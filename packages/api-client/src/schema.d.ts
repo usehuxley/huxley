@@ -123,6 +123,43 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
+	'/api/v1/modules': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** Every feature module and whether it's enabled and active. */
+		get: operations['list_modules'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/modules/{key}': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		/**
+		 * Turns a feature module on or off for the instance. Data is kept when a
+		 *     module is turned off.
+		 */
+		put: operations['set_module'];
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
 	'/api/v1/orgs': {
 		parameters: {
 			query?: never;
@@ -464,6 +501,8 @@ export interface components {
 		};
 		/** @description The signed-in user plus permission hints for the UI. */
 		MeView: components['schemas']['UserView'] & {
+			/** @description Feature modules that are enabled and released. */
+			activeModules: string[];
 			/**
 			 * @description Permissions granted at any organization. For deciding what to show;
 			 *     the API enforces permissions on every request regardless.
@@ -471,6 +510,28 @@ export interface components {
 			grantedPermissions: string[];
 			/** @description Holds the Owner role at the root organization. */
 			isOwner: boolean;
+		};
+		/** @description A feature module's manifest. */
+		Module: {
+			description: string;
+			key: string;
+			name: string;
+			/**
+			 * Format: int32
+			 * @description Implementation-plan phase in which the module ships.
+			 */
+			phase: number;
+			/** @description Whether this version of Huxley includes the module. */
+			released: boolean;
+			/** @description Modules that must be enabled for this one to work. */
+			requires: string[];
+		};
+		/** @description A module's state for the instance. */
+		ModuleState: components['schemas']['Module'] & {
+			/** @description Enabled and released: the module is running. */
+			active: boolean;
+			/** @description The admin wants it on. */
+			enabled: boolean;
 		};
 		MoveOrgRequest: {
 			/** Format: uuid */
@@ -543,6 +604,19 @@ export interface components {
 			/** Format: date-time */
 			lastSeenAt?: string | null;
 			userAgent?: string | null;
+		};
+		SetModuleRequest: {
+			enabled: boolean;
+			/**
+			 * @description When enabling, also enable any modules it requires (default false:
+			 *     respond 409 listing them instead).
+			 */
+			includeDependencies?: boolean;
+		};
+		SetModuleResponse: {
+			/** @description Modules whose setting changed, in the order they were applied. */
+			changed: string[];
+			modules: components['schemas']['ModuleState'][];
 		};
 		UpdateOrgRequest: {
 			name: string;
@@ -775,6 +849,68 @@ export interface operations {
 			};
 			/** @description No such session for this user */
 			404: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	list_modules: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ModuleState'][];
+				};
+			};
+		};
+	};
+	set_module: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				/** @description Module key, e.g. `servicedesk` */
+				key: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['SetModuleRequest'];
+			};
+		};
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['SetModuleResponse'];
+				};
+			};
+			404: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+			/** @description Missing dependencies, or enabled modules depend on it */
+			409: {
 				headers: {
 					[name: string]: unknown;
 				};

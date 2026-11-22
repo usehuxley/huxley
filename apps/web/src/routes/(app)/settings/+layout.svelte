@@ -10,7 +10,8 @@
 	const hrefs = {
 		organizations: resolve('/(app)/settings/organizations'),
 		users: resolve('/(app)/settings/users'),
-		audit: resolve('/(app)/settings/audit')
+		audit: resolve('/(app)/settings/audit'),
+		modules: resolve('/(app)/settings/modules')
 	};
 </script>
 

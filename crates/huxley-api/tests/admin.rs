@@ -277,3 +277,71 @@ async fn disabling_a_user_ends_their_sessions() {
     let (status, _) = call(&app, "GET", "/api/v1/auth/me", Some(&victim), None).await;
     assert_eq!(status, StatusCode::UNAUTHORIZED);
 }
+
+#[tokio::test]
+async fn module_toggles_need_permission_and_gate_disabled_modules() {
+    let Some(pools) = pools().await else { return };
+    ensure_root(&pools).await;
+    let app = app(&pools);
+    let owner = login(&app, &user(&pools, true).await).await;
+    let nobody = login(&app, &user(&pools, false).await).await;
+
+    let (status, modules) = call(&app, "GET", "/api/v1/modules", Some(&nobody), None).await;
+    assert_eq!(
+        status,
+        StatusCode::OK,
+        "any signed-in user may list modules"
+    );
+    assert!(
+        modules
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|m| m["key"] == "servicedesk")
+    );
+
+    let (status, _) = call(
+        &app,
+        "PUT",
+        "/api/v1/modules/knowledge",
+        Some(&nobody),
+        Some(json!({ "enabled": true })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+
+    let (status, body) = call(
+        &app,
+        "PUT",
+        "/api/v1/modules/cx",
+        Some(&owner),
+        Some(json!({ "enabled": true })),
+    )
+    .await;
+    // Unless another test left them on, cx's dependencies are missing.
+    if status == StatusCode::CONFLICT {
+        assert_eq!(
+            body["type"],
+            "https://usehuxley.com/problems/module-dependencies"
+        );
+    }
+    let (status, _) = call(
+        &app,
+        "PUT",
+        "/api/v1/modules/not-a-module",
+        Some(&owner),
+        Some(json!({ "enabled": true })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+
+    // Unreleased modules are never active, so the gate rejects them.
+    let state = AppState::new(
+        pools.app.clone(),
+        AuthService::new(pools.app.clone(), AuthConfig::default()),
+        ApiConfig::default(),
+    );
+    let gate = huxley_api::module_routes::require_module(&state, "servicedesk").await;
+    let err = gate.expect_err("unreleased module must be gated");
+    assert_eq!(err.kind, "https://usehuxley.com/problems/module-disabled");
+}

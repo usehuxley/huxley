@@ -11,6 +11,7 @@ use crate::auth_routes::{
     self, ChangePasswordRequest, LoginRequest, MeView, SessionView, UserView,
 };
 use crate::health::{self, HealthStatus};
+use crate::module_routes::{self, SetModuleRequest, SetModuleResponse};
 use crate::org_routes::{
     self, ArchiveOrgRequest, CreateOrgRequest, MoveOrgRequest, OrgKindInput, UpdateOrgRequest,
 };
@@ -52,6 +53,8 @@ use crate::user_routes::{
         user_routes::list_roles,
         user_routes::list_permissions,
         audit_routes::list,
+        module_routes::list,
+        module_routes::set,
     ),
     components(schemas(HealthStatus, ApiError, FieldError, LoginRequest, ChangePasswordRequest, UserView, SessionView,
         MeView,
@@ -74,6 +77,10 @@ use crate::user_routes::{
         huxley_authz::PermissionScope,
         AuditEventView,
         AuditPage,
+        huxley_modules::Module,
+        huxley_modules::ModuleState,
+        SetModuleRequest,
+        SetModuleResponse,
     )),
     tags(
         (name = "system", description = "Health and platform metadata"),
@@ -81,6 +88,7 @@ use crate::user_routes::{
         (name = "orgs", description = "The organization tree"),
         (name = "users", description = "Users, roles, and role assignments"),
         (name = "audit", description = "The audit log"),
+        (name = "modules", description = "Feature modules that can be turned on or off"),
     ),
 )]
 pub struct ApiDoc;
