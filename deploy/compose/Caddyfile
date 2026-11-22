@@ -1,0 +1,20 @@
+# TLS is automatic: Let's Encrypt for public domains, Caddy's local CA for
+# localhost names.
+
+(security_headers) {
+	header Strict-Transport-Security "max-age=31536000; includeSubDomains"
+	header -Server
+}
+
+{$HUXLEY_DOMAIN} {
+	import security_headers
+	# API, webhooks, and MCP go straight to the Rust server.
+	@api path /api/* /hooks/* /callbacks/* /mcp /mcp/*
+	reverse_proxy @api huxley:8080
+	reverse_proxy web:3000
+}
+
+{$HUXLEY_PORTAL_DOMAIN} {
+	import security_headers
+	reverse_proxy portal:3000
+}

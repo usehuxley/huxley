@@ -1,0 +1,126 @@
+# Huxley reference deployment for a single host.
+#
+#   cd deploy/compose
+#   ./install.sh                 # creates .env and secrets/ (first run only)
+#   docker compose up -d --build # build from source; or omit --build to pull images
+#
+# Optional profiles:
+#   --profile valkey         Valkey cache (recommended at scale; not required yet)
+#   --profile observability  OpenTelemetry Collector (set HUXLEY_OTLP_ENDPOINT too)
+
+name: huxley
+
+x-huxley-env: &huxley-env
+  HUXLEY_DATABASE__URL_FILE: /run/secrets/db_url
+  HUXLEY_TELEMETRY__LOG_FORMAT: json
+  HUXLEY_TELEMETRY__ENVIRONMENT: ${HUXLEY_ENVIRONMENT:-production}
+  HUXLEY_TELEMETRY__OTLP_ENDPOINT: ${HUXLEY_OTLP_ENDPOINT:-}
+
+services:
+  postgres:
+    image: postgres:18
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: huxley
+      POSTGRES_DB: huxley
+      POSTGRES_PASSWORD_FILE: /run/secrets/db_password
+    secrets: [db_password]
+    volumes:
+      - postgres-data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U huxley -d huxley"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  # Applies migrations before the server starts. Larger deployments run this as
+  # a separate step in their rollout pipeline.
+  migrate:
+    image: ghcr.io/usehuxley/huxley:${HUXLEY_VERSION:-latest}
+    build: { context: ../.., dockerfile: docker/huxley.Dockerfile }
+    command: ["migrate"]
+    environment: *huxley-env
+    secrets: [db_url]
+    depends_on:
+      postgres: { condition: service_healthy }
+    restart: "no"
+
+  huxley:
+    image: ghcr.io/usehuxley/huxley:${HUXLEY_VERSION:-latest}
+    build: { context: ../.., dockerfile: docker/huxley.Dockerfile }
+    command: ["serve", "--roles", "all"]
+    restart: unless-stopped
+    environment: *huxley-env
+    secrets: [db_url]
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+
+  web:
+    image: ghcr.io/usehuxley/web:${HUXLEY_VERSION:-latest}
+    build:
+      context: ../..
+      dockerfile: docker/frontend.Dockerfile
+      args: { APP: web }
+    restart: unless-stopped
+    environment:
+      HUXLEY_API_URL: http://huxley:8080
+      ORIGIN: https://${HUXLEY_DOMAIN:-localhost}
+    depends_on:
+      huxley: { condition: service_healthy }
+
+  portal:
+    image: ghcr.io/usehuxley/portal:${HUXLEY_VERSION:-latest}
+    build:
+      context: ../..
+      dockerfile: docker/frontend.Dockerfile
+      args: { APP: portal }
+    restart: unless-stopped
+    environment:
+      HUXLEY_API_URL: http://huxley:8080
+      ORIGIN: https://${HUXLEY_PORTAL_DOMAIN:-portal.localhost}
+    depends_on:
+      huxley: { condition: service_healthy }
+
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      HUXLEY_DOMAIN: ${HUXLEY_DOMAIN:-localhost}
+      HUXLEY_PORTAL_DOMAIN: ${HUXLEY_PORTAL_DOMAIN:-portal.localhost}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on: [web, portal]
+
+  valkey:
+    image: valkey/valkey:8
+    profiles: [valkey]
+    restart: unless-stopped
+    command: ["valkey-server", "--save", "60", "1"]
+    volumes:
+      - valkey-data:/data
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:latest
+    profiles: [observability]
+    restart: unless-stopped
+    command: ["--config=/etc/otelcol/config.yaml"]
+    volumes:
+      - ../observability/otel-collector.yaml:/etc/otelcol/config.yaml:ro
+
+secrets:
+  db_password:
+    file: ./secrets/db_password
+  db_url:
+    file: ./secrets/db_url
+
+volumes:
+  postgres-data:
+  valkey-data:
+  caddy-data:
+  caddy-config:

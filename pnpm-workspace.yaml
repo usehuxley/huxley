@@ -1,0 +1,8 @@
+packages:
+  - apps/*
+  - packages/*
+
+# Dependency install scripts are blocked unless listed here (supply-chain hardening).
+allowBuilds:
+  # Its postinstall only auto-installs git hooks; run `pnpm exec lefthook install` instead.
+  lefthook: false

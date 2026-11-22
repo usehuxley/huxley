@@ -1,0 +1,5 @@
+@import 'tailwindcss';
+@import '@usehuxley/ui/theme.css';
+
+/* Let Tailwind see the classes used inside the shared design system. */
+@source '../../../../packages/ui/src';

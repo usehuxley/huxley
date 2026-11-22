@@ -1,0 +1,23 @@
+[package]
+name = "huxley-db"
+description = "PostgreSQL pool, transactions, org-scope (RLS) context, and migrations for Huxley"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[dependencies]
+secrecy.workspace = true
+serde.workspace = true
+sqlx.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+uuid.workspace = true
+
+[dev-dependencies]
+tokio.workspace = true
+
+[lints]
+workspace = true

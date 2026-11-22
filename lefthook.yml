@@ -1,0 +1,14 @@
+# Git hooks. Enable once per clone: pnpm exec lefthook install
+pre-commit:
+  parallel: true
+  commands:
+    rustfmt:
+      glob: "*.rs"
+      run: cargo fmt --all -- --check
+    prettier:
+      glob: "*.{ts,js,svelte,css,json,html}"
+      run: pnpm exec prettier --check --ignore-unknown {staged_files}
+pre-push:
+  commands:
+    clippy:
+      run: cargo clippy --workspace --all-targets -- -D warnings

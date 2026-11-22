@@ -1,0 +1,126 @@
+{
+	"openapi": "3.1.0",
+	"info": {
+		"title": "Huxley API",
+		"description": "Huxley platform API. See https://docs.usehuxley.com for conventions.",
+		"license": {
+			"name": "MIT",
+			"identifier": "MIT"
+		},
+		"version": "0.1.0"
+	},
+	"paths": {
+		"/healthz": {
+			"get": {
+				"tags": ["system"],
+				"summary": "Liveness probe.",
+				"operationId": "healthz",
+				"responses": {
+					"200": {
+						"description": "Process is alive",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/HealthStatus"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/readyz": {
+			"get": {
+				"tags": ["system"],
+				"summary": "Readiness probe. Checks the database.",
+				"operationId": "readyz",
+				"responses": {
+					"200": {
+						"description": "Ready to serve traffic",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/HealthStatus"
+								}
+							}
+						}
+					},
+					"503": {
+						"description": "A dependency is unavailable",
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+	},
+	"components": {
+		"schemas": {
+			"ApiError": {
+				"type": "object",
+				"description": "An RFC 9457 problem details response.",
+				"required": ["type", "title", "status"],
+				"properties": {
+					"detail": {
+						"type": ["string", "null"]
+					},
+					"errors": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/FieldError"
+						}
+					},
+					"status": {
+						"type": "integer",
+						"format": "int32",
+						"minimum": 0
+					},
+					"title": {
+						"type": "string"
+					},
+					"type": {
+						"type": "string"
+					}
+				}
+			},
+			"FieldError": {
+				"type": "object",
+				"description": "A field-level validation error.",
+				"required": ["pointer", "message"],
+				"properties": {
+					"message": {
+						"type": "string"
+					},
+					"pointer": {
+						"type": "string",
+						"description": "JSON Pointer to the invalid field, e.g. `/name`."
+					}
+				}
+			},
+			"HealthStatus": {
+				"type": "object",
+				"required": ["status", "version"],
+				"properties": {
+					"status": {
+						"type": "string",
+						"description": "Always `ok` when the response is 200."
+					},
+					"version": {
+						"type": "string"
+					}
+				}
+			}
+		}
+	},
+	"tags": [
+		{
+			"name": "system",
+			"description": "Health and platform metadata"
+		}
+	]
+}

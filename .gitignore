@@ -1,0 +1,25 @@
+# Rust
+/target
+
+# Node
+node_modules/
+.svelte-kit/
+build/
+test-results/
+playwright-report/
+
+# Env and local config
+.env
+.env.*
+!.env.example
+huxley.toml
+!deploy/**/huxley.toml
+
+# Editors / OS
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Test output
+junit.xml

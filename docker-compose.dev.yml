@@ -1,0 +1,44 @@
+# Local development dependencies. The apps themselves run on the host
+# (cargo run / pnpm dev) for fast iteration.
+#
+#   just dev-up     # or: docker compose -f docker-compose.dev.yml up -d
+#
+# Object storage is not included: Phase 0 needs none, and the server's
+# object_store backend can use the local filesystem in development.
+
+name: huxley-dev
+
+services:
+  postgres:
+    image: postgres:18
+    environment:
+      POSTGRES_USER: huxley
+      POSTGRES_PASSWORD: huxley # development only
+      POSTGRES_DB: huxley
+    ports: ["127.0.0.1:5432:5432"]
+    volumes: [postgres-data:/var/lib/postgresql]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U huxley -d huxley"]
+      interval: 2s
+      retries: 30
+
+  valkey:
+    image: valkey/valkey:8
+    ports: ["127.0.0.1:6379:6379"]
+
+  # Catches outgoing email. UI at http://localhost:8025
+  mailpit:
+    image: axllent/mailpit:latest
+    ports: ["127.0.0.1:1025:1025", "127.0.0.1:8025:8025"]
+
+  # OpenTelemetry Collector + Grafana, Loki, Tempo, and Prometheus in one image.
+  # Send OTLP to localhost:4317; Grafana UI at http://localhost:3000
+  otel-lgtm:
+    image: grafana/otel-lgtm:latest
+    ports:
+      - "127.0.0.1:3000:3000"
+      - "127.0.0.1:4317:4317"
+      - "127.0.0.1:4318:4318"
+
+volumes:
+  postgres-data:

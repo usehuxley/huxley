@@ -1,0 +1,33 @@
+[package]
+name = "huxley-server"
+description = "The Huxley server binary: API, worker, and scheduler roles"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[[bin]]
+name = "huxley"
+path = "src/main.rs"
+
+[dependencies]
+anyhow.workspace = true
+axum.workspace = true
+clap.workspace = true
+figment.workspace = true
+huxley-api.workspace = true
+huxley-db.workspace = true
+huxley-telemetry.workspace = true
+serde.workspace = true
+tokio.workspace = true
+tokio-util.workspace = true
+tracing.workspace = true
+
+[dev-dependencies]
+figment = { workspace = true, features = ["test"] }
+secrecy.workspace = true
+
+[lints]
+workspace = true

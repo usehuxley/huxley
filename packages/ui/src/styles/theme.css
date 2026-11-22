@@ -1,0 +1,164 @@
+/*
+ * Huxley design tokens (Tailwind CSS v4).
+ *
+ * Import after Tailwind in each app:
+ *   @import 'tailwindcss';
+ *   @import '@usehuxley/ui/theme.css';
+ *   @source '<path to>/packages/ui/src';
+ *
+ * Theme: follows the OS by default. Setting data-theme="light" or "dark" on
+ * <html> overrides it (see ThemeToggle). No inline script is needed, which
+ * keeps the Content Security Policy strict.
+ *
+ * Components use semantic utilities (bg-surface, text-fg-muted, border-border,
+ * bg-accent, ...) rather than raw palette colors, so both themes and portal
+ * white-labeling only need to change these variables.
+ */
+
+:root {
+	color-scheme: light;
+	--hx-bg: #f7f8fa;
+	--hx-surface: #ffffff;
+	--hx-surface-raised: #ffffff;
+	--hx-surface-sunken: #eef0f3;
+	--hx-fg: #15181d;
+	--hx-fg-muted: #5b6370;
+	--hx-fg-subtle: #858d99;
+	--hx-border: #dfe3e8;
+	--hx-border-strong: #c5cbd3;
+	--hx-accent: #0f766e;
+	--hx-accent-hover: #0d645d;
+	--hx-accent-fg: #ffffff;
+	--hx-accent-soft: #e6f4f2;
+	--hx-danger: #c2410c;
+	--hx-danger-soft: #fdeee6;
+	--hx-warning: #a16207;
+	--hx-warning-soft: #fdf6e3;
+	--hx-success: #15803d;
+	--hx-success-soft: #e8f6ec;
+	--hx-info: #1d4ed8;
+	--hx-info-soft: #e8effd;
+	--hx-ring: #14b8a6;
+	--hx-overlay: rgb(15 18 22 / 0.45);
+	--hx-shadow: 0 1px 2px rgb(16 24 40 / 0.06), 0 1px 3px rgb(16 24 40 / 0.08);
+	--hx-shadow-lg: 0 12px 32px rgb(16 24 40 / 0.16);
+}
+
+@media (prefers-color-scheme: dark) {
+	:root:not([data-theme='light']) {
+		color-scheme: dark;
+		--hx-bg: #0e1013;
+		--hx-surface: #15181d;
+		--hx-surface-raised: #1b1f25;
+		--hx-surface-sunken: #0b0d10;
+		--hx-fg: #e8eaee;
+		--hx-fg-muted: #a0a7b2;
+		--hx-fg-subtle: #737b87;
+		--hx-border: #2a2f37;
+		--hx-border-strong: #3a414b;
+		--hx-accent: #2dd4bf;
+		--hx-accent-hover: #5eead4;
+		--hx-accent-fg: #04201d;
+		--hx-accent-soft: #10302c;
+		--hx-danger: #fb923c;
+		--hx-danger-soft: #3a1d0e;
+		--hx-warning: #facc15;
+		--hx-warning-soft: #352b08;
+		--hx-success: #4ade80;
+		--hx-success-soft: #0f2f1b;
+		--hx-info: #60a5fa;
+		--hx-info-soft: #13243f;
+		--hx-ring: #2dd4bf;
+		--hx-overlay: rgb(0 0 0 / 0.6);
+		--hx-shadow: 0 1px 2px rgb(0 0 0 / 0.4);
+		--hx-shadow-lg: 0 12px 32px rgb(0 0 0 / 0.5);
+	}
+}
+
+:root[data-theme='dark'] {
+	color-scheme: dark;
+	--hx-bg: #0e1013;
+	--hx-surface: #15181d;
+	--hx-surface-raised: #1b1f25;
+	--hx-surface-sunken: #0b0d10;
+	--hx-fg: #e8eaee;
+	--hx-fg-muted: #a0a7b2;
+	--hx-fg-subtle: #737b87;
+	--hx-border: #2a2f37;
+	--hx-border-strong: #3a414b;
+	--hx-accent: #2dd4bf;
+	--hx-accent-hover: #5eead4;
+	--hx-accent-fg: #04201d;
+	--hx-accent-soft: #10302c;
+	--hx-danger: #fb923c;
+	--hx-danger-soft: #3a1d0e;
+	--hx-warning: #facc15;
+	--hx-warning-soft: #352b08;
+	--hx-success: #4ade80;
+	--hx-success-soft: #0f2f1b;
+	--hx-info: #60a5fa;
+	--hx-info-soft: #13243f;
+	--hx-ring: #2dd4bf;
+	--hx-overlay: rgb(0 0 0 / 0.6);
+	--hx-shadow: 0 1px 2px rgb(0 0 0 / 0.4);
+	--hx-shadow-lg: 0 12px 32px rgb(0 0 0 / 0.5);
+}
+
+@theme inline {
+	--font-sans:
+		ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+	--font-mono: ui-monospace, 'SF Mono', 'Cascadia Code', Menlo, Consolas, monospace;
+
+	--color-bg: var(--hx-bg);
+	--color-surface: var(--hx-surface);
+	--color-surface-raised: var(--hx-surface-raised);
+	--color-surface-sunken: var(--hx-surface-sunken);
+	--color-fg: var(--hx-fg);
+	--color-fg-muted: var(--hx-fg-muted);
+	--color-fg-subtle: var(--hx-fg-subtle);
+	--color-border: var(--hx-border);
+	--color-border-strong: var(--hx-border-strong);
+	--color-accent: var(--hx-accent);
+	--color-accent-hover: var(--hx-accent-hover);
+	--color-accent-fg: var(--hx-accent-fg);
+	--color-accent-soft: var(--hx-accent-soft);
+	--color-danger: var(--hx-danger);
+	--color-danger-soft: var(--hx-danger-soft);
+	--color-warning: var(--hx-warning);
+	--color-warning-soft: var(--hx-warning-soft);
+	--color-success: var(--hx-success);
+	--color-success-soft: var(--hx-success-soft);
+	--color-info: var(--hx-info);
+	--color-info-soft: var(--hx-info-soft);
+	--color-ring: var(--hx-ring);
+	--color-overlay: var(--hx-overlay);
+
+	--shadow-card: var(--hx-shadow);
+	--shadow-overlay: var(--hx-shadow-lg);
+
+	--radius-control: 0.5rem;
+	--radius-card: 0.75rem;
+}
+
+@layer base {
+	html {
+		background: var(--hx-bg);
+		color: var(--hx-fg);
+		font-family: var(--font-sans);
+		-webkit-font-smoothing: antialiased;
+	}
+
+	:focus-visible {
+		outline: 2px solid var(--hx-ring);
+		outline-offset: 2px;
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		*,
+		*::before,
+		*::after {
+			animation-duration: 0.01ms !important;
+			transition-duration: 0.01ms !important;
+		}
+	}
+}

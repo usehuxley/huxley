@@ -1,0 +1,12 @@
+target
+**/node_modules
+**/.svelte-kit
+**/build
+**/test-results
+.git
+.github
+docs
+*.md
+!apps/**/README.md
+.env
+.env.*

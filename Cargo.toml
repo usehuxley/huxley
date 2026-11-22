@@ -1,0 +1,71 @@
+[workspace]
+resolver = "3"
+members = ["crates/*"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.90"
+license = "MIT"
+repository = "https://github.com/usehuxley/huxley"
+homepage = "https://usehuxley.com"
+authors = ["Huxley contributors"]
+
+[workspace.dependencies]
+# Internal crates
+huxley-api = { path = "crates/huxley-api" }
+huxley-core = { path = "crates/huxley-core" }
+huxley-db = { path = "crates/huxley-db" }
+huxley-telemetry = { path = "crates/huxley-telemetry" }
+
+# Async / HTTP
+tokio = { version = "1.54", features = ["macros", "rt-multi-thread", "signal", "net", "time"] }
+tokio-util = "0.7"
+axum = { version = "0.8", features = ["macros"] }
+tower = { version = "0.5", features = ["util"] }
+tower-http = { version = "0.7", features = ["trace", "request-id", "timeout", "limit", "sensitive-headers", "catch-panic", "util"] }
+http = "1.5"
+
+# Data
+sqlx = { version = "0.9", default-features = false, features = ["runtime-tokio", "tls-rustls", "postgres", "uuid", "time", "json", "migrate", "macros"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+uuid = { version = "1.29", features = ["v7", "serde"] }
+time = { version = "0.3", features = ["serde", "formatting", "parsing"] }
+base64 = "0.23"
+
+# Config / CLI / errors
+clap = { version = "4.6", features = ["derive", "env"] }
+figment = { version = "0.10", features = ["toml", "env"] }
+secrecy = { version = "0.10", features = ["serde"] }
+thiserror = "2"
+anyhow = "1"
+
+# Observability (OpenTelemetry is the only instrumentation standard: ADR-015)
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json", "fmt", "registry"] }
+opentelemetry = "0.33"
+opentelemetry_sdk = { version = "0.33", features = ["rt-tokio"] }
+opentelemetry-otlp = { version = "0.33", features = ["grpc-tonic", "trace", "metrics", "logs"] }
+opentelemetry-appender-tracing = "0.33"
+tracing-opentelemetry = "0.34"
+
+# API docs
+utoipa = { version = "6", features = ["axum_extras", "uuid", "time"] }
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+missing_debug_implementations = "warn"
+
+[workspace.lints.clippy]
+all = { level = "warn", priority = -1 }
+pedantic = { level = "warn", priority = -1 }
+module_name_repetitions = "allow"
+missing_errors_doc = "allow"
+missing_panics_doc = "allow"
+must_use_candidate = "allow"
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+strip = "symbols"

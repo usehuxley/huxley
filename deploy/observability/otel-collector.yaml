@@ -1,0 +1,53 @@
+# OpenTelemetry Collector for Huxley (design doc §13.3).
+#
+# Receives OTLP from all Huxley services, applies tail sampling (keep every
+# error and slow request, sample the rest), and exports to a backend.
+# Replace the `debug` exporter with your backend: Grafana Cloud, Tempo/Loki/
+# Prometheus, Jaeger, Azure Monitor, Datadog, Honeycomb, etc.
+
+receivers:
+  otlp:
+    protocols:
+      grpc: { endpoint: 0.0.0.0:4317 }
+      http: { endpoint: 0.0.0.0:4318 }
+
+processors:
+  memory_limiter:
+    check_interval: 1s
+    limit_percentage: 80
+    spike_limit_percentage: 20
+  tail_sampling:
+    decision_wait: 10s
+    policies:
+      - name: errors
+        type: status_code
+        status_code: { status_codes: [ERROR] }
+      - name: slow
+        type: latency
+        latency: { threshold_ms: 1000 }
+      - name: baseline
+        type: probabilistic
+        probabilistic: { sampling_percentage: 10 }
+  batch: {}
+
+exporters:
+  debug:
+    verbosity: basic
+  # otlp:
+  #   endpoint: tempo:4317
+  #   tls: { insecure: true }
+
+service:
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [memory_limiter, tail_sampling, batch]
+      exporters: [debug]
+    metrics:
+      receivers: [otlp]
+      processors: [memory_limiter, batch]
+      exporters: [debug]
+    logs:
+      receivers: [otlp]
+      processors: [memory_limiter, batch]
+      exporters: [debug]
