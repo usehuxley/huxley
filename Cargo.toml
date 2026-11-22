@@ -14,8 +14,10 @@ authors = ["Huxley contributors"]
 [workspace.dependencies]
 # Internal crates
 huxley-api = { path = "crates/huxley-api" }
+huxley-auth = { path = "crates/huxley-auth" }
 huxley-core = { path = "crates/huxley-core" }
 huxley-db = { path = "crates/huxley-db" }
+huxley-orgs = { path = "crates/huxley-orgs" }
 huxley-telemetry = { path = "crates/huxley-telemetry" }
 
 # Async / HTTP
@@ -33,6 +35,12 @@ serde_json = "1"
 uuid = { version = "1.29", features = ["v7", "serde"] }
 time = { version = "0.3", features = ["serde", "formatting", "parsing"] }
 base64 = "0.23"
+
+# Crypto
+argon2 = { version = "0.6", features = ["zeroize"] }
+sha2 = "0.11"
+getrandom = "0.4"
+subtle = "2.6"
 
 # Config / CLI / errors
 clap = { version = "4.6", features = ["derive", "env"] }

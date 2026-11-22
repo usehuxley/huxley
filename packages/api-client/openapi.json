@@ -10,6 +10,184 @@
 		"version": "0.1.0"
 	},
 	"paths": {
+		"/api/v1/auth/login": {
+			"post": {
+				"tags": ["auth"],
+				"summary": "Signs in with email and password. Sets the session cookie.",
+				"operationId": "login",
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/LoginRequest"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"200": {
+						"description": "Signed in; session cookie set",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/UserView"
+								}
+							}
+						}
+					},
+					"401": {
+						"description": "Wrong email or password, or the account is disabled or locked",
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					},
+					"429": {
+						"description": "Too many attempts from this address",
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/auth/logout": {
+			"post": {
+				"tags": ["auth"],
+				"summary": "Signs out the current session and clears the cookie.",
+				"operationId": "logout",
+				"responses": {
+					"204": {
+						"description": "Signed out"
+					}
+				}
+			}
+		},
+		"/api/v1/auth/me": {
+			"get": {
+				"tags": ["auth"],
+				"summary": "The signed-in user.",
+				"operationId": "me",
+				"responses": {
+					"200": {
+						"description": "The signed-in user",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/UserView"
+								}
+							}
+						}
+					},
+					"401": {
+						"description": "Not signed in",
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/auth/password": {
+			"post": {
+				"tags": ["auth"],
+				"summary": "Changes the signed-in user's password. Signs out all their other sessions.",
+				"operationId": "change_password",
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/ChangePasswordRequest"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"204": {
+						"description": "Password changed; other sessions signed out"
+					},
+					"422": {
+						"description": "Current password wrong or new password too weak",
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/auth/sessions": {
+			"get": {
+				"tags": ["auth"],
+				"summary": "The signed-in user's active sessions.",
+				"operationId": "list_sessions",
+				"responses": {
+					"200": {
+						"description": "Active sessions, newest first",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "array",
+									"items": {
+										"$ref": "#/components/schemas/SessionView"
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/auth/sessions/{id}": {
+			"delete": {
+				"tags": ["auth"],
+				"summary": "Revokes one of the signed-in user's sessions, e.g. a lost device.",
+				"operationId": "revoke_session",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"description": "Session id",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"responses": {
+					"204": {
+						"description": "Session revoked"
+					},
+					"404": {
+						"description": "No such session for this user",
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
 		"/healthz": {
 			"get": {
 				"tags": ["system"],
@@ -88,6 +266,20 @@
 					}
 				}
 			},
+			"ChangePasswordRequest": {
+				"type": "object",
+				"required": ["currentPassword", "newPassword"],
+				"properties": {
+					"currentPassword": {
+						"type": "string",
+						"format": "password"
+					},
+					"newPassword": {
+						"type": "string",
+						"format": "password"
+					}
+				}
+			},
 			"FieldError": {
 				"type": "object",
 				"description": "A field-level validation error.",
@@ -114,6 +306,75 @@
 						"type": "string"
 					}
 				}
+			},
+			"LoginRequest": {
+				"type": "object",
+				"required": ["email", "password"],
+				"properties": {
+					"email": {
+						"type": "string"
+					},
+					"password": {
+						"type": "string",
+						"format": "password"
+					}
+				}
+			},
+			"SessionView": {
+				"type": "object",
+				"required": ["id", "createdAt", "expiresAt", "current"],
+				"properties": {
+					"createdAt": {
+						"type": "string",
+						"format": "date-time"
+					},
+					"current": {
+						"type": "boolean",
+						"description": "True for the session making this request."
+					},
+					"expiresAt": {
+						"type": "string",
+						"format": "date-time"
+					},
+					"id": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"ip": {
+						"type": ["string", "null"]
+					},
+					"lastSeenAt": {
+						"type": ["string", "null"],
+						"format": "date-time"
+					},
+					"userAgent": {
+						"type": ["string", "null"]
+					}
+				}
+			},
+			"UserView": {
+				"type": "object",
+				"required": ["id", "email", "displayName", "status"],
+				"properties": {
+					"displayName": {
+						"type": "string"
+					},
+					"email": {
+						"type": "string"
+					},
+					"id": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"lastLoginAt": {
+						"type": ["string", "null"],
+						"format": "date-time"
+					},
+					"status": {
+						"type": "string",
+						"description": "`active` or `disabled`."
+					}
+				}
 			}
 		}
 	},
@@ -121,6 +382,10 @@
 		{
 			"name": "system",
 			"description": "Health and platform metadata"
+		},
+		{
+			"name": "auth",
+			"description": "Sign-in, sessions, and the current user"
 		}
 	]
 }

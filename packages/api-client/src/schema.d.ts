@@ -4,6 +4,108 @@
  */
 
 export interface paths {
+	'/api/v1/auth/login': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/** Signs in with email and password. Sets the session cookie. */
+		post: operations['login'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/auth/logout': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/** Signs out the current session and clears the cookie. */
+		post: operations['logout'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/auth/me': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** The signed-in user. */
+		get: operations['me'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/auth/password': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/** Changes the signed-in user's password. Signs out all their other sessions. */
+		post: operations['change_password'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/auth/sessions': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** The signed-in user's active sessions. */
+		get: operations['list_sessions'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/auth/sessions/{id}': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		post?: never;
+		/** Revokes one of the signed-in user's sessions, e.g. a lost device. */
+		delete: operations['revoke_session'];
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
 	'/healthz': {
 		parameters: {
 			query?: never;
@@ -51,6 +153,12 @@ export interface components {
 			title: string;
 			type: string;
 		};
+		ChangePasswordRequest: {
+			/** Format: password */
+			currentPassword: string;
+			/** Format: password */
+			newPassword: string;
+		};
 		/** @description A field-level validation error. */
 		FieldError: {
 			message: string;
@@ -62,6 +170,35 @@ export interface components {
 			status: string;
 			version: string;
 		};
+		LoginRequest: {
+			email: string;
+			/** Format: password */
+			password: string;
+		};
+		SessionView: {
+			/** Format: date-time */
+			createdAt: string;
+			/** @description True for the session making this request. */
+			current: boolean;
+			/** Format: date-time */
+			expiresAt: string;
+			/** Format: uuid */
+			id: string;
+			ip?: string | null;
+			/** Format: date-time */
+			lastSeenAt?: string | null;
+			userAgent?: string | null;
+		};
+		UserView: {
+			displayName: string;
+			email: string;
+			/** Format: uuid */
+			id: string;
+			/** Format: date-time */
+			lastLoginAt?: string | null;
+			/** @description `active` or `disabled`. */
+			status: string;
+		};
 	};
 	responses: never;
 	parameters: never;
@@ -71,6 +208,176 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+	login: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['LoginRequest'];
+			};
+		};
+		responses: {
+			/** @description Signed in; session cookie set */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['UserView'];
+				};
+			};
+			/** @description Wrong email or password, or the account is disabled or locked */
+			401: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+			/** @description Too many attempts from this address */
+			429: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	logout: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			/** @description Signed out */
+			204: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content?: never;
+			};
+		};
+	};
+	me: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			/** @description The signed-in user */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['UserView'];
+				};
+			};
+			/** @description Not signed in */
+			401: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	change_password: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['ChangePasswordRequest'];
+			};
+		};
+		responses: {
+			/** @description Password changed; other sessions signed out */
+			204: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content?: never;
+			};
+			/** @description Current password wrong or new password too weak */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	list_sessions: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			/** @description Active sessions, newest first */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['SessionView'][];
+				};
+			};
+		};
+	};
+	revoke_session: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				/** @description Session id */
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			/** @description Session revoked */
+			204: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content?: never;
+			};
+			/** @description No such session for this user */
+			404: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
 	healthz: {
 		parameters: {
 			query?: never;

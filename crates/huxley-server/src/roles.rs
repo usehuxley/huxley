@@ -53,11 +53,16 @@ impl Role {
 
 /// Runs the requested roles until a shutdown signal arrives.
 pub async fn serve(config: Config, roles: BTreeSet<Role>) -> anyhow::Result<()> {
-    let db = huxley_db::connect(config.database()?)?;
+    let db_config = config.database()?;
     if config.migrate_on_start {
         tracing::info!("migrate_on_start is set; applying migrations");
-        huxley_db::migrate(&db).await.context("migrations failed")?;
+        let owner = huxley_db::connect_owner(db_config)?;
+        huxley_db::migrate(&owner)
+            .await
+            .context("migrations failed")?;
+        owner.close().await;
     }
+    let db = huxley_db::connect(db_config)?;
 
     let shutdown = CancellationToken::new();
     shutdown::spawn_signal_listener(shutdown.clone());
@@ -70,7 +75,10 @@ pub async fn serve(config: Config, roles: BTreeSet<Role>) -> anyhow::Result<()> 
                     .await
                     .with_context(|| format!("failed to bind {}", config.http.bind))?;
                 tracing::info!(addr = %config.http.bind, "api role listening");
-                let app = huxley_api::router(huxley_api::AppState { db: db.clone() });
+                let auth = huxley_auth::AuthService::new(db.clone(), config.auth.clone());
+                let state = huxley_api::AppState::new(db.clone(), auth, config.http.api.clone());
+                let app = huxley_api::router(state)
+                    .into_make_service_with_connect_info::<std::net::SocketAddr>();
                 let token = shutdown.clone();
                 tasks.spawn(async move {
                     axum::serve(listener, app)

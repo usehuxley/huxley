@@ -1,20 +1,33 @@
 //! Database access for Huxley.
 //!
-//! - [`connect`] builds the connection pool.
-//! - [`migrate`] applies the embedded migrations from `/migrations`.
+//! - [`connect`] builds the runtime pool. Every connection switches to the
+//!   `huxley_app` role so PostgreSQL Row-Level Security applies.
+//! - [`connect_owner`] builds a pool as the connecting user, for migrations
+//!   and admin tooling only.
 //! - [`begin_scoped`] opens a transaction with the caller's org scope set, so
-//!   PostgreSQL Row-Level Security policies (design doc §4.4) can enforce
-//!   isolation as defense in depth alongside the application's own checks.
+//!   RLS policies (design doc §4.4) enforce isolation as defense in depth
+//!   alongside the application's own authorization checks.
+//! - [`audit`] and [`outbox`] write audit records and domain events inside the
+//!   caller's transaction.
+
+pub mod audit;
+pub mod outbox;
+#[cfg(feature = "testing")]
+pub mod testing;
 
 use std::time::Duration;
 
 use secrecy::{ExposeSecret as _, SecretString};
 use serde::Deserialize;
 use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
-use sqlx::{PgPool, Postgres, Transaction};
+use sqlx::{Executor as _, PgConnection, PgPool, Postgres, Transaction};
 use uuid::Uuid;
 
 pub use sqlx;
+
+/// The role runtime connections assume (created by migrations).
+pub const APP_ROLE: &str = "huxley_app";
+const SET_APP_ROLE: &str = "SET ROLE huxley_app";
 
 /// Database configuration (`[database]` in `huxley.toml`, or `HUXLEY_DATABASE__*`).
 #[derive(Debug, Clone, Deserialize)]
@@ -53,24 +66,42 @@ pub enum DbError {
 /// Embedded migrations from the workspace `migrations/` directory.
 pub static MIGRATOR: sqlx::migrate::Migrator = sqlx::migrate!("../../migrations");
 
-/// Creates the connection pool. Connections are opened lazily.
-pub fn connect(config: &DatabaseConfig) -> Result<PgPool, DbError> {
+fn options(config: &DatabaseConfig) -> Result<PgConnectOptions, DbError> {
     let options: PgConnectOptions = config
         .url
         .expose_secret()
         .parse()
         .map_err(DbError::InvalidUrl)?;
-    let options = options
+    Ok(options
         .application_name("huxley")
-        .options([("statement_timeout", config.statement_timeout_ms.to_string())]);
+        .options([("statement_timeout", config.statement_timeout_ms.to_string())]))
+}
 
+/// Creates the runtime pool. Connections are opened lazily and run as
+/// [`APP_ROLE`], so they fail until migrations have created that role.
+pub fn connect(config: &DatabaseConfig) -> Result<PgPool, DbError> {
     Ok(PgPoolOptions::new()
         .max_connections(config.max_connections)
         .acquire_timeout(Duration::from_secs(config.acquire_timeout_secs))
-        .connect_lazy_with(options))
+        .after_connect(|conn, _meta| {
+            Box::pin(async move {
+                conn.execute(SET_APP_ROLE).await?;
+                Ok(())
+            })
+        })
+        .connect_lazy_with(options(config)?))
 }
 
-/// Applies all pending migrations.
+/// Creates a pool that connects as the configured user without switching role.
+/// It bypasses RLS: use it only for migrations and admin commands.
+pub fn connect_owner(config: &DatabaseConfig) -> Result<PgPool, DbError> {
+    Ok(PgPoolOptions::new()
+        .max_connections(2)
+        .acquire_timeout(Duration::from_secs(config.acquire_timeout_secs))
+        .connect_lazy_with(options(config)?))
+}
+
+/// Applies all pending migrations. Requires an owner pool.
 pub async fn migrate(pool: &PgPool) -> Result<(), DbError> {
     MIGRATOR.run(pool).await?;
     Ok(())
@@ -85,10 +116,11 @@ pub async fn ping(pool: &PgPool) -> Result<(), DbError> {
 /// Which organizations a transaction may see under RLS.
 #[derive(Debug, Clone)]
 pub enum OrgScope {
-    /// Internal system work (migrations, the scheduler) that bypasses org filtering.
+    /// Internal system work (the scheduler, bootstrap, tree maintenance) that
+    /// is not limited to particular organizations.
     System,
-    /// A request limited to these organization ids (already expanded to include
-    /// descendants where the caller's role assignments inherit).
+    /// A request limited to these organization ids (already expanded to
+    /// include descendants where the caller's role assignments inherit).
     Orgs(Vec<Uuid>),
 }
 
@@ -107,9 +139,9 @@ impl OrgScope {
 
 /// Begins a transaction with `huxley.org_scope` set for its duration.
 ///
-/// RLS policies read the setting via `huxley_org_in_scope(org_id)` (defined in
-/// the initial migration). `set_config(..., true)` scopes the value to this
-/// transaction, so it cannot leak to the next user of a pooled connection.
+/// RLS policies read the setting via `huxley_org_in_scope(org_id)`.
+/// `set_config(..., true)` scopes the value to this transaction, so it cannot
+/// leak to the next user of a pooled connection.
 pub async fn begin_scoped(
     pool: &PgPool,
     scope: &OrgScope,
@@ -120,6 +152,31 @@ pub async fn begin_scoped(
         .execute(&mut *tx)
         .await?;
     Ok(tx)
+}
+
+/// Adds one organization to the current transaction's scope.
+///
+/// Used right after creating an organization the caller was authorized to
+/// create, so the rest of the transaction can read it. A no-op in system scope.
+pub async fn extend_scope(conn: &mut PgConnection, org_id: Uuid) -> Result<(), DbError> {
+    sqlx::query(
+        "SELECT set_config('huxley.org_scope', \
+            CASE coalesce(current_setting('huxley.org_scope', true), '') \
+                WHEN '*' THEN '*' \
+                WHEN '' THEN $1 \
+                ELSE current_setting('huxley.org_scope', true) || ',' || $1 \
+            END, true)",
+    )
+    .bind(org_id.to_string())
+    .execute(conn)
+    .await?;
+    Ok(())
+}
+
+/// Name of the constraint a database error violated, if any. Used to map
+/// constraint violations to domain errors.
+pub fn violated_constraint(error: &sqlx::Error) -> Option<&str> {
+    error.as_database_error().and_then(|e| e.constraint())
 }
 
 #[cfg(test)]

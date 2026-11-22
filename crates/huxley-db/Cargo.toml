@@ -9,12 +9,18 @@ repository.workspace = true
 publish = false
 
 [dependencies]
+huxley-core.workspace = true
+serde_json.workspace = true
 secrecy.workspace = true
 serde.workspace = true
 sqlx.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
 uuid.workspace = true
+
+[features]
+# Test helpers for other crates' integration tests.
+testing = []
 
 [dev-dependencies]
 tokio.workspace = true

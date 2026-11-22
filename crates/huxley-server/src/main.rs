@@ -3,6 +3,7 @@
 //! One binary, several roles (ADR-001). Small installs run `serve --roles all`;
 //! large installs run each role as its own deployment and scale it separately.
 
+mod admin;
 mod config;
 mod roles;
 mod shutdown;
@@ -47,6 +48,11 @@ enum Command {
         #[arg(long)]
         out: Option<PathBuf>,
     },
+    /// Administrative tasks: bootstrap, users, audit verification.
+    Admin {
+        #[command(subcommand)]
+        command: admin::AdminCommand,
+    },
     /// Probe a running server's /healthz and exit 0 if healthy. Used by
     /// container health checks, since the runtime image has no curl.
     Healthcheck {
@@ -61,6 +67,13 @@ async fn main() -> anyhow::Result<()> {
 
     match cli.command {
         Command::Healthcheck { addr } => healthcheck(addr),
+        Command::Admin { command } => {
+            let config = Config::load(cli.config.as_deref())?;
+            let telemetry = huxley_telemetry::init(&config.telemetry, "admin")?;
+            let result = admin::run(&config, command).await;
+            telemetry.shutdown();
+            result
+        }
         Command::Openapi { out } => {
             // Needs no config, database, or telemetry, so CI can run it anywhere.
             let json = huxley_api::openapi::to_pretty_json();
@@ -90,7 +103,8 @@ async fn main() -> anyhow::Result<()> {
 }
 
 async fn run_migrations(config: &Config) -> anyhow::Result<()> {
-    let db = huxley_db::connect(config.database()?)?;
+    // Migrations run as the connecting user, not the RLS-restricted app role.
+    let db = huxley_db::connect_owner(config.database()?)?;
     tracing::info!("applying database migrations");
     huxley_db::migrate(&db).await.context("migrations failed")?;
     tracing::info!("database migrations complete");
