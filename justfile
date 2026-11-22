@@ -22,7 +22,13 @@ server *args:
     HUXLEY_MIGRATE_ON_START=true \
     HUXLEY_TELEMETRY__LOG_FORMAT=pretty \
     HUXLEY_TELEMETRY__OTLP_ENDPOINT=http://127.0.0.1:4317 \
+    HUXLEY_HTTP__TRUST_FORWARDED_FOR=true \
+    HUXLEY_HTTP__COOKIE_SECURE=false \
     cargo run -p huxley-server -- serve {{args}}
+
+# Create the root organization and first user in the dev database (prints a generated password)
+bootstrap org="Dev MSP" email="admin@example.com" name="Dev Admin":
+    HUXLEY_DATABASE__URL={{dev_db}} cargo run -p huxley-server -- admin bootstrap --org-name "{{org}}" --email "{{email}}" --name "{{name}}"
 
 # Apply database migrations to the dev database
 migrate:

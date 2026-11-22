@@ -15,6 +15,9 @@ x-huxley-env: &huxley-env
   HUXLEY_TELEMETRY__LOG_FORMAT: json
   HUXLEY_TELEMETRY__ENVIRONMENT: ${HUXLEY_ENVIRONMENT:-production}
   HUXLEY_TELEMETRY__OTLP_ENDPOINT: ${HUXLEY_OTLP_ENDPOINT:-}
+  # Every request reaches the API through Caddy or the web apps, which set
+  # X-Forwarded-For to the real client address.
+  HUXLEY_HTTP__TRUST_FORWARDED_FOR: "true"
 
 services:
   postgres:
@@ -65,6 +68,9 @@ services:
     environment:
       HUXLEY_API_URL: http://huxley:8080
       ORIGIN: https://${HUXLEY_DOMAIN:-localhost}
+      # Behind Caddy: take the client address from the header Caddy sets.
+      ADDRESS_HEADER: X-Forwarded-For
+      XFF_DEPTH: "1"
     depends_on:
       huxley: { condition: service_healthy }
 
@@ -78,6 +84,9 @@ services:
     environment:
       HUXLEY_API_URL: http://huxley:8080
       ORIGIN: https://${HUXLEY_PORTAL_DOMAIN:-portal.localhost}
+      # Behind Caddy: take the client address from the header Caddy sets.
+      ADDRESS_HEADER: X-Forwarded-For
+      XFF_DEPTH: "1"
     depends_on:
       huxley: { condition: service_healthy }
 
