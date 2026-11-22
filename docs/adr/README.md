@@ -20,3 +20,4 @@ Decisions that shape Huxley. Add a new ADR by copying `0000-template.md` with th
 | [014](0014-huxley-generates-invoices-accounting-systems-are-the-system.md) | Huxley generates invoices; accounting systems are the system of record | Accepted |
 | [015](0015-opentelemetry-as-the-only-instrumentation-standard.md) | OpenTelemetry as the only instrumentation standard | Accepted |
 | [016](0016-typescript-sdk-compiles-to-hwf-at-build-time.md) | TypeScript SDK compiles to HWF at build time | Accepted |
+| [017](0017-toggleable-feature-modules.md) | Everything outside the core platform is a toggleable feature module | Accepted |
