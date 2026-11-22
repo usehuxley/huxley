@@ -806,6 +806,7 @@ dependencies = [
  "huxley-authz",
  "huxley-core",
  "huxley-db",
+ "huxley-modules",
  "huxley-orgs",
  "huxley-telemetry",
  "secrecy",
@@ -886,6 +887,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "huxley-modules"
+version = "0.1.0"
+dependencies = [
+ "huxley-core",
+ "huxley-db",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "thiserror",
+ "tokio",
+ "utoipa",
+ "uuid",
+]
+
+[[package]]
 name = "huxley-orgs"
 version = "0.1.0"
 dependencies = [
@@ -917,6 +933,7 @@ dependencies = [
  "huxley-authz",
  "huxley-core",
  "huxley-db",
+ "huxley-modules",
  "huxley-orgs",
  "huxley-telemetry",
  "secrecy",

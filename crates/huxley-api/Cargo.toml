@@ -18,6 +18,7 @@ huxley-auth.workspace = true
 huxley-authz.workspace = true
 huxley-core.workspace = true
 huxley-db.workspace = true
+huxley-modules.workspace = true
 huxley-orgs.workspace = true
 huxley-telemetry.workspace = true
 serde.workspace = true

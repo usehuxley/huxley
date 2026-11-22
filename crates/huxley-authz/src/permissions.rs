@@ -46,6 +46,7 @@ permissions! {
     ROLE_READ = "role:read", Instance, "View roles";
     ROLE_ASSIGN = "role_assignment:manage", Org, "Grant and remove roles at an organization";
     AUDIT_READ = "audit:read", Instance, "View the audit log";
+    MODULES_MANAGE = "platform:modules:manage", Instance, "Turn feature modules on or off";
 }
 
 /// Wildcard granting every permission.

@@ -18,6 +18,7 @@ huxley-auth = { path = "crates/huxley-auth" }
 huxley-authz = { path = "crates/huxley-authz" }
 huxley-core = { path = "crates/huxley-core" }
 huxley-db = { path = "crates/huxley-db" }
+huxley-modules = { path = "crates/huxley-modules" }
 huxley-orgs = { path = "crates/huxley-orgs" }
 huxley-telemetry = { path = "crates/huxley-telemetry" }
 

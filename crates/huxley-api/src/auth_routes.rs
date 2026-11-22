@@ -187,12 +187,24 @@ pub async fn logout(
         (status = 401, description = "Not signed in", body = ApiError,
             content_type = "application/problem+json"),
     ))]
-pub async fn me(authed: Authed) -> Json<MeView> {
-    Json(MeView {
+pub async fn me(State(state): State<AppState>, authed: Authed) -> ApiResult<Json<MeView>> {
+    let mut tx = huxley_db::begin_scoped(&state.db, &huxley_db::OrgScope::System)
+        .await
+        .map_err(|e| ApiError::internal(&e))?;
+    let active_modules = huxley_modules::states(&mut tx)
+        .await
+        .map_err(|e| ApiError::internal(&e))?
+        .into_iter()
+        .filter(|m| m.active)
+        .map(|m| m.module.key)
+        .collect();
+    tx.commit().await.map_err(|e| ApiError::internal(&e))?;
+    Ok(Json(MeView {
+        active_modules,
         granted_permissions: authed.principal.granted_anywhere(),
         is_owner: authed.principal.is_owner(),
         user: authed.user.auth.user.into(),
-    })
+    }))
 }
 
 /// The signed-in user plus permission hints for the UI.
@@ -206,6 +218,8 @@ pub struct MeView {
     pub granted_permissions: Vec<&'static str>,
     /// Holds the Owner role at the root organization.
     pub is_owner: bool,
+    /// Feature modules that are enabled and released.
+    pub active_modules: Vec<&'static str>,
 }
 
 /// The signed-in user's active sessions.

@@ -31,6 +31,10 @@ pub enum AdminCommand {
         /// random password is generated and printed once.
         #[arg(long)]
         password_stdin: bool,
+        /// Feature modules to turn on: `automation` (none: automation engine
+        /// only), `service-desk`, or `full`. Modules can be changed later.
+        #[arg(long, default_value = "automation")]
+        preset: String,
     },
     /// Create a local user.
     CreateUser {
@@ -60,7 +64,11 @@ pub async fn run(config: &Config, command: AdminCommand) -> anyhow::Result<()> {
             email,
             name,
             password_stdin,
+            preset,
         } => {
+            let preset = huxley_modules::Preset::parse(&preset).ok_or_else(|| {
+                anyhow::anyhow!("unknown preset `{preset}`: use automation, service-desk, or full")
+            })?;
             let owner = huxley_db::connect_owner(db_config)?;
             huxley_db::migrate(&owner)
                 .await
@@ -76,6 +84,7 @@ pub async fn run(config: &Config, command: AdminCommand) -> anyhow::Result<()> {
             let root = huxley_orgs::create_root(&mut tx, &ctx, &org_name).await?;
             let user = huxley_auth::create_user(&mut tx, &ctx, &email, &name, &password).await?;
             huxley_authz::grant_root_owner(&mut tx, &ctx, user.id).await?;
+            huxley_modules::apply_preset(&mut tx, &ctx, preset).await?;
             audit::record(
                 &mut tx,
                 &ctx,
