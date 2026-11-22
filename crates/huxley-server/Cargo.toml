@@ -19,6 +19,7 @@ clap.workspace = true
 figment.workspace = true
 huxley-api.workspace = true
 huxley-auth.workspace = true
+huxley-authz.workspace = true
 huxley-core.workspace = true
 huxley-db.workspace = true
 huxley-orgs.workspace = true

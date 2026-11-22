@@ -11,6 +11,7 @@ use time::OffsetDateTime;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
+use crate::authz::Authed;
 use crate::context::ClientInfo;
 use crate::session::{self, CurrentUser};
 use crate::{ApiError, ApiResult, AppState};
@@ -182,12 +183,29 @@ pub async fn logout(
 /// The signed-in user.
 #[utoipa::path(get, path = "/api/v1/auth/me", tag = "auth",
     responses(
-        (status = 200, description = "The signed-in user", body = UserView),
+        (status = 200, description = "The signed-in user", body = MeView),
         (status = 401, description = "Not signed in", body = ApiError,
             content_type = "application/problem+json"),
     ))]
-pub async fn me(user: CurrentUser) -> Json<UserView> {
-    Json(user.auth.user.into())
+pub async fn me(authed: Authed) -> Json<MeView> {
+    Json(MeView {
+        granted_permissions: authed.principal.granted_anywhere(),
+        is_owner: authed.principal.is_owner(),
+        user: authed.user.auth.user.into(),
+    })
+}
+
+/// The signed-in user plus permission hints for the UI.
+#[derive(Debug, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct MeView {
+    #[serde(flatten)]
+    pub user: UserView,
+    /// Permissions granted at any organization. For deciding what to show;
+    /// the API enforces permissions on every request regardless.
+    pub granted_permissions: Vec<&'static str>,
+    /// Holds the Owner role at the root organization.
+    pub is_owner: bool,
 }
 
 /// The signed-in user's active sessions.

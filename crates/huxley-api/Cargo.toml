@@ -10,10 +10,15 @@ publish = false
 
 [dependencies]
 axum.workspace = true
+base64.workspace = true
+getrandom.workspace = true
+sqlx.workspace = true
 http.workspace = true
 huxley-auth.workspace = true
+huxley-authz.workspace = true
 huxley-core.workspace = true
 huxley-db.workspace = true
+huxley-orgs.workspace = true
 huxley-telemetry.workspace = true
 serde.workspace = true
 serde_json.workspace = true
@@ -26,6 +31,7 @@ utoipa.workspace = true
 uuid.workspace = true
 
 [dev-dependencies]
+huxley-db = { workspace = true, features = ["testing"] }
 huxley-auth.workspace = true
 http-body-util = "0.1"
 secrecy.workspace = true

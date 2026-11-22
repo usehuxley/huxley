@@ -14,7 +14,9 @@ use tower_http::sensitive_headers::SetSensitiveRequestHeadersLayer;
 use tower_http::timeout::TimeoutLayer;
 use tower_http::trace::TraceLayer;
 
-use crate::{ApiError, AppState, auth_routes, csrf, health, openapi};
+use crate::{
+    ApiError, AppState, audit_routes, auth_routes, csrf, health, openapi, org_routes, user_routes,
+};
 
 const REQUEST_ID: HeaderName = HeaderName::from_static("x-request-id");
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
@@ -25,6 +27,9 @@ pub fn router(state: AppState) -> Router {
     let api_v1 = Router::new()
         .route("/openapi.json", get(openapi::openapi_json))
         .nest("/auth", auth_routes::routes())
+        .nest("/orgs", org_routes::routes())
+        .nest("/audit", audit_routes::routes())
+        .merge(user_routes::routes())
         .layer(middleware::from_fn(csrf::require_header));
 
     let stack = ServiceBuilder::new()

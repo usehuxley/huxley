@@ -20,6 +20,7 @@ Every module runs on the engine. Mailbox polling, SLA escalation, AI triage, and
 | `crates/huxley-db` | PostgreSQL pools, org-scoped transactions (RLS), audit log, outbox, migrations |
 | `crates/huxley-orgs` | Organization tree |
 | `crates/huxley-auth` | Passwords, sessions, sign-in |
+| `crates/huxley-authz` | Permissions, roles, scoped role assignments |
 | `crates/huxley-telemetry` | OpenTelemetry setup (traces, metrics, logs via OTLP) |
 | `crates/huxley-core` | Shared types: ids, pagination |
 | `migrations/` | SQL migrations, embedded in the binary |
@@ -62,7 +63,7 @@ docker compose run --rm huxley admin bootstrap \
   --org-name "Your MSP" --email you@example.com --name "Your Name"
 ```
 
-`bootstrap` creates the root organization and the first user, and prints a generated password once. Change it from your profile after signing in.
+`bootstrap` creates the root organization and the first user (with the Owner role), and prints a generated password once. Change it from your profile after signing in. If every owner is locked out, `huxley admin create-user --owner` creates a new owner.
 
 Then open https://localhost (staff app) and https://portal.localhost (client portal). Set `HUXLEY_DOMAIN` and `HUXLEY_PORTAL_DOMAIN` in `.env` for real hostnames; Caddy obtains certificates automatically.
 

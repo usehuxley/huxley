@@ -1,0 +1,149 @@
+//! The authorized-user extractor and error mapping for domain errors.
+
+use axum::extract::FromRequestParts;
+use http::StatusCode;
+use http::request::Parts;
+use huxley_auth::AuthError;
+use huxley_authz::{AuthzError, Principal, permissions};
+use huxley_db::{OrgScope, begin_scoped};
+use huxley_orgs::OrgError;
+use uuid::Uuid;
+
+use crate::session::CurrentUser;
+use crate::{ApiError, ApiResult, AppState};
+
+/// A signed-in user and their grants. Handlers check permissions through it.
+#[derive(Debug, Clone)]
+pub struct Authed {
+    pub user: CurrentUser,
+    pub principal: Principal,
+}
+
+impl FromRequestParts<AppState> for Authed {
+    type Rejection = ApiError;
+
+    async fn from_request_parts(parts: &mut Parts, state: &AppState) -> Result<Self, ApiError> {
+        let user = CurrentUser::from_request_parts(parts, state).await?;
+        let mut tx = begin_scoped(&state.db, &OrgScope::System)
+            .await
+            .map_err(|e| ApiError::internal(&e))?;
+        let principal = huxley_authz::load_principal(&mut tx, user.auth.user.id)
+            .await
+            .map_err(|e| ApiError::internal(&e))?;
+        tx.commit().await.map_err(|e| ApiError::internal(&e))?;
+        Ok(Self { user, principal })
+    }
+}
+
+impl Authed {
+    /// Requires an instance-wide permission.
+    pub fn require_instance(&self, permission: &str) -> ApiResult<()> {
+        if self.principal.can_instance(permission) {
+            Ok(())
+        } else {
+            Err(ApiError::forbidden())
+        }
+    }
+
+    /// Requires a permission at an org. Responds 404 rather than 403 when the
+    /// caller can't even see the org, so existence isn't revealed.
+    pub async fn require_at(
+        &self,
+        state: &AppState,
+        permission: &str,
+        org_id: Uuid,
+    ) -> ApiResult<()> {
+        let mut tx = begin_scoped(&state.db, &OrgScope::System)
+            .await
+            .map_err(|e| ApiError::internal(&e))?;
+        let path = huxley_authz::org_path(&mut tx, org_id)
+            .await
+            .map_err(map_authz)?;
+        tx.commit().await.map_err(|e| ApiError::internal(&e))?;
+        if self.principal.can_at_path(permission, &path) {
+            Ok(())
+        } else if self.principal.can_at_path(permissions::ORG_READ, &path) {
+            Err(ApiError::forbidden())
+        } else {
+            Err(ApiError::not_found())
+        }
+    }
+
+    /// The RLS scope for this user: every org where they hold a grant.
+    pub async fn scope(&self, state: &AppState) -> ApiResult<OrgScope> {
+        let mut tx = begin_scoped(&state.db, &OrgScope::System)
+            .await
+            .map_err(|e| ApiError::internal(&e))?;
+        let orgs = huxley_authz::visible_orgs(&mut tx, &self.principal)
+            .await
+            .map_err(|e| ApiError::internal(&e))?;
+        tx.commit().await.map_err(|e| ApiError::internal(&e))?;
+        Ok(OrgScope::Orgs(orgs))
+    }
+}
+
+pub fn map_org(error: OrgError) -> ApiError {
+    match error {
+        OrgError::NotFound => ApiError::not_found(),
+        OrgError::NameTaken => {
+            ApiError::conflict("An active sibling organization already uses this name.")
+        }
+        OrgError::RootExists => ApiError::conflict("The instance already has a root organization."),
+        OrgError::HasActiveChildren => {
+            ApiError::conflict("Archive or move its active sub-organizations first.")
+        }
+        OrgError::VersionConflict => ApiError::conflict(
+            "The organization was changed by someone else. Reload and try again.",
+        ),
+        OrgError::InvalidName(reason) => {
+            ApiError::validation().with_field_error("/name", format!("Name {reason}."))
+        }
+        e @ (OrgError::ProviderUnderClient | OrgError::Cycle | OrgError::RootImmutable) => {
+            ApiError::new(
+                StatusCode::UNPROCESSABLE_ENTITY,
+                "invalid-org-change",
+                "Invalid change",
+            )
+            .with_detail(format!(
+                "{}{}",
+                e.to_string()[..1].to_uppercase(),
+                &e.to_string()[1..]
+            ))
+        }
+        OrgError::Db(e) => ApiError::internal(&e),
+    }
+}
+
+pub fn map_authz(error: AuthzError) -> ApiError {
+    match error {
+        AuthzError::Forbidden => ApiError::forbidden(),
+        AuthzError::RoleNotFound | AuthzError::AssignmentNotFound | AuthzError::OrgNotFound => {
+            ApiError::not_found()
+        }
+        AuthzError::AlreadyAssigned => {
+            ApiError::conflict("The user already has this role at this organization.")
+        }
+        AuthzError::OwnerOnly => {
+            ApiError::new(StatusCode::FORBIDDEN, "owner-only", "Owner required")
+                .with_detail("Only an owner can grant or remove the Owner role.")
+        }
+        AuthzError::LastOwner => ApiError::conflict("The instance must keep at least one owner."),
+        AuthzError::Db(e) => ApiError::internal(&e),
+    }
+}
+
+pub fn map_auth(error: AuthError) -> ApiError {
+    match error {
+        AuthError::EmailTaken => ApiError::conflict("A user with this email already exists."),
+        AuthError::InvalidEmail => {
+            ApiError::validation().with_field_error("/email", "Enter a valid email address.")
+        }
+        AuthError::InvalidDisplayName => ApiError::validation()
+            .with_field_error("/displayName", "Enter a name of 1 to 200 characters."),
+        AuthError::WeakPassword(e) => {
+            ApiError::validation().with_field_error("/password", e.to_string())
+        }
+        AuthError::UserNotFound | AuthError::SessionNotFound => ApiError::not_found(),
+        other => ApiError::internal(&other),
+    }
+}

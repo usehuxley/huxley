@@ -69,6 +69,17 @@ check-js:
 test-db:
     HUXLEY_TEST_DATABASE_URL={{dev_db}} HUXLEY_REQUIRE_DB_TESTS=1 cargo test --workspace
 
+# Postgres on the host network at 127.0.0.1:5433, for machines where a VPN or
+# firewall blocks Docker's bridge network (the dev-up Postgres is unreachable)
+db-host-up:
+    docker start huxley-test-pg 2>/dev/null || docker run -d --name huxley-test-pg --network host \
+        -e POSTGRES_USER=huxley -e POSTGRES_PASSWORD=huxley -e POSTGRES_DB=huxley \
+        postgres:18 -p 5433 -c listen_addresses=127.0.0.1
+
+# Rust tests including database tests, against the host-network Postgres
+test-db-host: db-host-up
+    HUXLEY_TEST_DATABASE_URL=postgres://huxley:huxley@127.0.0.1:5433/huxley HUXLEY_REQUIRE_DB_TESTS=1 cargo test --workspace
+
 # Browser end-to-end tests
 e2e:
     pnpm test:e2e

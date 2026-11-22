@@ -4,16 +4,20 @@
 //! RFC 9457 problem details for errors, cursor pagination, `Idempotency-Key`
 //! support on unsafe methods, and OpenAPI documentation generated with `utoipa`.
 
+pub mod audit_routes;
 pub mod auth_routes;
+pub mod authz;
 pub mod context;
 pub mod csrf;
 pub mod health;
 pub mod idempotency;
 pub mod openapi;
+pub mod org_routes;
 pub mod problem;
 pub mod rate_limit;
 mod router;
 pub mod session;
+pub mod user_routes;
 
 pub use problem::{ApiError, ApiResult};
 pub use router::router;

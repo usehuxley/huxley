@@ -15,6 +15,7 @@ authors = ["Huxley contributors"]
 # Internal crates
 huxley-api = { path = "crates/huxley-api" }
 huxley-auth = { path = "crates/huxley-auth" }
+huxley-authz = { path = "crates/huxley-authz" }
 huxley-core = { path = "crates/huxley-core" }
 huxley-db = { path = "crates/huxley-db" }
 huxley-orgs = { path = "crates/huxley-orgs" }

@@ -131,6 +131,8 @@ pub enum AuthError {
     WeakPassword(#[from] PasswordPolicyError),
     #[error("session not found")]
     SessionNotFound,
+    #[error("user not found")]
+    UserNotFound,
     #[error("current password is incorrect")]
     WrongCurrentPassword,
     #[error(transparent)]
@@ -228,6 +230,69 @@ pub async fn find_user(conn: &mut PgConnection, id: Uuid) -> AuthResult<Option<U
         .bind(id)
         .fetch_optional(conn)
         .await?)
+}
+
+/// Users ordered by creation (UUIDv7 ids sort by time), after `after` if given.
+/// Returns up to `limit + 1` rows so the caller can tell whether more exist.
+pub async fn list_users(
+    conn: &mut PgConnection,
+    after: Option<Uuid>,
+    limit: u32,
+) -> AuthResult<Vec<User>> {
+    Ok(sqlx::query_as(select_user!(
+        "WHERE ($1::uuid IS NULL OR id > $1) ORDER BY id LIMIT $2"
+    ))
+    .bind(after)
+    .bind(i64::from(limit) + 1)
+    .fetch_all(conn)
+    .await?)
+}
+
+/// Changes a user's display name and/or status. Disabling revokes every
+/// session in the same transaction, so access ends immediately.
+pub async fn update_user(
+    conn: &mut PgConnection,
+    ctx: &RequestContext,
+    id: Uuid,
+    display_name: Option<&str>,
+    status: Option<UserStatus>,
+) -> AuthResult<User> {
+    let before = find_user(conn, id).await?.ok_or(AuthError::UserNotFound)?;
+    let display_name = display_name.map(normalize_display_name).transpose()?;
+    let user: User = sqlx::query_as(
+        "UPDATE users SET display_name = coalesce($2, display_name), \
+                status = coalesce($3, status), version = version + 1 \
+          WHERE id = $1 \
+         RETURNING id, email, display_name, status, last_login_at, created_at",
+    )
+    .bind(id)
+    .bind(display_name.as_deref())
+    .bind(status)
+    .fetch_one(&mut *conn)
+    .await?;
+    let mut revoked = 0;
+    if before.status == UserStatus::Active && user.status == UserStatus::Disabled {
+        revoked = sqlx::query(
+            "UPDATE sessions SET revoked_at = now() WHERE user_id = $1 AND revoked_at IS NULL",
+        )
+        .bind(id)
+        .execute(&mut *conn)
+        .await?
+        .rows_affected();
+    }
+    audit::record(
+        conn,
+        ctx,
+        AuditRecord::new("user.updated")
+            .target("user", id)
+            .details(json!({
+                "before": { "displayName": before.display_name, "status": before.status },
+                "after": { "displayName": user.display_name, "status": user.status },
+                "sessionsRevoked": revoked,
+            })),
+    )
+    .await?;
+    Ok(user)
 }
 
 /// Authentication operations that own their transactions.
