@@ -87,16 +87,16 @@ BEGIN
             USING ERRCODE = 'foreign_key_violation';
     END IF;
 
-    -- A client's sub-organizations are clients too; providers sit above clients.
-    IF parent_kind = 'client' AND NEW.kind = 'provider' THEN
-        RAISE EXCEPTION 'a provider organization cannot be placed under a client'
-            USING ERRCODE = 'check_violation', CONSTRAINT = 'organizations_provider_under_client';
-    END IF;
-
     -- Moving under one's own descendant would create a cycle.
     IF TG_OP = 'UPDATE' AND parent_path <@ OLD.path THEN
         RAISE EXCEPTION 'cannot move an organization under its own descendant'
             USING ERRCODE = 'check_violation', CONSTRAINT = 'organizations_no_cycles';
+    END IF;
+
+    -- A client's sub-organizations are clients too; providers sit above clients.
+    IF parent_kind = 'client' AND NEW.kind = 'provider' THEN
+        RAISE EXCEPTION 'a provider organization cannot be placed under a client'
+            USING ERRCODE = 'check_violation', CONSTRAINT = 'organizations_provider_under_client';
     END IF;
 
     NEW.path := parent_path || huxley_org_label(NEW.id);
@@ -128,8 +128,10 @@ BEGIN
 END
 $$;
 
+-- Keyed on parent_id, not path: a column-list trigger fires only for columns
+-- named in the UPDATE's SET clause, and path is changed by the BEFORE trigger.
 CREATE TRIGGER organizations_move_subtree
-    AFTER UPDATE OF path ON organizations
+    AFTER UPDATE OF parent_id ON organizations
     FOR EACH ROW WHEN (OLD.path IS DISTINCT FROM NEW.path)
     EXECUTE FUNCTION huxley_org_move_subtree();
 
