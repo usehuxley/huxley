@@ -6,6 +6,7 @@
 use axum::Json;
 use utoipa::OpenApi;
 
+use crate::auth_routes::{self, ChangePasswordRequest, LoginRequest, SessionView, UserView};
 use crate::health::{self, HealthStatus};
 use crate::problem::{ApiError, FieldError};
 
@@ -16,9 +17,21 @@ use crate::problem::{ApiError, FieldError};
         description = "Huxley platform API. See https://docs.usehuxley.com for conventions.",
         license(name = "MIT", identifier = "MIT"),
     ),
-    paths(health::healthz, health::readyz),
-    components(schemas(HealthStatus, ApiError, FieldError)),
-    tags((name = "system", description = "Health and platform metadata")),
+    paths(
+        health::healthz,
+        health::readyz,
+        auth_routes::login,
+        auth_routes::logout,
+        auth_routes::me,
+        auth_routes::change_password,
+        auth_routes::list_sessions,
+        auth_routes::revoke_session,
+    ),
+    components(schemas(HealthStatus, ApiError, FieldError, LoginRequest, ChangePasswordRequest, UserView, SessionView)),
+    tags(
+        (name = "system", description = "Health and platform metadata"),
+        (name = "auth", description = "Sign-in, sessions, and the current user"),
+    ),
 )]
 pub struct ApiDoc;
 

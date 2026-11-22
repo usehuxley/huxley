@@ -412,12 +412,61 @@ These ship as packs, built on the same OpenAPI mechanism with overlays: **Micros
 
 ## 8. Platform Modules
 
-All modules share the same patterns:
+All modules can be turned off (§8.0) and share the same patterns:
 
 - Entities are owned by an org and protected by RBAC.
 - Entities support **custom fields** (typed, per entity type, with optional scope to an org subtree), **tags**, **attachments**, an **activity timeline**, and **audit**.
 - Every create, update, or state change emits a **domain event**.
 - Every user-facing operation is also a **`core.*` workflow action**.
+
+### 8.0 Feature modules and toggles
+
+Everything outside the core platform is a **feature module** that an administrator can turn on or off. An MSP that only wants an automation engine runs Huxley with every module off and never sees ticketing, sales, or billing.
+
+**Always on (core):** organizations, users, RBAC, audit, settings, the automation engine (workflows, triggers, scripts, forms, webhooks, callbacks), integrations and connections, organization variables, datasets, packs, the AI assistant and MCP server, notifications, and analytics over core and dataset data.
+
+**Toggleable modules:**
+
+| Module | Covers | Requires |
+|---|---|---|
+| `crm` | Companies, contacts, sites, client 360 view | none |
+| `servicedesk` | Tickets, queues, SLAs, mailbox ingestion, dispatch | `crm` |
+| `cmdb` | Assets, relationships, dependency map | `crm` |
+| `knowledge` | Knowledge base, client documentation | none |
+| `contracts` | Agreements, warranties, product catalog | `crm` |
+| `change` | Change and problem management | `servicedesk` |
+| `projects` | Projects, templates, resource planning | `crm` |
+| `inventory` | Stock, warehouses, purchase orders | `contracts` |
+| `sales` | Pipeline, CPQ, sales orders | `crm`, `contracts` |
+| `cx` | CSAT, NPS, client health | `servicedesk` |
+| `billing` | Invoice generation, accounting sync | `contracts` |
+| `portal` | Client portal | `crm` |
+
+**How a module plugs in.** Each module registers a manifest with the platform's module registry:
+- its permissions
+- its API routes
+- its navigation entries and pages
+- its domain events and `core.*` workflow actions
+- its built-in pack of system workflows
+- its search and reporting data sources
+
+The registry is the single place that decides whether any of these are active.
+
+**What turning a module off does:**
+- Its navigation, pages, and command-palette entries disappear.
+- Its API routes return `404` with problem type `module-disabled`, and its MCP tools are withdrawn.
+- Its permissions are hidden from role editors, and its `core.*` actions are unavailable to new workflow versions.
+- Its system workflows are paused, and its data sources leave the report builder.
+- **Data is kept.** Turning a module back on restores everything as it was. Removing a module's data is a separate, explicit, audited admin action.
+
+**Rules:**
+- Enabling a module also enables what it requires, after confirmation.
+- A module can't be disabled while an enabled module depends on it.
+- Published workflows that call a disabled module's actions are flagged in the UI and fail with a clear error, rather than failing silently.
+- Module settings are instance-wide by default and can be narrowed per provider org. For example, under one owner, one MSP brand might use the service desk while another runs automation only.
+- Enabling and disabling require the `platform:modules:manage` permission and are audited.
+
+**Setup.** `huxley admin bootstrap` and the first-run setup offer presets: *Automation only* (no modules), *Service desk* (`crm`, `servicedesk`, `cmdb`, `knowledge`, `portal`), and *Full PSA* (everything). Modules can be changed later at any time.
 
 ### 8.1 Companies, contacts, sites (CRM base)
 
@@ -919,6 +968,7 @@ The TypeScript SDK lives in the monorepo (`packages/sdk`), so it changes in lock
 | ADR-014 | Huxley generates invoices; accounting systems are the system of record | Avoids rebuilding AR, payments, and tax compliance; syncs via integration packs. |
 | ADR-015 | OpenTelemetry as the only instrumentation standard (OTLP export) | Vendor-neutral; works with any backend operators already run, including Azure Monitor. |
 | ADR-016 | TypeScript SDK compiles to HWF at build time; no SDK runtime | One execution path, one security model; code and canvas stay interchangeable. |
+| ADR-017 | Everything outside the core platform is a toggleable feature module | Lets MSPs run Huxley as an automation engine only; one registry gates UI, API, permissions, and system workflows. Data is kept when a module is off. |
 
 ---
 
@@ -936,6 +986,7 @@ The TypeScript SDK lives in the monorepo (`packages/sdk`), so it changes in lock
 | Chat / phone intake | Not needed early. Post-1.0 candidate. Workflows and webhooks can bridge in the meantime. | Plan "Beyond 1.0" |
 | PSA importers | Eventually, not soon. Post-1.0 candidate, delivered as packs. | Plan "Beyond 1.0" |
 | Domain | `usehuxley.com` | Header, §15 |
+| Automation-only deployments | Every non-core feature is a module that can be turned off, instance-wide or per provider org. | §8.0, ADR-017 |
 | Observability | OpenTelemetry throughout | §13.3, ADR-015 |
 
 ### 18.2 Still open

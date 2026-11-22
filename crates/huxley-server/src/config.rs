@@ -14,6 +14,8 @@ use std::path::Path;
 use anyhow::{Context as _, anyhow};
 use figment::Figment;
 use figment::providers::{Env, Format as _, Serialized, Toml};
+use huxley_api::ApiConfig;
+use huxley_auth::AuthConfig;
 use huxley_db::DatabaseConfig;
 use huxley_telemetry::TelemetryConfig;
 use serde::Deserialize;
@@ -29,6 +31,8 @@ pub struct Config {
     pub database: Option<DatabaseConfig>,
     #[serde(default)]
     pub telemetry: TelemetryConfig,
+    #[serde(default)]
+    pub auth: AuthConfig,
     /// Apply migrations at startup. Convenient for single-node installs; larger
     /// deployments run `huxley migrate` as a separate step before rollout.
     #[serde(default)]
@@ -41,6 +45,9 @@ pub struct HttpConfig {
     pub bind: SocketAddr,
     /// Seconds to wait for in-flight requests and jobs on shutdown.
     pub shutdown_grace_secs: u64,
+    /// Proxy trust, cookie security, and sign-in rate limits.
+    #[serde(flatten)]
+    pub api: ApiConfig,
 }
 
 impl Default for HttpConfig {
@@ -48,6 +55,7 @@ impl Default for HttpConfig {
         Self {
             bind: SocketAddr::from(([0, 0, 0, 0], 8080)),
             shutdown_grace_secs: 30,
+            api: ApiConfig::default(),
         }
     }
 }
@@ -137,6 +145,21 @@ mod tests {
             let config = Config::load(None).unwrap();
             assert_eq!(config.http.bind.port(), 9100);
             assert!(config.database().is_ok());
+            Ok(())
+        });
+    }
+
+    #[test]
+    fn http_section_includes_api_settings() {
+        figment::Jail::expect_with(|jail| {
+            jail.set_env("HUXLEY_HTTP__TRUST_FORWARDED_FOR", "true");
+            jail.set_env("HUXLEY_HTTP__COOKIE_SECURE", "false");
+            jail.set_env("HUXLEY_AUTH__LOCKOUT_THRESHOLD", "9");
+            let config = Config::load(None).unwrap();
+            assert!(config.http.api.trust_forwarded_for);
+            assert!(!config.http.api.cookie_secure);
+            assert_eq!(config.http.api.login_attempts_per_minute, 20);
+            assert_eq!(config.auth.lockout_threshold, 9);
             Ok(())
         });
     }

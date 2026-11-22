@@ -11,6 +11,7 @@ publish = false
 [dependencies]
 axum.workspace = true
 http.workspace = true
+huxley-auth.workspace = true
 huxley-core.workspace = true
 huxley-db.workspace = true
 huxley-telemetry.workspace = true
@@ -19,10 +20,13 @@ serde_json.workspace = true
 tokio.workspace = true
 tower.workspace = true
 tower-http.workspace = true
+time.workspace = true
 tracing.workspace = true
 utoipa.workspace = true
+uuid.workspace = true
 
 [dev-dependencies]
+huxley-auth.workspace = true
 http-body-util = "0.1"
 secrecy.workspace = true
 

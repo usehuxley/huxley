@@ -4,7 +4,8 @@
 use axum::body::Body;
 use http::{Request, StatusCode};
 use http_body_util::BodyExt as _;
-use huxley_api::{AppState, router};
+use huxley_api::{ApiConfig, AppState, router};
+use huxley_auth::{AuthConfig, AuthService};
 use huxley_db::DatabaseConfig;
 use secrecy::SecretString;
 use tower::ServiceExt as _;
@@ -17,7 +18,8 @@ fn app() -> axum::Router {
         statement_timeout_ms: 1_000,
     };
     let db = huxley_db::connect(&config).expect("lazy pool");
-    router(AppState { db })
+    let auth = AuthService::new(db.clone(), AuthConfig::default());
+    router(AppState::new(db, auth, ApiConfig::default()))
 }
 
 async fn send(uri: &str) -> (StatusCode, http::HeaderMap, serde_json::Value) {
@@ -66,4 +68,37 @@ async fn openapi_document_lists_system_routes() {
     assert_eq!(status, StatusCode::OK);
     assert!(body["paths"]["/healthz"].is_object());
     assert!(body["paths"]["/readyz"].is_object());
+}
+
+#[tokio::test]
+async fn state_changing_requests_need_the_csrf_header() {
+    let request = Request::post("/api/v1/auth/login")
+        .header("content-type", "application/json")
+        .body(Body::from(r#"{"email":"a@example.com","password":"x"}"#))
+        .unwrap();
+    let response = app().oneshot(request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::FORBIDDEN);
+    let bytes = response.into_body().collect().await.unwrap().to_bytes();
+    let body: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+    assert_eq!(body["type"], "https://usehuxley.com/problems/csrf");
+}
+
+#[tokio::test]
+async fn me_without_a_session_is_unauthorized() {
+    let (status, headers, body) = send("/api/v1/auth/me").await;
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
+    assert_eq!(headers["content-type"], "application/problem+json");
+    assert_eq!(body["type"], "https://usehuxley.com/problems/unauthorized");
+}
+
+#[tokio::test]
+async fn logout_without_a_session_still_clears_the_cookie() {
+    let request = Request::post("/api/v1/auth/logout")
+        .header("x-requested-with", "huxley")
+        .body(Body::empty())
+        .unwrap();
+    let response = app().oneshot(request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::NO_CONTENT);
+    let cookie = response.headers()["set-cookie"].to_str().unwrap();
+    assert!(cookie.starts_with("hx_session=; Path=/; Max-Age=0"));
 }

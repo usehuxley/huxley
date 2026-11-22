@@ -15,7 +15,7 @@
 	import { AppShell, Button, CommandPalette, type Command, type NavItem } from '@usehuxley/ui';
 	import type { LayoutProps } from './$types';
 
-	let { children }: LayoutProps = $props();
+	let { children, data }: LayoutProps = $props();
 
 	// Modules arrive phase by phase (see docs/IMPLEMENTATION_PLAN.md).
 	const nav: NavItem[] = [
@@ -32,10 +32,11 @@
 	const commands: Command[] = [
 		{ id: 'home', label: 'Go to Home', group: 'Navigate', run: () => goto(resolve('/(app)')) },
 		{
-			id: 'login',
-			label: 'Go to sign-in page',
+			id: 'profile',
+			label: 'Your profile and sessions',
+			keywords: ['password', 'account', 'sessions'],
 			group: 'Navigate',
-			run: () => goto(resolve('/(auth)/login'))
+			run: () => goto(resolve('/(app)/profile'))
 		}
 	];
 
@@ -49,7 +50,15 @@
 	onSearch={() => (paletteOpen = true)}
 >
 	{#snippet topbar()}
-		<Button href="/login" variant="ghost" size="sm">Sign in</Button>
+		<a
+			href={resolve('/(app)/profile')}
+			class="hidden rounded-control px-2 py-1.5 text-sm font-medium text-fg-muted hover:bg-surface-sunken hover:text-fg sm:block"
+		>
+			{data.user.displayName}
+		</a>
+		<form method="POST" action="/logout">
+			<Button type="submit" variant="ghost" size="sm">Sign out</Button>
+		</form>
 	{/snippet}
 	{@render children()}
 </AppShell>

@@ -1,18 +1,10 @@
 <script lang="ts">
-	import { Button, Field, Input, toast } from '@usehuxley/ui';
+	import { enhance } from '$app/forms';
+	import { Button, Field, Input } from '@usehuxley/ui';
+	import type { PageProps } from './$types';
 
-	let email = $state('');
-	let password = $state('');
-
-	// Placeholder until authentication lands in Phase 1 (local accounts, MFA, OIDC).
-	function onsubmit(event: SubmitEvent) {
-		event.preventDefault();
-		toast.push({
-			title: 'Sign-in is not available yet',
-			description: 'Authentication arrives in Phase 1.',
-			tone: 'warning'
-		});
-	}
+	let { form }: PageProps = $props();
+	let submitting = $state(false);
 </script>
 
 <svelte:head>
@@ -32,27 +24,56 @@
 		</div>
 
 		<div class="rounded-card border border-border bg-surface p-6 shadow-card">
-			<form class="flex flex-col gap-4" {onsubmit}>
+			<form
+				method="POST"
+				class="flex flex-col gap-4"
+				use:enhance={() => {
+					submitting = true;
+					return async ({ update }) => {
+						await update({ reset: false });
+						submitting = false;
+					};
+				}}
+			>
+				{#if form?.message}
+					<p
+						role="alert"
+						class="rounded-control border border-danger/30 bg-danger-soft px-3 py-2 text-sm text-danger"
+					>
+						{form.message}
+					</p>
+				{/if}
 				<Field label="Email" for="email">
-					<Input id="email" type="email" autocomplete="username" required bind:value={email} />
+					<Input
+						id="email"
+						name="email"
+						type="email"
+						autocomplete="username"
+						required
+						value={form?.email ?? ''}
+					/>
 				</Field>
 				<Field label="Password" for="password">
 					<Input
 						id="password"
+						name="password"
 						type="password"
 						autocomplete="current-password"
 						required
-						bind:value={password}
 					/>
 				</Field>
-				<Button type="submit" variant="primary" block>Sign in</Button>
+				<Button type="submit" variant="primary" block disabled={submitting}>
+					{submitting ? 'Signing in…' : 'Sign in'}
+				</Button>
 			</form>
 
 			<div class="my-5 flex items-center gap-3 text-xs text-fg-subtle">
 				<span class="h-px flex-1 bg-border"></span>or<span class="h-px flex-1 bg-border"></span>
 			</div>
 
-			<Button block disabled>Sign in with Microsoft</Button>
+			<Button block disabled title="Single sign-on arrives later in Phase 1">
+				Sign in with Microsoft
+			</Button>
 		</div>
 	</div>
 </main>

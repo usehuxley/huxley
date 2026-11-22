@@ -1,11 +1,11 @@
 //! Runs against a real PostgreSQL when `HUXLEY_TEST_DATABASE_URL` is set (CI
 //! provides one; locally, `just db-up` starts one). Skips otherwise.
 
-use huxley_db::{DatabaseConfig, OrgScope, begin_scoped, connect, migrate, sqlx};
+use huxley_db::{DatabaseConfig, OrgScope, begin_scoped, connect, connect_owner, migrate, sqlx};
 use secrecy::SecretString;
 use uuid::Uuid;
 
-fn test_pool() -> Option<sqlx::PgPool> {
+fn test_pools() -> Option<(sqlx::PgPool, sqlx::PgPool)> {
     let Ok(url) = std::env::var("HUXLEY_TEST_DATABASE_URL") else {
         // CI sets this so a misconfigured job fails instead of silently skipping.
         assert!(
@@ -21,7 +21,9 @@ fn test_pool() -> Option<sqlx::PgPool> {
         acquire_timeout_secs: 10,
         statement_timeout_ms: 10_000,
     };
-    Some(connect(&config).expect("valid test database URL"))
+    // Migrations need the owner; the app role deliberately cannot change schema.
+    let owner = connect_owner(&config).expect("valid test database URL");
+    Some((owner, connect(&config).expect("valid test database URL")))
 }
 
 async fn in_scope(pool: &sqlx::PgPool, scope: Option<&OrgScope>, org: Uuid) -> bool {
@@ -40,10 +42,12 @@ async fn in_scope(pool: &sqlx::PgPool, scope: Option<&OrgScope>, org: Uuid) -> b
 
 #[tokio::test]
 async fn migrations_apply_idempotently_and_rls_denies_by_default() {
-    let Some(pool) = test_pool() else { return };
+    let Some((owner, pool)) = test_pools() else {
+        return;
+    };
 
-    migrate(&pool).await.expect("migrations apply");
-    migrate(&pool)
+    migrate(&owner).await.expect("migrations apply");
+    migrate(&owner)
         .await
         .expect("re-running migrations is a no-op");
 
@@ -64,8 +68,10 @@ async fn migrations_apply_idempotently_and_rls_denies_by_default() {
 
 #[tokio::test]
 async fn scope_does_not_leak_to_the_next_transaction() {
-    let Some(pool) = test_pool() else { return };
-    migrate(&pool).await.unwrap();
+    let Some((owner, pool)) = test_pools() else {
+        return;
+    };
+    migrate(&owner).await.unwrap();
 
     let org = Uuid::now_v7();
     {

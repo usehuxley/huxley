@@ -2,6 +2,7 @@ use std::any::Any;
 use std::time::Duration;
 
 use axum::Router;
+use axum::middleware;
 use axum::response::{IntoResponse, Response};
 use axum::routing::get;
 use http::{HeaderName, Request, StatusCode, header};
@@ -13,7 +14,7 @@ use tower_http::sensitive_headers::SetSensitiveRequestHeadersLayer;
 use tower_http::timeout::TimeoutLayer;
 use tower_http::trace::TraceLayer;
 
-use crate::{ApiError, AppState, health, openapi};
+use crate::{ApiError, AppState, auth_routes, csrf, health, openapi};
 
 const REQUEST_ID: HeaderName = HeaderName::from_static("x-request-id");
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
@@ -21,9 +22,12 @@ const MAX_BODY_BYTES: usize = 2 * 1024 * 1024;
 
 /// Builds the full API router with the standard middleware stack.
 pub fn router(state: AppState) -> Router {
-    let api_v1 = Router::new().route("/openapi.json", get(openapi::openapi_json));
+    let api_v1 = Router::new()
+        .route("/openapi.json", get(openapi::openapi_json))
+        .nest("/auth", auth_routes::routes())
+        .layer(middleware::from_fn(csrf::require_header));
 
-    let middleware = ServiceBuilder::new()
+    let stack = ServiceBuilder::new()
         .layer(SetSensitiveRequestHeadersLayer::new([
             header::AUTHORIZATION,
             header::COOKIE,
@@ -43,7 +47,7 @@ pub fn router(state: AppState) -> Router {
         .route("/readyz", get(health::readyz))
         .nest("/api/v1", api_v1)
         .fallback(not_found)
-        .layer(middleware)
+        .layer(stack)
         .with_state(state)
 }
 

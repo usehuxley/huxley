@@ -37,6 +37,7 @@ This is a long-term project. The plan follows four rules:
 - [ ] Every endpoint and `core.*` action enforces authorization; list endpoints use authz query filters
 - [ ] Config and entity changes write audit events
 - [ ] Domain events emitted for all state changes
+- [ ] Feature-module code registers through the module registry, and the app still works with that module turned off (from Phase 5)
 - [ ] UI built with the shared design system: keyboard accessible, light/dark, responsive
 - [ ] Playwright E2E tests for the main user flows
 - [ ] Metrics, traces, and structured logs for new background work
@@ -77,6 +78,7 @@ This is a long-term project. The plan follows four rules:
 - **Crypto** (§12): envelope encryption, KMS providers (env/file + Azure Key Vault), key rotation command.
 - **Audit log**: append-only, hash-chained, viewer UI with filters, export.
 - **Custom fields, tags, attachments framework** (object storage via `object_store`).
+- **Module registry and toggles** (design §8.0): module manifests, enable/disable with dependency checks (instance-wide, optionally per provider org), API gating (`module-disabled`), navigation gating, a modules admin page, and bootstrap presets (*Automation only*, *Service desk*, *Full PSA*). No toggleable modules exist yet; this lays the foundation so every module from Phase 5 on registers behind a toggle from day one.
 - **Events outbox** + dispatcher skeleton.
 - **Notifications** v0: in-app notifications + email channel, a real-time channel (WS/SSE with Valkey or PG LISTEN fan-out).
 - Admin UI: users, teams, roles, org tree, auth providers, system settings.
@@ -148,6 +150,7 @@ This is a long-term project. The plan follows four rules:
 
 **Goal:** a usable ITIL-aligned service desk built on the engine.
 
+- Every module in this phase (`crm`, `servicedesk`) registers through the module registry and ships with a CI job that runs the suite with the module off, so *Automation only* installs stay healthy.
 - **CRM base** (§8.1): companies (client orgs), sites, contacts, contact ↔ company links, client 360 view shell.
 - **Ticketing** (§8.2): ticket types (Incident, Service Request; Problem/Change stubbed), configurable status workflows, service queues + membership, priority matrix, notes (public/internal), time entries, attachments, parent/child/related, merge, templates, canned responses, bulk edit, saved queue views, My Work, collision/presence indicators.
 - **SLA engine**: policies, business-hours calendars and holidays, pause statuses, clocks driven by the scheduler, warning and breach events, SLA display everywhere.

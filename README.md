@@ -17,7 +17,9 @@ Every module runs on the engine. Mailbox polling, SLA escalation, AI triage, and
 |---|---|
 | `crates/huxley-server` | The `huxley` binary: API, worker, and scheduler roles |
 | `crates/huxley-api` | HTTP API, conventions, OpenAPI document |
-| `crates/huxley-db` | PostgreSQL pool, org-scoped transactions (RLS), migrations |
+| `crates/huxley-db` | PostgreSQL pools, org-scoped transactions (RLS), audit log, outbox, migrations |
+| `crates/huxley-orgs` | Organization tree |
+| `crates/huxley-auth` | Passwords, sessions, sign-in |
 | `crates/huxley-telemetry` | OpenTelemetry setup (traces, metrics, logs via OTLP) |
 | `crates/huxley-core` | Shared types: ids, pagination |
 | `migrations/` | SQL migrations, embedded in the binary |
@@ -39,9 +41,12 @@ just setup     # pnpm install + Playwright browser
 just dev-up    # Postgres, Valkey, Mailpit, OpenTelemetry + Grafana
 
 just server    # API on :8080 (applies migrations on start)
+just bootstrap # once: root organization + first user (prints a password)
 just web       # staff app on :5173
 just portal    # client portal on :5174
 ```
+
+Sign in at http://localhost:5173 with `admin@example.com` and the printed password. End-to-end tests that need the API run when `E2E_EMAIL` and `E2E_PASSWORD` are set.
 
 Grafana (traces, logs, metrics from your local server) is at http://localhost:3000, and Mailpit is at http://localhost:8025.
 
@@ -53,7 +58,11 @@ Run `just check` before pushing; it runs what CI runs. Other recipes: `just test
 cd deploy/compose
 ./install.sh
 docker compose up -d --build
+docker compose run --rm huxley admin bootstrap \
+  --org-name "Your MSP" --email you@example.com --name "Your Name"
 ```
+
+`bootstrap` creates the root organization and the first user, and prints a generated password once. Change it from your profile after signing in.
 
 Then open https://localhost (staff app) and https://portal.localhost (client portal). Set `HUXLEY_DOMAIN` and `HUXLEY_PORTAL_DOMAIN` in `.env` for real hostnames; Caddy obtains certificates automatically.
 
@@ -70,6 +79,11 @@ The server reads, in increasing precedence: built-in defaults, `huxley.toml`, th
 | `HUXLEY_TELEMETRY__OTLP_ENDPOINT` | (unset) | OTLP gRPC endpoint; unset disables export |
 | `HUXLEY_TELEMETRY__LOG_FORMAT` | `json` | `json` or `pretty` |
 | `HUXLEY_TELEMETRY__SAMPLE_RATIO` | `1.0` | Trace sampling ratio for new traces |
+| `HUXLEY_HTTP__TRUST_FORWARDED_FOR` | `false` | Trust the rightmost `X-Forwarded-For` entry (enable behind your own proxy only) |
+| `HUXLEY_HTTP__COOKIE_SECURE` | `true` | `Secure` flag on the session cookie; disable only for local HTTP |
+| `HUXLEY_AUTH__SESSION_IDLE_MINUTES` | `480` | Sign out after this long without activity |
+| `HUXLEY_AUTH__SESSION_ABSOLUTE_HOURS` | `168` | Sign out this long after sign-in regardless |
+| `HUXLEY_AUTH__LOCKOUT_THRESHOLD` | `5` | Failed sign-ins before a temporary lockout |
 
 ## Contributing
 
