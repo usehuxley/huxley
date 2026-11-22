@@ -10,6 +10,72 @@
 		"version": "0.1.0"
 	},
 	"paths": {
+		"/api/v1/audit": {
+			"get": {
+				"tags": ["audit"],
+				"summary": "Lists audit events, newest first.",
+				"operationId": "list_audit_events",
+				"parameters": [
+					{
+						"name": "limit",
+						"in": "query",
+						"required": false,
+						"schema": {
+							"type": ["integer", "null"],
+							"format": "int32",
+							"minimum": 0
+						}
+					},
+					{
+						"name": "cursor",
+						"in": "query",
+						"required": false,
+						"schema": {
+							"type": ["string", "null"]
+						}
+					},
+					{
+						"name": "action",
+						"in": "query",
+						"description": "Only actions starting with this prefix, e.g. `auth.` or `org.created`.",
+						"required": false,
+						"schema": {
+							"type": ["string", "null"]
+						}
+					},
+					{
+						"name": "targetId",
+						"in": "query",
+						"description": "Only events about this entity.",
+						"required": false,
+						"schema": {
+							"type": ["string", "null"],
+							"format": "uuid"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/AuditPage"
+								}
+							}
+						}
+					},
+					"403": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
 		"/api/v1/auth/login": {
 			"post": {
 				"tags": ["auth"],
@@ -82,7 +148,7 @@
 						"content": {
 							"application/json": {
 								"schema": {
-									"$ref": "#/components/schemas/UserView"
+									"$ref": "#/components/schemas/MeView"
 								}
 							}
 						}
@@ -188,6 +254,587 @@
 				}
 			}
 		},
+		"/api/v1/orgs": {
+			"get": {
+				"tags": ["orgs"],
+				"summary": "Organizations the caller can see, ordered as a tree (parents before children).",
+				"operationId": "list_orgs",
+				"responses": {
+					"200": {
+						"description": "Visible organizations in tree order",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "array",
+									"items": {
+										"$ref": "#/components/schemas/Organization"
+									}
+								}
+							}
+						}
+					}
+				}
+			},
+			"post": {
+				"tags": ["orgs"],
+				"summary": "Creates a sub-organization.",
+				"operationId": "create_org",
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/CreateOrgRequest"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"201": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Organization"
+								}
+							}
+						}
+					},
+					"409": {
+						"description": "Name already used by a sibling",
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					},
+					"422": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/orgs/{id}": {
+			"get": {
+				"tags": ["orgs"],
+				"operationId": "get_org",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"description": "Organization id",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Organization"
+								}
+							}
+						}
+					},
+					"404": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			},
+			"patch": {
+				"tags": ["orgs"],
+				"summary": "Renames an organization.",
+				"operationId": "update_org",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"description": "Organization id",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/UpdateOrgRequest"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Organization"
+								}
+							}
+						}
+					},
+					"409": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/orgs/{id}/archive": {
+			"post": {
+				"tags": ["orgs"],
+				"summary": "Archives an organization with no active sub-organizations.",
+				"operationId": "archive_org",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"description": "Organization id",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/ArchiveOrgRequest"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Organization"
+								}
+							}
+						}
+					},
+					"409": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/orgs/{id}/move": {
+			"post": {
+				"tags": ["orgs"],
+				"summary": "Moves an organization and its subtree under a new parent. Requires\n`org:move` on the organization and `org:create` on the new parent.",
+				"operationId": "move_org",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"description": "Organization id",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/MoveOrgRequest"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Organization"
+								}
+							}
+						}
+					},
+					"422": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/permissions": {
+			"get": {
+				"tags": ["users"],
+				"summary": "Every permission Huxley checks.",
+				"operationId": "list_permissions",
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "array",
+									"items": {
+										"$ref": "#/components/schemas/Permission"
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/role-assignments": {
+			"post": {
+				"tags": ["users"],
+				"summary": "Grants a role to a user at an organization.",
+				"operationId": "create_assignment",
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/CreateAssignmentRequest"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"201": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Assignment"
+								}
+							}
+						}
+					},
+					"403": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					},
+					"409": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/role-assignments/{id}": {
+			"delete": {
+				"tags": ["users"],
+				"summary": "Removes a role assignment.",
+				"operationId": "delete_assignment",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"description": "Assignment id",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"responses": {
+					"204": {},
+					"409": {
+						"description": "Would remove the last owner",
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/roles": {
+			"get": {
+				"tags": ["users"],
+				"summary": "Roles that can be assigned.",
+				"operationId": "list_roles",
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "array",
+									"items": {
+										"$ref": "#/components/schemas/Role"
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/users": {
+			"get": {
+				"tags": ["users"],
+				"summary": "Lists users.",
+				"operationId": "list_users",
+				"parameters": [
+					{
+						"name": "limit",
+						"in": "query",
+						"description": "Page size, 1 to 200 (default 50).",
+						"required": false,
+						"schema": {
+							"type": ["integer", "null"],
+							"format": "int32",
+							"minimum": 0
+						}
+					},
+					{
+						"name": "cursor",
+						"in": "query",
+						"description": "Opaque cursor from the previous page's `nextCursor`.",
+						"required": false,
+						"schema": {
+							"type": ["string", "null"]
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/UserPage"
+								}
+							}
+						}
+					},
+					"403": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			},
+			"post": {
+				"tags": ["users"],
+				"summary": "Creates a local user. The new user has no roles until one is assigned.",
+				"operationId": "create_user",
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/CreateUserRequest"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"201": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/CreateUserResponse"
+								}
+							}
+						}
+					},
+					"409": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					},
+					"422": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/users/{id}": {
+			"get": {
+				"tags": ["users"],
+				"operationId": "get_user",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"description": "User id",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/UserView"
+								}
+							}
+						}
+					},
+					"404": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			},
+			"patch": {
+				"tags": ["users"],
+				"summary": "Edits a user's name or status.",
+				"operationId": "update_user",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"description": "User id",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/UpdateUserRequest"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/UserView"
+								}
+							}
+						}
+					},
+					"409": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/users/{id}/assignments": {
+			"get": {
+				"tags": ["users"],
+				"summary": "A user's role assignments that the caller can see.",
+				"operationId": "list_assignments",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"description": "User id",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "array",
+									"items": {
+										"$ref": "#/components/schemas/Assignment"
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		},
 		"/healthz": {
 			"get": {
 				"tags": ["system"],
@@ -266,6 +913,135 @@
 					}
 				}
 			},
+			"ArchiveOrgRequest": {
+				"type": "object",
+				"required": ["version"],
+				"properties": {
+					"version": {
+						"type": "integer",
+						"format": "int32"
+					}
+				}
+			},
+			"Assignment": {
+				"type": "object",
+				"required": [
+					"id",
+					"userId",
+					"roleId",
+					"roleKey",
+					"roleName",
+					"orgId",
+					"orgName",
+					"inherit",
+					"createdAt"
+				],
+				"properties": {
+					"createdAt": {
+						"type": "string",
+						"format": "date-time"
+					},
+					"id": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"inherit": {
+						"type": "boolean"
+					},
+					"orgId": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"orgName": {
+						"type": "string"
+					},
+					"roleId": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"roleKey": {
+						"type": "string"
+					},
+					"roleName": {
+						"type": "string"
+					},
+					"userId": {
+						"type": "string",
+						"format": "uuid"
+					}
+				}
+			},
+			"AuditEventView": {
+				"type": "object",
+				"required": ["id", "seq", "occurredAt", "actorType", "via", "action", "details"],
+				"properties": {
+					"action": {
+						"type": "string"
+					},
+					"actorId": {
+						"type": ["string", "null"],
+						"format": "uuid"
+					},
+					"actorName": {
+						"type": ["string", "null"]
+					},
+					"actorType": {
+						"type": "string",
+						"description": "`user`, `system`, or `anonymous`."
+					},
+					"details": {
+						"type": "object"
+					},
+					"id": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"ip": {
+						"type": ["string", "null"]
+					},
+					"occurredAt": {
+						"type": "string",
+						"format": "date-time"
+					},
+					"orgId": {
+						"type": ["string", "null"],
+						"format": "uuid"
+					},
+					"orgName": {
+						"type": ["string", "null"]
+					},
+					"seq": {
+						"type": "integer",
+						"format": "int64"
+					},
+					"targetId": {
+						"type": ["string", "null"],
+						"format": "uuid"
+					},
+					"targetType": {
+						"type": ["string", "null"]
+					},
+					"via": {
+						"type": "string",
+						"description": "`ui`, `api`, `cli`, `mcp`, `workflow`, or `system`."
+					}
+				}
+			},
+			"AuditPage": {
+				"type": "object",
+				"required": ["items"],
+				"properties": {
+					"items": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/AuditEventView"
+						}
+					},
+					"nextCursor": {
+						"type": ["string", "null"]
+					}
+				}
+			},
 			"ChangePasswordRequest": {
 				"type": "object",
 				"required": ["currentPassword", "newPassword"],
@@ -277,6 +1053,74 @@
 					"newPassword": {
 						"type": "string",
 						"format": "password"
+					}
+				}
+			},
+			"CreateAssignmentRequest": {
+				"type": "object",
+				"required": ["userId", "roleId", "orgId"],
+				"properties": {
+					"inherit": {
+						"type": "boolean",
+						"description": "Also apply to every sub-organization (default true)."
+					},
+					"orgId": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"roleId": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"userId": {
+						"type": "string",
+						"format": "uuid"
+					}
+				}
+			},
+			"CreateOrgRequest": {
+				"type": "object",
+				"required": ["parentId", "kind", "name"],
+				"properties": {
+					"kind": {
+						"$ref": "#/components/schemas/OrgKindInput"
+					},
+					"name": {
+						"type": "string"
+					},
+					"parentId": {
+						"type": "string",
+						"format": "uuid"
+					}
+				}
+			},
+			"CreateUserRequest": {
+				"type": "object",
+				"required": ["email", "displayName"],
+				"properties": {
+					"displayName": {
+						"type": "string"
+					},
+					"email": {
+						"type": "string"
+					},
+					"password": {
+						"type": ["string", "null"],
+						"format": "password",
+						"description": "Initial password. If omitted, one is generated and returned once."
+					}
+				}
+			},
+			"CreateUserResponse": {
+				"type": "object",
+				"required": ["user"],
+				"properties": {
+					"generatedPassword": {
+						"type": ["string", "null"],
+						"description": "Present only when Huxley generated the password. Shown once."
+					},
+					"user": {
+						"$ref": "#/components/schemas/UserView"
 					}
 				}
 			},
@@ -320,6 +1164,147 @@
 					}
 				}
 			},
+			"MeView": {
+				"allOf": [
+					{
+						"$ref": "#/components/schemas/UserView"
+					},
+					{
+						"type": "object",
+						"required": ["grantedPermissions", "isOwner"],
+						"properties": {
+							"grantedPermissions": {
+								"type": "array",
+								"items": {
+									"type": "string"
+								},
+								"description": "Permissions granted at any organization. For deciding what to show;\nthe API enforces permissions on every request regardless."
+							},
+							"isOwner": {
+								"type": "boolean",
+								"description": "Holds the Owner role at the root organization."
+							}
+						}
+					}
+				],
+				"description": "The signed-in user plus permission hints for the UI."
+			},
+			"MoveOrgRequest": {
+				"type": "object",
+				"required": ["parentId", "version"],
+				"properties": {
+					"parentId": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"version": {
+						"type": "integer",
+						"format": "int32"
+					}
+				}
+			},
+			"OrgKind": {
+				"type": "string",
+				"description": "`provider`: the owning company, an MSP brand, or a division. `client`: a\ncustomer of a provider, or a site/sub-org of one.",
+				"enum": ["provider", "client"]
+			},
+			"OrgKindInput": {
+				"type": "string",
+				"enum": ["provider", "client"]
+			},
+			"OrgStatus": {
+				"type": "string",
+				"enum": ["active", "archived"]
+			},
+			"Organization": {
+				"type": "object",
+				"required": ["id", "depth", "kind", "name", "status", "version", "createdAt", "updatedAt"],
+				"properties": {
+					"createdAt": {
+						"type": "string",
+						"format": "date-time"
+					},
+					"depth": {
+						"type": "integer",
+						"format": "int32",
+						"description": "Depth in the tree; the root is 1."
+					},
+					"id": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"kind": {
+						"$ref": "#/components/schemas/OrgKind"
+					},
+					"name": {
+						"type": "string"
+					},
+					"parentId": {
+						"type": ["string", "null"],
+						"format": "uuid"
+					},
+					"status": {
+						"$ref": "#/components/schemas/OrgStatus"
+					},
+					"updatedAt": {
+						"type": "string",
+						"format": "date-time"
+					},
+					"version": {
+						"type": "integer",
+						"format": "int32",
+						"description": "Optimistic concurrency token. Send it back when updating."
+					}
+				}
+			},
+			"Permission": {
+				"type": "object",
+				"required": ["key", "description", "scope"],
+				"properties": {
+					"description": {
+						"type": "string"
+					},
+					"key": {
+						"type": "string"
+					},
+					"scope": {
+						"$ref": "#/components/schemas/PermissionScope"
+					}
+				}
+			},
+			"PermissionScope": {
+				"type": "string",
+				"description": "Where a permission is evaluated.",
+				"enum": ["org", "instance"]
+			},
+			"Role": {
+				"type": "object",
+				"required": ["id", "key", "name", "description", "isSystem", "permissions"],
+				"properties": {
+					"description": {
+						"type": "string"
+					},
+					"id": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"isSystem": {
+						"type": "boolean"
+					},
+					"key": {
+						"type": "string"
+					},
+					"name": {
+						"type": "string"
+					},
+					"permissions": {
+						"type": "array",
+						"items": {
+							"type": "string"
+						}
+					}
+				}
+			},
 			"SessionView": {
 				"type": "object",
 				"required": ["id", "createdAt", "expiresAt", "current"],
@@ -348,6 +1333,47 @@
 						"format": "date-time"
 					},
 					"userAgent": {
+						"type": ["string", "null"]
+					}
+				}
+			},
+			"UpdateOrgRequest": {
+				"type": "object",
+				"required": ["name", "version"],
+				"properties": {
+					"name": {
+						"type": "string"
+					},
+					"version": {
+						"type": "integer",
+						"format": "int32",
+						"description": "The version you last read; the update fails with 409 if it changed."
+					}
+				}
+			},
+			"UpdateUserRequest": {
+				"type": "object",
+				"properties": {
+					"displayName": {
+						"type": ["string", "null"]
+					},
+					"status": {
+						"type": ["string", "null"],
+						"description": "`active` or `disabled`. Disabling signs the user out everywhere."
+					}
+				}
+			},
+			"UserPage": {
+				"type": "object",
+				"required": ["items"],
+				"properties": {
+					"items": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/UserView"
+						}
+					},
+					"nextCursor": {
 						"type": ["string", "null"]
 					}
 				}
@@ -386,6 +1412,18 @@
 		{
 			"name": "auth",
 			"description": "Sign-in, sessions, and the current user"
+		},
+		{
+			"name": "orgs",
+			"description": "The organization tree"
+		},
+		{
+			"name": "users",
+			"description": "Users, roles, and role assignments"
+		},
+		{
+			"name": "audit",
+			"description": "The audit log"
 		}
 	]
 }

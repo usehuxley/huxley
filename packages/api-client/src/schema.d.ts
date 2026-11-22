@@ -4,6 +4,23 @@
  */
 
 export interface paths {
+	'/api/v1/audit': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** Lists audit events, newest first. */
+		get: operations['list_audit_events'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
 	'/api/v1/auth/login': {
 		parameters: {
 			query?: never;
@@ -106,6 +123,198 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
+	'/api/v1/orgs': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** Organizations the caller can see, ordered as a tree (parents before children). */
+		get: operations['list_orgs'];
+		put?: never;
+		/** Creates a sub-organization. */
+		post: operations['create_org'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/orgs/{id}': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get: operations['get_org'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		/** Renames an organization. */
+		patch: operations['update_org'];
+		trace?: never;
+	};
+	'/api/v1/orgs/{id}/archive': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/** Archives an organization with no active sub-organizations. */
+		post: operations['archive_org'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/orgs/{id}/move': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/**
+		 * Moves an organization and its subtree under a new parent. Requires
+		 *     `org:move` on the organization and `org:create` on the new parent.
+		 */
+		post: operations['move_org'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/permissions': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** Every permission Huxley checks. */
+		get: operations['list_permissions'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/role-assignments': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/** Grants a role to a user at an organization. */
+		post: operations['create_assignment'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/role-assignments/{id}': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		post?: never;
+		/** Removes a role assignment. */
+		delete: operations['delete_assignment'];
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/roles': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** Roles that can be assigned. */
+		get: operations['list_roles'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/users': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** Lists users. */
+		get: operations['list_users'];
+		put?: never;
+		/** Creates a local user. The new user has no roles until one is assigned. */
+		post: operations['create_user'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/users/{id}': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get: operations['get_user'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		/** Edits a user's name or status. */
+		patch: operations['update_user'];
+		trace?: never;
+	};
+	'/api/v1/users/{id}/assignments': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** A user's role assignments that the caller can see. */
+		get: operations['list_assignments'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
 	'/healthz': {
 		parameters: {
 			query?: never;
@@ -153,11 +362,89 @@ export interface components {
 			title: string;
 			type: string;
 		};
+		ArchiveOrgRequest: {
+			/** Format: int32 */
+			version: number;
+		};
+		Assignment: {
+			/** Format: date-time */
+			createdAt: string;
+			/** Format: uuid */
+			id: string;
+			inherit: boolean;
+			/** Format: uuid */
+			orgId: string;
+			orgName: string;
+			/** Format: uuid */
+			roleId: string;
+			roleKey: string;
+			roleName: string;
+			/** Format: uuid */
+			userId: string;
+		};
+		AuditEventView: {
+			action: string;
+			/** Format: uuid */
+			actorId?: string | null;
+			actorName?: string | null;
+			/** @description `user`, `system`, or `anonymous`. */
+			actorType: string;
+			details: Record<string, never>;
+			/** Format: uuid */
+			id: string;
+			ip?: string | null;
+			/** Format: date-time */
+			occurredAt: string;
+			/** Format: uuid */
+			orgId?: string | null;
+			orgName?: string | null;
+			/** Format: int64 */
+			seq: number;
+			/** Format: uuid */
+			targetId?: string | null;
+			targetType?: string | null;
+			/** @description `ui`, `api`, `cli`, `mcp`, `workflow`, or `system`. */
+			via: string;
+		};
+		AuditPage: {
+			items: components['schemas']['AuditEventView'][];
+			nextCursor?: string | null;
+		};
 		ChangePasswordRequest: {
 			/** Format: password */
 			currentPassword: string;
 			/** Format: password */
 			newPassword: string;
+		};
+		CreateAssignmentRequest: {
+			/** @description Also apply to every sub-organization (default true). */
+			inherit?: boolean;
+			/** Format: uuid */
+			orgId: string;
+			/** Format: uuid */
+			roleId: string;
+			/** Format: uuid */
+			userId: string;
+		};
+		CreateOrgRequest: {
+			kind: components['schemas']['OrgKindInput'];
+			name: string;
+			/** Format: uuid */
+			parentId: string;
+		};
+		CreateUserRequest: {
+			displayName: string;
+			email: string;
+			/**
+			 * Format: password
+			 * @description Initial password. If omitted, one is generated and returned once.
+			 */
+			password?: string | null;
+		};
+		CreateUserResponse: {
+			/** @description Present only when Huxley generated the password. Shown once. */
+			generatedPassword?: string | null;
+			user: components['schemas']['UserView'];
 		};
 		/** @description A field-level validation error. */
 		FieldError: {
@@ -175,6 +462,74 @@ export interface components {
 			/** Format: password */
 			password: string;
 		};
+		/** @description The signed-in user plus permission hints for the UI. */
+		MeView: components['schemas']['UserView'] & {
+			/**
+			 * @description Permissions granted at any organization. For deciding what to show;
+			 *     the API enforces permissions on every request regardless.
+			 */
+			grantedPermissions: string[];
+			/** @description Holds the Owner role at the root organization. */
+			isOwner: boolean;
+		};
+		MoveOrgRequest: {
+			/** Format: uuid */
+			parentId: string;
+			/** Format: int32 */
+			version: number;
+		};
+		/**
+		 * @description `provider`: the owning company, an MSP brand, or a division. `client`: a
+		 *     customer of a provider, or a site/sub-org of one.
+		 * @enum {string}
+		 */
+		OrgKind: 'provider' | 'client';
+		/** @enum {string} */
+		OrgKindInput: 'provider' | 'client';
+		/** @enum {string} */
+		OrgStatus: 'active' | 'archived';
+		Organization: {
+			/** Format: date-time */
+			createdAt: string;
+			/**
+			 * Format: int32
+			 * @description Depth in the tree; the root is 1.
+			 */
+			depth: number;
+			/** Format: uuid */
+			id: string;
+			kind: components['schemas']['OrgKind'];
+			name: string;
+			/** Format: uuid */
+			parentId?: string | null;
+			status: components['schemas']['OrgStatus'];
+			/** Format: date-time */
+			updatedAt: string;
+			/**
+			 * Format: int32
+			 * @description Optimistic concurrency token. Send it back when updating.
+			 */
+			version: number;
+		};
+		Permission: {
+			description: string;
+			key: string;
+			scope: components['schemas']['PermissionScope'];
+		};
+		/**
+		 * @description Where a permission is evaluated.
+		 * @enum {string}
+		 */
+		PermissionScope: 'org' | 'instance';
+		Role: {
+			description: string;
+			/** Format: uuid */
+			id: string;
+			isSystem: boolean;
+			key: string;
+			name: string;
+			permissions: string[];
+		};
 		SessionView: {
 			/** Format: date-time */
 			createdAt: string;
@@ -188,6 +543,23 @@ export interface components {
 			/** Format: date-time */
 			lastSeenAt?: string | null;
 			userAgent?: string | null;
+		};
+		UpdateOrgRequest: {
+			name: string;
+			/**
+			 * Format: int32
+			 * @description The version you last read; the update fails with 409 if it changed.
+			 */
+			version: number;
+		};
+		UpdateUserRequest: {
+			displayName?: string | null;
+			/** @description `active` or `disabled`. Disabling signs the user out everywhere. */
+			status?: string | null;
+		};
+		UserPage: {
+			items: components['schemas']['UserView'][];
+			nextCursor?: string | null;
 		};
 		UserView: {
 			displayName: string;
@@ -208,6 +580,40 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+	list_audit_events: {
+		parameters: {
+			query?: {
+				limit?: number | null;
+				cursor?: string | null;
+				/** @description Only actions starting with this prefix, e.g. `auth.` or `org.created`. */
+				action?: string | null;
+				/** @description Only events about this entity. */
+				targetId?: string | null;
+			};
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['AuditPage'];
+				};
+			};
+			403: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
 	login: {
 		parameters: {
 			query?: never;
@@ -283,7 +689,7 @@ export interface operations {
 					[name: string]: unknown;
 				};
 				content: {
-					'application/json': components['schemas']['UserView'];
+					'application/json': components['schemas']['MeView'];
 				};
 			};
 			/** @description Not signed in */
@@ -374,6 +780,461 @@ export interface operations {
 				};
 				content: {
 					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	list_orgs: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			/** @description Visible organizations in tree order */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['Organization'][];
+				};
+			};
+		};
+	};
+	create_org: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['CreateOrgRequest'];
+			};
+		};
+		responses: {
+			201: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['Organization'];
+				};
+			};
+			/** @description Name already used by a sibling */
+			409: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	get_org: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				/** @description Organization id */
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['Organization'];
+				};
+			};
+			404: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	update_org: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				/** @description Organization id */
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['UpdateOrgRequest'];
+			};
+		};
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['Organization'];
+				};
+			};
+			409: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	archive_org: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				/** @description Organization id */
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['ArchiveOrgRequest'];
+			};
+		};
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['Organization'];
+				};
+			};
+			409: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	move_org: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				/** @description Organization id */
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['MoveOrgRequest'];
+			};
+		};
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['Organization'];
+				};
+			};
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	list_permissions: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['Permission'][];
+				};
+			};
+		};
+	};
+	create_assignment: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['CreateAssignmentRequest'];
+			};
+		};
+		responses: {
+			201: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['Assignment'];
+				};
+			};
+			403: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+			409: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	delete_assignment: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				/** @description Assignment id */
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			204: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content?: never;
+			};
+			/** @description Would remove the last owner */
+			409: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	list_roles: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['Role'][];
+				};
+			};
+		};
+	};
+	list_users: {
+		parameters: {
+			query?: {
+				/** @description Page size, 1 to 200 (default 50). */
+				limit?: number | null;
+				/** @description Opaque cursor from the previous page's `nextCursor`. */
+				cursor?: string | null;
+			};
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['UserPage'];
+				};
+			};
+			403: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	create_user: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['CreateUserRequest'];
+			};
+		};
+		responses: {
+			201: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['CreateUserResponse'];
+				};
+			};
+			409: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	get_user: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				/** @description User id */
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['UserView'];
+				};
+			};
+			404: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	update_user: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				/** @description User id */
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['UpdateUserRequest'];
+			};
+		};
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['UserView'];
+				};
+			};
+			409: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	list_assignments: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				/** @description User id */
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['Assignment'][];
 				};
 			};
 		};

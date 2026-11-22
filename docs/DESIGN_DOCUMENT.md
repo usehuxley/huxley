@@ -700,7 +700,9 @@ A chat panel in `web` (and optionally `portal`, with portal-scoped tools). It us
 1. Point checks: `can(principal, action, resource)`.
 2. **Query filters**: compiled to SQL predicates for list endpoints, so pagination stays correct.
 
-Decisions are cached per request. An admin **"effective permissions" / "why can/can't this user…"** explainer helps debugging.
+Decisions are cached per request.
+
+**Implementation sequencing:** the first RBAC slice (Phase 1) evaluates role × org-scope grants with inheritance in-process, behind `Principal::can_at_path`, and derives the RLS scope from the same grants. Cedar takes over evaluation behind that interface when attribute conditions (ABAC) and field-level rules arrive, so handlers don't change. An admin **"effective permissions" / "why can/can't this user…"** explainer helps debugging.
 
 ---
 

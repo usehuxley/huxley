@@ -102,3 +102,21 @@ async fn logout_without_a_session_still_clears_the_cookie() {
     let cookie = response.headers()["set-cookie"].to_str().unwrap();
     assert!(cookie.starts_with("hx_session=; Path=/; Max-Age=0"));
 }
+
+#[test]
+fn openapi_operation_ids_are_unique() {
+    // Duplicate ids silently merge operations in the generated TypeScript client.
+    let doc: serde_json::Value =
+        serde_json::from_str(&huxley_api::openapi::to_pretty_json()).unwrap();
+    let mut ids: Vec<String> = doc["paths"]
+        .as_object()
+        .unwrap()
+        .values()
+        .flat_map(|ops| ops.as_object().unwrap().values())
+        .filter_map(|op| op["operationId"].as_str().map(str::to_owned))
+        .collect();
+    let total = ids.len();
+    ids.sort();
+    ids.dedup();
+    assert_eq!(ids.len(), total, "duplicate OpenAPI operationId");
+}

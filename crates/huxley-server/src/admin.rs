@@ -42,6 +42,10 @@ pub enum AdminCommand {
         /// random password is generated and printed once.
         #[arg(long)]
         password_stdin: bool,
+        /// Also grant the Owner role at the root organization. Use this to
+        /// recover access if no owner can sign in.
+        #[arg(long)]
+        owner: bool,
     },
     /// Recompute the audit log hash chain and report whether it is intact.
     /// Exits non-zero if any record was altered or removed.
@@ -71,6 +75,7 @@ pub async fn run(config: &Config, command: AdminCommand) -> anyhow::Result<()> {
             }
             let root = huxley_orgs::create_root(&mut tx, &ctx, &org_name).await?;
             let user = huxley_auth::create_user(&mut tx, &ctx, &email, &name, &password).await?;
+            huxley_authz::grant_root_owner(&mut tx, &ctx, user.id).await?;
             audit::record(
                 &mut tx,
                 &ctx,
@@ -92,14 +97,23 @@ pub async fn run(config: &Config, command: AdminCommand) -> anyhow::Result<()> {
             email,
             name,
             password_stdin,
+            owner,
         } => {
             let db = huxley_db::connect(db_config)?;
             let (password, generated) = password(password_stdin)?;
             let ctx = RequestContext::system(Via::Cli).with_actor(Actor::System);
-            let mut tx = db.begin().await?;
+            let mut tx = begin_scoped(&db, &OrgScope::System).await?;
             let user = huxley_auth::create_user(&mut tx, &ctx, &email, &name, &password).await?;
+            if owner {
+                huxley_authz::grant_root_owner(&mut tx, &ctx, user.id).await?;
+            }
             tx.commit().await?;
-            println!("Created user {} ({})", user.email, user.id);
+            println!(
+                "Created user {} ({}){}",
+                user.email,
+                user.id,
+                if owner { " with the Owner role" } else { "" }
+            );
             print_generated(generated.then_some(password.as_str()));
             Ok(())
         }

@@ -13,12 +13,14 @@
 		Workflow
 	} from '@lucide/svelte';
 	import { AppShell, Button, CommandPalette, type Command, type NavItem } from '@usehuxley/ui';
+	import { visibleSections } from '#lib/permissions.ts';
 	import type { LayoutProps } from './$types';
 
 	let { children, data }: LayoutProps = $props();
 
 	// Modules arrive phase by phase (see docs/IMPLEMENTATION_PLAN.md).
-	const nav: NavItem[] = [
+	let canSeeSettings = $derived(visibleSections(data.user.grantedPermissions).length > 0);
+	let nav: NavItem[] = $derived([
 		{ href: '/', label: 'Home', icon: House },
 		{ href: '/workflows', label: 'Workflows', icon: Workflow, soon: true },
 		{ href: '/tickets', label: 'Tickets', icon: Ticket, soon: true },
@@ -26,11 +28,18 @@
 		{ href: '/assets', label: 'Assets', icon: Boxes, soon: true },
 		{ href: '/knowledge', label: 'Knowledge', icon: BookOpen, soon: true },
 		{ href: '/reports', label: 'Reports', icon: ChartColumn, soon: true },
-		{ href: '/settings', label: 'Settings', icon: Settings, soon: true }
-	];
+		...(canSeeSettings ? [{ href: '/settings', label: 'Settings', icon: Settings }] : [])
+	]);
 
 	const commands: Command[] = [
 		{ id: 'home', label: 'Go to Home', group: 'Navigate', run: () => goto(resolve('/(app)')) },
+		{
+			id: 'settings',
+			label: 'Settings: organizations, users, audit log',
+			keywords: ['admin', 'roles', 'permissions', 'organizations', 'users', 'audit'],
+			group: 'Navigate',
+			run: () => goto(resolve('/(app)/settings'))
+		},
 		{
 			id: 'profile',
 			label: 'Your profile and sessions',
