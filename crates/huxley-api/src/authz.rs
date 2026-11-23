@@ -17,6 +17,9 @@ use crate::{ApiError, ApiResult, AppState};
 /// Extracting it also enforces the MFA policy: a user whom policy requires
 /// to have a second factor, and who has none, gets `403 mfa-setup-required`
 /// until they set one up (those routes take [`CurrentUser`] instead).
+///
+/// Accepts a session cookie or `Authorization: Bearer <API token>`. With a
+/// token, the principal's grants are narrowed to the token's scopes.
 #[derive(Debug, Clone)]
 pub struct Authed {
     pub user: CurrentUser,
@@ -27,7 +30,10 @@ impl FromRequestParts<AppState> for Authed {
     type Rejection = ApiError;
 
     async fn from_request_parts(parts: &mut Parts, state: &AppState) -> Result<Self, ApiError> {
-        let user = CurrentUser::from_request_parts(parts, state).await?;
+        let user = match bearer_token(&parts.headers).map(str::to_owned) {
+            Some(secret) => CurrentUser::from_api_token(parts, state, &secret).await?,
+            None => CurrentUser::from_request_parts(parts, state).await?,
+        };
         let authed = Self::load(user, state).await?;
         if authed.mfa_setup_required() {
             return Err(ApiError::new(
@@ -44,6 +50,16 @@ impl FromRequestParts<AppState> for Authed {
     }
 }
 
+/// The secret from `Authorization: Bearer …`, if present.
+pub fn bearer_token(headers: &http::HeaderMap) -> Option<&str> {
+    headers
+        .get(http::header::AUTHORIZATION)?
+        .to_str()
+        .ok()?
+        .strip_prefix("Bearer ")
+        .map(str::trim)
+}
+
 impl Authed {
     /// Loads the user's grants without enforcing the MFA policy.
     pub async fn load(user: CurrentUser, state: &AppState) -> ApiResult<Self> {
@@ -54,12 +70,18 @@ impl Authed {
             .await
             .map_err(|e| ApiError::internal(&e))?;
         tx.commit().await.map_err(|e| ApiError::internal(&e))?;
+        let mut principal = principal;
+        if let Some(grant) = &user.auth.token {
+            principal.restrict_to(&grant.scopes);
+        }
         Ok(Self { user, principal })
     }
 
-    /// Policy requires a second factor and the user has none.
+    /// Policy requires a second factor and the user has none. Service
+    /// accounts are exempt: they have no interactive sign-in to protect.
     pub fn mfa_setup_required(&self) -> bool {
-        self.principal.requires_mfa
+        self.user.auth.user.kind == huxley_auth::UserKind::Human
+            && self.principal.requires_mfa
             && !self.user.auth.user.mfa_enabled
             && !self.user.auth.session_mfa
     }
@@ -156,6 +178,9 @@ pub fn map_authz(error: AuthzError) -> ApiError {
                 .with_detail("Only an owner can grant or remove the Owner role.")
         }
         AuthzError::LastOwner => ApiError::conflict("The instance must keep at least one owner."),
+        AuthzError::ServiceAccountOwner => {
+            ApiError::conflict("Service accounts can't hold the Owner role.")
+        }
         AuthzError::Db(e) => ApiError::internal(&e),
     }
 }

@@ -7,7 +7,7 @@ import type { Actions, PageServerLoad } from './$types';
 export const load: PageServerLoad = async (event) => {
 	const cursor = event.url.searchParams.get('cursor') ?? undefined;
 	const { data, response } = await api(event).GET('/api/v1/users', {
-		params: { query: { cursor, limit: 50 } }
+		params: { query: { cursor, limit: 50, kind: 'human' } }
 	});
 	if (response.status === 403) error(403, 'You do not have access to users.');
 	if (!data) error(503, 'Could not load users.');

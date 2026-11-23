@@ -659,3 +659,222 @@ async fn mfa_policy_blocks_until_a_second_factor_is_set_up() {
     let (status, _) = call(&app, "PUT", &uri, Some(&owner), Some(off)).await;
     assert_eq!(status, StatusCode::NO_CONTENT);
 }
+
+/// A request authenticated only with `Authorization: Bearer` (no cookie, no
+/// anti-forgery header), like a script would send.
+async fn call_bearer(
+    app: &axum::Router,
+    method: &str,
+    uri: &str,
+    token: &str,
+    body: Option<Value>,
+) -> (StatusCode, Value) {
+    let req = Request::builder()
+        .method(method)
+        .uri(uri)
+        .header("authorization", format!("Bearer {token}"));
+    let req = match body {
+        Some(b) => req
+            .header("content-type", "application/json")
+            .body(Body::from(b.to_string())),
+        None => req.body(Body::empty()),
+    }
+    .unwrap();
+    let res = app.clone().oneshot(req).await.unwrap();
+    let status = res.status();
+    let bytes = res.into_body().collect().await.unwrap().to_bytes();
+    (
+        status,
+        serde_json::from_slice(&bytes).unwrap_or(Value::Null),
+    )
+}
+
+#[tokio::test]
+async fn personal_tokens_act_as_their_owner_narrowed_to_scopes() {
+    let Some(pools) = pools().await else { return };
+    ensure_root(&pools).await;
+    let app = app(&pools);
+    let owner = login(&app, &user(&pools, true).await).await;
+
+    // People's tokens must expire, within a year.
+    let never = json!({ "name": "ci", "scopes": ["org:read"] });
+    let (status, _) = call(
+        &app,
+        "POST",
+        "/api/v1/auth/tokens",
+        Some(&owner),
+        Some(never),
+    )
+    .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+    let too_long = json!({ "name": "ci", "scopes": ["org:read"], "expiresInDays": 400 });
+    let (status, _) = call(
+        &app,
+        "POST",
+        "/api/v1/auth/tokens",
+        Some(&owner),
+        Some(too_long),
+    )
+    .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+    let unknown = json!({ "name": "ci", "scopes": ["org:explode"], "expiresInDays": 30 });
+    let (status, _) = call(
+        &app,
+        "POST",
+        "/api/v1/auth/tokens",
+        Some(&owner),
+        Some(unknown),
+    )
+    .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+
+    let body = json!({ "name": "reporting", "scopes": ["org:read"], "expiresInDays": 30 });
+    let (status, created) = call(
+        &app,
+        "POST",
+        "/api/v1/auth/tokens",
+        Some(&owner),
+        Some(body),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED, "{created}");
+    let token = created["tokenSecret"].as_str().unwrap().to_owned();
+    assert!(token.starts_with("hxp_"));
+    assert!(token.starts_with(created["hint"].as_str().unwrap()));
+
+    // In scope: works. Out of scope: refused, even though the owner could.
+    let (status, _) = call_bearer(&app, "GET", "/api/v1/orgs", &token, None).await;
+    assert_eq!(status, StatusCode::OK);
+    let (status, _) = call_bearer(&app, "GET", "/api/v1/users", &token, None).await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+    // State changes need no anti-forgery header with a bearer token; this
+    // one is refused by scope, not CSRF.
+    let new_user = json!({ "email": "scoped@example.com", "displayName": "Scoped" });
+    let (status, err) = call_bearer(&app, "POST", "/api/v1/users", &token, Some(new_user)).await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+    assert_eq!(err["type"], "https://usehuxley.com/problems/forbidden");
+
+    // Tokens can't use self-service routes, so a leaked token can't take
+    // over the account (change the password, mint more tokens, add MFA).
+    let (status, _) = call_bearer(&app, "GET", "/api/v1/auth/me", &token, None).await;
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
+    let more = json!({ "name": "x", "scopes": ["*"], "expiresInDays": 1 });
+    let (status, _) = call_bearer(&app, "POST", "/api/v1/auth/tokens", &token, Some(more)).await;
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
+
+    // Listed with usage; never with the secret.
+    let (_, list) = call(&app, "GET", "/api/v1/auth/tokens", Some(&owner), None).await;
+    let listed = list
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|t| t["id"] == created["id"])
+        .unwrap();
+    assert!(listed["lastUsedAt"].is_string());
+    assert!(!list.to_string().contains(&token));
+
+    // Revoked: rejected.
+    let uri = format!("/api/v1/auth/tokens/{}", created["id"].as_str().unwrap());
+    let (status, _) = call(&app, "DELETE", &uri, Some(&owner), None).await;
+    assert_eq!(status, StatusCode::NO_CONTENT);
+    let (status, err) = call_bearer(&app, "GET", "/api/v1/orgs", &token, None).await;
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
+    assert_eq!(err["type"], "https://usehuxley.com/problems/invalid-token");
+}
+
+#[tokio::test]
+async fn service_accounts_use_tokens_and_roles_but_cannot_sign_in() {
+    let Some(pools) = pools().await else { return };
+    let root = ensure_root(&pools).await;
+    let app = app(&pools);
+    let owner = login(&app, &user(&pools, true).await).await;
+    let nobody = login(&app, &user(&pools, false).await).await;
+
+    let (status, _) = call(&app, "GET", "/api/v1/service-accounts", Some(&nobody), None).await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+
+    let body = json!({ "name": "RMM sync", "description": "Pulls devices nightly" });
+    let (status, sa) = call(
+        &app,
+        "POST",
+        "/api/v1/service-accounts",
+        Some(&owner),
+        Some(body),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED, "{sa}");
+    assert_eq!(sa["kind"], "service");
+    let sa_id = sa["id"].as_str().unwrap().to_owned();
+    let sa_email = sa["email"].as_str().unwrap().to_owned();
+    assert!(sa_email.ends_with("@service.invalid"));
+
+    // Roles work as for people, except Owner.
+    let (_, roles) = call(&app, "GET", "/api/v1/roles", Some(&owner), None).await;
+    let role = |key: &str| {
+        roles
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|r| r["key"] == key)
+            .unwrap()["id"]
+            .clone()
+    };
+    let grant = json!({ "userId": sa_id, "roleId": role("technician"), "orgId": root });
+    let (status, _) = call(
+        &app,
+        "POST",
+        "/api/v1/role-assignments",
+        Some(&owner),
+        Some(grant),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED);
+    let owner_grant = json!({ "userId": sa_id, "roleId": role("owner"), "orgId": root });
+    let (status, _) = call(
+        &app,
+        "POST",
+        "/api/v1/role-assignments",
+        Some(&owner),
+        Some(owner_grant),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CONFLICT);
+
+    // Its tokens may be non-expiring.
+    let uri = format!("/api/v1/service-accounts/{sa_id}/tokens");
+    let body = json!({ "name": "prod", "scopes": ["*"] });
+    let (status, created) = call(&app, "POST", &uri, Some(&owner), Some(body)).await;
+    assert_eq!(status, StatusCode::CREATED, "{created}");
+    assert!(created["expiresAt"].is_null());
+    let token = created["tokenSecret"].as_str().unwrap().to_owned();
+    let (status, _) = call_bearer(&app, "GET", "/api/v1/users", &token, None).await;
+    assert_eq!(status, StatusCode::OK, "technician can read users");
+    let new_user = json!({ "email": "by-sa@example.com", "displayName": "By SA" });
+    let (status, _) = call_bearer(&app, "POST", "/api/v1/users", &token, Some(new_user)).await;
+    assert_eq!(status, StatusCode::FORBIDDEN, "but not create them");
+
+    // No interactive sign-in, even with a guessed password.
+    let creds = json!({ "email": sa_email, "password": PASSWORD });
+    let (status, _, _) = post_anonymous(&app, "/api/v1/auth/login", creds).await;
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
+
+    // Disabling the account stops its tokens.
+    let uri = format!("/api/v1/service-accounts/{sa_id}");
+    let (status, _) = call(
+        &app,
+        "PATCH",
+        &uri,
+        Some(&owner),
+        Some(json!({ "status": "disabled" })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    let (status, _) = call_bearer(&app, "GET", "/api/v1/orgs", &token, None).await;
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
+
+    // People aren't service accounts.
+    let (_, me) = call(&app, "GET", "/api/v1/auth/me", Some(&nobody), None).await;
+    let uri = format!("/api/v1/service-accounts/{}", me["id"].as_str().unwrap());
+    let (status, _) = call(&app, "GET", &uri, Some(&owner), None).await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+}

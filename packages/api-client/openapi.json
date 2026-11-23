@@ -940,6 +940,93 @@
 				}
 			}
 		},
+		"/api/v1/auth/tokens": {
+			"get": {
+				"tags": ["auth"],
+				"summary": "Your API tokens. Needs a signed-in session (not a token).",
+				"operationId": "list_own",
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "array",
+									"items": {
+										"$ref": "#/components/schemas/ApiTokenView"
+									}
+								}
+							}
+						}
+					}
+				}
+			},
+			"post": {
+				"tags": ["auth"],
+				"summary": "Creates a personal access token that acts as you, narrowed to `scopes`.\nIt must expire within a year. Needs a signed-in session (not a token).",
+				"operationId": "create_own",
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/CreateTokenRequest"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"201": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/CreatedTokenView"
+								}
+							}
+						}
+					},
+					"422": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/auth/tokens/{id}": {
+			"delete": {
+				"tags": ["auth"],
+				"summary": "Revokes one of your API tokens.",
+				"operationId": "revoke_own",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"description": "Token id",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"responses": {
+					"204": {},
+					"404": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
 		"/api/v1/modules": {
 			"get": {
 				"tags": ["modules"],
@@ -1749,10 +1836,279 @@
 				}
 			}
 		},
+		"/api/v1/service-accounts": {
+			"get": {
+				"tags": ["users"],
+				"summary": "Service accounts: non-human identities for integrations and scripts.",
+				"operationId": "list_accounts",
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "array",
+									"items": {
+										"$ref": "#/components/schemas/ServiceAccountView"
+									}
+								}
+							}
+						}
+					},
+					"403": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			},
+			"post": {
+				"tags": ["users"],
+				"summary": "Creates a service account. Grant it roles with `POST /role-assignments`,\nthen create tokens for it.",
+				"operationId": "create_account",
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/CreateServiceAccountRequest"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"201": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ServiceAccountView"
+								}
+							}
+						}
+					},
+					"422": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/service-accounts/{id}": {
+			"get": {
+				"tags": ["users"],
+				"operationId": "get_account",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"description": "Service account id",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ServiceAccountView"
+								}
+							}
+						}
+					},
+					"404": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			},
+			"patch": {
+				"tags": ["users"],
+				"summary": "Renames, describes, disables, or re-enables a service account.",
+				"operationId": "update_account",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"description": "Service account id",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/UpdateServiceAccountRequest"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ServiceAccountView"
+								}
+							}
+						}
+					},
+					"404": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/service-accounts/{id}/tokens": {
+			"get": {
+				"tags": ["users"],
+				"operationId": "list_account_tokens",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"description": "Service account id",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "array",
+									"items": {
+										"$ref": "#/components/schemas/ApiTokenView"
+									}
+								}
+							}
+						}
+					}
+				}
+			},
+			"post": {
+				"tags": ["users"],
+				"summary": "Creates a token for a service account. It may be non-expiring.",
+				"operationId": "create_account_token",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"description": "Service account id",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/CreateTokenRequest"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"201": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/CreatedTokenView"
+								}
+							}
+						}
+					},
+					"422": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/service-accounts/{id}/tokens/{token_id}": {
+			"delete": {
+				"tags": ["users"],
+				"operationId": "revoke_account_token",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"description": "Service account id",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					},
+					{
+						"name": "token_id",
+						"in": "path",
+						"description": "Token id",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"responses": {
+					"204": {},
+					"404": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
 		"/api/v1/users": {
 			"get": {
 				"tags": ["users"],
-				"summary": "Lists users.",
+				"summary": "Lists users (people and service accounts; filter with `kind`).",
 				"operationId": "list_users",
 				"parameters": [
 					{
@@ -1770,6 +2126,15 @@
 						"name": "cursor",
 						"in": "query",
 						"description": "Opaque cursor from the previous page's `nextCursor`.",
+						"required": false,
+						"schema": {
+							"type": ["string", "null"]
+						}
+					},
+					{
+						"name": "kind",
+						"in": "query",
+						"description": "`human` or `service`. Omit for both.",
 						"required": false,
 						"schema": {
 							"type": ["string", "null"]
@@ -2080,6 +2445,47 @@
 					}
 				}
 			},
+			"ApiTokenView": {
+				"type": "object",
+				"required": ["id", "name", "hint", "scopes", "expired", "createdAt"],
+				"properties": {
+					"createdAt": {
+						"type": "string",
+						"format": "date-time"
+					},
+					"expired": {
+						"type": "boolean"
+					},
+					"expiresAt": {
+						"type": ["string", "null"],
+						"format": "date-time"
+					},
+					"hint": {
+						"type": "string",
+						"description": "The start of the token, to tell tokens apart."
+					},
+					"id": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"lastUsedAt": {
+						"type": ["string", "null"],
+						"format": "date-time"
+					},
+					"lastUsedIp": {
+						"type": ["string", "null"]
+					},
+					"name": {
+						"type": "string"
+					},
+					"scopes": {
+						"type": "array",
+						"items": {
+							"type": "string"
+						}
+					}
+				}
+			},
 			"ArchiveOrgRequest": {
 				"type": "object",
 				"required": ["version"],
@@ -2298,6 +2704,40 @@
 					}
 				}
 			},
+			"CreateServiceAccountRequest": {
+				"type": "object",
+				"required": ["name"],
+				"properties": {
+					"description": {
+						"type": "string"
+					},
+					"name": {
+						"type": "string"
+					}
+				}
+			},
+			"CreateTokenRequest": {
+				"type": "object",
+				"required": ["name", "scopes"],
+				"properties": {
+					"expiresInDays": {
+						"type": ["integer", "null"],
+						"format": "int32",
+						"description": "1 to 366 for people. Omit (service accounts only) for no expiry.",
+						"minimum": 0
+					},
+					"name": {
+						"type": "string"
+					},
+					"scopes": {
+						"type": "array",
+						"items": {
+							"type": "string"
+						},
+						"description": "Permission keys the token may use, or `[\"*\"]` for everything its\nowner may do. Scopes only narrow the owner's roles."
+					}
+				}
+			},
 			"CreateUserRequest": {
 				"type": "object",
 				"required": ["email", "displayName"],
@@ -2327,6 +2767,23 @@
 						"$ref": "#/components/schemas/UserView"
 					}
 				}
+			},
+			"CreatedTokenView": {
+				"allOf": [
+					{
+						"$ref": "#/components/schemas/ApiTokenView"
+					},
+					{
+						"type": "object",
+						"required": ["tokenSecret"],
+						"properties": {
+							"tokenSecret": {
+								"type": "string",
+								"description": "Send as `Authorization: Bearer <token>`. Shown only now."
+							}
+						}
+					}
+				]
 			},
 			"FieldError": {
 				"type": "object",
@@ -3064,6 +3521,22 @@
 					}
 				}
 			},
+			"ServiceAccountView": {
+				"allOf": [
+					{
+						"$ref": "#/components/schemas/UserView"
+					},
+					{
+						"type": "object",
+						"required": ["description"],
+						"properties": {
+							"description": {
+								"type": "string"
+							}
+						}
+					}
+				]
+			},
 			"SessionView": {
 				"type": "object",
 				"required": ["id", "createdAt", "expiresAt", "current"],
@@ -3205,6 +3678,21 @@
 					}
 				}
 			},
+			"UpdateServiceAccountRequest": {
+				"type": "object",
+				"properties": {
+					"description": {
+						"type": ["string", "null"]
+					},
+					"name": {
+						"type": ["string", "null"]
+					},
+					"status": {
+						"type": ["string", "null"],
+						"description": "`active` or `disabled`. Disabled accounts' tokens stop working."
+					}
+				}
+			},
 			"UpdateUserRequest": {
 				"type": "object",
 				"properties": {
@@ -3234,7 +3722,7 @@
 			},
 			"UserView": {
 				"type": "object",
-				"required": ["id", "email", "displayName", "status", "mfaEnabled"],
+				"required": ["id", "email", "displayName", "status", "mfaEnabled", "kind"],
 				"properties": {
 					"displayName": {
 						"type": "string"
@@ -3245,6 +3733,10 @@
 					"id": {
 						"type": "string",
 						"format": "uuid"
+					},
+					"kind": {
+						"type": "string",
+						"description": "`human` or `service` (a service account, which uses API tokens)."
 					},
 					"lastLoginAt": {
 						"type": ["string", "null"],

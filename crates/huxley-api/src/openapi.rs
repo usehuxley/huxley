@@ -29,6 +29,10 @@ use crate::security_routes::{self, SetRequirementRequest};
 use crate::sso_routes::{
     self, ProviderDetail, SsoCallbackRequest, StartSsoRequest, StartSsoResponse,
 };
+use crate::token_routes::{
+    self, ApiTokenView, CreateServiceAccountRequest, CreateTokenRequest, CreatedTokenView,
+    ServiceAccountView, UpdateServiceAccountRequest,
+};
 use crate::user_routes::{
     self, CreateAssignmentRequest, CreateUserRequest, CreateUserResponse, UpdateUserRequest,
     UserPage,
@@ -88,6 +92,16 @@ use crate::user_routes::{
         security_routes::set_role,
         security_routes::set_org,
         sso_routes::list_buttons,
+        token_routes::list_own,
+        token_routes::create_own,
+        token_routes::revoke_own,
+        token_routes::list_accounts,
+        token_routes::create_account,
+        token_routes::get_account,
+        token_routes::update_account,
+        token_routes::list_account_tokens,
+        token_routes::create_account_token,
+        token_routes::revoke_account_token,
         sso_routes::start,
         sso_routes::callback,
         sso_routes::list_providers,
@@ -140,6 +154,12 @@ use crate::user_routes::{
         SetModuleResponse,
         SetRequirementRequest,
         StartSsoRequest,
+        ApiTokenView,
+        CreateTokenRequest,
+        CreatedTokenView,
+        ServiceAccountView,
+        CreateServiceAccountRequest,
+        UpdateServiceAccountRequest,
         StartSsoResponse,
         SsoCallbackRequest,
         ProviderDetail,

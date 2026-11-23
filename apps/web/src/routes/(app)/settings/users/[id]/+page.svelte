@@ -43,9 +43,13 @@
 
 	<Card title={data.person.displayName} description={data.person.email}>
 		{#snippet actions()}
-			<Badge tone={data.person.mfaEnabled ? 'success' : 'warning'}>
-				{data.person.mfaEnabled ? '2FA on' : '2FA off'}
-			</Badge>
+			{#if data.person.kind === 'service'}
+				<Badge tone="info">Service account</Badge>
+			{:else}
+				<Badge tone={data.person.mfaEnabled ? 'success' : 'warning'}>
+					{data.person.mfaEnabled ? '2FA on' : '2FA off'}
+				</Badge>
+			{/if}
 			<Badge tone={data.person.status === 'active' ? 'success' : 'neutral'}>
 				{data.person.status}
 			</Badge>
@@ -61,7 +65,7 @@
 						<Button type="submit" size="sm">Enable</Button>
 					{/if}
 				</form>
-				{#if data.person.mfaEnabled}
+				{#if data.person.mfaEnabled && data.person.kind === 'human'}
 					<form
 						method="POST"
 						action="?/resetMfa"

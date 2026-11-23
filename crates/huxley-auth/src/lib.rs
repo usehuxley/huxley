@@ -5,6 +5,7 @@
 //! authentication with recovery codes ([`mfa`]), and passkeys ([`passkey`]).
 //! OIDC and API tokens build on the same pieces.
 
+pub mod api_tokens;
 pub mod mfa;
 pub mod passkey;
 pub mod password;
@@ -96,6 +97,15 @@ pub enum UserStatus {
     Disabled,
 }
 
+/// People sign in; service accounts only use API tokens.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, sqlx::Type)]
+#[sqlx(type_name = "user_kind", rename_all = "lowercase")]
+#[serde(rename_all = "lowercase")]
+pub enum UserKind {
+    Human,
+    Service,
+}
+
 #[derive(Debug, Clone, sqlx::FromRow)]
 pub struct User {
     pub id: Uuid,
@@ -104,6 +114,7 @@ pub struct User {
     pub status: UserStatus,
     pub last_login_at: Option<OffsetDateTime>,
     pub created_at: OffsetDateTime,
+    pub kind: UserKind,
     /// Has a confirmed second factor.
     pub mfa_enabled: bool,
 }
@@ -128,6 +139,9 @@ pub struct Authenticated {
     /// or SSO the provider reported as MFA). Satisfies the MFA policy even
     /// for users with no Huxley second factor.
     pub session_mfa: bool,
+    /// Set when the request authenticated with an API token rather than a
+    /// session; `session_id` is then the token's id.
+    pub token: Option<api_tokens::TokenGrant>,
 }
 
 /// The result of a correct password.
@@ -203,6 +217,12 @@ pub enum AuthError {
     PasskeyAlreadyRegistered,
     #[error("passkey not found")]
     PasskeyNotFound,
+    #[error("invalid token name")]
+    InvalidTokenName,
+    #[error("invalid token expiry: {0}")]
+    InvalidTokenExpiry(&'static str),
+    #[error("token not found")]
+    TokenNotFound,
     #[error("the instance has no root organization; run `huxley admin bootstrap`")]
     NoRootOrg,
     #[error(transparent)]
@@ -240,7 +260,7 @@ fn normalize_email(email: &str) -> AuthResult<String> {
     }
 }
 
-fn normalize_display_name(name: &str) -> AuthResult<String> {
+pub(crate) fn normalize_display_name(name: &str) -> AuthResult<String> {
     let name = name.trim();
     if name.is_empty() || name.chars().count() > 200 || name.chars().any(char::is_control) {
         return Err(AuthError::InvalidDisplayName);
@@ -249,10 +269,12 @@ fn normalize_display_name(name: &str) -> AuthResult<String> {
 }
 
 // sqlx requires static SQL.
+#[macro_export]
+#[doc(hidden)]
 macro_rules! select_user {
     ($rest:literal) => {
         concat!(
-            "SELECT id, email, display_name, status, last_login_at, created_at, \
+            "SELECT id, email, display_name, status, last_login_at, created_at, kind, \
                     (EXISTS (SELECT 1 FROM user_totp t \
                              WHERE t.user_id = users.id AND t.confirmed_at IS NOT NULL) \
                      OR EXISTS (SELECT 1 FROM user_passkeys k WHERE k.user_id = users.id)) AS mfa_enabled \
@@ -278,7 +300,7 @@ pub async fn create_user(
     let id = huxley_core::new_id();
     let user: User = sqlx::query_as(
         "INSERT INTO users (id, email, display_name) VALUES ($1, $2, $3) \
-         RETURNING id, email, display_name, status, last_login_at, created_at, false AS mfa_enabled",
+         RETURNING id, email, display_name, status, last_login_at, created_at, kind, false AS mfa_enabled",
     )
     .bind(id)
     .bind(&email)
@@ -315,7 +337,7 @@ pub async fn create_external_user(
     let id = huxley_core::new_id();
     let user: User = sqlx::query_as(
         "INSERT INTO users (id, email, display_name) VALUES ($1, $2, $3) \
-         RETURNING id, email, display_name, status, last_login_at, created_at, false AS mfa_enabled",
+         RETURNING id, email, display_name, status, last_login_at, created_at, kind, false AS mfa_enabled",
     )
     .bind(id)
     .bind(&email)
@@ -359,12 +381,15 @@ pub async fn list_users(
     conn: &mut PgConnection,
     after: Option<Uuid>,
     limit: u32,
+    kind: Option<UserKind>,
 ) -> AuthResult<Vec<User>> {
     Ok(sqlx::query_as(select_user!(
-        "WHERE ($1::uuid IS NULL OR id > $1) ORDER BY id LIMIT $2"
+        "WHERE ($1::uuid IS NULL OR id > $1) AND ($3::user_kind IS NULL OR kind = $3) \
+         ORDER BY id LIMIT $2"
     ))
     .bind(after)
     .bind(i64::from(limit) + 1)
+    .bind(kind)
     .fetch_all(conn)
     .await?)
 }
@@ -384,7 +409,7 @@ pub async fn update_user(
         "UPDATE users SET display_name = coalesce($2, display_name), \
                 status = coalesce($3, status), version = version + 1 \
           WHERE id = $1 \
-         RETURNING id, email, display_name, status, last_login_at, created_at, \
+         RETURNING id, email, display_name, status, last_login_at, created_at, kind, \
                    (EXISTS (SELECT 1 FROM user_totp t \
                              WHERE t.user_id = users.id AND t.confirmed_at IS NOT NULL) \
                      OR EXISTS (SELECT 1 FROM user_passkeys k WHERE k.user_id = users.id)) AS mfa_enabled",
@@ -475,7 +500,7 @@ impl AuthService {
         let row: Option<LoginRow> = sqlx::query_as(
             "SELECT u.id, u.status, u.failed_login_count, u.locked_until, p.hash \
                FROM users u LEFT JOIN user_passwords p ON p.user_id = u.id \
-              WHERE lower(u.email) = lower($1) \
+              WHERE lower(u.email) = lower($1) AND u.kind = 'human' \
               FOR UPDATE OF u",
         )
         .bind(email)
@@ -755,6 +780,7 @@ impl AuthService {
                 session_id,
                 user,
                 session_mfa,
+                token: None,
             }))
     }
 

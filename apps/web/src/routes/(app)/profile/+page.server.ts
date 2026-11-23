@@ -4,22 +4,28 @@ import { formString } from '#lib/forms.ts';
 import { api } from '#lib/server/api.ts';
 import { problemMessage } from '#lib/server/problems.ts';
 import { qrSvg } from '#lib/server/qr.ts';
+import { parseTokenForm } from '#lib/server/tokens.ts';
 import type { Actions, PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async (event) => {
 	const client = api(event);
-	const [sessions, mfa, passkeys, methods] = await Promise.all([
+	const [sessions, mfa, passkeys, methods, tokens, permissions] = await Promise.all([
 		client.GET('/api/v1/auth/sessions'),
 		client.GET('/api/v1/auth/mfa'),
 		client.GET('/api/v1/auth/passkeys'),
-		client.GET('/api/v1/auth/methods')
+		client.GET('/api/v1/auth/methods'),
+		client.GET('/api/v1/auth/tokens'),
+		// Refused while two-factor setup is required; the token card waits.
+		client.GET('/api/v1/permissions')
 	]);
 	if (!sessions.data || !mfa.data || !passkeys.data) error(503, 'Could not load your profile.');
 	return {
 		sessions: sessions.data,
 		mfa: mfa.data,
 		passkeys: passkeys.data,
-		passkeysEnabled: methods.data?.passkeys ?? false
+		passkeysEnabled: methods.data?.passkeys ?? false,
+		tokens: tokens.data ?? [],
+		permissions: permissions.data ?? []
 	};
 };
 
@@ -135,6 +141,35 @@ export const actions: Actions = {
 			return fail(response.status, { passkeys: { error: 'Could not remove the passkey.' } });
 		}
 		return { passkeys: { removed: true } };
+	},
+
+	createToken: async (event) => {
+		const form = await event.request.formData();
+		const body = parseTokenForm(form);
+		const {
+			data,
+			error: problem,
+			response
+		} = await api(event).POST('/api/v1/auth/tokens', {
+			body
+		});
+		if (!data) {
+			return fail(response.status, {
+				tokens: { error: problemMessage(problem, 'Could not create the token.') }
+			});
+		}
+		return { tokens: { created: { name: data.name, secret: data.tokenSecret } } };
+	},
+
+	revokeToken: async (event) => {
+		const form = await event.request.formData();
+		const { response } = await api(event).DELETE('/api/v1/auth/tokens/{id}', {
+			params: { path: { id: formString(form, 'id') } }
+		});
+		if (response.status !== 204) {
+			return fail(response.status, { tokens: { error: 'Could not revoke the token.' } });
+		}
+		return { tokens: { revoked: true } };
 	},
 
 	revokeSession: async (event) => {
