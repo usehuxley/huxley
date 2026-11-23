@@ -80,6 +80,24 @@ pub struct SandboxArgs {
     /// CPUs per script container.
     #[arg(long, env = "HUXLEY_RUNNER_CPUS", default_value = "1")]
     cpus: String,
+    /// Give scripts no network at all (not even through the egress proxy).
+    #[arg(long, env = "HUXLEY_RUNNER_NO_NETWORK")]
+    no_network: bool,
+    /// Let scripts reach private addresses through the proxy (link-local
+    /// ones such as cloud metadata stay blocked).
+    #[arg(long, env = "HUXLEY_RUNNER_EGRESS_ALLOW_PRIVATE")]
+    egress_allow_private: bool,
+    /// Host names scripts may reach at private addresses, e.g.
+    /// `*.corp.example` (repeatable, or comma-separated).
+    #[arg(
+        long,
+        env = "HUXLEY_RUNNER_EGRESS_PRIVATE_HOSTS",
+        value_delimiter = ','
+    )]
+    egress_private_host: Vec<String>,
+    /// Host names scripts may never reach (same patterns).
+    #[arg(long, env = "HUXLEY_RUNNER_EGRESS_DENIED_HOSTS", value_delimiter = ',')]
+    egress_denied_host: Vec<String>,
 }
 
 impl SandboxArgs {
@@ -90,6 +108,14 @@ impl SandboxArgs {
             python_image: self.python_image.clone(),
             memory: self.memory.clone(),
             cpus: self.cpus.clone(),
+            egress: (!self.no_network).then(|| {
+                std::sync::Arc::new(huxley_engine::EgressConfig {
+                    allow_private: self.egress_allow_private,
+                    private_hosts: self.egress_private_host.clone(),
+                    denied_hosts: self.egress_denied_host.clone(),
+                    ..huxley_engine::EgressConfig::default()
+                })
+            }),
             ..Podman::default()
         }
     }

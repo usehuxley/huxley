@@ -3,6 +3,7 @@
 pub mod ca;
 pub mod exec;
 pub mod gateway;
+pub mod proxy;
 pub mod registry;
 
 /// The generated runner protocol.

@@ -199,6 +199,51 @@ impl Resolve for GuardedResolver {
     }
 }
 
+/// The addresses a connection to `host:port` may use under `config`: for
+/// traffic Huxley relays rather than makes itself (the script egress
+/// proxy). Names are resolved here, so the caller connects to a checked
+/// address.
+pub async fn allowed_addrs(
+    config: &EgressConfig,
+    host: &str,
+    port: u16,
+) -> Result<Vec<SocketAddr>, Blocked> {
+    let policy = Policy {
+        config: config.clone(),
+    };
+    let bare = host.trim_start_matches('[').trim_end_matches(']');
+    if bare.is_empty() {
+        return Err(Blocked("no host".into()));
+    }
+    if policy.denied(bare) {
+        return Err(Blocked(format!("{bare} is on the denied list")));
+    }
+    if let Ok(ip) = bare.parse::<IpAddr>() {
+        return if policy.allows(bare, ip) {
+            Ok(vec![SocketAddr::new(ip, port)])
+        } else {
+            Err(Blocked(format!("{ip} isn't a public address")))
+        };
+    }
+    let addrs: Vec<SocketAddr> = tokio::net::lookup_host((bare, port))
+        .await
+        .map_err(|e| Blocked(format!("{bare} doesn't resolve: {e}")))?
+        .collect();
+    let allowed: Vec<SocketAddr> = addrs
+        .iter()
+        .copied()
+        .filter(|a| policy.allows(bare, a.ip()))
+        .collect();
+    if allowed.is_empty() {
+        let shown: Vec<String> = addrs.iter().map(|a| a.ip().to_string()).collect();
+        return Err(Blocked(format!(
+            "{bare} resolves to {}, which isn't a public address",
+            shown.join(", ")
+        )));
+    }
+    Ok(allowed)
+}
+
 /// The HTTP client steps use, and the policy it enforces.
 #[derive(Debug, Clone)]
 pub(crate) struct Egress {
@@ -304,6 +349,36 @@ mod tests {
         assert!(listed.allows("API.internal.", private));
         assert!(!listed.allows("corp.example", private));
         assert!(!listed.allows("evil.example", private));
+    }
+
+    #[tokio::test]
+    async fn relayed_connections_are_checked() {
+        let strict = EgressConfig::default();
+        assert!(allowed_addrs(&strict, "127.0.0.1", 80).await.is_err());
+        assert!(allowed_addrs(&strict, "localhost", 80).await.is_err());
+        assert!(allowed_addrs(&strict, "169.254.169.254", 80).await.is_err());
+        assert!(allowed_addrs(&strict, "[::1]", 80).await.is_err());
+        assert_eq!(
+            allowed_addrs(&strict, "1.1.1.1", 443).await.unwrap(),
+            vec!["1.1.1.1:443".parse().unwrap()]
+        );
+        let local = EgressConfig {
+            private_hosts: vec!["localhost".into()],
+            denied_hosts: vec!["*.blocked.example".into()],
+            ..EgressConfig::default()
+        };
+        assert!(allowed_addrs(&local, "localhost", 80).await.is_ok());
+        assert!(
+            allowed_addrs(&local, "x.blocked.example", 80)
+                .await
+                .is_err()
+        );
+        let open = EgressConfig {
+            allow_private: true,
+            ..EgressConfig::default()
+        };
+        assert!(allowed_addrs(&open, "127.0.0.1", 80).await.is_ok());
+        assert!(allowed_addrs(&open, "169.254.169.254", 80).await.is_err());
     }
 
     #[test]
