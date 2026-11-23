@@ -7,6 +7,7 @@
 //! parameters, or Python's `inputs` dict) and its result is what it
 //! returns: PowerShell's pipeline output, or Python's `result` variable.
 
+use std::collections::BTreeMap;
 use std::path::Path;
 use std::process::Stdio;
 use std::time::Duration;
@@ -35,12 +36,27 @@ with open("/huxley/out/result.json", "w") as f:
 "#;
 
 /// A script to run.
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct Job {
     pub language: String,
     pub source: String,
     pub inputs: Json,
     pub timeout: Duration,
+    /// Environment variables for the script. Podman takes their values
+    /// from its own environment, so they're never on a command line.
+    pub env: BTreeMap<String, String>,
+    /// Values scrubbed from the output and logs.
+    pub redact: Vec<String>,
+}
+
+impl std::fmt::Debug for Job {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Job")
+            .field("language", &self.language)
+            .field("timeout", &self.timeout)
+            .field("env", &self.env.keys().collect::<Vec<_>>())
+            .finish_non_exhaustive()
+    }
 }
 
 /// How it went.
@@ -167,6 +183,9 @@ impl Podman {
             "--volume={}:/huxley/out:rw",
             dir.join("out").display()
         ));
+        for name in job.env.keys() {
+            args.push(format!("--env={name}"));
+        }
         args.push(image.to_owned());
         args.extend(command.iter().map(|s| (*s).to_owned()));
         Some(args)
@@ -174,10 +193,11 @@ impl Podman {
 
     /// Runs `job` in a fresh container.
     pub async fn run(&self, job: &Job) -> Outcome {
-        match self.try_run(job).await {
+        let outcome = match self.try_run(job).await {
             Ok(outcome) => outcome,
             Err(e) => Outcome::failed(format!("the sandbox failed: {e}"), None, String::new()),
-        }
+        };
+        scrub(outcome, &job.redact)
     }
 
     async fn try_run(&self, job: &Job) -> std::io::Result<Outcome> {
@@ -201,6 +221,7 @@ impl Podman {
 
         let mut child = Command::new(&self.binary)
             .args(&args)
+            .envs(&job.env)
             .stdin(Stdio::null())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
@@ -298,6 +319,21 @@ fn prepare(job: &Job, dir: &Path) -> std::io::Result<()> {
     permissions(&output, 0o777)
 }
 
+/// Masks the job's secrets in everything reported.
+fn scrub(outcome: Outcome, redact: &[String]) -> Outcome {
+    let secrets = || redact.iter().map(String::as_str);
+    let text = |s: &str| match huxley_expr::redact(&Json::String(s.to_owned()), secrets()) {
+        Json::String(s) => s,
+        _ => String::new(),
+    };
+    Outcome {
+        output: outcome.output.map(|o| huxley_expr::redact(&o, secrets())),
+        error: outcome.error.as_deref().map(text),
+        logs: text(&outcome.logs),
+        ..outcome
+    }
+}
+
 fn clip(bytes: &[u8]) -> String {
     let text = String::from_utf8_lossy(bytes);
     if text.len() <= MAX_LOGS {
@@ -341,6 +377,8 @@ mod tests {
             source: String::new(),
             inputs: Json::Null,
             timeout: Duration::from_secs(5),
+            env: [("API_KEY".to_owned(), "sk-123456".to_owned())].into(),
+            redact: Vec::new(),
         };
         let args = podman.args("x", &job, Path::new("/tmp/d")).unwrap();
         for flag in [
@@ -354,6 +392,9 @@ mod tests {
             assert!(args.iter().any(|a| a == flag), "missing {flag}");
         }
         assert!(args.iter().any(|a| a == "--volume=/tmp/d/in:/huxley/in:ro"));
+        // Values never go on the command line.
+        assert!(args.iter().any(|a| a == "--env=API_KEY"));
+        assert!(!args.iter().any(|a| a.contains("sk-123456")));
         assert!(
             podman
                 .args(

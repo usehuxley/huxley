@@ -26,6 +26,8 @@ fn python(source: &str, inputs: serde_json::Value) -> Job {
         source: source.into(),
         inputs,
         timeout: Duration::from_secs(30),
+        env: std::collections::BTreeMap::new(),
+        redact: Vec::new(),
     }
 }
 
@@ -104,10 +106,12 @@ async fn powershell_scripts_get_parameters() {
     let job = Job {
         language: "pwsh".into(),
         source:
-            "param([string]$Name, [int]$Count)\n@{ greeting = \"hi $Name\"; twice = $Count * 2 }"
+            "param([string]$Name, [int]$Count)\n@{ greeting = \"$env:GREETING $Name\"; twice = $Count * 2 }"
                 .into(),
         inputs: json!({ "Name": "ada", "Count": 21 }),
         timeout: Duration::from_secs(60),
+        env: [("GREETING".to_owned(), "hi".to_owned())].into(),
+        redact: Vec::new(),
     };
     let outcome = podman.run(&job).await;
     assert!(outcome.succeeded, "{outcome:?}");
@@ -115,4 +119,33 @@ async fn powershell_scripts_get_parameters() {
         outcome.output,
         Some(json!({ "greeting": "hi ada", "twice": 42 }))
     );
+}
+
+#[tokio::test]
+async fn secrets_arrive_as_environment_and_are_scrubbed() {
+    let Some(podman) = podman("python").await else {
+        return;
+    };
+    let mut job = python(
+        "import os\nprint('key is', os.environ['VAULT_KEY'])\nresult = {'echo': os.environ['VAULT_KEY'], 'region': os.environ['REGION']}",
+        json!({}),
+    );
+    job.env = [
+        ("VAULT_KEY".to_owned(), "sk-live-ABCDEF".to_owned()),
+        ("REGION".to_owned(), "eu".to_owned()),
+    ]
+    .into();
+    job.redact = vec!["sk-live-ABCDEF".into()];
+    let outcome = podman.run(&job).await;
+    assert!(outcome.succeeded, "{outcome:?}");
+    assert_eq!(
+        outcome.output,
+        Some(json!({ "echo": "«redacted»", "region": "eu" }))
+    );
+    assert!(
+        outcome.logs.contains("key is «redacted»"),
+        "{}",
+        outcome.logs
+    );
+    assert!(!outcome.logs.contains("ABCDEF"));
 }

@@ -271,6 +271,54 @@ fn integration_action(c: &mut Checker, path: &str, s: &crate::IntegrationActionS
     }
 }
 
+/// An environment variable name a script may be given.
+fn is_env_name(name: &str) -> bool {
+    name.len() <= 64
+        && name.starts_with(|c: char| c.is_ascii_uppercase() || c == '_')
+        && name
+            .chars()
+            .all(|c| c.is_ascii_uppercase() || c.is_ascii_digit() || c == '_')
+        && !name.starts_with("HUXLEY_")
+        && !matches!(name, "PATH" | "HOME" | "USER" | "HOSTNAME" | "TERM")
+}
+
+fn script(c: &mut Checker, path: &str, s: &crate::ScriptStep) {
+    if !is_valid_key(&s.script) {
+        c.error(format!("{path}.script"), "a script key (not an expression)");
+    }
+    for name in s.env.keys() {
+        if !is_env_name(name) {
+            c.error(
+                format!("{path}.env.{name}"),
+                "upper-case letters, digits and underscores (not HUXLEY_*, PATH or HOME)",
+            );
+        }
+    }
+    for (name, target) in &s.connections {
+        if !is_env_name(name) {
+            c.error(
+                format!("{path}.connections.{name}"),
+                "upper-case letters, digits and underscores (not HUXLEY_*, PATH or HOME)",
+            );
+        }
+        let (integration, connection) = target.split_once('/').unwrap_or((target, ""));
+        if !is_valid_key(integration) || !(connection.is_empty() || is_valid_key(connection)) {
+            c.error(
+                format!("{path}.connections.{name}"),
+                "<integration> or <integration>/<connection> (keys, not expressions)",
+            );
+        }
+        for suffix in ["_URL", "_TOKEN", "_KEY", "_USERNAME", "_PASSWORD"] {
+            if s.env.contains_key(&format!("{name}{suffix}")) {
+                c.error(
+                    format!("{path}.env.{name}{suffix}"),
+                    format!("set by connection {name}"),
+                );
+            }
+        }
+    }
+}
+
 fn wait_for_callback(c: &mut Checker, path: &str, s: &crate::WaitForCallbackStep) {
     c.duration(&format!("{path}.expires"), s.expires.as_deref());
     let Some(send) = &s.send else { return };
@@ -377,9 +425,7 @@ fn one(c: &mut Checker, path: &str, step: &Step) {
         },
         Step::IntegrationAction(s) => integration_action(c, path, s),
         Step::WaitForCallback(s) => wait_for_callback(c, path, s),
-        Step::Script(s) if !is_valid_key(&s.script) => {
-            c.error(format!("{path}.script"), "a script key (not an expression)");
-        }
+        Step::Script(s) => script(c, path, s),
         Step::Approval(s) => {
             c.duration(&format!("{path}.expires"), s.expires.as_deref());
             if s.title.trim().is_empty() {

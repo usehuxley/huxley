@@ -2,7 +2,7 @@
 
 Runners execute library scripts in sandboxes, separate from the API and workers (design doc §6.9). They connect to Huxley's **runner gateway**, a gRPC listener on its own port, with a client certificate (ADR-025).
 
-A runner asks the gateway for work, runs each script in a fresh **rootless Podman** container, and reports the result. The `script` workflow step queues that work (see [workflows](workflows.md#steps)). Kubernetes Jobs as a sandbox, credential injection and live log streaming come next.
+A runner asks the gateway for work, runs each script in a fresh **rootless Podman** container, and reports the result. The `script` workflow step queues that work (see [workflows](workflows.md#steps)). Kubernetes Jobs as a sandbox and live log streaming come next.
 
 ## Set up the gateway
 
@@ -43,6 +43,15 @@ podman pull docker.io/library/python:3.13-alpine
 ```
 
 It only offers the languages whose images are present. Choose other images with `--pwsh-image` and `--python-image`, for example ones with your modules preinstalled. `--concurrency` (default 2) sets how many scripts run at once. Logs, meaning stdout and stderr up to 64 KB, are kept with the task, and a failed step's error includes the last 4 KB of them.
+
+## Credentials
+
+A step's `env` and `connections` arrive as environment variables. Connection tokens are fetched when the runner claims the task, so they're fresh.
+
+- Podman takes their values from its own environment, never from a command line.
+- The runner scrubs every secret value and credential from the output, error and logs it reports.
+- Huxley scrubs them again when it records the report, whatever the runner sent.
+- They're stored encrypted until the task is claimed.
 
 ## Use your own CA
 

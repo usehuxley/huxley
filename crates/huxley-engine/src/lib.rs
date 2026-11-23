@@ -22,6 +22,7 @@ pub mod queue;
 mod run;
 pub mod runs;
 pub mod script;
+mod script_credentials;
 mod step;
 mod walk;
 mod worker;

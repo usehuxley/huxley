@@ -256,7 +256,8 @@ async fn spawn_runner_gateway(
         .await
         .with_context(|| format!("failed to bind the runner gateway on {bind}"))?;
     tracing::info!(addr = %bind, "runner gateway listening");
-    let gateway = huxley_runners::gateway::Gateway::new(db.clone(), crypto.clone());
+    let engine = huxley_engine::Engine::with_config(db.clone(), crypto.clone(), &config.engine);
+    let gateway = huxley_runners::gateway::Gateway::new(db.clone(), crypto.clone(), engine);
     let token = shutdown.clone();
     tasks.spawn(async move {
         huxley_runners::gateway::serve(gateway, listener, &tls, token)

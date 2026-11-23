@@ -42,7 +42,8 @@ async fn harness(extra_ca: Option<&str>) -> Option<Harness> {
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let port = listener.local_addr().unwrap().port();
     let stop = CancellationToken::new();
-    let server = Gateway::new(db.pools.app.clone(), crypto.clone());
+    let engine = huxley_engine::Engine::new(db.pools.app.clone(), crypto.clone());
+    let server = Gateway::new(db.pools.app.clone(), crypto.clone(), engine);
     let token = stop.clone();
     tokio::spawn(async move { gateway::serve(server, listener, &tls, token).await });
     Some(Harness {

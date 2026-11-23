@@ -2068,6 +2068,7 @@ dependencies = [
  "huxley-crypto",
  "huxley-db",
  "huxley-engine",
+ "huxley-expr",
  "huxley-scripts",
  "prost",
  "protox",

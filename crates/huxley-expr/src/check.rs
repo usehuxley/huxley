@@ -164,6 +164,7 @@ const NOT_EXPRESSIONS: &[&str] = &[
     "wait",
     "action",
     "connection",
+    "connections",
     "expires",
     "script",
 ];
