@@ -4,6 +4,7 @@
 	import { ArrowLeft } from '@lucide/svelte';
 	import { Button, Card } from '@usehuxley/ui';
 	import RunStatusBadge from '#lib/workflows/RunStatusBadge.svelte';
+	import ScriptTask from '#lib/workflows/ScriptTask.svelte';
 	import type { PageProps } from './$types';
 
 	type Run = PageProps['data']['run'];
@@ -195,6 +196,16 @@
 												step.output
 											)}</pre>
 									</div>
+								{/if}
+								{#if step.stepType === 'script'}
+									<ScriptTask
+										url={resolve('/(app)/runs/[id]/steps/[key]/[attempt]/script', {
+											id: run.id,
+											key: step.stepKey,
+											attempt: String(step.attempt)
+										})}
+										active={step.status === 'running' || step.status === 'waiting'}
+									/>
 								{/if}
 							</div>
 						</details>

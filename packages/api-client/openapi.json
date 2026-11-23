@@ -4269,6 +4269,61 @@
 				}
 			}
 		},
+		"/api/v1/runs/{id}/steps/{key}/{attempt}/script": {
+			"get": {
+				"tags": ["workflows"],
+				"summary": "A script step attempt's task: where it ran, how it ended, its logs.",
+				"operationId": "get_step_script",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					},
+					{
+						"name": "key",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string"
+						}
+					},
+					{
+						"name": "attempt",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "integer",
+							"format": "int32"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/TaskView"
+								}
+							}
+						}
+					},
+					"404": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
 		"/api/v1/runs/{id}/steps/{key}/{attempt}/{field}": {
 			"get": {
 				"tags": ["workflows"],
@@ -10137,6 +10192,51 @@
 					},
 					"name": {
 						"type": "string"
+					}
+				}
+			},
+			"TaskStatus": {
+				"type": "string",
+				"enum": ["queued", "running", "succeeded", "failed"]
+			},
+			"TaskView": {
+				"type": "object",
+				"description": "A script step attempt's task, as the run page shows it.",
+				"required": ["status", "scriptVersion", "createdAt"],
+				"properties": {
+					"claimedAt": {
+						"type": ["string", "null"],
+						"format": "date-time"
+					},
+					"createdAt": {
+						"type": "string",
+						"format": "date-time"
+					},
+					"error": {
+						"type": ["string", "null"]
+					},
+					"exitCode": {
+						"type": ["integer", "null"],
+						"format": "int32"
+					},
+					"finishedAt": {
+						"type": ["string", "null"],
+						"format": "date-time"
+					},
+					"logs": {
+						"type": ["string", "null"],
+						"description": "Its stdout and stderr (scrubbed, at most 64 KiB), once it's done."
+					},
+					"runnerName": {
+						"type": ["string", "null"],
+						"description": "The runner it ran on."
+					},
+					"scriptVersion": {
+						"type": "integer",
+						"format": "int32"
+					},
+					"status": {
+						"$ref": "#/components/schemas/TaskStatus"
 					}
 				}
 			},

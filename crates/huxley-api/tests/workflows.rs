@@ -1136,3 +1136,84 @@ async fn runners_enrol_once_and_only_admins_manage_them() {
     let (_, list) = s.get(&s.owner, "/api/v1/runners").await;
     assert_eq!(list.as_array().unwrap().len(), 2);
 }
+
+#[tokio::test]
+async fn script_steps_show_where_they_ran_and_their_logs() {
+    // Its own database: it runs engine jobs.
+    let Some(db) = isolated("api_script_logs").await else {
+        return;
+    };
+    let s = setup_in(db.pools.clone()).await;
+    let script = json!({ "orgId": s.org, "script": {
+        "key": "hello", "name": "Hello", "language": "python", "source": "result = 1" } });
+    let (status, body) = s.post(&s.owner, "/api/v1/scripts", script).await;
+    assert_eq!(status, StatusCode::CREATED, "{body}");
+    let doc = document(
+        &key("script"),
+        &json!([{ "id": "greet", "type": "script", "script": "hello" }]),
+    );
+    let (_, created) = s.create(doc).await;
+    let id = created["id"].as_str().unwrap();
+    let (status, run) = s
+        .post(
+            &s.owner,
+            &format!("/api/v1/workflows/{id}/runs"),
+            json!({ "test": true, "inputs": { "name": "Ada" } }),
+        )
+        .await;
+    assert_eq!(status, StatusCode::CREATED, "{run}");
+    let run_id: Uuid = run["id"].as_str().unwrap().parse().unwrap();
+    let uri = format!("/api/v1/runs/{run_id}/steps/greet/1/script");
+
+    let engine = huxley_engine::Engine::new(s.pools.app.clone(), crypto(&s.pools));
+    let runner = Uuid::now_v7();
+    sqlx::query("INSERT INTO runners (id, name, source) VALUES ($1, 'runner-x', 'huxley')")
+        .bind(runner)
+        .execute(&s.pools.owner)
+        .await
+        .unwrap();
+    let deadline = Instant::now() + Duration::from_secs(20);
+    let task = loop {
+        engine.drain("api-test", 50).await.unwrap();
+        if let Some(task) = engine
+            .claim_script(runner, &[huxley_scripts::Language::Python])
+            .await
+            .unwrap()
+        {
+            break task;
+        }
+        assert!(Instant::now() < deadline, "the script wasn't queued");
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    };
+    let (status, running) = s.get(&s.owner, &uri).await;
+    assert_eq!(status, StatusCode::OK, "{running}");
+    assert_eq!(running["status"], "running");
+    assert_eq!(running["runnerName"], "runner-x");
+
+    let report = huxley_engine::script::Report {
+        succeeded: true,
+        output: Some(json!(1)),
+        error: None,
+        exit_code: Some(0),
+        logs: "hello from the script\n".into(),
+    };
+    engine
+        .report_script(runner, task.id, &report)
+        .await
+        .unwrap();
+    let done = finish(&s.pools, &s.app, &s.owner, &run_id.to_string()).await;
+    assert_eq!(done["status"], "succeeded", "{done}");
+    let (_, view) = s.get(&s.owner, &uri).await;
+    assert_eq!(view["status"], "succeeded");
+    assert_eq!(view["exitCode"], 0);
+    assert_eq!(view["logs"], "hello from the script\n");
+    assert_eq!(view["scriptVersion"], 1);
+    // Steps without a script task: not found.
+    let (status, _) = s
+        .get(
+            &s.owner,
+            &format!("/api/v1/runs/{run_id}/steps/nope/1/script"),
+        )
+        .await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+}

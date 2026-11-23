@@ -31,8 +31,9 @@ const MIN_REDACTED: usize = 4;
 /// The end of the logs a failed step's error carries.
 const ERROR_LOG_BYTES: usize = 4 * 1024;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, sqlx::Type)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, utoipa::ToSchema, sqlx::Type)]
 #[sqlx(type_name = "script_task_status", rename_all = "lowercase")]
+#[serde(rename_all = "lowercase")]
 pub enum TaskStatus {
     Queued,
     Running,
@@ -265,6 +266,47 @@ async fn task_for(
     .bind(run_id)
     .bind(&record.step_key)
     .bind(record.attempt)
+    .fetch_optional(conn)
+    .await
+}
+
+/// A script step attempt's task, as the run page shows it.
+#[derive(Debug, Clone, Serialize, utoipa::ToSchema, sqlx::FromRow)]
+#[serde(rename_all = "camelCase")]
+pub struct TaskView {
+    pub status: TaskStatus,
+    /// The runner it ran on.
+    pub runner_name: Option<String>,
+    pub script_version: i32,
+    pub exit_code: Option<i32>,
+    pub error: Option<String>,
+    /// Its stdout and stderr (scrubbed, at most 64 KiB), once it's done.
+    pub logs: Option<String>,
+    #[serde(with = "time::serde::rfc3339")]
+    pub created_at: OffsetDateTime,
+    #[serde(with = "time::serde::rfc3339::option")]
+    pub claimed_at: Option<OffsetDateTime>,
+    #[serde(with = "time::serde::rfc3339::option")]
+    pub finished_at: Option<OffsetDateTime>,
+}
+
+/// The task of a script step's attempt. The caller checks access to the
+/// run; runner names need the system scope.
+pub async fn task_view(
+    conn: &mut PgConnection,
+    run_id: Uuid,
+    step_key: &str,
+    attempt: i32,
+) -> sqlx::Result<Option<TaskView>> {
+    sqlx::query_as(
+        "SELECT t.status, r.name AS runner_name, t.script_version, t.exit_code, t.error, t.logs, \
+                t.created_at, t.claimed_at, t.finished_at \
+           FROM script_tasks t LEFT JOIN runners r ON r.id = t.runner_id \
+          WHERE t.run_id = $1 AND t.step_key = $2 AND t.attempt = $3",
+    )
+    .bind(run_id)
+    .bind(step_key)
+    .bind(attempt)
     .fetch_optional(conn)
     .await
 }
