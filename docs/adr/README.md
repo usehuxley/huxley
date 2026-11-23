@@ -26,3 +26,4 @@ Decisions that shape Huxley. Add a new ADR by copying `0000-template.md` with th
 | [020](0020-structured-control-flow-in-hwf.md) | Structured control flow in HWF | Accepted |
 | [021](0021-workflow-engine-execution-model.md) | Workflow engine execution model | Accepted |
 | [022](0022-visual-workflow-editor-as-nested-blocks.md) | The visual workflow editor shows nested blocks, not a free-form graph | Accepted |
+| [023](0023-integration-definitions-from-openapi.md) | Integration definitions come from OpenAPI through a tolerant importer | Accepted |

@@ -1,0 +1,129 @@
+openapi: 3.0.3
+info:
+  title: Tickets API
+  version: "2.1"
+  description: A small helpdesk API.
+servers:
+  - url: https://{tenant}.example.com/api/v2
+    description: Production
+    variables:
+      tenant:
+        default: demo
+        description: Your tenant name
+      unused:
+        default: x
+        enum: [x, y]
+security:
+  - apiKey: []
+paths:
+  /tickets:
+    parameters:
+      - $ref: "#/components/parameters/Page"
+    get:
+      operationId: listTickets
+      summary: List tickets
+      tags: [Tickets]
+      parameters:
+        - name: status
+          in: query
+          schema: { type: string, enum: [open, closed] }
+        - name: X-Request-Id
+          in: header
+          schema: { type: string }
+        - name: Authorization
+          in: header
+          schema: { type: string }
+      responses:
+        "200":
+          description: Tickets
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Ticket" }
+    post:
+      operationId: createTicket
+      summary: Create a ticket
+      tags: [Tickets]
+      security:
+        - oauth: [tickets.write]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/NewTicket" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Ticket" }
+  /tickets/{id}:
+    get:
+      operationId: listTickets
+      parameters:
+        - name: id
+          in: path
+          schema: { type: integer }
+      responses:
+        "200":
+          $ref: "#/components/responses/One"
+    delete:
+      deprecated: true
+      security: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "204": { description: Gone }
+components:
+  parameters:
+    Page:
+      name: page
+      in: query
+      description: Page number
+      schema: { type: integer, minimum: 1 }
+  responses:
+    One:
+      description: A ticket
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Ticket" }
+  schemas:
+    NewTicket:
+      type: object
+      required: [subject]
+      properties:
+        subject: { type: string }
+        parent: { $ref: "#/components/schemas/Ticket" }
+    Ticket:
+      type: object
+      properties:
+        id: { type: integer }
+        subject: { type: string }
+        children:
+          type: array
+          items: { $ref: "#/components/schemas/Ticket" }
+  securitySchemes:
+    apiKey:
+      type: apiKey
+      in: header
+      name: X-Api-Key
+    oauth:
+      type: oauth2
+      flows:
+        authorizationCode:
+          authorizationUrl: https://login.example.com/authorize
+          tokenUrl: https://login.example.com/token
+          scopes: { tickets.read: Read, tickets.write: Write }
+        clientCredentials:
+          tokenUrl: https://login.example.com/token
+          scopes: { tickets.read: Read }
+        implicit:
+          authorizationUrl: https://login.example.com/authorize
+          scopes: {}
+    legacy:
+      type: http
+      scheme: digest

@@ -1,0 +1,9 @@
+{
+  "openapi": "3.1.0",
+  "info": { "title": "Minimal" },
+  "paths": {
+    "/ping": { "get": { "responses": { "200": { "description": "pong", "content": { "application/problem+json": { "schema": { "type": ["object", "null"] } } } } } } },
+    "/things/{id}": { "put": { "requestBody": { "content": { "application/x-www-form-urlencoded": { "schema": { "type": "object" } }, "text/plain": {} } }, "responses": { "default": { "description": "x" } } } }
+  },
+  "components": { "securitySchemes": { "oidc": { "type": "openIdConnect", "openIdConnectUrl": "https://id.example.com/.well-known/openid-configuration" } } }
+}
