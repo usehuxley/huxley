@@ -2,7 +2,8 @@
 	import { enhance } from '$app/forms';
 	import { resolve } from '$app/paths';
 	import { ArrowLeft } from '@lucide/svelte';
-	import { Badge, Button, Card } from '@usehuxley/ui';
+	import { Badge, Button, Card, Field, Input, Select } from '@usehuxley/ui';
+	import { fieldsFor } from '#lib/integrations/connections.ts';
 	import type { PageProps } from './$types';
 
 	let { data, form }: PageProps = $props();
@@ -10,6 +11,32 @@
 	let definition = $derived(integration.definition);
 	let canManage = $derived(data.user.grantedPermissions.includes('integration:manage'));
 	let updating = $state(false);
+	let canConnect = $derived(data.user.grantedPermissions.includes('connection:manage'));
+	let orgName = $derived(new Map(data.orgs.map((o) => [o.id, o.name])));
+	let orgOptions = $derived(data.orgs.map((o) => ({ value: o.id, label: o.name })));
+	let connectOrg = $state('');
+	$effect(() => {
+		if (!connectOrg) connectOrg = integration.orgId;
+	});
+	let schemeKey = $state('');
+	$effect(() => {
+		if (!schemeKey) schemeKey = definition.authSchemes[0]?.key ?? '';
+	});
+	let schemeOptions = $derived([
+		...definition.authSchemes.map((s) => ({
+			value: s.key,
+			label: `${describeAuth(s)} (${s.key})`
+		})),
+		{ value: '', label: 'No authentication' }
+	]);
+	let schemeFields = $derived(
+		fieldsFor(definition.authSchemes.find((s) => s.key === schemeKey)?.type)
+	);
+	let serverVariables = $derived(definition.servers[0]?.variables ?? []);
+	const statusTone = (status: string) =>
+		status === 'ready' ? 'success' : status === 'needs_auth' ? 'warning' : 'danger';
+	const statusLabel = (status: string) =>
+		status === 'ready' ? 'Ready' : status === 'needs_auth' ? 'Needs sign-in' : 'Error';
 
 	type Action = (typeof definition.actions)[number];
 	// Actions grouped by their first tag, groups in spec order.
@@ -150,6 +177,119 @@
 			{/if}
 		</Card>
 	</div>
+
+	<Card
+		title="Connections"
+		description="Credentials for calling this API. Organizations below the owner can use shared ones; secrets are never shown again."
+	>
+		{#if data.connections.length === 0}
+			<p class="text-sm text-fg-muted">No connections yet.</p>
+		{:else}
+			<ul class="flex flex-col divide-y divide-border" aria-label="Connections">
+				{#each data.connections as connection (connection.id)}
+					<li class="flex items-center justify-between gap-4 py-2">
+						<div class="min-w-0 text-sm">
+							<p class="text-fg">
+								{connection.name}
+								{#if connection.shared}<Badge tone="neutral">Shared</Badge>{/if}
+							</p>
+							<p class="font-mono text-xs text-fg-muted">
+								{connection.key} · {orgName.get(connection.orgId) ?? 'Unknown organization'}
+								· {connection.authScheme ?? 'no auth'}
+								{#if connection.secretFields.length}· {connection.secretFields.join(', ')} set{/if}
+							</p>
+						</div>
+						<div class="flex items-center gap-2">
+							<Badge tone={statusTone(connection.status)}>{statusLabel(connection.status)}</Badge>
+							{#if canConnect}
+								<form method="POST" action="?/disconnect" use:enhance>
+									<input type="hidden" name="connectionId" value={connection.id} />
+									<Button type="submit" variant="ghost" size="sm">Delete</Button>
+								</form>
+							{/if}
+						</div>
+					</li>
+				{/each}
+			</ul>
+		{/if}
+		{#if canConnect}
+			<form
+				method="POST"
+				action="?/connect"
+				class="mt-4 flex flex-col gap-3"
+				use:enhance={() =>
+					async ({ update }) => {
+						await update({ reset: true });
+					}}
+				aria-label="New connection"
+			>
+				<div class="flex flex-wrap items-end gap-3">
+					<Field label="Connection name" for="connName">
+						<Input id="connName" name="name" required maxlength={200} />
+					</Field>
+					<Field label="Organization" for="connOrg">
+						<Select id="connOrg" name="orgId" options={orgOptions} bind:value={connectOrg} />
+					</Field>
+					<Field label="Authentication" for="connScheme">
+						<Select
+							id="connScheme"
+							name="authScheme"
+							options={schemeOptions}
+							bind:value={schemeKey}
+						/>
+					</Field>
+				</div>
+				{#if schemeFields.length}
+					<div class="flex flex-wrap items-end gap-3">
+						{#each schemeFields as field (field.name)}
+							<Field label={field.label} for="conn-{field.name}" hint={field.hint}>
+								<Input
+									id="conn-{field.name}"
+									name="field.{field.name}"
+									type={field.secret ? 'password' : 'text'}
+									autocomplete="off"
+								/>
+							</Field>
+						{/each}
+					</div>
+				{/if}
+				<div class="flex flex-wrap items-end gap-3">
+					{#each serverVariables as variable (variable.name)}
+						<Field
+							label={variable.name}
+							for="var-{variable.name}"
+							hint={variable.description ?? undefined}
+						>
+							<Input
+								id="var-{variable.name}"
+								name="var.{variable.name}"
+								placeholder={variable.default}
+							/>
+						</Field>
+					{/each}
+					<Field
+						label="Base URL"
+						for="connBase"
+						hint={definition.servers.length ? 'Optional; overrides the spec' : 'Required'}
+					>
+						<Input
+							id="connBase"
+							name="baseUrl"
+							type="url"
+							placeholder={definition.servers[0]?.url}
+						/>
+					</Field>
+				</div>
+				<label class="flex items-center gap-2 text-sm text-fg">
+					<input type="checkbox" name="shared" /> Share with the organizations below
+				</label>
+				<div><Button type="submit">Create connection</Button></div>
+			</form>
+			{#if form && 'connectMessage' in form && form.connectMessage}
+				<p class="mt-2 text-sm text-danger" role="alert">{form.connectMessage}</p>
+			{/if}
+		{/if}
+	</Card>
 
 	{#if form && 'preview' in form && form.preview}
 		{@const preview = form.preview}

@@ -1925,6 +1925,7 @@ name = "huxley-integrations"
 version = "0.1.0"
 dependencies = [
  "huxley-core",
+ "huxley-crypto",
  "huxley-db",
  "serde",
  "serde-saphyr",
@@ -1933,8 +1934,10 @@ dependencies = [
  "thiserror 2.0.21",
  "time",
  "tokio",
+ "url",
  "utoipa",
  "uuid",
+ "zeroize",
 ]
 
 [[package]]
