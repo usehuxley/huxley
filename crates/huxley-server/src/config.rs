@@ -191,4 +191,29 @@ mod tests {
             Ok(())
         });
     }
+
+    #[test]
+    fn vault_kek_settings_come_from_env_and_files() {
+        figment::Jail::expect_with(|jail| {
+            jail.create_file("secret-id", "approle-secret\n")?;
+            let path = jail.directory().join("secret-id");
+            jail.set_env("HUXLEY_CRYPTO__VAULT__ADDRESS", "https://bao.internal:8200");
+            jail.set_env("HUXLEY_CRYPTO__VAULT__APPROLE__ROLE_ID", "huxley");
+            let env = [(
+                "HUXLEY_CRYPTO__VAULT__APPROLE__SECRET_ID_FILE".to_owned(),
+                path.display().to_string(),
+            )];
+            let config = Config::from_figment(&figment(None, env.into_iter()).unwrap()).unwrap();
+            let vault = config.crypto.vault.as_ref().unwrap();
+            assert_eq!(vault.mount, "transit");
+            let approle = vault.approle.as_ref().unwrap();
+            assert_eq!(approle.secret_id.expose_secret(), "approle-secret");
+            assert!(!format!("{vault:?}").contains("approle-secret"));
+            assert_eq!(
+                config.crypto.key_ring().unwrap().active_id(),
+                "vault:transit/huxley"
+            );
+            Ok(())
+        });
+    }
 }

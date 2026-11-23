@@ -166,7 +166,7 @@ async fn rewrap_moves_keys_to_the_new_kek() {
     // Without the old KEK nothing can be re-wrapped, and nothing changes.
     let lost = Crypto::new(pools.app.clone(), ring(&new, &[]));
     assert!(matches!(
-        lost.rewrap(&ctx, Some(provider)).await,
+        lost.rewrap(&ctx, Some(provider), false).await,
         Err(CryptoError::UnknownKek(_))
     ));
     assert_eq!(active_keys(&pools, provider).await[0].1, old_id);
@@ -174,9 +174,15 @@ async fn rewrap_moves_keys_to_the_new_kek() {
     // Other tests share the database with keys under KEKs this test doesn't
     // hold, so re-wrap only this test's org.
     let rotated = Crypto::new(pools.app.clone(), ring(&new, &[&old]));
-    assert_eq!(rotated.rewrap(&ctx, Some(provider)).await.unwrap(), 1);
+    assert_eq!(
+        rotated.rewrap(&ctx, Some(provider), false).await.unwrap(),
+        1
+    );
     assert_ne!(active_keys(&pools, provider).await[0].1, old_id);
-    assert_eq!(rotated.rewrap(&ctx, Some(provider)).await.unwrap(), 0);
+    assert_eq!(
+        rotated.rewrap(&ctx, Some(provider), false).await.unwrap(),
+        0
+    );
 
     // The old KEK is no longer needed.
     let new_only = Crypto::new(pools.app.clone(), ring(&new, &[]));

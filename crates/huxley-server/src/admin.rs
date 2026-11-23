@@ -58,9 +58,15 @@ pub enum AdminCommand {
     /// database or configuration.
     GenerateKek,
     /// Re-wrap every data key under the active key-encryption key. Run after
-    /// rotating `crypto.kek` (with the old key in `crypto.retired_keks`); once
-    /// it succeeds the retired keys can be removed.
-    RewrapKeys,
+    /// rotating `crypto.kek` (with the old key in `crypto.retired_keks`) or
+    /// moving to a key service (`crypto.active`); once it succeeds the retired
+    /// keys can be removed.
+    RewrapKeys {
+        /// Also re-wrap keys already under the active key-encryption key, e.g.
+        /// to move them to a new key version after rotating it in Vault.
+        #[arg(long)]
+        all: bool,
+    },
 }
 
 pub async fn run(config: &Config, command: AdminCommand) -> anyhow::Result<()> {
@@ -71,7 +77,7 @@ pub async fn run(config: &Config, command: AdminCommand) -> anyhow::Result<()> {
     let db_config = config.database()?;
     match command {
         AdminCommand::GenerateKek => unreachable!("handled above"),
-        AdminCommand::RewrapKeys => rewrap_keys(config, db_config).await,
+        AdminCommand::RewrapKeys { all } => rewrap_keys(config, db_config, all).await,
         AdminCommand::Bootstrap {
             org_name,
             email,
@@ -154,15 +160,25 @@ pub async fn run(config: &Config, command: AdminCommand) -> anyhow::Result<()> {
     }
 }
 
-async fn rewrap_keys(config: &Config, db_config: &huxley_db::DatabaseConfig) -> anyhow::Result<()> {
+async fn rewrap_keys(
+    config: &Config,
+    db_config: &huxley_db::DatabaseConfig,
+    all: bool,
+) -> anyhow::Result<()> {
     let db = huxley_db::connect(db_config)?;
-    let crypto = huxley_crypto::Crypto::new(db, config.crypto.key_ring()?);
+    let ring = config.crypto.key_ring()?;
+    let active = ring.active_id().to_owned();
+    let retired: Vec<String> = ring.retired_ids().map(str::to_owned).collect();
+    let crypto = huxley_crypto::Crypto::new(db, ring);
     let count = crypto
-        .rewrap(&RequestContext::system(Via::Cli), None)
+        .rewrap(&RequestContext::system(Via::Cli), None, all)
         .await?;
-    println!("Re-wrapped {count} data key(s) under the active key-encryption key.");
-    if !config.crypto.retired_keks.is_empty() {
-        println!("The retired keys are no longer needed; remove them from crypto.retired_keks.");
+    println!("Re-wrapped {count} data key(s) under key-encryption key {active}.");
+    if !retired.is_empty() {
+        println!(
+            "These key-encryption keys are no longer needed and can be removed from configuration: {}",
+            retired.join(", ")
+        );
     }
     Ok(())
 }

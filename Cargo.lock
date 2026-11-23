@@ -1662,10 +1662,12 @@ dependencies = [
 name = "huxley-crypto"
 version = "0.1.0"
 dependencies = [
+ "axum",
  "base64 0.23.1",
  "getrandom 0.4.3",
  "huxley-core",
  "huxley-db",
+ "reqwest 0.13.5",
  "ring",
  "secrecy",
  "serde",
@@ -1674,6 +1676,7 @@ dependencies = [
  "sqlx",
  "thiserror 2.0.21",
  "tokio",
+ "tracing",
  "uuid",
  "zeroize",
 ]
@@ -3692,6 +3695,8 @@ dependencies = [
  "rustls",
  "rustls-pki-types",
  "rustls-platform-verifier",
+ "serde",
+ "serde_json",
  "sync_wrapper",
  "tokio",
  "tokio-rustls",

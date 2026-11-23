@@ -77,6 +77,20 @@ Then open https://localhost (staff app) and https://portal.localhost (client por
 
 Secrets are encrypted with per-provider-org data keys, which are in turn encrypted ("wrapped") by the KEK. To rotate the KEK: generate a new one, set it as `HUXLEY_CRYPTO__KEK` with the old one in `HUXLEY_CRYPTO__RETIRED_KEKS`, restart, run `huxley admin rewrap-keys`, then remove the retired key. The server refuses to start if any stored data key was wrapped by a KEK it doesn't have.
 
+### Keeping the key-encryption key in Vault or OpenBao
+
+Instead of holding the KEK in configuration, Huxley can ask HashiCorp Vault or OpenBao to wrap and unwrap data keys with a Transit key, so the KEK never leaves the key service:
+
+```sh
+bao secrets enable transit
+bao write -f transit/keys/huxley        # aes256-gcm96
+# Policy for Huxley: update on transit/encrypt/huxley and transit/decrypt/huxley.
+```
+
+Then set `HUXLEY_CRYPTO__VAULT__ADDRESS` and one way to sign in: `HUXLEY_CRYPTO__VAULT__TOKEN` (a periodic token), AppRole (`HUXLEY_CRYPTO__VAULT__APPROLE__ROLE_ID` and `..._SECRET_ID`), or Kubernetes (`HUXLEY_CRYPTO__VAULT__KUBERNETES__ROLE`). Optional: `..._MOUNT` (default `transit`), `..._KEY` (default `huxley`), `..._NAMESPACE`, `..._CA_CERT_FILE` for a private CA. Huxley checks at startup that it can wrap and unwrap with the key, and unwraps each organization's data key once per process, so Vault is not on the request path.
+
+To move an existing install over, keep `HUXLEY_CRYPTO__KEK`, add the Vault settings and `HUXLEY_CRYPTO__ACTIVE=vault`, restart, run `huxley admin rewrap-keys`, then remove the KEK. After rotating the key inside Vault, `huxley admin rewrap-keys --all` moves data keys to its newest version, so older versions can be retired with `min_decryption_version`.
+
 ### Configuration
 
 The server reads, in increasing precedence: built-in defaults, `huxley.toml`, then `HUXLEY_<SECTION>__<KEY>` environment variables. Any variable can instead be supplied as a file by appending `_FILE` (for Docker and Kubernetes secrets).
@@ -84,7 +98,9 @@ The server reads, in increasing precedence: built-in defaults, `huxley.toml`, th
 | Variable | Default | Purpose |
 |---|---|---|
 | `HUXLEY_DATABASE__URL` | (required) | PostgreSQL connection URL |
-| `HUXLEY_CRYPTO__KEK` | (required) | Key-encryption key for secrets at rest: 32 random bytes, base64 (`huxley admin generate-kek`). Back it up: without it, encrypted data is unrecoverable. |
+| `HUXLEY_CRYPTO__KEK` | (required unless Vault is set) | Key-encryption key for secrets at rest: 32 random bytes, base64 (`huxley admin generate-kek`). Back it up: without it, encrypted data is unrecoverable. |
+| `HUXLEY_CRYPTO__VAULT__ADDRESS` | (unset) | Keep the KEK in Vault or OpenBao Transit instead (see above) |
+| `HUXLEY_CRYPTO__ACTIVE` | (the one configured) | `local` or `vault`: which KEK wraps new data keys when both are set |
 | `HUXLEY_AUTH__PUBLIC_URL` | (unset) | The staff app's URL as browsers see it, e.g. `https://huxley.example.com`. Enables passkeys, which are bound to its host name (changing the host later invalidates registered passkeys), and single sign-on, whose redirect URI is `<public URL>/login/oidc/callback`. |
 | `HUXLEY_EMAIL__SMTP_URL` | (unset) | SMTP server for password reset, invitations, and verification, e.g. `smtps://user:pass@smtp.example.com` or `smtp://user:pass@host:587?tls=required`. Unset or empty: email is off. Links need `HUXLEY_AUTH__PUBLIC_URL`. |
 | `HUXLEY_EMAIL__FROM` | (required with SMTP) | From address, e.g. `Huxley <huxley@example.com>` |

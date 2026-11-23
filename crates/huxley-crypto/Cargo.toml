@@ -13,6 +13,7 @@ base64.workspace = true
 getrandom.workspace = true
 huxley-core.workspace = true
 huxley-db.workspace = true
+reqwest.workspace = true
 ring.workspace = true
 secrecy.workspace = true
 serde.workspace = true
@@ -20,6 +21,8 @@ serde_json.workspace = true
 sha2.workspace = true
 sqlx.workspace = true
 thiserror.workspace = true
+tokio.workspace = true
+tracing.workspace = true
 uuid.workspace = true
 zeroize.workspace = true
 
@@ -28,8 +31,8 @@ zeroize.workspace = true
 testing = []
 
 [dev-dependencies]
+axum.workspace = true
 huxley-db = { workspace = true, features = ["testing"] }
-tokio.workspace = true
 
 [lints]
 workspace = true

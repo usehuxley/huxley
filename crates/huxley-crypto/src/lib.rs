@@ -3,8 +3,9 @@
 //! - A **key-encryption key** (KEK) comes from configuration (`crypto.kek`, or
 //!   `HUXLEY_CRYPTO__KEK[_FILE]`) and never touches the database. Retired KEKs
 //!   (`crypto.retired_keks`) can still unwrap old data keys until
-//!   `huxley admin rewrap-keys` re-wraps them under the active one. KMS-backed
-//!   KEKs (Azure Key Vault, Vault) plug in at [`KeyRing`] later.
+//!   `huxley admin rewrap-keys` re-wraps them under the active one. The KEK
+//!   can instead live in a key management service (`crypto.vault`: HashiCorp
+//!   Vault or OpenBao Transit), which wraps and unwraps data keys for Huxley.
 //! - Each **provider organization** has its own data-encryption key (DEK),
 //!   created on first use and stored wrapped by the KEK in `data_keys`.
 //! - Values are sealed with AES-256-GCM under the DEK. The ciphertext names its
@@ -14,6 +15,7 @@
 //! Ciphertext layout: `0x01 || dek_id (16) || nonce (12) || ciphertext || tag (16)`.
 
 mod keyring;
+mod kms;
 #[cfg(feature = "testing")]
 pub mod testing;
 
@@ -33,6 +35,7 @@ use zeroize::Zeroizing;
 
 use keyring::{AeadKey, random_key};
 pub use keyring::{KEY_LEN, KeyRing, generate_key_base64};
+pub use kms::{AppRoleConfig, KubernetesAuthConfig, VaultConfig};
 
 const FORMAT_V1: u8 = 1;
 const HEADER_LEN: usize = 1 + 16;
@@ -52,12 +55,52 @@ pub struct CryptoConfig {
     /// Previous KEKs, kept so data keys wrapped by them can still be read
     /// until `huxley admin rewrap-keys` has run.
     pub retired_keks: Vec<SecretString>,
+    /// A KEK held in HashiCorp Vault or OpenBao (Transit).
+    pub vault: Option<VaultConfig>,
+    /// Which configured KEK wraps new data keys. Needed only when more than
+    /// one is configured, e.g. while moving from `kek` to `vault`; the others
+    /// stay readable until `huxley admin rewrap-keys` has run.
+    pub active: Option<KekSource>,
+}
+
+/// Where a key-encryption key lives.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum KekSource {
+    /// `crypto.kek`.
+    Local,
+    /// `crypto.vault`.
+    Vault,
 }
 
 impl CryptoConfig {
     pub fn key_ring(&self) -> Result<KeyRing, CryptoError> {
-        let kek = self.kek.as_ref().ok_or(CryptoError::MissingKek)?;
-        KeyRing::new(kek, &self.retired_keks)
+        let active = match (self.active, self.kek.is_some(), self.vault.is_some()) {
+            (Some(source), ..) => source,
+            (None, true, false) => KekSource::Local,
+            (None, false, true) => KekSource::Vault,
+            (None, true, true) => return Err(CryptoError::AmbiguousKek),
+            (None, false, false) => return Err(CryptoError::MissingKek),
+        };
+        let mut local = self
+            .kek
+            .as_ref()
+            .map(keyring::parse_local_one)
+            .transpose()?;
+        let mut vault = self
+            .vault
+            .as_ref()
+            .map(|c| kms::VaultKek::new(c).map(|k| keyring::Kek::Vault(Box::new(k))))
+            .transpose()?;
+        let active = match active {
+            KekSource::Local => local.take().ok_or(CryptoError::MissingKek)?,
+            KekSource::Vault => vault.take().ok_or_else(|| {
+                CryptoError::Config("crypto.active is \"vault\" but crypto.vault is not set".into())
+            })?,
+        };
+        let mut retired: Vec<_> = local.into_iter().chain(vault).collect();
+        retired.extend(keyring::parse_local(&self.retired_keks)?);
+        Ok(KeyRing::from_keks(active, retired))
     }
 }
 
@@ -67,6 +110,14 @@ pub enum CryptoError {
         "no key-encryption key is configured: set HUXLEY_CRYPTO__KEK (or _FILE) to the output of `huxley admin generate-kek`"
     )]
     MissingKek,
+    #[error(
+        "more than one key-encryption key is configured: set crypto.active to say which wraps new data keys"
+    )]
+    AmbiguousKek,
+    #[error("invalid crypto configuration: {0}")]
+    Config(String),
+    #[error("key management service: {0}")]
+    Kms(String),
     #[error("a configured key-encryption key is not 32 bytes of base64")]
     InvalidKek,
     #[error("invalid key material")]
@@ -177,9 +228,11 @@ impl Crypto {
         key.open(&binding.aad(dek_id), &ciphertext[HEADER_LEN..])
     }
 
-    /// Checks that every stored data key can be unwrapped with the configured
-    /// KEKs. Run at startup so a missing KEK fails fast instead of on first use.
+    /// Checks that the active KEK works and that every stored data key can be
+    /// unwrapped with the configured KEKs, caching them. Run at startup so a
+    /// missing KEK or unreachable key service fails fast instead of on first use.
     pub async fn verify_keys(&self) -> CryptoResult<()> {
+        self.ring.check().await?;
         let mut tx = begin_scoped(&self.db, &OrgScope::System).await?;
         let rows: Vec<DataKeyRow> =
             sqlx::query_as("SELECT id, org_id, kek_id, wrapped_key FROM data_keys")
@@ -187,32 +240,40 @@ impl Crypto {
                 .await?;
         tx.commit().await?;
         for row in rows {
-            self.ring
-                .unwrap(&row.kek_id, row.id, row.org_id, &row.wrapped_key)?;
+            self.load(&row).await?;
         }
         Ok(())
     }
 
     /// Re-wraps every data key (or only `org_id`'s) not already under the
     /// active KEK, all or nothing. Returns how many were re-wrapped. Afterwards
-    /// the retired KEKs can be removed from configuration.
-    pub async fn rewrap(&self, ctx: &RequestContext, org_id: Option<Uuid>) -> CryptoResult<u64> {
+    /// the retired KEKs can be removed from configuration. With `all`, keys
+    /// already under the active KEK are re-wrapped too: after rotating a key
+    /// inside Vault, this moves them to its newest version.
+    pub async fn rewrap(
+        &self,
+        ctx: &RequestContext,
+        org_id: Option<Uuid>,
+        all: bool,
+    ) -> CryptoResult<u64> {
         let mut tx = begin_scoped(&self.db, &OrgScope::System).await?;
         let rows: Vec<DataKeyRow> = sqlx::query_as(
             "SELECT id, org_id, kek_id, wrapped_key FROM data_keys \
-              WHERE kek_id <> $1 AND ($2::uuid IS NULL OR org_id = $2) \
+              WHERE ($3 OR kek_id <> $1) AND ($2::uuid IS NULL OR org_id = $2) \
               ORDER BY id FOR UPDATE",
         )
         .bind(self.ring.active_id())
         .bind(org_id)
+        .bind(all)
         .fetch_all(&mut *tx)
         .await?;
         let mut from: Vec<String> = Vec::new();
         for row in &rows {
             let dek = self
                 .ring
-                .unwrap(&row.kek_id, row.id, row.org_id, &row.wrapped_key)?;
-            let (kek_id, wrapped) = self.ring.wrap(row.id, row.org_id, &dek);
+                .unwrap(&row.kek_id, row.id, row.org_id, &row.wrapped_key)
+                .await?;
+            let (kek_id, wrapped) = self.ring.wrap(row.id, row.org_id, &dek).await?;
             sqlx::query(
                 "UPDATE data_keys SET kek_id = $2, wrapped_key = $3, rewrapped_at = now() \
                  WHERE id = $1",
@@ -255,13 +316,14 @@ impl Crypto {
                 .await?;
         tx.commit().await?;
         let row = row.ok_or(CryptoError::UnknownDataKey(dek_id))?;
-        self.load(&row)
+        self.load(&row).await
     }
 
-    fn load(&self, row: &DataKeyRow) -> CryptoResult<Arc<AeadKey>> {
+    async fn load(&self, row: &DataKeyRow) -> CryptoResult<Arc<AeadKey>> {
         let dek = self
             .ring
-            .unwrap(&row.kek_id, row.id, row.org_id, &row.wrapped_key)?;
+            .unwrap(&row.kek_id, row.id, row.org_id, &row.wrapped_key)
+            .await?;
         let key = Arc::new(AeadKey::new(&dek)?);
         self.cache
             .lock()
@@ -305,7 +367,9 @@ impl Crypto {
         if row.is_none() {
             let id = huxley_core::new_id();
             let dek = random_key();
-            let (kek_id, wrapped) = self.ring.wrap(id, provider, &*dek);
+            // With a key service this is a network call inside the
+            // transaction; it happens once per provider org.
+            let (kek_id, wrapped) = self.ring.wrap(id, provider, &*dek).await?;
             let inserted = sqlx::query(
                 "INSERT INTO data_keys (id, org_id, kek_id, wrapped_key) VALUES ($1, $2, $3, $4) \
                  ON CONFLICT (org_id) WHERE status = 'active' DO NOTHING",
@@ -336,7 +400,7 @@ impl Crypto {
         }
         tx.commit().await?;
         let row = row.ok_or(CryptoError::UnknownOrg(provider))?;
-        let key = self.load(&row)?;
+        let key = self.load(&row).await?;
         self.cache
             .lock()
             .expect("cache lock")
