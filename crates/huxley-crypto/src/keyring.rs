@@ -12,7 +12,7 @@ use zeroize::Zeroizing;
 use uuid::Uuid;
 
 use crate::CryptoError;
-use crate::kms::{self, VaultKek};
+use crate::kms::{self, AzureKek, VaultKek};
 
 /// AES-256 key length in bytes.
 pub const KEY_LEN: usize = 32;
@@ -130,6 +130,7 @@ impl LocalKek {
 pub(crate) enum Kek {
     Local(Box<LocalKek>),
     Vault(Box<VaultKek>),
+    Azure(Box<AzureKek>),
 }
 
 impl Kek {
@@ -137,6 +138,7 @@ impl Kek {
         match self {
             Self::Local(k) => &k.id,
             Self::Vault(k) => k.id(),
+            Self::Azure(k) => k.id(),
         }
     }
 
@@ -144,6 +146,7 @@ impl Kek {
         match self {
             Self::Local(k) => Ok(k.key.seal(&wrap_aad(dek_id, org_id), dek)),
             Self::Vault(k) => k.wrap(&kms::frame(dek_id, org_id, dek)).await,
+            Self::Azure(k) => k.wrap(&kms::frame(dek_id, org_id, dek)).await,
         }
     }
 
@@ -156,6 +159,7 @@ impl Kek {
         match self {
             Self::Local(k) => k.key.open(&wrap_aad(dek_id, org_id), wrapped),
             Self::Vault(k) => kms::unframe(dek_id, org_id, &k.unwrap(wrapped).await?),
+            Self::Azure(k) => kms::unframe(dek_id, org_id, &k.unwrap(wrapped).await?),
         }
     }
 }

@@ -5,7 +5,8 @@
 //!   (`crypto.retired_keks`) can still unwrap old data keys until
 //!   `huxley admin rewrap-keys` re-wraps them under the active one. The KEK
 //!   can instead live in a key management service (`crypto.vault`: HashiCorp
-//!   Vault or OpenBao Transit), which wraps and unwraps data keys for Huxley.
+//!   Vault or OpenBao Transit; `crypto.azure_key_vault`), which wraps and
+//!   unwraps data keys for Huxley.
 //! - Each **provider organization** has its own data-encryption key (DEK),
 //!   created on first use and stored wrapped by the KEK in `data_keys`.
 //! - Values are sealed with AES-256-GCM under the DEK. The ciphertext names its
@@ -35,7 +36,9 @@ use zeroize::Zeroizing;
 
 use keyring::{AeadKey, random_key};
 pub use keyring::{KEY_LEN, KeyRing, generate_key_base64};
-pub use kms::{AppRoleConfig, KubernetesAuthConfig, VaultConfig};
+pub use kms::{
+    AppRoleConfig, AzureAuthConfig, AzureKeyVaultConfig, KubernetesAuthConfig, VaultConfig,
+};
 
 const FORMAT_V1: u8 = 1;
 const HEADER_LEN: usize = 1 + 16;
@@ -57,48 +60,67 @@ pub struct CryptoConfig {
     pub retired_keks: Vec<SecretString>,
     /// A KEK held in HashiCorp Vault or OpenBao (Transit).
     pub vault: Option<VaultConfig>,
+    /// A KEK held in Azure Key Vault.
+    pub azure_key_vault: Option<AzureKeyVaultConfig>,
     /// Which configured KEK wraps new data keys. Needed only when more than
-    /// one is configured, e.g. while moving from `kek` to `vault`; the others
-    /// stay readable until `huxley admin rewrap-keys` has run.
+    /// one is configured, e.g. while moving from `kek` to a key service; the
+    /// others stay readable until `huxley admin rewrap-keys` has run.
     pub active: Option<KekSource>,
 }
 
 /// Where a key-encryption key lives.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
-#[serde(rename_all = "lowercase")]
+#[serde(rename_all = "snake_case")]
 pub enum KekSource {
     /// `crypto.kek`.
     Local,
     /// `crypto.vault`.
     Vault,
+    /// `crypto.azure_key_vault`.
+    AzureKeyVault,
+}
+
+impl KekSource {
+    const fn setting(self) -> &'static str {
+        match self {
+            Self::Local => "kek",
+            Self::Vault => "vault",
+            Self::AzureKeyVault => "azure_key_vault",
+        }
+    }
 }
 
 impl CryptoConfig {
     pub fn key_ring(&self) -> Result<KeyRing, CryptoError> {
-        let active = match (self.active, self.kek.is_some(), self.vault.is_some()) {
-            (Some(source), ..) => source,
-            (None, true, false) => KekSource::Local,
-            (None, false, true) => KekSource::Vault,
-            (None, true, true) => return Err(CryptoError::AmbiguousKek),
-            (None, false, false) => return Err(CryptoError::MissingKek),
+        let mut configured: Vec<(KekSource, keyring::Kek)> = Vec::new();
+        if let Some(kek) = &self.kek {
+            configured.push((KekSource::Local, keyring::parse_local_one(kek)?));
+        }
+        if let Some(vault) = &self.vault {
+            let kek = kms::VaultKek::new(vault)?;
+            configured.push((KekSource::Vault, keyring::Kek::Vault(Box::new(kek))));
+        }
+        if let Some(azure) = &self.azure_key_vault {
+            let kek = kms::AzureKek::new(azure)?;
+            configured.push((KekSource::AzureKeyVault, keyring::Kek::Azure(Box::new(kek))));
+        }
+        let index = match (self.active, configured.len()) {
+            (Some(source), _) => configured
+                .iter()
+                .position(|(s, _)| *s == source)
+                .ok_or_else(|| {
+                    CryptoError::Config(format!(
+                        "crypto.active is {:?} but crypto.{} is not set",
+                        source.setting(),
+                        source.setting()
+                    ))
+                })?,
+            (None, 0) => return Err(CryptoError::MissingKek),
+            (None, 1) => 0,
+            (None, _) => return Err(CryptoError::AmbiguousKek),
         };
-        let mut local = self
-            .kek
-            .as_ref()
-            .map(keyring::parse_local_one)
-            .transpose()?;
-        let mut vault = self
-            .vault
-            .as_ref()
-            .map(|c| kms::VaultKek::new(c).map(|k| keyring::Kek::Vault(Box::new(k))))
-            .transpose()?;
-        let active = match active {
-            KekSource::Local => local.take().ok_or(CryptoError::MissingKek)?,
-            KekSource::Vault => vault.take().ok_or_else(|| {
-                CryptoError::Config("crypto.active is \"vault\" but crypto.vault is not set".into())
-            })?,
-        };
-        let mut retired: Vec<_> = local.into_iter().chain(vault).collect();
+        let (_, active) = configured.remove(index);
+        let mut retired: Vec<_> = configured.into_iter().map(|(_, k)| k).collect();
         retired.extend(keyring::parse_local(&self.retired_keks)?);
         Ok(KeyRing::from_keks(active, retired))
     }
