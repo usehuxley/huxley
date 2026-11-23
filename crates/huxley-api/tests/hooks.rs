@@ -244,3 +244,55 @@ async fn async_webhooks_answer_at_once_and_unknown_ones_404() {
     tx.commit().await.unwrap();
     assert_eq!(post(&app, &uri, &auth, "{}").await.0, StatusCode::NOT_FOUND);
 }
+
+#[tokio::test]
+async fn webhook_runs_act_as_the_run_as_account() {
+    let Some(pools) = pools().await else { return };
+    let app = app(&pools);
+    let (workflow, public_id) = webhook(
+        &pools,
+        json!({ "type": "webhook", "auth": { "type": "bearer", "token": "t0ken" } }),
+    )
+    .await;
+    let ctx = RequestContext::system(Via::System);
+    let mut tx = begin_scoped(&pools.app, &OrgScope::System).await.unwrap();
+    let account =
+        huxley_auth::api_tokens::create_service_account(&mut tx, &ctx, &unique("Bot"), "")
+            .await
+            .unwrap();
+    huxley_workflows::set_run_as(&mut tx, &ctx, workflow, Some(account.id))
+        .await
+        .unwrap();
+    tx.commit().await.unwrap();
+
+    let uri = format!("/hooks/{public_id}");
+    let auth = [("authorization", "Bearer t0ken".to_owned())];
+    let (status, accepted) = post(&app, &uri, &auth, r#"{"n":1}"#).await;
+    assert_eq!(status, StatusCode::ACCEPTED, "{accepted}");
+    let run: Uuid = accepted["runId"].as_str().unwrap().parse().unwrap();
+    let actor: Option<Uuid> = sqlx::query_scalar("SELECT actor_id FROM runs WHERE id = $1")
+        .bind(run)
+        .fetch_one(&pools.owner)
+        .await
+        .unwrap();
+    assert_eq!(actor, Some(account.id));
+
+    // A disabled account starts nothing.
+    sqlx::query("UPDATE users SET status = 'disabled' WHERE id = $1")
+        .bind(account.id)
+        .execute(&pools.owner)
+        .await
+        .unwrap();
+    let (status, problem) = post(&app, &uri, &auth, r#"{"n":1}"#).await;
+    assert_eq!(status, StatusCode::CONFLICT, "{problem}");
+    assert_eq!(
+        problem["type"],
+        "https://usehuxley.com/problems/run-as-unavailable"
+    );
+    let runs: i64 = sqlx::query_scalar("SELECT count(*) FROM runs WHERE workflow_id = $1")
+        .bind(workflow)
+        .fetch_one(&pools.owner)
+        .await
+        .unwrap();
+    assert_eq!(runs, 1);
+}

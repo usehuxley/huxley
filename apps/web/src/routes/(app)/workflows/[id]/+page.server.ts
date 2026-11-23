@@ -17,7 +17,15 @@ export const load: PageServerLoad = async (event) => {
 	]);
 	if (workflow.response.status === 404) error(404, 'Workflow not found.');
 	if (!workflow.data) error(503, 'Could not load the workflow.');
+	// Only those who manage service accounts may pick one to run as.
+	const { user } = await event.parent();
+	const accounts = user.grantedPermissions.includes('service_account:manage')
+		? ((await client.GET('/api/v1/service-accounts')).data ?? [])
+		: [];
 	return {
+		serviceAccounts: accounts
+			.filter((a) => a.status === 'active')
+			.map((a) => ({ id: a.id, name: a.displayName })),
 		workflow: workflow.data,
 		yaml: toYaml(workflow.data.draft),
 		versions: versions.data ?? [],
@@ -151,6 +159,18 @@ export const actions: Actions = {
 			return fail(response.status, { message: problemMessage(problem, 'Could not archive it.') });
 		}
 		return { message: 'Archived. It no longer runs or answers its webhooks.' };
+	},
+	runAs: async (event) => {
+		const form = await event.request.formData();
+		const account = formString(form, 'serviceAccountId');
+		const { response, error: problem } = await api(event).PUT('/api/v1/workflows/{id}/run-as', {
+			params: { path: { id: event.params.id } },
+			body: { serviceAccountId: account || null }
+		});
+		if (!response.ok) {
+			return fail(response.status, { message: problemMessage(problem, 'Could not change it.') });
+		}
+		return { message: account ? 'Triggered runs now act as that account.' : 'Run-as cleared.' };
 	},
 	restore: async (event) => {
 		const { response, error: problem } = await api(event).POST('/api/v1/workflows/{id}/restore', {

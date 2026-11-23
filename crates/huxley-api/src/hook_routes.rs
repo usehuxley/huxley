@@ -130,7 +130,15 @@ async fn handle(
     });
     let run = huxley_triggers::start(&state.engine, &webhook, trigger, inputs)
         .await
-        .map_err(|e| ApiError::internal(&e))?;
+        .map_err(|e| match e {
+            huxley_triggers::TriggerError::RunAsUnavailable(reason) => ApiError::new(
+                StatusCode::CONFLICT,
+                "run-as-unavailable",
+                "The workflow can't run right now",
+            )
+            .with_detail(reason),
+            other => ApiError::internal(&other),
+        })?;
 
     if webhook.config.response == WebhookResponse::Async {
         return Ok((StatusCode::ACCEPTED, Json(json!({ "runId": run }))).into_response());

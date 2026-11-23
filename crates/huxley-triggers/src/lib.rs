@@ -37,6 +37,9 @@ pub enum TriggerError {
     Scope(#[from] huxley_db::DbError),
     #[error(transparent)]
     Variables(#[from] huxley_variables::VariableError),
+    /// The workflow's run-as account can't be used, so no run started.
+    #[error("{0}")]
+    RunAsUnavailable(String),
 }
 
 pub type TriggerResult<T> = Result<T, TriggerError>;
@@ -122,6 +125,16 @@ async fn start_schedule(
         );
         return Ok(false);
     }
+    let actor = match huxley_workflows::trigger_actor(conn, trigger.workflow_id).await? {
+        Ok(actor) => actor,
+        Err(reason) => {
+            tracing::warn!(
+                workflow = %trigger.workflow_id, trigger = %trigger.trigger_id,
+                "scheduled run skipped: {reason}"
+            );
+            return Ok(false);
+        }
+    };
     let scheduled_for = trigger
         .next_run_at
         .format(&time::format_description::well_known::Rfc3339)
@@ -137,7 +150,7 @@ async fn start_schedule(
                 trigger_type: "schedule".into(),
                 trigger: json!({ "id": trigger.trigger_id, "scheduled_for": scheduled_for }),
                 inputs,
-                actor_id: None,
+                actor_id: actor,
             },
         )
         .await?;
@@ -276,6 +289,9 @@ pub async fn start(
     inputs: Json,
 ) -> TriggerResult<Uuid> {
     let mut tx = begin_scoped(engine.db(), &OrgScope::System).await?;
+    let actor = huxley_workflows::trigger_actor(&mut tx, webhook.workflow_id)
+        .await?
+        .map_err(TriggerError::RunAsUnavailable)?;
     let run = engine
         .start_run(
             &mut tx,
@@ -287,7 +303,7 @@ pub async fn start(
                 trigger_type: "webhook".into(),
                 trigger,
                 inputs,
-                actor_id: None,
+                actor_id: actor,
             },
         )
         .await?;
