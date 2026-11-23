@@ -12,7 +12,7 @@ use zeroize::Zeroizing;
 
 use crate::EngineError;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, sqlx::Type)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, utoipa::ToSchema, sqlx::Type)]
 #[sqlx(type_name = "step_status", rename_all = "lowercase")]
 #[serde(rename_all = "lowercase")]
 pub enum StepStatus {

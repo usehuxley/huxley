@@ -15,6 +15,7 @@ mod journal;
 mod notify;
 pub mod queue;
 mod run;
+pub mod runs;
 mod step;
 mod walk;
 mod worker;
@@ -78,6 +79,11 @@ impl Engine {
 
     pub const fn db(&self) -> &PgPool {
         &self.db
+    }
+
+    /// The expression engine, for checking documents.
+    pub fn expr(&self) -> &huxley_expr::Engine {
+        &self.expr
     }
 
     /// Processes one job: dispatches on its kind. Handlers remove or

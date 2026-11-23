@@ -13,7 +13,9 @@ use crate::queue::{self, Job};
 use crate::walk::{Outcome, RunContext, Walker, error};
 use crate::{Engine, EngineError, EngineResult};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, sqlx::Type)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, Serialize, serde::Deserialize, utoipa::ToSchema, sqlx::Type,
+)]
 #[sqlx(type_name = "run_status", rename_all = "lowercase")]
 #[serde(rename_all = "lowercase")]
 pub enum RunStatus {

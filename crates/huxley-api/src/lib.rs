@@ -27,6 +27,7 @@ pub mod sso_routes;
 pub mod team_routes;
 pub mod token_routes;
 pub mod user_routes;
+mod workflow_routes;
 
 pub use problem::{ApiError, ApiResult};
 pub use router::router;
@@ -79,6 +80,8 @@ pub struct AppState {
     pub notifications: Broadcaster,
     /// Object storage for attachments. In-memory until [`AppState::with_storage`].
     pub storage: Storage,
+    /// Starts and cancels workflow runs (workers execute them).
+    pub engine: huxley_engine::Engine,
     pub config: Arc<ApiConfig>,
     pub login_limiter: Arc<RateLimiter>,
 }
@@ -89,12 +92,14 @@ impl AppState {
             config.login_attempts_per_minute,
             Duration::from_secs(60),
         ));
+        let engine = huxley_engine::Engine::new(db.clone(), crypto.clone());
         Self {
             db,
             sso: SsoService::new(auth.clone(), crypto.clone())
                 .expect("the HTTP client for single sign-on builds"),
             notifications: Broadcaster::new(),
             storage: Storage::memory(),
+            engine,
             auth,
             crypto,
             config: Arc::new(config),
