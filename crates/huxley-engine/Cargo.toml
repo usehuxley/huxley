@@ -33,6 +33,9 @@ uuid.workspace = true
 zeroize.workspace = true
 
 [dev-dependencies]
+secrecy.workspace = true
+sqlx.workspace = true
+tokio.workspace = true
 huxley-core.workspace = true
 axum.workspace = true
 huxley-crypto = { workspace = true, features = ["testing"] }

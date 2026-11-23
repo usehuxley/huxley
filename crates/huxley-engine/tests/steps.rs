@@ -10,10 +10,12 @@ use axum::extract::{Form, Query, State};
 use axum::http::{HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Redirect};
 use axum::routing::{get, post};
-use huxley_db::testing::{TestPools, ensure_root, pools, unique};
+use huxley_db::DatabaseConfig;
+use huxley_db::testing::{TestPools, ensure_root, unique};
 use huxley_db::{OrgScope, begin_scoped};
 use huxley_engine::{EgressConfig, Engine, EngineConfig, RunStatus, StartRun};
 use serde_json::{Value as Json, json};
+use sqlx::Connection as _;
 use std::collections::HashMap;
 use uuid::Uuid;
 
@@ -80,14 +82,72 @@ async fn mock_server() -> (u16, Arc<Mock>) {
 }
 
 struct Harness {
+    db_name: String,
     pools: TestPools,
     engine: Engine,
     org: Uuid,
 }
 
 /// `localhost` may reach the mock server; nothing else private may.
+/// A database of this test's own: other test processes run engines with
+/// different egress settings, and must not pick up this test's jobs.
+async fn isolated() -> Option<(String, TestPools)> {
+    let Ok(admin) = std::env::var("HUXLEY_TEST_DATABASE_URL") else {
+        assert!(
+            std::env::var_os("HUXLEY_REQUIRE_DB_TESTS").is_none(),
+            "HUXLEY_REQUIRE_DB_TESTS is set but HUXLEY_TEST_DATABASE_URL is not"
+        );
+        return None;
+    };
+    let name = format!("huxley_steps_{}", Uuid::now_v7().simple());
+    let mut conn = sqlx::PgConnection::connect(&admin).await.unwrap();
+    sqlx::query(sqlx::AssertSqlSafe(format!("CREATE DATABASE {name}")))
+        .execute(&mut conn)
+        .await
+        .unwrap();
+    let (base, _) = admin.rsplit_once('/').unwrap();
+    let config = DatabaseConfig {
+        url: secrecy::SecretString::from(format!("{base}/{name}")),
+        max_connections: 4,
+        acquire_timeout_secs: 10,
+        statement_timeout_ms: 10_000,
+    };
+    let owner = huxley_db::connect_owner(&config).unwrap();
+    huxley_db::migrate(&owner).await.unwrap();
+    let app = huxley_db::connect(&config).unwrap();
+    Some((name, TestPools { owner, app }))
+}
+
+impl Drop for Harness {
+    fn drop(&mut self) {
+        // Best effort: drop the database from a fresh runtime thread.
+        let name = self.db_name.clone();
+        let Ok(admin) = std::env::var("HUXLEY_TEST_DATABASE_URL") else {
+            return;
+        };
+        let _ = std::thread::spawn(move || {
+            let Ok(rt) = tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()
+            else {
+                return;
+            };
+            rt.block_on(async move {
+                if let Ok(mut conn) = sqlx::PgConnection::connect(&admin).await {
+                    let _ = sqlx::query(sqlx::AssertSqlSafe(format!(
+                        "DROP DATABASE IF EXISTS {name} WITH (FORCE)"
+                    )))
+                    .execute(&mut conn)
+                    .await;
+                }
+            });
+        })
+        .join();
+    }
+}
+
 async fn harness(max_response_bytes: usize) -> Option<Harness> {
-    let pools = pools().await?;
+    let (db_name, pools) = isolated().await?;
     let root = ensure_root(&pools).await;
     let org = Uuid::now_v7();
     let mut tx = begin_scoped(&pools.app, &OrgScope::System).await.unwrap();
@@ -112,7 +172,12 @@ async fn harness(max_response_bytes: usize) -> Option<Harness> {
     };
     let crypto = huxley_crypto::Crypto::new(pools.app.clone(), huxley_crypto::testing::key_ring());
     let engine = Engine::with_config(pools.app.clone(), crypto, &config);
-    Some(Harness { pools, engine, org })
+    Some(Harness {
+        db_name,
+        pools,
+        engine,
+        org,
+    })
 }
 
 impl Harness {
