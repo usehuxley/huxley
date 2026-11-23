@@ -39,6 +39,9 @@
 	let ui = $derived(mode === 'builder' ? built.ui : (tryParse(uiText) ?? {}));
 	let preview = $state<Record<string, unknown>>({});
 	const when = (v: string) => new Date(v).toLocaleString();
+	// The preview looks choices up with the saved definition.
+	const previewOptions = (name: string): string =>
+		resolve('/(app)/forms/[id]/fields/[name]/options', { id: data.form.id, name });
 
 	function toJson() {
 		schemaText = JSON.stringify(built.schema, null, 2);
@@ -164,7 +167,13 @@
 			{#if schema === undefined}
 				<p class="text-sm text-fg-muted">The schema isn't valid JSON yet.</p>
 			{:else}
-				<FormRenderer {schema} {ui} bind:values={preview} idPrefix="preview" />
+				<FormRenderer
+					{schema}
+					{ui}
+					bind:values={preview}
+					idPrefix="preview"
+					optionsUrl={previewOptions}
+				/>
 			{/if}
 		</Card>
 	</div>

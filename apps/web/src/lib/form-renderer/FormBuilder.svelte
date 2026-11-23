@@ -27,6 +27,8 @@
 			help: '',
 			placeholder: '',
 			options: [],
+			showIf: null,
+			lookup: null,
 			extra: {}
 		});
 	}
@@ -88,18 +90,95 @@
 					<input class={inputClass} bind:value={field.help} />
 				</label>
 				{#if hasOptions(field.kind)}
-					<label class="flex flex-col gap-1 text-xs text-fg-muted sm:col-span-2">
-						Choices, one per line
-						<textarea
-							class={inputClass}
-							rows="3"
-							value={field.options.join('\n')}
-							oninput={(e) => (field.options = e.currentTarget.value.split('\n'))}></textarea>
+					<label class="flex items-center gap-2 text-sm text-fg sm:col-span-2">
+						<input
+							type="checkbox"
+							checked={field.lookup !== null}
+							onchange={(e) =>
+								(field.lookup = e.currentTarget.checked
+									? { action: '', connection: '', items: '', value: '', label: '', extra: {} }
+									: null)}
+						/>
+						Choices from an integration
 					</label>
+					{#if field.lookup}
+						<label class="flex flex-col gap-1 text-xs text-fg-muted">
+							Action (read-only)
+							<input
+								class="{inputClass} font-mono"
+								bind:value={field.lookup.action}
+								placeholder="msgraph/listUsers"
+								spellcheck="false"
+							/>
+						</label>
+						<label class="flex flex-col gap-1 text-xs text-fg-muted">
+							Connection (optional)
+							<input class="{inputClass} font-mono" bind:value={field.lookup.connection} />
+						</label>
+						<label class="flex flex-col gap-1 text-xs text-fg-muted">
+							List in the response
+							<input
+								class="{inputClass} font-mono"
+								bind:value={field.lookup.items}
+								placeholder="value"
+							/>
+						</label>
+						<label class="flex flex-col gap-1 text-xs text-fg-muted">
+							Value, then label, of each item
+							<span class="flex gap-1">
+								<input
+									class="{inputClass} font-mono"
+									aria-label="Value of each item"
+									bind:value={field.lookup.value}
+									placeholder="id"
+								/>
+								<input
+									class="{inputClass} font-mono"
+									aria-label="Label of each item"
+									bind:value={field.lookup.label}
+									placeholder="displayName"
+								/>
+							</span>
+						</label>
+					{:else}
+						<label class="flex flex-col gap-1 text-xs text-fg-muted sm:col-span-2">
+							Choices, one per line
+							<textarea
+								class={inputClass}
+								rows="3"
+								value={field.options.join('\n')}
+								oninput={(e) => (field.options = e.currentTarget.value.split('\n'))}></textarea>
+						</label>
+					{/if}
 				{:else if field.kind !== 'boolean'}
 					<label class="flex flex-col gap-1 text-xs text-fg-muted">
 						Placeholder
 						<input class={inputClass} bind:value={field.placeholder} />
+					</label>
+				{/if}
+			</div>
+			<div class="grid gap-2 sm:grid-cols-2">
+				<label class="flex flex-col gap-1 text-xs text-fg-muted">
+					Show only when
+					<select
+						class={inputClass}
+						value={field.showIf?.field ?? ''}
+						onchange={(e) => {
+							const target = e.currentTarget.value;
+							field.showIf = target ? { field: target, values: field.showIf?.values ?? '' } : null;
+						}}
+					>
+						<option value="">Always shown</option>
+						<!-- By position: names can repeat while they're being typed. -->
+						{#each fields as other, k (k)}
+							{#if k !== i}<option value={other.name}>{other.label || other.name}</option>{/if}
+						{/each}
+					</select>
+				</label>
+				{#if field.showIf}
+					<label class="flex flex-col gap-1 text-xs text-fg-muted">
+						…is (comma-separated; empty: answered)
+						<input class={inputClass} bind:value={field.showIf.values} />
 					</label>
 				{/if}
 			</div>

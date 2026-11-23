@@ -32,6 +32,33 @@ A form is a **JSON Schema** of its answers (an object), plus **UI hints**.
 
 `title` is a field's label, and `required` lists the fields that must be answered. UI hints can set `order` (the fields' order) and, per field, `widget`, `help` and `placeholder`. The editor shows a live preview as you change it.
 
+## Questions that depend on answers
+
+A field can be shown only when another field's answer is one of some values. In the builder, use **Show only when … is …**. In JSON, use the UI hint `"show_if": { "field": "kind", "equals": "existing" }`, or `"in": [...]` for several values; with no value, the field is shown once the other field is answered. A multiple-choice field matches if any of its answers does.
+
+A hidden field isn't required, and **its answer is dropped**, also when what hides it is itself hidden. Huxley decides this again when the form is submitted, so a workflow never sees answers to questions the person wasn't shown.
+
+## Choices from an integration
+
+A choice field can take its choices from a **read-only (GET) integration action**, such as the users in a Microsoft 365 tenant. In the builder, tick **Choices from an integration**. In JSON, use the hint:
+
+```json
+"options_from": {
+  "action": "msgraph/listUsers",
+  "connection": "contoso",
+  "with": { "$top": 100 },
+  "items": "value",
+  "value": "id",
+  "label": "displayName"
+}
+```
+
+- `items` is where the list is in the response, as a dot-separated path; leave it out if the response is the list.
+- `value` and `label` are paths within each item.
+- `connection` is optional; the default is the nearest connection the organization may use, as for actions.
+
+The choices are looked up for the organization the form is being filled in for, with up to 1,000 per field. On submit, Huxley looks them up again, so an answer must be one of the current choices. Actions other than GET are refused, so filling a form in can't change anything.
+
 ## Starting workflows
 
 A workflow listens for a form with a trigger:

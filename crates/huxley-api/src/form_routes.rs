@@ -1,12 +1,12 @@
 //! `/api/v1/forms`: forms people fill in to start workflows (design doc §6.8).
 
-use axum::extract::{Path, State};
+use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
 use axum::routing::{get, post};
 use axum::{Json, Router};
 use huxley_authz::permissions;
 use huxley_db::{OrgScope, begin_scoped};
-use huxley_forms::{Form, FormError, FormInput, Submitted};
+use huxley_forms::{Choice, Form, FormError, FormInput, Submitted};
 use serde::{Deserialize, Serialize};
 use serde_json::Value as JsonValue;
 use time::OffsetDateTime;
@@ -23,6 +23,7 @@ pub fn routes() -> Router<AppState> {
         .route("/{id}/archive", post(archive))
         .route("/{id}/restore", post(restore))
         .route("/{id}/submissions", get(submissions).post(submit))
+        .route("/{id}/fields/{name}/options", get(options))
 }
 
 fn db_err(e: impl std::fmt::Display) -> ApiError {
@@ -44,8 +45,39 @@ fn map_err(e: FormError) -> ApiError {
             ),
             |error, (at, message)| error.with_field_error(format!("answers{at}"), message),
         ),
+        FormError::Lookup(message) => ApiError::new(
+            StatusCode::BAD_GATEWAY,
+            "lookup-failed",
+            "Couldn't look up the choices",
+        )
+        .with_detail(message),
         other => ApiError::internal(&other),
     }
+}
+
+/// The organization a form is filled in for (its own, or one below it),
+/// checked: the caller may submit there.
+async fn submit_org(
+    state: &AppState,
+    authed: &Authed,
+    form: &Form,
+    org_id: Option<Uuid>,
+) -> ApiResult<Uuid> {
+    let org_id = org_id.unwrap_or(form.org_id);
+    authed
+        .require_at(state, permissions::FORM_SUBMIT, org_id)
+        .await?;
+    let (Some(form_path), Some(org_path)) = (
+        org_path(state, form.org_id).await?,
+        org_path(state, org_id).await?,
+    ) else {
+        return Err(ApiError::not_found());
+    };
+    if org_path != form_path && !org_path.starts_with(&format!("{form_path}.")) {
+        return Err(ApiError::validation()
+            .with_field_error("orgId", "the form's organization or one below it"));
+    }
+    Ok(org_id)
 }
 
 async fn org_path(state: &AppState, org: Uuid) -> ApiResult<Option<String>> {
@@ -234,20 +266,11 @@ pub async fn submit(
     Json(body): Json<SubmitRequest>,
 ) -> ApiResult<(StatusCode, Json<Submitted>)> {
     let form = load(&state, &authed, id).await?;
-    let org_id = body.org_id.unwrap_or(form.org_id);
-    authed
-        .require_at(&state, permissions::FORM_SUBMIT, org_id)
-        .await?;
-    let (Some(form_path), Some(org_path)) = (
-        org_path(&state, form.org_id).await?,
-        org_path(&state, org_id).await?,
-    ) else {
-        return Err(ApiError::not_found());
-    };
-    if org_path != form_path && !org_path.starts_with(&format!("{form_path}.")) {
-        return Err(ApiError::validation()
-            .with_field_error("orgId", "the form's organization or one below it"));
-    }
+    let org_id = submit_org(&state, &authed, &form, body.org_id).await?;
+    // Looked-up choices are checked against a fresh lookup.
+    huxley_forms::check_choices(&state.engine, &form, &body.answers, org_id)
+        .await
+        .map_err(map_err)?;
     // The workflows usually live above the submitter's scope.
     let mut tx = begin_scoped(&state.db, &OrgScope::System)
         .await
@@ -265,6 +288,34 @@ pub async fn submit(
     .map_err(map_err)?;
     tx.commit().await.map_err(db_err)?;
     Ok((StatusCode::CREATED, Json(submitted)))
+}
+
+#[derive(Debug, Deserialize, utoipa::IntoParams)]
+#[serde(rename_all = "camelCase")]
+pub struct OptionsQuery {
+    /// The organization it's being filled in for (default: the form's).
+    pub org_id: Option<Uuid>,
+}
+
+/// A field's choices, looked up through its `options_from` action for the
+/// organization the form is being filled in for.
+#[utoipa::path(get, path = "/api/v1/forms/{id}/fields/{name}/options", operation_id = "form_field_options", tag = "forms",
+    params(("id" = Uuid, Path), ("name" = String, Path), OptionsQuery),
+    responses((status = 200, body = Vec<Choice>),
+              (status = 404, body = ApiError, content_type = "application/problem+json"),
+              (status = 502, body = ApiError, content_type = "application/problem+json")))]
+pub async fn options(
+    State(state): State<AppState>,
+    authed: Authed,
+    Path((id, name)): Path<(Uuid, String)>,
+    Query(query): Query<OptionsQuery>,
+) -> ApiResult<Json<Vec<Choice>>> {
+    let form = load(&state, &authed, id).await?;
+    let org_id = submit_org(&state, &authed, &form, query.org_id).await?;
+    let choices = huxley_forms::options(&state.engine, &form, &name, org_id)
+        .await
+        .map_err(map_err)?;
+    Ok(Json(choices))
 }
 
 #[derive(Debug, Serialize, ToSchema, sqlx::FromRow)]

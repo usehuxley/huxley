@@ -919,6 +919,26 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
+	'/api/v1/forms/{id}/fields/{name}/options': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/**
+		 * A field's choices, looked up through its `options_from` action for the
+		 *     organization the form is being filled in for.
+		 */
+		get: operations['form_field_options'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
 	'/api/v1/forms/{id}/restore': {
 		parameters: {
 			query?: never;
@@ -2792,6 +2812,11 @@ export interface components {
 		Channels: {
 			email: boolean;
 			inApp: boolean;
+		};
+		/** @description One choice. */
+		Choice: {
+			label: string;
+			value: string;
 		};
 		ConfirmPasswordResetRequest: {
 			/** Format: password */
@@ -6110,6 +6135,47 @@ export interface operations {
 				};
 				content: {
 					'application/json': components['schemas']['Form'];
+				};
+			};
+		};
+	};
+	form_field_options: {
+		parameters: {
+			query?: {
+				/** @description The organization it's being filled in for (default: the form's). */
+				orgId?: string | null;
+			};
+			header?: never;
+			path: {
+				id: string;
+				name: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['Choice'][];
+				};
+			};
+			404: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+			502: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
 				};
 			};
 		};

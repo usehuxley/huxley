@@ -16,6 +16,9 @@
 		if (!orgId) orgId = data.form.orgId;
 	});
 	let orgOptions = $derived(data.orgs.map((o) => ({ value: o.id, label: o.name })));
+	// Looked-up choices depend on the organization it's for.
+	const optionsUrl = (name: string) =>
+		`${resolve('/(app)/forms/[id]/fields/[name]/options', { id: data.form.id, name })}?orgId=${encodeURIComponent(orgId)}`;
 	let errors: Record<string, string> = $derived(
 		form && 'errors' in form && form.errors ? (form.errors as Record<string, string>) : {}
 	);
@@ -80,7 +83,13 @@
 				<Field label="For" for="orgId" hint="The organization this is for">
 					<Select id="orgId" name="orgId" options={orgOptions} bind:value={orgId} />
 				</Field>
-				<FormRenderer schema={data.form.schema} ui={data.form.ui} bind:values {errors} />
+				<FormRenderer
+					schema={data.form.schema}
+					ui={data.form.ui}
+					bind:values
+					{errors}
+					{optionsUrl}
+				/>
 				<input type="hidden" name="answers" value={answers} />
 				<div><Button type="submit" disabled={data.form.archived}>Submit</Button></div>
 				{#if form && 'message' in form && form.message}

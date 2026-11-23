@@ -16,6 +16,8 @@ const field = (over: Partial<BuilderField>): BuilderField => ({
 	help: '',
 	placeholder: '',
 	options: [],
+	showIf: null,
+	lookup: null,
 	extra: {},
 	...over
 });
@@ -81,6 +83,42 @@ describe('form builder', () => {
 			type: 'object',
 			properties: { team: { type: 'boolean', title: 'Team?' } }
 		});
+	});
+
+	it('keeps and edits show_if and options_from', () => {
+		const schema = {
+			type: 'object',
+			properties: {
+				kind: { type: 'string', enum: ['new', 'existing'] },
+				ok: { type: 'boolean' },
+				user: { type: 'string' },
+				note: { type: 'string' }
+			}
+		};
+		const ui = {
+			user: {
+				show_if: { field: 'kind', equals: 'existing' },
+				options_from: { action: 'graph/listUsers', items: 'value', value: 'id', with: { top: 5 } },
+				custom: 1
+			},
+			note: { show_if: { field: 'ok', in: [true] } }
+		};
+		const fields = builderFieldsOf(schema, ui);
+		const user = fields.find((f) => f.name === 'user')!;
+		expect(user.kind).toBe('select');
+		expect(user.showIf).toEqual({ field: 'kind', values: 'existing' });
+		expect(user.lookup?.action).toBe('graph/listUsers');
+		const out = definitionOf(fields, ui);
+		expect(out.schema.properties).toMatchObject({ user: { type: 'string' } });
+		expect(out.ui.user).toEqual(ui.user);
+		expect(out.ui.note).toEqual({ show_if: { field: 'ok', equals: true } });
+		// Several values become `in`, typed for the field they test.
+		user.showIf = { field: 'kind', values: 'new, existing' };
+		expect(definitionOf(fields).ui.user).toMatchObject({
+			show_if: { field: 'kind', in: ['new', 'existing'] }
+		});
+		user.lookup!.action = 'nope';
+		expect(problemsOf(fields).get(fields.indexOf(user))).toMatch('integration');
 	});
 
 	it('fields sharing a name (mid-edit) still render once', () => {
