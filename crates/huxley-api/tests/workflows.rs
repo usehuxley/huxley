@@ -975,3 +975,77 @@ async fn technician(s: &Setup) -> (Uuid, String) {
     .unwrap();
     (tech_id, login(&s.app, &tech_email).await)
 }
+
+#[tokio::test]
+async fn scripts_keep_every_version() {
+    let Some(s) = setup().await else { return };
+    let script_key = key("new-user");
+    let new = |parameters: Value| {
+        json!({ "orgId": s.org, "script": {
+            "key": script_key, "name": "New user", "language": "pwsh",
+            "source": "param($Upn)\nWrite-Output \"Creating $Upn\"",
+            "parameters": parameters } })
+    };
+    let (status, problem) = s
+        .post(
+            &s.owner,
+            "/api/v1/scripts",
+            new(json!({ "type": "string" })),
+        )
+        .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{problem}");
+    assert_eq!(problem["errors"][0]["pointer"], "parameters");
+
+    let params = json!({ "type": "object", "required": ["upn"], "properties": { "upn": { "type": "string" } } });
+    let (status, script) = s
+        .post(&s.owner, "/api/v1/scripts", new(params.clone()))
+        .await;
+    assert_eq!(status, StatusCode::CREATED, "{script}");
+    assert_eq!(script["currentVersion"], 1);
+    assert_eq!(script["language"], "pwsh");
+    assert_eq!(
+        s.post(&s.owner, "/api/v1/scripts", new(params.clone()))
+            .await
+            .0,
+        StatusCode::CONFLICT
+    );
+    let id = script["id"].as_str().unwrap().to_owned();
+    let versions = format!("/api/v1/scripts/{id}/versions");
+
+    // The next version, based on the current one.
+    let next = json!({ "source": "param($Upn)\nWrite-Output \"Hello $Upn\"", "parameters": params,
+                       "notes": "friendlier", "baseVersion": 1 });
+    let (status, saved) = s.post(&s.owner, &versions, next.clone()).await;
+    assert_eq!(status, StatusCode::OK, "{saved}");
+    assert_eq!(saved["currentVersion"], 2);
+    assert!(saved["source"].as_str().unwrap().contains("Hello"));
+    // An edit based on version 1 again is stale.
+    assert_eq!(
+        s.post(&s.owner, &versions, next).await.0,
+        StatusCode::CONFLICT
+    );
+
+    let (_, history) = s.get(&s.owner, &versions).await;
+    assert_eq!(history[0]["version"], 2);
+    assert_eq!(history[0]["notes"], "friendlier");
+    let (_, first) = s.get(&s.owner, &format!("{versions}/1")).await;
+    assert!(first["source"].as_str().unwrap().contains("Creating"));
+
+    // Technicians read the library but can't change it.
+    let (_, tech) = technician(&s).await;
+    assert_eq!(
+        s.get(&tech, &format!("/api/v1/scripts/{id}")).await.0,
+        StatusCode::OK
+    );
+    let edit = json!({ "source": "Write-Output 1" });
+    assert_eq!(
+        s.post(&tech, &versions, edit).await.0,
+        StatusCode::FORBIDDEN
+    );
+    let (_, stranger_email) = user(&s.pools, false).await;
+    let stranger = login(&s.app, &stranger_email).await;
+    assert_eq!(
+        s.get(&stranger, &format!("/api/v1/scripts/{id}")).await.0,
+        StatusCode::NOT_FOUND
+    );
+}

@@ -26,6 +26,7 @@ pub mod passkey_routes;
 pub mod problem;
 pub mod rate_limit;
 mod router;
+mod script_routes;
 pub mod security_routes;
 pub mod session;
 pub mod sso_routes;

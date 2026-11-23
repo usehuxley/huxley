@@ -1,0 +1,28 @@
+[package]
+name = "huxley-scripts"
+description = "The script library: versioned PowerShell and Python scripts (design doc §6.9)"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[dependencies]
+huxley-core.workspace = true
+huxley-db.workspace = true
+jsonschema.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sqlx.workspace = true
+thiserror.workspace = true
+time.workspace = true
+utoipa.workspace = true
+uuid.workspace = true
+
+[dev-dependencies]
+huxley-db = { workspace = true, features = ["testing"] }
+tokio.workspace = true
+
+[lints]
+workspace = true

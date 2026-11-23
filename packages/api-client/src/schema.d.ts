@@ -1681,6 +1681,110 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
+	'/api/v1/scripts': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** Scripts you can see. */
+		get: operations['list_scripts'];
+		put?: never;
+		post: operations['create_script'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/scripts/{id}': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** A script with its current version. */
+		get: operations['get_script'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/scripts/{id}/archive': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		post: operations['archive_script'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/scripts/{id}/restore': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		post: operations['restore_script'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/scripts/{id}/versions': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** Every version, newest first. */
+		get: operations['list_script_versions'];
+		put?: never;
+		/**
+		 * Saves the next version and makes it current. With `baseVersion`, a
+		 *     script changed meanwhile is a 409.
+		 */
+		post: operations['save_script_version'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/scripts/{id}/versions/{version}': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** One version's source and parameters. */
+		get: operations['get_script_version'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
 	'/api/v1/security/mfa-policy': {
 		parameters: {
 			query?: never;
@@ -2681,6 +2785,11 @@ export interface components {
 			/** Format: uuid */
 			parentId: string;
 		};
+		CreateScriptRequest: {
+			/** Format: uuid */
+			orgId: string;
+			script: components['schemas']['NewScript'];
+		};
 		CreateServiceAccountRequest: {
 			description?: string;
 			name: string;
@@ -2954,6 +3063,8 @@ export interface components {
 			/** Format: int32 */
 			warnings: number;
 		};
+		/** @enum {string} */
+		Language: 'pwsh' | 'python';
 		/** @description A value set at the org itself. */
 		LocalSetting: {
 			locked: boolean;
@@ -3092,6 +3203,32 @@ export interface components {
 			required?: boolean;
 			/** Format: uuid */
 			scopeOrgId?: string | null;
+		};
+		/** @description A new script. */
+		NewScript: {
+			description?: string | null;
+			key: string;
+			language: components['schemas']['Language'];
+			name: string;
+			/** @description JSON Schema (an object) of its parameters; default: none. */
+			parameters?: {
+				[key: string]: unknown;
+			} | null;
+			source: string;
+		};
+		/** @description The next version of a script. */
+		NewVersion: {
+			/**
+			 * Format: int32
+			 * @description The version this edit started from: if the script has moved on
+			 *     since, nothing is saved (409).
+			 */
+			baseVersion?: number | null;
+			notes?: string | null;
+			parameters?: {
+				[key: string]: unknown;
+			} | null;
+			source: string;
 		};
 		Notification: {
 			body: string;
@@ -3450,6 +3587,37 @@ export interface components {
 			 */
 			revision: number;
 		};
+		/** @description A script with its current version. */
+		Script: components['schemas']['ScriptSummary'] & {
+			parameters: {
+				[key: string]: unknown;
+			};
+			source: string;
+		};
+		ScriptSummary: {
+			archived: boolean;
+			/** Format: int32 */
+			currentVersion: number;
+			description?: string | null;
+			/** Format: uuid */
+			id: string;
+			key: string;
+			language: components['schemas']['Language'];
+			name: string;
+			/** Format: uuid */
+			orgId: string;
+			/** Format: date-time */
+			updatedAt: string;
+		};
+		ScriptVersion: {
+			/** Format: date-time */
+			createdAt: string;
+			/** Format: uuid */
+			createdBy?: string | null;
+			notes?: string | null;
+			/** Format: int32 */
+			version: number;
+		};
 		SelectOption: {
 			label: string;
 			value: string;
@@ -3801,6 +3969,14 @@ export interface components {
 			document: {
 				[key: string]: unknown;
 			};
+		};
+		VersionSource: {
+			parameters: {
+				[key: string]: unknown;
+			};
+			source: string;
+			/** Format: int32 */
+			version: number;
 		};
 		VersionSummary: {
 			notes?: string | null;
@@ -7146,6 +7322,219 @@ export interface operations {
 				};
 				content: {
 					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	list_scripts: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ScriptSummary'][];
+				};
+			};
+		};
+	};
+	create_script: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['CreateScriptRequest'];
+			};
+		};
+		responses: {
+			201: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['Script'];
+				};
+			};
+			409: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	get_script: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['Script'];
+				};
+			};
+			404: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	archive_script: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['Script'];
+				};
+			};
+		};
+	};
+	restore_script: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['Script'];
+				};
+			};
+		};
+	};
+	list_script_versions: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ScriptVersion'][];
+				};
+			};
+		};
+	};
+	save_script_version: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['NewVersion'];
+			};
+		};
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['Script'];
+				};
+			};
+			409: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	get_script_version: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+				version: number;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['VersionSource'];
 				};
 			};
 		};

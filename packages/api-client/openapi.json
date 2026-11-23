@@ -4205,6 +4205,289 @@
 				}
 			}
 		},
+		"/api/v1/scripts": {
+			"get": {
+				"tags": ["scripts"],
+				"summary": "Scripts you can see.",
+				"operationId": "list_scripts",
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "array",
+									"items": {
+										"$ref": "#/components/schemas/ScriptSummary"
+									}
+								}
+							}
+						}
+					}
+				}
+			},
+			"post": {
+				"tags": ["scripts"],
+				"operationId": "create_script",
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/CreateScriptRequest"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"201": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Script"
+								}
+							}
+						}
+					},
+					"409": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					},
+					"422": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/scripts/{id}": {
+			"get": {
+				"tags": ["scripts"],
+				"summary": "A script with its current version.",
+				"operationId": "get_script",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Script"
+								}
+							}
+						}
+					},
+					"404": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/scripts/{id}/archive": {
+			"post": {
+				"tags": ["scripts"],
+				"operationId": "archive_script",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Script"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/scripts/{id}/restore": {
+			"post": {
+				"tags": ["scripts"],
+				"operationId": "restore_script",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Script"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/scripts/{id}/versions": {
+			"get": {
+				"tags": ["scripts"],
+				"summary": "Every version, newest first.",
+				"operationId": "list_script_versions",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "array",
+									"items": {
+										"$ref": "#/components/schemas/ScriptVersion"
+									}
+								}
+							}
+						}
+					}
+				}
+			},
+			"post": {
+				"tags": ["scripts"],
+				"summary": "Saves the next version and makes it current. With `baseVersion`, a\nscript changed meanwhile is a 409.",
+				"operationId": "save_script_version",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/NewVersion"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Script"
+								}
+							}
+						}
+					},
+					"409": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					},
+					"422": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/scripts/{id}/versions/{version}": {
+			"get": {
+				"tags": ["scripts"],
+				"summary": "One version's source and parameters.",
+				"operationId": "get_script_version",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					},
+					{
+						"name": "version",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "integer",
+							"format": "int32"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/VersionSource"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
 		"/api/v1/security/mfa-policy": {
 			"get": {
 				"tags": ["security"],
@@ -7054,6 +7337,20 @@
 					}
 				}
 			},
+			"CreateScriptRequest": {
+				"type": "object",
+				"required": ["orgId", "script"],
+				"properties": {
+					"orgId": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"script": {
+						"$ref": "#/components/schemas/NewScript"
+					}
+				},
+				"additionalProperties": false
+			},
 			"CreateServiceAccountRequest": {
 				"type": "object",
 				"required": ["name"],
@@ -7716,6 +8013,10 @@
 					}
 				}
 			},
+			"Language": {
+				"type": "string",
+				"enum": ["pwsh", "python"]
+			},
 			"LocalSetting": {
 				"type": "object",
 				"description": "A value set at the org itself.",
@@ -8041,6 +8342,63 @@
 						"format": "uuid"
 					}
 				}
+			},
+			"NewScript": {
+				"type": "object",
+				"description": "A new script.",
+				"required": ["key", "name", "language", "source"],
+				"properties": {
+					"description": {
+						"type": ["string", "null"]
+					},
+					"key": {
+						"type": "string"
+					},
+					"language": {
+						"$ref": "#/components/schemas/Language"
+					},
+					"name": {
+						"type": "string"
+					},
+					"parameters": {
+						"type": ["object", "null"],
+						"description": "JSON Schema (an object) of its parameters; default: none.",
+						"additionalProperties": {},
+						"propertyNames": {
+							"type": "string"
+						}
+					},
+					"source": {
+						"type": "string"
+					}
+				},
+				"additionalProperties": false
+			},
+			"NewVersion": {
+				"type": "object",
+				"description": "The next version of a script.",
+				"required": ["source"],
+				"properties": {
+					"baseVersion": {
+						"type": ["integer", "null"],
+						"format": "int32",
+						"description": "The version this edit started from: if the script has moved on\nsince, nothing is saved (409)."
+					},
+					"notes": {
+						"type": ["string", "null"]
+					},
+					"parameters": {
+						"type": ["object", "null"],
+						"additionalProperties": {},
+						"propertyNames": {
+							"type": "string"
+						}
+					},
+					"source": {
+						"type": "string"
+					}
+				},
+				"additionalProperties": false
 			},
 			"Notification": {
 				"type": "object",
@@ -8949,6 +9307,97 @@
 					}
 				}
 			},
+			"Script": {
+				"allOf": [
+					{
+						"$ref": "#/components/schemas/ScriptSummary"
+					},
+					{
+						"type": "object",
+						"required": ["source", "parameters"],
+						"properties": {
+							"parameters": {
+								"type": "object",
+								"additionalProperties": {},
+								"propertyNames": {
+									"type": "string"
+								}
+							},
+							"source": {
+								"type": "string"
+							}
+						}
+					}
+				],
+				"description": "A script with its current version."
+			},
+			"ScriptSummary": {
+				"type": "object",
+				"required": [
+					"id",
+					"orgId",
+					"key",
+					"name",
+					"language",
+					"currentVersion",
+					"archived",
+					"updatedAt"
+				],
+				"properties": {
+					"archived": {
+						"type": "boolean"
+					},
+					"currentVersion": {
+						"type": "integer",
+						"format": "int32"
+					},
+					"description": {
+						"type": ["string", "null"]
+					},
+					"id": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"key": {
+						"type": "string"
+					},
+					"language": {
+						"$ref": "#/components/schemas/Language"
+					},
+					"name": {
+						"type": "string"
+					},
+					"orgId": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"updatedAt": {
+						"type": "string",
+						"format": "date-time"
+					}
+				}
+			},
+			"ScriptVersion": {
+				"type": "object",
+				"required": ["version", "createdAt"],
+				"properties": {
+					"createdAt": {
+						"type": "string",
+						"format": "date-time"
+					},
+					"createdBy": {
+						"type": ["string", "null"],
+						"format": "uuid"
+					},
+					"notes": {
+						"type": ["string", "null"]
+					},
+					"version": {
+						"type": "integer",
+						"format": "int32"
+					}
+				}
+			},
 			"SelectOption": {
 				"type": "object",
 				"required": ["value", "label"],
@@ -9786,6 +10235,26 @@
 					}
 				]
 			},
+			"VersionSource": {
+				"type": "object",
+				"required": ["version", "source", "parameters"],
+				"properties": {
+					"parameters": {
+						"type": "object",
+						"additionalProperties": {},
+						"propertyNames": {
+							"type": "string"
+						}
+					},
+					"source": {
+						"type": "string"
+					},
+					"version": {
+						"type": "integer",
+						"format": "int32"
+					}
+				}
+			},
 			"VersionSummary": {
 				"type": "object",
 				"required": ["version", "publishedAt"],
@@ -9949,6 +10418,10 @@
 		{
 			"name": "workflows",
 			"description": "Workflows, their versions, and their runs"
+		},
+		{
+			"name": "scripts",
+			"description": "The script library"
 		},
 		{
 			"name": "forms",
