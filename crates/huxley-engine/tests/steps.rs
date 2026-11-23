@@ -84,6 +84,8 @@ struct Harness {
     pools: TestPools,
     engine: Engine,
     org: Uuid,
+    /// What `core.email` steps sent.
+    mail: Arc<std::sync::Mutex<Vec<huxley_email::Email>>>,
 }
 
 /// `localhost` may reach the mock server; nothing else private may. Each
@@ -115,12 +117,14 @@ async fn harness(max_response_bytes: usize) -> Option<Harness> {
         ..EngineConfig::default()
     };
     let crypto = huxley_crypto::Crypto::new(pools.app.clone(), huxley_crypto::testing::key_ring());
-    let engine = Engine::with_config(pools.app.clone(), crypto, &config);
+    let (mailer, mail) = huxley_email::Mailer::memory();
+    let engine = Engine::with_config(pools.app.clone(), crypto, &config).with_mailer(mailer);
     Some(Harness {
         _db: db,
         pools,
         engine,
         org,
+        mail,
     })
 }
 
@@ -531,4 +535,51 @@ async fn secret_inputs_are_sealed_and_taint_what_reads_them() {
     assert!(rows[0].1, "reading the secret input taints the step");
     assert!(!rows[1].1, "reading other inputs doesn't");
     assert!(rows.iter().all(|r| !r.2.contains("HUNTER")));
+}
+
+#[tokio::test]
+async fn email_steps_send_one_copy_per_recipient() {
+    let Some(h) = harness(1 << 20).await else {
+        return;
+    };
+    let (_, status, outputs, error) = h
+        .run_with(
+            r#"  steps:
+    - id: mail
+      type: core.email
+      with:
+        to: ["{{ inputs.who }}", ops@example.com]
+        subject: "Welcome {{ inputs.name }}"
+        text: "Hi {{ inputs.name }},\nyour account is ready."
+  outputs: { sent: "{{ steps.mail.output.sent }}" }
+"#,
+            json!({ "who": "ada@example.com", "name": "Ada <script>" }),
+        )
+        .await;
+    assert_eq!(status, RunStatus::Succeeded, "{error:?}");
+    assert_eq!(outputs.unwrap()["sent"], 2);
+    let mail = h.mail.lock().unwrap().clone();
+    assert_eq!(mail.len(), 2);
+    assert_eq!(mail[0].to, "ada@example.com");
+    assert_eq!(mail[1].to, "ops@example.com");
+    assert_eq!(mail[0].subject, "Welcome Ada <script>");
+    // Without an HTML body, the text is escaped into one.
+    assert!(
+        mail[0].html.contains("Ada &lt;script&gt;,<br>your account"),
+        "{}",
+        mail[0].html
+    );
+
+    // A header smuggled into an address is refused, and nothing is sent.
+    let (_, status, _, error) = h
+        .run_with(
+            r#"  steps:
+    - { id: mail, type: core.email, with: { to: "{{ inputs.who }}", subject: Hi, text: x } }
+"#,
+            json!({ "who": "a@example.com\r\nBcc: x@evil.com" }),
+        )
+        .await;
+    assert_eq!(status, RunStatus::Failed);
+    assert_eq!(error.unwrap()["kind"], "input");
+    assert_eq!(h.mail.lock().unwrap().len(), 2);
 }

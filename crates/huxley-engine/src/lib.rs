@@ -13,6 +13,7 @@ mod action;
 pub mod approval;
 mod callback;
 mod egress;
+mod email;
 mod http;
 mod journal;
 mod notify;
@@ -78,6 +79,8 @@ pub struct Engine {
     payloads: payload::Payloads,
     /// `auth.public_url`: where callback URLs point.
     public_url: Option<String>,
+    /// Sends `core.email` steps' mail.
+    mailer: Option<huxley_email::Mailer>,
 }
 
 impl Engine {
@@ -95,6 +98,7 @@ impl Engine {
             payload_config: config.payload.clone(),
             payloads: payload::Payloads::new(None, &config.payload),
             public_url: None,
+            mailer: None,
         }
     }
 
@@ -102,6 +106,13 @@ impl Engine {
     #[must_use]
     pub fn with_public_url(mut self, public_url: Option<String>) -> Self {
         self.public_url = public_url;
+        self
+    }
+
+    /// The mail server `core.email` steps send through.
+    #[must_use]
+    pub fn with_mailer(mut self, mailer: huxley_email::Mailer) -> Self {
+        self.mailer = Some(mailer);
         self
     }
 

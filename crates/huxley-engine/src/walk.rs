@@ -309,6 +309,10 @@ impl<'a> Walker<'a> {
                 let value = serde_json::to_value(&s.request).unwrap_or(Json::Null);
                 self.external(step, &value, frame)
             }
+            Step::Email(s) => {
+                let value = serde_json::to_value(&s.email).unwrap_or(Json::Null);
+                self.external(step, &value, frame)
+            }
             Step::Notify(s) => {
                 let value = serde_json::to_value(&s.notification).unwrap_or(Json::Null);
                 self.external(step, &value, frame)

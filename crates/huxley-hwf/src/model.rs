@@ -341,6 +341,9 @@ pub enum Step {
     /// Send a notification to people.
     #[serde(rename = "core.notify")]
     Notify(NotifyStep),
+    /// Send an email to any address, through the instance's mail server.
+    #[serde(rename = "core.email")]
+    Email(EmailStep),
 }
 
 /// Declares a step struct with the common fields first.
@@ -544,6 +547,11 @@ step!(NotifyStep {
     pub notification: Notification,
 });
 
+step!(EmailStep {
+    #[serde(rename = "with")]
+    pub email: EmailMessage,
+});
+
 const fn yes() -> bool {
     true
 }
@@ -586,7 +594,8 @@ impl Step {
             Script,
             Return,
             Fail,
-            Notify
+            Notify,
+            Email
         )
     }
 
@@ -614,6 +623,7 @@ impl Step {
             Self::Return(_) => "return",
             Self::Fail(_) => "fail",
             Self::Notify(_) => "core.notify",
+            Self::Email(_) => "core.email",
         }
     }
 
@@ -768,6 +778,20 @@ pub enum BodyType {
     Form,
     /// A string, sent as is.
     Text,
+}
+
+/// An email to send (`core.email`).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct EmailMessage {
+    /// An address or a list of them (at most 20); each gets their own copy.
+    pub to: Value,
+    pub subject: String,
+    /// The plain-text body.
+    pub text: String,
+    /// An HTML body, sent alongside the text.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub html: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]

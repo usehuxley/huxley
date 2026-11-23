@@ -157,7 +157,8 @@ pub async fn serve(config: Config, roles: BTreeSet<Role>) -> anyhow::Result<()> 
                 let engine =
                     huxley_engine::Engine::with_config(db.clone(), crypto.clone(), &config.engine)
                         .with_storage(storage.clone())
-                        .with_public_url(config.auth.public_url.clone());
+                        .with_public_url(config.auth.public_url.clone())
+                        .with_mailer(mailer.clone());
                 let worker_config = huxley_engine::WorkerConfig::from(&config.engine);
                 let stop = shutdown.clone();
                 let events = (engine.clone(), crypto.clone(), shutdown.clone());
