@@ -364,3 +364,123 @@ async fn decisions_are_journaled_once() {
     let run = h.finish(id).await;
     assert_eq!(run.outputs.unwrap(), json!({ "same": true }));
 }
+
+/// Publishes a workflow in the harness org.
+async fn publish(h: &Harness, key: &str, spec: &str) {
+    let yaml = format!(
+        "apiVersion: usehuxley.com/v1\nkind: Workflow\nmetadata: {{ key: {key}, name: {key} }}\nspec:\n{spec}"
+    );
+    let document = serde_json::to_value(huxley_hwf::parse_yaml(&yaml).unwrap()).unwrap();
+    let ctx = huxley_core::RequestContext::system(huxley_core::Via::System);
+    let expr = huxley_expr::Engine::new();
+    let mut tx = begin_scoped(&h.pools.app, &OrgScope::System).await.unwrap();
+    let created = huxley_workflows::create(&mut tx, &ctx, &expr, h.org, document)
+        .await
+        .unwrap();
+    huxley_workflows::publish(&mut tx, &ctx, &expr, created.summary.id, None)
+        .await
+        .unwrap();
+    tx.commit().await.unwrap();
+}
+
+#[tokio::test]
+async fn subworkflows_return_outputs_and_failures() {
+    let Some(h) = harness().await else { return };
+    publish(
+        &h,
+        "double",
+        r#"  inputs: { type: object, required: [n], properties: { n: { type: integer } } }
+  steps:
+    - { id: pause, type: wait, duration: 5ms }
+    - { id: twice, type: transform, output: "{{ inputs.n * 2 }}" }
+  outputs: { result: "{{ steps.twice.output }}" }
+"#,
+    )
+    .await;
+    publish(
+        &h,
+        "explode",
+        "  steps:\n    - { id: boom, type: fail, message: child broke }\n",
+    )
+    .await;
+    let id = h
+        .start(
+            r#"  steps:
+    - { id: call, type: subworkflow, workflow: double, with: { n: 21 } }
+    - { id: fire, type: subworkflow, workflow: double, with: { n: 1 }, wait: false }
+    - { id: bad, type: subworkflow, workflow: explode, continue_on_error: true }
+    - { id: missing, type: subworkflow, workflow: nowhere, continue_on_error: true }
+    - { id: wrong, type: subworkflow, workflow: double, with: { n: "x" }, continue_on_error: true }
+  outputs:
+    result: "{{ steps.call.output.result }}"
+    fired: "{{ steps.fire.output.run_id is defined }}"
+    bad: "{{ steps.bad.output.message }}"
+    missing: "{{ steps.missing.output.kind }}"
+    wrong: "{{ steps.wrong.output.kind }}"
+"#,
+            json!({}),
+        )
+        .await;
+    let run = h.finish(id).await;
+    assert_eq!(run.status, RunStatus::Succeeded, "{run:?}");
+    assert_eq!(
+        run.outputs.unwrap(),
+        json!({
+            "result": 42,
+            "fired": true,
+            "bad": "child broke",
+            "missing": "definition",
+            "wrong": "inputs",
+        })
+    );
+    let children: Vec<(String, Option<String>)> = sqlx::query_as(
+        "SELECT status::text, parent_step_key FROM runs WHERE parent_run_id = $1 ORDER BY id",
+    )
+    .bind(id)
+    .fetch_all(&h.pools.owner)
+    .await
+    .unwrap();
+    assert_eq!(children.len(), 3, "{children:?}");
+    assert!(
+        children
+            .iter()
+            .any(|c| c.1.as_deref() == Some("bad") && c.0 == "failed")
+    );
+}
+
+#[tokio::test]
+async fn cancelling_a_parent_cancels_its_children() {
+    let Some(h) = harness().await else { return };
+    publish(
+        &h,
+        "sleepy",
+        "  steps:\n    - { id: nap, type: wait, duration: 1h }\n",
+    )
+    .await;
+    let id = h
+        .start(
+            "  steps:\n    - { id: call, type: subworkflow, workflow: sleepy }\n",
+            json!({}),
+        )
+        .await;
+    let deadline = Instant::now() + Duration::from_secs(10);
+    let child = loop {
+        h.engine.drain("test-worker", 10).await.unwrap();
+        let child: Option<Uuid> = sqlx::query_scalar(
+            "SELECT id FROM runs WHERE parent_run_id = $1 AND status = 'running'",
+        )
+        .bind(id)
+        .fetch_optional(&h.pools.owner)
+        .await
+        .unwrap();
+        if let Some(child) = child {
+            break child;
+        }
+        assert!(Instant::now() < deadline, "child never started");
+    };
+    let mut tx = begin_scoped(&h.pools.app, &OrgScope::System).await.unwrap();
+    h.engine.cancel_run(&mut tx, id).await.unwrap();
+    tx.commit().await.unwrap();
+    assert_eq!(h.finish(id).await.status, RunStatus::Cancelled);
+    assert_eq!(h.finish(child).await.status, RunStatus::Cancelled);
+}

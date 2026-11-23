@@ -1849,6 +1849,7 @@ dependencies = [
  "huxley-hwf",
  "huxley-notify",
  "huxley-variables",
+ "huxley-workflows",
  "reqwest 0.13.5",
  "secrecy",
  "serde",

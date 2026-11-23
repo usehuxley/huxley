@@ -18,6 +18,7 @@ huxley-expr.workspace = true
 huxley-hwf.workspace = true
 huxley-notify.workspace = true
 huxley-variables.workspace = true
+huxley-workflows.workspace = true
 reqwest.workspace = true
 serde.workspace = true
 serde_json.workspace = true
@@ -36,6 +37,9 @@ zeroize.workspace = true
 secrecy.workspace = true
 sqlx.workspace = true
 tokio.workspace = true
+huxley-expr.workspace = true
+huxley-hwf.workspace = true
+huxley-workflows.workspace = true
 huxley-core.workspace = true
 axum.workspace = true
 huxley-crypto = { workspace = true, features = ["testing"] }

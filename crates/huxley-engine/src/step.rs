@@ -55,6 +55,10 @@ enum Executed {
     NotYet(OffsetDateTime),
     /// Work done in the recording transaction (so it happens exactly once).
     Notify(Json),
+    Subworkflow(Json),
+    /// Started something that will complete the step later (a subworkflow
+    /// that is waited for): keep it running, record this as its output.
+    Waiting(Json),
 }
 
 impl Engine {
@@ -162,6 +166,7 @@ impl Engine {
                 Err(failure) => Executed::Failed(failure),
             },
             Step::Notify(_) => Executed::Notify(input.clone()),
+            Step::Subworkflow(_) => Executed::Subworkflow(input.clone()),
             Step::Wait(_) => {
                 let until = input["until"]
                     .as_str()
@@ -178,6 +183,60 @@ impl Engine {
                 format!("{} steps aren't available yet", other.type_name()),
             )),
         }
+    }
+
+    /// Does the work that belongs in the recording transaction (notifying,
+    /// starting a subworkflow) and masks secrets a tainted step may echo.
+    async fn in_transaction(
+        &self,
+        tx: &mut sqlx::PgConnection,
+        org_id: Uuid,
+        run_id: Uuid,
+        attempted: &Record,
+        executed: Executed,
+    ) -> EngineResult<Executed> {
+        let executed = match executed {
+            Executed::Notify(input) => match crate::notify::send(&mut *tx, org_id, &input).await? {
+                Ok(output) => Executed::Done(output),
+                Err(failure) => Executed::Failed(failure),
+            },
+            Executed::Subworkflow(input) => {
+                let started = crate::run::start_child(
+                    self,
+                    &mut *tx,
+                    org_id,
+                    run_id,
+                    &attempted.step_key,
+                    &input,
+                )
+                .await?;
+                match started {
+                    Ok(child) if input["wait"].as_bool() == Some(false) => {
+                        Executed::Done(json!({ "run_id": child }))
+                    }
+                    Ok(child) => Executed::Waiting(json!({ "run_id": child })),
+                    Err(failure) => Executed::Failed(failure),
+                }
+            }
+            other => other,
+        };
+        // A step given a secret may echo it back (an API reflecting its
+        // Authorization header): mask the org's secret values in what's kept.
+        let executed = if attempted.tainted {
+            let secrets = huxley_variables::for_run(&mut *tx, &self.crypto, org_id)
+                .await?
+                .secrets;
+            let mask =
+                |value: &Json| huxley_expr::redact(value, secrets.values().map(String::as_str));
+            match executed {
+                Executed::Done(output) => Executed::Done(mask(&output)),
+                Executed::Failed(failure) => Executed::Failed(mask(&failure)),
+                other => other,
+            }
+        } else {
+            executed
+        };
+        Ok(executed)
     }
 
     /// Removes a job that has nothing left to do, nudging the run along.
@@ -222,29 +281,9 @@ impl Engine {
             return Ok(());
         }
 
-        let executed = match executed {
-            Executed::Notify(input) => match crate::notify::send(&mut tx, org_id, &input).await? {
-                Ok(output) => Executed::Done(output),
-                Err(failure) => Executed::Failed(failure),
-            },
-            other => other,
-        };
-        // A step given a secret may echo it back (an API reflecting its
-        // Authorization header): mask the org's secret values in what's kept.
-        let executed = if attempted.tainted {
-            let secrets = huxley_variables::for_run(&mut tx, &self.crypto, org_id)
-                .await?
-                .secrets;
-            let mask =
-                |value: &Json| huxley_expr::redact(value, secrets.values().map(String::as_str));
-            match executed {
-                Executed::Done(output) => Executed::Done(mask(&output)),
-                Executed::Failed(failure) => Executed::Failed(mask(&failure)),
-                other => other,
-            }
-        } else {
-            executed
-        };
+        let executed = self
+            .in_transaction(&mut tx, org_id, run_id, attempted, executed)
+            .await?;
         let mut settled = true;
         match executed {
             Executed::NotYet(at) => {
@@ -252,7 +291,22 @@ impl Engine {
                 tx.commit().await?;
                 return Ok(());
             }
-            Executed::Notify(_) => unreachable!("sent above"),
+            Executed::Notify(_) | Executed::Subworkflow(_) => unreachable!("handled above"),
+            Executed::Waiting(output) => {
+                sqlx::query(
+                    "UPDATE step_runs SET output = $4 \
+                      WHERE run_id = $1 AND step_key = $2 AND attempt = $3",
+                )
+                .bind(run_id)
+                .bind(&attempted.step_key)
+                .bind(attempted.attempt)
+                .bind(&output)
+                .execute(&mut *tx)
+                .await?;
+                queue::complete(&mut tx, job.id, worker).await?;
+                tx.commit().await?;
+                return Ok(());
+            }
             Executed::Done(output) => {
                 set_result(
                     &mut tx,

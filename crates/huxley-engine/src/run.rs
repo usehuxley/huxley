@@ -310,9 +310,159 @@ async fn finish(
     )
     .bind(run_id)
     .bind(status)
-    .bind(outputs)
-    .bind(error)
+    .bind(&outputs)
+    .bind(&error)
     .execute(&mut *conn)
     .await?;
+
+    // Children still running stop with their parent.
+    if status != RunStatus::Succeeded {
+        let children: Vec<(Uuid, Uuid)> = sqlx::query_as(
+            "UPDATE runs SET cancel_requested = true \
+              WHERE parent_run_id = $1 AND status IN ('queued', 'running') \
+              RETURNING id, org_id",
+        )
+        .bind(run_id)
+        .fetch_all(&mut *conn)
+        .await?;
+        for (child, org) in children {
+            queue::enqueue_advance(conn, org, child).await?;
+        }
+    }
+
+    // A subworkflow that was waited for completes its parent's step.
+    let parent: Option<(Option<Uuid>, Option<String>)> =
+        sqlx::query_as("SELECT parent_run_id, parent_step_key FROM runs WHERE id = $1")
+            .bind(run_id)
+            .fetch_optional(&mut *conn)
+            .await?;
+    if let Some((Some(parent_run), Some(parent_key))) = parent {
+        let (step_status, step_output, step_error) = match status {
+            RunStatus::Succeeded => ("succeeded", outputs.or(Some(json!({}))), None),
+            other => (
+                "failed",
+                None,
+                Some(json!({
+                    "kind": "subworkflow",
+                    "message": error
+                        .as_ref()
+                        .and_then(|e| e["message"].as_str())
+                        .map_or_else(|| format!("the subworkflow run was {other:?}").to_lowercase(), str::to_owned),
+                    "run_id": run_id,
+                    "error": error,
+                })),
+            ),
+        };
+        let updated: Option<(Uuid,)> = sqlx::query_as(
+            "UPDATE step_runs s SET status = $3::step_status, output = $4, error = $5, \
+                    finished_at = now() \
+               FROM runs p \
+              WHERE s.run_id = $1 AND s.step_key = $2 AND p.id = s.run_id \
+                AND s.status = 'running' \
+                AND s.attempt = (SELECT max(attempt) FROM step_runs \
+                                  WHERE run_id = $1 AND step_key = $2) \
+             RETURNING p.org_id",
+        )
+        .bind(parent_run)
+        .bind(&parent_key)
+        .bind(step_status)
+        .bind(step_output)
+        .bind(step_error)
+        .fetch_optional(&mut *conn)
+        .await?;
+        if let Some((parent_org,)) = updated {
+            queue::enqueue_advance(conn, parent_org, parent_run).await?;
+        }
+    }
     Ok(())
+}
+
+/// How deep subworkflows may nest.
+pub(crate) const MAX_SUBWORKFLOW_DEPTH: usize = 8;
+
+/// Starts a subworkflow run for a parent's step, in the caller's
+/// transaction. The child runs in the parent's org; the workflow is found
+/// by key there or on the nearest ancestor that has it published. Returns
+/// the child's run id, or a step error.
+pub(crate) async fn start_child(
+    engine: &Engine,
+    conn: &mut PgConnection,
+    org_id: Uuid,
+    parent_run: Uuid,
+    parent_key: &str,
+    input: &Json,
+) -> EngineResult<Result<Uuid, Json>> {
+    let key = input["workflow"].as_str().unwrap_or_default();
+    let inputs = match &input["inputs"] {
+        Json::Null => json!({}),
+        other => other.clone(),
+    };
+    // Depth: walk up the parent chain.
+    let mut depth = 1;
+    let mut cursor = Some(parent_run);
+    while let Some(run) = cursor {
+        let (parent,): (Option<Uuid>,) =
+            sqlx::query_as("SELECT parent_run_id FROM runs WHERE id = $1")
+                .bind(run)
+                .fetch_one(&mut *conn)
+                .await?;
+        cursor = parent;
+        if cursor.is_some() {
+            depth += 1;
+        }
+        if depth >= MAX_SUBWORKFLOW_DEPTH {
+            return Ok(Err(error(
+                "limit",
+                format!("subworkflows nest at most {MAX_SUBWORKFLOW_DEPTH} deep"),
+            )));
+        }
+    }
+    let found: Option<(Uuid, i32, Json)> = sqlx::query_as(
+        "SELECT w.id, w.current_version, v.document \
+           FROM workflows w \
+           JOIN organizations o ON o.id = w.org_id \
+           JOIN workflow_versions v ON v.workflow_id = w.id AND v.version = w.current_version \
+          WHERE w.key = $1 AND w.status = 'active' \
+            AND o.path @> (SELECT path FROM organizations WHERE id = $2) \
+          ORDER BY nlevel(o.path) DESC LIMIT 1",
+    )
+    .bind(key)
+    .bind(org_id)
+    .fetch_optional(&mut *conn)
+    .await?;
+    let Some((workflow_id, version, document)) = found else {
+        return Ok(Err(error(
+            "definition",
+            format!("no published workflow {key:?} here or above"),
+        )));
+    };
+    if let Err(e) = huxley_workflows::check_inputs(&document, &inputs) {
+        let mut failure = error("inputs", e.to_string());
+        if let huxley_workflows::WorkflowError::InvalidInputs(problems) = e {
+            failure["problems"] = json!(problems);
+        }
+        return Ok(Err(failure));
+    }
+    let child = engine
+        .start_run(
+            conn,
+            StartRun {
+                org_id,
+                workflow_id: Some(workflow_id),
+                version: Some(version),
+                document: None,
+                trigger_type: "subworkflow".into(),
+                trigger: json!({ "parent_run": parent_run, "parent_step": parent_key }),
+                inputs,
+                actor_id: None,
+            },
+        )
+        .await?;
+    sqlx::query("UPDATE runs SET parent_run_id = $2, parent_step_key = $3 WHERE id = $1")
+        .bind(child)
+        .bind(parent_run)
+        .bind(parent_key)
+        .execute(&mut *conn)
+        .await?;
+    Ok(Ok(child))
 }
