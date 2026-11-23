@@ -94,6 +94,11 @@ test.describe('workflows', () => {
 		await expect(
 			page.getByRole('list', { name: 'Recent runs' }).getByText('Succeeded')
 		).toBeVisible();
+
+		// The published version and the draft are the same.
+		await page.getByRole('link', { name: 'Compare versions' }).click();
+		await expect(page.getByRole('heading', { level: 1 })).toHaveText('Compare versions');
+		await expect(page.getByText('No differences.')).toBeVisible();
 	});
 
 	test('workflows read organization variables', async ({ browser }) => {
