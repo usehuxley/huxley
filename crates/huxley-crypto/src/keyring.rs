@@ -9,7 +9,10 @@ use secrecy::{ExposeSecret as _, SecretString};
 use sha2::{Digest as _, Sha256};
 use zeroize::Zeroizing;
 
+use uuid::Uuid;
+
 use crate::CryptoError;
+use crate::kms::{self, VaultKek};
 
 /// AES-256 key length in bytes.
 pub const KEY_LEN: usize = 32;
@@ -84,14 +87,14 @@ impl AeadKey {
     }
 }
 
-/// A key-encryption key and its fingerprint.
+/// A key-encryption key held in configuration, and its fingerprint.
 #[derive(Debug)]
-pub(crate) struct Kek {
+pub(crate) struct LocalKek {
     pub(crate) id: String,
     key: AeadKey,
 }
 
-impl Kek {
+impl LocalKek {
     fn parse(encoded: &str) -> Result<Self, CryptoError> {
         let bytes = Zeroizing::new(
             STANDARD
@@ -121,6 +124,42 @@ impl Kek {
     }
 }
 
+/// A key-encryption key: one from configuration, or one held by a key
+/// management service that Huxley asks to wrap and unwrap data keys.
+#[derive(Debug)]
+pub(crate) enum Kek {
+    Local(Box<LocalKek>),
+    Vault(Box<VaultKek>),
+}
+
+impl Kek {
+    pub(crate) fn id(&self) -> &str {
+        match self {
+            Self::Local(k) => &k.id,
+            Self::Vault(k) => k.id(),
+        }
+    }
+
+    async fn wrap(&self, dek_id: Uuid, org_id: Uuid, dek: &[u8]) -> Result<Vec<u8>, CryptoError> {
+        match self {
+            Self::Local(k) => Ok(k.key.seal(&wrap_aad(dek_id, org_id), dek)),
+            Self::Vault(k) => k.wrap(&kms::frame(dek_id, org_id, dek)).await,
+        }
+    }
+
+    async fn unwrap(
+        &self,
+        dek_id: Uuid,
+        org_id: Uuid,
+        wrapped: &[u8],
+    ) -> Result<Zeroizing<Vec<u8>>, CryptoError> {
+        match self {
+            Self::Local(k) => k.key.open(&wrap_aad(dek_id, org_id), wrapped),
+            Self::Vault(k) => kms::unframe(dek_id, org_id, &k.unwrap(wrapped).await?),
+        }
+    }
+}
+
 /// The active KEK plus retired ones that can still unwrap older DEKs.
 #[derive(Debug)]
 pub struct KeyRing {
@@ -130,7 +169,7 @@ pub struct KeyRing {
 
 /// Binds a wrapped DEK to its id and owner, so a row can't be swapped onto
 /// another org or key id.
-fn wrap_aad(dek_id: uuid::Uuid, org_id: uuid::Uuid) -> Vec<u8> {
+fn wrap_aad(dek_id: Uuid, org_id: Uuid) -> Vec<u8> {
     let mut aad = b"huxley-dek:v1:".to_vec();
     aad.extend_from_slice(dek_id.as_bytes());
     aad.extend_from_slice(org_id.as_bytes());
@@ -140,13 +179,25 @@ fn wrap_aad(dek_id: uuid::Uuid, org_id: uuid::Uuid) -> Vec<u8> {
 impl KeyRing {
     /// Builds the ring from base64-encoded 256-bit keys.
     pub fn new(active: &SecretString, retired: &[SecretString]) -> Result<Self, CryptoError> {
-        let active = Kek::parse(active.expose_secret())?;
+        let active = Kek::Local(Box::new(LocalKek::parse(active.expose_secret())?));
+        let retired = parse_local(retired)?;
+        Ok(Self::from_keks(active, retired))
+    }
+
+    /// The active KEK plus any others; duplicates of the active one are dropped.
+    pub(crate) fn from_keks(active: Kek, retired: Vec<Kek>) -> Self {
+        let mut ids = vec![active.id().to_owned()];
         let retired = retired
-            .iter()
-            .map(|k| Kek::parse(k.expose_secret()))
-            .filter(|k| k.as_ref().map_or(true, |k| k.id != active.id))
-            .collect::<Result<_, _>>()?;
-        Ok(Self { active, retired })
+            .into_iter()
+            .filter(|k| {
+                let fresh = !ids.iter().any(|id| id == k.id());
+                if fresh {
+                    ids.push(k.id().to_owned());
+                }
+                fresh
+            })
+            .collect();
+        Self { active, retired }
     }
 
     /// A ring with a random KEK that exists only in this process. For tests
@@ -156,46 +207,74 @@ impl KeyRing {
             .expect("a generated key is valid")
     }
 
-    /// Fingerprint of the active KEK.
+    /// Identifier of the active KEK: a fingerprint for a configured key, or
+    /// `<provider>:<key>` for a key in a key management service.
     pub fn active_id(&self) -> &str {
-        &self.active.id
+        self.active.id()
+    }
+
+    /// Identifiers of the retired KEKs.
+    pub fn retired_ids(&self) -> impl Iterator<Item = &str> {
+        self.retired.iter().map(Kek::id)
     }
 
     fn find(&self, id: &str) -> Option<&Kek> {
         std::iter::once(&self.active)
             .chain(&self.retired)
-            .find(|k| k.id == id)
+            .find(|k| k.id() == id)
     }
 
     /// Wraps a DEK with the active KEK. Returns (KEK id, wrapped bytes).
-    pub(crate) fn wrap(
+    pub(crate) async fn wrap(
         &self,
-        dek_id: uuid::Uuid,
-        org_id: uuid::Uuid,
+        dek_id: Uuid,
+        org_id: Uuid,
         dek: &[u8],
-    ) -> (String, Vec<u8>) {
-        let wrapped = self.active.key.seal(&wrap_aad(dek_id, org_id), dek);
-        (self.active.id.clone(), wrapped)
+    ) -> Result<(String, Vec<u8>), CryptoError> {
+        let wrapped = self.active.wrap(dek_id, org_id, dek).await?;
+        Ok((self.active.id().to_owned(), wrapped))
     }
 
-    pub(crate) fn unwrap(
+    pub(crate) async fn unwrap(
         &self,
         kek_id: &str,
-        dek_id: uuid::Uuid,
-        org_id: uuid::Uuid,
+        dek_id: Uuid,
+        org_id: Uuid,
         wrapped: &[u8],
     ) -> Result<Zeroizing<Vec<u8>>, CryptoError> {
         let kek = self
             .find(kek_id)
             .ok_or_else(|| CryptoError::UnknownKek(kek_id.to_owned()))?;
-        kek.key.open(&wrap_aad(dek_id, org_id), wrapped)
+        kek.unwrap(dek_id, org_id, wrapped).await
     }
+
+    /// Wraps and unwraps a throwaway key with the active KEK, so a key
+    /// management service that is unreachable or refuses Huxley's credentials
+    /// fails at startup rather than on first use.
+    pub async fn check(&self) -> Result<(), CryptoError> {
+        let probe = random_key();
+        let (dek_id, org_id) = (Uuid::nil(), Uuid::nil());
+        let wrapped = self.active.wrap(dek_id, org_id, &*probe).await?;
+        let back = self.active.unwrap(dek_id, org_id, &wrapped).await?;
+        if back.as_slice() == probe.as_slice() {
+            Ok(())
+        } else {
+            Err(CryptoError::Decrypt)
+        }
+    }
+}
+
+pub(crate) fn parse_local(keys: &[SecretString]) -> Result<Vec<Kek>, CryptoError> {
+    keys.iter().map(parse_local_one).collect()
+}
+
+pub(crate) fn parse_local_one(key: &SecretString) -> Result<Kek, CryptoError> {
+    LocalKek::parse(key.expose_secret()).map(|k| Kek::Local(Box::new(k)))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use uuid::Uuid;
 
     fn secret(s: String) -> SecretString {
         SecretString::from(s)
@@ -230,39 +309,45 @@ mod tests {
         assert!(KeyRing::new(&secret(generate_key_base64()), &[]).is_ok());
     }
 
-    #[test]
-    fn retired_keks_still_unwrap() {
+    #[tokio::test]
+    async fn retired_keks_still_unwrap() {
         let old = generate_key_base64();
         let new = generate_key_base64();
         let (dek_id, org_id) = (Uuid::now_v7(), Uuid::now_v7());
 
         let before = KeyRing::new(&secret(old.clone()), &[]).unwrap();
-        let (kek_id, wrapped) = before.wrap(dek_id, org_id, b"dek bytes");
+        let (kek_id, wrapped) = before.wrap(dek_id, org_id, b"dek bytes").await.unwrap();
 
         let after = KeyRing::new(&secret(new), &[secret(old)]).unwrap();
         assert_ne!(after.active_id(), kek_id);
         assert_eq!(
-            &**after.unwrap(&kek_id, dek_id, org_id, &wrapped).unwrap(),
+            &**after
+                .unwrap(&kek_id, dek_id, org_id, &wrapped)
+                .await
+                .unwrap(),
             b"dek bytes"
         );
         // Bound to its ids.
         assert!(
             after
                 .unwrap(&kek_id, Uuid::now_v7(), org_id, &wrapped)
+                .await
                 .is_err()
         );
         assert!(
             after
                 .unwrap(&kek_id, dek_id, Uuid::now_v7(), &wrapped)
+                .await
                 .is_err()
         );
     }
 
-    #[test]
-    fn unknown_kek_is_reported_by_id() {
+    #[tokio::test]
+    async fn unknown_kek_is_reported_by_id() {
         let ring = KeyRing::new(&secret(generate_key_base64()), &[]).unwrap();
         let err = ring
             .unwrap("0000000000000000", Uuid::nil(), Uuid::nil(), b"x")
+            .await
             .unwrap_err();
         assert!(matches!(err, CryptoError::UnknownKek(id) if id == "0000000000000000"));
     }
@@ -276,5 +361,13 @@ mod tests {
         assert_eq!(a.active_id(), b.active_id());
         assert_ne!(a.active_id(), c.active_id());
         assert_eq!(a.active_id().len(), 16);
+    }
+
+    #[tokio::test]
+    async fn self_test_passes_and_duplicates_collapse() {
+        let k = generate_key_base64();
+        let ring = KeyRing::new(&secret(k.clone()), &[secret(k)]).unwrap();
+        assert_eq!(ring.retired_ids().count(), 0);
+        ring.check().await.unwrap();
     }
 }

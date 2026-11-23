@@ -31,10 +31,19 @@ jobs:
         options: >-
           --health-cmd "pg_isready -U huxley -d huxley"
           --health-interval 2s --health-timeout 5s --health-retries 30
+      # Dev-mode OpenBao for the Vault key-encryption-key tests (in memory).
+      openbao:
+        image: openbao/openbao:2.4.3
+        env:
+          BAO_DEV_ROOT_TOKEN_ID: ci-root
+        ports: ["8200:8200"]
     env:
       HUXLEY_TEST_DATABASE_URL: postgres://huxley:huxley@localhost:5432/huxley
       # Fail rather than skip if the database tests can't find Postgres.
       HUXLEY_REQUIRE_DB_TESTS: "1"
+      HUXLEY_TEST_VAULT_ADDR: http://localhost:8200
+      HUXLEY_TEST_VAULT_TOKEN: ci-root
+      HUXLEY_REQUIRE_VAULT_TESTS: "1"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # v1

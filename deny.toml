@@ -50,7 +50,7 @@ exceptions = [
   { crate = "webauthn-attestation-ca", allow = ["MPL-2.0"] },
   { crate = "crypto-glue", allow = ["MPL-2.0"] },
   # 0BSD is public-domain equivalent (no conditions at all), more permissive
-  # than MIT. Needed by lettre for email encoding. Pending maintainer review.
+  # than MIT. Needed by lettre for email encoding. Approved 2026-11-23.
   { crate = "quoted_printable", allow = ["0BSD"] },
 ]
 

@@ -36,6 +36,8 @@ axum = { version = "0.8", features = ["macros", "multipart"] }
 tower = { version = "0.5", features = ["util"] }
 tower-http = { version = "0.7", features = ["trace", "request-id", "timeout", "limit", "sensitive-headers", "catch-panic", "util"] }
 http = "1.5"
+# Outbound HTTP (KMS providers). Same TLS stack object_store already uses.
+reqwest = { version = "0.13", default-features = false, features = ["rustls", "http2", "json"] }
 
 # Data
 sqlx = { version = "0.9", default-features = false, features = ["runtime-tokio", "tls-rustls", "postgres", "uuid", "time", "json", "migrate", "macros"] }
