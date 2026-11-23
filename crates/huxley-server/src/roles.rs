@@ -138,7 +138,8 @@ pub async fn serve(config: Config, roles: BTreeSet<Role>) -> anyhow::Result<()> 
                     Ok(())
                 });
                 // Workflow runs: any number of worker processes share the queue.
-                let engine = huxley_engine::Engine::new(db.clone(), crypto.clone());
+                let engine =
+                    huxley_engine::Engine::with_config(db.clone(), crypto.clone(), &config.engine);
                 let worker_config = huxley_engine::WorkerConfig::from(&config.engine);
                 let stop = shutdown.clone();
                 tasks.spawn(async move {

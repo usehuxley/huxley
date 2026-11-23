@@ -112,6 +112,11 @@ The server reads, in increasing precedence: built-in defaults, `huxley.toml`, th
 | `HUXLEY_STORAGE__URL` | `./data/objects` (image: `/var/lib/huxley/objects`) | Where attachments go: a directory, `s3://bucket[/prefix]` (AWS S3, DigitalOcean Spaces, MinIO), or `az://container`. Credentials and endpoints via `HUXLEY_STORAGE__OPTIONS__<NAME>`, e.g. `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION`, `AWS_ENDPOINT`. Back up local storage with the database. |
 | `HUXLEY_STORAGE__MAX_UPLOAD_MB` | `25` | Largest attachment |
 | `HUXLEY_CRYPTO__RETIRED_KEKS` | (empty) | Previous KEKs as a list, e.g. `[old1, old2]`, during rotation |
+| `HUXLEY_ENGINE__CONCURRENCY` | `8` | Workflow jobs each worker process runs at once |
+| `HUXLEY_ENGINE__EGRESS__ALLOW_PRIVATE` | `false` | Let workflow HTTP steps reach private and loopback addresses. Link-local addresses (cloud metadata) stay blocked. |
+| `HUXLEY_ENGINE__EGRESS__PRIVATE_HOSTS` | (empty) | Host names that may resolve to private addresses anyway, e.g. `[api.internal, "*.corp.example"]` |
+| `HUXLEY_ENGINE__EGRESS__DENIED_HOSTS` | (empty) | Host names workflows may never reach |
+| `HUXLEY_ENGINE__EGRESS__MAX_RESPONSE_BYTES` | `1048576` | Largest response body an HTTP step reads |
 | `HUXLEY_HTTP__BIND` | `0.0.0.0:8080` | API listen address |
 | `HUXLEY_MIGRATE_ON_START` | `false` | Apply migrations at startup |
 | `HUXLEY_ROLES` | `all` | `api`, `worker`, `scheduler`, or `all` |

@@ -9,7 +9,10 @@
 //! Start runs with [`Engine::start_run`] inside the transaction that wants
 //! them; they begin once it commits.
 
+mod egress;
+mod http;
 mod journal;
+mod notify;
 pub mod queue;
 mod run;
 mod step;
@@ -22,6 +25,7 @@ use huxley_crypto::{Crypto, CryptoError};
 use huxley_db::DbError;
 use sqlx::PgPool;
 
+pub use egress::EgressConfig;
 pub use journal::{StepStatus, step_key};
 pub use run::{RunStatus, StartRun};
 pub use walk::MAX_FOREACH_ITEMS;
@@ -54,14 +58,21 @@ pub struct Engine {
     db: PgPool,
     crypto: Crypto,
     expr: Arc<huxley_expr::Engine>,
+    egress: egress::Egress,
 }
 
 impl Engine {
+    /// An engine with the default settings (public egress only).
     pub fn new(db: PgPool, crypto: Crypto) -> Self {
+        Self::with_config(db, crypto, &EngineConfig::default())
+    }
+
+    pub fn with_config(db: PgPool, crypto: Crypto, config: &EngineConfig) -> Self {
         Self {
             db,
             crypto,
             expr: Arc::new(huxley_expr::Engine::new()),
+            egress: egress::Egress::new(&config.egress),
         }
     }
 

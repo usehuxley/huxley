@@ -50,6 +50,7 @@ pub mod kinds {
     pub const API_TOKEN_CREATED: &str = "security.api_token_created";
     pub const ROLE_GRANTED: &str = "access.role_granted";
     pub const TEAM_JOINED: &str = "access.team_joined";
+    pub const WORKFLOW: &str = "workflow.notification";
 
     pub const ALL: &[Kind] = &[
         Kind {
@@ -85,6 +86,13 @@ pub mod kinds {
             description: "You were added to a team",
             in_app: true,
             email: false,
+            mandatory: false,
+        },
+        Kind {
+            key: WORKFLOW,
+            description: "Notifications sent by workflows",
+            in_app: true,
+            email: true,
             mandatory: false,
         },
     ];
