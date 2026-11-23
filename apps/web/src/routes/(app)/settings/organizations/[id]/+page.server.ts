@@ -10,12 +10,13 @@ export const load: PageServerLoad = async (event) => {
 	const client = api(event);
 	const id = event.params.id;
 	const path = { params: { path: { entity_type: 'organization', id } } };
-	const [org, fields, tags, allTags, attachments] = await Promise.all([
+	const [org, fields, tags, allTags, attachments, settings] = await Promise.all([
 		client.GET('/api/v1/orgs/{id}', { params: { path: { id } } }),
 		client.GET('/api/v1/entities/{entity_type}/{id}/fields', path),
 		client.GET('/api/v1/entities/{entity_type}/{id}/tags', path),
 		client.GET('/api/v1/tags'),
-		client.GET('/api/v1/entities/{entity_type}/{id}/attachments', path)
+		client.GET('/api/v1/entities/{entity_type}/{id}/attachments', path),
+		client.GET('/api/v1/orgs/{id}/settings', { params: { path: { id } } })
 	]);
 	if (org.response.status === 404) error(404, 'Organization not found.');
 	if (!org.data || !fields.data || !tags.data) error(503, 'Could not load the organization.');
@@ -24,7 +25,8 @@ export const load: PageServerLoad = async (event) => {
 		fields: fields.data,
 		tags: tags.data,
 		allTags: allTags.data ?? [],
-		attachments: attachments.data ?? []
+		attachments: attachments.data ?? [],
+		settings: settings.data ?? []
 	};
 };
 
@@ -51,6 +53,35 @@ export const actions: Actions = {
 			});
 		}
 		return { message: 'Saved.' };
+	},
+
+	setting: async (event) => {
+		const form = await event.request.formData();
+		const key = formString(form, 'key');
+		const { error: problem, response } = await api(event).PUT('/api/v1/orgs/{id}/settings/{key}', {
+			params: { path: { id: event.params.id, key } },
+			body: { value: formString(form, 'value'), locked: form.get('locked') === 'on' }
+		});
+		if (response.status !== 204) {
+			return fail(response.status, {
+				message: problemMessage(problem, 'Could not save the setting.')
+			});
+		}
+		return { message: 'Setting saved.' };
+	},
+
+	clearSetting: async (event) => {
+		const form = await event.request.formData();
+		const { error: problem, response } = await api(event).DELETE(
+			'/api/v1/orgs/{id}/settings/{key}',
+			{ params: { path: { id: event.params.id, key: formString(form, 'key') } } }
+		);
+		if (response.status !== 204) {
+			return fail(response.status, {
+				message: problemMessage(problem, 'Could not reset the setting.')
+			});
+		}
+		return { message: 'Now inherited.' };
 	},
 
 	upload: async (event) => {

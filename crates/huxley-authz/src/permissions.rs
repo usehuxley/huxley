@@ -40,6 +40,7 @@ permissions! {
     ORG_UPDATE = "org:update", Org, "Rename organizations";
     ORG_MOVE = "org:move", Org, "Move organizations within the tree";
     ORG_ARCHIVE = "org:archive", Org, "Archive organizations";
+    ORG_SETTINGS_MANAGE = "org:settings:manage", Org, "Change organization settings, such as branding and numbering, and lock them for sub-organizations";
     USER_READ = "user:read", Instance, "View users";
     USER_CREATE = "user:create", Instance, "Create users";
     USER_UPDATE = "user:update", Instance, "Edit users and enable or disable them";

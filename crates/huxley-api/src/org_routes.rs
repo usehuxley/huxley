@@ -20,6 +20,11 @@ pub fn routes() -> Router<AppState> {
         .route("/{id}", get(get_one).patch(update))
         .route("/{id}/move", post(move_org))
         .route("/{id}/archive", post(archive))
+        .route("/{id}/settings", get(list_settings))
+        .route(
+            "/{id}/settings/{key}",
+            axum::routing::put(set_setting).delete(clear_setting),
+        )
 }
 
 fn db_err(e: impl std::fmt::Display) -> ApiError {
@@ -229,4 +234,90 @@ pub async fn archive(
         .map_err(map_org)?;
     tx.commit().await.map_err(db_err)?;
     Ok(Json(org))
+}
+
+/// Every setting at an organization: the effective value, where it comes
+/// from (this org, an ancestor, or the default), and any ancestor lock.
+#[utoipa::path(get, path = "/api/v1/orgs/{id}/settings", operation_id = "list_org_settings", tag = "orgs",
+    params(("id" = Uuid, Path, description = "Organization id")),
+    responses((status = 200, body = Vec<huxley_orgs::settings::ResolvedSetting>),
+        (status = 404, body = ApiError, content_type = "application/problem+json")))]
+pub async fn list_settings(
+    State(state): State<AppState>,
+    authed: Authed,
+    Path(id): Path<Uuid>,
+) -> ApiResult<Json<Vec<huxley_orgs::settings::ResolvedSetting>>> {
+    authed.require_at(&state, permissions::ORG_READ, id).await?;
+    // System scope: resolution reads ancestors the caller may not see.
+    let mut tx = begin_scoped(&state.db, &OrgScope::System)
+        .await
+        .map_err(db_err)?;
+    let list = huxley_orgs::settings::resolve(&mut tx, id)
+        .await
+        .map_err(map_org)?;
+    tx.commit().await.map_err(db_err)?;
+    Ok(Json(list))
+}
+
+#[derive(Debug, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct SetSettingRequest {
+    pub value: String,
+    /// Stop sub-organizations from overriding it.
+    #[serde(default)]
+    pub locked: bool,
+}
+
+/// Sets a value at this organization, for it and its sub-organizations.
+#[utoipa::path(put, path = "/api/v1/orgs/{id}/settings/{key}", operation_id = "set_org_setting", tag = "orgs",
+    params(("id" = Uuid, Path, description = "Organization id"), ("key" = String, Path, description = "Setting key")),
+    request_body = SetSettingRequest,
+    responses((status = 204), (status = 409, description = "Locked by an ancestor", body = ApiError, content_type = "application/problem+json"),
+        (status = 422, body = ApiError, content_type = "application/problem+json")))]
+pub async fn set_setting(
+    State(state): State<AppState>,
+    authed: Authed,
+    Path((id, key)): Path<(Uuid, String)>,
+    Json(body): Json<SetSettingRequest>,
+) -> ApiResult<StatusCode> {
+    authed
+        .require_at(&state, permissions::ORG_SETTINGS_MANAGE, id)
+        .await?;
+    let mut tx = begin_scoped(&state.db, &OrgScope::System)
+        .await
+        .map_err(db_err)?;
+    huxley_orgs::settings::set(
+        &mut tx,
+        &authed.user.ctx,
+        id,
+        &key,
+        &body.value,
+        body.locked,
+    )
+    .await
+    .map_err(map_org)?;
+    tx.commit().await.map_err(db_err)?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+/// Removes this organization's value, so it inherits again.
+#[utoipa::path(delete, path = "/api/v1/orgs/{id}/settings/{key}", operation_id = "clear_org_setting", tag = "orgs",
+    params(("id" = Uuid, Path, description = "Organization id"), ("key" = String, Path, description = "Setting key")),
+    responses((status = 204)))]
+pub async fn clear_setting(
+    State(state): State<AppState>,
+    authed: Authed,
+    Path((id, key)): Path<(Uuid, String)>,
+) -> ApiResult<StatusCode> {
+    authed
+        .require_at(&state, permissions::ORG_SETTINGS_MANAGE, id)
+        .await?;
+    let mut tx = begin_scoped(&state.db, &OrgScope::System)
+        .await
+        .map_err(db_err)?;
+    huxley_orgs::settings::clear(&mut tx, &authed.user.ctx, id, &key)
+        .await
+        .map_err(map_org)?;
+    tx.commit().await.map_err(db_err)?;
+    Ok(StatusCode::NO_CONTENT)
 }

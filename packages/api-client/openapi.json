@@ -2316,6 +2316,137 @@
 				}
 			}
 		},
+		"/api/v1/orgs/{id}/settings": {
+			"get": {
+				"tags": ["orgs"],
+				"summary": "Every setting at an organization: the effective value, where it comes\nfrom (this org, an ancestor, or the default), and any ancestor lock.",
+				"operationId": "list_org_settings",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"description": "Organization id",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "array",
+									"items": {
+										"$ref": "#/components/schemas/ResolvedSetting"
+									}
+								}
+							}
+						}
+					},
+					"404": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/orgs/{id}/settings/{key}": {
+			"put": {
+				"tags": ["orgs"],
+				"summary": "Sets a value at this organization, for it and its sub-organizations.",
+				"operationId": "set_org_setting",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"description": "Organization id",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					},
+					{
+						"name": "key",
+						"in": "path",
+						"description": "Setting key",
+						"required": true,
+						"schema": {
+							"type": "string"
+						}
+					}
+				],
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/SetSettingRequest"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"204": {},
+					"409": {
+						"description": "Locked by an ancestor",
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					},
+					"422": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			},
+			"delete": {
+				"tags": ["orgs"],
+				"summary": "Removes this organization's value, so it inherits again.",
+				"operationId": "clear_org_setting",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"description": "Organization id",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					},
+					{
+						"name": "key",
+						"in": "path",
+						"description": "Setting key",
+						"required": true,
+						"schema": {
+							"type": "string"
+						}
+					}
+				],
+				"responses": {
+					"204": {}
+				}
+			}
+		},
 		"/api/v1/permissions": {
 			"get": {
 				"tags": ["users"],
@@ -4624,6 +4755,19 @@
 					}
 				}
 			},
+			"LocalSetting": {
+				"type": "object",
+				"description": "A value set at the org itself.",
+				"required": ["value", "locked"],
+				"properties": {
+					"locked": {
+						"type": "boolean"
+					},
+					"value": {
+						"type": "string"
+					}
+				}
+			},
 			"LoginMfaRequest": {
 				"type": "object",
 				"required": ["challenge"],
@@ -4981,6 +5125,20 @@
 			"OrgKindInput": {
 				"type": "string",
 				"enum": ["provider", "client"]
+			},
+			"OrgRef": {
+				"type": "object",
+				"description": "An org in a resolution.",
+				"required": ["id", "name"],
+				"properties": {
+					"id": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"name": {
+						"type": "string"
+					}
+				}
 			},
 			"OrgStatus": {
 				"type": "string",
@@ -5405,6 +5563,56 @@
 					}
 				}
 			},
+			"ResolvedSetting": {
+				"allOf": [
+					{
+						"$ref": "#/components/schemas/SettingDef"
+					},
+					{
+						"type": "object",
+						"properties": {
+							"local": {
+								"oneOf": [
+									{
+										"$ref": "#/components/schemas/LocalSetting",
+										"description": "The value set at this org, if any (ignored while an ancestor's lock applies)."
+									},
+									{
+										"type": "null"
+									}
+								]
+							},
+							"lockedBy": {
+								"oneOf": [
+									{
+										"$ref": "#/components/schemas/OrgRef",
+										"description": "Set when an ancestor locked this key: it can't be changed here."
+									},
+									{
+										"type": "null"
+									}
+								]
+							},
+							"source": {
+								"oneOf": [
+									{
+										"$ref": "#/components/schemas/OrgRef",
+										"description": "Where `value` comes from; `None` means the built-in default."
+									},
+									{
+										"type": "null"
+									}
+								]
+							},
+							"value": {
+								"type": ["string", "null"],
+								"description": "The effective value (`None`: unset, use the documented fallback)."
+							}
+						}
+					}
+				],
+				"description": "A setting's effective value at an org, and why."
+			},
 			"Role": {
 				"type": "object",
 				"required": ["id", "key", "name", "description", "isSystem", "permissions", "requireMfa"],
@@ -5583,6 +5791,19 @@
 					}
 				}
 			},
+			"SetSettingRequest": {
+				"type": "object",
+				"required": ["value"],
+				"properties": {
+					"locked": {
+						"type": "boolean",
+						"description": "Stop sub-organizations from overriding it."
+					},
+					"value": {
+						"type": "string"
+					}
+				}
+			},
 			"SetValuesRequest": {
 				"type": "object",
 				"required": ["values"],
@@ -5596,6 +5817,36 @@
 						}
 					}
 				}
+			},
+			"SettingDef": {
+				"type": "object",
+				"required": ["key", "group", "label", "description", "kind"],
+				"properties": {
+					"default": {
+						"type": ["string", "null"],
+						"description": "Used when no org in the chain sets a value."
+					},
+					"description": {
+						"type": "string"
+					},
+					"group": {
+						"type": "string"
+					},
+					"key": {
+						"type": "string"
+					},
+					"kind": {
+						"$ref": "#/components/schemas/SettingKind"
+					},
+					"label": {
+						"type": "string"
+					}
+				}
+			},
+			"SettingKind": {
+				"type": "string",
+				"description": "How a setting's value is validated (and edited in the UI).",
+				"enum": ["text", "timezone", "color", "email", "prefix"]
 			},
 			"SsoCallbackRequest": {
 				"type": "object",

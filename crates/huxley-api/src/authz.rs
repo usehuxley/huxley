@@ -134,7 +134,7 @@ impl Authed {
 
 pub fn map_org(error: OrgError) -> ApiError {
     match error {
-        OrgError::NotFound => ApiError::not_found(),
+        OrgError::NotFound | OrgError::UnknownSetting => ApiError::not_found(),
         OrgError::NameTaken => {
             ApiError::conflict("An active sibling organization already uses this name.")
         }
@@ -145,6 +145,12 @@ pub fn map_org(error: OrgError) -> ApiError {
         OrgError::VersionConflict => ApiError::conflict(
             "The organization was changed by someone else. Reload and try again.",
         ),
+        OrgError::InvalidSetting(message) => {
+            ApiError::validation().with_field_error("/value", message)
+        }
+        OrgError::SettingLocked(by) => ApiError::conflict(format!(
+            "{by} locked this setting, so it can't be changed here."
+        )),
         OrgError::InvalidName(reason) => {
             ApiError::validation().with_field_error("/name", format!("Name {reason}."))
         }

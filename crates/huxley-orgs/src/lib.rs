@@ -10,6 +10,8 @@
 //! they behave as if they don't exist. Moves rewrite descendants' paths, so
 //! [`move_to`] must run in system scope after the caller is authorized.
 
+pub mod settings;
+
 use huxley_core::RequestContext;
 use huxley_db::audit::{self, AuditRecord};
 use huxley_db::outbox::{self, DomainEvent};
@@ -77,6 +79,12 @@ pub enum OrgError {
     VersionConflict,
     #[error("invalid name: {0}")]
     InvalidName(&'static str),
+    #[error("unknown setting")]
+    UnknownSetting,
+    #[error("{0}")]
+    InvalidSetting(String),
+    #[error("locked by {0}")]
+    SettingLocked(String),
     #[error(transparent)]
     Db(#[from] DbError),
 }

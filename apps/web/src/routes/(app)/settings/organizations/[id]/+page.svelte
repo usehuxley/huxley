@@ -4,6 +4,7 @@
 	import { ArrowLeft, X } from '@lucide/svelte';
 	import { Badge, Button, Card, Field, Select, toast } from '@usehuxley/ui';
 	import FieldInput from '#lib/fields/FieldInput.svelte';
+	import OrgSettings from '#lib/orgs/OrgSettings.svelte';
 	import type { PageProps } from './$types';
 
 	let { data, form }: PageProps = $props();
@@ -142,6 +143,18 @@
 				</form>
 			{/if}
 		</div>
+	</Card>
+
+	<Card
+		title="Organization settings"
+		description="Values apply here and to every sub-organization unless they set their own. Lock a value to stop them."
+	>
+		<OrgSettings
+			settings={data.settings}
+			orgId={data.org.id}
+			canManage={data.user.grantedPermissions.includes('org:settings:manage')}
+			{notify}
+		/>
 	</Card>
 
 	<Card title="Custom fields" description="Fields your administrators defined for organizations.">

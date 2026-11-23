@@ -1770,3 +1770,136 @@ async fn audit_export_streams_every_event_in_order() {
     assert_eq!(status, StatusCode::OK);
     assert_eq!(body, "");
 }
+
+#[tokio::test]
+async fn org_settings_inherit_and_lock_over_http() {
+    let Some(pools) = pools().await else { return };
+    let root = ensure_root(&pools).await;
+    let app = app(&pools);
+    let owner = login(&app, &user(&pools, true).await).await;
+    let body = json!({ "parentId": root, "kind": "provider", "name": unique("Brandco") });
+    let (_, msp) = call(&app, "POST", "/api/v1/orgs", Some(&owner), Some(body)).await;
+    let msp_id = msp["id"].as_str().unwrap().to_owned();
+    let body = json!({ "parentId": msp_id, "kind": "client", "name": unique("Brand client") });
+    let (_, client) = call(&app, "POST", "/api/v1/orgs", Some(&owner), Some(body)).await;
+    let client_id = client["id"].as_str().unwrap().to_owned();
+
+    // A technician at the client can read settings but not change them.
+    let tech = login(&app, &user(&pools, false).await).await;
+    grant_role(&app, &owner, &tech, "technician", &client_id).await;
+
+    let msp_uri = format!("/api/v1/orgs/{msp_id}/settings/branding.accent_color");
+    let client_uri = format!("/api/v1/orgs/{client_id}/settings/branding.accent_color");
+    let (status, _) = call(
+        &app,
+        "PUT",
+        &msp_uri,
+        Some(&owner),
+        Some(json!({ "value": "#123456", "locked": true })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::NO_CONTENT);
+
+    let (status, list) = call(
+        &app,
+        "GET",
+        &format!("/api/v1/orgs/{client_id}/settings"),
+        Some(&tech),
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    let accent = list
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|s| s["key"] == "branding.accent_color")
+        .unwrap();
+    assert_eq!(accent["value"], "#123456");
+    assert_eq!(accent["source"]["id"], msp_id.as_str());
+    assert_eq!(accent["lockedBy"]["id"], msp_id.as_str());
+    assert_eq!(accent["kind"], "color");
+
+    let (status, _) = call(
+        &app,
+        "PUT",
+        &client_uri,
+        Some(&tech),
+        Some(json!({ "value": "#000000" })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+    let (status, err) = call(
+        &app,
+        "PUT",
+        &client_uri,
+        Some(&owner),
+        Some(json!({ "value": "#000000" })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CONFLICT, "{err}");
+    let prefix_uri = format!("/api/v1/orgs/{client_id}/settings/numbering.ticket_prefix");
+    let (status, _) = call(
+        &app,
+        "PUT",
+        &prefix_uri,
+        Some(&owner),
+        Some(json!({ "value": "lower" })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+    let (status, _) = call(
+        &app,
+        "PUT",
+        &prefix_uri,
+        Some(&owner),
+        Some(json!({ "value": "CL" })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::NO_CONTENT);
+    let (status, _) = call(
+        &app,
+        "PUT",
+        &format!("/api/v1/orgs/{client_id}/settings/nope.nope"),
+        Some(&owner),
+        Some(json!({ "value": "x" })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+
+    // Clearing the MSP's value unlocks the client.
+    let (status, _) = call(&app, "DELETE", &msp_uri, Some(&owner), None).await;
+    assert_eq!(status, StatusCode::NO_CONTENT);
+    let (status, _) = call(
+        &app,
+        "PUT",
+        &client_uri,
+        Some(&owner),
+        Some(json!({ "value": "#000000" })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::NO_CONTENT);
+}
+
+/// Gives the user behind `member` a system role at `org_id`.
+async fn grant_role(app: &axum::Router, owner: &str, member: &str, role_key: &str, org_id: &str) {
+    let (_, me) = call(app, "GET", "/api/v1/auth/me", Some(member), None).await;
+    let (_, roles) = call(app, "GET", "/api/v1/roles", Some(owner), None).await;
+    let role = roles
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|r| r["key"] == role_key)
+        .unwrap()["id"]
+        .clone();
+    let grant = json!({ "userId": me["id"], "roleId": role, "orgId": org_id });
+    let (status, _) = call(
+        app,
+        "POST",
+        "/api/v1/role-assignments",
+        Some(owner),
+        Some(grant),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED);
+}
