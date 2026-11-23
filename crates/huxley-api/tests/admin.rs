@@ -1903,3 +1903,91 @@ async fn grant_role(app: &axum::Router, owner: &str, member: &str, role_key: &st
     .await;
     assert_eq!(status, StatusCode::CREATED);
 }
+
+#[tokio::test]
+async fn modules_narrow_per_provider_org_over_http() {
+    let Some(pools) = pools().await else { return };
+    let root = ensure_root(&pools).await;
+    let app = app(&pools);
+    let owner = login(&app, &user(&pools, true).await).await;
+    let nobody = login(&app, &user(&pools, false).await).await;
+    let body = json!({ "parentId": root, "kind": "provider", "name": unique("Second MSP") });
+    let (_, msp) = call(&app, "POST", "/api/v1/orgs", Some(&owner), Some(body)).await;
+    let msp_id = msp["id"].as_str().unwrap().to_owned();
+    let body = json!({ "parentId": msp_id, "kind": "client", "name": unique("Its client") });
+    let (_, client) = call(&app, "POST", "/api/v1/orgs", Some(&owner), Some(body)).await;
+    let client_id = client["id"].as_str().unwrap().to_owned();
+
+    let off = json!({ "enabled": false });
+    let uri = format!("/api/v1/orgs/{msp_id}/modules/knowledge");
+    let (status, _) = call(&app, "PUT", &uri, Some(&nobody), Some(off.clone())).await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+    let (status, after) = call(&app, "PUT", &uri, Some(&owner), Some(off.clone())).await;
+    assert_eq!(status, StatusCode::OK, "{after}");
+    let knowledge = after
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|m| m["key"] == "knowledge")
+        .unwrap();
+    assert_eq!(knowledge["enabledHere"], false);
+    if knowledge["enabled"] == true {
+        assert_eq!(knowledge["narrowedBy"]["orgId"], msp_id.as_str());
+    }
+
+    // Clients and the root don't narrow; unknown modules are 404.
+    let (status, _) = call(
+        &app,
+        "PUT",
+        &format!("/api/v1/orgs/{client_id}/modules/knowledge"),
+        Some(&owner),
+        Some(off.clone()),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CONFLICT);
+    let (status, _) = call(
+        &app,
+        "PUT",
+        &format!("/api/v1/orgs/{root}/modules/knowledge"),
+        Some(&owner),
+        Some(off.clone()),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CONFLICT);
+    let (status, _) = call(
+        &app,
+        "PUT",
+        &format!("/api/v1/orgs/{msp_id}/modules/nope"),
+        Some(&owner),
+        Some(off),
+    )
+    .await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+
+    // Readers of the client see the state there.
+    let (status, at_client) = call(
+        &app,
+        "GET",
+        &format!("/api/v1/orgs/{client_id}/modules"),
+        Some(&owner),
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(
+        at_client
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|m| m["key"] != "knowledge" || m["enabledHere"] == false)
+    );
+    let (status, _) = call(
+        &app,
+        "PUT",
+        &uri,
+        Some(&owner),
+        Some(json!({ "enabled": true })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+}

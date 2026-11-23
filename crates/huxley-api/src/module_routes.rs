@@ -19,6 +19,60 @@ pub fn routes() -> Router<AppState> {
         .route("/{key}", put(set))
 }
 
+/// `/orgs/{id}/modules`: per-provider-org narrowing.
+pub fn org_routes() -> Router<AppState> {
+    Router::new()
+        .route("/orgs/{id}/modules", get(list_for_org))
+        .route("/orgs/{id}/modules/{key}", put(set_for_org))
+}
+
+fn map_set(e: SetError) -> ApiError {
+    let sentence = |e: &dyn std::fmt::Display| {
+        let text = e.to_string();
+        format!("{}{}", text[..1].to_uppercase(), &text[1..])
+    };
+    match e {
+        SetError::Module(ModuleError::Unknown(_)) | SetError::OrgNotFound => ApiError::not_found(),
+        SetError::Module(
+            e @ (ModuleError::MissingDependencies(_) | ModuleError::HasDependents(_)),
+        ) => ApiError::new(
+            StatusCode::CONFLICT,
+            "module-dependencies",
+            "Module dependencies",
+        )
+        .with_detail(sentence(&e)),
+        e
+        @ (SetError::NotAProviderOrg | SetError::OffInstanceWide | SetError::NarrowedAbove(_)) => {
+            ApiError::conflict(format!("{}.", sentence(&e)))
+        }
+        SetError::Db(e) => db_err(e),
+    }
+}
+
+/// Rejects requests to a module that isn't active at `org_id` (off for the
+/// instance, or narrowed by a provider org above it).
+pub async fn require_module_at(state: &AppState, key: &str, org_id: uuid::Uuid) -> ApiResult<()> {
+    let mut tx = begin_scoped(&state.db, &OrgScope::System)
+        .await
+        .map_err(db_err)?;
+    let active = huxley_modules::is_active_at(&mut tx, key, org_id)
+        .await
+        .map_err(db_err)?;
+    tx.commit().await.map_err(db_err)?;
+    if active {
+        Ok(())
+    } else {
+        Err(ApiError::new(
+            StatusCode::NOT_FOUND,
+            "module-disabled",
+            "Module not enabled",
+        )
+        .with_detail(format!(
+            "The `{key}` module is turned off for this organization."
+        )))
+    }
+}
+
 fn db_err(e: impl std::fmt::Display) -> ApiError {
     ApiError::internal(&e)
 }
@@ -110,23 +164,63 @@ pub async fn set(
         body.include_dependencies,
     )
     .await
-    .map_err(|e| match e {
-        SetError::Module(ModuleError::Unknown(_)) => ApiError::not_found(),
-        SetError::Module(
-            e @ (ModuleError::MissingDependencies(_) | ModuleError::HasDependents(_)),
-        ) => ApiError::new(
-            StatusCode::CONFLICT,
-            "module-dependencies",
-            "Module dependencies",
-        )
-        .with_detail(format!(
-            "{}{}",
-            e.to_string()[..1].to_uppercase(),
-            &e.to_string()[1..]
-        )),
-        SetError::Db(e) => db_err(e),
-    })?;
+    .map_err(map_set)?;
     let modules = huxley_modules::states(&mut tx).await.map_err(db_err)?;
     tx.commit().await.map_err(db_err)?;
     Ok(Json(SetModuleResponse { changed, modules }))
+}
+
+/// Every module's state at an organization, including narrowing by a
+/// provider org on its chain.
+#[utoipa::path(get, path = "/api/v1/orgs/{id}/modules", operation_id = "list_org_modules", tag = "modules",
+    params(("id" = uuid::Uuid, Path, description = "Organization id")),
+    responses((status = 200, body = Vec<huxley_modules::OrgModuleState>)))]
+pub async fn list_for_org(
+    State(state): State<AppState>,
+    authed: Authed,
+    Path(id): Path<uuid::Uuid>,
+) -> ApiResult<Json<Vec<huxley_modules::OrgModuleState>>> {
+    authed.require_at(&state, permissions::ORG_READ, id).await?;
+    let mut tx = begin_scoped(&state.db, &OrgScope::System)
+        .await
+        .map_err(db_err)?;
+    let states = huxley_modules::states_at(&mut tx, id)
+        .await
+        .map_err(db_err)?;
+    tx.commit().await.map_err(db_err)?;
+    Ok(Json(states))
+}
+
+#[derive(Debug, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct SetOrgModuleRequest {
+    /// `false` turns it off here and below; `true` removes that.
+    pub enabled: bool,
+}
+
+/// Turns a module off for a provider organization (below the root) and its
+/// sub-organizations, or back on. Only narrows what the instance has on.
+#[utoipa::path(put, path = "/api/v1/orgs/{id}/modules/{key}", operation_id = "set_org_module", tag = "modules",
+    params(("id" = uuid::Uuid, Path, description = "Provider organization id"), ("key" = String, Path, description = "Module key")),
+    request_body = SetOrgModuleRequest,
+    responses((status = 200, body = Vec<huxley_modules::OrgModuleState>),
+        (status = 409, body = ApiError, content_type = "application/problem+json")))]
+pub async fn set_for_org(
+    State(state): State<AppState>,
+    authed: Authed,
+    Path((id, key)): Path<(uuid::Uuid, String)>,
+    Json(body): Json<SetOrgModuleRequest>,
+) -> ApiResult<Json<Vec<huxley_modules::OrgModuleState>>> {
+    authed.require_instance(permissions::MODULES_MANAGE)?;
+    let mut tx = begin_scoped(&state.db, &OrgScope::System)
+        .await
+        .map_err(db_err)?;
+    huxley_modules::set_for_org(&mut tx, &authed.user.ctx, id, &key, body.enabled)
+        .await
+        .map_err(map_set)?;
+    let states = huxley_modules::states_at(&mut tx, id)
+        .await
+        .map_err(db_err)?;
+    tx.commit().await.map_err(db_err)?;
+    Ok(Json(states))
 }

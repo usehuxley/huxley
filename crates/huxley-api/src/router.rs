@@ -48,6 +48,7 @@ pub fn router(state: AppState) -> Router {
         .nest("/security", security_routes::routes())
         .merge(user_routes::routes())
         .merge(entity_routes::routes())
+        .merge(module_routes::org_routes())
         .merge(entity_routes::attachment_routes(
             usize::try_from(state.storage.max_upload_bytes())
                 .unwrap_or(usize::MAX)
