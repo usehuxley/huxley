@@ -1646,7 +1646,11 @@ async fn templates_become_drafts_with_their_bindings_resolved() {
         .get(&s.owner, &format!("/api/v1/workflows/{workflow_id}"))
         .await;
     assert_eq!(workflow["name"], "Laptop requests");
-    assert_eq!(workflow["currentVersion"], Value::Null, "a draft, not published");
+    assert_eq!(
+        workflow["currentVersion"],
+        Value::Null,
+        "a draft, not published"
+    );
     assert_eq!(workflow["diagnostics"], json!([]), "ready to publish");
     assert_eq!(
         workflow["draft"]["spec"]["triggers"][0]["form"], key,
