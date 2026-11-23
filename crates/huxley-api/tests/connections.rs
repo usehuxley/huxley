@@ -425,3 +425,92 @@ async fn only_sign_in_connections_start_a_sign_in() {
     .await;
     assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
 }
+
+#[tokio::test]
+async fn built_in_integrations_are_added_from_the_catalog() {
+    let Some(pools) = pools().await else { return };
+    let app = app(&pools);
+    let msp = provider_org(&pools).await;
+    let owner = login(&app, &user(&pools, true).await.1).await;
+    let (status, catalog) = call(&app, "GET", "/api/v1/integrations/catalog", &owner, None).await;
+    assert_eq!(status, StatusCode::OK);
+    let graph = catalog
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|e| e["key"] == "msgraph")
+        .unwrap();
+    assert_eq!(graph["actions"], 14);
+
+    let add = |org: Uuid| json!({ "orgId": org });
+    let (status, added) = call(
+        &app,
+        "POST",
+        "/api/v1/integrations/catalog/msgraph",
+        &owner,
+        Some(add(msp)),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED, "{added}");
+    assert_eq!(added["key"], "msgraph");
+    let id = added["id"].as_str().unwrap().to_owned();
+    let (status, _) = call(
+        &app,
+        "POST",
+        "/api/v1/integrations/catalog/msgraph",
+        &owner,
+        Some(add(msp)),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CONFLICT, "added once per organization");
+    let (status, _) = call(
+        &app,
+        "POST",
+        "/api/v1/integrations/catalog/nope",
+        &owner,
+        Some(add(msp)),
+    )
+    .await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+
+    // Its token URL takes the tenant, which must be safe.
+    let connection = |tenant: &str| {
+        json!({ "orgId": msp, "integrationId": id, "connection": {
+            "name": "Contoso", "authScheme": "app", "serverVariables": { "tenant": tenant },
+            "settings": { "client_id": "abc" }, "secrets": { "client_secret": "s3cret" } } })
+    };
+    let (status, problem) = call(
+        &app,
+        "POST",
+        "/api/v1/connections",
+        &owner,
+        Some(connection("evil.com/x")),
+    )
+    .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{problem}");
+    assert_eq!(problem["errors"][0]["pointer"], "serverVariables.tenant");
+    let (status, created) = call(
+        &app,
+        "POST",
+        "/api/v1/connections",
+        &owner,
+        Some(connection("contoso.onmicrosoft.com")),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED, "{created}");
+
+    // Technicians can't add integrations.
+    let tech = login(&app, &user(&pools, false).await.1).await;
+    let (status, _) = call(
+        &app,
+        "POST",
+        "/api/v1/integrations/catalog/slack",
+        &tech,
+        Some(add(msp)),
+    )
+    .await;
+    assert!(
+        status == StatusCode::FORBIDDEN || status == StatusCode::NOT_FOUND,
+        "{status}"
+    );
+}

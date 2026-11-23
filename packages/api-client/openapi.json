@@ -2764,6 +2764,83 @@
 				}
 			}
 		},
+		"/api/v1/integrations/catalog": {
+			"get": {
+				"tags": ["integrations"],
+				"summary": "The built-in integrations that can be added.",
+				"operationId": "integration_catalog",
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "array",
+									"items": {
+										"$ref": "#/components/schemas/CatalogEntry"
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/integrations/catalog/{key}": {
+			"post": {
+				"tags": ["integrations"],
+				"summary": "Adds a built-in integration to an organization, under its catalog key.",
+				"operationId": "add_built_in_integration",
+				"parameters": [
+					{
+						"name": "key",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string"
+						}
+					}
+				],
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/AddBuiltInRequest"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"201": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/IntegrationDetail"
+								}
+							}
+						}
+					},
+					"404": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					},
+					"409": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
 		"/api/v1/integrations/{id}": {
 			"get": {
 				"tags": ["integrations"],
@@ -7112,6 +7189,17 @@
 					}
 				}
 			},
+			"AddBuiltInRequest": {
+				"type": "object",
+				"required": ["orgId"],
+				"properties": {
+					"orgId": {
+						"type": "string",
+						"format": "uuid"
+					}
+				},
+				"additionalProperties": false
+			},
 			"AffectedStep": {
 				"type": "object",
 				"required": ["stepId", "action", "problem"],
@@ -7651,6 +7739,31 @@
 					"cancelled": {
 						"type": "boolean",
 						"description": "False if the run had already finished."
+					}
+				}
+			},
+			"CatalogEntry": {
+				"type": "object",
+				"description": "A built-in integration as the catalog shows it.",
+				"required": ["key", "name", "summary", "category", "actions"],
+				"properties": {
+					"actions": {
+						"type": "integer",
+						"description": "How many actions it has.",
+						"minimum": 0
+					},
+					"category": {
+						"type": "string"
+					},
+					"key": {
+						"type": "string",
+						"description": "The key it's added under."
+					},
+					"name": {
+						"type": "string"
+					},
+					"summary": {
+						"type": "string"
 					}
 				}
 			},

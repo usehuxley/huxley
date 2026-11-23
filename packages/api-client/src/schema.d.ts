@@ -1056,6 +1056,40 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
+	'/api/v1/integrations/catalog': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** The built-in integrations that can be added. */
+		get: operations['integration_catalog'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/integrations/catalog/{key}': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/** Adds a built-in integration to an organization, under its catalog key. */
+		post: operations['add_built_in_integration'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
 	'/api/v1/integrations/{id}': {
 		parameters: {
 			query?: never;
@@ -2677,6 +2711,10 @@ export interface components {
 			path: string;
 			required: string[];
 		};
+		AddBuiltInRequest: {
+			/** Format: uuid */
+			orgId: string;
+		};
 		AffectedStep: {
 			action: string;
 			problem: string;
@@ -2885,6 +2923,16 @@ export interface components {
 		CancelRunResponse: {
 			/** @description False if the run had already finished. */
 			cancelled: boolean;
+		};
+		/** @description A built-in integration as the catalog shows it. */
+		CatalogEntry: {
+			/** @description How many actions it has. */
+			actions: number;
+			category: string;
+			/** @description The key it's added under. */
+			key: string;
+			name: string;
+			summary: string;
 		};
 		/** @description The first half of a WebAuthn ceremony. */
 		CeremonyView: {
@@ -6608,6 +6656,66 @@ export interface operations {
 				};
 				content: {
 					'application/json': components['schemas']['ActionOption'][];
+				};
+			};
+		};
+	};
+	integration_catalog: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['CatalogEntry'][];
+				};
+			};
+		};
+	};
+	add_built_in_integration: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				key: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['AddBuiltInRequest'];
+			};
+		};
+		responses: {
+			201: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['IntegrationDetail'];
+				};
+			};
+			404: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+			409: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
 				};
 			};
 		};

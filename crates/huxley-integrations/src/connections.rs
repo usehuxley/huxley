@@ -196,7 +196,23 @@ fn check(
         }
         return Ok(());
     };
-    let wanted = fields(&scheme(definition, key)?.kind);
+    let kind = &scheme(definition, key)?.kind;
+    // Placeholders in auth URLs need safe values now, not at the first call.
+    match kind {
+        AuthKind::OAuth2ClientCredentials { token_url, .. } => {
+            fill_auth_url_with(token_url, definition, &input.server_variables)?;
+        }
+        AuthKind::OAuth2AuthorizationCode {
+            authorization_url,
+            token_url,
+            ..
+        } => {
+            fill_auth_url_with(authorization_url, definition, &input.server_variables)?;
+            fill_auth_url_with(token_url, definition, &input.server_variables)?;
+        }
+        _ => {}
+    }
+    let wanted = fields(kind);
     for name in input.settings.keys() {
         if !wanted.settings.contains(&name.as_str()) {
             return Err(invalid(
@@ -550,6 +566,69 @@ pub fn base_url(definition: &Definition, view: &ConnectionView) -> Option<String
     Some(url.trim_end_matches('/').to_owned())
 }
 
+/// Fills `{name}` placeholders in an auth URL (e.g. a tenant in
+/// `https://login.microsoftonline.com/{tenant}/oauth2/v2.0/token`) from the
+/// connection's server variables, or the spec's defaults. Values are
+/// limited to letters, digits, `.`, `-` and `_`, so they can't change where
+/// the URL points.
+pub fn fill_auth_url(
+    url: &str,
+    definition: &Definition,
+    view: &ConnectionView,
+) -> ConnectionResult<String> {
+    let empty = Map::new();
+    let variables = view.server_variables.as_object().unwrap_or(&empty);
+    fill_auth_url_with(url, definition, variables)
+}
+
+fn fill_auth_url_with(
+    url: &str,
+    definition: &Definition,
+    variables: &Map<String, Json>,
+) -> ConnectionResult<String> {
+    let mut out = String::with_capacity(url.len());
+    let mut rest = url;
+    while let Some(start) = rest.find('{') {
+        out.push_str(&rest[..start]);
+        let Some(end) = rest[start..].find('}') else {
+            return Err(invalid("authScheme", "the auth URL has an unclosed {"));
+        };
+        let name = &rest[start + 1..start + end];
+        let value = variables
+            .get(name)
+            .and_then(Json::as_str)
+            .filter(|v| !v.is_empty())
+            .map(str::to_owned)
+            .or_else(|| {
+                definition
+                    .servers
+                    .iter()
+                    .flat_map(|s| &s.variables)
+                    .find(|v| v.name == name && !v.default.is_empty())
+                    .map(|v| v.default.clone())
+            })
+            .ok_or_else(|| {
+                invalid(
+                    &format!("serverVariables.{name}"),
+                    "required (it's in the auth URL)",
+                )
+            })?;
+        if !value
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '-' | '_'))
+        {
+            return Err(invalid(
+                &format!("serverVariables.{name}"),
+                "only letters, digits, dots, hyphens and underscores (it goes in the auth URL)",
+            ));
+        }
+        out.push_str(&value);
+        rest = &rest[start + end + 1..];
+    }
+    out.push_str(rest);
+    Ok(out)
+}
+
 /// Decrypts a connection for calling its integration. Runs as the system:
 /// the caller has already decided the run may use it.
 pub async fn resolve(
@@ -595,6 +674,7 @@ pub async fn resolve(
                 token: secret("token"),
             },
             AuthKind::OAuth2ClientCredentials { token_url, scopes } => {
+                let token_url = &fill_auth_url(token_url, definition, &view)?;
                 let chosen: Vec<String> = view.settings["scopes"].as_array().map_or_else(
                     || scopes.clone(),
                     |a| {
@@ -613,7 +693,7 @@ pub async fn resolve(
             }
             AuthKind::OAuth2AuthorizationCode { token_url, .. } => {
                 ResolvedAuth::OAuth2AuthorizationCode {
-                    token_url: token_url.clone(),
+                    token_url: fill_auth_url(token_url, definition, &view)?,
                     client_id: setting("client_id"),
                     client_secret: secret("client_secret"),
                 }
@@ -631,4 +711,50 @@ pub async fn resolve(
         base_url,
         auth,
     })
+}
+
+#[cfg(test)]
+mod auth_url_tests {
+    use super::*;
+
+    fn graph() -> Definition {
+        let spec = crate::parse(crate::catalog::spec("msgraph").unwrap()).unwrap();
+        crate::import_value(spec).unwrap().definition
+    }
+
+    fn vars(tenant: &str) -> Map<String, Json> {
+        [("tenant".to_owned(), json!(tenant))].into_iter().collect()
+    }
+
+    #[test]
+    fn tenants_fill_the_token_url_safely() {
+        let definition = graph();
+        let url = "https://login.microsoftonline.com/{tenant}/oauth2/v2.0/token";
+        assert_eq!(
+            fill_auth_url_with(url, &definition, &vars("contoso.onmicrosoft.com")).unwrap(),
+            "https://login.microsoftonline.com/contoso.onmicrosoft.com/oauth2/v2.0/token"
+        );
+        assert_eq!(
+            fill_auth_url_with(
+                url,
+                &definition,
+                &vars("0b1c2d3e-aaaa-bbbb-cccc-1234567890ab")
+            )
+            .unwrap(),
+            "https://login.microsoftonline.com/0b1c2d3e-aaaa-bbbb-cccc-1234567890ab/oauth2/v2.0/token"
+        );
+        // Nothing that could move the request elsewhere.
+        for bad in ["evil.com/x", "a?b", "a@evil.com", "a#", "../x", "a b"] {
+            assert!(
+                fill_auth_url_with(url, &definition, &vars(bad)).is_err(),
+                "{bad}"
+            );
+        }
+        // The spec's default is empty: the tenant must be given.
+        assert!(fill_auth_url_with(url, &definition, &Map::new()).is_err());
+        assert_eq!(
+            fill_auth_url_with("https://x/token", &definition, &Map::new()).unwrap(),
+            "https://x/token"
+        );
+    }
 }
