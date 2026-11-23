@@ -1223,6 +1223,26 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
+	'/api/v1/runs/{id}/resume': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/**
+		 * Resumes a failed run from the step that failed: steps that succeeded
+		 *     aren't run again.
+		 */
+		post: operations['resume_run'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
 	'/api/v1/security/mfa-policy': {
 		parameters: {
 			query?: never;
@@ -2522,6 +2542,10 @@ export interface components {
 			type: components['schemas']['VariableType'];
 			/** @description The effective value; always `null` for secrets. */
 			value?: unknown;
+		};
+		ResumeRunResponse: {
+			/** @description False unless the run had failed. */
+			resumed: boolean;
 		};
 		Role: {
 			description: string;
@@ -5304,6 +5328,27 @@ export interface operations {
 				};
 				content: {
 					'application/json': components['schemas']['CancelRunResponse'];
+				};
+			};
+		};
+	};
+	resume_run: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ResumeRunResponse'];
 				};
 			};
 		};

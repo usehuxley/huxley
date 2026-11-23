@@ -59,6 +59,11 @@
 		</div>
 		<div class="flex items-center gap-2" aria-live="polite">
 			<RunStatusBadge status={run.status} />
+			{#if run.status === 'failed' && canCancel}
+				<form method="POST" action="?/resume" use:enhance>
+					<Button type="submit" size="sm">Resume</Button>
+				</form>
+			{/if}
 			{#if active && canCancel && !run.cancelRequested}
 				<form method="POST" action="?/cancel" use:enhance>
 					<Button type="submit" variant="secondary" size="sm">Cancel</Button>

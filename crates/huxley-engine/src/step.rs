@@ -356,7 +356,8 @@ async fn latest(
     sqlx::query_as(
         "SELECT step_key, step_id, step_type, attempt, status, input, output, error, tainted, \
                 input_sealed, output_tainted, output_sealed \
-           FROM step_runs WHERE run_id = $1 AND step_key = $2 ORDER BY attempt DESC LIMIT 1",
+           FROM step_runs WHERE run_id = $1 AND step_key = $2 AND NOT superseded \
+          ORDER BY attempt DESC LIMIT 1",
     )
     .bind(run_id)
     .bind(key)

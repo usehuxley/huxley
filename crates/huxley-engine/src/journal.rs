@@ -96,6 +96,9 @@ impl Record {
 #[derive(Debug, Default)]
 pub struct Journal {
     records: BTreeMap<String, Record>,
+    /// Highest superseded attempt per key (a resumed run): a new record for
+    /// that key continues the numbering.
+    superseded: BTreeMap<String, i32>,
 }
 
 impl Journal {
@@ -103,12 +106,21 @@ impl Journal {
         let rows: Vec<Record> = sqlx::query_as(
             "SELECT DISTINCT ON (step_key) step_key, step_id, step_type, attempt, status, input, \
                     output, error, tainted, input_sealed, output_tainted, output_sealed \
-               FROM step_runs WHERE run_id = $1 ORDER BY step_key, attempt DESC",
+               FROM step_runs WHERE run_id = $1 AND NOT superseded \
+              ORDER BY step_key, attempt DESC",
+        )
+        .bind(run_id)
+        .fetch_all(&mut *conn)
+        .await?;
+        let superseded: Vec<(String, i32)> = sqlx::query_as(
+            "SELECT step_key, max(attempt) FROM step_runs \
+              WHERE run_id = $1 AND superseded GROUP BY step_key",
         )
         .bind(run_id)
         .fetch_all(conn)
         .await?;
         Ok(Self {
+            superseded: superseded.into_iter().collect(),
             records: rows
                 .into_iter()
                 .map(|mut r| {
@@ -129,7 +141,12 @@ impl Journal {
         Some(record)
     }
 
-    pub fn put(&mut self, record: Record) {
+    pub fn put(&mut self, mut record: Record) {
+        if !self.records.contains_key(&record.step_key)
+            && let Some(last) = self.superseded.get(&record.step_key)
+        {
+            record.attempt = last + 1;
+        }
         self.records.insert(record.step_key.clone(), record);
     }
 

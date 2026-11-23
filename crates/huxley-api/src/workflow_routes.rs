@@ -42,6 +42,7 @@ pub fn run_routes() -> Router<AppState> {
         .route("/", get(list_runs))
         .route("/{id}", get(get_run))
         .route("/{id}/cancel", post(cancel_run))
+        .route("/{id}/resume", post(resume_run))
 }
 
 fn db_err(e: impl std::fmt::Display) -> ApiError {
@@ -611,4 +612,47 @@ pub async fn triggers(
         .map_err(map_workflow)?;
     tx.commit().await.map_err(db_err)?;
     Ok(Json(triggers))
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct ResumeRunResponse {
+    /// False unless the run had failed.
+    pub resumed: bool,
+}
+
+/// Resumes a failed run from the step that failed: steps that succeeded
+/// aren't run again.
+#[utoipa::path(post, path = "/api/v1/runs/{id}/resume", operation_id = "resume_run", tag = "workflows",
+    params(("id" = Uuid, Path)), responses((status = 200, body = ResumeRunResponse)))]
+pub async fn resume_run(
+    State(state): State<AppState>,
+    authed: Authed,
+    Path(id): Path<Uuid>,
+) -> ApiResult<Json<ResumeRunResponse>> {
+    let run = load_run(&state, &authed, id).await?;
+    let permission = if run.summary.workflow_version.is_none() {
+        permissions::WORKFLOW_WRITE
+    } else {
+        permissions::WORKFLOW_RUN
+    };
+    authed
+        .require_at(&state, permission, run.summary.org_id)
+        .await?;
+    let mut tx = begin_scoped(&state.db, &authed.scope(&state).await?)
+        .await
+        .map_err(db_err)?;
+    let resumed = state.engine.resume_run(&mut tx, id).await.map_err(db_err)?;
+    if resumed {
+        huxley_db::audit::record(
+            &mut tx,
+            &authed.user.ctx,
+            huxley_db::audit::AuditRecord::new("workflow.run_resumed")
+                .org(run.summary.org_id)
+                .target("run", id),
+        )
+        .await
+        .map_err(db_err)?;
+    }
+    tx.commit().await.map_err(db_err)?;
+    Ok(Json(ResumeRunResponse { resumed }))
 }

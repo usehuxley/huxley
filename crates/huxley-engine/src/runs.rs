@@ -124,7 +124,8 @@ pub async fn get(conn: &mut PgConnection, id: Uuid) -> sqlx::Result<Option<RunDe
                    output, error, started_at, finished_at, \
                    (SELECT min(started_at) FROM step_runs f \
                      WHERE f.run_id = s.run_id AND f.step_key = s.step_key) AS first_started \
-              FROM step_runs s WHERE run_id = $1 ORDER BY step_key, attempt DESC) latest \
+              FROM step_runs s WHERE run_id = $1 AND NOT superseded \
+             ORDER BY step_key, attempt DESC) latest \
           ORDER BY first_started, step_key",
     )
     .bind(id)

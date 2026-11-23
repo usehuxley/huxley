@@ -24,6 +24,7 @@
 		<h1 class="text-2xl font-semibold text-fg">Workflows</h1>
 		<p class="mt-1 text-sm text-fg-muted">
 			Automations that run on a schedule, from a webhook, or when someone starts them.
+			<a href={resolve('/(app)/runs')} class="text-accent hover:underline">All runs</a>
 		</p>
 	</header>
 
