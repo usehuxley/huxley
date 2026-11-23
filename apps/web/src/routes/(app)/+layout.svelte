@@ -15,6 +15,7 @@
 		Workflow
 	} from '@lucide/svelte';
 	import { AppShell, Button, CommandPalette, type Command, type NavItem } from '@usehuxley/ui';
+	import OrgSwitcher from '#lib/orgs/OrgSwitcher.svelte';
 	import { visibleSections } from '#lib/permissions.ts';
 	import type { LayoutProps } from './$types';
 
@@ -72,6 +73,7 @@
 	onSearch={() => (paletteOpen = true)}
 >
 	{#snippet topbar()}
+		<OrgSwitcher current={data.currentOrg} />
 		<a
 			href={resolve('/(app)/notifications')}
 			class="relative rounded-control p-2 text-fg-muted hover:bg-surface-sunken hover:text-fg"

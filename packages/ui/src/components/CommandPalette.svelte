@@ -17,23 +17,35 @@
 		commands: Command[];
 		open?: boolean;
 		placeholder?: string;
+		/** Read by screen readers. */
+		title?: string;
+		/** Toggle with Cmd/Ctrl+K. Only one palette on a page should. */
+		hotkey?: boolean;
+		/** Most results shown at once; type to narrow. */
+		maxResults?: number;
 	};
 
 	let {
 		commands,
 		open = $bindable(false),
-		placeholder = 'Search or run a command…'
+		placeholder = 'Search or run a command…',
+		title = 'Command palette',
+		hotkey = true,
+		maxResults = 50
 	}: Props = $props();
+	const uid = $props.id();
 
 	let query = $state('');
 	let active = $state(0);
 
 	let results = $derived.by(() => {
 		const q = query.trim().toLowerCase();
-		if (!q) return commands;
-		return commands.filter((c) =>
-			[c.label, c.group ?? '', ...(c.keywords ?? [])].some((s) => s.toLowerCase().includes(q))
-		);
+		const matches = q
+			? commands.filter((c) =>
+					[c.label, c.group ?? '', ...(c.keywords ?? [])].some((s) => s.toLowerCase().includes(q))
+				)
+			: commands;
+		return matches.slice(0, maxResults);
 	});
 
 	$effect(() => {
@@ -43,7 +55,7 @@
 	});
 
 	function onGlobalKey(event: KeyboardEvent) {
-		if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
+		if (hotkey && (event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
 			event.preventDefault();
 			open = !open;
 		}
@@ -77,7 +89,7 @@
 		<Dialog.Content
 			class="fixed top-[15vh] left-1/2 z-50 w-[calc(100%-2rem)] max-w-xl -translate-x-1/2 overflow-hidden rounded-card border border-border bg-surface-raised shadow-overlay"
 		>
-			<Dialog.Title class="sr-only">Command palette</Dialog.Title>
+			<Dialog.Title class="sr-only">{title}</Dialog.Title>
 			<div class="flex items-center gap-2 border-b border-border px-4">
 				<Search size={18} class="text-fg-subtle" />
 				<input
@@ -87,14 +99,15 @@
 					class="h-12 flex-1 bg-transparent text-sm text-fg outline-none placeholder:text-fg-subtle"
 					role="combobox"
 					aria-expanded="true"
-					aria-controls="hx-command-list"
-					aria-activedescendant={results[active] ? `hx-cmd-${results[active].id}` : undefined}
+					aria-label={title}
+					aria-controls="{uid}-list"
+					aria-activedescendant={results[active] ? `${uid}-${results[active].id}` : undefined}
 				/>
 			</div>
-			<ul id="hx-command-list" role="listbox" class="max-h-80 overflow-y-auto p-2">
+			<ul id="{uid}-list" role="listbox" class="max-h-80 overflow-y-auto p-2">
 				{#each results as command, i (command.id)}
 					<li
-						id="hx-cmd-{command.id}"
+						id="{uid}-{command.id}"
 						role="option"
 						aria-selected={i === active}
 						class="flex cursor-pointer items-center justify-between rounded-control px-3 py-2 text-sm {i ===
