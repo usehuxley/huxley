@@ -30,3 +30,4 @@ Decisions that shape Huxley. Add a new ADR by copying `0000-template.md` with th
 | [024](0024-callbacks-hand-their-url-over-in-the-step.md) | A callback step hands its URL over itself | Accepted |
 | [025](0025-runner-identity.md) | Runners prove who they are with client certificates from Huxley or from you | Accepted |
 | [026](0026-kubernetes-jobs-sandbox.md) | On Kubernetes, scripts run as confined Jobs, with egress through a proxy enforced by NetworkPolicy | Accepted |
+| [027](0027-per-organization-connections.md) | One partner connection serves every client through organization variables | Accepted |

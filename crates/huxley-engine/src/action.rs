@@ -458,7 +458,13 @@ impl Engine {
         let view = connections::get(&mut tx, target.connection_id)
             .await
             .map_err(|e| crate::EngineError::Document(e.to_string()))?;
-        let resolved = match connections::resolve(&mut tx, &self.crypto, target.connection_id).await
+        let resolved = match connections::resolve_for(
+            &mut tx,
+            &self.crypto,
+            target.connection_id,
+            Some(org_id),
+        )
+        .await
         {
             Ok(resolved) => resolved,
             Err(e) => {
@@ -482,7 +488,10 @@ impl Engine {
         let token = match &resolved.auth {
             ResolvedAuth::OAuth2ClientCredentials { .. }
             | ResolvedAuth::OAuth2AuthorizationCode { .. } => {
-                match self.connection_token(target.connection_id).await {
+                match self
+                    .connection_token_for(target.connection_id, Some(org_id))
+                    .await
+                {
                     Ok(token) => token,
                     Err(e) => return Ok(Err(crate::oauth::token_error(&e))),
                 }
