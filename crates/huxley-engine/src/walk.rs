@@ -316,6 +316,10 @@ impl<'a> Walker<'a> {
                 self.external(step, &value, frame)
             }
             Step::WaitForCallback(s) => self.callback_step(step, s, frame),
+            Step::Script(s) => {
+                let value = json!({ "script": s.script, "with": s.inputs });
+                self.external(step, &value, frame)
+            }
             Step::Approval(s) => {
                 // Validation checked `expires`; fall back to the default.
                 let expires = huxley_hwf::duration::parse(s.expires.as_deref().unwrap_or("7d"))

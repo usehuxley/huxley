@@ -377,6 +377,9 @@ fn one(c: &mut Checker, path: &str, step: &Step) {
         },
         Step::IntegrationAction(s) => integration_action(c, path, s),
         Step::WaitForCallback(s) => wait_for_callback(c, path, s),
+        Step::Script(s) if !is_valid_key(&s.script) => {
+            c.error(format!("{path}.script"), "a script key (not an expression)");
+        }
         Step::Approval(s) => {
             c.duration(&format!("{path}.expires"), s.expires.as_deref());
             if s.title.trim().is_empty() {

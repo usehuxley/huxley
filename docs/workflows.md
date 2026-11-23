@@ -65,6 +65,7 @@ spec:
 | `set_var` | Sets run variables, read as `run.vars.<name>`. |
 | `approval` | Pauses until one of the `approvers` (`user:<id>`, `team:<id>`, `role:<key>` at the run's organization) approves or rejects under **Approvals**. They're notified with a link. The first decision counts. Output: `{decision: approved \| rejected, by: {id, name}, comment, decided_at}`. `expires` (default `7d`) fails it with `kind: timeout`. |
 | `wait_for_callback` | Pauses until another system calls a single-use URL, then continues with the request (`method`, `query`, `content_type`, `body`) as output. `send` tells the other system the URL (`{{ callback.url }}`) with an integration action (`action`, `with`) or an HTTP request (`request`). `expires` (default `24h`) is how long it waits before failing with `kind: timeout`. Needs `auth.public_url`. |
+| `script` | Runs the library script `script` (this organization's, or the nearest one above with that key) with the parameters in `with`, which are checked against the script's parameter schema. A runner picks it up and runs it in a sandbox. Output: what the script returns, which is PowerShell's pipeline output or Python's `result` variable. `timeout` (default `15m`) includes waiting for a runner. A failed script fails the step with `kind: script`, its `exit_code`, and the end of its `logs`. See [runners](runners.md). |
 | `wait` | Pauses for a `duration` or `until` a time. |
 | `if`, `switch` | Run one block depending on a condition or a value. |
 | `foreach` | Runs its steps for each item (`as` names the item; `concurrency` runs several at once). Output: the last step's output for each item. |
@@ -90,7 +91,7 @@ A run started by hand acts as whoever started it. Runs started by a schedule, we
 
 **Scripts** is a library of PowerShell 7 and Python 3 scripts. Each save is a new, numbered version, and earlier versions stay readable. Every script has a JSON Schema of its parameters, which a step running it will ask for. A library at an organization is shared with the organizations below it.
 
-Running scripts is next. The `script` step will send them to sandboxed runners: rootless Podman containers by default, or Kubernetes Jobs (design doc §6.9). It needs `script:read` to view scripts and `script:manage` to change them.
+The `script` step runs them on [runners](runners.md), each script in a fresh rootless Podman container (design doc §6.9). A PowerShell script gets its parameters as `param(...)` arguments. A Python script gets them as the `inputs` dict and sets `result`. Viewing scripts needs `script:read`, and changing them needs `script:manage`.
 
 ## Permissions
 

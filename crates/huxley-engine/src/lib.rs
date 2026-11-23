@@ -21,6 +21,7 @@ mod payload;
 pub mod queue;
 mod run;
 pub mod runs;
+pub mod script;
 mod step;
 mod walk;
 mod worker;

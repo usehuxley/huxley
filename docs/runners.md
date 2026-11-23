@@ -2,7 +2,7 @@
 
 Runners execute library scripts in sandboxes, separate from the API and workers (design doc §6.9). They connect to Huxley's **runner gateway**, a gRPC listener on its own port, with a client certificate (ADR-025).
 
-Running scripts in rootless Podman containers (or Kubernetes Jobs), and the `script` step, come next. This page covers enrolling and managing runners.
+A runner asks the gateway for work, runs each script in a fresh **rootless Podman** container, and reports the result. The `script` workflow step queues that work (see [workflows](workflows.md#steps)). Kubernetes Jobs as a sandbox, credential injection and live log streaming come next.
 
 ## Set up the gateway
 
@@ -24,6 +24,25 @@ The gateway's server certificate comes from Huxley's runner CA, which runners re
    ```
 
 `enroll` makes the runner's own key and sends only a certificate request. It stores the key, the certificate (valid 7 days), the CA and the gateway address in `--state` (default `/var/lib/huxley-runner`), readable only by the runner's user. `run` sends a heartbeat every 30 seconds and renews the certificate when less than two days are left. Each renewal replaces the previous certificate.
+
+## The sandbox
+
+Each script runs in its own container, removed afterwards, with:
+
+- **no network** (`--network=none`)
+- a **read-only root filesystem**, plus a 64 MB `/tmp`
+- **no capabilities**, `no-new-privileges`, and the unprivileged user `65534`
+- limits: **512 MB memory and 1 CPU** by default (`--memory`, `--cpus`), and 256 processes
+- the step's **timeout**, after which the container is killed
+
+The runner needs Podman (rootless) and the images, which it never pulls by itself:
+
+```sh
+podman pull mcr.microsoft.com/powershell:7.5-alpine-3.20
+podman pull docker.io/library/python:3.13-alpine
+```
+
+It only offers the languages whose images are present. Choose other images with `--pwsh-image` and `--python-image`, for example ones with your modules preinstalled. `--concurrency` (default 2) sets how many scripts run at once. Logs, meaning stdout and stderr up to 64 KB, are kept with the task, and a failed step's error includes the last 4 KB of them.
 
 ## Use your own CA
 

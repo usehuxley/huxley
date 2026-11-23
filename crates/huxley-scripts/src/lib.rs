@@ -400,6 +400,31 @@ pub async fn find(
     .await?)
 }
 
+/// Checks a script step's inputs against the script's parameter schema.
+pub fn check_inputs(parameters: &Json, inputs: &Json) -> Result<(), String> {
+    if parameters.as_object().is_none_or(serde_json::Map::is_empty) {
+        return Ok(());
+    }
+    let validator = jsonschema::validator_for(parameters)
+        .map_err(|e| format!("the script's parameters aren't a valid schema: {e}"))?;
+    let problems: Vec<String> = validator
+        .iter_errors(inputs)
+        .map(|e| {
+            let at = e.instance_path().to_string();
+            if at.is_empty() {
+                e.to_string()
+            } else {
+                format!("{at}: {e}")
+            }
+        })
+        .collect();
+    if problems.is_empty() {
+        Ok(())
+    } else {
+        Err(problems.join("; "))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -415,6 +440,11 @@ mod tests {
         );
         assert!(parameters(Some(&json!({ "type": "string" }))).is_err());
         assert!(source("   ").is_err());
+        let schema = json!({ "type": "object", "required": ["upn"],
+                             "properties": { "upn": { "type": "string" } } });
+        assert!(check_inputs(&schema, &json!({ "upn": "a@b" })).is_ok());
+        assert!(check_inputs(&schema, &json!({})).is_err());
+        assert!(check_inputs(&json!({}), &json!({ "any": 1 })).is_ok());
         assert!(source(&"x".repeat(MAX_SOURCE_BYTES + 1)).is_err());
     }
 }

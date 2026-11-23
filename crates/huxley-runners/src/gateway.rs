@@ -14,7 +14,10 @@ use tonic::transport::{Certificate, Identity, Server, ServerTlsConfig};
 use tonic::{Request, Response, Status};
 
 use crate::proto::runner_server::{Runner, RunnerServer};
-use crate::proto::{HeartbeatRequest, HeartbeatResponse, RenewRequest, RenewResponse};
+use crate::proto::{
+    HeartbeatRequest, HeartbeatResponse, NextRequest, NextResponse, RenewRequest, RenewResponse,
+    ReportRequest, ReportResponse, Task,
+};
 use crate::registry::{self, RegistryError, RunnerSource, RunnerView};
 
 /// The gateway's TLS material.
@@ -141,6 +144,67 @@ impl Runner for Gateway {
             certificate_pem: issued.cert_pem,
             expires_at: issued.expires_at.unix_timestamp(),
         }))
+    }
+
+    async fn next(&self, request: Request<NextRequest>) -> Result<Response<NextResponse>, Status> {
+        let runner = self.runner(&request).await?;
+        let languages: Vec<huxley_scripts::Language> = request
+            .into_inner()
+            .languages
+            .iter()
+            .filter_map(|l| serde_json::from_value(serde_json::Value::String(l.clone())).ok())
+            .collect();
+        if languages.is_empty() {
+            return Ok(Response::new(NextResponse { task: None }));
+        }
+        let claimed = huxley_engine::script::claim(&self.db, &self.crypto, runner.id, &languages)
+            .await
+            .map_err(|e| Status::internal(e.to_string()))?;
+        Ok(Response::new(NextResponse {
+            task: claimed.map(|t| Task {
+                id: t.id.to_string(),
+                language: serde_json::to_value(t.language)
+                    .ok()
+                    .and_then(|v| v.as_str().map(str::to_owned))
+                    .unwrap_or_default(),
+                source: t.source,
+                inputs_json: t.inputs.to_string(),
+                timeout_secs: t.timeout_secs,
+            }),
+        }))
+    }
+
+    async fn report(
+        &self,
+        request: Request<ReportRequest>,
+    ) -> Result<Response<ReportResponse>, Status> {
+        let runner = self.runner(&request).await?;
+        let body = request.into_inner();
+        let id: uuid::Uuid = body
+            .task_id
+            .parse()
+            .map_err(|_| Status::invalid_argument("task_id isn't a UUID"))?;
+        let output = match body.output_json.as_deref() {
+            Some(text) => Some(
+                serde_json::from_str(text)
+                    .map_err(|_| Status::invalid_argument("output_json isn't JSON"))?,
+            ),
+            None => None,
+        };
+        let report = huxley_engine::script::Report {
+            succeeded: body.succeeded,
+            output,
+            error: body.error,
+            exit_code: body.exit_code,
+            logs: body.logs,
+        };
+        match huxley_engine::script::report(&self.db, runner.id, id, &report).await {
+            Ok(()) => Ok(Response::new(ReportResponse {})),
+            Err(huxley_engine::script::ReportError::NotYours) => {
+                Err(Status::not_found("no such task is running on this runner"))
+            }
+            Err(e) => Err(Status::internal(e.to_string())),
+        }
     }
 }
 
