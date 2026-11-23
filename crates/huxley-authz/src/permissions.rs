@@ -44,6 +44,7 @@ permissions! {
     USER_CREATE = "user:create", Instance, "Create users";
     USER_UPDATE = "user:update", Instance, "Edit users and enable or disable them";
     ROLE_READ = "role:read", Instance, "View roles";
+    ROLE_MANAGE = "role:manage", Instance, "Create, edit, and delete custom roles";
     ROLE_ASSIGN = "role_assignment:manage", Org, "Grant and remove roles at an organization";
     AUDIT_READ = "audit:read", Instance, "View the audit log";
     MODULES_MANAGE = "platform:modules:manage", Instance, "Turn feature modules on or off";
@@ -56,6 +57,11 @@ permissions! {
 
 /// Wildcard granting every permission.
 pub const WILDCARD: &str = "*";
+
+/// The registry entry for a permission key.
+pub fn get(key: &str) -> Option<&'static Permission> {
+    ALL.iter().find(|p| p.key == key)
+}
 
 /// Whether a permission key is registered (or the wildcard).
 pub fn is_known(key: &str) -> bool {

@@ -171,4 +171,49 @@
 			</form>
 		{/if}
 	</Card>
+
+	{#if data.effective}
+		<Card
+			title="Effective permissions"
+			description="What this person can do at an organization, and which roles give it."
+		>
+			<form method="GET" class="mb-4 flex items-end gap-2" data-sveltekit-keepfocus>
+				<Field label="At organization" for="effectiveOrg">
+					<Select
+						id="effectiveOrg"
+						name="org"
+						value={data.effectiveOrg ?? data.orgs.find((o) => o.parentId === null)?.id ?? ''}
+						options={data.orgs.map((o) => ({
+							value: o.id,
+							label: `${'— '.repeat(o.depth - 1)}${o.name}`
+						}))}
+					/>
+				</Field>
+				<Button type="submit">Show</Button>
+			</form>
+			<ul class="flex flex-col divide-y divide-border">
+				{#each data.effective as p (p.key)}
+					<li
+						class="flex items-start justify-between gap-4 py-2 first:pt-0 last:pb-0"
+						data-testid="perm-{p.key}"
+					>
+						<div class="min-w-0">
+							<p class="text-sm {p.allowed ? 'text-fg' : 'text-fg-subtle'}">{p.description}</p>
+							{#if p.allowed}
+								<p class="mt-0.5 text-xs text-fg-muted">
+									{p.via
+										.map(
+											(v) =>
+												`${v.roleName} at ${v.orgName}${v.inherit ? ' (and below)' : ''}${v.teamName ? ` via team ${v.teamName}` : ''}`
+										)
+										.join(' · ')}
+								</p>
+							{/if}
+						</div>
+						<Badge tone={p.allowed ? 'success' : 'neutral'}>{p.allowed ? 'Allowed' : 'No'}</Badge>
+					</li>
+				{/each}
+			</ul>
+		</Card>
+	{/if}
 </div>

@@ -1593,3 +1593,99 @@ async fn uploads_over_the_limit_are_refused() {
     .await;
     assert_eq!(status, StatusCode::PAYLOAD_TOO_LARGE, "{err}");
 }
+
+#[tokio::test]
+async fn custom_roles_and_the_explainer_over_http() {
+    let Some(pools) = pools().await else { return };
+    let root = ensure_root(&pools).await;
+    let app = app(&pools);
+    let owner = login(&app, &user(&pools, true).await).await;
+    let member = login(&app, &user(&pools, false).await).await;
+    let (_, me) = call(&app, "GET", "/api/v1/auth/me", Some(&member), None).await;
+    let member_id = me["id"].as_str().unwrap().to_owned();
+
+    let body = json!({ "name": unique("Auditor"), "permissions": ["audit:read", "org:read"] });
+    let (status, _) = call(
+        &app,
+        "POST",
+        "/api/v1/roles",
+        Some(&member),
+        Some(body.clone()),
+    )
+    .await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+    let (status, role) = call(&app, "POST", "/api/v1/roles", Some(&owner), Some(body)).await;
+    assert_eq!(status, StatusCode::CREATED, "{role}");
+    assert_eq!(role["isSystem"], false);
+    let role_id = role["id"].as_str().unwrap().to_owned();
+    let grant = json!({ "userId": member_id, "roleId": role_id, "orgId": root });
+    let (status, _) = call(
+        &app,
+        "POST",
+        "/api/v1/role-assignments",
+        Some(&owner),
+        Some(grant),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED);
+    let (status, _) = call(&app, "GET", "/api/v1/audit", Some(&member), None).await;
+    assert_eq!(status, StatusCode::OK);
+
+    // Why can they read the audit log? The explainer says.
+    let uri = format!("/api/v1/users/{member_id}/effective-permissions");
+    let (status, explained) = call(&app, "GET", &uri, Some(&owner), None).await;
+    assert_eq!(status, StatusCode::OK);
+    let audit = explained
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|p| p["key"] == "audit:read")
+        .unwrap();
+    assert_eq!(audit["allowed"], true);
+    assert_eq!(audit["via"][0]["roleName"], role["name"]);
+
+    // Editing the role changes their access at the next request.
+    let narrower = json!({ "name": role["name"], "permissions": ["org:read"] });
+    let (status, _) = call(
+        &app,
+        "PUT",
+        &format!("/api/v1/roles/{role_id}"),
+        Some(&owner),
+        Some(narrower),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    let (status, _) = call(&app, "GET", "/api/v1/audit", Some(&member), None).await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+
+    // Still assigned: can't delete. System roles: can't edit.
+    let (status, _) = call(
+        &app,
+        "DELETE",
+        &format!("/api/v1/roles/{role_id}"),
+        Some(&owner),
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::CONFLICT);
+    let (_, roles) = call(&app, "GET", "/api/v1/roles", Some(&owner), None).await;
+    let tech = roles
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|r| r["key"] == "technician")
+        .unwrap()["id"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    let edit = json!({ "name": "Tech", "permissions": ["org:read"] });
+    let (status, _) = call(
+        &app,
+        "PUT",
+        &format!("/api/v1/roles/{tech}"),
+        Some(&owner),
+        Some(edit),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CONFLICT);
+}

@@ -3,6 +3,7 @@ export const SETTINGS_SECTIONS = [
 	{ key: 'organizations', label: 'Organizations', permission: 'org:read' },
 	{ key: 'users', label: 'Users', permission: 'user:read' },
 	{ key: 'teams', label: 'Teams', permission: 'user:read' },
+	{ key: 'roles', label: 'Roles', permission: 'role:read' },
 	{ key: 'service-accounts', label: 'Service accounts', permission: 'service_account:manage' },
 	{ key: 'audit', label: 'Audit log', permission: 'audit:read' },
 	{ key: 'fields', label: 'Fields & tags', permission: 'custom_field:manage' },

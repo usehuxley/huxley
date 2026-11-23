@@ -1003,8 +1003,33 @@ export interface paths {
 		/** Roles that can be assigned. */
 		get: operations['list_roles'];
 		put?: never;
-		post?: never;
+		/**
+		 * Creates a custom role. It may only contain permissions you hold
+		 *     instance-wide; only owners can create a role with `*`.
+		 */
+		post: operations['create_role'];
 		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/roles/{id}': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		/**
+		 * Replaces a custom role's name, description, and permissions. Holders get
+		 *     the change at their next request.
+		 */
+		put: operations['update_role'];
+		post?: never;
+		/** Deletes a custom role that nobody holds. */
+		delete: operations['delete_role'];
 		options?: never;
 		head?: never;
 		patch?: never;
@@ -1353,6 +1378,26 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
+	'/api/v1/users/{id}/effective-permissions': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/**
+		 * What a user may do at an organization, and why: each permission with the
+		 *     grants (role, org, team) that give it.
+		 */
+		get: operations['effective_permissions'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
 	'/api/v1/users/{id}/mfa': {
 		parameters: {
 			query?: never;
@@ -1693,6 +1738,17 @@ export interface components {
 			/** @description A label to tell passkeys apart, e.g. "Work laptop". */
 			name: string;
 		};
+		/** @description One grant that gives a permission. */
+		GrantSource: {
+			/** @description The grant reaches sub-organizations. */
+			inherit: boolean;
+			/** Format: uuid */
+			orgId: string;
+			orgName: string;
+			roleName: string;
+			/** @description Set when the grant comes through a team. */
+			teamName?: string | null;
+		};
 		HealthStatus: {
 			/** @description Always `ok` when the response is 200. */
 			status: string;
@@ -1909,6 +1965,14 @@ export interface components {
 			key: string;
 			scope: components['schemas']['PermissionScope'];
 		};
+		PermissionExplanation: {
+			allowed: boolean;
+			description: string;
+			key: string;
+			scope: components['schemas']['PermissionScope'];
+			/** @description Grants that give it (empty when not allowed). */
+			via: components['schemas']['GrantSource'][];
+		};
 		/**
 		 * @description Where a permission is evaluated.
 		 * @enum {string}
@@ -2022,6 +2086,17 @@ export interface components {
 			permissions: string[];
 			/** @description Holders must have a second factor. */
 			requireMfa: boolean;
+		};
+		RoleInput: {
+			description?: string;
+			/**
+			 * @description Lowercase letters, digits, underscores. Derived from the name if omitted
+			 *     (on create; it never changes afterwards).
+			 */
+			key?: string | null;
+			name: string;
+			/** @description Permission keys, or `["*"]` (owners only). */
+			permissions: string[];
 		};
 		/** @description A claim value → role at an org. */
 		RoleMapping: {
@@ -4143,6 +4218,102 @@ export interface operations {
 			};
 		};
 	};
+	create_role: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['RoleInput'];
+			};
+		};
+		responses: {
+			201: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['Role'];
+				};
+			};
+			/** @description Missing role:manage, or a permission you don't hold */
+			403: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	update_role: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				/** @description Role id */
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['RoleInput'];
+			};
+		};
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['Role'];
+				};
+			};
+			/** @description System role */
+			409: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	delete_role: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				/** @description Role id */
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			204: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content?: never;
+			};
+			/** @description System role, or still assigned */
+			409: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
 	get_policy: {
 		parameters: {
 			query?: never;
@@ -5131,6 +5302,31 @@ export interface operations {
 				};
 				content: {
 					'application/json': components['schemas']['Assignment'][];
+				};
+			};
+		};
+	};
+	effective_permissions: {
+		parameters: {
+			query?: {
+				/** @description The organization to evaluate at. Defaults to the root. */
+				orgId?: string | null;
+			};
+			header?: never;
+			path: {
+				/** @description User id */
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['PermissionExplanation'][];
 				};
 			};
 		};

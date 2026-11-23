@@ -26,7 +26,15 @@ pub fn routes() -> Router<AppState> {
         .route("/users/{id}/mfa", delete(reset_mfa))
         .route("/role-assignments", post(create_assignment))
         .route("/role-assignments/{id}", delete(delete_assignment))
-        .route("/roles", get(list_roles))
+        .route("/roles", get(list_roles).post(create_role))
+        .route(
+            "/roles/{id}",
+            axum::routing::put(update_role).delete(delete_role),
+        )
+        .route(
+            "/users/{id}/effective-permissions",
+            get(effective_permissions),
+        )
         .route("/permissions", get(list_permissions))
 }
 
@@ -428,4 +436,109 @@ pub async fn list_roles(
 #[utoipa::path(get, path = "/api/v1/permissions", tag = "users", responses((status = 200, body = Vec<Permission>)))]
 pub async fn list_permissions(_authed: Authed) -> Json<&'static [Permission]> {
     Json(permissions::ALL)
+}
+
+/// Creates a custom role. It may only contain permissions you hold
+/// instance-wide; only owners can create a role with `*`.
+#[utoipa::path(post, path = "/api/v1/roles", tag = "users", request_body = huxley_authz::roles::RoleInput,
+    responses((status = 201, body = Role), (status = 403, description = "Missing role:manage, or a permission you don't hold",
+        body = ApiError, content_type = "application/problem+json")))]
+pub async fn create_role(
+    State(state): State<AppState>,
+    authed: Authed,
+    Json(body): Json<huxley_authz::roles::RoleInput>,
+) -> ApiResult<(StatusCode, Json<Role>)> {
+    authed.require_instance(permissions::ROLE_MANAGE)?;
+    let mut tx = begin_scoped(&state.db, &OrgScope::System)
+        .await
+        .map_err(db_err)?;
+    let role = huxley_authz::roles::create(&mut tx, &authed.user.ctx, &authed.principal, &body)
+        .await
+        .map_err(map_authz)?;
+    tx.commit().await.map_err(db_err)?;
+    Ok((StatusCode::CREATED, Json(role)))
+}
+
+/// Replaces a custom role's name, description, and permissions. Holders get
+/// the change at their next request.
+#[utoipa::path(put, path = "/api/v1/roles/{id}", tag = "users",
+    params(("id" = Uuid, Path, description = "Role id")), request_body = huxley_authz::roles::RoleInput,
+    responses((status = 200, body = Role), (status = 409, description = "System role", body = ApiError, content_type = "application/problem+json")))]
+pub async fn update_role(
+    State(state): State<AppState>,
+    authed: Authed,
+    Path(id): Path<Uuid>,
+    Json(body): Json<huxley_authz::roles::RoleInput>,
+) -> ApiResult<Json<Role>> {
+    authed.require_instance(permissions::ROLE_MANAGE)?;
+    let mut tx = begin_scoped(&state.db, &OrgScope::System)
+        .await
+        .map_err(db_err)?;
+    let role = huxley_authz::roles::update(&mut tx, &authed.user.ctx, &authed.principal, id, &body)
+        .await
+        .map_err(map_authz)?;
+    tx.commit().await.map_err(db_err)?;
+    Ok(Json(role))
+}
+
+/// Deletes a custom role that nobody holds.
+#[utoipa::path(delete, path = "/api/v1/roles/{id}", tag = "users",
+    params(("id" = Uuid, Path, description = "Role id")),
+    responses((status = 204), (status = 409, description = "System role, or still assigned", body = ApiError, content_type = "application/problem+json")))]
+pub async fn delete_role(
+    State(state): State<AppState>,
+    authed: Authed,
+    Path(id): Path<Uuid>,
+) -> ApiResult<StatusCode> {
+    authed.require_instance(permissions::ROLE_MANAGE)?;
+    let mut tx = begin_scoped(&state.db, &OrgScope::System)
+        .await
+        .map_err(db_err)?;
+    huxley_authz::roles::delete(&mut tx, &authed.user.ctx, id)
+        .await
+        .map_err(map_authz)?;
+    tx.commit().await.map_err(db_err)?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+#[derive(Debug, Deserialize, IntoParams)]
+#[serde(rename_all = "camelCase")]
+pub struct EffectiveParams {
+    /// The organization to evaluate at. Defaults to the root.
+    pub org_id: Option<Uuid>,
+}
+
+/// What a user may do at an organization, and why: each permission with the
+/// grants (role, org, team) that give it.
+#[utoipa::path(get, path = "/api/v1/users/{id}/effective-permissions", tag = "users",
+    params(("id" = Uuid, Path, description = "User id"), EffectiveParams),
+    responses((status = 200, body = Vec<huxley_authz::explain::PermissionExplanation>)))]
+pub async fn effective_permissions(
+    State(state): State<AppState>,
+    authed: Authed,
+    Path(id): Path<Uuid>,
+    Query(params): Query<EffectiveParams>,
+) -> ApiResult<Json<Vec<huxley_authz::explain::PermissionExplanation>>> {
+    authed.require_instance(permissions::USER_READ)?;
+    authed.require_instance(permissions::ROLE_READ)?;
+    let mut tx = begin_scoped(&state.db, &OrgScope::System)
+        .await
+        .map_err(db_err)?;
+    huxley_auth::find_user(&mut tx, id)
+        .await
+        .map_err(map_auth)?
+        .ok_or_else(ApiError::not_found)?;
+    let org_id = match params.org_id {
+        Some(org) => org,
+        None => huxley_orgs::root(&mut tx)
+            .await
+            .map_err(db_err)?
+            .map(|r| r.id)
+            .ok_or_else(ApiError::not_found)?,
+    };
+    let list = huxley_authz::explain::explain(&mut tx, id, org_id)
+        .await
+        .map_err(map_authz)?;
+    tx.commit().await.map_err(db_err)?;
+    Ok(Json(list))
 }

@@ -2370,6 +2370,122 @@
 						}
 					}
 				}
+			},
+			"post": {
+				"tags": ["users"],
+				"summary": "Creates a custom role. It may only contain permissions you hold\ninstance-wide; only owners can create a role with `*`.",
+				"operationId": "create_role",
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/RoleInput"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"201": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Role"
+								}
+							}
+						}
+					},
+					"403": {
+						"description": "Missing role:manage, or a permission you don't hold",
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/roles/{id}": {
+			"put": {
+				"tags": ["users"],
+				"summary": "Replaces a custom role's name, description, and permissions. Holders get\nthe change at their next request.",
+				"operationId": "update_role",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"description": "Role id",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/RoleInput"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Role"
+								}
+							}
+						}
+					},
+					"409": {
+						"description": "System role",
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			},
+			"delete": {
+				"tags": ["users"],
+				"summary": "Deletes a custom role that nobody holds.",
+				"operationId": "delete_role",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"description": "Role id",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"responses": {
+					"204": {},
+					"409": {
+						"description": "System role, or still assigned",
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
 			}
 		},
 		"/api/v1/security/mfa-policy": {
@@ -3625,6 +3741,49 @@
 				}
 			}
 		},
+		"/api/v1/users/{id}/effective-permissions": {
+			"get": {
+				"tags": ["users"],
+				"summary": "What a user may do at an organization, and why: each permission with the\ngrants (role, org, team) that give it.",
+				"operationId": "effective_permissions",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"description": "User id",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					},
+					{
+						"name": "orgId",
+						"in": "query",
+						"description": "The organization to evaluate at. Defaults to the root.",
+						"required": false,
+						"schema": {
+							"type": ["string", "null"],
+							"format": "uuid"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "array",
+									"items": {
+										"$ref": "#/components/schemas/PermissionExplanation"
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		},
 		"/api/v1/users/{id}/mfa": {
 			"delete": {
 				"tags": ["users"],
@@ -4363,6 +4522,31 @@
 					}
 				}
 			},
+			"GrantSource": {
+				"type": "object",
+				"description": "One grant that gives a permission.",
+				"required": ["roleName", "orgId", "orgName", "inherit"],
+				"properties": {
+					"inherit": {
+						"type": "boolean",
+						"description": "The grant reaches sub-organizations."
+					},
+					"orgId": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"orgName": {
+						"type": "string"
+					},
+					"roleName": {
+						"type": "string"
+					},
+					"teamName": {
+						"type": ["string", "null"],
+						"description": "Set when the grant comes through a team."
+					}
+				}
+			},
 			"HealthStatus": {
 				"type": "object",
 				"required": ["status", "version"],
@@ -4850,6 +5034,31 @@
 					}
 				}
 			},
+			"PermissionExplanation": {
+				"type": "object",
+				"required": ["key", "description", "scope", "allowed", "via"],
+				"properties": {
+					"allowed": {
+						"type": "boolean"
+					},
+					"description": {
+						"type": "string"
+					},
+					"key": {
+						"type": "string"
+					},
+					"scope": {
+						"$ref": "#/components/schemas/PermissionScope"
+					},
+					"via": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/GrantSource"
+						},
+						"description": "Grants that give it (empty when not allowed)."
+					}
+				}
+			},
 			"PermissionScope": {
 				"type": "string",
 				"description": "Where a permission is evaluated.",
@@ -5161,6 +5370,29 @@
 					"requireMfa": {
 						"type": "boolean",
 						"description": "Holders must have a second factor."
+					}
+				}
+			},
+			"RoleInput": {
+				"type": "object",
+				"required": ["name", "permissions"],
+				"properties": {
+					"description": {
+						"type": "string"
+					},
+					"key": {
+						"type": ["string", "null"],
+						"description": "Lowercase letters, digits, underscores. Derived from the name if omitted\n(on create; it never changes afterwards)."
+					},
+					"name": {
+						"type": "string"
+					},
+					"permissions": {
+						"type": "array",
+						"items": {
+							"type": "string"
+						},
+						"description": "Permission keys, or `[\"*\"]` (owners only)."
 					}
 				}
 			},
