@@ -1,13 +1,17 @@
 //! Authentication for Huxley (design doc §11.2).
 //!
-//! This slice covers local accounts: Argon2id passwords, server-side sessions
-//! with idle and absolute timeouts, and login lockout with backoff. MFA, OIDC,
-//! and API tokens build on the same pieces.
+//! Local accounts (Argon2id passwords), server-side sessions with idle and
+//! absolute timeouts, login lockout with backoff, and TOTP multi-factor
+//! authentication with recovery codes ([`mfa`]). Passkeys, OIDC, and API
+//! tokens build on the same pieces.
 
+pub mod mfa;
 pub mod password;
 pub mod token;
+pub mod totp;
 
 use huxley_core::{Actor, RequestContext};
+use huxley_crypto::{Crypto, CryptoError};
 use huxley_db::audit::{self, AuditRecord};
 use huxley_db::{DbError, violated_constraint};
 use serde::{Deserialize, Serialize};
@@ -16,6 +20,7 @@ use sqlx::{PgConnection, PgPool};
 use time::{Duration, OffsetDateTime};
 use uuid::Uuid;
 
+pub use mfa::{MfaChallenge, MfaMethod, MfaStatus, SecondFactor, TotpEnrollment};
 pub use password::PasswordPolicyError;
 
 /// Authentication settings (`[auth]` in `huxley.toml`, or `HUXLEY_AUTH__*`).
@@ -86,6 +91,8 @@ pub struct User {
     pub status: UserStatus,
     pub last_login_at: Option<OffsetDateTime>,
     pub created_at: OffsetDateTime,
+    /// Has a confirmed second factor.
+    pub mfa_enabled: bool,
 }
 
 #[derive(Debug, Clone, sqlx::FromRow)]
@@ -104,6 +111,25 @@ pub struct Session {
 pub struct Authenticated {
     pub session_id: Uuid,
     pub user: User,
+}
+
+/// The result of a correct password.
+#[derive(Debug)]
+pub enum LoginOutcome {
+    /// Signed in: the user has no second factor.
+    SignedIn(LoginSuccess),
+    /// The user must complete [`AuthService::complete_mfa`] with this challenge.
+    MfaRequired(MfaChallenge),
+}
+
+impl LoginOutcome {
+    /// The session, if no second factor was required.
+    pub fn into_session(self) -> Option<LoginSuccess> {
+        match self {
+            Self::SignedIn(success) => Some(success),
+            Self::MfaRequired(_) => None,
+        }
+    }
 }
 
 /// A successful login. `token` must be sent to the client exactly once.
@@ -135,6 +161,21 @@ pub enum AuthError {
     UserNotFound,
     #[error("current password is incorrect")]
     WrongCurrentPassword,
+    /// Unknown, expired, used up, or the account can no longer sign in.
+    #[error("the sign-in attempt has expired; start again")]
+    InvalidMfaChallenge,
+    #[error("invalid authentication code")]
+    InvalidMfaCode,
+    #[error("an authenticator app is already set up")]
+    MfaAlreadyEnabled,
+    #[error("no authenticator app is set up")]
+    MfaNotEnabled,
+    #[error("no authenticator setup is in progress")]
+    NoPendingEnrollment,
+    #[error("the instance has no root organization; run `huxley admin bootstrap`")]
+    NoRootOrg,
+    #[error(transparent)]
+    Crypto(#[from] CryptoError),
     #[error(transparent)]
     Db(#[from] DbError),
 }
@@ -180,7 +221,10 @@ fn normalize_display_name(name: &str) -> AuthResult<String> {
 macro_rules! select_user {
     ($rest:literal) => {
         concat!(
-            "SELECT id, email, display_name, status, last_login_at, created_at FROM users ",
+            "SELECT id, email, display_name, status, last_login_at, created_at, \
+                    EXISTS (SELECT 1 FROM user_totp t \
+                             WHERE t.user_id = users.id AND t.confirmed_at IS NOT NULL) AS mfa_enabled \
+               FROM users ",
             $rest
         )
     };
@@ -202,7 +246,7 @@ pub async fn create_user(
     let id = huxley_core::new_id();
     let user: User = sqlx::query_as(
         "INSERT INTO users (id, email, display_name) VALUES ($1, $2, $3) \
-         RETURNING id, email, display_name, status, last_login_at, created_at",
+         RETURNING id, email, display_name, status, last_login_at, created_at, false AS mfa_enabled",
     )
     .bind(id)
     .bind(&email)
@@ -263,7 +307,9 @@ pub async fn update_user(
         "UPDATE users SET display_name = coalesce($2, display_name), \
                 status = coalesce($3, status), version = version + 1 \
           WHERE id = $1 \
-         RETURNING id, email, display_name, status, last_login_at, created_at",
+         RETURNING id, email, display_name, status, last_login_at, created_at, \
+                   EXISTS (SELECT 1 FROM user_totp t \
+                            WHERE t.user_id = users.id AND t.confirmed_at IS NOT NULL) AS mfa_enabled",
     )
     .bind(id)
     .bind(display_name.as_deref())
@@ -300,6 +346,7 @@ pub async fn update_user(
 pub struct AuthService {
     db: PgPool,
     config: AuthConfig,
+    crypto: Crypto,
 }
 
 #[derive(sqlx::FromRow)]
@@ -312,15 +359,16 @@ struct LoginRow {
 }
 
 impl AuthService {
-    pub fn new(db: PgPool, config: AuthConfig) -> Self {
-        Self { db, config }
+    pub fn new(db: PgPool, config: AuthConfig, crypto: Crypto) -> Self {
+        Self { db, config, crypto }
     }
 
     pub fn config(&self) -> &AuthConfig {
         &self.config
     }
 
-    /// Verifies credentials and starts a session.
+    /// Verifies credentials and starts a session, or issues an MFA challenge
+    /// if the user has a second factor.
     ///
     /// Every failure returns [`AuthError::InvalidCredentials`] and takes about
     /// the same time, whether the email is unknown, the password is wrong, or
@@ -330,7 +378,7 @@ impl AuthService {
         ctx: &RequestContext,
         email: &str,
         password: &str,
-    ) -> AuthResult<LoginSuccess> {
+    ) -> AuthResult<LoginOutcome> {
         let email = email.trim();
         let mut tx = self.db.begin().await?;
         let row: Option<LoginRow> = sqlx::query_as(
@@ -376,19 +424,40 @@ impl AuthService {
             return Err(AuthError::InvalidCredentials);
         }
 
-        let (session_id, token, absolute_expires_at) =
-            self.start_session(&mut tx, ctx, row.id, now).await?;
+        // The failure counter is left alone until the second factor succeeds,
+        // so wrong codes and wrong passwords share one lockout budget.
+        if mfa::has_mfa(&mut tx, row.id).await? {
+            let challenge = self.issue_challenge(&mut tx, ctx, row.id, now).await?;
+            tx.commit().await?;
+            return Ok(LoginOutcome::MfaRequired(challenge));
+        }
 
-        let user = find_user(&mut tx, row.id)
+        let success = self
+            .finish_login(&mut tx, ctx, row.id, now, "password")
+            .await?;
+        tx.commit().await?;
+        Ok(LoginOutcome::SignedIn(success))
+    }
+
+    /// Starts a session and loads the user, inside the caller's transaction.
+    async fn finish_login(
+        &self,
+        conn: &mut PgConnection,
+        ctx: &RequestContext,
+        user_id: Uuid,
+        now: OffsetDateTime,
+        method: &str,
+    ) -> AuthResult<LoginSuccess> {
+        let (session_id, token, expires_at) =
+            self.start_session(conn, ctx, user_id, now, method).await?;
+        let user = find_user(conn, user_id)
             .await?
             .ok_or(AuthError::InvalidCredentials)?;
-        tx.commit().await?;
-
         Ok(LoginSuccess {
             user,
             session_id,
             token,
-            expires_at: absolute_expires_at,
+            expires_at,
         })
     }
 
@@ -404,30 +473,45 @@ impl AuthService {
         now: OffsetDateTime,
     ) -> AuthResult<()> {
         if reason == "bad_password" {
-            let failures = row.failed_login_count + 1;
-            let locked_until = self.config.lockout_for(failures).map(|d| now + d);
-            sqlx::query(
-                "UPDATE users SET failed_login_count = $2, \
-                 locked_until = coalesce($3, locked_until) WHERE id = $1",
-            )
-            .bind(row.id)
-            .bind(failures)
-            .bind(locked_until)
-            .execute(&mut *conn)
-            .await?;
-            if let Some(until) = locked_until {
-                audit::record(
-                    conn,
-                    ctx,
-                    AuditRecord::new("auth.account_locked")
-                        .target("user", row.id)
-                        .details(json!({ "failures": failures, "until": until.unix_timestamp() })),
-                )
+            self.count_failure(conn, ctx, row.id, row.failed_login_count, now)
                 .await?;
-            }
         }
         self.audit_failure(conn, ctx, Some(row.id), email, reason)
             .await
+    }
+
+    /// Adds one to the user's consecutive failures and locks the account once
+    /// the threshold is reached.
+    async fn count_failure(
+        &self,
+        conn: &mut PgConnection,
+        ctx: &RequestContext,
+        user_id: Uuid,
+        failures_before: i32,
+        now: OffsetDateTime,
+    ) -> AuthResult<()> {
+        let failures = failures_before + 1;
+        let locked_until = self.config.lockout_for(failures).map(|d| now + d);
+        sqlx::query(
+            "UPDATE users SET failed_login_count = $2, \
+             locked_until = coalesce($3, locked_until) WHERE id = $1",
+        )
+        .bind(user_id)
+        .bind(failures)
+        .bind(locked_until)
+        .execute(&mut *conn)
+        .await?;
+        if let Some(until) = locked_until {
+            audit::record(
+                conn,
+                &ctx.clone().with_actor(Actor::Anonymous),
+                AuditRecord::new("auth.account_locked")
+                    .target("user", user_id)
+                    .details(json!({ "failures": failures, "until": until.unix_timestamp() })),
+            )
+            .await?;
+        }
+        Ok(())
     }
 
     /// Resets failure counters and creates a session. Returns (id, token, expiry).
@@ -437,6 +521,7 @@ impl AuthService {
         ctx: &RequestContext,
         user_id: Uuid,
         now: OffsetDateTime,
+        method: &str,
     ) -> AuthResult<(Uuid, String, OffsetDateTime)> {
         sqlx::query(
             "UPDATE users SET failed_login_count = 0, locked_until = NULL, last_login_at = now() \
@@ -470,7 +555,7 @@ impl AuthService {
             &ctx.clone().with_actor(Actor::User(user_id)),
             AuditRecord::new("auth.login_succeeded")
                 .target("session", session_id)
-                .details(json!({ "method": "password" })),
+                .details(json!({ "method": method })),
         )
         .await?;
         Ok((session_id, token.secret, absolute_expires_at))
@@ -553,16 +638,7 @@ impl AuthService {
     ) -> AuthResult<()> {
         password::validate(new)?;
         let mut tx = self.db.begin().await?;
-        let row: Option<(String,)> =
-            sqlx::query_as("SELECT hash FROM user_passwords WHERE user_id = $1 FOR UPDATE")
-                .bind(user_id)
-                .fetch_optional(&mut *tx)
-                .await?;
-        let current_ok = match &row {
-            Some((hash,)) => password::verify(current, hash),
-            None => false,
-        };
-        if !current_ok {
+        if !verify_password(&mut tx, user_id, current).await? {
             audit::record(
                 &mut tx,
                 ctx,
@@ -650,6 +726,26 @@ impl AuthService {
         .await?;
         tx.commit().await?;
         Ok(())
+    }
+}
+
+/// Checks a signed-in user's password (re-authentication before sensitive
+/// changes). Locks the password row until the transaction ends.
+async fn verify_password(
+    conn: &mut PgConnection,
+    user_id: Uuid,
+    candidate: &str,
+) -> AuthResult<bool> {
+    let row: Option<(String,)> =
+        sqlx::query_as("SELECT hash FROM user_passwords WHERE user_id = $1 FOR UPDATE")
+            .bind(user_id)
+            .fetch_optional(conn)
+            .await?;
+    if let Some((hash,)) = &row {
+        Ok(password::verify(candidate, hash))
+    } else {
+        password::verify_dummy(candidate);
+        Ok(false)
     }
 }
 

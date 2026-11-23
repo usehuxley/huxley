@@ -30,8 +30,31 @@ export interface paths {
 		};
 		get?: never;
 		put?: never;
-		/** Signs in with email and password. Sets the session cookie. */
+		/**
+		 * Signs in with email and password. Sets the session cookie, or asks for a
+		 *     second factor if the user has one.
+		 */
 		post: operations['login'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/auth/login/mfa': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/**
+		 * Completes sign-in with a second factor. Send exactly one of `code` or
+		 *     `recoveryCode`.
+		 */
+		post: operations['login_mfa'];
 		delete?: never;
 		options?: never;
 		head?: never;
@@ -66,6 +89,97 @@ export interface paths {
 		get: operations['me'];
 		put?: never;
 		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/auth/mfa': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** The signed-in user's MFA setup. */
+		get: operations['status'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/auth/mfa/recovery-codes': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/** Replaces the recovery codes. The old ones stop working. */
+		post: operations['regenerate_recovery_codes'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/auth/mfa/totp': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/**
+		 * Starts setting up an authenticator app. Returns the secret to scan; the
+		 *     app isn't required at sign-in until `/totp/confirm` succeeds.
+		 */
+		post: operations['begin_totp'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/auth/mfa/totp/confirm': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/**
+		 * Finishes authenticator setup with a code from the app. Returns recovery
+		 *     codes (shown once) and signs out the user's other sessions.
+		 */
+		post: operations['confirm_totp'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/auth/mfa/totp/disable': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/** Turns off the authenticator app and deletes recovery codes. */
+		post: operations['disable_totp'];
 		delete?: never;
 		options?: never;
 		head?: never;
@@ -352,6 +466,27 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
+	'/api/v1/users/{id}/mfa': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		post?: never;
+		/**
+		 * Removes a user's second factors (authenticator app and recovery codes) and
+		 *     signs them out everywhere, for when they've lost access to both. Only an
+		 *     owner can reset an owner's MFA.
+		 */
+		delete: operations['reset_mfa'];
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
 	'/healthz': {
 		parameters: {
 			query?: never;
@@ -453,6 +588,10 @@ export interface components {
 			/** Format: password */
 			newPassword: string;
 		};
+		ConfirmTotpRequest: {
+			/** @description A current six-digit code from the app. */
+			code: string;
+		};
 		CreateAssignmentRequest: {
 			/** @description Also apply to every sub-organization (default true). */
 			inherit?: boolean;
@@ -494,11 +633,35 @@ export interface components {
 			status: string;
 			version: string;
 		};
+		LoginMfaRequest: {
+			/** @description From the `mfaRequired` response. */
+			challenge: string;
+			/** @description A six-digit code from the authenticator app. */
+			code?: string | null;
+			/** @description One of the user's recovery codes. Each works once. */
+			recoveryCode?: string | null;
+		};
 		LoginRequest: {
 			email: string;
 			/** Format: password */
 			password: string;
 		};
+		/** @description The result of a sign-in step. */
+		LoginResponse:
+			| {
+					/** @enum {string} */
+					status: 'signedIn';
+					user: components['schemas']['UserView'];
+			  }
+			| {
+					/** @description Pass to `/login/mfa`. Valid for a few minutes and a few attempts. */
+					challenge: string;
+					/** Format: date-time */
+					expiresAt: string;
+					methods: components['schemas']['MfaMethodView'][];
+					/** @enum {string} */
+					status: 'mfaRequired';
+			  };
 		/** @description The signed-in user plus permission hints for the UI. */
 		MeView: components['schemas']['UserView'] & {
 			/** @description Feature modules that are enabled and released. */
@@ -510,6 +673,20 @@ export interface components {
 			grantedPermissions: string[];
 			/** @description Holds the Owner role at the root organization. */
 			isOwner: boolean;
+		};
+		/**
+		 * @description Second-factor methods offered for a challenge.
+		 * @enum {string}
+		 */
+		MfaMethodView: 'totp' | 'recoveryCode';
+		MfaStatusView: {
+			/**
+			 * Format: int64
+			 * @description Unused recovery codes left.
+			 */
+			recoveryCodesRemaining: number;
+			/** @description An authenticator app is set up and required at sign-in. */
+			totpEnabled: boolean;
 		};
 		/** @description A feature module's manifest. */
 		Module: {
@@ -572,6 +749,13 @@ export interface components {
 			 */
 			version: number;
 		};
+		PasswordConfirmation: {
+			/**
+			 * Format: password
+			 * @description The user's current password, re-checked before the change.
+			 */
+			password: string;
+		};
 		Permission: {
 			description: string;
 			key: string;
@@ -582,6 +766,10 @@ export interface components {
 		 * @enum {string}
 		 */
 		PermissionScope: 'org' | 'instance';
+		RecoveryCodesView: {
+			/** @description Shown only now. Each code signs in once if the authenticator is lost. */
+			recoveryCodes: string[];
+		};
 		Role: {
 			description: string;
 			/** Format: uuid */
@@ -618,6 +806,12 @@ export interface components {
 			changed: string[];
 			modules: components['schemas']['ModuleState'][];
 		};
+		TotpEnrollmentView: {
+			/** @description `otpauth://` URI to show as a QR code. */
+			otpauthUri: string;
+			/** @description Base32 secret, for entering into the app by hand. */
+			secret: string;
+		};
 		UpdateOrgRequest: {
 			name: string;
 			/**
@@ -642,6 +836,8 @@ export interface components {
 			id: string;
 			/** Format: date-time */
 			lastLoginAt?: string | null;
+			/** @description Has a second factor (authenticator app) set up. */
+			mfaEnabled: boolean;
 			/** @description `active` or `disabled`. */
 			status: string;
 		};
@@ -701,16 +897,58 @@ export interface operations {
 			};
 		};
 		responses: {
+			/** @description Signed in (session cookie set), or a second factor is required */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['LoginResponse'];
+				};
+			};
+			/** @description Wrong email or password, or the account is disabled or locked */
+			401: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+			/** @description Too many attempts from this address */
+			429: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	login_mfa: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['LoginMfaRequest'];
+			};
+		};
+		responses: {
 			/** @description Signed in; session cookie set */
 			200: {
 				headers: {
 					[name: string]: unknown;
 				};
 				content: {
-					'application/json': components['schemas']['UserView'];
+					'application/json': components['schemas']['LoginResponse'];
 				};
 			};
-			/** @description Wrong email or password, or the account is disabled or locked */
+			/** @description Wrong code, or the challenge expired or ran out of attempts */
 			401: {
 				headers: {
 					[name: string]: unknown;
@@ -768,6 +1006,188 @@ export interface operations {
 			};
 			/** @description Not signed in */
 			401: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	status: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['MfaStatusView'];
+				};
+			};
+		};
+	};
+	regenerate_recovery_codes: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['PasswordConfirmation'];
+			};
+		};
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['RecoveryCodesView'];
+				};
+			};
+			/** @description MFA not set up */
+			409: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+			/** @description Wrong password */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	begin_totp: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['PasswordConfirmation'];
+			};
+		};
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['TotpEnrollmentView'];
+				};
+			};
+			/** @description Already set up */
+			409: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+			/** @description Wrong password */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	confirm_totp: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['ConfirmTotpRequest'];
+			};
+		};
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['RecoveryCodesView'];
+				};
+			};
+			/** @description Wrong code */
+			401: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+			/** @description No setup in progress */
+			409: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	disable_totp: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['PasswordConfirmation'];
+			};
+		};
+		responses: {
+			/** @description Turned off */
+			204: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content?: never;
+			};
+			/** @description Not set up */
+			409: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+			/** @description Wrong password */
+			422: {
 				headers: {
 					[name: string]: unknown;
 				};
@@ -1371,6 +1791,43 @@ export interface operations {
 				};
 				content: {
 					'application/json': components['schemas']['Assignment'][];
+				};
+			};
+		};
+	};
+	reset_mfa: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				/** @description User id */
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			/** @description MFA removed; the user signs in with a password and can set it up again */
+			204: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content?: never;
+			};
+			403: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+			404: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
 				};
 			};
 		};

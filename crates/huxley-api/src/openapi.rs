@@ -8,9 +8,14 @@ use utoipa::OpenApi;
 
 use crate::audit_routes::{self, AuditEventView, AuditPage};
 use crate::auth_routes::{
-    self, ChangePasswordRequest, LoginRequest, MeView, SessionView, UserView,
+    self, ChangePasswordRequest, LoginMfaRequest, LoginRequest, LoginResponse, MeView,
+    MfaMethodView, SessionView, UserView,
 };
 use crate::health::{self, HealthStatus};
+use crate::mfa_routes::{
+    self, ConfirmTotpRequest, MfaStatusView, PasswordConfirmation, RecoveryCodesView,
+    TotpEnrollmentView,
+};
 use crate::module_routes::{self, SetModuleRequest, SetModuleResponse};
 use crate::org_routes::{
     self, ArchiveOrgRequest, CreateOrgRequest, MoveOrgRequest, OrgKindInput, UpdateOrgRequest,
@@ -32,6 +37,12 @@ use crate::user_routes::{
         health::healthz,
         health::readyz,
         auth_routes::login,
+        auth_routes::login_mfa,
+        mfa_routes::status,
+        mfa_routes::begin_totp,
+        mfa_routes::confirm_totp,
+        mfa_routes::disable_totp,
+        mfa_routes::regenerate_recovery_codes,
         auth_routes::logout,
         auth_routes::me,
         auth_routes::change_password,
@@ -47,6 +58,7 @@ use crate::user_routes::{
         user_routes::get_user,
         user_routes::create_user,
         user_routes::update_user,
+        user_routes::reset_mfa,
         user_routes::list_assignments,
         user_routes::create_assignment,
         user_routes::delete_assignment,
@@ -58,6 +70,14 @@ use crate::user_routes::{
     ),
     components(schemas(HealthStatus, ApiError, FieldError, LoginRequest, ChangePasswordRequest, UserView, SessionView,
         MeView,
+        LoginResponse,
+        LoginMfaRequest,
+        MfaMethodView,
+        MfaStatusView,
+        PasswordConfirmation,
+        TotpEnrollmentView,
+        ConfirmTotpRequest,
+        RecoveryCodesView,
         huxley_orgs::Organization,
         huxley_orgs::OrgKind,
         huxley_orgs::OrgStatus,

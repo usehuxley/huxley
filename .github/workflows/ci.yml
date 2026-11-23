@@ -97,6 +97,9 @@ jobs:
       HUXLEY_HTTP__BIND: 127.0.0.1:8080
       HUXLEY_HTTP__TRUST_FORWARDED_FOR: "true"
       HUXLEY_HTTP__COOKIE_SECURE: "false"
+      # Every browser test signs in from 127.0.0.1; the default 20/min is too
+      # tight for the whole suite.
+      HUXLEY_HTTP__LOGIN_ATTEMPTS_PER_MINUTE: "200"
       HUXLEY_API_URL: http://127.0.0.1:8080
       E2E_EMAIL: e2e@example.com
       E2E_PASSWORD: e2e test passphrase

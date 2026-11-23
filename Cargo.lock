@@ -831,16 +831,20 @@ dependencies = [
  "base64 0.23.1",
  "getrandom 0.4.3",
  "huxley-core",
+ "huxley-crypto",
  "huxley-db",
+ "ring",
  "serde",
  "serde_json",
  "sha2",
  "sqlx",
+ "subtle",
  "thiserror",
  "time",
  "tokio",
  "tracing",
  "uuid",
+ "zeroize",
 ]
 
 [[package]]

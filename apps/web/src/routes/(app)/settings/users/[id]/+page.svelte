@@ -43,20 +43,44 @@
 
 	<Card title={data.person.displayName} description={data.person.email}>
 		{#snippet actions()}
+			<Badge tone={data.person.mfaEnabled ? 'success' : 'warning'}>
+				{data.person.mfaEnabled ? '2FA on' : '2FA off'}
+			</Badge>
 			<Badge tone={data.person.status === 'active' ? 'success' : 'neutral'}>
 				{data.person.status}
 			</Badge>
 		{/snippet}
 		{#if canEdit && !isSelf}
-			<form method="POST" action="?/status" use:enhance={notify}>
-				{#if data.person.status === 'active'}
-					<input type="hidden" name="status" value="disabled" />
-					<Button type="submit" variant="danger" size="sm">Disable and sign out</Button>
-				{:else}
-					<input type="hidden" name="status" value="active" />
-					<Button type="submit" size="sm">Enable</Button>
+			<div class="flex flex-wrap gap-2">
+				<form method="POST" action="?/status" use:enhance={notify}>
+					{#if data.person.status === 'active'}
+						<input type="hidden" name="status" value="disabled" />
+						<Button type="submit" variant="danger" size="sm">Disable and sign out</Button>
+					{:else}
+						<input type="hidden" name="status" value="active" />
+						<Button type="submit" size="sm">Enable</Button>
+					{/if}
+				</form>
+				{#if data.person.mfaEnabled}
+					<form
+						method="POST"
+						action="?/resetMfa"
+						use:enhance={(event) => {
+							if (
+								!confirm(
+									`Remove ${data.person.displayName}'s two-factor authentication? They'll be signed out and can sign in with just their password until they set it up again.`
+								)
+							) {
+								event.cancel();
+								return;
+							}
+							return notify(event);
+						}}
+					>
+						<Button type="submit" size="sm">Reset two-factor authentication</Button>
+					</form>
 				{/if}
-			</form>
+			</div>
 		{:else}
 			<p class="text-sm text-fg-muted">
 				{isSelf ? 'This is your account.' : 'You can view this user but not change them.'}

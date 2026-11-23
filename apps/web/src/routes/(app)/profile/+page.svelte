@@ -12,6 +12,17 @@
 		>
 	);
 
+	type MfaForm = {
+		error?: string;
+		enrollment?: { secret: string; otpauthUri: string; qr: string };
+		recoveryCodes?: string[];
+		enabled?: boolean;
+		disabled?: boolean;
+	};
+	let mfaForm = $derived((form && 'mfa' in form ? form.mfa : {}) as MfaForm);
+	/** Groups the base32 secret in fours so it's easier to type. */
+	const grouped = (secret: string) => secret.replace(/(.{4})/g, '$1 ').trim();
+
 	const dateFormat = new Intl.DateTimeFormat(undefined, {
 		dateStyle: 'medium',
 		timeStyle: 'short'
@@ -53,7 +64,9 @@
 <div class="mx-auto flex max-w-3xl flex-col gap-6">
 	<div>
 		<h1 class="text-2xl font-semibold text-fg">Your profile</h1>
-		<p class="mt-1 text-fg-muted">Manage your password and where you're signed in.</p>
+		<p class="mt-1 text-fg-muted">
+			Manage your password, two-factor authentication, and where you're signed in.
+		</p>
 	</div>
 
 	<Card title="Change password" description="Changing it signs you out everywhere else.">
@@ -114,6 +127,137 @@
 			</Field>
 			<div><Button type="submit" variant="primary">Change password</Button></div>
 		</form>
+	</Card>
+
+	<Card
+		title="Two-factor authentication"
+		description="Ask for a code from an authenticator app when you sign in."
+	>
+		<div class="flex flex-col gap-4">
+			{#if mfaForm.error}
+				<p role="alert" class="text-sm text-danger">{mfaForm.error}</p>
+			{/if}
+
+			{#if mfaForm.recoveryCodes}
+				<div class="rounded-control border border-warning/40 bg-warning-soft p-4">
+					<p class="text-sm font-medium text-fg">Save your recovery codes</p>
+					<p class="mt-1 text-sm text-fg-muted">
+						If you lose your authenticator, each code signs you in once. They're shown only now:
+						store them in your password manager.
+					</p>
+					<ul class="mt-3 grid grid-cols-2 gap-x-6 gap-y-1 font-mono text-sm text-fg">
+						{#each mfaForm.recoveryCodes as code (code)}
+							<li>{code}</li>
+						{/each}
+					</ul>
+				</div>
+			{/if}
+
+			{#if data.mfa.totpEnabled}
+				<p class="flex items-center gap-2 text-sm text-fg">
+					<Badge tone="success">On</Badge>
+					Authenticator app · {data.mfa.recoveryCodesRemaining} recovery code{data.mfa
+						.recoveryCodesRemaining === 1
+						? ''
+						: 's'} left
+				</p>
+				<div class="flex flex-col gap-4 sm:flex-row sm:items-end">
+					<form method="POST" action="?/regenerateCodes" class="flex items-end gap-2" use:enhance>
+						<Field label="Password" for="regenPassword">
+							<Input
+								id="regenPassword"
+								name="password"
+								type="password"
+								autocomplete="current-password"
+								required
+							/>
+						</Field>
+						<Button type="submit">New recovery codes</Button>
+					</form>
+					<form
+						method="POST"
+						action="?/disableTotp"
+						class="flex items-end gap-2"
+						use:enhance={() =>
+							async ({ result, update }) => {
+								await update();
+								if (result.type === 'success') {
+									toast.push({ title: 'Two-factor authentication turned off' });
+								}
+							}}
+					>
+						<Field label="Password" for="disablePassword">
+							<Input
+								id="disablePassword"
+								name="password"
+								type="password"
+								autocomplete="current-password"
+								required
+							/>
+						</Field>
+						<Button type="submit" variant="danger">Turn off</Button>
+					</form>
+				</div>
+			{:else if mfaForm.enrollment}
+				<ol class="flex flex-col gap-4 text-sm text-fg">
+					<li>
+						<p>
+							1. Scan this code with your authenticator app (Microsoft Authenticator, 1Password, …).
+						</p>
+						<!-- Generated on our server from the otpauth URI; contains no user-controlled markup. -->
+						<div class="mt-3 size-44 rounded-control bg-white p-2" aria-hidden="true">
+							<!-- eslint-disable-next-line svelte/no-at-html-tags -->
+							{@html mfaForm.enrollment.qr}
+						</div>
+						<p class="mt-2 text-fg-muted">
+							Can't scan it? Enter this key instead:
+							<code class="font-mono text-fg" data-testid="totp-secret">
+								{grouped(mfaForm.enrollment.secret)}
+							</code>
+						</p>
+					</li>
+					<li>
+						<p>2. Enter the six-digit code the app shows.</p>
+						<form
+							method="POST"
+							action="?/confirmTotp"
+							class="mt-3 flex items-end gap-2"
+							use:enhance
+						>
+							<input type="hidden" name="secret" value={mfaForm.enrollment.secret} />
+							<input type="hidden" name="otpauthUri" value={mfaForm.enrollment.otpauthUri} />
+							<Field label="Code" for="totpCode">
+								<Input
+									id="totpCode"
+									name="code"
+									inputmode="numeric"
+									autocomplete="one-time-code"
+									maxlength={7}
+									required
+								/>
+							</Field>
+							<Button type="submit" variant="primary">Turn on</Button>
+						</form>
+					</li>
+				</ol>
+			{:else}
+				<p class="flex items-center gap-2 text-sm text-fg-muted">
+					<Badge>Off</Badge> Only your password protects your account.
+				</p>
+				<form method="POST" action="?/startTotp" class="flex items-end gap-2" use:enhance>
+					<Field label="Password" for="totpPassword">
+						<Input
+							id="totpPassword"
+							name="password"
+							type="password"
+							autocomplete="current-password"
+							required
+						/>
+					</Field>
+					<Button type="submit" variant="primary">Set up authenticator app</Button>
+				</form>
+			{/if}
+		</div>
 	</Card>
 
 	<Card title="Active sessions" description="Devices currently signed in to your account.">

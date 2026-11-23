@@ -80,7 +80,8 @@ pub async fn serve(config: Config, roles: BTreeSet<Role>) -> anyhow::Result<()> 
                     .await
                     .with_context(|| format!("failed to bind {}", config.http.bind))?;
                 tracing::info!(addr = %config.http.bind, "api role listening");
-                let auth = huxley_auth::AuthService::new(db.clone(), config.auth.clone());
+                let auth =
+                    huxley_auth::AuthService::new(db.clone(), config.auth.clone(), crypto.clone());
                 let state = huxley_api::AppState::new(
                     db.clone(),
                     auth,
