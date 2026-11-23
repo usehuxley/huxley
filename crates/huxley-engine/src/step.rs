@@ -53,6 +53,8 @@ enum Executed {
     Failed(Json),
     /// Not due yet (a `wait` claimed early): run again at this time.
     NotYet(OffsetDateTime),
+    /// Work done in the recording transaction (so it happens exactly once).
+    Notify(Json),
 }
 
 impl Engine {
@@ -154,9 +156,12 @@ impl Engine {
     }
 
     async fn execute(&self, step: &Step, input: &Json) -> Executed {
-        // Steps with network calls (http.request, core.notify) await here.
-        tokio::task::yield_now().await;
         match step {
+            Step::HttpRequest(_) => match crate::http::request(&self.egress, input).await {
+                Ok(output) => Executed::Done(output),
+                Err(failure) => Executed::Failed(failure),
+            },
+            Step::Notify(_) => Executed::Notify(input.clone()),
             Step::Wait(_) => {
                 let until = input["until"]
                     .as_str()
@@ -217,6 +222,13 @@ impl Engine {
             return Ok(());
         }
 
+        let executed = match executed {
+            Executed::Notify(input) => match crate::notify::send(&mut tx, org_id, &input).await? {
+                Ok(output) => Executed::Done(output),
+                Err(failure) => Executed::Failed(failure),
+            },
+            other => other,
+        };
         let mut settled = true;
         match executed {
             Executed::NotYet(at) => {
@@ -224,6 +236,7 @@ impl Engine {
                 tx.commit().await?;
                 return Ok(());
             }
+            Executed::Notify(_) => unreachable!("sent above"),
             Executed::Done(output) => {
                 set_result(
                     &mut tx,
@@ -333,7 +346,10 @@ fn should_retry(policy: &RetryPolicy, failure: &Json, attempt: i32) -> bool {
     }
     let kind = failure["kind"].as_str().unwrap_or_default();
     // Mistakes in the workflow fail the same way every time.
-    if matches!(kind, "expression" | "definition" | "secret" | "unsupported") {
+    if matches!(
+        kind,
+        "expression" | "definition" | "secret" | "unsupported" | "egress" | "limit"
+    ) {
         return false;
     }
     if policy.on.is_empty() {

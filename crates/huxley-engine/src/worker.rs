@@ -21,11 +21,16 @@ use crate::{Engine, EngineError, EngineResult};
 pub struct EngineConfig {
     /// Jobs each worker process runs at once.
     pub concurrency: usize,
+    /// What `http.request` steps may reach.
+    pub egress: crate::EgressConfig,
 }
 
 impl Default for EngineConfig {
     fn default() -> Self {
-        Self { concurrency: 8 }
+        Self {
+            concurrency: 8,
+            egress: crate::EgressConfig::default(),
+        }
     }
 }
 
