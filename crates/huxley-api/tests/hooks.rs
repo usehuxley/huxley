@@ -62,6 +62,27 @@ async fn webhook(pools: &TestPools, trigger: Value) -> (Uuid, String) {
             }
         }
     });
+    tx.commit().await.unwrap();
+    // The HMAC secret lives in a secret organization variable.
+    let mut tx = begin_scoped(&pools.app, &OrgScope::System).await.unwrap();
+    let secret = huxley_variables::VariableInput {
+        kind: huxley_variables::VariableType::Secret,
+        value: json!("hook-secret"),
+        description: None,
+        locked: false,
+    };
+    huxley_variables::set(
+        &mut tx,
+        &ctx,
+        &crypto(pools),
+        org.id,
+        "hook_secret",
+        &secret,
+    )
+    .await
+    .unwrap();
+    tx.commit().await.unwrap();
+    let mut tx = begin_scoped(&pools.app, &OrgScope::System).await.unwrap();
     let created = huxley_workflows::create(&mut tx, &ctx, &expr, org.id, document)
         .await
         .unwrap();
@@ -131,7 +152,7 @@ async fn signed_sync_webhooks_return_outputs() {
             "type": "webhook",
             "response": "sync",
             "timeout": "15s",
-            "auth": { "type": "hmac", "secret": "hook-secret", "prefix": "sha256=" }
+            "auth": { "type": "hmac", "secret": "{{ secrets.hook_secret }}", "prefix": "sha256=" }
         }),
     )
     .await;

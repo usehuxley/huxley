@@ -28,6 +28,7 @@ pub mod sso_routes;
 pub mod team_routes;
 pub mod token_routes;
 pub mod user_routes;
+mod variable_routes;
 mod workflow_routes;
 
 pub use problem::{ApiError, ApiResult};

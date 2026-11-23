@@ -34,6 +34,8 @@ pub enum TriggerError {
     Workflow(#[from] huxley_workflows::WorkflowError),
     #[error(transparent)]
     Scope(#[from] huxley_db::DbError),
+    #[error(transparent)]
+    Variables(#[from] huxley_variables::VariableError),
 }
 
 pub type TriggerResult<T> = Result<T, TriggerError>;
@@ -233,24 +235,36 @@ pub async fn find_webhook(engine: &Engine, public_id: &str) -> TriggerResult<Opt
     }))
 }
 
-/// Evaluates the webhook's auth expressions (they may read org variables
-/// and secrets).
-pub fn resolve_auth(expr: &huxley_expr::Engine, webhook: &Webhook) -> Option<webhook::Resolved> {
-    let auth = webhook.config.auth.as_ref()?;
+/// Evaluates the webhook's auth expressions, which usually read a secret
+/// organization variable (`{{ secrets.hook_secret }}`).
+pub async fn resolve_auth(
+    engine: &Engine,
+    crypto: &huxley_crypto::Crypto,
+    webhook: &Webhook,
+) -> TriggerResult<Option<webhook::Resolved>> {
+    let Some(auth) = webhook.config.auth.as_ref() else {
+        return Ok(None);
+    };
+    let mut tx = begin_scoped(engine.db(), &OrgScope::System).await?;
+    let variables = huxley_variables::for_run(&mut tx, crypto, webhook.org_id).await?;
+    tx.commit().await?;
     let scope = huxley_expr::Scope::new()
         .with("org", &json!({ "id": webhook.org_id }))
-        .with("vars", &json!({}))
-        .with("env", &json!({}));
+        .with("vars", &Json::Object(variables.vars))
+        .with("env", &json!({}))
+        .with_secrets(variables.secrets);
     let values = webhook::expressions(auth)
         .into_iter()
         .map(|e| {
-            expr.eval_str(e, &scope)
+            engine
+                .expr()
+                .eval_str(e, &scope)
                 .ok()
                 .and_then(|v| v.value.as_str().map(str::to_owned))
                 .unwrap_or_default()
         })
         .collect();
-    Some(webhook::resolve(auth, values))
+    Ok(Some(webhook::resolve(auth, values)))
 }
 
 /// Starts a run for a verified webhook request.

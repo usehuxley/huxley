@@ -43,6 +43,8 @@ pub enum EngineError {
     Document(String),
     #[error("start a run with either a published version or a draft document")]
     InvalidStart,
+    #[error("organization variables: {0}")]
+    Variables(#[from] huxley_variables::VariableError),
 }
 
 impl From<sqlx::Error> for EngineError {

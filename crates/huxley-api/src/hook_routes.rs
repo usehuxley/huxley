@@ -56,7 +56,10 @@ async fn handle(
         .map_err(|e| ApiError::internal(&e))?
         .ok_or_else(ApiError::not_found)?;
 
-    if let Some(auth) = huxley_triggers::resolve_auth(state.engine.expr(), &webhook) {
+    let auth = huxley_triggers::resolve_auth(&state.engine, &state.crypto, &webhook)
+        .await
+        .map_err(|e| ApiError::internal(&e))?;
+    if let Some(auth) = auth {
         let lookup = |name: &str| {
             headers
                 .get(name)

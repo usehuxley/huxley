@@ -1041,6 +1041,44 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
+	'/api/v1/orgs/{id}/variables': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/**
+		 * The variables in effect at an organization: its own and inherited ones.
+		 *     Secret values are never returned.
+		 */
+		get: operations['list_org_variables'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/orgs/{id}/variables/{key}': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		/** Sets a variable at an organization (for it and those below). */
+		put: operations['set_org_variable'];
+		post?: never;
+		/** Removes a variable from an organization; it inherits again. */
+		delete: operations['clear_org_variable'];
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
 	'/api/v1/permissions': {
 		parameters: {
 			query?: never;
@@ -2287,7 +2325,6 @@ export interface components {
 			enabledHere: boolean;
 			narrowedBy?: components['schemas']['NarrowedBy'] | null;
 		};
-		/** @description An org in a resolution. */
 		OrgRef: {
 			/** Format: uuid */
 			id: string;
@@ -2470,6 +2507,21 @@ export interface components {
 			source?: components['schemas']['OrgRef'] | null;
 			/** @description The effective value (`None`: unset, use the documented fallback). */
 			value?: string | null;
+		};
+		/** @description A variable's effective value at an org, and why. */
+		ResolvedVariable: {
+			description?: string | null;
+			key: string;
+			lockedBy?: components['schemas']['OrgRef'] | null;
+			/** @description Whether this org locks the key for those below. */
+			lockedHere: boolean;
+			/** @description Whether this org sets the key itself (possibly overridden by a lock). */
+			setHere: boolean;
+			/** @description Where the effective value is set. */
+			source: components['schemas']['OrgRef'];
+			type: components['schemas']['VariableType'];
+			/** @description The effective value; always `null` for secrets. */
+			value?: unknown;
 		};
 		Role: {
 			description: string;
@@ -2794,6 +2846,17 @@ export interface components {
 			/** @description Empty when the document is ready to publish. */
 			diagnostics: components['schemas']['DiagnosticView'][];
 		};
+		/** @description A variable to set. */
+		VariableInput: {
+			description?: string | null;
+			/** @description Stop the organizations under this one changing it. */
+			locked?: boolean;
+			type: components['schemas']['VariableType'];
+			/** @description A string for `string` and `secret`, a number, a boolean, or any JSON. */
+			value: unknown;
+		};
+		/** @enum {string} */
+		VariableType: 'string' | 'number' | 'bool' | 'json' | 'secret';
 		VerifyEmailRequest: {
 			/** @description From the emailed link. */
 			token: string;
@@ -4874,6 +4937,96 @@ export interface operations {
 					[name: string]: unknown;
 				};
 				content?: never;
+			};
+		};
+	};
+	list_org_variables: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ResolvedVariable'][];
+				};
+			};
+		};
+	};
+	set_org_variable: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+				key: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['VariableInput'];
+			};
+		};
+		responses: {
+			204: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content?: never;
+			};
+			/** @description Locked above */
+			409: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	clear_org_variable: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+				key: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			204: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content?: never;
+			};
+			404: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
 			};
 		};
 	};

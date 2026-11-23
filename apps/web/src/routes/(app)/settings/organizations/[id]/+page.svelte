@@ -5,6 +5,7 @@
 	import { Badge, Button, Card, Field, Select, toast } from '@usehuxley/ui';
 	import FieldInput from '#lib/fields/FieldInput.svelte';
 	import OrgSettings from '#lib/orgs/OrgSettings.svelte';
+	import OrgVariables from '#lib/orgs/OrgVariables.svelte';
 	import type { PageProps } from './$types';
 
 	let { data, form }: PageProps = $props();
@@ -157,6 +158,20 @@
 			{notify}
 		/>
 	</Card>
+
+	{#if data.variables}
+		<Card
+			title="Workflow variables"
+			description="Values workflows read here and in every sub-organization, unless one sets its own. Secrets are encrypted and never shown again."
+		>
+			<OrgVariables
+				variables={data.variables}
+				orgId={data.org.id}
+				canManage={data.user.grantedPermissions.includes('variable:manage')}
+				{notify}
+			/>
+		</Card>
+	{/if}
 
 	{#if data.org.kind === 'provider' && data.org.parentId && data.modules.some((m) => m.enabled)}
 		<Card

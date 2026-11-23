@@ -94,4 +94,41 @@ test.describe('workflows', () => {
 			page.getByRole('list', { name: 'Recent runs' }).getByText('Succeeded')
 		).toBeVisible();
 	});
+
+	test('workflows read organization variables', async ({ browser }) => {
+		const page = await signIn(browser);
+		const suffix = Date.now().toString(36);
+		const word = `greeting_${suffix}`;
+
+		// Set a variable and a secret on the root organization.
+		await page.goto('/settings/organizations');
+		await page.getByRole('link', { name: 'E2E MSP' }).first().click();
+		await page.getByLabel('Variable', { exact: true }).fill(word);
+		await page.getByLabel('Value', { exact: true }).fill('Howdy');
+		await page.getByRole('button', { name: 'Set', exact: true }).click();
+		await expect(page.getByRole('list', { name: 'Variables' })).toContainText(word);
+		await page.getByLabel('Variable', { exact: true }).fill(`token_${suffix}`);
+		await page.getByLabel('Type', { exact: true }).selectOption('secret');
+		await page.getByLabel('Value', { exact: true }).fill('super-secret-value');
+		await page.getByRole('button', { name: 'Set', exact: true }).click();
+		const variables = page.getByRole('list', { name: 'Variables' });
+		await expect(variables).toContainText(`{{ secrets.token_${suffix} }}`);
+		await expect(variables).not.toContainText('super-secret-value');
+
+		// A workflow in that organization reads it.
+		await page.goto('/workflows');
+		const key = `vars-${suffix}`;
+		await page.getByLabel('Name').fill(`Greeter ${key}`);
+		await page.getByLabel('Key').fill(key);
+		await page.getByRole('button', { name: 'Create' }).click();
+		await page
+			.getByRole('textbox', { name: 'Workflow YAML' })
+			.fill(definition(key, `{{ vars.${word} }} {{ inputs.name }}`));
+		await page.getByRole('button', { name: 'Save draft' }).click();
+		await expect(page.getByRole('list', { name: 'Problems' })).toHaveCount(0);
+		await page.getByRole('textbox', { name: 'Inputs' }).fill('{"name": "Ada"}');
+		await page.getByRole('button', { name: 'Test run the draft' }).click();
+		await expect(page.getByText('Succeeded').first()).toBeVisible({ timeout: 20_000 });
+		await expect(page.getByLabel('Run outputs')).toContainText('"greeting": "Howdy Ada"');
+	});
 });
