@@ -182,6 +182,8 @@ use crate::workflow_routes::{
         workflow_routes::resume_run,
         workflow_routes::dead_jobs,
         workflow_routes::retry_job,
+
+        workflow_routes::step_payload,
         workflow_routes::triggers,
         crate::variable_routes::list,
         crate::variable_routes::set,
@@ -305,6 +307,7 @@ use crate::workflow_routes::{
         huxley_engine::runs::RunSummary,
         huxley_engine::runs::RunDetail,
         huxley_engine::runs::StepRunView,
+        huxley_engine::runs::PayloadField,
         huxley_workflows::triggers::TriggerView,
         huxley_variables::ResolvedVariable,
         huxley_variables::VariableInput,

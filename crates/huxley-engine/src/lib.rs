@@ -13,6 +13,7 @@ mod egress;
 mod http;
 mod journal;
 mod notify;
+mod payload;
 pub mod queue;
 mod run;
 pub mod runs;
@@ -28,6 +29,7 @@ use sqlx::PgPool;
 
 pub use egress::EgressConfig;
 pub use journal::{StepStatus, step_key};
+pub use payload::{PayloadConfig, SPILLED};
 pub use run::{RunStatus, StartRun};
 pub use walk::MAX_FOREACH_ITEMS;
 pub use worker::{EngineConfig, WorkerConfig, run_workers};
@@ -45,6 +47,9 @@ pub enum EngineError {
     InvalidStart,
     #[error("organization variables: {0}")]
     Variables(#[from] huxley_variables::VariableError),
+    /// Object storage (spilled payloads) failed.
+    #[error("object storage: {0}")]
+    Storage(String),
 }
 
 impl From<sqlx::Error> for EngineError {
@@ -62,6 +67,8 @@ pub struct Engine {
     crypto: Crypto,
     expr: Arc<huxley_expr::Engine>,
     egress: egress::Egress,
+    payload_config: PayloadConfig,
+    payloads: payload::Payloads,
 }
 
 impl Engine {
@@ -76,7 +83,23 @@ impl Engine {
             crypto,
             expr: Arc::new(huxley_expr::Engine::new()),
             egress: egress::Egress::new(&config.egress),
+            payload_config: config.payload.clone(),
+            payloads: payload::Payloads::new(None, &config.payload),
         }
+    }
+
+    /// Spills large step inputs and outputs to `storage` (design doc §6.4).
+    /// Without it, everything stays in the database; an engine that reads
+    /// runs other processes wrote needs it to load what they spilled.
+    #[must_use]
+    pub fn with_storage(mut self, storage: huxley_storage::Storage) -> Self {
+        self.payloads = payload::Payloads::new(Some(storage), &self.payload_config);
+        self
+    }
+
+    /// Reads a spilled step payload (an `input_ref` / `output_ref`).
+    pub async fn load_payload(&self, key: &str) -> EngineResult<serde_json::Value> {
+        self.payloads.load(key).await
     }
 
     pub const fn db(&self) -> &PgPool {

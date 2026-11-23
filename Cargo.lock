@@ -1848,6 +1848,7 @@ dependencies = [
  "huxley-expr",
  "huxley-hwf",
  "huxley-notify",
+ "huxley-storage",
  "huxley-variables",
  "huxley-workflows",
  "reqwest 0.13.5",

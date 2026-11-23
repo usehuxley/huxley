@@ -1280,6 +1280,27 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
+	'/api/v1/runs/{id}/steps/{key}/{attempt}/{field}': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/**
+		 * A step attempt's full input or output. Values over the spill threshold
+		 *     are kept in object storage, and the run shows a `$spilled` marker in
+		 *     their place; this returns the value itself either way.
+		 */
+		get: operations['get_step_payload'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
 	'/api/v1/security/mfa-policy': {
 		parameters: {
 			query?: never;
@@ -2454,6 +2475,11 @@ export interface components {
 		PasswordResetRequest: {
 			email: string;
 		};
+		/**
+		 * @description Which half of a step attempt.
+		 * @enum {string}
+		 */
+		PayloadField: 'input' | 'output';
 		Permission: {
 			description: string;
 			key: string;
@@ -5446,6 +5472,39 @@ export interface operations {
 				};
 				content: {
 					'application/json': components['schemas']['ResumeRunResponse'];
+				};
+			};
+		};
+	};
+	get_step_payload: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+				/** @description Step key, e.g. `add_member[2]` */
+				key: string;
+				attempt: number;
+				field: components['schemas']['PayloadField'];
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': unknown;
+				};
+			};
+			404: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
 				};
 			};
 		};

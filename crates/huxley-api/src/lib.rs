@@ -109,9 +109,10 @@ impl AppState {
         }
     }
 
-    /// Uses `storage` for attachments.
+    /// Uses `storage` for attachments and spilled workflow payloads.
     #[must_use]
     pub fn with_storage(mut self, storage: Storage) -> Self {
+        self.engine = self.engine.with_storage(storage.clone());
         self.storage = storage;
         self
     }

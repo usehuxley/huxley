@@ -26,6 +26,8 @@ pub struct EngineConfig {
     /// Seconds a claimed job stays with its worker without a heartbeat: how
     /// long a crashed worker's jobs wait before another worker takes them.
     pub lease_secs: u64,
+    /// When step inputs and outputs go to object storage.
+    pub payload: crate::PayloadConfig,
 }
 
 impl Default for EngineConfig {
@@ -34,6 +36,7 @@ impl Default for EngineConfig {
             concurrency: 8,
             egress: crate::EgressConfig::default(),
             lease_secs: 60,
+            payload: crate::PayloadConfig::default(),
         }
     }
 }

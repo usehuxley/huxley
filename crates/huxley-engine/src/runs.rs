@@ -1,6 +1,6 @@
 //! Reading runs and their steps, for the API and the run views.
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use serde_json::Value as Json;
 use sqlx::PgConnection;
 use time::OffsetDateTime;
@@ -139,4 +139,36 @@ pub async fn get(conn: &mut PgConnection, id: Uuid) -> sqlx::Result<Option<RunDe
         cancel_requested: row.cancel_requested,
         steps,
     }))
+}
+
+/// Which half of a step attempt.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, utoipa::ToSchema)]
+#[serde(rename_all = "lowercase")]
+pub enum PayloadField {
+    Input,
+    Output,
+}
+
+/// Where a step attempt's spilled input or output is: `Ok(None)` if the
+/// attempt isn't in the caller's scope, `Ok(Some(None))` if that value
+/// wasn't spilled.
+pub async fn payload_ref(
+    conn: &mut PgConnection,
+    run_id: Uuid,
+    step_key: &str,
+    attempt: i32,
+    field: PayloadField,
+) -> sqlx::Result<Option<Option<String>>> {
+    let column = match field {
+        PayloadField::Input => "input_ref",
+        PayloadField::Output => "output_ref",
+    };
+    sqlx::query_scalar(sqlx::AssertSqlSafe(format!(
+        "SELECT {column} FROM step_runs WHERE run_id = $1 AND step_key = $2 AND attempt = $3"
+    )))
+    .bind(run_id)
+    .bind(step_key)
+    .bind(attempt)
+    .fetch_optional(conn)
+    .await
 }

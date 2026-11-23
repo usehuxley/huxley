@@ -111,7 +111,7 @@ The server reads, in increasing precedence: built-in defaults, `huxley.toml`, th
 | `HUXLEY_AUTH__PUBLIC_URL` | (unset) | The staff app's URL as browsers see it, e.g. `https://huxley.example.com`. Enables passkeys, which are bound to its host name (changing the host later invalidates registered passkeys), and single sign-on, whose redirect URI is `<public URL>/login/oidc/callback`. |
 | `HUXLEY_EMAIL__SMTP_URL` | (unset) | SMTP server for password reset, invitations, and verification, e.g. `smtps://user:pass@smtp.example.com` or `smtp://user:pass@host:587?tls=required`. Unset or empty: email is off. Links need `HUXLEY_AUTH__PUBLIC_URL`. |
 | `HUXLEY_EMAIL__FROM` | (required with SMTP) | From address, e.g. `Huxley <huxley@example.com>` |
-| `HUXLEY_STORAGE__URL` | `./data/objects` (image: `/var/lib/huxley/objects`) | Where attachments go: a directory, `s3://bucket[/prefix]` (AWS S3, DigitalOcean Spaces, MinIO), or `az://container`. Credentials and endpoints via `HUXLEY_STORAGE__OPTIONS__<NAME>`, e.g. `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION`, `AWS_ENDPOINT`. Back up local storage with the database. |
+| `HUXLEY_STORAGE__URL` | `./data/objects` (image: `/var/lib/huxley/objects`) | Where attachments and large workflow step payloads go: a directory, `s3://bucket[/prefix]` (AWS S3, DigitalOcean Spaces, MinIO), or `az://container`. Credentials and endpoints via `HUXLEY_STORAGE__OPTIONS__<NAME>`, e.g. `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION`, `AWS_ENDPOINT`. Back up local storage with the database. |
 | `HUXLEY_STORAGE__MAX_UPLOAD_MB` | `25` | Largest attachment |
 | `HUXLEY_CRYPTO__RETIRED_KEKS` | (empty) | Previous KEKs as a list, e.g. `[old1, old2]`, during rotation |
 | `HUXLEY_ENGINE__CONCURRENCY` | `8` | Workflow jobs each worker process runs at once |
@@ -120,6 +120,7 @@ The server reads, in increasing precedence: built-in defaults, `huxley.toml`, th
 | `HUXLEY_ENGINE__EGRESS__PRIVATE_HOSTS` | (empty) | Host names that may resolve to private addresses anyway, e.g. `[api.internal, "*.corp.example"]` |
 | `HUXLEY_ENGINE__EGRESS__DENIED_HOSTS` | (empty) | Host names workflows may never reach |
 | `HUXLEY_ENGINE__EGRESS__MAX_RESPONSE_BYTES` | `1048576` | Largest response body an HTTP step reads |
+| `HUXLEY_ENGINE__PAYLOAD__SPILL_KB` | `256` | Workflow step inputs and outputs larger than this go to object storage, with a marker in the database; `0` keeps them all in the database |
 | `HUXLEY_HTTP__BIND` | `0.0.0.0:8080` | API listen address |
 | `HUXLEY_MIGRATE_ON_START` | `false` | Apply migrations at startup |
 | `HUXLEY_ROLES` | `all` | `api`, `worker`, `scheduler`, or `all` |
