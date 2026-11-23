@@ -1,0 +1,38 @@
+# Script pods reach nothing but the egress proxy, and nothing reaches them.
+# The runner refuses to start without this policy. Your cluster's network
+# plugin must enforce NetworkPolicy (most do; check yours).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: huxley-scripts
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/component: huxley-script
+  policyTypes: [Ingress, Egress]
+  ingress: []
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: huxley-egress-proxy
+      ports:
+        - { protocol: TCP, port: 3128 }
+---
+# Only script pods reach the egress proxy.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: huxley-egress-proxy
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: huxley-egress-proxy
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/component: huxley-script
+      ports:
+        - { protocol: TCP, port: 3128 }

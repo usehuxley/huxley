@@ -3,8 +3,10 @@
 pub mod ca;
 pub mod exec;
 pub mod gateway;
+pub mod kubernetes;
 pub mod proxy;
 pub mod registry;
+pub mod sandbox;
 
 /// The generated runner protocol.
 #[allow(clippy::pedantic, clippy::nursery, missing_docs)]

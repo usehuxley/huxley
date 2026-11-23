@@ -19,6 +19,9 @@ huxley-expr.workspace = true
 huxley-scripts.workspace = true
 ring.workspace = true
 rustls.workspace = true
+kube.workspace = true
+k8s-openapi.workspace = true
+futures-util.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 sqlx.workspace = true
@@ -37,6 +40,7 @@ tonic.workspace = true
 tonic-prost.workspace = true
 
 [dev-dependencies]
+serde-saphyr.workspace = true
 huxley-crypto = { workspace = true, features = ["testing"] }
 huxley-db = { workspace = true, features = ["testing"] }
 

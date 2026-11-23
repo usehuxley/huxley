@@ -1,0 +1,17 @@
+# Huxley script runner on Kubernetes, with the Kubernetes Jobs sandbox
+# (docs/runners.md). Everything lives in the huxley-scripts namespace.
+#
+#   kubectl create secret generic huxley-runner-enrolment -n huxley-scripts \
+#     --from-literal=server=https://huxley.example.com --from-literal=token=hxr_…
+#   kubectl apply -k deploy/kubernetes
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: huxley-scripts
+resources:
+  - namespace.yaml
+  - network-policy.yaml
+  - egress-proxy.yaml
+  - runner.yaml
+images:
+  - name: ghcr.io/usehuxley/runner
+    newTag: latest

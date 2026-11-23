@@ -2,7 +2,7 @@
 
 Runners execute library scripts in sandboxes, separate from the API and workers (design doc §6.9). They connect to Huxley's **runner gateway**, a gRPC listener on its own port, with a client certificate (ADR-025).
 
-A runner asks the gateway for work, runs each script in a fresh **rootless Podman** container, and reports the result. The `script` workflow step queues that work (see [workflows](workflows.md#steps)). Kubernetes Jobs as a sandbox come next.
+A runner asks the gateway for work, runs each script in a fresh **rootless Podman** container, and reports the result. The `script` workflow step queues that work (see [workflows](workflows.md#steps)). On Kubernetes, scripts can run as Jobs instead (see below).
 
 ## Set up the gateway
 
@@ -80,6 +80,25 @@ Runner flags:
 | `--egress-private-host` | Host names that may resolve to private addresses, e.g. `*.corp.example`. Repeatable. |
 | `--egress-denied-host` | Host names scripts may never reach |
 | `--no-network` | No egress at all |
+
+## On Kubernetes: Jobs
+
+With `--sandbox kubernetes`, each script runs as a Job in the runner's namespace instead of a Podman container (ADR-026).
+
+- **The pod is confined like the Podman sandbox:** non-root, a read-only root, no capabilities, no service account token, CPU and memory limits, and the step's timeout as its deadline. `--k8s-runtime-class gvisor` adds gVisor where the cluster has it.
+- **Inputs and secrets** travel in a Secret that lives only as long as the Job.
+- **Egress:** a NetworkPolicy lets script pods reach only the **egress proxy** Deployment (`huxley runner egress-proxy`, with the same policy and flags as above), and nothing else. The runner won't start without that policy. Each script waits until the policy is in force for its pod before any of its code runs. **Your cluster's network plugin must enforce NetworkPolicy.**
+
+`deploy/kubernetes` sets it all up in the `huxley-scripts` namespace. The runner enrols itself on first start:
+
+```sh
+kubectl create namespace huxley-scripts
+kubectl create secret generic huxley-runner-enrolment -n huxley-scripts \
+  --from-literal=server=https://huxley.example.com --from-literal=token=hxr_…
+kubectl apply -k deploy/kubernetes
+```
+
+The script images come from the cluster's registry access: `--pwsh-image` and `--python-image` work as with Podman. A runner outside the cluster can also use it, with a kubeconfig and `--k8s-namespace`.
 
 ## Credentials
 

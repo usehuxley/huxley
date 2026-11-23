@@ -13,6 +13,7 @@ use huxley_runners::ca;
 use huxley_runners::exec::{Job, Podman};
 use huxley_runners::gateway::{self, ClientTls};
 use huxley_runners::proto::{HeartbeatRequest, NextRequest, RenewRequest, ReportRequest};
+use huxley_runners::sandbox::Sandbox;
 use serde_json::{Value, json};
 use tokio_util::sync::CancellationToken;
 
@@ -23,13 +24,17 @@ const HEARTBEAT: Duration = Duration::from_secs(30);
 const POLL: Duration = Duration::from_secs(2);
 
 #[derive(Debug, Subcommand)]
+#[allow(
+    clippy::large_enum_variant,
+    reason = "parsed once from the command line"
+)]
 pub enum RunnerCommand {
     /// Enrol this runner with a token from Settings → Runners.
     Enroll {
         /// Huxley's address, e.g. `https://huxley.example.com`.
         #[arg(long, env = "HUXLEY_SERVER")]
         server: String,
-        #[arg(long, env = "HUXLEY_RUNNER_TOKEN")]
+        #[arg(long, env = "HUXLEY_RUNNER_TOKEN", hide_env_values = true)]
         token: String,
         /// The gateway to use, if Huxley doesn't say (`runners.public_url`).
         #[arg(long)]
@@ -41,6 +46,18 @@ pub enum RunnerCommand {
         )]
         state: PathBuf,
     },
+    /// The egress proxy for the Kubernetes sandbox: script pods' only way
+    /// out (`deploy/kubernetes` runs it).
+    EgressProxy {
+        #[arg(
+            long,
+            env = "HUXLEY_RUNNER_PROXY_LISTEN",
+            default_value = "0.0.0.0:3128"
+        )]
+        listen: std::net::SocketAddr,
+        #[command(flatten)]
+        egress: EgressArgs,
+    },
     /// Connect to the gateway, keep the certificate fresh, and run scripts.
     Run {
         #[arg(
@@ -49,6 +66,12 @@ pub enum RunnerCommand {
             default_value = "/var/lib/huxley-runner"
         )]
         state: PathBuf,
+        /// With `--token`: enrol on first start (e.g. in Kubernetes, from
+        /// a Secret). Ignored once enrolled.
+        #[arg(long, env = "HUXLEY_SERVER")]
+        server: Option<String>,
+        #[arg(long, env = "HUXLEY_RUNNER_TOKEN", hide_env_values = true)]
+        token: Option<String>,
         #[command(flatten)]
         sandbox: SandboxArgs,
     },
@@ -86,24 +109,157 @@ pub struct SandboxArgs {
     /// Give scripts no network at all (not even through the egress proxy).
     #[arg(long, env = "HUXLEY_RUNNER_NO_NETWORK")]
     no_network: bool,
+    /// Where scripts run.
+    #[arg(
+        long,
+        env = "HUXLEY_RUNNER_SANDBOX",
+        value_enum,
+        default_value = "podman"
+    )]
+    sandbox: SandboxKind,
+    #[command(flatten)]
+    kubernetes: KubernetesArgs,
+    #[command(flatten)]
+    egress: EgressArgs,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, clap::ValueEnum)]
+enum SandboxKind {
+    /// A rootless Podman container per script, on this host.
+    Podman,
+    /// A Kubernetes Job per script (deploy/kubernetes sets the cluster up).
+    Kubernetes,
+}
+
+/// The Kubernetes Jobs sandbox (`--sandbox kubernetes`).
+#[derive(Debug, clap::Args)]
+pub struct KubernetesArgs {
+    /// The namespace scripts run in. Default: the runner's own namespace
+    /// in a cluster, else `huxley-scripts`.
+    #[arg(long = "k8s-namespace", env = "HUXLEY_RUNNER_K8S_NAMESPACE")]
+    namespace: Option<String>,
+    /// A runtime class for script pods, e.g. `gvisor`.
+    #[arg(long = "k8s-runtime-class", env = "HUXLEY_RUNNER_K8S_RUNTIME_CLASS")]
+    runtime_class: Option<String>,
+    /// The network policy that confines script pods; the runner won't
+    /// start without it.
+    #[arg(
+        long = "k8s-network-policy",
+        env = "HUXLEY_RUNNER_K8S_NETWORK_POLICY",
+        default_value = "huxley-scripts"
+    )]
+    network_policy: String,
+    /// The egress proxy's Service, in the same namespace.
+    #[arg(
+        long = "k8s-egress-proxy",
+        env = "HUXLEY_RUNNER_K8S_EGRESS_PROXY",
+        default_value = "huxley-egress-proxy"
+    )]
+    egress_proxy: String,
+}
+
+/// The egress policy: for the Podman sandbox's proxy, and for
+/// `huxley runner egress-proxy`.
+#[derive(Debug, Clone, clap::Args)]
+pub struct EgressArgs {
     /// Let scripts reach private addresses through the proxy (link-local
     /// ones such as cloud metadata stay blocked).
-    #[arg(long, env = "HUXLEY_RUNNER_EGRESS_ALLOW_PRIVATE")]
-    egress_allow_private: bool,
+    #[arg(
+        long = "egress-allow-private",
+        env = "HUXLEY_RUNNER_EGRESS_ALLOW_PRIVATE"
+    )]
+    allow_private: bool,
     /// Host names scripts may reach at private addresses, e.g.
     /// `*.corp.example` (repeatable, or comma-separated).
     #[arg(
-        long,
+        long = "egress-private-host",
         env = "HUXLEY_RUNNER_EGRESS_PRIVATE_HOSTS",
         value_delimiter = ','
     )]
-    egress_private_host: Vec<String>,
+    private_host: Vec<String>,
     /// Host names scripts may never reach (same patterns).
-    #[arg(long, env = "HUXLEY_RUNNER_EGRESS_DENIED_HOSTS", value_delimiter = ',')]
-    egress_denied_host: Vec<String>,
+    #[arg(
+        long = "egress-denied-host",
+        env = "HUXLEY_RUNNER_EGRESS_DENIED_HOSTS",
+        value_delimiter = ','
+    )]
+    denied_host: Vec<String>,
+}
+
+impl EgressArgs {
+    fn policy(&self) -> std::sync::Arc<huxley_engine::EgressConfig> {
+        std::sync::Arc::new(huxley_engine::EgressConfig {
+            allow_private: self.allow_private,
+            private_hosts: self.private_host.clone(),
+            denied_hosts: self.denied_host.clone(),
+            ..huxley_engine::EgressConfig::default()
+        })
+    }
+}
+
+/// Podman sizes (`512m`, `2g`) as Kubernetes quantities (`512Mi`, `2Gi`).
+fn kube_memory(memory: &str) -> String {
+    let lower = memory.trim().to_ascii_lowercase();
+    for (suffix, unit) in [("k", "Ki"), ("m", "Mi"), ("g", "Gi")] {
+        if let Some(n) = lower.strip_suffix(suffix)
+            && n.chars().all(|c| c.is_ascii_digit())
+            && !n.is_empty()
+        {
+            return format!("{n}{unit}");
+        }
+    }
+    memory.to_owned()
 }
 
 impl SandboxArgs {
+    async fn kubernetes(&self) -> anyhow::Result<huxley_runners::kubernetes::Kubernetes> {
+        huxley_runners::install_crypto_provider();
+        let client = kube::Client::try_default()
+            .await
+            .context("couldn't connect to Kubernetes (in-cluster or kubeconfig)")?;
+        let namespace = self.kubernetes.namespace.clone().unwrap_or_else(|| {
+            std::fs::read_to_string("/var/run/secrets/kubernetes.io/serviceaccount/namespace")
+                .map_or_else(|_| "huxley-scripts".to_owned(), |n| n.trim().to_owned())
+        });
+        let proxy_url = if self.no_network {
+            None
+        } else {
+            let services: kube::Api<k8s_openapi::api::core::v1::Service> =
+                kube::Api::namespaced(client.clone(), &namespace);
+            let name = &self.kubernetes.egress_proxy;
+            let service = services
+                .get(name)
+                .await
+                .with_context(|| format!("no egress proxy Service {name} in {namespace}"))?;
+            let spec = service.spec.unwrap_or_default();
+            let ip = spec
+                .cluster_ip
+                .filter(|ip| ip != "None")
+                .with_context(|| format!("Service {name} has no cluster IP"))?;
+            let port = spec
+                .ports
+                .and_then(|p| p.first().map(|p| p.port))
+                .unwrap_or(3128);
+            // An address, not a name: script pods get no DNS.
+            Some(format!("http://{ip}:{port}"))
+        };
+        let kubernetes = huxley_runners::kubernetes::Kubernetes {
+            client,
+            namespace,
+            pwsh_image: self.pwsh_image.clone(),
+            python_image: self.python_image.clone(),
+            memory: kube_memory(&self.memory),
+            cpus: self.cpus.clone(),
+            runtime_class: self.kubernetes.runtime_class.clone(),
+            proxy_url,
+        };
+        kubernetes
+            .check_policy(&self.kubernetes.network_policy)
+            .await
+            .map_err(anyhow::Error::msg)?;
+        Ok(kubernetes)
+    }
+
     fn podman(&self) -> Podman {
         Podman {
             binary: self.podman.clone(),
@@ -111,14 +267,7 @@ impl SandboxArgs {
             python_image: self.python_image.clone(),
             memory: self.memory.clone(),
             cpus: self.cpus.clone(),
-            egress: (!self.no_network).then(|| {
-                std::sync::Arc::new(huxley_engine::EgressConfig {
-                    allow_private: self.egress_allow_private,
-                    private_hosts: self.egress_private_host.clone(),
-                    denied_hosts: self.egress_denied_host.clone(),
-                    ..huxley_engine::EgressConfig::default()
-                })
-            }),
+            egress: (!self.no_network).then(|| self.egress.policy()),
             ..Podman::default()
         }
     }
@@ -132,31 +281,26 @@ pub async fn run(command: RunnerCommand) -> anyhow::Result<()> {
             gateway,
             state,
         } => enroll(&server, &token, gateway.as_deref(), &state).await,
-        RunnerCommand::Run { state, sandbox } => {
+        RunnerCommand::EgressProxy { listen, egress } => egress_proxy(listen, &egress).await,
+        RunnerCommand::Run {
+            state,
+            server,
+            token,
+            sandbox,
+        } => {
+            if !state.join("cert.pem").exists()
+                && let (Some(server), Some(token)) = (&server, &token)
+            {
+                enroll(server, token, None, &state).await?;
+            }
             let shutdown = CancellationToken::new();
             crate::shutdown::spawn_signal_listener(shutdown.clone());
-            let podman = sandbox.podman();
-            if !podman.available().await {
-                bail!("Podman isn't available here (`{}`)", podman.binary);
-            }
-            if sandbox.pull_images {
-                for image in podman.pull().await {
-                    tracing::warn!(%image, "couldn't pull a script image");
-                }
-            }
-            let languages = podman.languages().await;
-            if languages.is_empty() {
-                tracing::warn!(
-                    "no script images are present: pull {} and/or {} with podman",
-                    podman.pwsh_image,
-                    podman.python_image
-                );
-            }
+            let (runner, languages) = prepare(&sandbox).await?;
             let mut workers = tokio::task::JoinSet::new();
             for _ in 0..sandbox.concurrency.max(1) {
                 workers.spawn(work(
                     state.clone(),
-                    podman.clone(),
+                    runner.clone(),
                     languages.clone(),
                     shutdown.clone(),
                 ));
@@ -167,6 +311,48 @@ pub async fn run(command: RunnerCommand) -> anyhow::Result<()> {
             result
         }
     }
+}
+
+/// The sandbox, checked, and the languages it can run.
+async fn prepare(args: &SandboxArgs) -> anyhow::Result<(Sandbox, Vec<String>)> {
+    if args.sandbox == SandboxKind::Kubernetes {
+        let kubernetes = args.kubernetes().await?;
+        tracing::info!(namespace = %kubernetes.namespace, "running scripts as Kubernetes Jobs");
+        return Ok((
+            Sandbox::Kubernetes(kubernetes),
+            vec!["pwsh".into(), "python".into()],
+        ));
+    }
+    let podman = args.podman();
+    if !podman.available().await {
+        bail!("Podman isn't available here (`{}`)", podman.binary);
+    }
+    if args.pull_images {
+        for image in podman.pull().await {
+            tracing::warn!(%image, "couldn't pull a script image");
+        }
+    }
+    let languages = podman.languages().await;
+    if languages.is_empty() {
+        tracing::warn!(
+            "no script images are present: pull {} and/or {} with podman",
+            podman.pwsh_image,
+            podman.python_image
+        );
+    }
+    Ok((Sandbox::Podman(podman), languages))
+}
+
+/// `huxley runner egress-proxy`: the Kubernetes sandbox's egress proxy.
+async fn egress_proxy(listen: std::net::SocketAddr, egress: &EgressArgs) -> anyhow::Result<()> {
+    let shutdown = CancellationToken::new();
+    crate::shutdown::spawn_signal_listener(shutdown.clone());
+    let listener = tokio::net::TcpListener::bind(listen)
+        .await
+        .with_context(|| format!("failed to listen on {listen}"))?;
+    tracing::info!(addr = %listen, "egress proxy listening");
+    huxley_runners::proxy::serve_tcp(listener, egress.policy(), shutdown).await;
+    Ok(())
 }
 
 fn write_secret(path: &Path, contents: &str) -> anyhow::Result<()> {
@@ -255,7 +441,12 @@ async fn client(
 }
 
 /// One worker: asks for a script, runs it, reports, repeats.
-async fn work(state: PathBuf, podman: Podman, languages: Vec<String>, shutdown: CancellationToken) {
+async fn work(
+    state: PathBuf,
+    sandbox: Sandbox,
+    languages: Vec<String>,
+    shutdown: CancellationToken,
+) {
     let mut denied = 0;
     while !shutdown.is_cancelled() {
         let mut client = match client(&state).await {
@@ -309,7 +500,7 @@ async fn work(state: PathBuf, podman: Podman, languages: Vec<String>, shutdown: 
             };
             let (sink, lines) = tokio::sync::mpsc::unbounded_channel();
             let forwarding = tokio::spawn(forward_logs(client.clone(), task.id.clone(), lines));
-            let outcome = podman.run_with_logs(&job, Some(sink)).await;
+            let outcome = sandbox.run_with_logs(&job, Some(sink)).await;
             // The last lines go out before the report replaces them all.
             let _ = forwarding.await;
             let report = ReportRequest {
@@ -424,5 +615,18 @@ async fn serve(
         if pause(&shutdown, HEARTBEAT).await {
             return Ok(());
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::kube_memory;
+
+    #[test]
+    fn podman_sizes_become_kubernetes_quantities() {
+        assert_eq!(kube_memory("512m"), "512Mi");
+        assert_eq!(kube_memory("2G"), "2Gi");
+        assert_eq!(kube_memory("768Mi"), "768Mi");
+        assert_eq!(kube_memory("1000000"), "1000000");
     }
 }
