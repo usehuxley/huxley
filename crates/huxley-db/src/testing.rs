@@ -6,9 +6,13 @@
 //!
 //! All tests share one database, so they must not assume it is empty: create
 //! uniquely named data and use [`ensure_root`] for the single root org.
+//!
+//! Tests that run a job queue use [`isolated`] instead: test binaries run in
+//! separate processes, and a process that exits while holding another test's
+//! job leaves it leased until the lease runs out.
 
 use secrecy::SecretString;
-use sqlx::PgPool;
+use sqlx::{Connection, PgPool};
 use uuid::Uuid;
 
 use crate::{DatabaseConfig, OrgScope, begin_scoped, connect, connect_owner, migrate};
@@ -21,7 +25,8 @@ pub struct TestPools {
     pub app: PgPool,
 }
 
-pub async fn pools() -> Option<TestPools> {
+/// The test server's URL, or `None` to skip the test.
+fn admin_url() -> Option<String> {
     let Ok(url) = std::env::var("HUXLEY_TEST_DATABASE_URL") else {
         assert!(
             std::env::var_os("HUXLEY_REQUIRE_DB_TESTS").is_none(),
@@ -30,6 +35,10 @@ pub async fn pools() -> Option<TestPools> {
         eprintln!("skipping: HUXLEY_TEST_DATABASE_URL is not set");
         return None;
     };
+    Some(url)
+}
+
+async fn migrated(url: String) -> TestPools {
     let config = DatabaseConfig {
         url: SecretString::from(url),
         max_connections: 4,
@@ -39,7 +48,67 @@ pub async fn pools() -> Option<TestPools> {
     let owner = connect_owner(&config).expect("valid test database URL");
     migrate(&owner).await.expect("migrations apply");
     let app = connect(&config).expect("valid test database URL");
-    Some(TestPools { owner, app })
+    TestPools { owner, app }
+}
+
+pub async fn pools() -> Option<TestPools> {
+    Some(migrated(admin_url()?).await)
+}
+
+/// A migrated database of the test's own, dropped when this is dropped.
+/// Needs a `HUXLEY_TEST_DATABASE_URL` role that may create databases.
+#[derive(Debug)]
+pub struct IsolatedDb {
+    pub pools: TestPools,
+    admin_url: String,
+    name: String,
+}
+
+/// Creates a database named `huxley_<prefix>_<uuid>` next to the test
+/// database, or returns `None` to skip (see [`pools`]).
+pub async fn isolated(prefix: &str) -> Option<IsolatedDb> {
+    let admin_url = admin_url()?;
+    let name = format!("huxley_{prefix}_{}", Uuid::now_v7().simple());
+    let mut conn = sqlx::PgConnection::connect(&admin_url)
+        .await
+        .expect("test database reachable");
+    sqlx::query(sqlx::AssertSqlSafe(format!("CREATE DATABASE {name}")))
+        .execute(&mut conn)
+        .await
+        .expect("test role may create databases");
+    let (base, _) = admin_url.rsplit_once('/').expect("a database URL");
+    let pools = migrated(format!("{base}/{name}")).await;
+    Some(IsolatedDb {
+        pools,
+        admin_url,
+        name,
+    })
+}
+
+impl Drop for IsolatedDb {
+    fn drop(&mut self) {
+        // Best effort, on a fresh runtime: the test's runtime may be gone.
+        let admin = self.admin_url.clone();
+        let name = self.name.clone();
+        let _ = std::thread::spawn(move || {
+            let Ok(rt) = tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()
+            else {
+                return;
+            };
+            rt.block_on(async move {
+                if let Ok(mut conn) = sqlx::PgConnection::connect(&admin).await {
+                    let _ = sqlx::query(sqlx::AssertSqlSafe(format!(
+                        "DROP DATABASE IF EXISTS {name} WITH (FORCE)"
+                    )))
+                    .execute(&mut conn)
+                    .await;
+                }
+            });
+        })
+        .join();
+    }
 }
 
 /// A short unique suffix for test data names.

@@ -1,22 +1,25 @@
-//! The engine against a real PostgreSQL. Tests share the database (and its
-//! job queue), so each waits for its own run rather than for an empty queue.
+//! The engine against a real PostgreSQL. Each test has a database (and job
+//! queue) of its own: a test process that exits while holding another
+//! test's job would leave it leased past that test's deadline.
 
 use std::time::{Duration, Instant};
 
-use huxley_db::testing::{TestPools, ensure_root, pools, unique};
+use huxley_db::testing::{IsolatedDb, TestPools, ensure_root, isolated, unique};
 use huxley_db::{OrgScope, begin_scoped};
 use huxley_engine::{Engine, RunStatus, StartRun};
 use serde_json::{Value as Json, json};
 use uuid::Uuid;
 
 struct Harness {
+    _db: IsolatedDb,
     pools: TestPools,
     engine: Engine,
     org: Uuid,
 }
 
 async fn harness() -> Option<Harness> {
-    let pools = pools().await?;
+    let db = isolated("engine").await?;
+    let pools = db.pools.clone();
     let root = ensure_root(&pools).await;
     let org = Uuid::now_v7();
     let mut tx = begin_scoped(&pools.app, &OrgScope::System).await.unwrap();
@@ -35,7 +38,12 @@ async fn harness() -> Option<Harness> {
         pools.app.clone(),
         huxley_crypto::Crypto::new(pools.app.clone(), huxley_crypto::testing::key_ring()),
     );
-    Some(Harness { pools, engine, org })
+    Some(Harness {
+        _db: db,
+        pools,
+        engine,
+        org,
+    })
 }
 
 fn document(spec: &str) -> Json {
