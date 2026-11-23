@@ -32,7 +32,7 @@ fn a_well_formed_workflow_has_no_problems() {
       auth: { type: bearer, token: "{{ secrets.hook_token }}" }
     - { type: event, event: ticket.created, filter: "{{ event.priority == 'high' }}" }
   steps:
-    - { id: first, type: transform, output: "{{ inputs.name }}" }
+    - { id: first, type: transform, output: "{{ inputs.name ~ uuid() ~ (range(3) | list | length) ~ now() }}" }
     - id: loop
       type: foreach
       items: "{{ steps.first.output | list }}"

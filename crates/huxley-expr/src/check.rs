@@ -288,7 +288,7 @@ impl Checker<'_> {
         for reference in references {
             let mut parts = reference.split('.');
             let root = parts.next().unwrap_or_default();
-            if !site.names.iter().any(|n| n == root) {
+            if !site.names.iter().any(|n| n == root) && !self.engine.is_global(root) {
                 self.error(
                     path,
                     format!(

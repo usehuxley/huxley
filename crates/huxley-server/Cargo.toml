@@ -41,7 +41,18 @@ tracing.workspace = true
 
 [dev-dependencies]
 figment = { workspace = true, features = ["test"] }
+huxley-core.workspace = true
+huxley-crypto = { workspace = true, features = ["testing"] }
+huxley-db = { workspace = true, features = ["testing"] }
+huxley-engine.workspace = true
+huxley-expr.workspace = true
+huxley-hwf.workspace = true
+huxley-workflows.workspace = true
 secrecy.workspace = true
+serde_json.workspace = true
+sqlx.workspace = true
+tokio.workspace = true
+uuid.workspace = true
 
 [lints]
 workspace = true

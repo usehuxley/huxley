@@ -23,6 +23,9 @@ pub struct EngineConfig {
     pub concurrency: usize,
     /// What `http.request` steps may reach.
     pub egress: crate::EgressConfig,
+    /// Seconds a claimed job stays with its worker without a heartbeat: how
+    /// long a crashed worker's jobs wait before another worker takes them.
+    pub lease_secs: u64,
 }
 
 impl Default for EngineConfig {
@@ -30,6 +33,7 @@ impl Default for EngineConfig {
         Self {
             concurrency: 8,
             egress: crate::EgressConfig::default(),
+            lease_secs: 60,
         }
     }
 }
@@ -38,6 +42,7 @@ impl From<&EngineConfig> for WorkerConfig {
     fn from(config: &EngineConfig) -> Self {
         Self {
             concurrency: config.concurrency.clamp(1, 256),
+            lease: Duration::from_secs(config.lease_secs.clamp(2, 3600)),
             ..Self::default()
         }
     }

@@ -113,6 +113,7 @@ The server reads, in increasing precedence: built-in defaults, `huxley.toml`, th
 | `HUXLEY_STORAGE__MAX_UPLOAD_MB` | `25` | Largest attachment |
 | `HUXLEY_CRYPTO__RETIRED_KEKS` | (empty) | Previous KEKs as a list, e.g. `[old1, old2]`, during rotation |
 | `HUXLEY_ENGINE__CONCURRENCY` | `8` | Workflow jobs each worker process runs at once |
+| `HUXLEY_ENGINE__LEASE_SECS` | `60` | How long a crashed worker's jobs wait before another worker takes them over |
 | `HUXLEY_ENGINE__EGRESS__ALLOW_PRIVATE` | `false` | Let workflow HTTP steps reach private and loopback addresses. Link-local addresses (cloud metadata) stay blocked. |
 | `HUXLEY_ENGINE__EGRESS__PRIVATE_HOSTS` | (empty) | Host names that may resolve to private addresses anyway, e.g. `[api.internal, "*.corp.example"]` |
 | `HUXLEY_ENGINE__EGRESS__DENIED_HOSTS` | (empty) | Host names workflows may never reach |
