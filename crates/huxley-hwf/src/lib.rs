@@ -73,7 +73,8 @@ pub fn to_yaml(workflow: &Workflow) -> String {
     serde_saphyr::to_string(workflow).expect("HWF types always serialize")
 }
 
-/// The JSON Schema for HWF v1 documents.
+/// The JSON Schema for HWF v1 documents, with keys sorted so the output is
+/// the same however `serde_json` is built (`preserve_order` or not).
 pub fn json_schema() -> serde_json::Value {
     let mut schema = schemars::schema_for!(Workflow).to_value();
     if let Some(object) = schema.as_object_mut() {
@@ -82,5 +83,19 @@ pub fn json_schema() -> serde_json::Value {
             "https://usehuxley.com/schemas/hwf/v1.json".into(),
         );
     }
-    schema
+    sorted(schema)
+}
+
+fn sorted(value: serde_json::Value) -> serde_json::Value {
+    match value {
+        serde_json::Value::Object(map) => {
+            let mut entries: Vec<_> = map.into_iter().collect();
+            entries.sort_by(|a, b| a.0.cmp(&b.0));
+            serde_json::Value::Object(entries.into_iter().map(|(k, v)| (k, sorted(v))).collect())
+        }
+        serde_json::Value::Array(items) => {
+            serde_json::Value::Array(items.into_iter().map(sorted).collect())
+        }
+        other => other,
+    }
 }
