@@ -12,6 +12,8 @@
 		type Step
 	} from './catalog.ts';
 	import type { EditorContext } from './context.ts';
+	import ExpressionInput from './ExpressionInput.svelte';
+	import { namesFor } from './suggest.ts';
 
 	let { editor }: { editor: EditorContext } = $props();
 
@@ -21,6 +23,8 @@
 	let index = $derived(path ? (path[path.length - 1] as number) : -1);
 	let spec = $derived(isStep(step) ? stepSpec(step.type) : undefined);
 	let problems = $derived(path ? editor.problems(pathKey(path)) : []);
+	// What this step's expressions can read, for autocomplete.
+	let names = $derived(path ? namesFor(editor.document, path) : []);
 	let jsonErrors = $state<Record<string, string>>({});
 
 	const fieldId = (f: FieldSpec) => `step-field-${f.path.replaceAll('.', '-')}`;
@@ -216,16 +220,20 @@
 									e.currentTarget.value === '' ? undefined : Number(e.currentTarget.value)
 								)}
 						/>
+					{:else if field.kind === 'expression'}
+						<ExpressionInput
+							id={fieldId(field)}
+							value={text(value)}
+							{names}
+							readonly={editor.readonly}
+							onchange={(v) => set(field.path, v)}
+						/>
 					{:else}
 						<input
 							id={fieldId(field)}
-							class="rounded-control border border-border bg-surface px-2 py-1 text-sm text-fg {field.kind ===
-							'expression'
-								? 'font-mono'
-								: ''}"
+							class="rounded-control border border-border bg-surface px-2 py-1 text-sm text-fg"
 							value={text(value)}
 							readonly={editor.readonly}
-							spellcheck={field.kind === 'expression' ? 'false' : undefined}
 							onchange={(e) => set(field.path, e.currentTarget.value)}
 						/>
 					{/if}
