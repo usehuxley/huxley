@@ -1768,6 +1768,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "huxley-expr"
+version = "0.1.0"
+dependencies = [
+ "base64 0.23.1",
+ "getrandom 0.4.3",
+ "huxley-hwf",
+ "minijinja",
+ "minijinja-contrib",
+ "regex",
+ "serde",
+ "serde_json",
+ "sha2 0.11.1",
+ "thiserror 2.0.21",
+ "uuid",
+]
+
+[[package]]
 name = "huxley-hwf"
 version = "0.1.0"
 dependencies = [
@@ -2549,6 +2566,27 @@ name = "mime"
 version = "0.3.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d5848f5a9e8117cf94f2f90faac24a87ff81600ff8628c1e3deaab572e76bfa1"
+
+[[package]]
+name = "minijinja"
+version = "3.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "509eeb2603a84eccabb4d75f6ec8ba23b46bbf441aaeb863d6b83a5887fd51e4"
+dependencies = [
+ "indexmap 2.14.2",
+ "percent-encoding",
+ "serde",
+]
+
+[[package]]
+name = "minijinja-contrib"
+version = "3.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "64b62a39daf92d02b89f7888ab57f08d15d22dab862e5c95353253f91e9344f0"
+dependencies = [
+ "jiff 0.2.46",
+ "minijinja",
+]
 
 [[package]]
 name = "minimal-lexical"

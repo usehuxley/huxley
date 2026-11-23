@@ -1,0 +1,25 @@
+[package]
+name = "huxley-expr"
+description = "Huxley expressions: sandboxed Jinja with typed evaluation and secret redaction (design doc §6.3, ADR-005)"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[dependencies]
+base64.workspace = true
+getrandom.workspace = true
+huxley-hwf.workspace = true
+minijinja.workspace = true
+minijinja-contrib.workspace = true
+regex.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+thiserror.workspace = true
+uuid.workspace = true
+
+[lints]
+workspace = true
