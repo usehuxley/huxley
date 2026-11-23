@@ -492,6 +492,43 @@ impl From<sqlx::Error> for ReportError {
 }
 
 impl Engine {
+    /// Appends output from a running task, scrubbed, up to the log limit.
+    /// The final report replaces it with the whole log.
+    pub async fn append_script_logs(
+        &self,
+        runner_id: Uuid,
+        id: Uuid,
+        text: &str,
+    ) -> Result<(), ReportError> {
+        let redact = self.redactions(id).await?;
+        let text = match huxley_expr::redact(
+            &Json::String(text.to_owned()),
+            redact.iter().map(String::as_str),
+        ) {
+            Json::String(s) => s,
+            _ => String::new(),
+        };
+        let mut tx = begin_scoped(self.db(), &OrgScope::System)
+            .await
+            .map_err(crate::EngineError::from)?;
+        let updated = sqlx::query(
+            "UPDATE script_tasks \
+                SET logs = left(coalesce(logs, '') || $3, $4) \
+              WHERE id = $1 AND runner_id = $2 AND status = 'running'",
+        )
+        .bind(id)
+        .bind(runner_id)
+        .bind(&text)
+        .bind(i32::try_from(MAX_LOG_BYTES).unwrap_or(i32::MAX))
+        .execute(&mut *tx)
+        .await?;
+        if updated.rows_affected() == 0 {
+            return Err(ReportError::NotYours);
+        }
+        tx.commit().await?;
+        Ok(())
+    }
+
     /// Records `runner_id`'s result for task `id`, scrubbing the task's
     /// secrets from it (whatever the runner did), and wakes its step.
     pub async fn report_script(

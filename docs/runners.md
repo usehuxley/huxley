@@ -2,7 +2,7 @@
 
 Runners execute library scripts in sandboxes, separate from the API and workers (design doc §6.9). They connect to Huxley's **runner gateway**, a gRPC listener on its own port, with a client certificate (ADR-025).
 
-A runner asks the gateway for work, runs each script in a fresh **rootless Podman** container, and reports the result. The `script` workflow step queues that work (see [workflows](workflows.md#steps)). Kubernetes Jobs as a sandbox and live log streaming come next.
+A runner asks the gateway for work, runs each script in a fresh **rootless Podman** container, and reports the result. The `script` workflow step queues that work (see [workflows](workflows.md#steps)). Kubernetes Jobs as a sandbox come next.
 
 ## Set up the gateway
 
@@ -58,7 +58,7 @@ podman pull mcr.microsoft.com/powershell:7.5-alpine-3.20
 podman pull docker.io/library/python:3.13-alpine
 ```
 
-It only offers the languages whose images are present. Choose other images with `--pwsh-image` and `--python-image`, for example ones with your modules preinstalled. `--concurrency` (default 2) sets how many scripts run at once. Logs, meaning stdout and stderr up to 64 KB, are kept with the task, and a failed step's error includes the last 4 KB of them.
+It only offers the languages whose images are present. Choose other images with `--pwsh-image` and `--python-image`, for example ones with your modules preinstalled. `--concurrency` (default 2) sets how many scripts run at once. Logs (stdout and stderr up to 64 KB) are streamed while the script runs: the runner sends new lines about every second, and the run page shows them as they arrive. The whole log replaces them when the script finishes, and a failed step's error includes its last 4 KB. Each streamed line is scrubbed by the runner, and again by Huxley.
 
 ## Network egress
 

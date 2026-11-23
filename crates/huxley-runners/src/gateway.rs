@@ -15,8 +15,8 @@ use tonic::{Request, Response, Status};
 
 use crate::proto::runner_server::{Runner, RunnerServer};
 use crate::proto::{
-    HeartbeatRequest, HeartbeatResponse, NextRequest, NextResponse, RenewRequest, RenewResponse,
-    ReportRequest, ReportResponse, Task,
+    HeartbeatRequest, HeartbeatResponse, LogRequest, LogResponse, NextRequest, NextResponse,
+    RenewRequest, RenewResponse, ReportRequest, ReportResponse, Task,
 };
 use crate::registry::{self, RegistryError, RunnerSource, RunnerView};
 
@@ -177,6 +177,26 @@ impl Runner for Gateway {
                 redact: t.redact,
             }),
         }))
+    }
+
+    async fn log(&self, request: Request<LogRequest>) -> Result<Response<LogResponse>, Status> {
+        let runner = self.runner(&request).await?;
+        let body = request.into_inner();
+        let id: uuid::Uuid = body
+            .task_id
+            .parse()
+            .map_err(|_| Status::invalid_argument("task_id isn't a UUID"))?;
+        match self
+            .engine
+            .append_script_logs(runner.id, id, &body.text)
+            .await
+        {
+            Ok(()) => Ok(Response::new(LogResponse {})),
+            Err(huxley_engine::script::ReportError::NotYours) => {
+                Err(Status::not_found("no such task is running on this runner"))
+            }
+            Err(e) => Err(Status::internal(e.to_string())),
+        }
     }
 
     async fn report(

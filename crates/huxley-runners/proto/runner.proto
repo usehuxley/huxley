@@ -11,6 +11,8 @@ service Runner {
   rpc Renew(RenewRequest) returns (RenewResponse);
   // The next script to run, if there is one.
   rpc Next(NextRequest) returns (NextResponse);
+  // Output from a running script, as it comes.
+  rpc Log(LogRequest) returns (LogResponse);
   // A claimed script's result.
   rpc Report(ReportRequest) returns (ReportResponse);
 }
@@ -72,3 +74,11 @@ message ReportRequest {
 }
 
 message ReportResponse {}
+
+message LogRequest {
+  string task_id = 1;
+  // New output, appended to what was sent before.
+  string text = 2;
+}
+
+message LogResponse {}
