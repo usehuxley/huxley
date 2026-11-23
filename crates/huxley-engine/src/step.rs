@@ -180,6 +180,20 @@ impl Engine {
                     Err(e) => Executed::Failed(error("internal", e.to_string())),
                 }
             }
+            Step::Script(_) => {
+                let timeout = step
+                    .common()
+                    .timeout
+                    .and_then(huxley_hwf::duration::parse)
+                    .unwrap_or(crate::script::DEFAULT_TIMEOUT);
+                match self
+                    .park_script(run_id, org_id, record, input, timeout)
+                    .await
+                {
+                    Ok(executed) => executed,
+                    Err(e) => Executed::Failed(error("internal", e.to_string())),
+                }
+            }
             Step::HttpRequest(_) => match crate::http::request(&self.egress, input).await {
                 Ok(output) => Executed::Done(output),
                 Err(failure) => Executed::Failed(failure),

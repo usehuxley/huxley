@@ -9,6 +9,10 @@ service Runner {
   rpc Heartbeat(HeartbeatRequest) returns (HeartbeatResponse);
   // A new certificate for the runner's new key, before the old one expires.
   rpc Renew(RenewRequest) returns (RenewResponse);
+  // The next script to run, if there is one.
+  rpc Next(NextRequest) returns (NextResponse);
+  // A claimed script's result.
+  rpc Report(ReportRequest) returns (ReportResponse);
 }
 
 message HeartbeatRequest {
@@ -33,3 +37,34 @@ message RenewResponse {
   string certificate_pem = 1;
   int64 expires_at = 2;
 }
+
+message NextRequest {
+  // The languages this runner can run now.
+  repeated string languages = 1;
+}
+
+message Task {
+  string id = 1;
+  string language = 2;
+  string source = 3;
+  // The script's parameters, a JSON object.
+  string inputs_json = 4;
+  int32 timeout_secs = 5;
+}
+
+message NextResponse {
+  // Unset: nothing to do.
+  optional Task task = 1;
+}
+
+message ReportRequest {
+  string task_id = 1;
+  bool succeeded = 2;
+  // The script's result as JSON, if it produced one.
+  optional string output_json = 3;
+  optional string error = 4;
+  optional int32 exit_code = 5;
+  string logs = 6;
+}
+
+message ReportResponse {}

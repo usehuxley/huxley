@@ -1,6 +1,7 @@
 //! Script runners (design doc §6.9, ADR-025).
 
 pub mod ca;
+pub mod exec;
 pub mod gateway;
 pub mod registry;
 

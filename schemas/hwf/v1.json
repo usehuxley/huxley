@@ -1306,6 +1306,73 @@
         },
         {
           "additionalProperties": false,
+          "description": "Run a library script in a sandboxed runner.",
+          "properties": {
+            "continue_on_error": {
+              "description": "Record the error as the step's output and carry on.",
+              "type": "boolean"
+            },
+            "description": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "id": {
+              "description": "Unique in the workflow: lowercase letters, digits, underscores.\nOther steps read this step's output as `steps.<id>.output`.",
+              "type": "string"
+            },
+            "if": {
+              "description": "Skip the step unless this expression is true.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "name": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "retry": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/RetryPolicy"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "script": {
+              "description": "The library script's key (this organization's or the nearest one\nabove that has it).",
+              "type": "string"
+            },
+            "timeout": {
+              "description": "Fail the attempt after this long, e.g. `30s`.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "type": {
+              "const": "script",
+              "type": "string"
+            },
+            "with": {
+              "description": "Its parameters."
+            }
+          },
+          "required": [
+            "type",
+            "id",
+            "script"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
           "description": "End the run successfully.",
           "properties": {
             "continue_on_error": {

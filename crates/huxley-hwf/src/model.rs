@@ -329,6 +329,9 @@ pub enum Step {
     /// Park until one of the approvers approves or rejects.
     #[serde(rename = "approval")]
     Approval(ApprovalStep),
+    /// Run a library script in a sandboxed runner.
+    #[serde(rename = "script")]
+    Script(ScriptStep),
     /// End the run successfully.
     #[serde(rename = "return")]
     Return(ReturnStep),
@@ -478,6 +481,15 @@ pub struct CallbackSend {
     pub request: Option<HttpRequest>,
 }
 
+step!(ScriptStep {
+    /// The library script's key (this organization's or the nearest one
+    /// above that has it).
+    pub script: String,
+    /// Its parameters.
+    #[serde(default, rename = "with", skip_serializing_if = "Option::is_none")]
+    pub inputs: Option<Value>,
+});
+
 step!(ApprovalStep {
     /// What's being decided; shown to approvers.
     pub title: String,
@@ -559,6 +571,7 @@ impl Step {
             Subworkflow,
             WaitForCallback,
             Approval,
+            Script,
             Return,
             Fail,
             Notify
@@ -585,6 +598,7 @@ impl Step {
             Self::Subworkflow(_) => "subworkflow",
             Self::WaitForCallback(_) => "wait_for_callback",
             Self::Approval(_) => "approval",
+            Self::Script(_) => "script",
             Self::Return(_) => "return",
             Self::Fail(_) => "fail",
             Self::Notify(_) => "core.notify",

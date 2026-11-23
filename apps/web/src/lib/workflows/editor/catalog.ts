@@ -60,6 +60,23 @@ export const STEPS: StepSpec[] = [
 		]
 	},
 	{
+		type: 'script',
+		label: 'Run script',
+		description: 'Run a library script in a sandboxed runner.',
+		group: 'Actions',
+		template: { script: '', with: {}, timeout: '15m' },
+		fields: [
+			{ path: 'script', label: 'Script key', kind: 'text', hint: 'From Scripts, e.g. reset-mfa' },
+			{ path: 'with', label: 'Parameters', kind: 'json', hint: 'An object' },
+			{
+				path: 'timeout',
+				label: 'Timeout',
+				kind: 'text',
+				hint: 'Waiting for a runner included, e.g. 15m'
+			}
+		]
+	},
+	{
 		type: 'core.notify',
 		label: 'Notify',
 		description: 'Tell people in the app and by email.',
@@ -377,6 +394,8 @@ export function summary(step: Step): string {
 			return text(step.action);
 		case 'approval':
 			return text(step.title);
+		case 'script':
+			return text(step.script);
 		case 'wait_for_callback':
 			return `expires after ${text(step.expires ?? '24h')}`;
 		case 'transform':

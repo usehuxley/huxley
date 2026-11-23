@@ -14,6 +14,8 @@ getrandom.workspace = true
 huxley-core.workspace = true
 huxley-crypto.workspace = true
 huxley-db.workspace = true
+huxley-engine.workspace = true
+huxley-scripts.workspace = true
 ring.workspace = true
 rustls.workspace = true
 serde.workspace = true
@@ -22,7 +24,7 @@ sqlx.workspace = true
 utoipa.workspace = true
 uuid.workspace = true
 x509-parser.workspace = true
-tokio.workspace = true
+tokio = { workspace = true, features = ["process", "io-util"] }
 tokio-stream.workspace = true
 tokio-util.workspace = true
 zeroize.workspace = true

@@ -165,6 +165,7 @@ const NOT_EXPRESSIONS: &[&str] = &[
     "action",
     "connection",
     "expires",
+    "script",
 ];
 
 impl Checker<'_> {
