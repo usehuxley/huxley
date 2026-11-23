@@ -268,7 +268,15 @@
 								</p>
 							{/if}
 							{#if trigger.nextRunAt}
-								<p class="mt-1 text-xs text-fg-muted">Next run {when(trigger.nextRunAt)}</p>
+								<p class="mt-1 text-xs text-fg-muted">
+									{trigger.type === 'poll' ? 'Next check' : 'Next run'}
+									{when(trigger.nextRunAt)}
+								</p>
+							{/if}
+							{#if trigger.lastError}
+								<p class="mt-1 text-xs text-danger" role="alert">
+									Last check failed: {trigger.lastError}
+								</p>
 							{/if}
 						</li>
 					{/each}

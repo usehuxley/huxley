@@ -92,6 +92,9 @@ pub enum Trigger {
     Webhook(WebhookTrigger),
     /// A domain event, such as `ticket.created`.
     Event(EventTrigger),
+    /// New (or changed) items from an integration's list action, checked at
+    /// an interval.
+    Poll(PollTrigger),
     /// A form submission.
     Form(FormTrigger),
     /// Exposed as a tool to MCP clients and the assistant.
@@ -105,6 +108,7 @@ impl Trigger {
             Self::Schedule(t) => t.id.as_deref(),
             Self::Webhook(t) => t.id.as_deref(),
             Self::Event(t) => t.id.as_deref(),
+            Self::Poll(t) => t.id.as_deref(),
             Self::Form(t) => t.id.as_deref(),
             Self::McpTool(t) => t.id.as_deref(),
         }
@@ -116,6 +120,7 @@ impl Trigger {
             Self::Schedule(_) => "schedule",
             Self::Webhook(_) => "webhook",
             Self::Event(_) => "event",
+            Self::Poll(_) => "poll",
             Self::Form(_) => "form",
             Self::McpTool(_) => "mcp_tool",
         }
@@ -220,6 +225,41 @@ pub struct EventTrigger {
     /// Start a run only when this expression is true. `event` is in scope.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub filter: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct PollTrigger {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub id: Option<String>,
+    /// The list action: `<integration key>/<action key>`.
+    pub action: String,
+    /// A connection key; default: the nearest one, as for action steps.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub connection: Option<String>,
+    /// The action's inputs, passed as they are (not expressions).
+    #[serde(default, rename = "with", skip_serializing_if = "Option::is_none")]
+    pub inputs: Option<Value>,
+    /// How often to check, e.g. `5m` (at least `1m`).
+    pub interval: String,
+    /// Where the list is in the response, as a dotted path (e.g. `value`);
+    /// by default the response is the list.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub items: Option<String>,
+    /// The field that identifies an item (dotted path; default `id`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub item_id: Option<String>,
+    /// Start runs for new items only (default), or for changed ones too.
+    #[serde(default)]
+    pub on: PollOn,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum PollOn {
+    #[default]
+    New,
+    NewOrChanged,
 }
 
 #[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize, JsonSchema)]

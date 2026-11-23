@@ -7,6 +7,7 @@
 //! - [`find_webhook`] and [`start`]: what the webhook endpoint calls.
 
 pub mod events;
+pub mod poll;
 pub mod webhook;
 
 use std::time::Duration;
@@ -188,6 +189,11 @@ async fn lead(engine: &Engine, shutdown: &CancellationToken) -> TriggerResult<()
             Ok(0) => {}
             Ok(started) => tracing::info!(started, "started scheduled runs"),
             Err(e) => tracing::error!(error = %e, "scheduler tick failed"),
+        }
+        match poll::poll_due(engine).await {
+            Ok(0) => {}
+            Ok(started) => tracing::info!(started, "started runs for polled items"),
+            Err(e) => tracing::error!(error = %e, "polling failed"),
         }
         tokio::select! {
             () = shutdown.cancelled() => {

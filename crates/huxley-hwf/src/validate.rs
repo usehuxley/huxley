@@ -185,6 +185,7 @@ fn triggers(c: &mut Checker, triggers: &[Trigger]) {
                     c.error(timeout, "at most 5m");
                 }
             }
+            Trigger::Poll(p) => poll_trigger(c, &path, p),
             Trigger::Event(e) if e.event.trim().is_empty() => {
                 c.error(format!("{path}.event"), "is required");
             }
@@ -193,6 +194,38 @@ fn triggers(c: &mut Checker, triggers: &[Trigger]) {
             }
             _ => {}
         }
+    }
+}
+
+/// The shortest poll interval.
+const MIN_POLL_SECS: u64 = 60;
+
+fn poll_trigger(c: &mut Checker, path: &str, p: &crate::PollTrigger) {
+    let fixed = p
+        .action
+        .split_once('/')
+        .is_some_and(|(integration, action)| {
+            is_valid_key(integration)
+                && !action.is_empty()
+                && action
+                    .chars()
+                    .all(|c| c.is_ascii_alphanumeric() || c == '_')
+        });
+    if !fixed {
+        c.error(format!("{path}.action"), "<integration key>/<action key>");
+    }
+    if p.connection.as_deref().is_some_and(|k| !is_valid_key(k)) {
+        c.error(format!("{path}.connection"), "a connection key");
+    }
+    match duration::parse(&p.interval) {
+        None => c.error(
+            format!("{path}.interval"),
+            format!("{:?} is not a duration", p.interval),
+        ),
+        Some(d) if d.as_secs() < MIN_POLL_SECS => {
+            c.error(format!("{path}.interval"), "at least 1m");
+        }
+        Some(_) => {}
     }
 }
 

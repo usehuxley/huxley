@@ -30,6 +30,8 @@ tracing.workspace = true
 uuid.workspace = true
 
 [dev-dependencies]
+axum.workspace = true
+huxley-integrations.workspace = true
 huxley-orgs.workspace = true
 huxley-crypto = { workspace = true, features = ["testing"] }
 huxley-db = { workspace = true, features = ["testing"] }

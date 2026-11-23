@@ -3528,6 +3528,8 @@ export interface components {
 		};
 		/** @description A trigger as the app shows it. */
 		TriggerView: {
+			/** @description Polls: why the last check failed, if it did. */
+			lastError?: string | null;
 			/** Format: date-time */
 			lastRunAt?: string | null;
 			/** Format: date-time */

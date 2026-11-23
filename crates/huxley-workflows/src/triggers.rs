@@ -28,6 +28,8 @@ pub struct TriggerView {
     pub next_run_at: Option<OffsetDateTime>,
     #[serde(with = "time::serde::rfc3339::option")]
     pub last_run_at: Option<OffsetDateTime>,
+    /// Polls: why the last check failed, if it did.
+    pub last_error: Option<String>,
 }
 
 fn to_offset(at: Timestamp) -> Option<OffsetDateTime> {
@@ -104,6 +106,8 @@ pub async fn sync(
                 let zone = schedule_zone(conn, org_id, schedule).await?;
                 next_run(schedule, &zone, now)
             }
+            // The first check records what's there already.
+            Trigger::Poll(_) => Some(now),
             _ => None,
         };
         let public = matches!(trigger, Trigger::Webhook(_)).then(public_id);
@@ -121,6 +125,9 @@ pub async fn sync(
                           OR workflow_triggers.next_run_at IS NULL \
                         THEN EXCLUDED.next_run_at \
                         ELSE workflow_triggers.next_run_at END, \
+                    last_run_at = CASE \
+                        WHEN workflow_triggers.config IS DISTINCT FROM EXCLUDED.config THEN NULL \
+                        ELSE workflow_triggers.last_run_at END, \
                     updated_at = now()",
         )
         .bind(huxley_core::new_id())
@@ -133,6 +140,18 @@ pub async fn sync(
         .bind(next_run_at)
         .execute(&mut *conn)
         .await?;
+        // A changed poll starts over: its next check is a new baseline.
+        if matches!(trigger, Trigger::Poll(_)) {
+            sqlx::query(
+                "DELETE FROM poll_items p USING workflow_triggers t \
+                  WHERE p.trigger_id = t.id AND t.workflow_id = $1 AND t.trigger_id = $2 \
+                    AND t.last_run_at IS NULL",
+            )
+            .bind(workflow_id)
+            .bind(&trigger_id)
+            .execute(&mut *conn)
+            .await?;
+        }
         ids.push(trigger_id);
     }
     sqlx::query(
@@ -156,7 +175,8 @@ pub async fn clear(conn: &mut PgConnection, workflow_id: Uuid) -> WorkflowResult
 
 pub async fn list(conn: &mut PgConnection, workflow_id: Uuid) -> WorkflowResult<Vec<TriggerView>> {
     Ok(sqlx::query_as(
-        "SELECT trigger_id, type, public_id, next_run_at, last_run_at FROM workflow_triggers \
+        "SELECT trigger_id, type, public_id, next_run_at, last_run_at, last_error \
+           FROM workflow_triggers \
           WHERE workflow_id = $1 ORDER BY trigger_id",
     )
     .bind(workflow_id)

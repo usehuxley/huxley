@@ -164,7 +164,7 @@ struct Target {
 
 async fn target(
     conn: &mut PgConnection,
-    run_id: Uuid,
+    run_id: Option<Uuid>,
     org_id: Uuid,
     input: &Json,
 ) -> EngineResult<Result<Target, Json>> {
@@ -175,9 +175,12 @@ async fn target(
             format!("action {full:?} should be <integration>/<action>"),
         )));
     };
-    let Some((integration_id, version)) =
-        pinned(&mut *conn, run_id, org_id, integration_key).await?
-    else {
+    // Runs use their pinned version; polls (no run) use the current one.
+    let found = match run_id {
+        Some(run_id) => pinned(&mut *conn, run_id, org_id, integration_key).await?,
+        None => find_integration(&mut *conn, org_id, integration_key).await?,
+    };
+    let Some((integration_id, version)) = found else {
         return Ok(Err(error(
             "definition",
             format!("no integration {integration_key:?} here or above"),
@@ -362,6 +365,26 @@ impl Engine {
     pub(crate) async fn call_action(
         &self,
         run_id: Uuid,
+        org_id: Uuid,
+        input: &Json,
+    ) -> EngineResult<Result<Json, Json>> {
+        self.call_action_in(Some(run_id), org_id, input).await
+    }
+
+    /// Calls an action for a poll trigger: no run, so the integration's
+    /// current version. `input` is `{action, connection, inputs}`; `Ok`
+    /// holds the response body.
+    pub async fn poll_action(
+        &self,
+        org_id: Uuid,
+        input: &Json,
+    ) -> EngineResult<Result<Json, Json>> {
+        self.call_action_in(None, org_id, input).await
+    }
+
+    async fn call_action_in(
+        &self,
+        run_id: Option<Uuid>,
         org_id: Uuid,
         input: &Json,
     ) -> EngineResult<Result<Json, Json>> {
