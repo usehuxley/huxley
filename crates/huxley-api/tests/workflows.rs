@@ -1217,3 +1217,207 @@ async fn script_steps_show_where_they_ran_and_their_logs() {
         .await;
     assert_eq!(status, StatusCode::NOT_FOUND);
 }
+
+/// A vendor API listing users at `GET /users`, plus a `POST /users`.
+async fn vendor() -> u16 {
+    let app = axum::Router::new().route(
+        "/users",
+        axum::routing::get(|| async {
+            axum::Json(json!({ "value": [
+                { "id": "u1", "displayName": "Ada Lovelace" },
+                { "id": "u2", "displayName": "Grace Hopper" } ] }))
+        })
+        .post(|| async { axum::Json(json!({})) }),
+    );
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let port = listener.local_addr().unwrap().port();
+    tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+    port
+}
+
+/// A form whose "user" field is shown for existing users, with choices
+/// from the vendor, and whose "reason" field is shown for new ones.
+fn access_form(org: Uuid, integration: &str) -> Value {
+    json!({ "orgId": org, "form": {
+        "key": key("access"), "name": "Access request",
+        "schema": { "type": "object", "required": ["kind", "user", "reason"], "properties": {
+            "kind": { "type": "string", "enum": ["existing", "new"] },
+            "user": { "type": "string", "title": "Who" },
+            "reason": { "type": "string" } } },
+        "ui": {
+            "user": { "show_if": { "field": "kind", "equals": "existing" },
+                      "options_from": { "action": format!("{integration}/listUsers"), "items": "value",
+                                        "value": "id", "label": "displayName" } },
+            "reason": { "show_if": { "field": "kind", "equals": "new" } } } } })
+}
+
+/// An app whose engine may reach a local vendor API, and an integration
+/// (with a connection) for that API: returns the app and its key.
+async fn lookup_app(s: &Setup) -> (axum::Router, String) {
+    // An app whose engine may reach the local vendor API.
+    let auth = AuthService::new(s.pools.app.clone(), AuthConfig::default(), crypto(&s.pools));
+    let config = ApiConfig {
+        login_attempts_per_minute: 1000,
+        ..ApiConfig::default()
+    };
+    let mut state = AppState::new(s.pools.app.clone(), auth, crypto(&s.pools), config);
+    state.engine = huxley_engine::Engine::with_config(
+        s.pools.app.clone(),
+        crypto(&s.pools),
+        &huxley_engine::EngineConfig {
+            egress: huxley_engine::EgressConfig {
+                private_hosts: vec!["127.0.0.1".into()],
+                ..huxley_engine::EgressConfig::default()
+            },
+            ..huxley_engine::EngineConfig::default()
+        },
+    );
+    let app = router(state);
+    let port = vendor().await;
+    let integration = key("dir");
+    let spec = format!(
+        "openapi: 3.0.3\ninfo: {{ title: Dir, version: '1' }}\nservers: [ {{ url: 'http://127.0.0.1:{port}' }} ]\n\
+         paths:\n  /users:\n    get: {{ operationId: listUsers, responses: {{ '200': {{ description: ok }} }} }}\n\
+         \x20   post: {{ operationId: createUser, responses: {{ '200': {{ description: ok }} }} }}\n"
+    );
+    let ctx = RequestContext::system(Via::System);
+    // The org's first data key audits on its own: make it first.
+    crypto(&s.pools)
+        .encrypt(
+            s.org,
+            huxley_crypto::Binding {
+                purpose: "test",
+                record: s.org,
+            },
+            b"x",
+        )
+        .await
+        .unwrap();
+    let mut tx = begin_scoped(&s.pools.app, &OrgScope::System).await.unwrap();
+    let created =
+        huxley_integrations::store::create(&mut tx, &ctx, s.org, Some(&integration), &spec)
+            .await
+            .unwrap();
+    let input = huxley_integrations::connections::ConnectionInput {
+        name: "Main".into(),
+        key: Some("main".into()),
+        ..huxley_integrations::connections::ConnectionInput::default()
+    };
+    huxley_integrations::connections::create(
+        &mut tx,
+        &crypto(&s.pools),
+        &ctx,
+        s.org,
+        created.summary.id,
+        &input,
+    )
+    .await
+    .unwrap();
+    tx.commit().await.unwrap();
+
+    (app, integration)
+}
+
+#[tokio::test]
+async fn forms_show_fields_conditionally_and_look_up_choices() {
+    let Some(s) = setup().await else { return };
+    let (app, integration) = lookup_app(&s).await;
+    let form = access_form(s.org, &integration);
+    let (status, created) = call(&app, "POST", "/api/v1/forms", &s.owner, Some(form)).await;
+    assert_eq!(status, StatusCode::CREATED, "{created}");
+    let id = created["id"].as_str().unwrap().to_owned();
+
+    // The looked-up choices.
+    let (status, choices) = call(
+        &app,
+        "GET",
+        &format!("/api/v1/forms/{id}/fields/user/options"),
+        &s.owner,
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{choices}");
+    assert_eq!(
+        choices,
+        json!([{ "value": "u1", "label": "Ada Lovelace" }, { "value": "u2", "label": "Grace Hopper" }])
+    );
+    let (status, _) = call(
+        &app,
+        "GET",
+        &format!("/api/v1/forms/{id}/fields/reason/options"),
+        &s.owner,
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::NOT_FOUND, "no lookup on that field");
+
+    // "existing": user is asked (and checked); reason is hidden, so not required and dropped.
+    let submit = format!("/api/v1/forms/{id}/submissions");
+    let (status, problem) = call(
+        &app,
+        "POST",
+        &submit,
+        &s.owner,
+        Some(json!({ "answers": { "kind": "existing", "user": "u9" } })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{problem}");
+    assert_eq!(problem["errors"][0]["pointer"], "answers/user");
+    assert_eq!(problem["errors"][0]["message"], "not one of the choices");
+    let (status, submitted) = call(
+        &app,
+        "POST",
+        &submit,
+        &s.owner,
+        Some(json!({ "answers": { "kind": "existing", "user": "u2", "reason": "ignored" } })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED, "{submitted}");
+    let data: Value = sqlx::query_scalar("SELECT data FROM form_submissions WHERE id = $1")
+        .bind(
+            submitted["submissionId"]
+                .as_str()
+                .unwrap()
+                .parse::<Uuid>()
+                .unwrap(),
+        )
+        .fetch_one(&s.pools.owner)
+        .await
+        .unwrap();
+    assert_eq!(data, json!({ "kind": "existing", "user": "u2" }));
+
+    // "new": reason is required, user isn't.
+    let (status, problem) = call(
+        &app,
+        "POST",
+        &submit,
+        &s.owner,
+        Some(json!({ "answers": { "kind": "new" } })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{problem}");
+    assert!(problem.to_string().contains("reason"), "{problem}");
+
+    // Lookups are read-only: a POST action can't be used.
+    let mut tx = begin_scoped(&s.pools.app, &OrgScope::System).await.unwrap();
+    sqlx::query("UPDATE forms SET ui = jsonb_set(ui, '{user,options_from,action}', to_jsonb($2::text)) WHERE id = $1")
+        .bind(id.parse::<Uuid>().unwrap())
+        .bind(format!("{integration}/createUser"))
+        .execute(&mut *tx)
+        .await
+        .unwrap();
+    tx.commit().await.unwrap();
+    let (status, problem) = call(
+        &app,
+        "GET",
+        &format!("/api/v1/forms/{id}/fields/user/options"),
+        &s.owner,
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_GATEWAY, "{problem}");
+    assert!(
+        problem["detail"].as_str().unwrap().contains("read-only"),
+        "{problem}"
+    );
+}

@@ -48,6 +48,8 @@ utoipa.workspace = true
 uuid.workspace = true
 
 [dev-dependencies]
+huxley-integrations.workspace = true
+huxley-engine.workspace = true
 huxley-scripts.workspace = true
 huxley-runners.workspace = true
 ring.workspace = true

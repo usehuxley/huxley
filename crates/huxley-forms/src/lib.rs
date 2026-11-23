@@ -7,8 +7,14 @@
 //! Supported fields (the renderer's subset): strings (with `enum` for a
 //! choice, `format: date | date-time | email`, `maxLength`), integers and
 //! numbers, booleans, and arrays of `enum` strings (several choices). UI
-//! hints per field: `widget: textarea`, `help`, `placeholder`; and
-//! `order`, the fields' order.
+//! hints per field: `widget: textarea`, `help`, `placeholder`,
+//! `show_if` (shown only for certain answers) and `options_from` (choices
+//! looked up through a read-only integration action); and `order`, the
+//! fields' order.
+
+mod hints;
+
+pub use hints::{Choice, OptionsFrom, ShowIf, choices_of, options, shown};
 
 use huxley_core::RequestContext;
 use huxley_db::audit::{self, AuditRecord};
@@ -37,6 +43,9 @@ pub enum FormError {
     InvalidAnswers(Vec<(String, String)>),
     #[error("the form is archived")]
     Archived,
+    /// Looking up a field's choices failed.
+    #[error("couldn't look up the choices: {0}")]
+    Lookup(String),
     #[error(transparent)]
     Engine(#[from] huxley_engine::EngineError),
     #[error(transparent)]
@@ -138,7 +147,9 @@ pub fn check(input: &FormInput) -> FormResult<()> {
         let supported = match field["type"].as_str() {
             Some("string" | "integer" | "number" | "boolean") => true,
             Some("array") => {
-                field["items"]["type"] == "string" && field["items"]["enum"].is_array()
+                field["items"]["type"] == "string"
+                    && (field["items"]["enum"].is_array()
+                        || hints::options_from(&input.ui, name).is_some())
             }
             _ => false,
         };
@@ -155,7 +166,7 @@ pub fn check(input: &FormInput) -> FormResult<()> {
     if !input.ui.is_null() && !input.ui.is_object() {
         return Err(invalid("ui", "an object of hints"));
     }
-    Ok(())
+    hints::check(schema, &input.ui)
 }
 
 fn ui(input: &FormInput) -> Json {
@@ -287,14 +298,53 @@ pub async fn list(conn: &mut PgConnection) -> FormResult<Vec<Form>> {
 }
 
 /// Checks answers against a form: one problem per field, with a pointer.
-pub fn check_answers(form: &Form, answers: &Json) -> FormResult<()> {
-    let Ok(validator) = jsonschema::validator_for(&form.schema) else {
+/// Fields that aren't shown (`show_if`) aren't required, and their answers
+/// are dropped: returns the answers that count.
+pub fn check_answers(form: &Form, answers: &Json) -> FormResult<Json> {
+    let (kept, hidden) = hints::shown(form, answers);
+    let schema = hints::schema_for(form, &hidden);
+    let Ok(validator) = jsonschema::validator_for(&schema) else {
         return Err(invalid("schema", "the form's schema doesn't compile"));
     };
     let problems: Vec<(String, String)> = validator
-        .iter_errors(answers)
+        .iter_errors(&kept)
         .map(|e| (e.instance_path().to_string(), e.to_string()))
         .collect();
+    if problems.is_empty() {
+        Ok(kept)
+    } else {
+        Err(FormError::InvalidAnswers(problems))
+    }
+}
+
+/// Checks that answers to fields with looked-up choices are among them
+/// (looking them up again, for `org_id`). Call before [`submit`], outside
+/// a transaction.
+pub async fn check_choices(
+    engine: &Engine,
+    form: &Form,
+    answers: &Json,
+    org_id: Uuid,
+) -> FormResult<()> {
+    let (kept, _) = hints::shown(form, answers);
+    let mut problems = Vec::new();
+    for (name, answer) in kept.as_object().into_iter().flatten() {
+        if hints::options_from(&form.ui, name).is_none() {
+            continue;
+        }
+        let choices = hints::options(engine, form, name, org_id).await?;
+        let given: Vec<&Json> = match answer {
+            Json::Array(items) => items.iter().collect(),
+            one => vec![one],
+        };
+        let all_known = given.iter().all(|g| {
+            g.as_str()
+                .is_some_and(|g| choices.iter().any(|c| c.value == g))
+        });
+        if !all_known {
+            problems.push((format!("/{name}"), "not one of the choices".to_owned()));
+        }
+    }
     if problems.is_empty() {
         Ok(())
     } else {
@@ -332,7 +382,7 @@ pub async fn submit(
     if form.archived {
         return Err(FormError::Archived);
     }
-    check_answers(&form, &answers)?;
+    let answers = check_answers(&form, &answers)?;
     let workflows: Vec<(Uuid, String, i32, Json)> = sqlx::query_as(
         "SELECT w.id, w.name, w.current_version, v.document FROM workflow_triggers t \
            JOIN workflows w ON w.id = t.workflow_id \

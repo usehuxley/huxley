@@ -16,8 +16,55 @@ export interface BuilderField {
 	help: string;
 	placeholder: string;
 	options: string[];
+	/** Shown only when another field's answer is one of `values`. */
+	showIf: { field: string; values: string } | null;
+	/** Choices looked up through a read-only integration action. */
+	lookup: Lookup | null;
 	/** The rest of the field's schema, kept as it was. */
 	extra: Obj;
+	/** Hints the builder doesn't edit, kept as they were. */
+	hintExtra?: Obj;
+}
+
+export interface Lookup {
+	action: string;
+	connection: string;
+	items: string;
+	value: string;
+	label: string;
+	/** `with` and anything else, kept as it was. */
+	extra: Obj;
+}
+
+/** Hint keys the builder sets; others are kept. */
+const MANAGED_HINTS = ['widget', 'help', 'placeholder', 'show_if', 'options_from'];
+const text = (v: unknown) => (typeof v === 'string' ? v : '');
+const shownValue = (v: unknown) => (typeof v === 'string' ? v : JSON.stringify(v));
+
+function lookupOf(v: unknown): Lookup | null {
+	if (!isObj(v)) return null;
+	const { action, connection, items, value, label, ...extra } = v;
+	return {
+		action: text(action),
+		connection: text(connection),
+		items: text(items),
+		value: text(value),
+		label: text(label),
+		extra
+	};
+}
+
+/** The builder's text of values ("a, b") as `show_if` values, typed for the field they test. */
+function ruleValues(values: string, kind: FieldKind | undefined): unknown[] {
+	return values
+		.split(',')
+		.map((v) => v.trim())
+		.filter(Boolean)
+		.map((v) => {
+			if (kind === 'boolean') return v === 'true' || v === 'yes';
+			if (kind === 'number' || kind === 'integer') return Number.isNaN(Number(v)) ? v : Number(v);
+			return v;
+		});
 }
 
 export const KINDS: { value: FieldKind; label: string }[] = [
@@ -50,6 +97,15 @@ export function builderFieldsOf(schema: unknown, ui: unknown): BuilderField[] {
 		const hints: Obj = isObj(hintValue) ? hintValue : {};
 		// Help shown from `description` stays there unless a hint overrides it.
 		const help = typeof hints.help === 'string' ? hints.help : '';
+		const hintExtra = Object.fromEntries(
+			Object.entries(hints).filter(([k]) => !MANAGED_HINTS.includes(k))
+		);
+		const rule = f.showIf;
+		const values = rule
+			? 'equals' in rule
+				? shownValue(rule.equals)
+				: (rule.in ?? []).map(shownValue).join(', ')
+			: '';
 		return {
 			name: f.name,
 			label: f.label === f.name && typeof own.title !== 'string' ? '' : f.label,
@@ -58,7 +114,10 @@ export function builderFieldsOf(schema: unknown, ui: unknown): BuilderField[] {
 			help,
 			placeholder: f.placeholder ?? '',
 			options: f.options,
-			extra
+			showIf: rule ? { field: rule.field, values } : null,
+			lookup: lookupOf(hints.options_from),
+			extra,
+			hintExtra
 		};
 	});
 }
@@ -85,12 +144,12 @@ function propertyOf(field: BuilderField): Obj {
 			Object.assign(out, { type: 'string', format: 'date-time' });
 			break;
 		case 'select':
-			Object.assign(out, { type: 'string', enum: options });
+			Object.assign(out, field.lookup ? { type: 'string' } : { type: 'string', enum: options });
 			break;
 		case 'multiselect':
 			Object.assign(out, {
 				type: 'array',
-				items: { type: 'string', enum: options },
+				items: field.lookup ? { type: 'string' } : { type: 'string', enum: options },
 				uniqueItems: true
 			});
 			break;
@@ -117,10 +176,33 @@ export function definitionOf(
 	for (const field of fields) {
 		properties[field.name] = propertyOf(field);
 		if (field.required) required.push(field.name);
-		const hint: Obj = {};
+		const hint: Obj = { ...field.hintExtra };
 		if (field.kind === 'textarea') hint.widget = 'textarea';
 		if (field.help.trim()) hint.help = field.help.trim();
 		if (field.placeholder.trim()) hint.placeholder = field.placeholder.trim();
+		if (field.showIf?.field) {
+			const target = fields.find((f) => f.name === field.showIf?.field);
+			const values = ruleValues(field.showIf.values, target?.kind);
+			hint.show_if =
+				values.length === 1
+					? { field: field.showIf.field, equals: values[0] }
+					: values.length > 1
+						? { field: field.showIf.field, in: values }
+						: { field: field.showIf.field };
+		}
+		if (field.lookup && hasOptions(field.kind)) {
+			const l = field.lookup;
+			const lookup: Obj = { ...l.extra, action: l.action.trim() };
+			for (const [k, v] of [
+				['connection', l.connection],
+				['items', l.items],
+				['value', l.value],
+				['label', l.label]
+			] as const) {
+				if (v.trim()) lookup[k] = v.trim();
+			}
+			hint.options_from = lookup;
+		}
 		if (Object.keys(hint).length) ui[field.name] = hint;
 		else delete ui[field.name];
 	}
@@ -152,8 +234,19 @@ export function problemsOf(fields: BuilderField[]): Map<number, string> {
 			problems.set(i, 'The name needs lowercase letters, digits and underscores.');
 		} else if (fields.findIndex((g) => g.name === f.name) !== i) {
 			problems.set(i, 'Another field has this name.');
-		} else if (hasOptions(f.kind) && !f.options.some((o) => o.trim())) {
+		} else if (
+			hasOptions(f.kind) &&
+			f.lookup &&
+			!/^[^/\s]+\/[^/\s]+$/.test(f.lookup.action.trim())
+		) {
+			problems.set(i, 'The action is <integration>/<action>.');
+		} else if (hasOptions(f.kind) && !f.lookup && !f.options.some((o) => o.trim())) {
 			problems.set(i, 'Add at least one choice.');
+		} else if (
+			f.showIf &&
+			(f.showIf.field === f.name || !fields.some((g) => g.name === f.showIf?.field))
+		) {
+			problems.set(i, 'Choose another field for when to show this one.');
 		}
 	});
 	return problems;

@@ -395,7 +395,8 @@ impl Engine {
         org_id: Uuid,
         input: &Json,
     ) -> EngineResult<Result<Json, Json>> {
-        self.call_action_in(Some(run_id), org_id, input).await
+        self.call_action_in(Some(run_id), org_id, input, false)
+            .await
     }
 
     /// Calls an action for a poll trigger: no run, so the integration's
@@ -406,7 +407,18 @@ impl Engine {
         org_id: Uuid,
         input: &Json,
     ) -> EngineResult<Result<Json, Json>> {
-        self.call_action_in(None, org_id, input).await
+        self.call_action_in(None, org_id, input, false).await
+    }
+
+    /// Calls a read-only (GET) action to look something up, e.g. a form
+    /// field's choices: anything else is refused. Same input as
+    /// [`Self::poll_action`].
+    pub async fn lookup_action(
+        &self,
+        org_id: Uuid,
+        input: &Json,
+    ) -> EngineResult<Result<Json, Json>> {
+        self.call_action_in(None, org_id, input, true).await
     }
 
     async fn call_action_in(
@@ -414,6 +426,7 @@ impl Engine {
         run_id: Option<Uuid>,
         org_id: Uuid,
         input: &Json,
+        read_only: bool,
     ) -> EngineResult<Result<Json, Json>> {
         let inputs = match &input["inputs"] {
             Json::Null => json!({}),
@@ -428,6 +441,15 @@ impl Engine {
             }
         };
         tx.commit().await?;
+        if read_only && !target.action.method.eq_ignore_ascii_case("get") {
+            return Ok(Err(error(
+                "definition",
+                format!(
+                    "{} isn't a read-only (GET) action, so it can't be used to look things up",
+                    target.action.key
+                ),
+            )));
+        }
         if let Err(failure) = check_inputs(&target.action, &inputs) {
             return Ok(Err(failure));
         }

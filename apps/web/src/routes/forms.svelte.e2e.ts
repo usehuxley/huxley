@@ -136,4 +136,42 @@ spec:
 		await expect(page.getByLabel('Department')).toBeVisible();
 		await expect(page.getByLabel('Full name *')).toBeVisible();
 	});
+
+	test('a question shows only when an earlier answer calls for it', async ({ browser }) => {
+		const page = await signIn(browser);
+		const suffix = Date.now().toString(36);
+		const formName = `Equipment ${suffix}`;
+		await page.goto('/forms');
+		await page.getByLabel('Name').fill(formName);
+		await page.getByRole('button', { name: 'Create' }).click();
+		await expect(page.getByRole('heading', { level: 1 })).toHaveText('Edit form');
+		const remove = page.getByRole('button', { name: 'Remove field' });
+		while ((await remove.count()) > 0) await remove.first().click();
+
+		await page.getByRole('button', { name: 'Add field' }).click();
+		const first = page.getByRole('group', { name: 'Field 1' });
+		await first.getByLabel('Label').fill('Needs a laptop');
+		await first.getByLabel('Type').selectOption('boolean');
+		await page.getByRole('button', { name: 'Add field' }).click();
+		const second = page.getByRole('group', { name: 'Field 2' });
+		await second.getByLabel('Label').fill('Laptop model');
+		await second.getByLabel('Required').check();
+		await second.getByLabel('Show only when').selectOption('needs_a_laptop');
+		await second.getByLabel('…is (comma-separated; empty: answered)').fill('true');
+		// The preview follows the rule.
+		await expect(page.locator('#preview-laptop_model')).toBeHidden();
+		await page.locator('#preview-needs_a_laptop').check();
+		await expect(page.locator('#preview-laptop_model')).toBeVisible();
+		await page.getByRole('button', { name: 'Save', exact: true }).click();
+		await expect(page.getByText('Saved.')).toBeVisible();
+
+		// Filling it in: hidden, then asked, and not required while hidden.
+		await page.goto('/forms');
+		await page.getByRole('link', { name: formName }).click();
+		await expect(page.getByLabel('Laptop model *')).toBeHidden();
+		await page.getByRole('button', { name: 'Submit' }).click();
+		await expect(
+			page.getByText('Saved. No workflows are listening for this form yet.')
+		).toBeVisible();
+	});
 });
