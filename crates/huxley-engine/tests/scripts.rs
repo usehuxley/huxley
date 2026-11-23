@@ -133,14 +133,10 @@ spec:
     }
 
     async fn claim(&self) -> Option<script::ClaimedTask> {
-        script::claim(
-            &self.pools.app,
-            &self.crypto,
-            self.runner,
-            &[Language::Python],
-        )
-        .await
-        .unwrap()
+        self.engine
+            .claim_script(self.runner, &[Language::Python])
+            .await
+            .unwrap()
     }
 
     async fn claimed(&self) -> script::ClaimedTask {
@@ -187,24 +183,26 @@ async fn a_runners_result_completes_the_step() {
     assert!(!String::from_utf8_lossy(&sealed).contains("ada"));
     // Nobody else gets it, and only its runner can report.
     assert!(h.claim().await.is_none());
-    let stranger = script::report(&h.pools.app, Uuid::now_v7(), task.id, &ok(json!({}))).await;
+    let stranger = h
+        .engine
+        .report_script(Uuid::now_v7(), task.id, &ok(json!({})))
+        .await;
     assert!(matches!(stranger, Err(ReportError::NotYours)));
 
-    script::report(
-        &h.pools.app,
-        h.runner,
-        task.id,
-        &ok(json!({ "greeting": "hi ada" })),
-    )
-    .await
-    .unwrap();
+    h.engine
+        .report_script(h.runner, task.id, &ok(json!({ "greeting": "hi ada" })))
+        .await
+        .unwrap();
     h.until("the run finishing", async || {
         h.run(run).await.0 == RunStatus::Succeeded
     })
     .await;
     assert_eq!(h.run(run).await.1, Some(json!({ "greeting": "hi ada" })));
     // Reported once.
-    let again = script::report(&h.pools.app, h.runner, task.id, &ok(json!({}))).await;
+    let again = h
+        .engine
+        .report_script(h.runner, task.id, &ok(json!({})))
+        .await;
     assert!(matches!(again, Err(ReportError::NotYours)));
 }
 
@@ -226,7 +224,8 @@ async fn a_failed_script_is_retried_then_fails_the_run() {
             exit_code: Some(3),
             logs: "boom".into(),
         };
-        script::report(&h.pools.app, h.runner, task.id, &report)
+        h.engine
+            .report_script(h.runner, task.id, &report)
             .await
             .unwrap();
     }
@@ -301,5 +300,141 @@ async fn a_cancelled_runs_script_isnt_handed_out() {
         h.run(run).await.0 == RunStatus::Cancelled
     })
     .await;
+    assert!(h.claim().await.is_none());
+}
+
+impl Harness {
+    async fn secret(&self, key: &str, value: &str) {
+        let ctx = RequestContext::system(Via::System);
+        let mut tx = begin_scoped(&self.pools.app, &OrgScope::System)
+            .await
+            .unwrap();
+        let input = huxley_variables::VariableInput {
+            kind: huxley_variables::VariableType::Secret,
+            value: json!(value),
+            description: None,
+            locked: false,
+        };
+        huxley_variables::set(&mut tx, &ctx, &self.crypto, self.org, key, &input)
+            .await
+            .unwrap();
+        tx.commit().await.unwrap();
+    }
+
+    /// An integration `vault` with an API key connection.
+    async fn api_key_connection(&self, key: &str) {
+        let spec = r"openapi: 3.0.3
+info: { title: Vault, version: '1' }
+servers: [ { url: 'https://vault.example.com/api' } ]
+components:
+  securitySchemes:
+    key: { type: apiKey, in: header, name: X-Key }
+paths: {}
+";
+        let ctx = RequestContext::system(Via::System);
+        let mut tx = begin_scoped(&self.pools.app, &OrgScope::System)
+            .await
+            .unwrap();
+        let integration =
+            huxley_integrations::store::create(&mut tx, &ctx, self.org, Some("vault"), spec)
+                .await
+                .unwrap();
+        let input = huxley_integrations::connections::ConnectionInput {
+            name: "Main".into(),
+            key: Some("main".into()),
+            auth_scheme: Some("key".into()),
+            secrets: [("key".to_owned(), key.to_owned())].into(),
+            ..huxley_integrations::connections::ConnectionInput::default()
+        };
+        huxley_integrations::connections::create(
+            &mut tx,
+            &self.crypto,
+            &ctx,
+            self.org,
+            integration.summary.id,
+            &input,
+        )
+        .await
+        .unwrap();
+        tx.commit().await.unwrap();
+    }
+}
+
+#[tokio::test]
+async fn credentials_reach_the_script_and_are_scrubbed_from_what_comes_back() {
+    let Some(h) = harness().await else { return };
+    h.secret("db_password", "pw-HUNTER-2026").await;
+    h.api_key_connection("sk-live-ABCDEF").await;
+    let run = h
+        .start(
+            r#"{ id: run, type: script, script: greet, with: { name: ada },
+                 env: { DB_PASSWORD: "{{ secrets.db_password }}", REGION: eu },
+                 connections: { VAULT: vault/main } }"#,
+        )
+        .await;
+    let task = h.claimed().await;
+    assert_eq!(task.env["DB_PASSWORD"], "pw-HUNTER-2026");
+    assert_eq!(task.env["REGION"], "eu");
+    assert_eq!(task.env["VAULT_URL"], "https://vault.example.com/api");
+    assert_eq!(task.env["VAULT_KEY"], "sk-live-ABCDEF");
+    let mut redact = task.redact.clone();
+    redact.sort();
+    assert_eq!(redact, vec!["pw-HUNTER-2026", "sk-live-ABCDEF"]);
+    // Not in the parameters, and not stored in the clear.
+    assert_eq!(task.inputs, json!({ "name": "ada" }));
+    let stored: (Vec<u8>, Vec<u8>) =
+        sqlx::query_as("SELECT inputs_sealed, redact_sealed FROM script_tasks WHERE id = $1")
+            .bind(task.id)
+            .fetch_one(&h.pools.owner)
+            .await
+            .unwrap();
+    for sealed in [stored.0, stored.1] {
+        let text = String::from_utf8_lossy(&sealed).into_owned();
+        assert!(!text.contains("HUNTER") && !text.contains("ABCDEF"));
+    }
+
+    // A careless runner echoes them back: Huxley scrubs them anyway.
+    let report = Report {
+        succeeded: true,
+        output: Some(json!({ "greeting": "key sk-live-ABCDEF, pw pw-HUNTER-2026" })),
+        error: None,
+        exit_code: Some(0),
+        logs: "connecting with sk-live-ABCDEF".into(),
+    };
+    h.engine
+        .report_script(h.runner, task.id, &report)
+        .await
+        .unwrap();
+    h.until("the run finishing", async || {
+        h.run(run).await.0 == RunStatus::Succeeded
+    })
+    .await;
+    let outputs = h.run(run).await.1.unwrap().to_string();
+    assert!(
+        !outputs.contains("ABCDEF") && !outputs.contains("HUNTER"),
+        "{outputs}"
+    );
+    let (logs, output): (String, Json) =
+        sqlx::query_as("SELECT logs, output FROM script_tasks WHERE id = $1")
+            .bind(task.id)
+            .fetch_one(&h.pools.owner)
+            .await
+            .unwrap();
+    assert!(!logs.contains("ABCDEF"), "{logs}");
+    assert!(!output.to_string().contains("ABCDEF"), "{output}");
+}
+
+#[tokio::test]
+async fn a_missing_connection_fails_the_step() {
+    let Some(h) = harness().await else { return };
+    let run = h
+        .start("{ id: run, type: script, script: greet, with: { name: ada }, connections: { X: nope } }")
+        .await;
+    h.until("the run failing", async || {
+        h.run(run).await.0 == RunStatus::Failed
+    })
+    .await;
+    let error = h.run(run).await.2.unwrap().to_string();
+    assert!(error.contains("nope"), "{error}");
     assert!(h.claim().await.is_none());
 }

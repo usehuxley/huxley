@@ -50,6 +50,10 @@ message Task {
   // The script's parameters, a JSON object.
   string inputs_json = 4;
   int32 timeout_secs = 5;
+  // Environment variables for the script, credentials included.
+  map<string, string> env = 6;
+  // Values the runner must scrub from the output and logs it reports.
+  repeated string redact = 7;
 }
 
 message NextResponse {

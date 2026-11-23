@@ -69,6 +69,18 @@ export const STEPS: StepSpec[] = [
 			{ path: 'script', label: 'Script key', kind: 'text', hint: 'From Scripts, e.g. reset-mfa' },
 			{ path: 'with', label: 'Parameters', kind: 'json', hint: 'An object' },
 			{
+				path: 'env',
+				label: 'Environment',
+				kind: 'json',
+				hint: '{ "NAME": "{{ secrets.key }}" }; secrets are scrubbed from the output'
+			},
+			{
+				path: 'connections',
+				label: 'Connections',
+				kind: 'json',
+				hint: '{ "GRAPH": "msgraph" } gives GRAPH_URL and GRAPH_TOKEN'
+			},
+			{
 				path: 'timeout',
 				label: 'Timeout',
 				kind: 'text',

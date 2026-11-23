@@ -156,6 +156,33 @@ async fn find_connection(
     .await
 }
 
+/// The connection `target` (`<integration>` or `<integration>/<connection>`)
+/// means from `org_id`, as for an action.
+pub(crate) async fn connection_for(
+    conn: &mut PgConnection,
+    org_id: Uuid,
+    target: &str,
+) -> EngineResult<Result<Uuid, Json>> {
+    let (integration, key) = match target.split_once('/') {
+        Some((integration, key)) => (integration, Some(key)),
+        None => (target, None),
+    };
+    let Some((integration_id, _)) = find_integration(&mut *conn, org_id, integration).await? else {
+        return Ok(Err(error(
+            "definition",
+            format!("no integration {integration:?} here or above"),
+        )));
+    };
+    Ok(find_connection(&mut *conn, org_id, integration_id, key)
+        .await?
+        .ok_or_else(|| {
+            error(
+                "connection",
+                format!("no connection {target:?} this organization can use"),
+            )
+        }))
+}
+
 /// What a step needs: the action, its connection, and the definition.
 struct Target {
     action: Action,

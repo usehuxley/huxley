@@ -317,7 +317,12 @@ impl<'a> Walker<'a> {
             }
             Step::WaitForCallback(s) => self.callback_step(step, s, frame),
             Step::Script(s) => {
-                let value = json!({ "script": s.script, "with": s.inputs });
+                let value = json!({
+                    "script": s.script,
+                    "with": s.inputs,
+                    "env": s.env,
+                    "connections": s.connections,
+                });
                 self.external(step, &value, frame)
             }
             Step::Approval(s) => {

@@ -270,6 +270,8 @@ async fn work(state: PathBuf, podman: Podman, languages: Vec<String>, shutdown: 
                 source: task.source,
                 inputs: serde_json::from_str(&task.inputs_json).unwrap_or_else(|_| json!({})),
                 timeout: Duration::from_secs(u64::try_from(task.timeout_secs).unwrap_or(60)),
+                env: task.env.into_iter().collect(),
+                redact: task.redact,
             };
             let outcome = podman.run(&job).await;
             let report = ReportRequest {

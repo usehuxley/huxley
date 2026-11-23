@@ -1308,6 +1308,13 @@
           "additionalProperties": false,
           "description": "Run a library script in a sandboxed runner.",
           "properties": {
+            "connections": {
+              "additionalProperties": {
+                "type": "string"
+              },
+              "description": "Connections whose credentials the script gets as environment\nvariables: `NAME: <integration>` or `NAME: <integration>/<connection>`\ngives `NAME_URL` and `NAME_TOKEN` (OAuth 2.0, bearer), `NAME_KEY`\n(API key) or `NAME_USERNAME` and `NAME_PASSWORD` (basic), fetched\nwhen the script starts and scrubbed from its output and logs.",
+              "type": "object"
+            },
             "continue_on_error": {
               "description": "Record the error as the step's output and carry on.",
               "type": "boolean"
@@ -1317,6 +1324,11 @@
                 "string",
                 "null"
               ]
+            },
+            "env": {
+              "additionalProperties": true,
+              "description": "Environment variables for the script (names in upper case), e.g.\nfrom variables or secrets. Secret values are scrubbed from its\noutput and logs.",
+              "type": "object"
             },
             "id": {
               "description": "Unique in the workflow: lowercase letters, digits, underscores.\nOther steps read this step's output as `steps.<id>.output`.",

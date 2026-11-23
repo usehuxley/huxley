@@ -488,6 +488,18 @@ step!(ScriptStep {
     /// Its parameters.
     #[serde(default, rename = "with", skip_serializing_if = "Option::is_none")]
     pub inputs: Option<Value>,
+    /// Environment variables for the script (names in upper case), e.g.
+    /// from variables or secrets. Secret values are scrubbed from its
+    /// output and logs.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub env: BTreeMap<String, Value>,
+    /// Connections whose credentials the script gets as environment
+    /// variables: `NAME: <integration>` or `NAME: <integration>/<connection>`
+    /// gives `NAME_URL` and `NAME_TOKEN` (OAuth 2.0, bearer), `NAME_KEY`
+    /// (API key) or `NAME_USERNAME` and `NAME_PASSWORD` (basic), fetched
+    /// when the script starts and scrubbed from its output and logs.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub connections: BTreeMap<String, String>,
 });
 
 step!(ApprovalStep {

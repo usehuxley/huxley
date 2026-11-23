@@ -259,3 +259,25 @@ fn published_schema_is_up_to_date() {
         assert!(text.contains(name), "{name}");
     }
 }
+
+#[test]
+fn script_environment_names_are_checked() {
+    let ok = with_steps(
+        "    - { id: a, type: script, script: greet, env: { REGION: eu }, connections: { GRAPH: msgraph/contoso } }\n",
+    );
+    assert!(parse_yaml(&ok).is_ok());
+    let bad = with_steps(
+        "    - { id: a, type: script, script: greet, env: { lower: x, HUXLEY_X: y, PATH: z, GRAPH_TOKEN: t }, \
+           connections: { GRAPH: \"{{ x }}\" } }\n",
+    );
+    let found = diagnostics(&bad).join("\n");
+    for expected in [
+        "env.lower",
+        "env.HUXLEY_X",
+        "env.PATH",
+        "env.GRAPH_TOKEN",
+        "connections.GRAPH",
+    ] {
+        assert!(found.contains(expected), "{expected} not in {found}");
+    }
+}

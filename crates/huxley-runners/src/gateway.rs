@@ -66,11 +66,12 @@ pub async fn tls(
 pub struct Gateway {
     db: PgPool,
     crypto: Crypto,
+    engine: huxley_engine::Engine,
 }
 
 impl Gateway {
-    pub const fn new(db: PgPool, crypto: Crypto) -> Self {
-        Self { db, crypto }
+    pub const fn new(db: PgPool, crypto: Crypto, engine: huxley_engine::Engine) -> Self {
+        Self { db, crypto, engine }
     }
 
     /// Who's calling, from their client certificate.
@@ -157,7 +158,9 @@ impl Runner for Gateway {
         if languages.is_empty() {
             return Ok(Response::new(NextResponse { task: None }));
         }
-        let claimed = huxley_engine::script::claim(&self.db, &self.crypto, runner.id, &languages)
+        let claimed = self
+            .engine
+            .claim_script(runner.id, &languages)
             .await
             .map_err(|e| Status::internal(e.to_string()))?;
         Ok(Response::new(NextResponse {
@@ -170,6 +173,8 @@ impl Runner for Gateway {
                 source: t.source,
                 inputs_json: t.inputs.to_string(),
                 timeout_secs: t.timeout_secs,
+                env: t.env.into_iter().collect(),
+                redact: t.redact,
             }),
         }))
     }
@@ -198,7 +203,7 @@ impl Runner for Gateway {
             exit_code: body.exit_code,
             logs: body.logs,
         };
-        match huxley_engine::script::report(&self.db, runner.id, id, &report).await {
+        match self.engine.report_script(runner.id, id, &report).await {
             Ok(()) => Ok(Response::new(ReportResponse {})),
             Err(huxley_engine::script::ReportError::NotYours) => {
                 Err(Status::not_found("no such task is running on this runner"))
