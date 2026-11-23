@@ -1136,3 +1136,136 @@ async fn email_features_report_when_email_is_off() {
     let (status, _) = call(&app, "POST", "/api/v1/users", Some(&owner), Some(body)).await;
     assert_eq!(status, StatusCode::SERVICE_UNAVAILABLE);
 }
+
+#[tokio::test]
+async fn notifications_over_http() {
+    let Some(pools) = pools().await else { return };
+    let root = ensure_root(&pools).await;
+    let app = app(&pools);
+    let owner = login(&app, &user(&pools, true).await).await;
+    let member = login(&app, &user(&pools, false).await).await;
+    let (_, me) = call(&app, "GET", "/api/v1/auth/me", Some(&member), None).await;
+    let member_id = me["id"].as_str().unwrap().to_owned();
+
+    // Being given a role notifies you.
+    let (_, roles) = call(&app, "GET", "/api/v1/roles", Some(&owner), None).await;
+    let tech = roles
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|r| r["key"] == "technician")
+        .unwrap()["id"]
+        .clone();
+    let grant = json!({ "userId": member_id, "roleId": tech, "orgId": root });
+    let (status, _) = call(
+        &app,
+        "POST",
+        "/api/v1/role-assignments",
+        Some(&owner),
+        Some(grant),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED);
+    let (status, feed) = call(&app, "GET", "/api/v1/notifications", Some(&member), None).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(feed["unreadCount"], 1);
+    assert_eq!(feed["items"][0]["kind"], "access.role_granted");
+    assert_eq!(
+        feed["items"][0]["title"],
+        "You were given the Technician role"
+    );
+
+    // The stream opens with the unread count.
+    let req = Request::get("/api/v1/notifications/stream")
+        .header("cookie", &member)
+        .body(Body::empty())
+        .unwrap();
+    let res = app.clone().oneshot(req).await.unwrap();
+    assert_eq!(res.status(), StatusCode::OK);
+    assert_eq!(res.headers()["content-type"], "text/event-stream");
+    let mut body = res.into_body();
+    let frame = tokio::time::timeout(std::time::Duration::from_secs(3), body.frame())
+        .await
+        .unwrap()
+        .unwrap()
+        .unwrap();
+    let text = String::from_utf8(frame.into_data().unwrap().to_vec()).unwrap();
+    assert!(
+        text.contains("event: unread") && text.contains("data: 1"),
+        "{text}"
+    );
+
+    // Mark read; someone else's id is unknown to you.
+    let id = feed["items"][0]["id"].as_str().unwrap();
+    let (status, _) = call(
+        &app,
+        "POST",
+        &format!("/api/v1/notifications/{id}/read"),
+        Some(&owner),
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+    let (status, _) = call(
+        &app,
+        "POST",
+        &format!("/api/v1/notifications/{id}/read"),
+        Some(&member),
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::NO_CONTENT);
+    let (_, count) = call(
+        &app,
+        "GET",
+        "/api/v1/notifications/unread-count",
+        Some(&member),
+        None,
+    )
+    .await;
+    assert_eq!(count["unreadCount"], 0);
+}
+
+#[tokio::test]
+async fn notification_preferences_over_http() {
+    let Some(pools) = pools().await else { return };
+    ensure_root(&pools).await;
+    let app = app(&pools);
+    let member = login(&app, &user(&pools, false).await).await;
+    // Preferences: optional kinds can change; security notices can't.
+    let (_, prefs) = call(
+        &app,
+        "GET",
+        "/api/v1/notifications/preferences",
+        Some(&member),
+        None,
+    )
+    .await;
+    assert!(
+        prefs
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|p| p["kind"] == "security.password_changed" && p["mandatory"] == true)
+    );
+    let both = json!({ "inApp": true, "email": true });
+    let (status, _) = call(
+        &app,
+        "PUT",
+        "/api/v1/notifications/preferences/access.role_granted",
+        Some(&member),
+        Some(both.clone()),
+    )
+    .await;
+    assert_eq!(status, StatusCode::NO_CONTENT);
+    let off = json!({ "inApp": false, "email": false });
+    let (status, _) = call(
+        &app,
+        "PUT",
+        "/api/v1/notifications/preferences/security.mfa_changed",
+        Some(&member),
+        Some(off),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CONFLICT);
+}

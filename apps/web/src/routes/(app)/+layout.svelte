@@ -2,7 +2,9 @@
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
+	import { onMount } from 'svelte';
 	import {
+		Bell,
 		BookOpen,
 		Boxes,
 		Building2,
@@ -50,6 +52,17 @@
 	];
 
 	let paletteOpen = $state(false);
+
+	// Live unread count: the server pushes it over Server-Sent Events.
+	let liveUnread = $state<number | null>(null);
+	let unread = $derived(liveUnread ?? data.unreadNotifications);
+	onMount(() => {
+		const source = new EventSource('/notifications/stream');
+		source.addEventListener('unread', (e) => {
+			liveUnread = Number((e as MessageEvent<string>).data) || 0;
+		});
+		return () => source.close();
+	});
 </script>
 
 <AppShell
@@ -59,6 +72,21 @@
 	onSearch={() => (paletteOpen = true)}
 >
 	{#snippet topbar()}
+		<a
+			href={resolve('/(app)/notifications')}
+			class="relative rounded-control p-2 text-fg-muted hover:bg-surface-sunken hover:text-fg"
+			aria-label={unread > 0 ? `Notifications, ${unread} unread` : 'Notifications'}
+		>
+			<Bell size={18} />
+			{#if unread > 0}
+				<span
+					class="absolute -top-0.5 -right-0.5 min-w-4 rounded-full bg-danger px-1 text-center text-[10px] leading-4 font-semibold text-white"
+					data-testid="unread-count"
+				>
+					{unread > 99 ? '99+' : unread}
+				</span>
+			{/if}
+		</a>
 		<a
 			href={resolve('/(app)/profile')}
 			class="hidden rounded-control px-2 py-1.5 text-sm font-medium text-fg-muted hover:bg-surface-sunken hover:text-fg sm:block"

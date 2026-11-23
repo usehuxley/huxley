@@ -153,6 +153,15 @@ pub enum AuthzError {
     Db(#[from] DbError),
 }
 
+impl From<huxley_notify::NotifyError> for AuthzError {
+    fn from(error: huxley_notify::NotifyError) -> Self {
+        match error {
+            huxley_notify::NotifyError::Db(e) => Self::Db(DbError::Sqlx(e)),
+            other => Self::Db(DbError::Sqlx(sqlx::Error::Protocol(other.to_string()))),
+        }
+    }
+}
+
 impl From<sqlx::Error> for AuthzError {
     fn from(error: sqlx::Error) -> Self {
         match violated_constraint(&error) {
@@ -434,6 +443,50 @@ pub async fn assign_to(
             .details(json!({ "role": role.key, "inherit": inherit, "assignmentId": id })),
     )
     .await?;
+    let org_name: (String,) = sqlx::query_as("SELECT name FROM organizations WHERE id = $1")
+        .bind(org_id)
+        .fetch_one(&mut *conn)
+        .await?;
+    let title = format!("You were given the {} role", role.name);
+    let body = format!(
+        "At {}{}.",
+        org_name.0,
+        if inherit {
+            " and its sub-organizations"
+        } else {
+            ""
+        }
+    );
+    match assignee {
+        // Not when people grant themselves a role.
+        Assignee::User(user_id) if ctx.actor.id() != Some(user_id) => {
+            huxley_notify::notify(
+                conn,
+                huxley_notify::Notice {
+                    user_id,
+                    kind: huxley_notify::kinds::ROLE_GRANTED,
+                    title: &title,
+                    body: &body,
+                    link: None,
+                },
+            )
+            .await?;
+        }
+        Assignee::User(_) => {}
+        Assignee::Team(team_id) => {
+            let team = teams::get(conn, team_id).await?;
+            let body = format!("{body} Through your team {}.", team.name);
+            huxley_notify::notify_team(
+                conn,
+                team_id,
+                huxley_notify::kinds::ROLE_GRANTED,
+                &title,
+                &body,
+                None,
+            )
+            .await?;
+        }
+    }
     fetch_assignment(conn, id).await
 }
 

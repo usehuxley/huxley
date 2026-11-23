@@ -51,6 +51,44 @@ impl Role {
     }
 }
 
+type Tasks = JoinSet<anyhow::Result<()>>;
+
+/// Starts the HTTP API and its real-time notification listener.
+async fn spawn_api(
+    tasks: &mut Tasks,
+    config: &Config,
+    db: &huxley_db::sqlx::PgPool,
+    crypto: &huxley_crypto::Crypto,
+    mailer: &huxley_email::Mailer,
+    shutdown: &CancellationToken,
+) -> anyhow::Result<()> {
+    let listener = tokio::net::TcpListener::bind(config.http.bind)
+        .await
+        .with_context(|| format!("failed to bind {}", config.http.bind))?;
+    tracing::info!(addr = %config.http.bind, "api role listening");
+    let auth = huxley_auth::AuthService::new(db.clone(), config.auth.clone(), crypto.clone())
+        .with_mailer(mailer.clone());
+    let state =
+        huxley_api::AppState::new(db.clone(), auth, crypto.clone(), config.http.api.clone());
+    // Real-time notifications: one LISTEN connection per process.
+    let broadcaster = state.notifications.clone();
+    let (listen_db, listen_stop) = (db.clone(), shutdown.clone());
+    tasks.spawn(async move {
+        broadcaster.run(listen_db, listen_stop).await;
+        Ok(())
+    });
+    let app =
+        huxley_api::router(state).into_make_service_with_connect_info::<std::net::SocketAddr>();
+    let token = shutdown.clone();
+    tasks.spawn(async move {
+        axum::serve(listener, app)
+            .with_graceful_shutdown(token.cancelled_owned())
+            .await
+            .context("api server failed")
+    });
+    Ok(())
+}
+
 /// Runs the requested roles until a shutdown signal arrives.
 pub async fn serve(config: Config, roles: BTreeSet<Role>) -> anyhow::Result<()> {
     let db_config = config.database()?;
@@ -81,30 +119,17 @@ pub async fn serve(config: Config, roles: BTreeSet<Role>) -> anyhow::Result<()> 
     for role in &roles {
         match role {
             Role::Api => {
-                let listener = tokio::net::TcpListener::bind(config.http.bind)
-                    .await
-                    .with_context(|| format!("failed to bind {}", config.http.bind))?;
-                tracing::info!(addr = %config.http.bind, "api role listening");
-                let auth =
-                    huxley_auth::AuthService::new(db.clone(), config.auth.clone(), crypto.clone())
-                        .with_mailer(mailer.clone());
-                let state = huxley_api::AppState::new(
-                    db.clone(),
-                    auth,
-                    crypto.clone(),
-                    config.http.api.clone(),
-                );
-                let app = huxley_api::router(state)
-                    .into_make_service_with_connect_info::<std::net::SocketAddr>();
-                let token = shutdown.clone();
-                tasks.spawn(async move {
-                    axum::serve(listener, app)
-                        .with_graceful_shutdown(token.cancelled_owned())
-                        .await
-                        .context("api server failed")
-                });
+                spawn_api(&mut tasks, &config, &db, &crypto, &mailer, &shutdown).await?;
             }
             Role::Worker => {
+                // Notification emails. Several workers may run: rows are
+                // claimed with SKIP LOCKED.
+                let (mail_db, mail_stop) = (db.clone(), shutdown.clone());
+                let (mail, public_url) = (mailer.clone(), config.auth.public_url.clone());
+                tasks.spawn(async move {
+                    huxley_notify::run_email_dispatcher(mail_db, mail, public_url, mail_stop).await;
+                    Ok(())
+                });
                 tasks.spawn(placeholder(
                     "worker",
                     "workflow execution arrives in Phase 2",

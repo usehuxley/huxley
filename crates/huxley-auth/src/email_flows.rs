@@ -254,6 +254,15 @@ impl AuthService {
                 .details(json!({ "sessionsRevoked": revoked })),
         )
         .await?;
+        if purpose == Purpose::PasswordReset {
+            crate::notify_security(
+                &mut tx,
+                user_id,
+                huxley_notify::kinds::PASSWORD_CHANGED,
+                "Your password was reset",
+            )
+            .await?;
+        }
         let user = find_user(&mut tx, user_id)
             .await?
             .ok_or(AuthError::InvalidEmailToken)?;

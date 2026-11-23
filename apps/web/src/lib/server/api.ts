@@ -13,6 +13,11 @@ type ApiEvent = Pick<RequestEvent, 'fetch' | 'cookies' | 'getClientAddress' | 'r
  * records, and the anti-forgery header the API requires on state changes.
  */
 export function api(event: ApiEvent) {
+	return createHuxleyClient(HUXLEY_API_URL, { fetch: event.fetch, headers: apiHeaders(event) });
+}
+
+/** The headers `api()` sends, for calls that bypass the typed client (streams). */
+export function apiHeaders(event: ApiEvent): Record<string, string> {
 	const headers: Record<string, string> = {
 		'x-requested-with': 'huxley',
 		'x-forwarded-for': event.getClientAddress()
@@ -21,6 +26,8 @@ export function api(event: ApiEvent) {
 	if (token) headers.cookie = `${SESSION_COOKIE}=${token}`;
 	const userAgent = event.request.headers.get('user-agent');
 	if (userAgent) headers['user-agent'] = userAgent;
-
-	return createHuxleyClient(HUXLEY_API_URL, { fetch: event.fetch, headers });
+	return headers;
 }
+
+/** The API's base URL. */
+export const apiUrl = HUXLEY_API_URL;

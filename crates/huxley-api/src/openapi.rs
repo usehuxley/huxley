@@ -18,6 +18,7 @@ use crate::mfa_routes::{
     TotpEnrollmentView,
 };
 use crate::module_routes::{self, SetModuleRequest, SetModuleResponse};
+use crate::notification_routes::{self, NotificationPage, UnreadCount};
 use crate::org_routes::{
     self, ArchiveOrgRequest, CreateOrgRequest, MoveOrgRequest, OrgKindInput, UpdateOrgRequest,
 };
@@ -98,6 +99,13 @@ use crate::user_routes::{
         security_routes::set_role,
         security_routes::set_org,
         sso_routes::list_buttons,
+        notification_routes::list,
+        notification_routes::unread_count,
+        notification_routes::read_one,
+        notification_routes::read_all,
+        notification_routes::preferences,
+        notification_routes::set_preference,
+        notification_routes::stream,
         team_routes::list,
         team_routes::get_team,
         team_routes::create,
@@ -171,6 +179,11 @@ use crate::user_routes::{
         SetModuleResponse,
         SetRequirementRequest,
         StartSsoRequest,
+        NotificationPage,
+        UnreadCount,
+        huxley_notify::Notification,
+        huxley_notify::Preference,
+        huxley_notify::Channels,
         TeamInput,
         TeamDetail,
         huxley_authz::teams::Team,
@@ -201,6 +214,7 @@ use crate::user_routes::{
         (name = "audit", description = "The audit log"),
         (name = "modules", description = "Feature modules that can be turned on or off"),
         (name = "security", description = "Sign-in security policy"),
+        (name = "notifications", description = "Your notifications and how you receive them"),
     ),
 )]
 pub struct ApiDoc;

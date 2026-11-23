@@ -119,6 +119,13 @@ pub async fn create(
             })),
     )
     .await?;
+    crate::notify_security(
+        conn,
+        user.id,
+        huxley_notify::kinds::API_TOKEN_CREATED,
+        &format!("A new API token was created: {name}"),
+    )
+    .await?;
     Ok(NewApiToken {
         token: created,
         secret: generated.secret,

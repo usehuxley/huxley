@@ -573,6 +573,126 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
+	'/api/v1/notifications': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** Your notifications, newest first. */
+		get: operations['list_notifications'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/notifications/preferences': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** Your channel choices for each kind of notification. */
+		get: operations['preferences'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/notifications/preferences/{kind}': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		/** Chooses the channels for one kind. Security notices can't be changed. */
+		put: operations['set_preference'];
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/notifications/read-all': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		post: operations['read_all'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/notifications/stream': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/**
+		 * Server-Sent Events: an `unread` event with your unread count when the
+		 *     stream opens and whenever a notification arrives. Closes after ten minutes
+		 *     (reconnect to continue).
+		 */
+		get: operations['stream'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/notifications/unread-count': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get: operations['unread_count'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/notifications/{id}/read': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		post: operations['read_one'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
 	'/api/v1/orgs': {
 		parameters: {
 			query?: never;
@@ -1191,6 +1311,10 @@ export interface components {
 			/** Format: password */
 			newPassword: string;
 		};
+		Channels: {
+			email: boolean;
+			inApp: boolean;
+		};
 		ConfirmPasswordResetRequest: {
 			/** Format: password */
 			newPassword: string;
@@ -1402,6 +1526,24 @@ export interface components {
 			/** Format: int32 */
 			version: number;
 		};
+		Notification: {
+			body: string;
+			/** Format: date-time */
+			createdAt: string;
+			/** Format: uuid */
+			id: string;
+			kind: string;
+			link?: string | null;
+			/** Format: date-time */
+			readAt?: string | null;
+			title: string;
+		};
+		NotificationPage: {
+			items: components['schemas']['Notification'][];
+			nextCursor?: string | null;
+			/** Format: int64 */
+			unreadCount: number;
+		};
 		/**
 		 * @description `provider`: the owning company, an MSP brand, or a division. `client`: a
 		 *     customer of a provider, or a site/sub-org of one.
@@ -1478,6 +1620,14 @@ export interface components {
 			/** @description The root: the requirement covers every user. */
 			isRoot: boolean;
 			name: string;
+		};
+		/** @description A kind with the user's effective channels. */
+		Preference: {
+			description: string;
+			email: boolean;
+			inApp: boolean;
+			kind: string;
+			mandatory: boolean;
 		};
 		/**
 		 * @description Provider templates with sensible defaults.
@@ -1669,6 +1819,10 @@ export interface components {
 			otpauthUri: string;
 			/** @description Base32 secret, for entering into the app by hand. */
 			secret: string;
+		};
+		UnreadCount: {
+			/** Format: int64 */
+			unreadCount: number;
 		};
 		UpdateOrgRequest: {
 			name: string;
@@ -2790,6 +2944,168 @@ export interface operations {
 			};
 			/** @description Missing dependencies, or enabled modules depend on it */
 			409: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	list_notifications: {
+		parameters: {
+			query?: {
+				/** @description Page size, 1 to 200 (default 50). */
+				limit?: number | null;
+				/** @description Opaque cursor from the previous page's `nextCursor`. */
+				cursor?: string | null;
+				/** @description Only unread notifications. */
+				unreadOnly?: boolean;
+			};
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['NotificationPage'];
+				};
+			};
+		};
+	};
+	preferences: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['Preference'][];
+				};
+			};
+		};
+	};
+	set_preference: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				/** @description Notification kind */
+				kind: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['Channels'];
+			};
+		};
+		responses: {
+			204: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content?: never;
+			};
+			/** @description Mandatory kind */
+			409: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	read_all: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			204: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content?: never;
+			};
+		};
+	};
+	stream: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			/** @description text/event-stream of `unread` events */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'text/event-stream': unknown;
+				};
+			};
+		};
+	};
+	unread_count: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['UnreadCount'];
+				};
+			};
+		};
+	};
+	read_one: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				/** @description Notification id */
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			204: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content?: never;
+			};
+			404: {
 				headers: {
 					[name: string]: unknown;
 				};

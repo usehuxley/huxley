@@ -30,6 +30,22 @@ async function linkIn(to: string, path: string): Promise<string> {
 	}
 }
 
+/** Waits for an email to `to` with `subject` (e.g. one the worker sends). */
+async function expectEmail(to: string, subject: string) {
+	const api = await request.newContext({ baseURL: mailpit });
+	try {
+		for (let i = 0; i < 50; i++) {
+			const query = `to:"${to}" subject:"${subject}"`;
+			const res = await api.get(`/api/v1/search?query=${encodeURIComponent(query)}`);
+			if (((await res.json()) as { messages: unknown[] }).messages.length > 0) return;
+			await new Promise((r) => setTimeout(r, 200));
+		}
+		throw new Error(`no "${subject}" email to ${to}`);
+	} finally {
+		await api.dispose();
+	}
+}
+
 /** Creates a user through the API as the owner. */
 async function createUser(body: Record<string, unknown>) {
 	const api = await request.newContext({
@@ -72,6 +88,9 @@ test.describe('email', () => {
 		await expect(page.getByRole('heading', { level: 1 })).toHaveText('Welcome to Huxley');
 		await page.goto('/profile');
 		await expect(page.getByText('Verified', { exact: true })).toBeVisible();
+
+		// The worker emails a security notice about the change.
+		await expectEmail(email, 'Your password was reset');
 	});
 
 	test('an invited user chooses their own password', async ({ page }) => {

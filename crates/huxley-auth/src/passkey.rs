@@ -314,6 +314,13 @@ impl AuthService {
                 .details(json!({ "passkey": id, "name": name, "firstFactor": first_factor })),
         )
         .await?;
+        crate::notify_security(
+            &mut tx,
+            user_id,
+            huxley_notify::kinds::MFA_CHANGED,
+            &format!("A passkey was added: {name}"),
+        )
+        .await?;
         tx.commit().await?;
         Ok(RegisteredPasskey {
             passkey: info,
@@ -380,6 +387,13 @@ impl AuthService {
             AuditRecord::new("auth.passkey_removed")
                 .target("user", user_id)
                 .details(json!({ "passkey": id, "mfaRemaining": !last_factor })),
+        )
+        .await?;
+        crate::notify_security(
+            &mut tx,
+            user_id,
+            huxley_notify::kinds::MFA_CHANGED,
+            "A passkey was removed",
         )
         .await?;
         tx.commit().await?;

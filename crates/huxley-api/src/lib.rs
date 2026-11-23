@@ -13,6 +13,7 @@ pub mod health;
 pub mod idempotency;
 pub mod mfa_routes;
 pub mod module_routes;
+pub mod notification_routes;
 pub mod openapi;
 pub mod org_routes;
 pub mod passkey_routes;
@@ -35,6 +36,7 @@ use std::time::Duration;
 use huxley_auth::AuthService;
 use huxley_crypto::Crypto;
 use huxley_db::sqlx::PgPool;
+use huxley_notify::Broadcaster;
 use huxley_sso::SsoService;
 use serde::Deserialize;
 
@@ -71,6 +73,8 @@ pub struct AppState {
     pub auth: AuthService,
     pub crypto: Crypto,
     pub sso: SsoService,
+    /// Real-time notification fan-out. Run it with [`Broadcaster::run`].
+    pub notifications: Broadcaster,
     pub config: Arc<ApiConfig>,
     pub login_limiter: Arc<RateLimiter>,
 }
@@ -85,6 +89,7 @@ impl AppState {
             db,
             sso: SsoService::new(auth.clone(), crypto.clone())
                 .expect("the HTTP client for single sign-on builds"),
+            notifications: Broadcaster::new(),
             auth,
             crypto,
             config: Arc::new(config),
