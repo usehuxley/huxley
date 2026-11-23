@@ -190,3 +190,77 @@ pub async fn affected(
     }
     Ok(affected)
 }
+
+/// An action a workflow in some organization can call: for pickers.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ActionOption {
+    /// What a step's `action` says: `<integration>/<action>`.
+    pub action: String,
+    pub integration: String,
+    pub integration_name: String,
+    pub name: String,
+    pub group: Option<String>,
+    pub method: String,
+    pub path: String,
+    /// Input names, required ones first.
+    pub inputs: Vec<String>,
+    pub required: Vec<String>,
+    pub deprecated: bool,
+}
+
+/// The actions workflows in `org_id` can call: those of the nearest
+/// integration with each key, in this organization or above.
+pub async fn available_actions(
+    conn: &mut PgConnection,
+    org_id: Uuid,
+) -> sqlx::Result<Vec<ActionOption>> {
+    let rows: Vec<(String, String, Json)> = sqlx::query_as(
+        "SELECT DISTINCT ON (i.key) i.key, i.name, v.definition FROM integrations i \
+           JOIN organizations o ON o.id = i.org_id \
+           JOIN integration_versions v ON v.integration_id = i.id AND v.version = i.current_version \
+          WHERE o.path @> (SELECT path FROM organizations WHERE id = $1) \
+          ORDER BY i.key, nlevel(o.path) DESC",
+    )
+    .bind(org_id)
+    .fetch_all(conn)
+    .await?;
+    let mut options = Vec::new();
+    for (key, integration_name, definition) in rows {
+        let Ok(definition) = serde_json::from_value::<Definition>(definition) else {
+            continue;
+        };
+        for action in definition.actions {
+            let required: Vec<String> = action.input_schema["required"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .filter_map(Json::as_str)
+                .map(str::to_owned)
+                .collect();
+            let mut inputs = required.clone();
+            for name in action.input_schema["properties"]
+                .as_object()
+                .into_iter()
+                .flat_map(serde_json::Map::keys)
+            {
+                if !inputs.contains(name) {
+                    inputs.push(name.clone());
+                }
+            }
+            options.push(ActionOption {
+                action: format!("{key}/{}", action.key),
+                integration: key.clone(),
+                integration_name: integration_name.clone(),
+                name: action.name,
+                group: action.group,
+                method: action.method,
+                path: action.path,
+                inputs,
+                required,
+                deprecated: action.deprecated,
+            });
+        }
+    }
+    Ok(options)
+}

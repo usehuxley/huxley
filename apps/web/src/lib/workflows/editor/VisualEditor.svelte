@@ -3,16 +3,18 @@
 	import StepPanel from './StepPanel.svelte';
 	import { isStep, type Path } from './catalog.ts';
 	import { ownerOf } from './problems.ts';
-	import type { EditorContext } from './context.ts';
+	import type { ActionChoice, EditorContext } from './context.ts';
 
 	let {
 		draft,
 		diagnostics,
 		readonly = false,
 		dirty = $bindable(false),
-		document = $bindable()
+		document = $bindable(),
+		actions = []
 	}: {
 		draft: Record<string, unknown>;
+		actions?: ActionChoice[];
 		diagnostics: { path: string; message: string }[];
 		readonly?: boolean;
 		dirty?: boolean;
@@ -74,6 +76,9 @@
 		},
 		problems(key) {
 			return byStep[key] ?? [];
+		},
+		get actions() {
+			return actions;
 		}
 	};
 

@@ -47,4 +47,15 @@ describe('visual editor helpers', () => {
 		expect(step).toEqual({ id: 'a', type: 'http.request', with: {} });
 		expect(summary({ id: 'w', type: 'wait', duration: '5m' })).toBe('5m');
 	});
+
+	it('integration action steps start empty and summarise their action', () => {
+		const step = newStep('integration.action', {});
+		expect(step).toEqual({
+			id: 'integration_action_1',
+			type: 'integration.action',
+			action: '',
+			with: {}
+		});
+		expect(summary({ ...step, action: 'tickets/createTicket' })).toBe('tickets/createTicket');
+	});
 });

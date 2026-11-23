@@ -23,6 +23,32 @@
 	let index = $derived(path ? (path[path.length - 1] as number) : -1);
 	let spec = $derived(isStep(step) ? stepSpec(step.type) : undefined);
 	let problems = $derived(path ? editor.problems(pathKey(path)) : []);
+	// Actions to pick from, by integration; and the one this step calls.
+	let actionGroups = $derived.by(() => {
+		const groups: [string, typeof editor.actions][] = [];
+		for (const choice of editor.actions) {
+			const found = groups.find(([name]) => name === choice.integrationName);
+			if (found) found[1].push(choice);
+			else groups.push([choice.integrationName, [choice]]);
+		}
+		return groups;
+	});
+	let chosen = $derived(
+		isStep(step) ? editor.actions.find((a) => a.action === step.action) : undefined
+	);
+
+	/** Picks an action; fills in its required inputs if there are none yet. */
+	function chooseAction(action: string) {
+		if (!isStep(step)) return;
+		set('action', action || undefined);
+		const choice = editor.actions.find((a) => a.action === action);
+		const current = step.with;
+		const empty = !isStep(current) || Object.keys(current).length === 0;
+		if (choice && empty && choice.required.length) {
+			set('with', Object.fromEntries(choice.required.map((name) => [name, ''])));
+		}
+	}
+
 	// What this step's expressions can read, for autocomplete.
 	let names = $derived(path ? namesFor(editor.document, path) : []);
 	let jsonErrors = $state<Record<string, string>>({});
@@ -220,6 +246,42 @@
 									e.currentTarget.value === '' ? undefined : Number(e.currentTarget.value)
 								)}
 						/>
+					{:else if field.kind === 'action'}
+						<select
+							id={fieldId(field)}
+							class="rounded-control border border-border bg-surface px-2 py-1 text-sm text-fg"
+							value={text(value)}
+							disabled={editor.readonly}
+							onchange={(e) => chooseAction(e.currentTarget.value)}
+						>
+							<option value="">Choose an action…</option>
+							{#each actionGroups as [integration, choices] (integration)}
+								<optgroup label={integration}>
+									{#each choices as choice (choice.action)}
+										<option value={choice.action}>
+											{choice.name}{choice.deprecated ? ' (deprecated)' : ''}
+										</option>
+									{/each}
+								</optgroup>
+							{/each}
+							{#if value && !editor.actions.some((a) => a.action === value)}
+								<option value={text(value)}>{text(value)}</option>
+							{/if}
+						</select>
+						{#if chosen}
+							<p class="font-mono text-xs text-fg-muted">{chosen.method} {chosen.path}</p>
+							{#if chosen.inputs.length}
+								<p class="text-xs text-fg-muted">
+									Inputs: {chosen.inputs
+										.map((i) => (chosen.required.includes(i) ? `${i} (required)` : i))
+										.join(', ')}
+								</p>
+							{/if}
+						{:else if editor.actions.length === 0}
+							<p class="text-xs text-fg-muted">
+								No integrations here yet: import one under Integrations.
+							</p>
+						{/if}
 					{:else if field.kind === 'expression'}
 						<ExpressionInput
 							id={fieldId(field)}

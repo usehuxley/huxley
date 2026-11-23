@@ -71,6 +71,23 @@ test.describe('integrations', () => {
 		await expect(list).toContainText('Ready');
 		await expect(page.locator('body')).not.toContainText('t0ken-never-shown');
 
+		// A workflow calls one of its actions, picked in the visual editor.
+		const integrationPage = page.url();
+		await page.goto('/workflows');
+		const key = `devices-flow-${Date.now().toString(36)}`;
+		await page.getByLabel('Name').fill(`Devices ${key}`);
+		await page.getByLabel('Key').fill(key);
+		await page.getByRole('button', { name: 'Create' }).click();
+		await expect(page.getByRole('heading', { level: 1 })).toHaveText(`Devices ${key}`);
+		await page.getByRole('button', { name: 'Add a step after greet' }).click();
+		await page.getByRole('menuitem', { name: /^Integration action/ }).click();
+		const settings = page.getByLabel('Step settings');
+		await settings.getByLabel('Action').selectOption({ label: 'List devices' });
+		await expect(settings).toContainText('GET /devices');
+		await page.getByRole('button', { name: 'Save draft' }).click();
+		await expect(page.getByText('Draft saved. It is ready to publish.')).toBeVisible();
+		await page.goto(integrationPage);
+
 		// A newer spec is reviewed first; dropping an action is flagged.
 		const newer = spec(title)
 			.replace('"1.0"', '"1.1"')
