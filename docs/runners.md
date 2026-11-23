@@ -25,6 +25,22 @@ The gateway's server certificate comes from Huxley's runner CA, which runners re
 
 `enroll` makes the runner's own key and sends only a certificate request. It stores the key, the certificate (valid 7 days), the CA and the gateway address in `--state` (default `/var/lib/huxley-runner`), readable only by the runner's user. `run` sends a heartbeat every 30 seconds and renews the certificate when less than two days are left. Each renewal replaces the previous certificate.
 
+## Run it in a container
+
+`ghcr.io/usehuxley/runner` is `huxley runner` with rootless Podman built in. Run it with what nested rootless Podman needs, and **never** with a Docker or Podman socket:
+
+```sh
+docker run -d --name huxley-runner \
+  --device /dev/fuse --security-opt label=disable \
+  -v runner-state:/var/lib/huxley-runner \
+  -v runner-images:/home/podman/.local/share/containers \
+  ghcr.io/usehuxley/runner run --pull-images
+```
+
+Enrol it once beforehand, with the same volumes, by running `ghcr.io/usehuxley/runner enroll --server https://huxley.example.com --token hxr_…`. `--pull-images` fetches the PowerShell and Python images when it starts. Scripts never cause a pull.
+
+The reference Compose deployment has it as the `runner` profile. Enrol it with `docker compose run --rm runner enroll --server http://huxley:8080 --token hxr_…`, then start it with `docker compose --profile runner up -d`.
+
 ## The sandbox
 
 Each script runs in its own container, removed afterwards, with:

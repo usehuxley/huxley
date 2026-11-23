@@ -36,6 +36,9 @@ jobs:
           - name: huxley
             dockerfile: docker/huxley.Dockerfile
             build-args: ""
+          - name: runner
+            dockerfile: docker/runner.Dockerfile
+            build-args: ""
           - name: web
             dockerfile: docker/frontend.Dockerfile
             build-args: APP=web

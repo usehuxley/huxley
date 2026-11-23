@@ -5,6 +5,7 @@
 #   docker compose up -d --build # build from source; or omit --build to pull images
 #
 # Optional profiles:
+#   --profile runner         A script runner (enrol it first; see docs/runners.md)
 #   --profile valkey         Valkey cache (recommended at scale; not required yet)
 #   --profile observability  OpenTelemetry Collector (set HUXLEY_OTLP_ENDPOINT too)
 
@@ -23,6 +24,11 @@ x-huxley-env: &huxley-env
   HUXLEY_AUTH__PUBLIC_URL: https://${HUXLEY_DOMAIN:-localhost}
   HUXLEY_EMAIL__SMTP_URL: ${HUXLEY_SMTP_URL:-}
   HUXLEY_EMAIL__FROM: ${HUXLEY_EMAIL_FROM:-Huxley <huxley@example.com>}
+  # The script runner gateway (mutual TLS), reached by runners inside this
+  # network as https://huxley:8443. Not published on the host.
+  HUXLEY_RUNNERS__BIND: 0.0.0.0:8443
+  HUXLEY_RUNNERS__HOSTS: "[huxley]"
+  HUXLEY_RUNNERS__PUBLIC_URL: https://huxley:8443
 
 services:
   postgres:
@@ -117,6 +123,24 @@ services:
       - caddy-config:/config
     depends_on: [web, portal]
 
+  # Runs scripts in rootless Podman sandboxes. Enrol it once with a token
+  # from Settings → Script runners:
+  #   docker compose run --rm runner enroll --server http://huxley:8080 --token hxr_…
+  runner:
+    image: ghcr.io/usehuxley/runner:${HUXLEY_VERSION:-latest}
+    build: { context: ../.., dockerfile: docker/runner.Dockerfile }
+    profiles: [runner]
+    restart: unless-stopped
+    command: ["run", "--pull-images"]
+    # What nested rootless Podman needs. Never mount a container socket.
+    devices: ["/dev/fuse"]
+    security_opt: ["label=disable"]
+    volumes:
+      - runner-state:/var/lib/huxley-runner
+      - runner-images:/home/podman/.local/share/containers
+    depends_on:
+      huxley: { condition: service_healthy }
+
   valkey:
     image: valkey/valkey:8
     profiles: [valkey]
@@ -149,3 +173,5 @@ volumes:
   valkey-data:
   caddy-data:
   caddy-config:
+  runner-state:
+  runner-images:

@@ -207,6 +207,23 @@ mod tests {
     }
 
     #[test]
+    fn runner_gateway_settings_come_from_env() {
+        figment::Jail::expect_with(|jail| {
+            jail.set_env("HUXLEY_RUNNERS__BIND", "0.0.0.0:8443");
+            jail.set_env("HUXLEY_RUNNERS__HOSTS", "[huxley, runners.example.com]");
+            jail.set_env("HUXLEY_RUNNERS__PUBLIC_URL", "https://huxley:8443");
+            let config = Config::load(None).unwrap();
+            assert_eq!(config.runners.bind, Some("0.0.0.0:8443".parse().unwrap()));
+            assert_eq!(config.runners.hosts, vec!["huxley", "runners.example.com"]);
+            assert_eq!(
+                config.runners.public_url.as_deref(),
+                Some("https://huxley:8443")
+            );
+            Ok(())
+        });
+    }
+
+    #[test]
     fn file_env_vars_supply_secrets() {
         figment::Jail::expect_with(|jail| {
             jail.create_file("db-url", "postgres://from-file\n")?;
