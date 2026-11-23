@@ -137,11 +137,14 @@ pub async fn serve(config: Config, roles: BTreeSet<Role>) -> anyhow::Result<()> 
                     huxley_notify::run_email_dispatcher(mail_db, mail, public_url, mail_stop).await;
                     Ok(())
                 });
-                tasks.spawn(placeholder(
-                    "worker",
-                    "workflow execution arrives in Phase 2",
-                    shutdown.clone(),
-                ));
+                // Workflow runs: any number of worker processes share the queue.
+                let engine = huxley_engine::Engine::new(db.clone(), crypto.clone());
+                let worker_config = huxley_engine::WorkerConfig::from(&config.engine);
+                let stop = shutdown.clone();
+                tasks.spawn(async move {
+                    huxley_engine::run_workers(engine, worker_config, stop).await;
+                    Ok(())
+                });
             }
             Role::Scheduler => {
                 tasks.spawn(placeholder(

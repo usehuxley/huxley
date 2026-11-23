@@ -1,0 +1,366 @@
+//! The engine against a real PostgreSQL. Tests share the database (and its
+//! job queue), so each waits for its own run rather than for an empty queue.
+
+use std::time::{Duration, Instant};
+
+use huxley_db::testing::{TestPools, ensure_root, pools, unique};
+use huxley_db::{OrgScope, begin_scoped};
+use huxley_engine::{Engine, RunStatus, StartRun};
+use serde_json::{Value as Json, json};
+use uuid::Uuid;
+
+struct Harness {
+    pools: TestPools,
+    engine: Engine,
+    org: Uuid,
+}
+
+async fn harness() -> Option<Harness> {
+    let pools = pools().await?;
+    let root = ensure_root(&pools).await;
+    let org = Uuid::now_v7();
+    let mut tx = begin_scoped(&pools.app, &OrgScope::System).await.unwrap();
+    sqlx::query(
+        "INSERT INTO organizations (id, parent_id, kind, name, path) \
+         VALUES ($1, $2, 'provider', $3, '')",
+    )
+    .bind(org)
+    .bind(root)
+    .bind(unique("engine"))
+    .execute(&mut *tx)
+    .await
+    .unwrap();
+    tx.commit().await.unwrap();
+    let engine = Engine::new(
+        pools.app.clone(),
+        huxley_crypto::Crypto::new(pools.app.clone(), huxley_crypto::testing::key_ring()),
+    );
+    Some(Harness { pools, engine, org })
+}
+
+fn document(spec: &str) -> Json {
+    let yaml = format!(
+        "apiVersion: usehuxley.com/v1\nkind: Workflow\nmetadata: {{ key: test, name: Test }}\nspec:\n{spec}"
+    );
+    serde_json::to_value(huxley_hwf::parse_yaml(&yaml).unwrap()).unwrap()
+}
+
+#[derive(Debug, sqlx::FromRow)]
+struct RunRow {
+    status: RunStatus,
+    outputs: Option<Json>,
+    error: Option<Json>,
+}
+
+impl Harness {
+    async fn start(&self, spec: &str, inputs: Json) -> Uuid {
+        let mut tx = begin_scoped(&self.pools.app, &OrgScope::System)
+            .await
+            .unwrap();
+        let id = self
+            .engine
+            .start_run(
+                &mut tx,
+                StartRun {
+                    org_id: self.org,
+                    workflow_id: None,
+                    version: None,
+                    document: Some(document(spec)),
+                    trigger_type: "manual".into(),
+                    trigger: json!({}),
+                    inputs,
+                    actor_id: None,
+                },
+            )
+            .await
+            .unwrap();
+        tx.commit().await.unwrap();
+        id
+    }
+
+    async fn run(&self, id: Uuid) -> RunRow {
+        sqlx::query_as("SELECT status, outputs, error FROM runs WHERE id = $1")
+            .bind(id)
+            .fetch_one(&self.pools.owner)
+            .await
+            .unwrap()
+    }
+
+    /// Processes jobs until the run finishes.
+    async fn finish(&self, id: Uuid) -> RunRow {
+        let deadline = Instant::now() + Duration::from_secs(20);
+        loop {
+            self.engine.drain("test-worker", 50).await.unwrap();
+            let run = self.run(id).await;
+            if run.status.is_finished() {
+                return run;
+            }
+            assert!(Instant::now() < deadline, "run {id} didn't finish: {run:?}");
+            tokio::time::sleep(Duration::from_millis(20)).await;
+        }
+    }
+
+    /// Latest attempt of each step: key → (status, output, error).
+    async fn steps(&self, id: Uuid) -> Vec<(String, String, Option<Json>, Option<Json>)> {
+        sqlx::query_as(
+            "SELECT DISTINCT ON (step_key) step_key, status::text, output, error \
+               FROM step_runs WHERE run_id = $1 ORDER BY step_key, attempt DESC",
+        )
+        .bind(id)
+        .fetch_all(&self.pools.owner)
+        .await
+        .unwrap()
+    }
+
+    async fn status_of(&self, id: Uuid, key: &str) -> String {
+        self.steps(id)
+            .await
+            .into_iter()
+            .find(|s| s.0 == key)
+            .map_or_else(|| "missing".into(), |s| s.1)
+    }
+
+    async fn jobs(&self, id: Uuid) -> i64 {
+        sqlx::query_scalar("SELECT count(*) FROM jobs WHERE run_id = $1")
+            .bind(id)
+            .fetch_one(&self.pools.owner)
+            .await
+            .unwrap()
+    }
+}
+
+#[tokio::test]
+async fn pure_steps_run_in_one_pass() {
+    let Some(h) = harness().await else { return };
+    let id = h
+        .start(
+            r#"  steps:
+    - { id: greet, type: transform, output: "Hello {{ inputs.name }}" }
+    - { id: remember, type: set_var, vars: { count: "{{ inputs.n * 2 }}" } }
+    - { id: skipped, type: transform, if: "{{ false }}", output: never }
+    - id: choose
+      type: if
+      condition: "{{ run.vars.count > 5 }}"
+      then: [ { id: big, type: transform, output: "{{ run.vars.count }} is big" } ]
+      else: [ { id: small, type: transform, output: small } ]
+    - id: route
+      type: switch
+      value: "{{ inputs.name | lower }}"
+      cases:
+        - { when: bob, steps: [ { id: is_bob, type: transform, output: 1 } ] }
+        - { when: ada, steps: [ { id: is_ada, type: transform, output: 2 } ] }
+  outputs:
+    greeting: "{{ steps.greet.output }}"
+    branch: "{{ steps.choose.output }}"
+    route: "{{ steps.route.output }}"
+    skipped: "{{ steps.skipped.output }}"
+"#,
+            json!({ "name": "Ada", "n": 4 }),
+        )
+        .await;
+    let run = h.finish(id).await;
+    assert_eq!(run.status, RunStatus::Succeeded, "{run:?}");
+    assert_eq!(
+        run.outputs.unwrap(),
+        json!({ "greeting": "Hello Ada", "branch": "8 is big", "route": 2, "skipped": null })
+    );
+    assert_eq!(h.status_of(id, "skipped").await, "skipped");
+    assert_eq!(h.status_of(id, "small").await, "missing");
+    assert_eq!(h.jobs(id).await, 0);
+}
+
+#[tokio::test]
+async fn foreach_and_parallel_wait_on_scheduled_steps() {
+    let Some(h) = harness().await else { return };
+    let id = h
+        .start(
+            r#"  steps:
+    - id: each
+      type: foreach
+      items: "{{ inputs.items }}"
+      as: thing
+      concurrency: 2
+      steps:
+        - { id: pause, type: wait, duration: 10ms }
+        - { id: shout, type: transform, output: "{{ thing | upper }}{{ loop.index }}" }
+    - id: both
+      type: parallel
+      branches:
+        - { id: left, steps: [ { id: l_wait, type: wait, duration: 10ms }, { id: l, type: transform, output: L } ] }
+        - { id: right, steps: [ { id: r, type: transform, output: R } ] }
+    - id: first
+      type: parallel
+      join: any
+      branches:
+        - { id: slow, steps: [ { id: s_wait, type: wait, duration: 1h }, { id: s, type: transform, output: slow } ] }
+        - { id: fast, steps: [ { id: f, type: transform, output: fast } ] }
+  outputs:
+    each: "{{ steps.each.output }}"
+    both: "{{ steps.both.output }}"
+    first: "{{ steps.first.output }}"
+"#,
+            json!({ "items": ["a", "b", "c"] }),
+        )
+        .await;
+    let run = h.finish(id).await;
+    assert_eq!(run.status, RunStatus::Succeeded, "{run:?}");
+    assert_eq!(
+        run.outputs.unwrap(),
+        json!({
+            "each": ["A1", "B2", "C3"],
+            "both": { "left": "L", "right": "R" },
+            "first": { "fast": "fast" },
+        })
+    );
+    // Iteration keys, and the losing branch's wait was cancelled.
+    assert_eq!(h.status_of(id, "shout[2]").await, "succeeded");
+    assert_eq!(h.status_of(id, "s_wait").await, "cancelled");
+    assert_eq!(h.jobs(id).await, 0);
+}
+
+#[tokio::test]
+async fn errors_are_caught_handled_and_reported() {
+    let Some(h) = harness().await else { return };
+    let id = h
+        .start(
+            r#"  steps:
+    - id: guarded
+      type: try
+      steps:
+        - { id: boom, type: fail, message: "bad {{ inputs.what }}", code: E1 }
+      catch:
+        - { id: caught, type: transform, output: "caught {{ error.message }} ({{ error.code }})" }
+      finally:
+        - { id: tidy, type: transform, output: tidied }
+    - { id: shrug, type: fail, message: ignored, continue_on_error: true }
+    - { id: typo, type: transform, output: "{{ inputs.missing.deeper }}" }
+    - { id: never, type: transform, output: no }
+  on_error:
+    - { id: report, type: transform, output: "handled {{ error.kind }}" }
+"#,
+            json!({ "what": "thing" }),
+        )
+        .await;
+    let run = h.finish(id).await;
+    assert_eq!(run.status, RunStatus::Failed, "{run:?}");
+    let error = run.error.unwrap();
+    assert_eq!(error["kind"], "expression");
+    assert!(run.outputs.is_none());
+    let steps = h.steps(id).await;
+    let output = |key: &str| steps.iter().find(|s| s.0 == key).and_then(|s| s.2.clone());
+    assert_eq!(output("guarded"), Some(json!("caught bad thing (E1)")));
+    assert_eq!(output("tidy"), Some(json!("tidied")));
+    assert_eq!(output("report"), Some(json!("handled expression")));
+    assert_eq!(h.status_of(id, "shrug").await, "failed");
+    assert_eq!(h.status_of(id, "never").await, "missing");
+}
+
+#[tokio::test]
+async fn a_step_held_by_a_dead_worker_is_picked_up_again() {
+    let Some(h) = harness().await else { return };
+    let id = h
+        .start(
+            r#"  steps:
+    - { id: pause, type: wait, duration: 400ms }
+    - { id: after, type: transform, output: done }
+  outputs: { result: "{{ steps.after.output }}" }
+"#,
+            json!({}),
+        )
+        .await;
+    // Advance until the wait is scheduled, then "crash" while holding it.
+    let deadline = Instant::now() + Duration::from_secs(10);
+    while h.status_of(id, "pause").await != "waiting" {
+        h.engine.drain("test-worker", 5).await.unwrap();
+        assert!(Instant::now() < deadline);
+    }
+    // Claimed (by a worker that then dies) before it's due, so no other
+    // test's worker can take it first.
+    let held = sqlx::query(
+        "UPDATE jobs SET locked_by = 'crashed', locked_until = now() + interval '1500 milliseconds' \
+          WHERE run_id = $1 AND kind = 'step'",
+    )
+    .bind(id)
+    .execute(&h.pools.owner)
+    .await
+    .unwrap()
+    .rows_affected();
+    assert_eq!(held, 1);
+    tokio::time::sleep(Duration::from_millis(500)).await;
+    h.engine.drain("test-worker", 50).await.unwrap();
+    assert_eq!(
+        h.run(id).await.status,
+        RunStatus::Running,
+        "due, but still leased"
+    );
+
+    // The lease runs out and another worker finishes the run.
+    tokio::time::sleep(Duration::from_millis(1100)).await;
+    let run = h.finish(id).await;
+    assert_eq!(run.status, RunStatus::Succeeded, "{run:?}");
+    assert_eq!(run.outputs.unwrap(), json!({ "result": "done" }));
+}
+
+#[tokio::test]
+async fn cancelling_stops_the_run() {
+    let Some(h) = harness().await else { return };
+    let id = h
+        .start(
+            "  steps:\n    - { id: nap, type: wait, duration: 1h }\n",
+            json!({}),
+        )
+        .await;
+    let deadline = Instant::now() + Duration::from_secs(10);
+    while h.status_of(id, "nap").await != "waiting" {
+        h.engine.drain("test-worker", 5).await.unwrap();
+        assert!(Instant::now() < deadline);
+    }
+    let mut tx = begin_scoped(&h.pools.app, &OrgScope::System).await.unwrap();
+    assert!(h.engine.cancel_run(&mut tx, id).await.unwrap());
+    tx.commit().await.unwrap();
+    let run = h.finish(id).await;
+    assert_eq!(run.status, RunStatus::Cancelled);
+    assert_eq!(h.status_of(id, "nap").await, "cancelled");
+    assert_eq!(h.jobs(id).await, 0);
+    let mut tx = begin_scoped(&h.pools.app, &OrgScope::System).await.unwrap();
+    assert!(
+        !h.engine.cancel_run(&mut tx, id).await.unwrap(),
+        "already finished"
+    );
+}
+
+#[tokio::test]
+async fn runs_time_out() {
+    let Some(h) = harness().await else { return };
+    let id = h
+        .start(
+            "  settings: { timeout: 1s }\n  steps:\n    - { id: nap, type: wait, duration: 1h }\n",
+            json!({}),
+        )
+        .await;
+    h.engine.drain("test-worker", 10).await.unwrap();
+    tokio::time::sleep(Duration::from_millis(1100)).await;
+    let run = h.finish(id).await;
+    assert_eq!(run.status, RunStatus::Failed);
+    assert_eq!(run.error.unwrap()["kind"], "timeout");
+    assert_eq!(h.status_of(id, "nap").await, "cancelled");
+}
+
+#[tokio::test]
+async fn decisions_are_journaled_once() {
+    let Some(h) = harness().await else { return };
+    // The id is generated once even though the run is walked several times.
+    let id = h
+        .start(
+            r#"  steps:
+    - { id: made, type: transform, output: "{{ uuid() }}" }
+    - { id: pause, type: wait, duration: 5ms }
+    - { id: again, type: transform, output: "{{ steps.made.output }}" }
+  outputs: { same: "{{ steps.made.output == steps.again.output }}" }
+"#,
+            json!({}),
+        )
+        .await;
+    let run = h.finish(id).await;
+    assert_eq!(run.outputs.unwrap(), json!({ "same": true }));
+}
