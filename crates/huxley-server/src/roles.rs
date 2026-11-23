@@ -148,11 +148,14 @@ pub async fn serve(config: Config, roles: BTreeSet<Role>) -> anyhow::Result<()> 
                 });
             }
             Role::Scheduler => {
-                tasks.spawn(placeholder(
-                    "scheduler",
-                    "timers and cron arrive in Phase 2",
-                    shutdown.clone(),
-                ));
+                // Schedule triggers; one leader at a time across processes.
+                let engine =
+                    huxley_engine::Engine::with_config(db.clone(), crypto.clone(), &config.engine);
+                let stop = shutdown.clone();
+                tasks.spawn(async move {
+                    huxley_triggers::run_scheduler(engine, stop).await;
+                    Ok(())
+                });
             }
             Role::All => unreachable!("expanded before serve"),
         }
@@ -199,19 +202,6 @@ fn flatten(
         Some(Ok(Err(e))) => Err(e),
         Some(Err(e)) => Err(anyhow::Error::new(e).context("role task panicked")),
     }
-}
-
-/// Stand-in for roles whose functionality arrives in later phases. Keeps the
-/// process model, telemetry, and shutdown paths exercised from day one.
-async fn placeholder(
-    name: &'static str,
-    note: &'static str,
-    token: CancellationToken,
-) -> anyhow::Result<()> {
-    tracing::info!(role = name, note, "role started");
-    token.cancelled().await;
-    tracing::info!(role = name, "role stopped");
-    Ok(())
 }
 
 #[cfg(test)]

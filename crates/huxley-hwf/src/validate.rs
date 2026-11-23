@@ -152,11 +152,8 @@ fn triggers(c: &mut Checker, triggers: &[Trigger]) {
             Trigger::Schedule(s) => {
                 match (&s.cron, &s.interval) {
                     (Some(cron), None) => {
-                        if cron.split_whitespace().count() != 5 {
-                            c.error(
-                                format!("{path}.cron"),
-                                "use five fields: minute hour day-of-month month day-of-week",
-                            );
+                        if let Err(e) = crate::cron::Cron::parse(cron) {
+                            c.error(format!("{path}.cron"), e);
                         }
                     }
                     (None, Some(_)) => {
@@ -166,6 +163,15 @@ fn triggers(c: &mut Checker, triggers: &[Trigger]) {
                 }
                 if s.interval.is_some() && s.timezone.is_some() {
                     c.error(format!("{path}.timezone"), "only applies to cron schedules");
+                } else if let Some(tz) = &s.timezone
+                    && crate::cron::time_zone(tz).is_none()
+                {
+                    c.error(
+                        format!("{path}.timezone"),
+                        format!(
+                            "{tz:?} isn't a time zone (use an IANA name such as Europe/London)"
+                        ),
+                    );
                 }
             }
             Trigger::Webhook(w) => {

@@ -6,6 +6,8 @@
 //! Publishing requires none: structure (`huxley-hwf`) and expressions
 //! (`huxley-expr`) both have to check out.
 
+pub mod triggers;
+
 use huxley_core::RequestContext;
 use huxley_db::audit::{self, AuditRecord};
 use huxley_hwf::Diagnostic;
@@ -324,6 +326,7 @@ pub async fn publish(
         .bind(version)
         .execute(&mut *conn)
         .await?;
+    triggers::sync(&mut *conn, id, org_id, &draft).await?;
     audit::record(
         conn,
         ctx,
@@ -391,6 +394,23 @@ pub async fn set_archived(
     .fetch_optional(&mut *conn)
     .await?;
     let (org_id,) = org.ok_or(WorkflowError::NotFound)?;
+    // Archived workflows don't trigger; restoring brings the published
+    // version's triggers back.
+    if archived {
+        triggers::clear(&mut *conn, id).await?;
+    } else {
+        let published: Option<(Json,)> = sqlx::query_as(
+            "SELECT v.document FROM workflows w \
+               JOIN workflow_versions v ON v.workflow_id = w.id AND v.version = w.current_version \
+              WHERE w.id = $1",
+        )
+        .bind(id)
+        .fetch_optional(&mut *conn)
+        .await?;
+        if let Some((document,)) = published {
+            triggers::sync(&mut *conn, id, org_id, &document).await?;
+        }
+    }
     let action = if archived {
         "workflow.archived"
     } else {

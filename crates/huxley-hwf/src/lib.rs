@@ -6,6 +6,7 @@
 //! - [`validate`]: structural checks beyond the types.
 //! - [`json_schema`]: the published JSON Schema (`schemas/hwf/v1.json`).
 
+pub mod cron;
 pub mod duration;
 pub mod model;
 mod validate;

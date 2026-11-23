@@ -179,6 +179,7 @@ use crate::workflow_routes::{
         workflow_routes::list_runs,
         workflow_routes::get_run,
         workflow_routes::cancel_run,
+        workflow_routes::triggers,
     ),
     components(schemas(HealthStatus, ApiError, FieldError, LoginRequest, ChangePasswordRequest, UserView, SessionView,
         MeView,
@@ -295,6 +296,7 @@ use crate::workflow_routes::{
         huxley_engine::runs::RunSummary,
         huxley_engine::runs::RunDetail,
         huxley_engine::runs::StepRunView,
+        huxley_workflows::triggers::TriggerView,
     )),
     tags(
         (name = "system", description = "Health and platform metadata"),
