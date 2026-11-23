@@ -1567,6 +1567,94 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
+	'/api/v1/runners': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** Every runner, active ones first. */
+		get: operations['list_runners'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/runners/enroll': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/** A runner enrols: the token (used once) proves who sent it. No session. */
+		post: operations['enroll_runner'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/runners/enrollments': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/** A single-use token for a new runner to enrol with (valid 24 hours). */
+		post: operations['create_runner_enrollment'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/runners/external': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/**
+		 * Registers a runner whose certificate comes from your own CA
+		 *     (`runners.client_ca_file`); its certificate's common name is `name`.
+		 */
+		post: operations['register_external_runner'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/runners/{id}/revoke': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/** Stops a runner at once: the gateway refuses it from its next call. */
+		post: operations['revoke_runner'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
 	'/api/v1/runs': {
 		parameters: {
 			query?: never;
@@ -2899,6 +2987,27 @@ export interface components {
 			/** @description e.g. `spec.steps[2].then[0].id` */
 			path: string;
 		};
+		EnrollRequest: {
+			/** @description PEM certificate signing request for the runner's own key. */
+			csrPem: string;
+			token: string;
+		};
+		EnrollResponse: {
+			/** @description The CA to trust for the gateway. */
+			caPem: string;
+			certificatePem: string;
+			/** @description Where to connect (`runners.public_url`), if configured. */
+			gatewayUrl?: string | null;
+			name: string;
+			/** Format: uuid */
+			runnerId: string;
+		};
+		EnrollmentToken: {
+			/** Format: date-time */
+			expiresAt: string;
+			/** @description Shown once: the runner uses it with `huxley runner enroll`. */
+			token: string;
+		};
 		/** @description An entity type that supports custom fields and tags. */
 		EntityType: {
 			key: string;
@@ -3576,6 +3685,28 @@ export interface components {
 			 * @description `null` for a test run of the draft.
 			 */
 			workflowVersion?: number | null;
+		};
+		RunnerNameRequest: {
+			/** @description Lowercase letters, digits, dots and hyphens. */
+			name: string;
+		};
+		/** @enum {string} */
+		RunnerSource: 'huxley' | 'external';
+		RunnerView: {
+			/** Format: date-time */
+			certExpiresAt?: string | null;
+			/** Format: date-time */
+			createdAt: string;
+			/** Format: uuid */
+			id: string;
+			languages: string[];
+			/** Format: date-time */
+			lastSeenAt?: string | null;
+			name: string;
+			/** Format: date-time */
+			revokedAt?: string | null;
+			source: components['schemas']['RunnerSource'];
+			version?: string | null;
 		};
 		SaveDraftRequest: {
 			document: {
@@ -7162,6 +7293,139 @@ export interface operations {
 				};
 				content: {
 					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	list_runners: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['RunnerView'][];
+				};
+			};
+		};
+	};
+	enroll_runner: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['EnrollRequest'];
+			};
+		};
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['EnrollResponse'];
+				};
+			};
+			401: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	create_runner_enrollment: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['RunnerNameRequest'];
+			};
+		};
+		responses: {
+			201: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['EnrollmentToken'];
+				};
+			};
+			409: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	register_external_runner: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['RunnerNameRequest'];
+			};
+		};
+		responses: {
+			201: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['RunnerView'];
+				};
+			};
+			409: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	revoke_runner: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['RunnerView'];
 				};
 			};
 		};

@@ -3952,6 +3952,167 @@
 				}
 			}
 		},
+		"/api/v1/runners": {
+			"get": {
+				"tags": ["runners"],
+				"summary": "Every runner, active ones first.",
+				"operationId": "list_runners",
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "array",
+									"items": {
+										"$ref": "#/components/schemas/RunnerView"
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/runners/enroll": {
+			"post": {
+				"tags": ["runners"],
+				"summary": "A runner enrols: the token (used once) proves who sent it. No session.",
+				"operationId": "enroll_runner",
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/EnrollRequest"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/EnrollResponse"
+								}
+							}
+						}
+					},
+					"401": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/runners/enrollments": {
+			"post": {
+				"tags": ["runners"],
+				"summary": "A single-use token for a new runner to enrol with (valid 24 hours).",
+				"operationId": "create_runner_enrollment",
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/RunnerNameRequest"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"201": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/EnrollmentToken"
+								}
+							}
+						}
+					},
+					"409": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/runners/external": {
+			"post": {
+				"tags": ["runners"],
+				"summary": "Registers a runner whose certificate comes from your own CA\n(`runners.client_ca_file`); its certificate's common name is `name`.",
+				"operationId": "register_external_runner",
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/RunnerNameRequest"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"201": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/RunnerView"
+								}
+							}
+						}
+					},
+					"409": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/runners/{id}/revoke": {
+			"post": {
+				"tags": ["runners"],
+				"summary": "Stops a runner at once: the gateway refuses it from its next call.",
+				"operationId": "revoke_runner",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/RunnerView"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
 		"/api/v1/runs": {
 			"get": {
 				"tags": ["workflows"],
@@ -7607,6 +7768,58 @@
 					}
 				}
 			},
+			"EnrollRequest": {
+				"type": "object",
+				"required": ["token", "csrPem"],
+				"properties": {
+					"csrPem": {
+						"type": "string",
+						"description": "PEM certificate signing request for the runner's own key."
+					},
+					"token": {
+						"type": "string"
+					}
+				},
+				"additionalProperties": false
+			},
+			"EnrollResponse": {
+				"type": "object",
+				"required": ["runnerId", "name", "certificatePem", "caPem"],
+				"properties": {
+					"caPem": {
+						"type": "string",
+						"description": "The CA to trust for the gateway."
+					},
+					"certificatePem": {
+						"type": "string"
+					},
+					"gatewayUrl": {
+						"type": ["string", "null"],
+						"description": "Where to connect (`runners.public_url`), if configured."
+					},
+					"name": {
+						"type": "string"
+					},
+					"runnerId": {
+						"type": "string",
+						"format": "uuid"
+					}
+				}
+			},
+			"EnrollmentToken": {
+				"type": "object",
+				"required": ["token", "expiresAt"],
+				"properties": {
+					"expiresAt": {
+						"type": "string",
+						"format": "date-time"
+					},
+					"token": {
+						"type": "string",
+						"description": "Shown once: the runner uses it with `huxley runner enroll`."
+					}
+				}
+			},
 			"EntityType": {
 				"type": "object",
 				"description": "An entity type that supports custom fields and tags.",
@@ -9289,6 +9502,62 @@
 					}
 				}
 			},
+			"RunnerNameRequest": {
+				"type": "object",
+				"required": ["name"],
+				"properties": {
+					"name": {
+						"type": "string",
+						"description": "Lowercase letters, digits, dots and hyphens."
+					}
+				},
+				"additionalProperties": false
+			},
+			"RunnerSource": {
+				"type": "string",
+				"enum": ["huxley", "external"]
+			},
+			"RunnerView": {
+				"type": "object",
+				"required": ["id", "name", "source", "languages", "createdAt"],
+				"properties": {
+					"certExpiresAt": {
+						"type": ["string", "null"],
+						"format": "date-time"
+					},
+					"createdAt": {
+						"type": "string",
+						"format": "date-time"
+					},
+					"id": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"languages": {
+						"type": "array",
+						"items": {
+							"type": "string"
+						}
+					},
+					"lastSeenAt": {
+						"type": ["string", "null"],
+						"format": "date-time"
+					},
+					"name": {
+						"type": "string"
+					},
+					"revokedAt": {
+						"type": ["string", "null"],
+						"format": "date-time"
+					},
+					"source": {
+						"$ref": "#/components/schemas/RunnerSource"
+					},
+					"version": {
+						"type": ["string", "null"]
+					}
+				}
+			},
 			"SaveDraftRequest": {
 				"type": "object",
 				"required": ["revision", "document"],
@@ -10418,6 +10687,10 @@
 		{
 			"name": "workflows",
 			"description": "Workflows, their versions, and their runs"
+		},
+		{
+			"name": "runners",
+			"description": "Script runners and their enrolment"
 		},
 		{
 			"name": "scripts",

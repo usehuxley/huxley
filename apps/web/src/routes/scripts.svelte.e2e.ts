@@ -38,4 +38,14 @@ test.describe('scripts', () => {
 		await expect(page.getByLabel('Version 1 source')).toContainText('json.load');
 		await expect(page.getByLabel('Script source')).toHaveValue('print("version two")\n');
 	});
+
+	test('an admin enrols a script runner', async ({ browser }) => {
+		const page = await signIn(browser);
+		await page.goto('/settings/runners');
+		const name = `runner-${Date.now().toString(36)}`;
+		await page.getByLabel('Runner name').fill(name);
+		await page.getByRole('button', { name: 'Create token' }).click();
+		await expect(page.getByTestId('runner-token')).toContainText('hxr_');
+		await expect(page.getByText('huxley runner enroll --server')).toBeVisible();
+	});
 });

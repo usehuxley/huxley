@@ -12,6 +12,15 @@ homepage = "https://usehuxley.com"
 authors = ["Huxley contributors"]
 
 [workspace.dependencies]
+tonic = { version = "0.14", default-features = false, features = ["transport", "codegen", "tls-ring", "router"] }
+tonic-prost = "0.14"
+tonic-prost-build = { version = "0.14", default-features = false, features = ["transport"] }
+prost = "0.14"
+protox = "0.10"
+rustls = { version = "0.23", default-features = false, features = ["ring", "std"] }
+tokio-stream = { version = "0.1", default-features = false, features = ["net"] }
+rcgen = { version = "0.14", default-features = false, features = ["crypto", "ring", "pem", "x509-parser"] }
+x509-parser = "0.18"
 # Internal crates
 huxley-api = { path = "crates/huxley-api" }
 huxley-auth = { path = "crates/huxley-auth" }
@@ -30,6 +39,7 @@ huxley-hwf = { path = "crates/huxley-hwf" }
 huxley-forms = { path = "crates/huxley-forms" }
 huxley-integrations = { path = "crates/huxley-integrations" }
 huxley-orgs = { path = "crates/huxley-orgs" }
+huxley-runners = { path = "crates/huxley-runners" }
 huxley-scripts = { path = "crates/huxley-scripts" }
 huxley-storage = { path = "crates/huxley-storage" }
 huxley-telemetry = { path = "crates/huxley-telemetry" }

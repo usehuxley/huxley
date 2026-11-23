@@ -9,6 +9,7 @@ export const SETTINGS_SECTIONS = [
 	{ key: 'fields', label: 'Fields & tags', permission: 'custom_field:manage' },
 	{ key: 'modules', label: 'Modules', permission: 'platform:modules:manage' },
 	{ key: 'jobs', label: 'Workflow jobs', permission: 'platform:jobs:manage' },
+	{ key: 'runners', label: 'Script runners', permission: 'platform:runners:manage' },
 	{ key: 'security', label: 'Security', permission: 'security:policy:manage' },
 	{ key: 'sso', label: 'Single sign-on', permission: 'security:policy:manage' }
 ] as const;

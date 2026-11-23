@@ -1049,3 +1049,90 @@ async fn scripts_keep_every_version() {
         StatusCode::NOT_FOUND
     );
 }
+
+#[tokio::test]
+async fn runners_enrol_once_and_only_admins_manage_them() {
+    // Its own database: the runner CA is one per instance.
+    let Some(db) = isolated("api_runners").await else {
+        return;
+    };
+    let s = setup_in(db.pools.clone()).await;
+    let (_, tech) = technician(&s).await;
+    assert_eq!(
+        s.get(&tech, "/api/v1/runners").await.0,
+        StatusCode::FORBIDDEN
+    );
+    let (status, _) = s
+        .post(
+            &tech,
+            "/api/v1/runners/enrollments",
+            json!({ "name": "nope" }),
+        )
+        .await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+
+    let (status, problem) = s
+        .post(
+            &s.owner,
+            "/api/v1/runners/enrollments",
+            json!({ "name": "Bad Name" }),
+        )
+        .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{problem}");
+    let (status, token) = s
+        .post(
+            &s.owner,
+            "/api/v1/runners/enrollments",
+            json!({ "name": "runner-a" }),
+        )
+        .await;
+    assert_eq!(status, StatusCode::CREATED, "{token}");
+    let token = token["token"].as_str().unwrap().to_owned();
+
+    // The runner enrols without a session; the token works once.
+    let (_, csr) = huxley_runners::ca::runner_key_and_csr().unwrap();
+    let body = json!({ "token": token, "csrPem": csr });
+    let (status, enrolled) = call(
+        &s.app,
+        "POST",
+        "/api/v1/runners/enroll",
+        "",
+        Some(body.clone()),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{enrolled}");
+    assert_eq!(enrolled["name"], "runner-a");
+    assert!(
+        enrolled["certificatePem"]
+            .as_str()
+            .unwrap()
+            .contains("BEGIN CERTIFICATE")
+    );
+    assert!(
+        enrolled["caPem"]
+            .as_str()
+            .unwrap()
+            .contains("BEGIN CERTIFICATE")
+    );
+    let (status, _) = call(&s.app, "POST", "/api/v1/runners/enroll", "", Some(body)).await;
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
+
+    let (status, external) = s
+        .post(
+            &s.owner,
+            "/api/v1/runners/external",
+            json!({ "name": "byo-runner" }),
+        )
+        .await;
+    assert_eq!(status, StatusCode::CREATED, "{external}");
+    assert_eq!(external["source"], "external");
+
+    let id = enrolled["runnerId"].as_str().unwrap();
+    let (status, revoked) = s
+        .post(&s.owner, &format!("/api/v1/runners/{id}/revoke"), json!({}))
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(revoked["revokedAt"].is_string());
+    let (_, list) = s.get(&s.owner, "/api/v1/runners").await;
+    assert_eq!(list.as_array().unwrap().len(), 2);
+}

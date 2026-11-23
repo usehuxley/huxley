@@ -25,6 +25,7 @@ huxley-workflows.workspace = true
 huxley-integrations.workspace = true
 huxley-forms.workspace = true
 huxley-scripts.workspace = true
+huxley-runners.workspace = true
 huxley-triggers.workspace = true
 huxley-variables.workspace = true
 huxley-hwf.workspace = true
@@ -47,6 +48,7 @@ utoipa.workspace = true
 uuid.workspace = true
 
 [dev-dependencies]
+huxley-runners.workspace = true
 ring.workspace = true
 huxley-expr.workspace = true
 huxley-email.workspace = true

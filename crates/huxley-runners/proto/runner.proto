@@ -1,0 +1,35 @@
+// Worker <-> runner protocol (design doc §6.9, ADR-025). Runners connect to
+// the gateway with mutual TLS and pull their work.
+syntax = "proto3";
+
+package huxley.runner.v1;
+
+service Runner {
+  // Proves the connection works and the runner is still allowed in.
+  rpc Heartbeat(HeartbeatRequest) returns (HeartbeatResponse);
+  // A new certificate for the runner's new key, before the old one expires.
+  rpc Renew(RenewRequest) returns (RenewResponse);
+}
+
+message HeartbeatRequest {
+  // What the runner can run, e.g. "pwsh", "python".
+  repeated string languages = 1;
+  string version = 2;
+}
+
+message HeartbeatResponse {
+  string runner_id = 1;
+  string runner_name = 2;
+  // Unix seconds when the runner's certificate expires (0 for external ones).
+  int64 certificate_expires_at = 3;
+}
+
+message RenewRequest {
+  // PEM certificate signing request for the runner's new key.
+  string csr_pem = 1;
+}
+
+message RenewResponse {
+  string certificate_pem = 1;
+  int64 expires_at = 2;
+}
