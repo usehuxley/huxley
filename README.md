@@ -91,6 +91,10 @@ Then set `HUXLEY_CRYPTO__VAULT__ADDRESS` and one way to sign in: `HUXLEY_CRYPTO_
 
 To move an existing install over, keep `HUXLEY_CRYPTO__KEK`, add the Vault settings and `HUXLEY_CRYPTO__ACTIVE=vault`, restart, run `huxley admin rewrap-keys`, then remove the KEK. After rotating the key inside Vault, `huxley admin rewrap-keys --all` moves data keys to its newest version, so older versions can be retired with `min_decryption_version`.
 
+### Keeping the key-encryption key in Azure Key Vault
+
+Create an RSA key (3072 or 4096 bits) in a Key Vault or Managed HSM and give Huxley's identity the *Key Vault Crypto User* role on it (wrap and unwrap only). Then set `HUXLEY_CRYPTO__AZURE_KEY_VAULT__VAULT_URL` (e.g. `https://contoso.vault.azure.net`) and, if the key isn't named `huxley`, `..._KEY`. Huxley signs in with managed identity by default (Container Apps, App Service, or a VM), with workload identity on AKS when `AZURE_FEDERATED_TOKEN_FILE` is set, or with an app registration's secret (`..._AUTH__TENANT_ID`, `..._AUTH__CLIENT_ID`, `..._AUTH__CLIENT_SECRET`). For a user-assigned identity set `..._AUTH__CLIENT_ID`. Rotate the key in Key Vault whenever you like: each wrapped data key remembers its key version, and `huxley admin rewrap-keys --all` moves them to the newest one. Moving from a local KEK works as for Vault, with `HUXLEY_CRYPTO__ACTIVE=azure_key_vault`.
+
 ### Configuration
 
 The server reads, in increasing precedence: built-in defaults, `huxley.toml`, then `HUXLEY_<SECTION>__<KEY>` environment variables. Any variable can instead be supplied as a file by appending `_FILE` (for Docker and Kubernetes secrets).
@@ -98,9 +102,10 @@ The server reads, in increasing precedence: built-in defaults, `huxley.toml`, th
 | Variable | Default | Purpose |
 |---|---|---|
 | `HUXLEY_DATABASE__URL` | (required) | PostgreSQL connection URL |
-| `HUXLEY_CRYPTO__KEK` | (required unless Vault is set) | Key-encryption key for secrets at rest: 32 random bytes, base64 (`huxley admin generate-kek`). Back it up: without it, encrypted data is unrecoverable. |
+| `HUXLEY_CRYPTO__KEK` | (required unless a key service is set) | Key-encryption key for secrets at rest: 32 random bytes, base64 (`huxley admin generate-kek`). Back it up: without it, encrypted data is unrecoverable. |
 | `HUXLEY_CRYPTO__VAULT__ADDRESS` | (unset) | Keep the KEK in Vault or OpenBao Transit instead (see above) |
-| `HUXLEY_CRYPTO__ACTIVE` | (the one configured) | `local` or `vault`: which KEK wraps new data keys when both are set |
+| `HUXLEY_CRYPTO__AZURE_KEY_VAULT__VAULT_URL` | (unset) | Keep the KEK in Azure Key Vault instead (see above) |
+| `HUXLEY_CRYPTO__ACTIVE` | (the one configured) | `local`, `vault`, or `azure_key_vault`: which KEK wraps new data keys when several are set |
 | `HUXLEY_AUTH__PUBLIC_URL` | (unset) | The staff app's URL as browsers see it, e.g. `https://huxley.example.com`. Enables passkeys, which are bound to its host name (changing the host later invalidates registered passkeys), and single sign-on, whose redirect URI is `<public URL>/login/oidc/callback`. |
 | `HUXLEY_EMAIL__SMTP_URL` | (unset) | SMTP server for password reset, invitations, and verification, e.g. `smtps://user:pass@smtp.example.com` or `smtp://user:pass@host:587?tls=required`. Unset or empty: email is off. Links need `HUXLEY_AUTH__PUBLIC_URL`. |
 | `HUXLEY_EMAIL__FROM` | (required with SMTP) | From address, e.g. `Huxley <huxley@example.com>` |
