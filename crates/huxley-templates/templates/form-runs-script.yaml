@@ -1,0 +1,41 @@
+template:
+  key: form-runs-script
+  name: Form that runs a script
+  description: A form whose answers become a library script's parameters, run in a sandboxed runner.
+  category: Scripts
+  bindings:
+    - { key: script, label: Script, kind: script, help: "The key of a script in your library" }
+    - { key: recipients, label: Who to tell when it's done, kind: recipients, default: "role:admin" }
+form:
+  name: Run a script
+  schema:
+    type: object
+    required: [target]
+    properties:
+      target: { type: string, title: Target, description: "Passed to the script as Target" }
+  ui:
+    order: [target]
+workflow:
+  apiVersion: usehuxley.com/v1
+  kind: Workflow
+  metadata: { key: form-runs-script, name: Form that runs a script }
+  spec:
+    inputs:
+      type: object
+      required: [target]
+      properties:
+        target: { type: string }
+    triggers:
+      - { type: form, form: "%{form}" }
+    steps:
+      - id: run
+        type: script
+        script: "%{script}"
+        with: { Target: "{{ inputs.target }}" }
+        timeout: 15m
+      - id: tell
+        type: core.notify
+        with:
+          to: "%{recipients}"
+          title: "%{script} finished for {{ inputs.target }}"
+          message: "{{ steps.run.output | tojson }}"

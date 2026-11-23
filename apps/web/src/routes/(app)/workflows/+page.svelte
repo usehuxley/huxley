@@ -78,6 +78,11 @@
 				<Button type="submit">Create</Button>
 			</form>
 			{#if form?.message}<p class="mt-3 text-sm text-danger" role="alert">{form.message}</p>{/if}
+			<p class="mt-3 text-sm text-fg-muted">
+				Or <a href={resolve('/(app)/workflows/templates')} class="text-accent hover:underline">
+					start from a template
+				</a>.
+			</p>
 		</Card>
 	{/if}
 </div>

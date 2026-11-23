@@ -2239,6 +2239,40 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
+	'/api/v1/templates': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** The templates there are. */
+		get: operations['list_templates'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/templates/{key}/use': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/** Creates the template's form (if any) and a draft workflow from it. */
+		post: operations['use_template'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
 	'/api/v1/users': {
 		parameters: {
 			query?: never;
@@ -2831,6 +2865,18 @@ export interface components {
 			/** @description The spec's name for it (the `securitySchemes` key). */
 			key: string;
 		};
+		Binding: {
+			default?: string | null;
+			help?: string | null;
+			key: string;
+			kind: components['schemas']['BindingKind'];
+			label: string;
+		};
+		/**
+		 * @description What a binding holds, which decides how it's checked and inserted.
+		 * @enum {string}
+		 */
+		BindingKind: 'text' | 'url' | 'recipients' | 'script';
 		Body: {
 			/** @description e.g. `application/json`, `application/x-www-form-urlencoded`. */
 			contentType: string;
@@ -4156,6 +4202,16 @@ export interface components {
 			/** Format: uuid */
 			userId: string;
 		};
+		/** @description A template as the gallery shows it. */
+		TemplateInfo: {
+			bindings?: components['schemas']['Binding'][];
+			category: string;
+			description: string;
+			/** @description Whether using it also creates a form. */
+			hasForm?: boolean;
+			key: string;
+			name: string;
+		};
 		TotpEnrollmentView: {
 			/** @description `otpauth://` URI to show as a QR code. */
 			otpauthUri: string;
@@ -4225,6 +4281,32 @@ export interface components {
 			displayName?: string | null;
 			/** @description `active` or `disabled`. Disabling signs the user out everywhere. */
 			status?: string | null;
+		};
+		UseTemplateRequest: {
+			/** @description Values for the template's bindings (missing ones take defaults). */
+			bindings?: {
+				[key: string]: string;
+			};
+			/**
+			 * @description The new form's key and name, if the template has one (default: the
+			 *     workflow's key and the template's form name).
+			 */
+			formKey?: string | null;
+			formName?: string | null;
+			/** @description The new workflow's key and name. */
+			key: string;
+			name: string;
+			/** Format: uuid */
+			orgId: string;
+		};
+		UsedTemplate: {
+			/** Format: uuid */
+			formId?: string | null;
+			/**
+			 * Format: uuid
+			 * @description The new draft workflow.
+			 */
+			workflowId: string;
 		};
 		UserPage: {
 			items: components['schemas']['UserView'][];
@@ -8949,6 +9031,74 @@ export interface operations {
 				content?: never;
 			};
 			404: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	list_templates: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['TemplateInfo'][];
+				};
+			};
+		};
+	};
+	use_template: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				key: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['UseTemplateRequest'];
+			};
+		};
+		responses: {
+			201: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['UsedTemplate'];
+				};
+			};
+			404: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+			409: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+			422: {
 				headers: {
 					[name: string]: unknown;
 				};

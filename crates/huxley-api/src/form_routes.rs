@@ -32,7 +32,7 @@ fn db_err(e: impl std::fmt::Display) -> ApiError {
     ApiError::internal(&e)
 }
 
-fn map_err(e: FormError) -> ApiError {
+pub(crate) fn map_err(e: FormError) -> ApiError {
     match e {
         FormError::NotFound => ApiError::not_found(),
         FormError::KeyTaken(_) | FormError::Archived => ApiError::conflict(e.to_string()),

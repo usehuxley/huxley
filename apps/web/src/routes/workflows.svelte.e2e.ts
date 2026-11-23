@@ -294,4 +294,25 @@ spec:
 		await expect(page.getByLabel('Run outputs')).toContainText('"decision": "approved"');
 		await expect(page.getByLabel('Run outputs')).toContainText('"comment": "Go ahead"');
 	});
+
+	test('a template becomes a draft, with its form', async ({ browser }) => {
+		const page = await signIn(browser);
+		const suffix = Date.now().toString(36);
+		await page.goto('/workflows');
+		await page.getByRole('link', { name: 'start from a template' }).click();
+		await expect(page.getByRole('heading', { level: 1 })).toHaveText('Templates');
+		await page.getByRole('link', { name: /Request and notify/ }).click();
+		await page.getByLabel('Name').fill(`Requests ${suffix}`);
+		await page.getByLabel('Who to tell').fill('everyone');
+		await page.getByRole('button', { name: 'Create draft' }).click();
+		await expect(
+			page.getByText('user:<id>, team:<id> or role:<key>, comma-separated').last()
+		).toBeVisible();
+		await page.getByLabel('Who to tell').fill('role:admin');
+		await page.getByRole('button', { name: 'Create draft' }).click();
+		await expect(page.getByRole('heading', { level: 1 })).toHaveText(`Requests ${suffix}`);
+		// Its form is there to fill in once the workflow is published.
+		await page.goto('/forms');
+		await expect(page.getByRole('link', { name: 'Request', exact: true }).first()).toBeVisible();
+	});
 });
