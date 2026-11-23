@@ -227,6 +227,16 @@ pub async fn update(
     .await?;
     let (org_id, version) = row.ok_or(StoreError::NotFound)?;
     insert_version(conn, id, version, org_id, &spec, &imported, ctx).await?;
+    // Steps written against a renamed action keep working.
+    let aliases = carried_aliases(&mut *conn, id, current, &imported.definition).await?;
+    sqlx::query(
+        "UPDATE integration_versions SET aliases = $3 WHERE integration_id = $1 AND version = $2",
+    )
+    .bind(id)
+    .bind(version)
+    .bind(&aliases)
+    .execute(&mut *conn)
+    .await?;
     audit::record(
         &mut *conn,
         ctx,
@@ -242,6 +252,49 @@ pub async fn update(
     .await
     .map_err(db)?;
     get(conn, id).await
+}
+
+/// The aliases a new version gets: the previous version's, plus actions
+/// renamed since it (same method and path, new key), each pointing at a
+/// key that exists in the new version.
+async fn carried_aliases(
+    conn: &mut PgConnection,
+    id: Uuid,
+    previous: i32,
+    new: &Definition,
+) -> StoreResult<Json> {
+    let row: Option<(Json, Json)> = sqlx::query_as(
+        "SELECT definition, aliases FROM integration_versions \
+          WHERE integration_id = $1 AND version = $2",
+    )
+    .bind(id)
+    .bind(previous)
+    .fetch_optional(&mut *conn)
+    .await?;
+    let Some((old, old_aliases)) = row else {
+        return Ok(json!({}));
+    };
+    let old: Definition = serde_json::from_value(old)
+        .map_err(|e| StoreError::Db(sqlx::Error::Decode(Box::new(e))))?;
+    let renames: std::collections::BTreeMap<String, String> = diff(&old, new)
+        .renamed
+        .into_iter()
+        .map(|r| (r.from, r.to))
+        .collect();
+    let exists = |key: &str| new.actions.iter().any(|a| a.key == key);
+    let mut aliases = serde_json::Map::new();
+    // Earlier aliases follow a rename of their target.
+    for (from, to) in old_aliases.as_object().into_iter().flatten() {
+        let to = to.as_str().unwrap_or_default();
+        let to = renames.get(to).map_or(to, String::as_str);
+        if exists(to) {
+            aliases.insert(from.clone(), json!(to));
+        }
+    }
+    for (from, to) in renames {
+        aliases.insert(from, json!(to));
+    }
+    Ok(Json::Object(aliases))
 }
 
 async fn insert_version(

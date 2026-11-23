@@ -21,6 +21,7 @@ huxley-notify.workspace = true
 huxley-storage.workspace = true
 huxley-variables.workspace = true
 huxley-workflows.workspace = true
+jsonschema.workspace = true
 reqwest.workspace = true
 serde.workspace = true
 serde_json.workspace = true

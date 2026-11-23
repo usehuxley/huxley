@@ -162,6 +162,8 @@ const NOT_EXPRESSIONS: &[&str] = &[
     "join",
     "workflow",
     "wait",
+    "action",
+    "connection",
 ];
 
 impl Checker<'_> {

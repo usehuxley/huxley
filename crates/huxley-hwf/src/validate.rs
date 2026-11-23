@@ -212,6 +212,32 @@ fn block(c: &mut Checker, path: &str, steps: &[Step]) {
     }
 }
 
+/// `action` and `connection` are fixed keys, so publishing can check them.
+fn integration_action(c: &mut Checker, path: &str, s: &crate::IntegrationActionStep) {
+    let fixed = s
+        .action
+        .split_once('/')
+        .is_some_and(|(integration, action)| {
+            is_valid_key(integration)
+                && !action.is_empty()
+                && action
+                    .chars()
+                    .all(|c| c.is_ascii_alphanumeric() || c == '_')
+        });
+    if !fixed {
+        c.error(
+            format!("{path}.action"),
+            "<integration key>/<action key>, e.g. tickets-api/createTicket (not an expression)",
+        );
+    }
+    if s.connection.as_deref().is_some_and(|k| !is_valid_key(k)) {
+        c.error(
+            format!("{path}.connection"),
+            "a connection key (not an expression)",
+        );
+    }
+}
+
 fn one(c: &mut Checker, path: &str, step: &Step) {
     c.steps += 1;
     let common = step.common();
@@ -291,6 +317,7 @@ fn one(c: &mut Checker, path: &str, step: &Step) {
             (None, Some(_)) => {}
             _ => c.error(path, "set exactly one of duration or until"),
         },
+        Step::IntegrationAction(s) => integration_action(c, path, s),
         Step::Subworkflow(s) if !is_valid_key(&s.workflow) => {
             c.error(format!("{path}.workflow"), "a workflow key");
         }

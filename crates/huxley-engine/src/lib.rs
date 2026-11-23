@@ -9,6 +9,7 @@
 //! Start runs with [`Engine::start_run`] inside the transaction that wants
 //! them; they begin once it commits.
 
+mod action;
 mod egress;
 mod http;
 mod journal;

@@ -86,6 +86,21 @@ impl Engine {
         .bind(start.actor_id)
         .execute(&mut *conn)
         .await?;
+        // Integrations stay at the version current now for the whole run.
+        let document = match (&start.document, start.workflow_id, start.version) {
+            (Some(document), _, _) => Some(document.clone()),
+            (None, Some(workflow), Some(version)) => sqlx::query_scalar(
+                "SELECT document FROM workflow_versions WHERE workflow_id = $1 AND version = $2",
+            )
+            .bind(workflow)
+            .bind(version)
+            .fetch_optional(&mut *conn)
+            .await?,
+            _ => None,
+        };
+        if let Some(document) = document {
+            crate::action::pin(&mut *conn, id, start.org_id, &document).await?;
+        }
         queue::enqueue_advance(conn, start.org_id, id).await?;
         Ok(id)
     }
