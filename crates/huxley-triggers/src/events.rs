@@ -152,17 +152,9 @@ async fn dispatch_one(
         } else {
             json!({})
         };
-        let document =
-            huxley_workflows::version(&mut *conn, candidate.workflow_id, candidate.current_version)
-                .await?
-                .document;
-        if let Err(e) = huxley_workflows::check_inputs(&document, &inputs) {
-            tracing::warn!(
-                workflow = %candidate.workflow_id, error = %e,
-                "event run skipped: the event doesn't match the workflow's input schema"
-            );
+        let Some(actor) = runnable(&mut *conn, &candidate, &inputs).await? else {
             continue;
-        }
+        };
         engine
             .start_run(
                 &mut *conn,
@@ -178,13 +170,41 @@ async fn dispatch_one(
                         trigger
                     },
                     inputs,
-                    actor_id: None,
+                    actor_id: actor,
                 },
             )
             .await?;
         started += 1;
     }
     Ok(started)
+}
+
+/// Whether a matching workflow can run for an event: its inputs fit the
+/// schema and its run-as account (the run's actor) is usable. `None` (with
+/// a warning logged) skips it.
+async fn runnable(
+    conn: &mut PgConnection,
+    candidate: &Candidate,
+    inputs: &Json,
+) -> TriggerResult<Option<Option<Uuid>>> {
+    let document =
+        huxley_workflows::version(&mut *conn, candidate.workflow_id, candidate.current_version)
+            .await?
+            .document;
+    if let Err(e) = huxley_workflows::check_inputs(&document, inputs) {
+        tracing::warn!(
+            workflow = %candidate.workflow_id, error = %e,
+            "event run skipped: the event doesn't match the workflow's input schema"
+        );
+        return Ok(None);
+    }
+    match huxley_workflows::trigger_actor(conn, candidate.workflow_id).await? {
+        Ok(actor) => Ok(Some(actor)),
+        Err(reason) => {
+            tracing::warn!(workflow = %candidate.workflow_id, "event run skipped: {reason}");
+            Ok(None)
+        }
+    }
 }
 
 /// Evaluates a trigger's filter for an event; a failing filter is logged

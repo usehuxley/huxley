@@ -222,4 +222,28 @@ test.describe('workflows', () => {
 		await expect(page.getByText('Succeeded').first()).toBeVisible({ timeout: 20_000 });
 		await expect(page.getByRole('list', { name: 'Steps' })).toContainText('cheer');
 	});
+
+	test('triggered runs act as a chosen service account', async ({ browser }) => {
+		const page = await signIn(browser);
+		const suffix = Date.now().toString(36);
+		const bot = `Runner ${suffix}`;
+		await page.goto('/settings/service-accounts');
+		await page.getByLabel('Name').fill(bot);
+		await page.getByRole('button', { name: 'Create' }).click();
+		await expect(page.getByRole('heading', { name: bot })).toBeVisible();
+
+		await page.goto('/workflows');
+		const key = `runas-${suffix}`;
+		await page.getByLabel('Name').fill(`Greeter ${key}`);
+		await page.getByLabel('Key').fill(key);
+		await page.getByRole('button', { name: 'Create' }).click();
+		await expect(page.getByRole('heading', { level: 1 })).toHaveText(`Greeter ${key}`);
+
+		await page.getByLabel('Service account').selectOption({ label: bot });
+		await page.getByRole('button', { name: 'Save', exact: true }).click();
+		await expect(page.getByText('Triggered runs now act as that account.')).toBeVisible();
+		await page.reload();
+		await expect(page.getByLabel('Service account')).toHaveValue(/.+/);
+		await expect(page.getByLabel('Service account').locator('option:checked')).toHaveText(bot);
+	});
 });

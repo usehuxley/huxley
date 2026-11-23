@@ -552,6 +552,12 @@ pub(crate) async fn start_child(
             )));
         }
     }
+    // The child acts as whoever the parent acts as.
+    let (parent_actor,): (Option<Uuid>,) =
+        sqlx::query_as("SELECT actor_id FROM runs WHERE id = $1")
+            .bind(parent_run)
+            .fetch_one(&mut *conn)
+            .await?;
     let found: Option<(Uuid, i32, Json)> = sqlx::query_as(
         "SELECT w.id, w.current_version, v.document \
            FROM workflows w \
@@ -589,7 +595,7 @@ pub(crate) async fn start_child(
                 trigger_type: "subworkflow".into(),
                 trigger: json!({ "parent_run": parent_run, "parent_step": parent_key }),
                 inputs,
-                actor_id: None,
+                actor_id: parent_actor,
             },
         )
         .await?;

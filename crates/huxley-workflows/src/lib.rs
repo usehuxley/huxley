@@ -37,6 +37,9 @@ pub enum WorkflowError {
     Archived,
     #[error("the inputs don't match the workflow's input schema")]
     InvalidInputs(Vec<String>),
+    /// A run-as identity must be an active service account.
+    #[error("runs can only act as an active service account")]
+    InvalidRunAs,
     #[error(transparent)]
     Db(#[from] sqlx::Error),
 }
@@ -64,6 +67,11 @@ pub struct WorkflowSummary {
     pub current_version: Option<i32>,
     /// Increases with every draft save.
     pub revision: i32,
+    /// The service account that runs started by a schedule, webhook or
+    /// event act as. Manual runs act as whoever started them.
+    pub run_as: Option<Uuid>,
+    /// That service account's name.
+    pub run_as_name: Option<String>,
     #[serde(with = "time::serde::rfc3339")]
     pub created_at: OffsetDateTime,
     #[serde(with = "time::serde::rfc3339")]
@@ -156,8 +164,10 @@ fn detail(expr: &huxley_expr::Engine, summary: WorkflowSummary, draft: Json) -> 
 /// Workflows visible in the caller's scope, by name.
 pub async fn list(conn: &mut PgConnection) -> WorkflowResult<Vec<WorkflowSummary>> {
     Ok(sqlx::query_as(
-        "SELECT id, org_id, key, name, description, status, current_version, revision, \
-                created_at, updated_at FROM workflows ORDER BY lower(name), id",
+        "SELECT w.id, w.org_id, w.key, w.name, w.description, w.status, w.current_version, \
+                w.revision, w.run_as, u.display_name AS run_as_name, w.created_at, w.updated_at \
+           FROM workflows w LEFT JOIN users u ON u.id = w.run_as \
+          ORDER BY lower(w.name), w.id",
     )
     .fetch_all(conn)
     .await?)
@@ -165,8 +175,9 @@ pub async fn list(conn: &mut PgConnection) -> WorkflowResult<Vec<WorkflowSummary
 
 pub async fn summary(conn: &mut PgConnection, id: Uuid) -> WorkflowResult<WorkflowSummary> {
     sqlx::query_as(
-        "SELECT id, org_id, key, name, description, status, current_version, revision, \
-                created_at, updated_at FROM workflows WHERE id = $1",
+        "SELECT w.id, w.org_id, w.key, w.name, w.description, w.status, w.current_version, \
+                w.revision, w.run_as, u.display_name AS run_as_name, w.created_at, w.updated_at \
+           FROM workflows w LEFT JOIN users u ON u.id = w.run_as WHERE w.id = $1",
     )
     .bind(id)
     .fetch_optional(conn)
@@ -451,4 +462,70 @@ pub fn check_inputs(document: &Json, inputs: &Json) -> WorkflowResult<()> {
     } else {
         Err(WorkflowError::InvalidInputs(problems))
     }
+}
+
+/// Sets (or clears) the service account that triggered runs act as. The
+/// caller checks the actor may hand out that identity.
+pub async fn set_run_as(
+    conn: &mut PgConnection,
+    ctx: &RequestContext,
+    id: Uuid,
+    account: Option<Uuid>,
+) -> WorkflowResult<WorkflowSummary> {
+    if let Some(account) = account {
+        let ok: Option<(bool,)> = sqlx::query_as(
+            "SELECT status = 'active' FROM users WHERE id = $1 AND kind = 'service'",
+        )
+        .bind(account)
+        .fetch_optional(&mut *conn)
+        .await?;
+        if !matches!(ok, Some((true,))) {
+            return Err(WorkflowError::InvalidRunAs);
+        }
+    }
+    let before: Option<(Uuid, Option<Uuid>)> =
+        sqlx::query_as("SELECT org_id, run_as FROM workflows WHERE id = $1 FOR UPDATE")
+            .bind(id)
+            .fetch_optional(&mut *conn)
+            .await?;
+    let (org_id, previous) = before.ok_or(WorkflowError::NotFound)?;
+    sqlx::query("UPDATE workflows SET run_as = $2, updated_at = now() WHERE id = $1")
+        .bind(id)
+        .bind(account)
+        .execute(&mut *conn)
+        .await?;
+    audit::record(
+        &mut *conn,
+        ctx,
+        AuditRecord::new("workflow.run_as_changed")
+            .org(org_id)
+            .target("workflow", id)
+            .details(json!({ "before": { "runAs": previous }, "after": { "runAs": account } })),
+    )
+    .await
+    .map_err(db)?;
+    summary(conn, id).await
+}
+
+/// Who a run started by one of the workflow's triggers acts as: `Ok(None)`
+/// when no run-as account is set, `Err` with a reason when the account set
+/// can't be used (it was disabled), in which case no run should start.
+pub async fn trigger_actor(
+    conn: &mut PgConnection,
+    workflow_id: Uuid,
+) -> WorkflowResult<Result<Option<Uuid>, String>> {
+    let row: Option<(Option<Uuid>, Option<bool>)> = sqlx::query_as(
+        "SELECT w.run_as, u.status = 'active' \
+           FROM workflows w LEFT JOIN users u ON u.id = w.run_as WHERE w.id = $1",
+    )
+    .bind(workflow_id)
+    .fetch_optional(conn)
+    .await?;
+    Ok(match row.ok_or(WorkflowError::NotFound)? {
+        (None, _) => Ok(None),
+        (Some(account), Some(true)) => Ok(Some(account)),
+        (Some(account), _) => Err(format!(
+            "the workflow's run-as service account {account} is disabled"
+        )),
+    })
 }

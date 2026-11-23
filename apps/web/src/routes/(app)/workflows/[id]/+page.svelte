@@ -2,7 +2,7 @@
 	import { enhance, type SubmitFunction } from '$app/forms';
 	import { resolve } from '$app/paths';
 	import { ArrowLeft } from '@lucide/svelte';
-	import { Badge, Button, Card, Field, Input, Tabs, toast } from '@usehuxley/ui';
+	import { Badge, Button, Card, Field, Input, Select, Tabs, toast } from '@usehuxley/ui';
 	import RunStatusBadge from '#lib/workflows/RunStatusBadge.svelte';
 	import VisualEditor from '#lib/workflows/editor/VisualEditor.svelte';
 	import type { PageProps } from './$types';
@@ -14,6 +14,11 @@
 	let canPublish = $derived(granted.includes('workflow:publish'));
 	let canRun = $derived(granted.includes('workflow:run'));
 	let archived = $derived(workflow.status === 'archived');
+	let canAssignRunAs = $derived(canPublish && granted.includes('service_account:manage'));
+	let runAsOptions = $derived([
+		{ value: '', label: 'No identity' },
+		...data.serviceAccounts.map((a) => ({ value: a.id, label: a.name }))
+	]);
 
 	// Keep unsaved edits when a save fails; take the server's copy otherwise.
 	let yaml = $state('');
@@ -267,6 +272,27 @@
 						</li>
 					{/each}
 				</ul>
+			{/if}
+		</Card>
+
+		<Card
+			title="Runs as"
+			description="Runs started by a schedule, webhook or event act as this service account. Runs started by hand act as whoever starts them."
+		>
+			{#if canAssignRunAs}
+				<form method="POST" action="?/runAs" use:enhance={notify} class="flex items-end gap-2">
+					<Field label="Service account" for="serviceAccountId">
+						<Select
+							id="serviceAccountId"
+							name="serviceAccountId"
+							value={workflow.runAs ?? ''}
+							options={runAsOptions}
+						/>
+					</Field>
+					<Button type="submit" variant="secondary">Save</Button>
+				</form>
+			{:else}
+				<p class="text-sm text-fg">{workflow.runAsName ?? 'No identity'}</p>
 			{/if}
 		</Card>
 

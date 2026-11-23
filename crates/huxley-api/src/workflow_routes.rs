@@ -36,6 +36,7 @@ pub fn workflow_routes() -> Router<AppState> {
         .route("/{id}/publish", post(publish))
         .route("/{id}/archive", post(archive))
         .route("/{id}/restore", post(restore))
+        .route("/{id}/run-as", put(set_run_as))
         .route("/{id}/versions", get(versions))
         .route("/{id}/versions/{version}", get(version))
         .route("/{id}/runs", post(start_run))
@@ -89,6 +90,9 @@ fn map_workflow(e: WorkflowError) -> ApiError {
             ),
             |error, p| error.with_field_error("inputs", p),
         ),
+        WorkflowError::InvalidRunAs => {
+            ApiError::validation().with_field_error("serviceAccountId", e.to_string())
+        }
         WorkflowError::Db(e) => ApiError::internal(&e),
     }
 }
@@ -347,6 +351,39 @@ pub async fn archive(
     Path(id): Path<Uuid>,
 ) -> ApiResult<Json<WorkflowSummary>> {
     set_archived(&state, &authed, id, true).await
+}
+
+#[derive(Debug, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct RunAsRequest {
+    /// An active service account, or null for no identity.
+    pub service_account_id: Option<Uuid>,
+}
+
+/// Sets the service account that runs started by a schedule, webhook or
+/// event act as. Needs `workflow:publish` on the workflow and
+/// `service_account:manage`: whoever hands out an account's identity could
+/// already act as it.
+#[utoipa::path(put, path = "/api/v1/workflows/{id}/run-as", operation_id = "set_workflow_run_as", tag = "workflows",
+    params(("id" = Uuid, Path)), request_body = RunAsRequest,
+    responses((status = 200, body = WorkflowSummary), (status = 422, body = ApiError, content_type = "application/problem+json")))]
+pub async fn set_run_as(
+    State(state): State<AppState>,
+    authed: Authed,
+    Path(id): Path<Uuid>,
+    Json(body): Json<RunAsRequest>,
+) -> ApiResult<Json<WorkflowSummary>> {
+    authorize(&state, &authed, permissions::WORKFLOW_PUBLISH, id).await?;
+    authed.require_instance(permissions::SERVICE_ACCOUNT_MANAGE)?;
+    let mut tx = begin_scoped(&state.db, &authed.scope(&state).await?)
+        .await
+        .map_err(db_err)?;
+    let summary =
+        huxley_workflows::set_run_as(&mut tx, &authed.user.ctx, id, body.service_account_id)
+            .await
+            .map_err(map_workflow)?;
+    tx.commit().await.map_err(db_err)?;
+    Ok(Json(summary))
 }
 
 #[utoipa::path(post, path = "/api/v1/workflows/{id}/restore", operation_id = "restore_workflow", tag = "workflows",

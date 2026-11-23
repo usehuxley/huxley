@@ -1825,6 +1825,28 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
+	'/api/v1/workflows/{id}/run-as': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		/**
+		 * Sets the service account that runs started by a schedule, webhook or
+		 *     event act as. Needs `workflow:publish` on the workflow and
+		 *     `service_account:manage`: whoever hands out an account's identity could
+		 *     already act as it.
+		 */
+		put: operations['set_workflow_run_as'];
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
 	'/api/v1/workflows/{id}/runs': {
 		parameters: {
 			query?: never;
@@ -2684,6 +2706,13 @@ export interface components {
 			/** Format: uuid */
 			roleId: string;
 		};
+		RunAsRequest: {
+			/**
+			 * Format: uuid
+			 * @description An active service account, or null for no identity.
+			 */
+			serviceAccountId?: string | null;
+		};
 		RunDetail: components['schemas']['RunSummary'] & {
 			cancelRequested: boolean;
 			inputs: {
@@ -3035,6 +3064,14 @@ export interface components {
 			 * @description Increases with every draft save.
 			 */
 			revision: number;
+			/**
+			 * Format: uuid
+			 * @description The service account that runs started by a schedule, webhook or
+			 *     event act as. Manual runs act as whoever started them.
+			 */
+			runAs?: string | null;
+			/** @description That service account's name. */
+			runAsName?: string | null;
 			status: components['schemas']['WorkflowStatus'];
 			/** Format: date-time */
 			updatedAt: string;
@@ -6838,6 +6875,39 @@ export interface operations {
 				};
 				content: {
 					'application/json': components['schemas']['WorkflowSummary'];
+				};
+			};
+		};
+	};
+	set_workflow_run_as: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['RunAsRequest'];
+			};
+		};
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['WorkflowSummary'];
+				};
+			};
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
 				};
 			};
 		};

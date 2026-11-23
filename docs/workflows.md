@@ -77,6 +77,10 @@ Organization variables (on the organization's page) are inherited down the tree;
 
 The run page shows each step as it starts and finishes, with its input, output or error and attempts. Inputs and outputs over 256 KB (configurable) are kept in object storage: the page shows their size and a download link, and `GET /api/v1/runs/{id}/steps/{key}/{attempt}/{input|output}` returns them; expressions see the full value as usual. A failed run can be **resumed** after fixing the cause: steps that succeeded aren't run again. Running runs can be **cancelled**: nothing new starts, and subworkflows they started stop too. All runs are under **Runs**.
 
+## Identity
+
+A run started by hand acts as whoever started it. Runs started by a schedule, webhook or event act as the workflow's **run-as** service account (set on the workflow page), or as no one if none is set; subworkflows act as their parent. The identity is `actor.id` in expressions and is recorded on the run. Setting it needs `workflow:publish` and `service_account:manage`, since whoever hands out an account's identity could act as it. If the account is disabled, triggers start nothing (a webhook answers 409) until it's re-enabled or changed.
+
 ## Permissions
 
 | Permission | Allows |

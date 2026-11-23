@@ -840,3 +840,49 @@ async fn large_payloads_spill_to_object_storage() {
     .unwrap();
     assert_eq!(pause.0, None);
 }
+
+#[tokio::test]
+async fn subworkflows_act_as_their_parent() {
+    let Some(h) = harness().await else { return };
+    publish(&h, "leaf", "  steps:\n    - { id: x, type: transform, output: \"{{ actor.id }}\" }\n  outputs: { actor: \"{{ steps.x.output }}\" }\n").await;
+    let actor = Uuid::now_v7();
+    sqlx::query(
+        "INSERT INTO users (id, email, display_name, kind) VALUES ($1, $2, 'Bot', 'service')",
+    )
+    .bind(actor)
+    .bind(format!("sa-{}@service.invalid", actor.simple()))
+    .execute(&h.pools.owner)
+    .await
+    .unwrap();
+    let mut tx = begin_scoped(&h.pools.app, &OrgScope::System).await.unwrap();
+    let id = h
+        .engine
+        .start_run(
+            &mut tx,
+            StartRun {
+                org_id: h.org,
+                workflow_id: None,
+                version: None,
+                document: Some(document(
+                    "  steps:\n    - { id: call, type: subworkflow, workflow: leaf }\n  outputs: { child: \"{{ steps.call.output.actor }}\" }\n",
+                )),
+                trigger_type: "schedule".into(),
+                trigger: json!({}),
+                inputs: json!({}),
+                actor_id: Some(actor),
+            },
+        )
+        .await
+        .unwrap();
+    tx.commit().await.unwrap();
+    let run = h.finish(id).await;
+    assert_eq!(run.status, RunStatus::Succeeded, "{run:?}");
+    assert_eq!(run.outputs.unwrap(), json!({ "child": actor.to_string() }));
+    let child: Option<Uuid> =
+        sqlx::query_scalar("SELECT actor_id FROM runs WHERE parent_run_id = $1")
+            .bind(id)
+            .fetch_one(&h.pools.owner)
+            .await
+            .unwrap();
+    assert_eq!(child, Some(actor));
+}

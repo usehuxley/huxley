@@ -691,3 +691,62 @@ async fn run_streams_follow_a_run_until_it_finishes() {
     .await;
     assert_eq!(status, StatusCode::NOT_FOUND);
 }
+
+#[tokio::test]
+async fn run_as_needs_an_active_service_account_and_the_right_to_assign_it() {
+    let Some(s) = setup().await else { return };
+    let (_, created) = s.create(greeter(&key("runas"))).await;
+    let id = created["id"].as_str().unwrap().to_owned();
+    assert_eq!(created["runAs"], Value::Null);
+    let ctx = RequestContext::system(Via::System);
+    let mut tx = begin_scoped(&s.pools.app, &OrgScope::System).await.unwrap();
+    let bot = huxley_auth::api_tokens::create_service_account(&mut tx, &ctx, &unique("Bot"), "")
+        .await
+        .unwrap();
+    tx.commit().await.unwrap();
+    let uri = format!("/api/v1/workflows/{id}/run-as");
+    let put = |cookie: String, body: Value| {
+        let (app, uri) = (s.app.clone(), uri.clone());
+        async move { call(&app, "PUT", &uri, &cookie, Some(body)).await }
+    };
+
+    let (status, summary) = put(s.owner.clone(), json!({ "serviceAccountId": bot.id })).await;
+    assert_eq!(status, StatusCode::OK, "{summary}");
+    assert_eq!(summary["runAs"], json!(bot.id));
+    assert_eq!(summary["runAsName"], json!(bot.display_name));
+
+    // People aren't service accounts.
+    let (person, _) = user(&s.pools, false).await;
+    let (status, problem) = put(s.owner.clone(), json!({ "serviceAccountId": person })).await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{problem}");
+
+    // Publishing rights alone aren't enough to hand out an account.
+    let (publisher, email) = user(&s.pools, false).await;
+    let role = Uuid::now_v7();
+    sqlx::query(
+        "INSERT INTO roles (id, key, name, permissions) \
+         VALUES ($1, $2, 'Publisher', '{workflow:read,workflow:publish}')",
+    )
+    .bind(role)
+    .bind(format!("publisher_{}", &role.simple().to_string()[20..]))
+    .execute(&s.pools.owner)
+    .await
+    .unwrap();
+    sqlx::query(
+        "INSERT INTO role_assignments (id, user_id, role_id, org_id) VALUES ($1, $2, $3, $4)",
+    )
+    .bind(Uuid::now_v7())
+    .bind(publisher)
+    .bind(role)
+    .bind(s.org)
+    .execute(&s.pools.owner)
+    .await
+    .unwrap();
+    let publisher = login(&s.app, &email).await;
+    let (status, _) = put(publisher, json!({ "serviceAccountId": bot.id })).await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+
+    let (status, summary) = put(s.owner.clone(), json!({ "serviceAccountId": null })).await;
+    assert_eq!(status, StatusCode::OK, "{summary}");
+    assert_eq!(summary["runAs"], Value::Null);
+}
