@@ -146,7 +146,7 @@ pub struct CreateWorkflowRequest {
     pub org_id: Uuid,
     /// An HWF document. It may be incomplete, but needs `metadata.key` and
     /// `metadata.name`.
-    #[schema(value_type = Object)]
+    #[schema(value_type = std::collections::HashMap<String, serde_json::Value>)]
     pub document: JsonValue,
 }
 
@@ -184,7 +184,7 @@ pub async fn create(
 
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct ValidateRequest {
-    #[schema(value_type = Object)]
+    #[schema(value_type = std::collections::HashMap<String, serde_json::Value>)]
     pub document: JsonValue,
 }
 
@@ -236,7 +236,7 @@ pub async fn get_one(
 pub struct SaveDraftRequest {
     /// The revision this edit is based on.
     pub revision: i32,
-    #[schema(value_type = Object)]
+    #[schema(value_type = std::collections::HashMap<String, serde_json::Value>)]
     pub document: JsonValue,
 }
 
@@ -386,7 +386,7 @@ pub async fn version(
 #[serde(rename_all = "camelCase")]
 pub struct StartRunRequest {
     #[serde(default = "empty_object")]
-    #[schema(value_type = Object)]
+    #[schema(value_type = std::collections::HashMap<String, serde_json::Value>)]
     pub inputs: JsonValue,
     /// Run the draft instead of the latest published version (needs
     /// permission to edit the workflow).

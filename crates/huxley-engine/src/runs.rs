@@ -20,7 +20,7 @@ pub struct RunSummary {
     pub status: RunStatus,
     pub trigger_type: String,
     pub actor_id: Option<Uuid>,
-    #[schema(value_type = Option<Object>)]
+    #[schema(value_type = Option<std::collections::HashMap<String, serde_json::Value>>)]
     pub error: Option<Json>,
     #[serde(with = "time::serde::rfc3339")]
     pub created_at: OffsetDateTime,
@@ -42,11 +42,11 @@ pub struct StepRunView {
     pub status: StepStatus,
     /// The evaluated input (or a control-flow step's decision); `«redacted»`
     /// when it came from a secret.
-    #[schema(value_type = Option<Object>)]
+    #[schema(value_type = Option<serde_json::Value>)]
     pub input: Option<Json>,
-    #[schema(value_type = Option<Object>)]
+    #[schema(value_type = Option<serde_json::Value>)]
     pub output: Option<Json>,
-    #[schema(value_type = Option<Object>)]
+    #[schema(value_type = Option<serde_json::Value>)]
     pub error: Option<Json>,
     #[serde(with = "time::serde::rfc3339")]
     pub started_at: OffsetDateTime,
@@ -59,11 +59,11 @@ pub struct StepRunView {
 pub struct RunDetail {
     #[serde(flatten)]
     pub summary: RunSummary,
-    #[schema(value_type = Object)]
+    #[schema(value_type = std::collections::HashMap<String, serde_json::Value>)]
     pub inputs: Json,
-    #[schema(value_type = Object)]
+    #[schema(value_type = std::collections::HashMap<String, serde_json::Value>)]
     pub trigger: Json,
-    #[schema(value_type = Option<Object>)]
+    #[schema(value_type = Option<std::collections::HashMap<String, serde_json::Value>>)]
     pub outputs: Option<Json>,
     pub cancel_requested: bool,
     /// Every step that has started, in the order it started.

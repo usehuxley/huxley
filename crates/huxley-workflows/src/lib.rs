@@ -77,7 +77,7 @@ pub struct WorkflowDetail {
     #[serde(flatten)]
     pub summary: WorkflowSummary,
     /// The HWF document being edited.
-    #[schema(value_type = Object)]
+    #[schema(value_type = std::collections::HashMap<String, serde_json::Value>)]
     pub draft: Json,
     /// Problems that would stop the draft being published. Empty when it's ready.
     #[schema(value_type = Vec<DiagnosticView>)]
@@ -107,7 +107,7 @@ pub struct VersionSummary {
 pub struct Version {
     #[serde(flatten)]
     pub summary: VersionSummary,
-    #[schema(value_type = Object)]
+    #[schema(value_type = std::collections::HashMap<String, serde_json::Value>)]
     pub document: Json,
 }
 
