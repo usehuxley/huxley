@@ -253,6 +253,7 @@ impl Engine {
             actor: json!({ "id": run.actor_id }),
             org_vars: Json::Object(variables.vars),
             secrets: variables.secrets,
+            public_url: self.public_url.clone(),
         };
         let mut walker = Walker::new(&self.expr, &mut ctx, &mut journal, now);
         let outcome = walker.run(workflow);

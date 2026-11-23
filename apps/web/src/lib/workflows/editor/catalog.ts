@@ -100,6 +100,27 @@ export const STEPS: StepSpec[] = [
 		]
 	},
 	{
+		type: 'wait_for_callback',
+		label: 'Wait for callback',
+		description: 'Pause until another system calls a single-use URL.',
+		group: 'Control flow',
+		template: { expires: '24h' },
+		fields: [
+			{
+				path: 'expires',
+				label: 'Expires after',
+				kind: 'text',
+				hint: 'e.g. 2h; then the step fails'
+			},
+			{
+				path: 'send',
+				label: 'Send the URL',
+				kind: 'json',
+				hint: '{ "action": "rmm/runScript", "with": { "callback": "{{ callback.url }}" } } or { "request": { … } }'
+			}
+		]
+	},
+	{
 		type: 'subworkflow',
 		label: 'Run workflow',
 		description: 'Run another workflow and use its outputs.',
@@ -331,6 +352,8 @@ export function summary(step: Step): string {
 			return text(step.workflow);
 		case 'integration.action':
 			return text(step.action);
+		case 'wait_for_callback':
+			return `expires after ${text(step.expires ?? '24h')}`;
 		case 'transform':
 			return text(step.output);
 		case 'set_var':

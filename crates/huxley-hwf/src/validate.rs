@@ -238,6 +238,31 @@ fn integration_action(c: &mut Checker, path: &str, s: &crate::IntegrationActionS
     }
 }
 
+fn wait_for_callback(c: &mut Checker, path: &str, s: &crate::WaitForCallbackStep) {
+    c.duration(&format!("{path}.expires"), s.expires.as_deref());
+    let Some(send) = &s.send else { return };
+    match (&send.action, &send.request) {
+        (Some(action), None) => {
+            let fixed = action.split_once('/').is_some_and(|(i, a)| {
+                is_valid_key(i)
+                    && !a.is_empty()
+                    && a.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
+            });
+            if !fixed {
+                c.error(
+                    format!("{path}.send.action"),
+                    "<integration key>/<action key>",
+                );
+            }
+        }
+        (None, Some(_)) => {}
+        _ => c.error(
+            format!("{path}.send"),
+            "set exactly one of action or request",
+        ),
+    }
+}
+
 fn one(c: &mut Checker, path: &str, step: &Step) {
     c.steps += 1;
     let common = step.common();
@@ -318,6 +343,7 @@ fn one(c: &mut Checker, path: &str, step: &Step) {
             _ => c.error(path, "set exactly one of duration or until"),
         },
         Step::IntegrationAction(s) => integration_action(c, path, s),
+        Step::WaitForCallback(s) => wait_for_callback(c, path, s),
         Step::Subworkflow(s) if !is_valid_key(&s.workflow) => {
             c.error(format!("{path}.workflow"), "a workflow key");
         }

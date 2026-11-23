@@ -56,6 +56,40 @@
       ],
       "type": "object"
     },
+    "CallbackSend": {
+      "additionalProperties": false,
+      "description": "How a `wait_for_callback` step hands its URL over: an integration action\nor a plain HTTP request (set one).",
+      "properties": {
+        "action": {
+          "description": "`<integration key>/<action key>`, as in `integration.action`.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "connection": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "request": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HttpRequest"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Or an HTTP request, as in `http.request`."
+        },
+        "with": {
+          "description": "The action's inputs."
+        }
+      },
+      "type": "object"
+    },
     "DocumentKind": {
       "enum": [
         "Workflow"
@@ -1101,6 +1135,83 @@
             "type",
             "id",
             "workflow"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Park until an external system calls a single-use URL.",
+          "properties": {
+            "continue_on_error": {
+              "description": "Record the error as the step's output and carry on.",
+              "type": "boolean"
+            },
+            "description": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "expires": {
+              "description": "How long the URL works, e.g. `2h` (default `24h`). After that the\nstep fails with `kind: timeout`.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "id": {
+              "description": "Unique in the workflow: lowercase letters, digits, underscores.\nOther steps read this step's output as `steps.<id>.output`.",
+              "type": "string"
+            },
+            "if": {
+              "description": "Skip the step unless this expression is true.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "name": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "retry": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/RetryPolicy"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "send": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/CallbackSend"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Tells the other system where to call back, once the URL exists:\n`callback.url` is in scope here."
+            },
+            "timeout": {
+              "description": "Fail the attempt after this long, e.g. `30s`.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "type": {
+              "const": "wait_for_callback",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "id"
           ],
           "type": "object"
         },

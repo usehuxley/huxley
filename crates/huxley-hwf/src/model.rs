@@ -283,6 +283,9 @@ pub enum Step {
     /// Run another workflow.
     #[serde(rename = "subworkflow")]
     Subworkflow(SubworkflowStep),
+    /// Park until an external system calls a single-use URL.
+    #[serde(rename = "wait_for_callback")]
+    WaitForCallback(WaitForCallbackStep),
     /// End the run successfully.
     #[serde(rename = "return")]
     Return(ReturnStep),
@@ -403,6 +406,35 @@ step!(IntegrationActionStep {
     pub inputs: Option<Value>,
 });
 
+step!(WaitForCallbackStep {
+    /// How long the URL works, e.g. `2h` (default `24h`). After that the
+    /// step fails with `kind: timeout`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub expires: Option<String>,
+    /// Tells the other system where to call back, once the URL exists:
+    /// `callback.url` is in scope here.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub send: Option<CallbackSend>,
+});
+
+/// How a `wait_for_callback` step hands its URL over: an integration action
+/// or a plain HTTP request (set one).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct CallbackSend {
+    /// `<integration key>/<action key>`, as in `integration.action`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub action: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub connection: Option<String>,
+    /// The action's inputs.
+    #[serde(default, rename = "with", skip_serializing_if = "Option::is_none")]
+    pub inputs: Option<Value>,
+    /// Or an HTTP request, as in `http.request`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub request: Option<HttpRequest>,
+}
+
 step!(SubworkflowStep {
     /// The other workflow's key.
     pub workflow: String,
@@ -467,6 +499,7 @@ impl Step {
             Try,
             Wait,
             Subworkflow,
+            WaitForCallback,
             Return,
             Fail,
             Notify
@@ -491,6 +524,7 @@ impl Step {
             Self::Try(_) => "try",
             Self::Wait(_) => "wait",
             Self::Subworkflow(_) => "subworkflow",
+            Self::WaitForCallback(_) => "wait_for_callback",
             Self::Return(_) => "return",
             Self::Fail(_) => "fail",
             Self::Notify(_) => "core.notify",

@@ -10,6 +10,7 @@
 //! them; they begin once it commits.
 
 mod action;
+mod callback;
 mod egress;
 mod http;
 mod journal;
@@ -29,6 +30,7 @@ use huxley_crypto::{Crypto, CryptoError};
 use huxley_db::DbError;
 use sqlx::PgPool;
 
+pub use callback::CallbackRequest;
 pub use egress::EgressConfig;
 pub use journal::{StepStatus, step_key};
 pub use payload::{PayloadConfig, SPILLED};
@@ -71,6 +73,8 @@ pub struct Engine {
     egress: egress::Egress,
     payload_config: PayloadConfig,
     payloads: payload::Payloads,
+    /// `auth.public_url`: where callback URLs point.
+    public_url: Option<String>,
 }
 
 impl Engine {
@@ -87,7 +91,15 @@ impl Engine {
             egress: egress::Egress::new(&config.egress),
             payload_config: config.payload.clone(),
             payloads: payload::Payloads::new(None, &config.payload),
+            public_url: None,
         }
+    }
+
+    /// Sets the address callback URLs point at (`auth.public_url`).
+    #[must_use]
+    pub fn with_public_url(mut self, public_url: Option<String>) -> Self {
+        self.public_url = public_url;
+        self
     }
 
     /// Spills large step inputs and outputs to `storage` (design doc §6.4).

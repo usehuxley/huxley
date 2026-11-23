@@ -99,7 +99,9 @@ impl AppState {
             config.login_attempts_per_minute,
             Duration::from_secs(60),
         ));
-        let engine = huxley_engine::Engine::new(db.clone(), crypto.clone());
+        // Workflows started from the API render callback URLs too.
+        let engine = huxley_engine::Engine::new(db.clone(), crypto.clone())
+            .with_public_url(auth.config().public_url.clone());
         Self {
             db,
             sso: SsoService::new(auth.clone(), crypto.clone())
