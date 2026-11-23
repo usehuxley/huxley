@@ -49,7 +49,7 @@ test.describe('two-factor authentication', () => {
 		await submitPassword(page, email);
 		await expect(page.getByRole('heading', { level: 1 })).toHaveText('Welcome to Huxley');
 		await page.goto('/profile');
-		await page.getByLabel('Password', { exact: true }).first().fill(PASSWORD);
+		await page.locator('#totpPassword').fill(PASSWORD);
 		await page.getByRole('button', { name: 'Set up authenticator app' }).click();
 		const secret = base32Decode(await page.getByTestId('totp-secret').innerText());
 		await page.getByLabel('Code').fill(totp(secret));
