@@ -1,0 +1,90 @@
+# The runner: pulls work from Huxley over mutual TLS and runs each script
+# as a Job in this namespace. It needs no privileges beyond this Role.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: huxley-runner
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: huxley-runner
+rules:
+  - apiGroups: [batch]
+    resources: [jobs]
+    verbs: [create, get, delete]
+  - apiGroups: [""]
+    resources: [secrets]
+    verbs: [create, delete]
+  - apiGroups: [""]
+    resources: [pods]
+    verbs: [get, list]
+  - apiGroups: [""]
+    resources: [pods/log]
+    verbs: [get]
+  - apiGroups: [""]
+    resources: [services]
+    verbs: [get]
+  - apiGroups: [networking.k8s.io]
+    resources: [networkpolicies]
+    verbs: [get]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: huxley-runner
+roleRef: { apiGroup: rbac.authorization.k8s.io, kind: Role, name: huxley-runner }
+subjects: [{ kind: ServiceAccount, name: huxley-runner }]
+---
+# The runner's key and certificate.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: huxley-runner-state
+spec:
+  accessModes: [ReadWriteOnce]
+  resources: { requests: { storage: 64Mi } }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: huxley-runner
+  labels: { app.kubernetes.io/name: huxley-runner }
+spec:
+  # One per enrolment: its certificate lives on the volume.
+  replicas: 1
+  strategy: { type: Recreate }
+  selector:
+    matchLabels: { app.kubernetes.io/name: huxley-runner }
+  template:
+    metadata:
+      labels: { app.kubernetes.io/name: huxley-runner }
+    spec:
+      serviceAccountName: huxley-runner
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
+        seccompProfile: { type: RuntimeDefault }
+      containers:
+        - name: runner
+          image: ghcr.io/usehuxley/runner
+          args: ["run", "--sandbox", "kubernetes"]
+          env:
+            # Used once, on first start, to enrol.
+            - name: HUXLEY_SERVER
+              valueFrom: { secretKeyRef: { name: huxley-runner-enrolment, key: server } }
+            - name: HUXLEY_RUNNER_TOKEN
+              valueFrom: { secretKeyRef: { name: huxley-runner-enrolment, key: token } }
+          volumeMounts:
+            - { name: state, mountPath: /var/lib/huxley-runner }
+          securityContext:
+            readOnlyRootFilesystem: true
+            allowPrivilegeEscalation: false
+            capabilities: { drop: [ALL] }
+          resources:
+            requests: { cpu: 50m, memory: 64Mi }
+            limits: { memory: 256Mi }
+      volumes:
+        - name: state
+          persistentVolumeClaim: { claimName: huxley-runner-state }

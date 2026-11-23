@@ -18,7 +18,8 @@ const MAX_HEAD: usize = 16 * 1024;
 const HEAD_TIMEOUT: Duration = Duration::from_secs(15);
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
 
-/// Serves the proxy on `listener` until `shutdown`.
+/// Serves the proxy on `listener` (a Unix socket: the Podman sandbox)
+/// until `shutdown`.
 pub async fn serve(listener: UnixListener, policy: Arc<EgressConfig>, shutdown: CancellationToken) {
     loop {
         let accepted = tokio::select! {
@@ -26,15 +27,39 @@ pub async fn serve(listener: UnixListener, policy: Arc<EgressConfig>, shutdown: 
             accepted = listener.accept() => accepted,
         };
         let Ok((stream, _)) = accepted else { continue };
-        let policy = policy.clone();
-        let stop = shutdown.clone();
-        tokio::spawn(async move {
-            tokio::select! {
-                () = stop.cancelled() => {}
-                () = handle(stream, &policy) => {}
-            }
-        });
+        spawn(stream, policy.clone(), shutdown.clone());
     }
+}
+
+/// Serves the proxy on a TCP `listener` (the Kubernetes sandbox's egress
+/// proxy Deployment, which only script pods may reach) until `shutdown`.
+pub async fn serve_tcp(
+    listener: tokio::net::TcpListener,
+    policy: Arc<EgressConfig>,
+    shutdown: CancellationToken,
+) {
+    loop {
+        let accepted = tokio::select! {
+            () = shutdown.cancelled() => return,
+            accepted = listener.accept() => accepted,
+        };
+        let Ok((stream, _)) = accepted else { continue };
+        let _ = stream.set_nodelay(true);
+        spawn(stream, policy.clone(), shutdown.clone());
+    }
+}
+
+fn spawn<S: AsyncRead + AsyncWrite + Unpin + Send + 'static>(
+    stream: S,
+    policy: Arc<EgressConfig>,
+    shutdown: CancellationToken,
+) {
+    tokio::spawn(async move {
+        tokio::select! {
+            () = shutdown.cancelled() => {}
+            () = handle(stream, &policy) => {}
+        }
+    });
 }
 
 /// A parsed request head.

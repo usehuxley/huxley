@@ -29,6 +29,10 @@ struct Cli {
 }
 
 #[derive(Debug, Subcommand)]
+#[allow(
+    clippy::large_enum_variant,
+    reason = "parsed once from the command line"
+)]
 enum Command {
     /// Run one or more server roles.
     Serve {

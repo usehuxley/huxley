@@ -22,21 +22,39 @@ use tokio::process::Command;
 use tokio::sync::mpsc;
 
 /// Logs kept from a run (stdout and stderr together).
-const MAX_LOGS: usize = 64 * 1024;
+pub(crate) const MAX_LOGS: usize = 64 * 1024;
 
 /// The scripts to run, in the container, around the library script.
-const PWSH_WRAPPER: &str = r"$ErrorActionPreference = 'Stop'
+pub(crate) const PWSH_WRAPPER: &str = r"$ErrorActionPreference = 'Stop'
 if (Test-Path /huxley/net/proxy.sock) {
     Add-Type -TypeDefinition (Get-Content -Raw /huxley/in/relay.cs)
     [HuxleyRelay]::Start('/huxley/net/proxy.sock', 3128)
 }
+if ($env:HUXLEY_EGRESS_PROBE) {
+    # Kubernetes: hold the script until the network policy is in force.
+    $probeHost, $probePort = $env:HUXLEY_EGRESS_PROBE -split ':(?=[^:]+$)'
+    $deadline = [DateTime]::UtcNow.AddSeconds(60)
+    while ($true) {
+        $client = [System.Net.Sockets.TcpClient]::new()
+        try { $open = $client.ConnectAsync($probeHost, [int]$probePort).Wait(1000) } catch { $open = $false }
+        $client.Dispose()
+        if (-not $open) { break }
+        if ([DateTime]::UtcNow -gt $deadline) {
+            [Console]::Error.WriteLine('huxley: the network policy isn''t in force; not running the script')
+            exit 97
+        }
+        Start-Sleep -Milliseconds 500
+    }
+}
 $params = Get-Content -Raw /huxley/in/inputs.json | ConvertFrom-Json -AsHashtable
 $result = @(& /huxley/in/script.ps1 @params)
 $value = if ($result.Count -eq 0) { $null } elseif ($result.Count -eq 1) { $result[0] } else { $result }
-ConvertTo-Json -InputObject $value -Depth 32 -Compress | Set-Content -NoNewline /huxley/out/result.json
+$json = ConvertTo-Json -InputObject $value -Depth 32 -Compress
+Set-Content -NoNewline -Path /huxley/out/result.json -Value $json
+if ($env:HUXLEY_RESULT_MARKER) { [Console]::Out.WriteLine($env:HUXLEY_RESULT_MARKER + $json) }
 ";
 
-const PYTHON_WRAPPER: &str = r#"import json, os, runpy, socket, threading
+pub(crate) const PYTHON_WRAPPER: &str = r#"import json, os, runpy, socket, threading
 
 def _relay(path, port):
     server = socket.socket()
@@ -74,16 +92,35 @@ def _relay(path, port):
 
 if os.path.exists("/huxley/net/proxy.sock"):
     _relay("/huxley/net/proxy.sock", 3128)
+
+# Kubernetes: the pod's network policy may take a moment to apply. Hold
+# the script until a connection the policy forbids no longer gets through.
+if os.environ.get("HUXLEY_EGRESS_PROBE"):
+    import sys, time
+    _host, _port = os.environ["HUXLEY_EGRESS_PROBE"].rsplit(":", 1)
+    _deadline = time.monotonic() + 60
+    while True:
+        try:
+            socket.create_connection((_host, int(_port)), timeout=1).close()
+        except OSError:
+            break
+        if time.monotonic() > _deadline:
+            print("huxley: the network policy isn't in force; not running the script", file=sys.stderr)
+            sys.exit(97)
+        time.sleep(0.5)
 with open("/huxley/in/inputs.json") as f:
     inputs = json.load(f)
 scope = runpy.run_path("/huxley/in/script.py", init_globals={"inputs": inputs}, run_name="__main__")
+_result = json.dumps(scope.get("result"), default=str)
 with open("/huxley/out/result.json", "w") as f:
-    json.dump(scope.get("result"), f, default=str)
+    f.write(_result)
+if os.environ.get("HUXLEY_RESULT_MARKER"):
+    print(os.environ["HUXLEY_RESULT_MARKER"] + _result, flush=True)
 "#;
 
 /// The PowerShell side of the egress relay: 127.0.0.1:3128 to the proxy's
 /// socket (Python's is in its wrapper).
-const PWSH_RELAY: &str = r"using System.Net;
+pub(crate) const PWSH_RELAY: &str = r"using System.Net;
 using System.Net.Sockets;
 using System.Threading.Tasks;
 
@@ -167,7 +204,7 @@ pub struct Outcome {
 }
 
 impl Outcome {
-    fn failed(error: impl Into<String>, exit_code: Option<i32>, logs: String) -> Self {
+    pub(crate) fn failed(error: impl Into<String>, exit_code: Option<i32>, logs: String) -> Self {
         Self {
             succeeded: false,
             output: None,
@@ -456,7 +493,7 @@ fn prepare(job: &Job, dir: &Path) -> std::io::Result<()> {
 }
 
 /// Masks the job's secrets in everything reported.
-fn scrub(outcome: Outcome, redact: &[String]) -> Outcome {
+pub(crate) fn scrub(outcome: Outcome, redact: &[String]) -> Outcome {
     let secrets = || redact.iter().map(String::as_str);
     Outcome {
         output: outcome.output.map(|o| huxley_expr::redact(&o, secrets())),
@@ -466,7 +503,7 @@ fn scrub(outcome: Outcome, redact: &[String]) -> Outcome {
     }
 }
 
-fn scrub_text(text: &str, redact: &[String]) -> String {
+pub(crate) fn scrub_text(text: &str, redact: &[String]) -> String {
     let secrets = redact.iter().map(String::as_str);
     match huxley_expr::redact(&Json::String(text.to_owned()), secrets) {
         Json::String(s) => s,
