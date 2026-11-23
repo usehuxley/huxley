@@ -63,6 +63,7 @@ test.describe('workflows', () => {
 		await expect(page.getByText('Not published', { exact: true })).toBeVisible();
 
 		// A broken reference saves, and is reported.
+		await page.getByRole('tab', { name: 'YAML' }).click();
 		const editor = page.getByRole('textbox', { name: 'Workflow YAML' });
 		await editor.fill(definition(key, 'Hi {{ steps.nope.output }}'));
 		await page.getByRole('button', { name: 'Save draft' }).click();
@@ -121,6 +122,7 @@ test.describe('workflows', () => {
 		await page.getByLabel('Name').fill(`Greeter ${key}`);
 		await page.getByLabel('Key').fill(key);
 		await page.getByRole('button', { name: 'Create' }).click();
+		await page.getByRole('tab', { name: 'YAML' }).click();
 		await page
 			.getByRole('textbox', { name: 'Workflow YAML' })
 			.fill(definition(key, `{{ vars.${word} }} {{ inputs.name }}`));
@@ -141,6 +143,7 @@ test.describe('workflows', () => {
 		await page.getByLabel('Name').fill(`Greeter ${key}`);
 		await page.getByLabel('Key').fill(key);
 		await page.getByRole('button', { name: 'Create' }).click();
+		await page.getByRole('tab', { name: 'YAML' }).click();
 		await page
 			.getByRole('textbox', { name: 'Workflow YAML' })
 			.fill(definition(key, `{{ vars.${flag}.upper() }} {{ inputs.name }}`));
@@ -169,5 +172,45 @@ test.describe('workflows', () => {
 
 		await page.goto('/runs?status=succeeded');
 		await expect(page.getByRole('list', { name: 'Runs' })).toContainText(`Greeter ${key}`);
+	});
+
+	test('build steps with the visual editor', async ({ browser }) => {
+		const page = await signIn(browser);
+		const key = `visual-${Date.now().toString(36)}`;
+		await page.goto('/workflows');
+		await page.getByLabel('Name').fill(`Visual ${key}`);
+		await page.getByLabel('Key').fill(key);
+		await page.getByRole('button', { name: 'Create' }).click();
+		await expect(page.getByRole('heading', { level: 1 })).toHaveText(`Visual ${key}`);
+
+		// The starter's step is a card; add an If after it.
+		await expect(page.getByRole('button', { name: 'Step greet, Transform' })).toBeVisible();
+		await page.getByRole('button', { name: 'Add a step after greet' }).click();
+		await page.getByRole('menuitem', { name: /^If/ }).click();
+		const settings = page.getByLabel('Step settings');
+		await expect(settings).toContainText('Branch on a condition.');
+		await settings.getByLabel('Condition').fill("{{ inputs.name == 'Ada' }}");
+		await settings.getByLabel('Condition').blur();
+
+		// Inside Then: a transform that reads the first step.
+		await page.getByRole('button', { name: 'Add a step at the start of Then' }).click();
+		await page.getByRole('menuitem', { name: /^Transform/ }).click();
+		await settings.getByLabel('Step id').fill('cheer');
+		await settings.getByLabel('Step id').blur();
+		await settings.getByLabel('Output').fill('{{ steps.greet.output ~ "!" }}');
+		await settings.getByLabel('Output').blur();
+		await page.getByRole('button', { name: 'Save draft' }).click();
+		await expect(page.getByText('Draft saved. It is ready to publish.')).toBeVisible();
+
+		// The YAML view shows the same document.
+		await page.getByRole('tab', { name: 'YAML' }).click();
+		const yaml = page.getByRole('textbox', { name: 'Workflow YAML' });
+		await expect(yaml).toHaveValue(/type: if/);
+		await expect(yaml).toHaveValue(/id: cheer/);
+
+		await page.getByRole('textbox', { name: 'Inputs' }).fill('{"name": "Ada"}');
+		await page.getByRole('button', { name: 'Test run the draft' }).click();
+		await expect(page.getByText('Succeeded').first()).toBeVisible({ timeout: 20_000 });
+		await expect(page.getByRole('list', { name: 'Steps' })).toContainText('cheer');
 	});
 });

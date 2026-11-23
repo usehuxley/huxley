@@ -2,8 +2,9 @@
 	import { enhance, type SubmitFunction } from '$app/forms';
 	import { resolve } from '$app/paths';
 	import { ArrowLeft } from '@lucide/svelte';
-	import { Badge, Button, Card, Field, Input, toast } from '@usehuxley/ui';
+	import { Badge, Button, Card, Field, Input, Tabs, toast } from '@usehuxley/ui';
 	import RunStatusBadge from '#lib/workflows/RunStatusBadge.svelte';
+	import VisualEditor from '#lib/workflows/editor/VisualEditor.svelte';
 	import type { PageProps } from './$types';
 
 	let { data, form }: PageProps = $props();
@@ -23,10 +24,22 @@
 	});
 	let inputs = $state('{}');
 
+	// Visual and YAML edit the same draft; switching needs the other saved.
+	let tab = $state('visual');
+	let visualDirty = $state(false);
+	let visualDocument = $state<Record<string, unknown>>();
+	let tabs = $derived([
+		{ value: 'visual', label: 'Visual', disabled: edited },
+		{ value: 'yaml', label: 'YAML', disabled: visualDirty }
+	]);
+
 	const notify: SubmitFunction = () => {
 		return async ({ result, update }) => {
 			await update({ reset: false });
-			if (result.type === 'success') edited = false;
+			if (result.type === 'success') {
+				edited = false;
+				visualDirty = false;
+			}
 			if ((result.type === 'success' || result.type === 'failure') && result.data?.message) {
 				toast.push({
 					title: String(result.data.message),
@@ -83,42 +96,72 @@
 		title="Definition"
 		description="The draft, in the Huxley Workflow Format. Saving keeps it as a draft; publishing makes it the version that runs."
 	>
-		<form method="POST" action="?/save" class="flex flex-col gap-3" use:enhance={notify}>
-			<input type="hidden" name="revision" value={workflow.revision} />
-			<label class="sr-only" for="yaml">Workflow YAML</label>
-			<textarea
-				id="yaml"
-				name="yaml"
-				bind:value={yaml}
-				oninput={() => (edited = true)}
-				readonly={!canWrite || archived}
-				spellcheck="false"
-				rows={Math.min(40, Math.max(14, yaml.split('\n').length + 2))}
-				class="w-full rounded-control border border-border bg-surface-sunken p-3 font-mono text-sm text-fg focus:border-accent focus:outline-none"
-			></textarea>
-			{#if workflow.diagnostics.length > 0}
-				<div class="rounded-control border border-warning/40 bg-warning/5 p-3" role="status">
-					<p class="text-sm font-medium text-fg">
-						{workflow.diagnostics.length} problem{workflow.diagnostics.length === 1 ? '' : 's'} to fix
-						before publishing
-					</p>
-					<ul class="mt-2 flex flex-col gap-1" aria-label="Problems">
-						{#each workflow.diagnostics as problem, i (i)}
-							<li class="text-sm text-fg-muted">
-								{#if problem.path}<code class="text-fg">{problem.path}</code>:
-								{/if}{problem.message}
-							</li>
-						{/each}
-					</ul>
-				</div>
-			{/if}
-			{#if canWrite && !archived}
-				<div class="flex items-center gap-3">
-					<Button type="submit">Save draft</Button>
-					{#if edited}<span class="text-sm text-fg-muted">Unsaved changes</span>{/if}
-				</div>
-			{/if}
-		</form>
+		<Tabs items={tabs} bind:value={tab} label="Editor">
+			{#snippet panel(which)}
+				{#if which === 'visual'}
+					<form
+						method="POST"
+						action="?/saveDocument"
+						class="flex flex-col gap-3"
+						use:enhance={notify}
+					>
+						<input type="hidden" name="revision" value={workflow.revision} />
+						<input type="hidden" name="document" value={JSON.stringify(visualDocument ?? {})} />
+						<VisualEditor
+							draft={workflow.draft}
+							diagnostics={workflow.diagnostics}
+							readonly={!canWrite || archived}
+							bind:dirty={visualDirty}
+							bind:document={visualDocument}
+						/>
+						{#if canWrite && !archived}
+							<div class="flex items-center gap-3">
+								<Button type="submit">Save draft</Button>
+								{#if visualDirty}<span class="text-sm text-fg-muted">Unsaved changes</span>{/if}
+							</div>
+						{/if}
+					</form>
+				{:else}
+					<form method="POST" action="?/save" class="flex flex-col gap-3" use:enhance={notify}>
+						<input type="hidden" name="revision" value={workflow.revision} />
+						<label class="sr-only" for="yaml">Workflow YAML</label>
+						<textarea
+							id="yaml"
+							name="yaml"
+							bind:value={yaml}
+							oninput={() => (edited = true)}
+							readonly={!canWrite || archived}
+							spellcheck="false"
+							rows={Math.min(40, Math.max(14, yaml.split('\n').length + 2))}
+							class="w-full rounded-control border border-border bg-surface-sunken p-3 font-mono text-sm text-fg focus:border-accent focus:outline-none"
+						></textarea>
+						{#if workflow.diagnostics.length > 0}
+							<div class="rounded-control border border-warning/40 bg-warning/5 p-3" role="status">
+								<p class="text-sm font-medium text-fg">
+									{workflow.diagnostics.length} problem{workflow.diagnostics.length === 1
+										? ''
+										: 's'} to fix before publishing
+								</p>
+								<ul class="mt-2 flex flex-col gap-1" aria-label="Problems">
+									{#each workflow.diagnostics as problem, i (i)}
+										<li class="text-sm text-fg-muted">
+											{#if problem.path}<code class="text-fg">{problem.path}</code>:
+											{/if}{problem.message}
+										</li>
+									{/each}
+								</ul>
+							</div>
+						{/if}
+						{#if canWrite && !archived}
+							<div class="flex items-center gap-3">
+								<Button type="submit">Save draft</Button>
+								{#if edited}<span class="text-sm text-fg-muted">Unsaved changes</span>{/if}
+							</div>
+						{/if}
+					</form>
+				{/if}
+			{/snippet}
+		</Tabs>
 		{#if canPublish && !archived}
 			<form
 				method="POST"
@@ -132,11 +175,11 @@
 				<Button
 					type="submit"
 					variant="secondary"
-					disabled={edited || workflow.diagnostics.length > 0}
+					disabled={edited || visualDirty || workflow.diagnostics.length > 0}
 				>
 					Publish version {(workflow.currentVersion ?? 0) + 1}
 				</Button>
-				{#if edited}<span class="text-sm text-fg-muted">Save first</span>{/if}
+				{#if edited || visualDirty}<span class="text-sm text-fg-muted">Save first</span>{/if}
 			</form>
 		{/if}
 	</Card>
