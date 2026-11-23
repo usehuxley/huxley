@@ -72,6 +72,41 @@ export const actions: Actions = {
 					: `Draft saved, with ${data.diagnostics.length} problem${data.diagnostics.length === 1 ? '' : 's'} to fix before publishing.`
 		};
 	},
+	saveDocument: async (event) => {
+		const form = await event.request.formData();
+		let document: unknown;
+		try {
+			document = JSON.parse(formString(form, 'document'));
+		} catch {
+			return fail(400, { message: 'The workflow could not be read.' });
+		}
+		if (typeof document !== 'object' || document === null || Array.isArray(document)) {
+			return fail(400, { message: 'The workflow could not be read.' });
+		}
+		const {
+			data,
+			error: problem,
+			response
+		} = await api(event).PUT('/api/v1/workflows/{id}/draft', {
+			params: { path: { id: event.params.id } },
+			body: {
+				revision: Number(formString(form, 'revision')),
+				document: document as Record<string, unknown>
+			}
+		});
+		if (!data) {
+			return fail(response.status, {
+				message: problemMessage(problem, 'Could not save the draft.')
+			});
+		}
+		return {
+			saved: true,
+			message:
+				data.diagnostics.length === 0
+					? 'Draft saved. It is ready to publish.'
+					: `Draft saved, with ${data.diagnostics.length} problem${data.diagnostics.length === 1 ? '' : 's'} to fix before publishing.`
+		};
+	},
 	publish: async (event) => {
 		const form = await event.request.formData();
 		const {
