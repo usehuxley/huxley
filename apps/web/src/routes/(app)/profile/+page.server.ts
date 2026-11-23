@@ -8,12 +8,19 @@ import type { Actions, PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async (event) => {
 	const client = api(event);
-	const [sessions, mfa] = await Promise.all([
+	const [sessions, mfa, passkeys, methods] = await Promise.all([
 		client.GET('/api/v1/auth/sessions'),
-		client.GET('/api/v1/auth/mfa')
+		client.GET('/api/v1/auth/mfa'),
+		client.GET('/api/v1/auth/passkeys'),
+		client.GET('/api/v1/auth/methods')
 	]);
-	if (!sessions.data || !mfa.data) error(503, 'Could not load your profile.');
-	return { sessions: sessions.data, mfa: mfa.data };
+	if (!sessions.data || !mfa.data || !passkeys.data) error(503, 'Could not load your profile.');
+	return {
+		sessions: sessions.data,
+		mfa: mfa.data,
+		passkeys: passkeys.data,
+		passkeysEnabled: methods.data?.passkeys ?? false
+	};
 };
 
 async function enrollmentView(secret: string, otpauthUri: string) {
@@ -117,6 +124,17 @@ export const actions: Actions = {
 			});
 		}
 		return { mfa: { recoveryCodes: data.recoveryCodes } };
+	},
+
+	deletePasskey: async (event) => {
+		const form = await event.request.formData();
+		const { response } = await api(event).DELETE('/api/v1/auth/passkeys/{id}', {
+			params: { path: { id: formString(form, 'id') } }
+		});
+		if (response.status !== 204) {
+			return fail(response.status, { passkeys: { error: 'Could not remove the passkey.' } });
+		}
+		return { passkeys: { removed: true } };
 	},
 
 	revokeSession: async (event) => {

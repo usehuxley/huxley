@@ -16,8 +16,11 @@ use sqlx::PgConnection;
 use time::{Duration, OffsetDateTime};
 use uuid::Uuid;
 
+use webauthn_rs::prelude::PublicKeyCredential;
+
 use crate::{
-    AuthError, AuthResult, AuthService, LoginSuccess, UserStatus, token, totp, verify_password,
+    AuthError, AuthResult, AuthService, LoginSuccess, UserStatus, passkey, token, totp,
+    verify_password,
 };
 
 /// Prefix for MFA challenge tokens.
@@ -35,6 +38,7 @@ const TOTP_PURPOSE: &str = "user_totp_secret";
 #[serde(rename_all = "camelCase")]
 pub enum MfaMethod {
     Totp,
+    Passkey,
     RecoveryCode,
 }
 
@@ -51,6 +55,11 @@ pub struct MfaChallenge {
 pub enum SecondFactor<'a> {
     Totp(&'a str),
     RecoveryCode(&'a str),
+    /// The browser's answer to [`AuthService::begin_mfa_passkey`].
+    Passkey {
+        ceremony: Uuid,
+        credential: &'a PublicKeyCredential,
+    },
 }
 
 impl SecondFactor<'_> {
@@ -58,6 +67,7 @@ impl SecondFactor<'_> {
         match self {
             Self::Totp(_) => "totp",
             Self::RecoveryCode(_) => "recovery_code",
+            Self::Passkey { .. } => "passkey",
         }
     }
 }
@@ -66,6 +76,7 @@ impl SecondFactor<'_> {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct MfaStatus {
     pub totp_enabled: bool,
+    pub passkeys: i64,
     pub recovery_codes_remaining: i64,
 }
 
@@ -87,6 +98,10 @@ fn binding(user_id: Uuid) -> Binding<'static> {
 
 /// Whether the user must pass a second factor to sign in.
 pub(crate) async fn has_mfa(conn: &mut PgConnection, user_id: Uuid) -> AuthResult<bool> {
+    Ok(has_totp(conn, user_id).await? || passkey::has_passkeys(conn, user_id).await?)
+}
+
+async fn has_totp(conn: &mut PgConnection, user_id: Uuid) -> AuthResult<bool> {
     let row: Option<(bool,)> = sqlx::query_as(
         "SELECT true FROM user_totp WHERE user_id = $1 AND confirmed_at IS NOT NULL",
     )
@@ -96,8 +111,55 @@ pub(crate) async fn has_mfa(conn: &mut PgConnection, user_id: Uuid) -> AuthResul
     Ok(row.is_some())
 }
 
+/// The methods a user can answer a challenge with.
+async fn available_methods(conn: &mut PgConnection, user_id: Uuid) -> AuthResult<Vec<MfaMethod>> {
+    let mut methods = Vec::new();
+    if has_totp(conn, user_id).await? {
+        methods.push(MfaMethod::Totp);
+    }
+    if passkey::has_passkeys(conn, user_id).await? {
+        methods.push(MfaMethod::Passkey);
+    }
+    if remaining_recovery_codes(conn, user_id).await? > 0 {
+        methods.push(MfaMethod::RecoveryCode);
+    }
+    Ok(methods)
+}
+
+/// An unexpired, unused challenge. Returns (challenge id, user id).
+pub(crate) async fn find_open_challenge(
+    conn: &mut PgConnection,
+    token: &str,
+) -> AuthResult<(Uuid, Uuid)> {
+    if !token::looks_valid(token, CHALLENGE_PREFIX) {
+        return Err(AuthError::InvalidMfaChallenge);
+    }
+    sqlx::query_as(
+        "SELECT id, user_id FROM mfa_challenges \
+          WHERE token_hash = $1 AND consumed_at IS NULL AND expires_at > now()",
+    )
+    .bind(token::hash(token))
+    .fetch_optional(conn)
+    .await?
+    .ok_or(AuthError::InvalidMfaChallenge)
+}
+
+pub(crate) async fn delete_recovery_codes(
+    conn: &mut PgConnection,
+    user_id: Uuid,
+) -> AuthResult<()> {
+    sqlx::query("DELETE FROM user_recovery_codes WHERE user_id = $1")
+        .bind(user_id)
+        .execute(conn)
+        .await?;
+    Ok(())
+}
+
 /// Replaces the user's recovery codes with a fresh set and returns them.
-async fn replace_recovery_codes(conn: &mut PgConnection, user_id: Uuid) -> AuthResult<Vec<String>> {
+pub(crate) async fn replace_recovery_codes(
+    conn: &mut PgConnection,
+    user_id: Uuid,
+) -> AuthResult<Vec<String>> {
     sqlx::query("DELETE FROM user_recovery_codes WHERE user_id = $1")
         .bind(user_id)
         .execute(&mut *conn)
@@ -135,12 +197,15 @@ pub async fn reset_mfa(
     ctx: &RequestContext,
     user_id: Uuid,
 ) -> AuthResult<bool> {
-    let had = sqlx::query("DELETE FROM user_totp WHERE user_id = $1")
+    let had = has_mfa(conn, user_id).await?;
+    sqlx::query("DELETE FROM user_totp WHERE user_id = $1")
         .bind(user_id)
         .execute(&mut *conn)
-        .await?
-        .rows_affected()
-        > 0;
+        .await?;
+    sqlx::query("DELETE FROM user_passkeys WHERE user_id = $1")
+        .bind(user_id)
+        .execute(&mut *conn)
+        .await?;
     sqlx::query("DELETE FROM user_recovery_codes WHERE user_id = $1")
         .bind(user_id)
         .execute(&mut *conn)
@@ -188,6 +253,10 @@ impl AuthService {
         user_id: Uuid,
         now: OffsetDateTime,
     ) -> AuthResult<MfaChallenge> {
+        sqlx::query("DELETE FROM mfa_challenges WHERE expires_at < now() - interval '1 hour'")
+            .execute(&mut *conn)
+            .await?;
+        let methods = available_methods(conn, user_id).await?;
         let token = token::generate(CHALLENGE_PREFIX);
         let id = huxley_core::new_id();
         let expires_at = now + CHALLENGE_TTL;
@@ -211,7 +280,7 @@ impl AuthService {
         Ok(MfaChallenge {
             token: token.secret,
             expires_at,
-            methods: vec![MfaMethod::Totp, MfaMethod::RecoveryCode],
+            methods,
         })
     }
 
@@ -256,6 +325,13 @@ impl AuthService {
         let ok = match factor {
             SecondFactor::Totp(code) => self.check_totp(&mut tx, user_id, code, now).await?,
             SecondFactor::RecoveryCode(code) => use_recovery_code(&mut tx, user_id, code).await?,
+            SecondFactor::Passkey {
+                ceremony,
+                credential,
+            } => {
+                self.check_mfa_passkey(&mut tx, user_id, challenge_id, ceremony, credential)
+                    .await?
+            }
         };
 
         if !ok {
@@ -298,6 +374,7 @@ impl AuthService {
         let method = match factor {
             SecondFactor::Totp(_) => "password+totp",
             SecondFactor::RecoveryCode(_) => "password+recovery_code",
+            SecondFactor::Passkey { .. } => "password+passkey",
         };
         let success = self
             .finish_login(&mut tx, ctx, user_id, now, method)
@@ -340,7 +417,8 @@ impl AuthService {
     pub async fn mfa_status(&self, user_id: Uuid) -> AuthResult<MfaStatus> {
         let mut conn = self.db.acquire().await?;
         Ok(MfaStatus {
-            totp_enabled: has_mfa(&mut conn, user_id).await?,
+            totp_enabled: has_totp(&mut conn, user_id).await?,
+            passkeys: passkey::passkey_count(&mut conn, user_id).await?,
             recovery_codes_remaining: remaining_recovery_codes(&mut conn, user_id).await?,
         })
     }
@@ -357,7 +435,7 @@ impl AuthService {
         let root = self.root_org().await?;
         let mut tx = self.db.begin().await?;
         self.reauthenticate(&mut tx, ctx, user_id, password).await?;
-        if has_mfa(&mut tx, user_id).await? {
+        if has_totp(&mut tx, user_id).await? {
             return Err(AuthError::MfaAlreadyEnabled);
         }
         let secret = totp::generate_secret();
@@ -404,7 +482,7 @@ impl AuthService {
         .fetch_optional(&mut *tx)
         .await?;
         let Some((secret_enc,)) = row else {
-            return Err(if has_mfa(&mut tx, user_id).await? {
+            return Err(if has_totp(&mut tx, user_id).await? {
                 AuthError::MfaAlreadyEnabled
             } else {
                 AuthError::NoPendingEnrollment
@@ -446,17 +524,17 @@ impl AuthService {
     ) -> AuthResult<()> {
         let mut tx = self.db.begin().await?;
         self.reauthenticate(&mut tx, ctx, user_id, password).await?;
-        if !has_mfa(&mut tx, user_id).await? {
+        if !has_totp(&mut tx, user_id).await? {
             return Err(AuthError::MfaNotEnabled);
         }
         sqlx::query("DELETE FROM user_totp WHERE user_id = $1")
             .bind(user_id)
             .execute(&mut *tx)
             .await?;
-        sqlx::query("DELETE FROM user_recovery_codes WHERE user_id = $1")
-            .bind(user_id)
-            .execute(&mut *tx)
-            .await?;
+        // Recovery codes stay while a passkey still protects the account.
+        if !passkey::has_passkeys(&mut tx, user_id).await? {
+            delete_recovery_codes(&mut tx, user_id).await?;
+        }
         audit::record(
             &mut tx,
             ctx,
@@ -494,7 +572,7 @@ impl AuthService {
 
     /// Re-checks the signed-in user's password. A failure is audited and
     /// committed on its own before the error returns.
-    async fn reauthenticate(
+    pub(crate) async fn reauthenticate(
         &self,
         tx: &mut sqlx::Transaction<'static, sqlx::Postgres>,
         ctx: &RequestContext,

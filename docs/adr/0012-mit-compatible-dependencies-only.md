@@ -14,3 +14,9 @@ Allow only permissive licenses, enforced by cargo-deny (`deny.toml`) in CI. npm 
 ## Consequences
 
 Some libraries are off-limits. Exceptions require a maintainer review and an update to this ADR.
+
+## Exceptions
+
+| Crates | License | Approved | Reason |
+|---|---|---|---|
+| `webauthn-rs`, `webauthn-rs-core`, `webauthn-rs-proto`, `webauthn-attestation-ca`, `crypto-glue` (all from the kanidm webauthn-rs project) | MPL-2.0 | 2026-11-22 | Passkeys (design doc §11.2). The most mature Rust WebAuthn relying-party library, externally reviewed. MPL-2.0 is file-level copyleft: we use the crates unmodified, so Huxley stays MIT. Any patch to these crates' files must be published under MPL-2.0. |

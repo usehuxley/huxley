@@ -535,3 +535,37 @@ async fn admin_mfa_reset_protects_owners() {
     assert_eq!(status, StatusCode::UNAUTHORIZED);
     login(&app, &email).await;
 }
+
+#[tokio::test]
+async fn passkey_endpoints_without_a_public_url() {
+    let Some(pools) = pools().await else { return };
+    ensure_root(&pools).await;
+    let app = app(&pools);
+    let (status, methods) = call(&app, "GET", "/api/v1/auth/methods", None, None).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(methods["passkeys"], false);
+
+    let (status, _, err) =
+        post_anonymous(&app, "/api/v1/auth/login/passkey/options", json!({})).await;
+    assert_eq!(status, StatusCode::SERVICE_UNAVAILABLE, "{err}");
+
+    let cookie = login(&app, &user(&pools, false).await).await;
+    let (status, list) = call(&app, "GET", "/api/v1/auth/passkeys", Some(&cookie), None).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(list, json!([]));
+    let body = json!({ "password": PASSWORD });
+    let (status, _) = call(
+        &app,
+        "POST",
+        "/api/v1/auth/passkeys/options",
+        Some(&cookie),
+        Some(body),
+    )
+    .await;
+    assert_eq!(status, StatusCode::SERVICE_UNAVAILABLE);
+
+    // Two answers at once are refused before anything else happens.
+    let both = json!({ "challenge": "hxm_x", "code": "123456", "recoveryCode": "AAAAA-AAAAA" });
+    let (status, _, _) = post_anonymous(&app, "/api/v1/auth/login/mfa", both).await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+}

@@ -8,8 +8,8 @@ use utoipa::OpenApi;
 
 use crate::audit_routes::{self, AuditEventView, AuditPage};
 use crate::auth_routes::{
-    self, ChangePasswordRequest, LoginMfaRequest, LoginRequest, LoginResponse, MeView,
-    MfaMethodView, SessionView, UserView,
+    self, AuthMethodsView, ChangePasswordRequest, LoginMfaRequest, LoginRequest, LoginResponse,
+    MeView, MfaChallengeRequest, MfaMethodView, PasskeyAnswer, SessionView, UserView,
 };
 use crate::health::{self, HealthStatus};
 use crate::mfa_routes::{
@@ -19,6 +19,10 @@ use crate::mfa_routes::{
 use crate::module_routes::{self, SetModuleRequest, SetModuleResponse};
 use crate::org_routes::{
     self, ArchiveOrgRequest, CreateOrgRequest, MoveOrgRequest, OrgKindInput, UpdateOrgRequest,
+};
+use crate::passkey_routes::{
+    self, CeremonyView, FinishRegistrationRequest, PasskeyView, RegisteredPasskeyView,
+    RenamePasskeyRequest,
 };
 use crate::problem::{ApiError, FieldError};
 use crate::user_routes::{
@@ -38,6 +42,15 @@ use crate::user_routes::{
         health::readyz,
         auth_routes::login,
         auth_routes::login_mfa,
+        auth_routes::login_mfa_passkey_options,
+        auth_routes::login_passkey_options,
+        auth_routes::login_passkey,
+        auth_routes::methods,
+        passkey_routes::list,
+        passkey_routes::begin_registration,
+        passkey_routes::finish_registration,
+        passkey_routes::rename,
+        passkey_routes::remove,
         mfa_routes::status,
         mfa_routes::begin_totp,
         mfa_routes::confirm_totp,
@@ -72,6 +85,14 @@ use crate::user_routes::{
         MeView,
         LoginResponse,
         LoginMfaRequest,
+        PasskeyAnswer,
+        MfaChallengeRequest,
+        AuthMethodsView,
+        PasskeyView,
+        CeremonyView,
+        FinishRegistrationRequest,
+        RegisteredPasskeyView,
+        RenamePasskeyRequest,
         MfaMethodView,
         MfaStatusView,
         PasswordConfirmation,

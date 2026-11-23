@@ -61,6 +61,63 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
+	'/api/v1/auth/login/mfa/passkey': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/**
+		 * Options for answering an MFA challenge with a passkey. Finish with
+		 *     `POST /api/v1/auth/login/mfa` and a `passkey` answer.
+		 */
+		post: operations['login_mfa_passkey_options'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/auth/login/passkey': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/**
+		 * Signs in with a passkey alone. A passkey verifies the user on the device,
+		 *     so no second factor is asked for.
+		 */
+		post: operations['login_passkey'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/auth/login/passkey/options': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/** Options for passwordless sign-in with a passkey. */
+		post: operations['login_passkey_options'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
 	'/api/v1/auth/logout': {
 		parameters: {
 			query?: never;
@@ -87,6 +144,23 @@ export interface paths {
 		};
 		/** The signed-in user. */
 		get: operations['me'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/auth/methods': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** Sign-in methods offered by this server. */
+		get: operations['methods'];
 		put?: never;
 		post?: never;
 		delete?: never;
@@ -184,6 +258,62 @@ export interface paths {
 		options?: never;
 		head?: never;
 		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/auth/passkeys': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** The signed-in user's passkeys. */
+		get: operations['list'];
+		put?: never;
+		/** Finishes adding a passkey with the browser's answer. */
+		post: operations['finish_registration'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/auth/passkeys/options': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/** Starts adding a passkey (re-checks the password). */
+		post: operations['begin_registration'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/auth/passkeys/{id}': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		post?: never;
+		/**
+		 * Removes a passkey. Removing the last second factor also deletes the
+		 *     recovery codes.
+		 */
+		delete: operations['remove'];
+		options?: never;
+		head?: never;
+		/** Renames a passkey. */
+		patch: operations['rename'];
 		trace?: never;
 	};
 	'/api/v1/auth/password': {
@@ -582,6 +712,25 @@ export interface components {
 			items: components['schemas']['AuditEventView'][];
 			nextCursor?: string | null;
 		};
+		/** @description Sign-in methods this server offers, for the sign-in page. */
+		AuthMethodsView: {
+			/** @description Passkeys are configured (`auth.public_url` is set). */
+			passkeys: boolean;
+		};
+		/** @description The first half of a WebAuthn ceremony. */
+		CeremonyView: {
+			/**
+			 * Format: uuid
+			 * @description Send back with the browser's answer.
+			 */
+			ceremony: string;
+			/**
+			 * @description Pass `options.publicKey` to `PublicKeyCredential.parseCreationOptionsFromJSON`
+			 *     (registration) or `parseRequestOptionsFromJSON` (sign-in), then to
+			 *     `navigator.credentials.create` / `.get`.
+			 */
+			options: Record<string, never>;
+		};
 		ChangePasswordRequest: {
 			/** Format: password */
 			currentPassword: string;
@@ -628,6 +777,14 @@ export interface components {
 			/** @description JSON Pointer to the invalid field, e.g. `/name`. */
 			pointer: string;
 		};
+		FinishRegistrationRequest: {
+			/** Format: uuid */
+			ceremony: string;
+			/** @description `credential.toJSON()` from `navigator.credentials.create`. */
+			credential: Record<string, never>;
+			/** @description A label to tell passkeys apart, e.g. "Work laptop". */
+			name: string;
+		};
 		HealthStatus: {
 			/** @description Always `ok` when the response is 200. */
 			status: string;
@@ -638,6 +795,7 @@ export interface components {
 			challenge: string;
 			/** @description A six-digit code from the authenticator app. */
 			code?: string | null;
+			passkey?: components['schemas']['PasskeyAnswer'] | null;
 			/** @description One of the user's recovery codes. Each works once. */
 			recoveryCode?: string | null;
 		};
@@ -674,12 +832,21 @@ export interface components {
 			/** @description Holds the Owner role at the root organization. */
 			isOwner: boolean;
 		};
+		MfaChallengeRequest: {
+			/** @description From the `mfaRequired` response. */
+			challenge: string;
+		};
 		/**
 		 * @description Second-factor methods offered for a challenge.
 		 * @enum {string}
 		 */
-		MfaMethodView: 'totp' | 'recoveryCode';
+		MfaMethodView: 'totp' | 'passkey' | 'recoveryCode';
 		MfaStatusView: {
+			/**
+			 * Format: int64
+			 * @description Registered passkeys.
+			 */
+			passkeys: number;
 			/**
 			 * Format: int64
 			 * @description Unused recovery codes left.
@@ -749,6 +916,22 @@ export interface components {
 			 */
 			version: number;
 		};
+		/** @description The browser's answer to a passkey sign-in ceremony. */
+		PasskeyAnswer: {
+			/** Format: uuid */
+			ceremony: string;
+			/** @description `credential.toJSON()` from `navigator.credentials.get`. */
+			credential: Record<string, never>;
+		};
+		PasskeyView: {
+			/** Format: date-time */
+			createdAt: string;
+			/** Format: uuid */
+			id: string;
+			/** Format: date-time */
+			lastUsedAt?: string | null;
+			name: string;
+		};
 		PasswordConfirmation: {
 			/**
 			 * Format: password
@@ -769,6 +952,14 @@ export interface components {
 		RecoveryCodesView: {
 			/** @description Shown only now. Each code signs in once if the authenticator is lost. */
 			recoveryCodes: string[];
+		};
+		RegisteredPasskeyView: {
+			passkey: components['schemas']['PasskeyView'];
+			/** @description Present when this was the user's first second factor. Shown once. */
+			recoveryCodes?: string[] | null;
+		};
+		RenamePasskeyRequest: {
+			name: string;
 		};
 		Role: {
 			description: string;
@@ -968,6 +1159,108 @@ export interface operations {
 			};
 		};
 	};
+	login_mfa_passkey_options: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['MfaChallengeRequest'];
+			};
+		};
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['CeremonyView'];
+				};
+			};
+			/** @description The challenge expired */
+			401: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+			/** @description The user has no passkeys */
+			409: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	login_passkey: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['PasskeyAnswer'];
+			};
+		};
+		responses: {
+			/** @description Signed in; session cookie set */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['LoginResponse'];
+				};
+			};
+			/** @description The passkey could not be verified */
+			401: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	login_passkey_options: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['CeremonyView'];
+				};
+			};
+			/** @description Passkeys aren't configured */
+			503: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
 	logout: {
 		parameters: {
 			query?: never;
@@ -1011,6 +1304,25 @@ export interface operations {
 				};
 				content: {
 					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	methods: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['AuthMethodsView'];
 				};
 			};
 		};
@@ -1188,6 +1500,169 @@ export interface operations {
 			};
 			/** @description Wrong password */
 			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	list: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['PasskeyView'][];
+				};
+			};
+		};
+	};
+	finish_registration: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['FinishRegistrationRequest'];
+			};
+		};
+		responses: {
+			201: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['RegisteredPasskeyView'];
+				};
+			};
+			/** @description Already registered */
+			409: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+			/** @description Invalid answer, name, or expired request */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	begin_registration: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['PasswordConfirmation'];
+			};
+		};
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['CeremonyView'];
+				};
+			};
+			/** @description Wrong password */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+			/** @description Passkeys aren't configured */
+			503: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	remove: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				/** @description Passkey id */
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			204: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content?: never;
+			};
+			404: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	rename: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				/** @description Passkey id */
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['RenamePasskeyRequest'];
+			};
+		};
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['PasskeyView'];
+				};
+			};
+			404: {
 				headers: {
 					[name: string]: unknown;
 				};

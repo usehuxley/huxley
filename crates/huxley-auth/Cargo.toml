@@ -24,12 +24,17 @@ subtle.workspace = true
 thiserror.workspace = true
 time.workspace = true
 tracing.workspace = true
+url.workspace = true
 uuid.workspace = true
+webauthn-rs.workspace = true
 zeroize.workspace = true
 
 [dev-dependencies]
 huxley-crypto = { workspace = true, features = ["testing"] }
 huxley-db = { workspace = true, features = ["testing"] }
+passkey = { version = "0.6", features = ["rust-crypto"] }
+async-trait = "0.1"
+public-suffix = "0.1"
 tokio.workspace = true
 
 [lints]
