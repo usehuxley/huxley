@@ -384,6 +384,25 @@ pub async fn check_choices(
     }
 }
 
+/// The form's secret (`writeOnly`) fields: password-style answers, kept
+/// out of submissions and encrypted in runs.
+pub fn secret_fields(form: &Form) -> std::collections::BTreeSet<String> {
+    huxley_engine::secret_input_names(&json!({ "spec": { "inputs": form.schema } }))
+}
+
+/// Answers with the secret ones replaced by a marker.
+fn redacted(answers: &Json, secret: &std::collections::BTreeSet<String>) -> Json {
+    let mut out = answers.clone();
+    if let Some(object) = out.as_object_mut() {
+        for name in secret {
+            if let Some(value) = object.get_mut(name) {
+                *value = json!(huxley_expr::REDACTED);
+            }
+        }
+    }
+    out
+}
+
 /// Who a submission's run acts as: the person, or (public links) the
 /// workflow's run-as account; `Err` if that account can't be used.
 async fn actor_for(
@@ -430,6 +449,7 @@ pub async fn submit(
         return Err(FormError::Archived);
     }
     let answers = check_answers(&form, &answers)?;
+    let secret_fields = secret_fields(&form);
     if let Submitter::Link(_) = by {
         links::refuse_lookups(&form)?;
     }
@@ -462,7 +482,7 @@ pub async fn submit(
             }
         };
         let run = engine
-            .start_run(
+            .start_run_with_secrets(
                 &mut *conn,
                 StartRun {
                     org_id,
@@ -476,6 +496,7 @@ pub async fn submit(
                     // the workflow's run-as account.
                     actor_id: actor,
                 },
+                &secret_fields,
             )
             .await?;
         runs.push(run);
@@ -495,7 +516,7 @@ pub async fn submit(
         Submitter::Link(link) => Some(link),
         Submitter::User(_) => None,
     })
-    .bind(&answers)
+    .bind(redacted(&answers, &secret_fields))
     .bind(&runs)
     .execute(&mut *conn)
     .await?;

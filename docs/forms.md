@@ -32,6 +32,10 @@ A form is a **JSON Schema** of its answers (an object), plus **UI hints**.
 
 `title` is a field's label, and `required` lists the fields that must be answered. UI hints can set `order` (the fields' order) and, per field, `widget`, `help` and `placeholder`. The editor shows a live preview as you change it.
 
+## Secret answers
+
+A **Secret (password)** field, which is `{ "type": "string", "writeOnly": true }` in JSON, is for answers such as a temporary password or a PIN. It shows as a password box. The stored submission keeps only `«redacted»`, and the runs it starts keep the answer encrypted, even if the workflow doesn't mark that input secret. Workflows read it as `inputs.<name>`, with the same masking as secrets (see [workflows](workflows.md#variables-and-secrets)).
+
 ## Questions that depend on answers
 
 A field can be shown only when another field's answer is one of some values. In the builder, use **Show only when … is …**. In JSON, use the UI hint `"show_if": { "field": "kind", "equals": "existing" }`, or `"in": [...]` for several values; with no value, the field is shown once the other field is answered. A multiple-choice field matches if any of its answers does.

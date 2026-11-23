@@ -6,6 +6,7 @@
 export type FieldKind =
 	| 'text'
 	| 'textarea'
+	| 'secret'
 	| 'email'
 	| 'date'
 	| 'datetime'
@@ -58,6 +59,8 @@ function kindOf(schema: Obj, hint: Obj): FieldKind {
 			return 'multiselect';
 		default:
 			if (Array.isArray(schema.enum)) return 'select';
+			// Password-style: kept out of submissions, encrypted in runs.
+			if (schema.writeOnly === true) return 'secret';
 			if (schema.format === 'email') return 'email';
 			if (schema.format === 'date') return 'date';
 			if (schema.format === 'date-time') return 'datetime';

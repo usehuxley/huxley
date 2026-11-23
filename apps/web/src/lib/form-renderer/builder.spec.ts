@@ -121,6 +121,16 @@ describe('form builder', () => {
 		expect(problemsOf(fields).get(fields.indexOf(user))).toMatch('integration');
 	});
 
+	it('secret fields are writeOnly strings', () => {
+		const out = definitionOf([field({ name: 'pin', kind: 'secret' })]);
+		expect(out.schema.properties).toEqual({ pin: { type: 'string', writeOnly: true } });
+		expect(builderFieldsOf(out.schema, out.ui)[0].kind).toBe('secret');
+		expect(
+			definitionOf([field({ name: 'pin', kind: 'text', extra: { writeOnly: true } })]).schema
+				.properties
+		).toEqual({ pin: { type: 'string' } });
+	});
+
 	it('fields sharing a name (mid-edit) still render once', () => {
 		const out = definitionOf([field({ name: 'a', label: 'One' }), field({ name: 'a' })]);
 		expect(out.ui.order).toEqual(['a']);

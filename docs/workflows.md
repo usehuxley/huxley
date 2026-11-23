@@ -79,6 +79,8 @@ Every step has an `id` (unique in the workflow; others read its result as `steps
 
 Organization variables (on the organization's page) are inherited down the tree; a nearer organization can set its own, and an organization can lock a variable for those below it. Workflows read them as `vars.<key>`. Secret variables are encrypted, never shown again, and read only as `secrets.<key>`: any step input that used one is stored redacted (the real value is encrypted for the step to use), and secret values are masked in what such steps return.
 
+**Secret inputs.** An input marked `writeOnly: true` in the workflow's input schema, such as a password or a PIN, is kept encrypted with the run. The run's inputs show `«redacted»`. Steps still read it as `inputs.<name>`, and reading it works like reading `secrets.*`: whatever used it is stored redacted, and its value is masked in what those steps return.
+
 ## Runs
 
 The run page shows each step as it starts and finishes, with its input, output or error and attempts. Inputs and outputs over 256 KB (configurable) are kept in object storage: the page shows their size and a download link, and `GET /api/v1/runs/{id}/steps/{key}/{attempt}/{input|output}` returns them; expressions see the full value as usual. A failed run can be **resumed** after fixing the cause: steps that succeeded aren't run again. Running runs can be **cancelled**: nothing new starts, and subworkflows they started stop too. All runs are under **Runs**.

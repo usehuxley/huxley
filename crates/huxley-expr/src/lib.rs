@@ -69,6 +69,8 @@ pub struct Evaluated {
 pub struct Scope {
     values: BTreeMap<String, Value>,
     secrets: Arc<BTreeMap<String, String>>,
+    /// Top-level objects with secret keys: (name → its fields, secret keys).
+    partly_secret: BTreeMap<String, (BTreeMap<String, Value>, std::collections::BTreeSet<String>)>,
 }
 
 impl Scope {
@@ -84,8 +86,31 @@ impl Scope {
     }
 
     pub fn insert(&mut self, name: &str, value: &Json) {
+        self.partly_secret.remove(name);
         self.values
             .insert(name.to_owned(), Value::from(minijinja::value::Serde(value)));
+    }
+
+    /// Adds a top-level object some of whose keys are secret: reading
+    /// them taints the evaluation (e.g. `inputs` with `writeOnly` inputs).
+    #[must_use]
+    pub fn with_partly_secret(
+        mut self,
+        name: &str,
+        value: &Json,
+        secret: &std::collections::BTreeSet<String>,
+    ) -> Self {
+        let Some(object) = value.as_object().filter(|_| !secret.is_empty()) else {
+            return self.with(name, value);
+        };
+        let fields = object
+            .iter()
+            .map(|(k, v)| (k.clone(), Value::from(minijinja::value::Serde(v))))
+            .collect();
+        self.values.remove(name);
+        self.partly_secret
+            .insert(name.to_owned(), (fields, secret.clone()));
+        self
     }
 
     /// Makes `secrets.<name>` available.
@@ -102,6 +127,16 @@ impl Scope {
 
     fn context(&self, touched: &Arc<AtomicBool>) -> Value {
         let mut map = self.values.clone();
+        for (name, (fields, secret)) in &self.partly_secret {
+            map.insert(
+                name.clone(),
+                Value::from_object(secrets::PartlySecret::new(
+                    fields.clone(),
+                    secret.clone(),
+                    touched.clone(),
+                )),
+            );
+        }
         map.insert(
             "secrets".into(),
             Value::from_object(secrets::SecretsObject::new(

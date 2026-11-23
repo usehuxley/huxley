@@ -26,6 +26,8 @@ pub struct RunContext {
     pub run_id: Uuid,
     pub org_id: Uuid,
     pub inputs: Json,
+    /// Inputs that are secret (`writeOnly`): reading them taints.
+    pub secret_inputs: std::collections::BTreeSet<String>,
     pub trigger: Json,
     /// Run-scoped variables (`run.vars`), updated by `set_var`.
     pub vars: Map<String, Json>,
@@ -155,7 +157,7 @@ impl<'a> Walker<'a> {
         run.insert("id".into(), json!(self.ctx.run_id));
         run.insert("vars".into(), Json::Object(self.ctx.vars.clone()));
         let mut scope = Scope::new()
-            .with("inputs", &self.ctx.inputs)
+            .with_partly_secret("inputs", &self.ctx.inputs, &self.ctx.secret_inputs)
             .with("trigger", &self.ctx.trigger)
             .with("steps", &self.journal.visible(&frame.indices))
             .with("vars", &self.ctx.org_vars)

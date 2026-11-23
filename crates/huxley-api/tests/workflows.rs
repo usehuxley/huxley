@@ -1557,3 +1557,49 @@ async fn public_forms_never_look_choices_up() {
     let (status, problem) = s.post(&s.owner, &links, json!({ "name": "Again" })).await;
     assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{problem}");
 }
+
+#[tokio::test]
+async fn secret_form_answers_are_kept_out_of_the_record() {
+    let Some(s) = setup().await else { return };
+    let form_key = key("reset");
+    let (status, form) = s
+        .post(
+            &s.owner,
+            "/api/v1/forms",
+            json!({ "orgId": s.org, "form": {
+            "key": form_key, "name": "Reset",
+            "schema": { "type": "object", "required": ["name", "pin"], "properties": {
+                "name": { "type": "string" },
+                "pin": { "type": "string", "writeOnly": true, "minLength": 4 } } } } }),
+        )
+        .await;
+    assert_eq!(status, StatusCode::CREATED, "{form}");
+    // The workflow doesn't mark it secret: the form's marking is enough.
+    listen(&s, &form_key).await;
+    let id = form["id"].as_str().unwrap();
+    let (status, submitted) = s
+        .post(
+            &s.owner,
+            &format!("/api/v1/forms/{id}/submissions"),
+            json!({ "answers": { "name": "Ada", "pin": "PIN-90210" } }),
+        )
+        .await;
+    assert_eq!(status, StatusCode::CREATED, "{submitted}");
+    let run: Uuid = submitted["runs"][0].as_str().unwrap().parse().unwrap();
+    let (data,): (Value,) = sqlx::query_as("SELECT data FROM form_submissions WHERE form_id = $1")
+        .bind(id.parse::<Uuid>().unwrap())
+        .fetch_one(&s.pools.owner)
+        .await
+        .unwrap();
+    assert_eq!(data, json!({ "name": "Ada", "pin": "«redacted»" }));
+    let (inputs, sealed): (Value, Option<Vec<u8>>) =
+        sqlx::query_as("SELECT inputs, inputs_sealed FROM runs WHERE id = $1")
+            .bind(run)
+            .fetch_one(&s.pools.owner)
+            .await
+            .unwrap();
+    assert_eq!(inputs["pin"], "«redacted»");
+    assert!(sealed.is_some_and(|b| !String::from_utf8_lossy(&b).contains("90210")));
+    let (_, shown) = s.get(&s.owner, &format!("/api/v1/runs/{run}")).await;
+    assert!(!shown.to_string().contains("90210"), "{shown}");
+}

@@ -71,6 +71,7 @@ export const KINDS: { value: FieldKind; label: string }[] = [
 	{ value: 'text', label: 'Text' },
 	{ value: 'textarea', label: 'Long text' },
 	{ value: 'email', label: 'Email' },
+	{ value: 'secret', label: 'Secret (password)' },
 	{ value: 'number', label: 'Number' },
 	{ value: 'integer', label: 'Whole number' },
 	{ value: 'date', label: 'Date' },
@@ -81,7 +82,7 @@ export const KINDS: { value: FieldKind; label: string }[] = [
 ];
 
 /** Keys the builder sets; everything else in a field's schema is kept. */
-const MANAGED = ['type', 'format', 'enum', 'items', 'title', 'uniqueItems'];
+const MANAGED = ['type', 'format', 'enum', 'items', 'title', 'uniqueItems', 'writeOnly'];
 
 export const hasOptions = (kind: FieldKind) => kind === 'select' || kind === 'multiselect';
 
@@ -136,6 +137,9 @@ function propertyOf(field: BuilderField): Obj {
 			break;
 		case 'email':
 			Object.assign(out, { type: 'string', format: 'email' });
+			break;
+		case 'secret':
+			Object.assign(out, { type: 'string', writeOnly: true });
 			break;
 		case 'date':
 			Object.assign(out, { type: 'string', format: 'date' });

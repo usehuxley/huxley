@@ -126,6 +126,14 @@ async fn harness(max_response_bytes: usize) -> Option<Harness> {
 
 impl Harness {
     async fn run(&self, spec: &str) -> (Uuid, RunStatus, Option<Json>, Option<Json>) {
+        self.run_with(spec, json!({})).await
+    }
+
+    async fn run_with(
+        &self,
+        spec: &str,
+        inputs: Json,
+    ) -> (Uuid, RunStatus, Option<Json>, Option<Json>) {
         let yaml = format!(
             "apiVersion: usehuxley.com/v1\nkind: Workflow\nmetadata: {{ key: t, name: T }}\nspec:\n{spec}"
         );
@@ -144,7 +152,7 @@ impl Harness {
                     document: Some(document),
                     trigger_type: "manual".into(),
                     trigger: json!({}),
-                    inputs: json!({}),
+                    inputs,
                     actor_id: None,
                 },
             )
@@ -464,4 +472,63 @@ async fn variables_and_secrets_reach_steps_but_not_the_record() {
     .await
     .unwrap();
     assert!(!everything.contains("tok-SECRET-42"));
+}
+
+#[tokio::test]
+async fn secret_inputs_are_sealed_and_taint_what_reads_them() {
+    let Some(h) = harness(1 << 20).await else {
+        return;
+    };
+    let (port, _) = mock_server().await;
+    let (id, status, outputs, error) = h
+        .run_with(
+            &format!(
+                r#"  inputs:
+    type: object
+    properties:
+      name: {{ type: string }}
+      password: {{ type: string, writeOnly: true }}
+  steps:
+    - id: greet
+      type: transform
+      output: "hi {{{{ inputs.name }}}}"
+    - id: call
+      type: http.request
+      with:
+        url: "http://localhost:{port}/echo"
+        headers: {{ Authorization: "Basic {{{{ inputs.password }}}}" }}
+  outputs:
+    greeting: "{{{{ steps.greet.output }}}}"
+    auth: "{{{{ steps.call.output.body.auth }}}}"
+"#
+            ),
+            json!({ "name": "ada", "password": "pw-HUNTER-2026" }),
+        )
+        .await;
+    assert_eq!(status, RunStatus::Succeeded, "{error:?}");
+    // The server got it; the record, the outputs and the run's inputs don't.
+    assert_eq!(
+        outputs.unwrap(),
+        json!({ "greeting": "hi ada", "auth": "Basic «redacted»" })
+    );
+    let (inputs, sealed): (Json, Option<Vec<u8>>) =
+        sqlx::query_as("SELECT inputs, inputs_sealed FROM runs WHERE id = $1")
+            .bind(id)
+            .fetch_one(&h.pools.owner)
+            .await
+            .unwrap();
+    assert_eq!(inputs, json!({ "name": "ada", "password": "«redacted»" }));
+    assert!(!String::from_utf8_lossy(&sealed.unwrap()).contains("HUNTER"));
+    let rows: Vec<(String, bool, String)> = sqlx::query_as(
+        "SELECT step_key, tainted, coalesce(input::text, '') || coalesce(output::text, '') \
+           FROM step_runs WHERE run_id = $1 ORDER BY step_key",
+    )
+    .bind(id)
+    .fetch_all(&h.pools.owner)
+    .await
+    .unwrap();
+    assert_eq!(rows[0].0, "call");
+    assert!(rows[0].1, "reading the secret input taints the step");
+    assert!(!rows[1].1, "reading other inputs doesn't");
+    assert!(rows.iter().all(|r| !r.2.contains("HUNTER")));
 }

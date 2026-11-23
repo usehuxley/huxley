@@ -9,6 +9,7 @@ repository.workspace = true
 publish = false
 
 [dependencies]
+huxley-expr.workspace = true
 base64.workspace = true
 getrandom.workspace = true
 ring.workspace = true
@@ -29,7 +30,6 @@ uuid.workspace = true
 [dev-dependencies]
 huxley-crypto = { workspace = true, features = ["testing"] }
 huxley-db = { workspace = true, features = ["testing"] }
-huxley-expr.workspace = true
 huxley-hwf.workspace = true
 tokio.workspace = true
 

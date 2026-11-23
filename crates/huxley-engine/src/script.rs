@@ -147,13 +147,11 @@ impl Engine {
             Err(failure) => return Ok(Executed::Failed(failure)),
         };
         let payload = if record.tainted {
-            let secrets = huxley_variables::for_run(&mut tx, &self.crypto, org_id)
-                .await?
-                .secrets;
+            let secrets = self.secret_values(&mut tx, org_id, run_id).await?;
             let given = serde_json::to_string(&(&payload.inputs, &payload.env)).unwrap_or_default();
             Payload {
                 redact: secrets
-                    .into_values()
+                    .into_iter()
                     .filter(|v| !v.is_empty() && given.contains(v.as_str()))
                     .collect(),
                 ..payload
