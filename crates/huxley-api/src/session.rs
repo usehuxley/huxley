@@ -56,6 +56,34 @@ pub struct CurrentUser {
 }
 
 impl CurrentUser {
+    /// Authenticates an API token. Only [`crate::authz::Authed`] accepts
+    /// tokens: self-service routes (password, MFA, sessions, tokens) take
+    /// `CurrentUser` and need a real session.
+    pub(crate) async fn from_api_token(
+        parts: &mut Parts,
+        state: &AppState,
+        secret: &str,
+    ) -> Result<Self, ApiError> {
+        let ClientInfo(ctx) = ClientInfo::from_request_parts(parts, state)
+            .await
+            .unwrap_or_else(|never| match never {});
+        let auth = state
+            .auth
+            .authenticate_token(secret, ctx.ip)
+            .await
+            .map_err(|e| ApiError::internal(&e))?
+            .ok_or_else(|| {
+                ApiError::new(
+                    http::StatusCode::UNAUTHORIZED,
+                    "invalid-token",
+                    "Invalid API token",
+                )
+                .with_detail("The token is unknown, expired, or revoked.")
+            })?;
+        let ctx = ctx.with_actor(Actor::User(auth.user.id));
+        Ok(Self { auth, ctx })
+    }
+
     async fn resolve(parts: &mut Parts, state: &AppState) -> Result<Option<Self>, ApiError> {
         let Some(token) = token_from_headers(&parts.headers) else {
             return Ok(None);

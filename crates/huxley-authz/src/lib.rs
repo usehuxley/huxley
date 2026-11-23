@@ -89,6 +89,26 @@ impl Principal {
         })
     }
 
+    /// Narrows every grant to `scopes` (an API token's scopes). `*` keeps
+    /// everything. Never adds permissions.
+    pub fn restrict_to(&mut self, scopes: &[String]) {
+        if scopes.iter().any(|s| s == permissions::WILDCARD) {
+            return;
+        }
+        for grant in &mut self.grants {
+            grant.permissions = if grant.permissions.iter().any(|p| p == permissions::WILDCARD) {
+                scopes.to_vec()
+            } else {
+                grant
+                    .permissions
+                    .iter()
+                    .filter(|p| scopes.contains(p))
+                    .cloned()
+                    .collect()
+            };
+        }
+    }
+
     /// Every permission granted anywhere in the tree, with `*` expanded.
     /// For UI hints only (e.g. which navigation to show); never for enforcement.
     pub fn granted_anywhere(&self) -> Vec<&'static str> {
@@ -116,6 +136,8 @@ pub enum AuthzError {
     OwnerOnly,
     #[error("the instance must keep at least one owner")]
     LastOwner,
+    #[error("service accounts can't hold the Owner role")]
+    ServiceAccountOwner,
     #[error(transparent)]
     Db(#[from] DbError),
 }
@@ -301,6 +323,16 @@ pub async fn assign(
     let role = role_by_id(conn, role_id).await?;
     if role.key == OWNER_ROLE && !actor.is_owner() {
         return Err(AuthzError::OwnerOnly);
+    }
+    if role.key == OWNER_ROLE {
+        let (service,): (bool,) =
+            sqlx::query_as("SELECT kind = 'service' FROM users WHERE id = $1")
+                .bind(user_id)
+                .fetch_one(&mut *conn)
+                .await?;
+        if service {
+            return Err(AuthzError::ServiceAccountOwner);
+        }
     }
     let id = huxley_core::new_id();
     sqlx::query(
@@ -514,5 +546,27 @@ mod tests {
         let p = principal(vec![]);
         assert!(!p.can_instance("org:read"));
         assert_eq!(p.granted_anywhere(), Vec::<&str>::new());
+    }
+
+    #[test]
+    fn token_scopes_only_narrow_grants() {
+        let mut p = principal(vec![
+            grant("admin", "root", true, &["*"]),
+            grant("tech", "root.a", true, &["org:read", "user:read"]),
+        ]);
+        p.restrict_to(&["org:read".to_owned(), "audit:read".to_owned()]);
+        assert!(p.can_instance("org:read"));
+        assert!(p.can_instance("audit:read"), "admin's * covers the scope");
+        assert!(!p.can_instance("user:create"));
+        assert!(!p.can_at_path("user:read", "root.a"), "not in scopes");
+        let mut q = principal(vec![grant("tech", "root", true, &["org:read"])]);
+        q.restrict_to(&["audit:read".to_owned()]);
+        assert!(
+            !q.can_instance("audit:read"),
+            "scopes never add permissions"
+        );
+        let mut all = principal(vec![grant("tech", "root", true, &["org:read"])]);
+        all.restrict_to(&["*".to_owned()]);
+        assert!(all.can_instance("org:read"));
     }
 }

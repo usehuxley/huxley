@@ -4,6 +4,7 @@
 	import { onMount } from 'svelte';
 	import { Badge, Button, Card, Field, Input, toast } from '@usehuxley/ui';
 	import { createPasskey, isCancelled, passkeysSupported, postJson } from '#lib/passkey.ts';
+	import TokensCard from '#lib/tokens/TokensCard.svelte';
 	import type { PageProps } from './$types';
 
 	let { data, form }: PageProps = $props();
@@ -26,6 +27,12 @@
 	/** Groups the base32 secret in fours so it's easier to type. */
 	const grouped = (secret: string) => secret.replace(/(.{4})/g, '$1 ').trim();
 
+	let tokenForm = $derived(
+		(form && 'tokens' in form ? form.tokens : {}) as {
+			created?: { name: string; secret: string };
+			error?: string;
+		}
+	);
 	let passkeySupported = $state(false);
 	let passkeyName = $state('Passkey');
 	let passkeyPassword = $state('');
@@ -114,7 +121,8 @@
 	<div>
 		<h1 class="text-2xl font-semibold text-fg">Your profile</h1>
 		<p class="mt-1 text-fg-muted">
-			Manage your password, passkeys, two-factor authentication, and where you're signed in.
+			Manage your password, passkeys, two-factor authentication, API tokens, and where you're signed
+			in.
 		</p>
 	</div>
 
@@ -383,6 +391,16 @@
 				</form>
 			</div>
 		</Card>
+	{/if}
+
+	{#if !data.user.mfaSetupRequired}
+		<TokensCard
+			tokens={data.tokens}
+			permissions={data.permissions}
+			created={tokenForm.created ?? null}
+			error={tokenForm.error ?? null}
+			description="Personal access tokens act as you from scripts and tools, limited to what you choose. Each expires within a year."
+		/>
 	{/if}
 
 	<Card title="Active sessions" description="Devices currently signed in to your account.">

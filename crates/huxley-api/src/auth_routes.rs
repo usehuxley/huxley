@@ -55,6 +55,8 @@ pub struct UserView {
     pub last_login_at: Option<OffsetDateTime>,
     /// Has a second factor (authenticator app) set up.
     pub mfa_enabled: bool,
+    /// `human` or `service` (a service account, which uses API tokens).
+    pub kind: String,
 }
 
 impl From<User> for UserView {
@@ -70,6 +72,11 @@ impl From<User> for UserView {
             .to_owned(),
             last_login_at: user.last_login_at,
             mfa_enabled: user.mfa_enabled,
+            kind: match user.kind {
+                huxley_auth::UserKind::Human => "human",
+                huxley_auth::UserKind::Service => "service",
+            }
+            .to_owned(),
         }
     }
 }

@@ -424,6 +424,44 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
+	'/api/v1/auth/tokens': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** Your API tokens. Needs a signed-in session (not a token). */
+		get: operations['list_own'];
+		put?: never;
+		/**
+		 * Creates a personal access token that acts as you, narrowed to `scopes`.
+		 *     It must expire within a year. Needs a signed-in session (not a token).
+		 */
+		post: operations['create_own'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/auth/tokens/{id}': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		post?: never;
+		/** Revokes one of your API tokens. */
+		delete: operations['revoke_own'];
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
 	'/api/v1/modules': {
 		parameters: {
 			query?: never;
@@ -718,6 +756,77 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
+	'/api/v1/service-accounts': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** Service accounts: non-human identities for integrations and scripts. */
+		get: operations['list_accounts'];
+		put?: never;
+		/**
+		 * Creates a service account. Grant it roles with `POST /role-assignments`,
+		 *     then create tokens for it.
+		 */
+		post: operations['create_account'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/service-accounts/{id}': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get: operations['get_account'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		/** Renames, describes, disables, or re-enables a service account. */
+		patch: operations['update_account'];
+		trace?: never;
+	};
+	'/api/v1/service-accounts/{id}/tokens': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get: operations['list_account_tokens'];
+		put?: never;
+		/** Creates a token for a service account. It may be non-expiring. */
+		post: operations['create_account_token'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/service-accounts/{id}/tokens/{token_id}': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		post?: never;
+		delete: operations['revoke_account_token'];
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
 	'/api/v1/users': {
 		parameters: {
 			query?: never;
@@ -725,7 +834,7 @@ export interface paths {
 			path?: never;
 			cookie?: never;
 		};
-		/** Lists users. */
+		/** Lists users (people and service accounts; filter with `kind`). */
 		get: operations['list_users'];
 		put?: never;
 		/** Creates a local user. The new user has no roles until one is assigned. */
@@ -838,6 +947,22 @@ export interface components {
 			title: string;
 			type: string;
 		};
+		ApiTokenView: {
+			/** Format: date-time */
+			createdAt: string;
+			expired: boolean;
+			/** Format: date-time */
+			expiresAt?: string | null;
+			/** @description The start of the token, to tell tokens apart. */
+			hint: string;
+			/** Format: uuid */
+			id: string;
+			/** Format: date-time */
+			lastUsedAt?: string | null;
+			lastUsedIp?: string | null;
+			name: string;
+			scopes: string[];
+		};
 		ArchiveOrgRequest: {
 			/** Format: int32 */
 			version: number;
@@ -931,6 +1056,23 @@ export interface components {
 			/** Format: uuid */
 			parentId: string;
 		};
+		CreateServiceAccountRequest: {
+			description?: string;
+			name: string;
+		};
+		CreateTokenRequest: {
+			/**
+			 * Format: int32
+			 * @description 1 to 366 for people. Omit (service accounts only) for no expiry.
+			 */
+			expiresInDays?: number | null;
+			name: string;
+			/**
+			 * @description Permission keys the token may use, or `["*"]` for everything its
+			 *     owner may do. Scopes only narrow the owner's roles.
+			 */
+			scopes: string[];
+		};
 		CreateUserRequest: {
 			displayName: string;
 			email: string;
@@ -944,6 +1086,10 @@ export interface components {
 			/** @description Present only when Huxley generated the password. Shown once. */
 			generatedPassword?: string | null;
 			user: components['schemas']['UserView'];
+		};
+		CreatedTokenView: components['schemas']['ApiTokenView'] & {
+			/** @description Send as `Authorization: Bearer <token>`. Shown only now. */
+			tokenSecret: string;
 		};
 		/** @description A field-level validation error. */
 		FieldError: {
@@ -1256,6 +1402,9 @@ export interface components {
 			/** Format: uuid */
 			roleId: string;
 		};
+		ServiceAccountView: components['schemas']['UserView'] & {
+			description: string;
+		};
 		SessionView: {
 			/** Format: date-time */
 			createdAt: string;
@@ -1319,6 +1468,12 @@ export interface components {
 			 */
 			version: number;
 		};
+		UpdateServiceAccountRequest: {
+			description?: string | null;
+			name?: string | null;
+			/** @description `active` or `disabled`. Disabled accounts' tokens stop working. */
+			status?: string | null;
+		};
 		UpdateUserRequest: {
 			displayName?: string | null;
 			/** @description `active` or `disabled`. Disabling signs the user out everywhere. */
@@ -1333,6 +1488,8 @@ export interface components {
 			email: string;
 			/** Format: uuid */
 			id: string;
+			/** @description `human` or `service` (a service account, which uses API tokens). */
+			kind: string;
 			/** Format: date-time */
 			lastLoginAt?: string | null;
 			/** @description Has a second factor (authenticator app) set up. */
@@ -2153,6 +2310,84 @@ export interface operations {
 			};
 		};
 	};
+	list_own: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiTokenView'][];
+				};
+			};
+		};
+	};
+	create_own: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['CreateTokenRequest'];
+			};
+		};
+		responses: {
+			201: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['CreatedTokenView'];
+				};
+			};
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	revoke_own: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				/** @description Token id */
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			204: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content?: never;
+			};
+			404: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
 	list_modules: {
 		parameters: {
 			query?: never;
@@ -2810,6 +3045,214 @@ export interface operations {
 			};
 		};
 	};
+	list_accounts: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ServiceAccountView'][];
+				};
+			};
+			403: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	create_account: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['CreateServiceAccountRequest'];
+			};
+		};
+		responses: {
+			201: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ServiceAccountView'];
+				};
+			};
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	get_account: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				/** @description Service account id */
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ServiceAccountView'];
+				};
+			};
+			404: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	update_account: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				/** @description Service account id */
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['UpdateServiceAccountRequest'];
+			};
+		};
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ServiceAccountView'];
+				};
+			};
+			404: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	list_account_tokens: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				/** @description Service account id */
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApiTokenView'][];
+				};
+			};
+		};
+	};
+	create_account_token: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				/** @description Service account id */
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['CreateTokenRequest'];
+			};
+		};
+		responses: {
+			201: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['CreatedTokenView'];
+				};
+			};
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	revoke_account_token: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				/** @description Service account id */
+				id: string;
+				/** @description Token id */
+				token_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			204: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content?: never;
+			};
+			404: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
 	list_users: {
 		parameters: {
 			query?: {
@@ -2817,6 +3260,8 @@ export interface operations {
 				limit?: number | null;
 				/** @description Opaque cursor from the previous page's `nextCursor`. */
 				cursor?: string | null;
+				/** @description `human` or `service`. Omit for both. */
+				kind?: string | null;
 			};
 			header?: never;
 			path?: never;

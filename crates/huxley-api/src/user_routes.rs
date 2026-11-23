@@ -49,15 +49,35 @@ pub struct PageParams {
     pub cursor: Option<String>,
 }
 
-/// Lists users.
-#[utoipa::path(get, path = "/api/v1/users", tag = "users", params(PageParams),
+#[derive(Debug, Deserialize, IntoParams)]
+pub struct UserListParams {
+    /// Page size, 1 to 200 (default 50).
+    pub limit: Option<u32>,
+    /// Opaque cursor from the previous page's `nextCursor`.
+    pub cursor: Option<String>,
+    /// `human` or `service`. Omit for both.
+    pub kind: Option<String>,
+}
+
+/// Lists users (people and service accounts; filter with `kind`).
+#[utoipa::path(get, path = "/api/v1/users", tag = "users", params(UserListParams),
     responses((status = 200, body = UserPage), (status = 403, body = ApiError, content_type = "application/problem+json")))]
 pub async fn list_users(
     State(state): State<AppState>,
     authed: Authed,
-    Query(params): Query<PageParams>,
+    Query(params): Query<UserListParams>,
 ) -> ApiResult<Json<UserPage>> {
     authed.require_instance(permissions::USER_READ)?;
+    let kind = match params.kind.as_deref() {
+        None => None,
+        Some("human") => Some(huxley_auth::UserKind::Human),
+        Some("service") => Some(huxley_auth::UserKind::Service),
+        Some(_) => {
+            return Err(
+                ApiError::validation().with_field_error("/kind", "Use `human` or `service`.")
+            );
+        }
+    };
     let page = PageRequest {
         limit: params.limit,
         cursor: params.cursor.map(Cursor::from),
@@ -65,7 +85,7 @@ pub async fn list_users(
     let after: Option<Uuid> = page.cursor.as_ref().map(Cursor::decode).transpose()?;
     let limit = page.limit();
     let mut conn = state.db.acquire().await.map_err(db_err)?;
-    let users = huxley_auth::list_users(&mut conn, after, limit)
+    let users = huxley_auth::list_users(&mut conn, after, limit, kind)
         .await
         .map_err(map_auth)?;
     let page = huxley_core::Page::from_overfetch(users, limit, |u| u.id);

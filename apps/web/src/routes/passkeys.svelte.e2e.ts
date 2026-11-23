@@ -69,7 +69,7 @@ test.describe('passkeys', () => {
 		// Add a passkey from the profile. It's the first second factor, so
 		// recovery codes come with it.
 		await page.goto('/profile');
-		await page.getByLabel('Name').fill('Test laptop');
+		await page.locator('#passkeyName').fill('Test laptop');
 		await page.locator('#passkeyPassword').fill(PASSWORD);
 		await page.getByRole('button', { name: 'Add a passkey' }).click();
 		await expect(page.getByText('Save your recovery codes')).toBeVisible();

@@ -4,7 +4,8 @@
 //! `X-Requested-With: huxley`. Browsers can't add custom headers to
 //! cross-site requests without a CORS preflight, and the API never grants
 //! cross-origin access, so a forged form or link can't satisfy this. Combined
-//! with `SameSite=Lax` session cookies this covers login CSRF too.
+//! with `SameSite=Lax` session cookies this covers login CSRF too. Requests
+//! authenticated with `Authorization: Bearer` are exempt (see below).
 
 use axum::body::Body;
 use axum::middleware::Next;
@@ -25,7 +26,10 @@ pub async fn require_header(request: Request<Body>, next: Next) -> Response {
         .headers()
         .get(HEADER)
         .is_some_and(|v| v.as_bytes() == VALUE.as_bytes());
-    if safe || has_header {
+    // Bearer-token clients (scripts, the CLI) send no cookies, and a browser
+    // can't attach an Authorization header cross-site without a preflight.
+    let bearer = crate::authz::bearer_token(request.headers()).is_some();
+    if safe || has_header || bearer {
         next.run(request).await
     } else {
         ApiError::new(StatusCode::FORBIDDEN, "csrf", "Missing anti-forgery header")

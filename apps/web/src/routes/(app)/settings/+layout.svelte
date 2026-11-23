@@ -10,6 +10,7 @@
 	const hrefs = {
 		organizations: resolve('/(app)/settings/organizations'),
 		users: resolve('/(app)/settings/users'),
+		'service-accounts': resolve('/(app)/settings/service-accounts'),
 		audit: resolve('/(app)/settings/audit'),
 		modules: resolve('/(app)/settings/modules'),
 		security: resolve('/(app)/settings/security'),
