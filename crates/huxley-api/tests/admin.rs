@@ -1429,3 +1429,167 @@ async fn tags_over_http() {
     .await;
     assert_eq!(on[0]["id"], tag["id"]);
 }
+
+/// A multipart upload of one `file` part.
+async fn upload(
+    app: &axum::Router,
+    uri: &str,
+    cookie: &str,
+    name: &str,
+    content_type: &str,
+    data: &[u8],
+) -> (StatusCode, Value) {
+    let boundary = "huxleyboundary";
+    let mut body = format!(
+        "--{boundary}\r\nContent-Disposition: form-data; name=\"file\"; filename=\"{name}\"\r\nContent-Type: {content_type}\r\n\r\n"
+    )
+    .into_bytes();
+    body.extend_from_slice(data);
+    body.extend_from_slice(format!("\r\n--{boundary}--\r\n").as_bytes());
+    let req = Request::post(uri)
+        .header("x-requested-with", "huxley")
+        .header("cookie", cookie)
+        .header(
+            "content-type",
+            format!("multipart/form-data; boundary={boundary}"),
+        )
+        .body(Body::from(body))
+        .unwrap();
+    let res = app.clone().oneshot(req).await.unwrap();
+    let status = res.status();
+    let bytes = res.into_body().collect().await.unwrap().to_bytes();
+    (
+        status,
+        serde_json::from_slice(&bytes).unwrap_or(Value::Null),
+    )
+}
+
+#[tokio::test]
+async fn attachments_over_http() {
+    let Some(pools) = pools().await else { return };
+    let root = ensure_root(&pools).await;
+    let app = app(&pools);
+    let owner = login(&app, &user(&pools, true).await).await;
+    let body = json!({ "parentId": root, "kind": "client", "name": unique("Fileco") });
+    let (_, client) = call(&app, "POST", "/api/v1/orgs", Some(&owner), Some(body)).await;
+    let client_id = client["id"].as_str().unwrap().to_owned();
+    let reader = login(&app, &user(&pools, false).await).await;
+    let (_, me) = call(&app, "GET", "/api/v1/auth/me", Some(&reader), None).await;
+    let (_, roles) = call(&app, "GET", "/api/v1/roles", Some(&owner), None).await;
+    let tech = roles
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|r| r["key"] == "technician")
+        .unwrap()["id"]
+        .clone();
+    let grant = json!({ "userId": me["id"], "roleId": tech, "orgId": client_id });
+    call(
+        &app,
+        "POST",
+        "/api/v1/role-assignments",
+        Some(&owner),
+        Some(grant),
+    )
+    .await;
+    let outsider = login(&app, &user(&pools, false).await).await;
+    let uri = format!("/api/v1/entities/organization/{client_id}/attachments");
+
+    // Readers can't upload; the owner can. An HTML upload is stored as such…
+    let page = b"<script>alert(1)</script>";
+    let (status, _) = upload(&app, &uri, &reader, "x.html", "text/html", page).await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+    let (status, file) = upload(&app, &uri, &owner, "../evil page.html", "text/html", page).await;
+    assert_eq!(status, StatusCode::CREATED, "{file}");
+    assert_eq!(file["filename"], "evil page.html");
+    let id = file["id"].as_str().unwrap().to_owned();
+
+    // …but downloads as an inert attachment, never inline HTML.
+    let req = Request::get(format!("/api/v1/attachments/{id}/content"))
+        .header("cookie", &reader)
+        .body(Body::empty())
+        .unwrap();
+    let res = app.clone().oneshot(req).await.unwrap();
+    assert_eq!(res.status(), StatusCode::OK);
+    let h = res.headers().clone();
+    assert_eq!(h["content-type"], "application/octet-stream");
+    assert!(
+        h["content-disposition"]
+            .to_str()
+            .unwrap()
+            .starts_with("attachment;")
+    );
+    assert_eq!(h["x-content-type-options"], "nosniff");
+    assert!(
+        h["content-security-policy"]
+            .to_str()
+            .unwrap()
+            .contains("sandbox")
+    );
+    assert_eq!(
+        &res.into_body().collect().await.unwrap().to_bytes()[..],
+        page
+    );
+
+    // Outsiders can't see it; readers can't delete it.
+    let (status, _) = call(
+        &app,
+        "GET",
+        &format!("/api/v1/attachments/{id}/content"),
+        Some(&outsider),
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+    let (status, _) = call(&app, "GET", &uri, Some(&outsider), None).await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+    let (status, _) = call(
+        &app,
+        "DELETE",
+        &format!("/api/v1/attachments/{id}"),
+        Some(&reader),
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+    let (_, list) = call(&app, "GET", &uri, Some(&reader), None).await;
+    assert_eq!(list.as_array().unwrap().len(), 1);
+    let (status, _) = call(
+        &app,
+        "DELETE",
+        &format!("/api/v1/attachments/{id}"),
+        Some(&owner),
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::NO_CONTENT);
+    let (_, list) = call(&app, "GET", &uri, Some(&reader), None).await;
+    assert_eq!(list, json!([]));
+}
+
+#[tokio::test]
+async fn uploads_over_the_limit_are_refused() {
+    let Some(pools) = pools().await else { return };
+    let root = ensure_root(&pools).await;
+    let crypto = Crypto::new(pools.app.clone(), huxley_crypto::testing::key_ring());
+    let auth = AuthService::new(pools.app.clone(), AuthConfig::default(), crypto.clone());
+    let config = ApiConfig {
+        login_attempts_per_minute: 1000,
+        ..ApiConfig::default()
+    };
+    let state = AppState::new(pools.app.clone(), auth, crypto, config)
+        .with_storage(huxley_storage::Storage::memory().with_max_upload_bytes(1024));
+    let app = router(state);
+    let owner = login(&app, &user(&pools, true).await).await;
+    let uri = format!("/api/v1/entities/organization/{root}/attachments");
+    let (status, err) = upload(
+        &app,
+        &uri,
+        &owner,
+        "big.bin",
+        "application/octet-stream",
+        &[7u8; 4096],
+    )
+    .await;
+    assert_eq!(status, StatusCode::PAYLOAD_TOO_LARGE, "{err}");
+}

@@ -60,6 +60,10 @@ services:
     restart: unless-stopped
     environment: *huxley-env
     secrets: [db_url, kek]
+    volumes:
+      # Attachments. Back this up with the database (or set
+      # HUXLEY_STORAGE__URL to an s3:// or az:// bucket instead).
+      - huxley-objects:/var/lib/huxley/objects
     depends_on:
       migrate: { condition: service_completed_successfully }
 
@@ -73,6 +77,8 @@ services:
     environment:
       HUXLEY_API_URL: http://huxley:8080
       ORIGIN: https://${HUXLEY_DOMAIN:-localhost}
+      # Uploads pass through the web app (default limit is 512 KB).
+      BODY_SIZE_LIMIT: 30M
       # Behind Caddy: take the client address from the header Caddy sets.
       ADDRESS_HEADER: X-Forwarded-For
       XFF_DEPTH: "1"
@@ -139,6 +145,7 @@ secrets:
 
 volumes:
   postgres-data:
+  huxley-objects:
   valkey-data:
   caddy-data:
   caddy-config:

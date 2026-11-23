@@ -1,12 +1,14 @@
 //! Extensions every entity shares (design doc §8): **custom fields** (typed,
 //! per entity type, optionally scoped to an org subtree, values stored as
-//! JSONB on the entity row) and **tags**. Attachments follow.
+//! JSONB on the entity row), **tags**, and **attachments** (bytes in object
+//! storage, metadata in Postgres).
 //!
 //! An entity type opts in by being listed in [`TYPES`] with its table (which
 //! must have `id` and a `custom_fields jsonb` column) and a way to find its
 //! owning org, which decides RLS and permissions. Organizations come first;
 //! modules add theirs.
 
+pub mod attachments;
 pub mod custom_fields;
 pub mod tags;
 
@@ -52,6 +54,10 @@ pub enum EntityError {
     KeyTaken,
     #[error("a tag with this name already exists")]
     TagNameTaken,
+    #[error("the file is larger than the {0} MB limit")]
+    TooLarge(u64),
+    #[error(transparent)]
+    Storage(#[from] huxley_storage::StorageError),
     #[error(transparent)]
     Db(#[from] sqlx::Error),
 }

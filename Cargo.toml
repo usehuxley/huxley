@@ -25,13 +25,14 @@ huxley-entity = { path = "crates/huxley-entity" }
 huxley-modules = { path = "crates/huxley-modules" }
 huxley-notify = { path = "crates/huxley-notify" }
 huxley-orgs = { path = "crates/huxley-orgs" }
+huxley-storage = { path = "crates/huxley-storage" }
 huxley-telemetry = { path = "crates/huxley-telemetry" }
 
 # Async / HTTP
 tokio = { version = "1.54", features = ["macros", "rt-multi-thread", "signal", "net", "time"] }
 tokio-util = "0.7"
 futures-util = { version = "0.3", default-features = false, features = ["std"] }
-axum = { version = "0.8", features = ["macros"] }
+axum = { version = "0.8", features = ["macros", "multipart"] }
 tower = { version = "0.5", features = ["util"] }
 tower-http = { version = "0.7", features = ["trace", "request-id", "timeout", "limit", "sensitive-headers", "catch-panic", "util"] }
 http = "1.5"
@@ -54,6 +55,8 @@ zeroize = "1.8"
 # MPL-2.0: licence exception approved for these crates only (ADR-012, deny.toml).
 webauthn-rs = { version = "0.6", features = ["danger-allow-state-serialisation", "conditional-ui"] }
 url = "2"
+object_store = { version = "0.14", default-features = false, features = ["fs", "aws", "azure"] }
+bytes = "1"
 lettre = { version = "0.11", default-features = false, features = ["builder", "smtp-transport", "pool", "hostname", "tokio1-rustls-tls"] }
 openidconnect = { version = "4.1", default-features = false, features = ["reqwest", "rustls-tls", "accept-string-booleans"] }
 

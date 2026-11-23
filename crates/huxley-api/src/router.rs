@@ -26,6 +26,11 @@ const MAX_BODY_BYTES: usize = 2 * 1024 * 1024;
 
 /// Builds the full API router with the standard middleware stack.
 pub fn router(state: AppState) -> Router {
+    let body_limit = MAX_BODY_BYTES.max(
+        usize::try_from(state.storage.max_upload_bytes())
+            .unwrap_or(usize::MAX)
+            .saturating_add(1024 * 1024),
+    );
     let api_v1 = Router::new()
         .route("/openapi.json", get(openapi::openapi_json))
         .nest("/auth", auth_routes::routes())
@@ -43,6 +48,11 @@ pub fn router(state: AppState) -> Router {
         .nest("/security", security_routes::routes())
         .merge(user_routes::routes())
         .merge(entity_routes::routes())
+        .merge(entity_routes::attachment_routes(
+            usize::try_from(state.storage.max_upload_bytes())
+                .unwrap_or(usize::MAX)
+                .saturating_add(64 * 1024),
+        ))
         .layer(middleware::from_fn(csrf::require_header));
 
     let stack = ServiceBuilder::new()
@@ -58,7 +68,9 @@ pub fn router(state: AppState) -> Router {
             StatusCode::REQUEST_TIMEOUT,
             REQUEST_TIMEOUT,
         ))
-        .layer(RequestBodyLimitLayer::new(MAX_BODY_BYTES));
+        // The hard cap fits the largest upload. JSON bodies keep axum's own
+        // 2 MB extractor limit; only the upload route raises it.
+        .layer(RequestBodyLimitLayer::new(body_limit));
 
     Router::new()
         .route("/healthz", get(health::healthz))

@@ -13,6 +13,13 @@
 	);
 	let untagged = $derived(data.allTags.filter((t) => !data.tags.some((on) => on.id === t.id)));
 	let tagToAdd = $state('');
+	const dateFormat = new Intl.DateTimeFormat(undefined, { dateStyle: 'medium' });
+	const formatSize = (bytes: number) =>
+		bytes < 1024
+			? `${bytes} B`
+			: bytes < 1024 * 1024
+				? `${(bytes / 1024).toFixed(1)} KB`
+				: `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 	type Tone = 'neutral' | 'accent' | 'success' | 'warning' | 'danger' | 'info';
 
 	const notify: SubmitFunction = () => {
@@ -81,6 +88,60 @@
 				<Button type="submit" disabled={!tagToAdd}>Add</Button>
 			</form>
 		{/if}
+	</Card>
+
+	<Card
+		title="Attachments"
+		description="Contracts, diagrams, and other files for this organization."
+	>
+		<div class="flex flex-col gap-4">
+			{#if data.attachments.length === 0}
+				<p class="text-sm text-fg-muted">No files yet.</p>
+			{:else}
+				<ul class="flex flex-col divide-y divide-border">
+					{#each data.attachments as file (file.id)}
+						<li class="flex items-center justify-between gap-4 py-3 first:pt-0 last:pb-0">
+							<div class="min-w-0">
+								<a
+									href={resolve('/(app)/attachments/[id]', { id: file.id })}
+									data-sveltekit-reload
+									class="text-sm font-medium text-fg hover:underline"
+								>
+									{file.filename}
+								</a>
+								<p class="mt-0.5 text-sm text-fg-muted">
+									{formatSize(file.sizeBytes)} · {file.createdByName ?? 'Someone'} · {dateFormat.format(
+										new Date(file.createdAt)
+									)}
+								</p>
+							</div>
+							{#if canEdit}
+								<form method="POST" action="?/deleteAttachment" use:enhance={notify}>
+									<input type="hidden" name="id" value={file.id} />
+									<Button type="submit" size="sm" aria-label="Delete {file.filename}">
+										Delete
+									</Button>
+								</form>
+							{/if}
+						</li>
+					{/each}
+				</ul>
+			{/if}
+			{#if canEdit}
+				<form
+					method="POST"
+					action="?/upload"
+					enctype="multipart/form-data"
+					class="flex flex-wrap items-end gap-2"
+					use:enhance={notify}
+				>
+					<Field label="File" for="file">
+						<input id="file" name="file" type="file" required class="text-sm text-fg" />
+					</Field>
+					<Button type="submit">Upload</Button>
+				</form>
+			{/if}
+		</div>
 	</Card>
 
 	<Card title="Custom fields" description="Fields your administrators defined for organizations.">

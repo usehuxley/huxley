@@ -68,8 +68,15 @@ async fn spawn_api(
     tracing::info!(addr = %config.http.bind, "api role listening");
     let auth = huxley_auth::AuthService::new(db.clone(), config.auth.clone(), crypto.clone())
         .with_mailer(mailer.clone());
+    let storage = huxley_storage::Storage::from_config(&config.storage)?;
+    storage
+        .check()
+        .await
+        .with_context(|| format!("object storage ({}) isn't writable", storage.describe()))?;
+    tracing::info!(store = storage.describe(), "object storage ready");
     let state =
-        huxley_api::AppState::new(db.clone(), auth, crypto.clone(), config.http.api.clone());
+        huxley_api::AppState::new(db.clone(), auth, crypto.clone(), config.http.api.clone())
+            .with_storage(storage);
     // Real-time notifications: one LISTEN connection per process.
     let broadcaster = state.notifications.clone();
     let (listen_db, listen_stop) = (db.clone(), shutdown.clone());

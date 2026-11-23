@@ -4,6 +4,44 @@
  */
 
 export interface paths {
+	'/api/v1/attachments/{id}': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		post?: never;
+		/** Removes a file from its record. */
+		delete: operations['delete_attachment'];
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/attachments/{id}/content': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/**
+		 * Downloads a file. Always served as a download (never shown inline), with
+		 *     only a few content types passed through, so an uploaded page or script
+		 *     can't run in the app's origin.
+		 */
+		get: operations['download_attachment'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
 	'/api/v1/audit': {
 		parameters: {
 			query?: never;
@@ -584,6 +622,24 @@ export interface paths {
 		put?: never;
 		/** Archives (hides) or restores a field. Stored values are kept. */
 		post: operations['archive_field'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/entities/{entity_type}/{id}/attachments': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** A record's attachments, newest first. */
+		get: operations['list_attachments'];
+		put?: never;
+		/** Uploads a file (multipart field `file`) to a record. */
+		post: operations['upload_attachment'];
 		delete?: never;
 		options?: never;
 		head?: never;
@@ -1413,6 +1469,24 @@ export interface components {
 			 */
 			userId?: string | null;
 		};
+		Attachment: {
+			contentType: string;
+			/** Format: date-time */
+			createdAt: string;
+			/** Format: uuid */
+			createdBy?: string | null;
+			createdByName?: string | null;
+			/** Format: uuid */
+			entityId: string;
+			entityType: string;
+			filename: string;
+			/** Format: uuid */
+			id: string;
+			/** @description Hex SHA-256 of the content. */
+			sha256: string;
+			/** Format: int64 */
+			sizeBytes: number;
+		};
 		AuditEventView: {
 			action: string;
 			/** Format: uuid */
@@ -2131,6 +2205,65 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+	delete_attachment: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				/** @description Attachment id */
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			204: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content?: never;
+			};
+			404: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	download_attachment: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				/** @description Attachment id */
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			/** @description The file */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/octet-stream': unknown;
+				};
+			};
+			404: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
 	list_audit_events: {
 		parameters: {
 			query?: {
@@ -3263,6 +3396,68 @@ export interface operations {
 				};
 				content: {
 					'application/json': components['schemas']['FieldDef'];
+				};
+			};
+		};
+	};
+	list_attachments: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				/** @description e.g. organization */
+				entity_type: string;
+				/** @description Record id */
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['Attachment'][];
+				};
+			};
+		};
+	};
+	upload_attachment: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				/** @description e.g. organization */
+				entity_type: string;
+				/** @description Record id */
+				id: string;
+			};
+			cookie?: never;
+		};
+		/** @description A `file` part */
+		requestBody?: {
+			content: {
+				'multipart/form-data': unknown;
+			};
+		};
+		responses: {
+			201: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['Attachment'];
+				};
+			};
+			/** @description Too large */
+			413: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
 				};
 			};
 		};
