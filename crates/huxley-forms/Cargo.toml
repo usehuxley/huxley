@@ -9,6 +9,9 @@ repository.workspace = true
 publish = false
 
 [dependencies]
+base64.workspace = true
+getrandom.workspace = true
+ring.workspace = true
 huxley-core.workspace = true
 huxley-db.workspace = true
 huxley-engine.workspace = true

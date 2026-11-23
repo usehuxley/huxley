@@ -7,13 +7,19 @@ import type { Actions, PageServerLoad } from './$types';
 export const load: PageServerLoad = async (event) => {
 	const client = api(event);
 	const params = { path: { id: event.params.id } };
-	const [found, submissions] = await Promise.all([
+	const [found, submissions, links] = await Promise.all([
 		client.GET('/api/v1/forms/{id}', { params }),
-		client.GET('/api/v1/forms/{id}/submissions', { params })
+		client.GET('/api/v1/forms/{id}/submissions', { params }),
+		client.GET('/api/v1/forms/{id}/links', { params })
 	]);
 	if (found.response.status === 404) error(404, 'Form not found.');
 	if (!found.data) error(503, 'Could not load the form.');
-	return { form: found.data, submissions: submissions.data ?? [] };
+	return {
+		form: found.data,
+		submissions: submissions.data ?? [],
+		links: links.data ?? [],
+		origin: event.url.origin
+	};
 };
 
 function parse(text: string): unknown {
@@ -55,6 +61,34 @@ export const actions: Actions = {
 			params: { path: { id: event.params.id } }
 		});
 		return { message: 'Archived. It can no longer be submitted.' };
+	},
+	link: async (event) => {
+		const form = await event.request.formData();
+		const expires = formString(form, 'expiresAt');
+		const {
+			data,
+			error: problem,
+			response
+		} = await api(event).POST('/api/v1/forms/{id}/links', {
+			params: { path: { id: event.params.id } },
+			body: {
+				name: formString(form, 'name'),
+				expiresAt: expires ? new Date(expires).toISOString() : null
+			}
+		});
+		if (!data) {
+			return fail(response.status, {
+				message: problemMessage(problem, 'Could not make the link.')
+			});
+		}
+		return { linkToken: data.token };
+	},
+	revokeLink: async (event) => {
+		const linkId = formString(await event.request.formData(), 'linkId');
+		await api(event).POST('/api/v1/forms/{id}/links/{link_id}/revoke', {
+			params: { path: { id: event.params.id, link_id: linkId } }
+		});
+		return { message: 'The link no longer works.' };
 	},
 	restore: async (event) => {
 		await api(event).POST('/api/v1/forms/{id}/restore', {

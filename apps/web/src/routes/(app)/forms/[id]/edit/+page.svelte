@@ -177,6 +177,52 @@
 			{/if}
 		</Card>
 	</div>
+	<Card
+		title="Public links"
+		description="Anyone with a link can fill this form in without signing in. Their runs act as each workflow's run-as account."
+	>
+		{#if form && 'linkToken' in form && form.linkToken}
+			<div class="mb-3 flex flex-col gap-1 text-sm" role="status">
+				<p class="text-fg">The link, shown once:</p>
+				<pre
+					class="overflow-x-auto rounded-control bg-surface-sunken p-2 font-mono text-xs"
+					data-testid="form-link">{data.origin}/f/{form.linkToken}</pre>
+			</div>
+		{/if}
+		{#if data.links.length}
+			<ul class="mb-3 flex flex-col divide-y divide-border text-sm" aria-label="Public links">
+				{#each data.links as link (link.id)}
+					<li class="flex items-center justify-between gap-3 py-2">
+						<span class="min-w-0">
+							<span class="text-fg">{link.name}</span>
+							<span class="text-xs text-fg-muted">
+								{#if link.revokedAt}· turned off{:else if link.expiresAt}· until {when(
+										link.expiresAt
+									)}{/if}
+								· last used {link.lastUsedAt ? when(link.lastUsedAt) : 'never'}
+							</span>
+						</span>
+						{#if !link.revokedAt}
+							<form method="POST" action="?/revokeLink" use:enhance>
+								<input type="hidden" name="linkId" value={link.id} />
+								<Button type="submit" size="sm" variant="danger">Turn off</Button>
+							</form>
+						{/if}
+					</li>
+				{/each}
+			</ul>
+		{/if}
+		<form method="POST" action="?/link" use:enhance class="flex flex-wrap items-end gap-3">
+			<Field label="Link name" for="link-name" hint="Who it's for, e.g. Contoso staff">
+				<Input id="link-name" name="name" required maxlength={200} />
+			</Field>
+			<Field label="Expires (optional)" for="link-expires">
+				<Input id="link-expires" name="expiresAt" type="datetime-local" />
+			</Field>
+			<Button type="submit" variant="secondary">Make a link</Button>
+		</form>
+	</Card>
+
 	<Card title="Recent submissions">
 		{#if data.submissions.length === 0}
 			<p class="text-sm text-fg-muted">None yet.</p>

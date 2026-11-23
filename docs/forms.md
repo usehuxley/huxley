@@ -59,6 +59,18 @@ A choice field can take its choices from a **read-only (GET) integration action*
 
 The choices are looked up for the organization the form is being filled in for, with up to 1,000 per field. On submit, Huxley looks them up again, so an answer must be one of the current choices. Actions other than GET are refused, so filling a form in can't change anything.
 
+## Public links
+
+Under **Public links** on a form's edit page, make a link that anyone can use to fill the form in **without signing in**, for example on a client's intranet or website.
+
+- **One organization:** each link is for one organization, the form's or one below it, and can have an expiry. The link (`/f/hxf_…`) is shown once; only a hash of it is kept. **Turn off** stops it at once.
+- **Who the runs act as:** each workflow's **run-as service account** (or no one), as webhooks do, never a person. A workflow whose run-as account is disabled doesn't start.
+- **What submitters see:** only that their answers were sent, nothing about the runs. Submissions record the link they came through.
+- **Rate limit:** 30 requests a minute per client address.
+- **No looked-up choices:** forms that look choices up through an integration can't have public links, because the lookup would show integration data to anyone with the link. While a form has active links, it can't be changed to look choices up.
+
+Making and turning off links needs `form:manage`.
+
 ## Starting workflows
 
 A workflow listens for a form with a trigger:

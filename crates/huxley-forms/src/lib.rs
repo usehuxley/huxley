@@ -13,8 +13,20 @@
 //! fields' order.
 
 mod hints;
+mod links;
 
 pub use hints::{Choice, OptionsFrom, ShowIf, choices_of, options, shown};
+pub use links::{LinkView, TOKEN_PREFIX, create_link, links, open, revoke_link};
+
+/// Who submitted answers.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Submitter {
+    /// A signed-in person: runs act as them.
+    User(Uuid),
+    /// Someone with a public link: runs act as each workflow's run-as
+    /// service account (or no one), never as a person.
+    Link(Uuid),
+}
 
 use huxley_core::RequestContext;
 use huxley_db::audit::{self, AuditRecord};
@@ -227,6 +239,26 @@ pub async fn update(
         return Err(invalid("key", "a form's key can't change"));
     }
     check(input)?;
+    let public: bool = sqlx::query_scalar(
+        "SELECT EXISTS (SELECT 1 FROM form_links WHERE form_id = $1 AND revoked_at IS NULL \
+                          AND (expires_at IS NULL OR expires_at > now()))",
+    )
+    .bind(id)
+    .fetch_one(&mut *conn)
+    .await?;
+    if public {
+        let proposed = Form {
+            schema: input.schema.clone(),
+            ui: ui(input),
+            ..current.clone()
+        };
+        links::refuse_lookups(&proposed).map_err(|_| {
+            invalid(
+                "ui",
+                "this form has public links, so it can't look choices up through an integration (revoke them first)",
+            )
+        })?;
+    }
     sqlx::query(
         "UPDATE forms SET name = $2, description = $3, schema = $4, ui = $5, updated_at = now() \
           WHERE id = $1",
@@ -352,6 +384,21 @@ pub async fn check_choices(
     }
 }
 
+/// Who a submission's run acts as: the person, or (public links) the
+/// workflow's run-as account; `Err` if that account can't be used.
+async fn actor_for(
+    conn: &mut PgConnection,
+    by: Submitter,
+    workflow_id: Uuid,
+) -> FormResult<Result<Option<Uuid>, String>> {
+    match by {
+        Submitter::User(user) => Ok(Ok(Some(user))),
+        Submitter::Link(_) => huxley_workflows::trigger_actor(conn, workflow_id)
+            .await
+            .map_err(|e| FormError::Db(sqlx::Error::Protocol(e.to_string()))),
+    }
+}
+
 /// What a submission started.
 #[derive(Debug, Clone, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
@@ -375,7 +422,7 @@ pub async fn submit(
     ctx: &RequestContext,
     form_id: Uuid,
     org_id: Uuid,
-    user_id: Option<Uuid>,
+    by: Submitter,
     answers: Json,
 ) -> FormResult<Submitted> {
     let form = get(&mut *conn, form_id).await?;
@@ -383,6 +430,9 @@ pub async fn submit(
         return Err(FormError::Archived);
     }
     let answers = check_answers(&form, &answers)?;
+    if let Submitter::Link(_) = by {
+        links::refuse_lookups(&form)?;
+    }
     let workflows: Vec<(Uuid, String, i32, Json)> = sqlx::query_as(
         "SELECT w.id, w.name, w.current_version, v.document FROM workflow_triggers t \
            JOIN workflows w ON w.id = t.workflow_id \
@@ -403,6 +453,14 @@ pub async fn submit(
             skipped.push(name);
             continue;
         }
+        let actor = match actor_for(&mut *conn, by, workflow_id).await? {
+            Ok(actor) => actor,
+            Err(reason) => {
+                tracing::warn!(%workflow_id, %reason, "public form submission not started");
+                skipped.push(name);
+                continue;
+            }
+        };
         let run = engine
             .start_run(
                 &mut *conn,
@@ -414,25 +472,39 @@ pub async fn submit(
                     trigger_type: "form".into(),
                     trigger: json!({ "form": form.key, "submission": submission_id }),
                     inputs: answers.clone(),
-                    // Form runs act as whoever filled the form in.
-                    actor_id: user_id,
+                    // As whoever filled the form in, or (public links)
+                    // the workflow's run-as account.
+                    actor_id: actor,
                 },
             )
             .await?;
         runs.push(run);
     }
     sqlx::query(
-        "INSERT INTO form_submissions (id, form_id, org_id, submitted_by, data, run_ids) \
-         VALUES ($1, $2, $3, $4, $5, $6)",
+        "INSERT INTO form_submissions (id, form_id, org_id, submitted_by, link_id, data, run_ids) \
+         VALUES ($1, $2, $3, $4, $5, $6, $7)",
     )
     .bind(submission_id)
     .bind(form_id)
     .bind(org_id)
-    .bind(user_id)
+    .bind(match by {
+        Submitter::User(user) => Some(user),
+        Submitter::Link(_) => None,
+    })
+    .bind(match by {
+        Submitter::Link(link) => Some(link),
+        Submitter::User(_) => None,
+    })
     .bind(&answers)
     .bind(&runs)
     .execute(&mut *conn)
     .await?;
+    if let Submitter::Link(link) = by {
+        sqlx::query("UPDATE form_links SET last_used_at = now() WHERE id = $1")
+            .bind(link)
+            .execute(&mut *conn)
+            .await?;
+    }
     audit::record(
         &mut *conn,
         ctx,

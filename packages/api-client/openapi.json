@@ -2436,6 +2436,121 @@
 				}
 			}
 		},
+		"/api/v1/forms/{id}/links": {
+			"get": {
+				"tags": ["forms"],
+				"operationId": "list_form_links",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "array",
+									"items": {
+										"$ref": "#/components/schemas/LinkView"
+									}
+								}
+							}
+						}
+					}
+				}
+			},
+			"post": {
+				"tags": ["forms"],
+				"summary": "A public link: anyone with it can fill the form in for one\norganization, without signing in. Their runs act as each workflow's\nrun-as account. Forms that look choices up can't have one.",
+				"operationId": "create_form_link",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/CreateLinkRequest"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"201": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/CreatedLink"
+								}
+							}
+						}
+					},
+					"422": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/forms/{id}/links/{link_id}/revoke": {
+			"post": {
+				"tags": ["forms"],
+				"summary": "Stops a public link working at once.",
+				"operationId": "revoke_form_link",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					},
+					{
+						"name": "link_id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/LinkView"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
 		"/api/v1/forms/{id}/restore": {
 			"post": {
 				"tags": ["forms"],
@@ -6638,6 +6753,106 @@
 				}
 			}
 		},
+		"/public/forms/{token}": {
+			"get": {
+				"tags": ["forms"],
+				"summary": "The form a public link opens.",
+				"operationId": "get_public_form",
+				"parameters": [
+					{
+						"name": "token",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/PublicForm"
+								}
+							}
+						}
+					},
+					"404": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			},
+			"post": {
+				"tags": ["forms"],
+				"summary": "Submits answers through a public link.",
+				"operationId": "submit_public_form",
+				"parameters": [
+					{
+						"name": "token",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string"
+						}
+					}
+				],
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/PublicSubmission"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"201": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Received"
+								}
+							}
+						}
+					},
+					"404": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					},
+					"422": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					},
+					"429": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
 		"/readyz": {
 			"get": {
 				"tags": ["system"],
@@ -7618,6 +7833,26 @@
 				},
 				"additionalProperties": false
 			},
+			"CreateLinkRequest": {
+				"type": "object",
+				"required": ["name"],
+				"properties": {
+					"expiresAt": {
+						"type": ["string", "null"],
+						"format": "date-time"
+					},
+					"name": {
+						"type": "string",
+						"description": "What it's for, e.g. \"Contoso staff\"."
+					},
+					"orgId": {
+						"type": ["string", "null"],
+						"format": "uuid",
+						"description": "The organization submissions are for: the form's (default) or one\nbelow it."
+					}
+				},
+				"additionalProperties": false
+			},
 			"CreateOrgRequest": {
 				"type": "object",
 				"required": ["parentId", "kind", "name"],
@@ -7735,6 +7970,19 @@
 					"orgId": {
 						"type": "string",
 						"format": "uuid"
+					}
+				}
+			},
+			"CreatedLink": {
+				"type": "object",
+				"required": ["token", "link"],
+				"properties": {
+					"link": {
+						"$ref": "#/components/schemas/LinkView"
+					},
+					"token": {
+						"type": "string",
+						"description": "Shown once: the link is `<web app>/f/<token>`."
 					}
 				}
 			},
@@ -8365,6 +8613,44 @@
 			"Language": {
 				"type": "string",
 				"enum": ["pwsh", "python"]
+			},
+			"LinkView": {
+				"type": "object",
+				"description": "A public link as its managers see it (never the token).",
+				"required": ["id", "formId", "orgId", "name", "createdAt"],
+				"properties": {
+					"createdAt": {
+						"type": "string",
+						"format": "date-time"
+					},
+					"expiresAt": {
+						"type": ["string", "null"],
+						"format": "date-time"
+					},
+					"formId": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"id": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"lastUsedAt": {
+						"type": ["string", "null"],
+						"format": "date-time"
+					},
+					"name": {
+						"type": "string"
+					},
+					"orgId": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"revokedAt": {
+						"type": ["string", "null"],
+						"format": "date-time"
+					}
+				}
 			},
 			"LocalSetting": {
 				"type": "object",
@@ -9279,11 +9565,62 @@
 					}
 				}
 			},
+			"PublicForm": {
+				"type": "object",
+				"description": "What someone with the link sees.",
+				"required": ["name", "schema", "ui"],
+				"properties": {
+					"description": {
+						"type": ["string", "null"]
+					},
+					"name": {
+						"type": "string"
+					},
+					"schema": {
+						"type": "object",
+						"additionalProperties": {},
+						"propertyNames": {
+							"type": "string"
+						}
+					},
+					"ui": {
+						"type": "object",
+						"additionalProperties": {},
+						"propertyNames": {
+							"type": "string"
+						}
+					}
+				}
+			},
+			"PublicSubmission": {
+				"type": "object",
+				"required": ["answers"],
+				"properties": {
+					"answers": {
+						"type": "object",
+						"additionalProperties": {},
+						"propertyNames": {
+							"type": "string"
+						}
+					}
+				},
+				"additionalProperties": false
+			},
 			"PublishRequest": {
 				"type": "object",
 				"properties": {
 					"notes": {
 						"type": ["string", "null"]
+					}
+				}
+			},
+			"Received": {
+				"type": "object",
+				"description": "Only that it was received: nothing about the runs.",
+				"required": ["received"],
+				"properties": {
+					"received": {
+						"type": "boolean"
 					}
 				}
 			},

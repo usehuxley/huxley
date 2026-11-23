@@ -174,4 +174,33 @@ spec:
 			page.getByText('Saved. No workflows are listening for this form yet.')
 		).toBeVisible();
 	});
+
+	test('anyone with a public link can fill a form in', async ({ browser }) => {
+		const page = await signIn(browser);
+		const suffix = Date.now().toString(36);
+		await page.goto('/forms');
+		await page.getByLabel('Name').fill(`Visitor ${suffix}`);
+		await page.getByRole('button', { name: 'Create' }).click();
+		await expect(page.getByRole('heading', { level: 1 })).toHaveText('Edit form');
+		await page.getByLabel('Link name').fill('Website');
+		await page.getByRole('button', { name: 'Make a link' }).click();
+		const url = (await page.getByTestId('form-link').textContent())!.trim();
+		expect(url).toContain('/f/hxf_');
+
+		// A visitor, signed out.
+		const visitor = await (await browser.newContext()).newPage();
+		await visitor.goto(url);
+		await expect(visitor.getByRole('heading', { level: 1 })).toHaveText(`Visitor ${suffix}`);
+		await visitor.getByRole('textbox').first().fill('Ada');
+		await visitor.getByRole('button', { name: 'Send' }).click();
+		await expect(visitor.getByText('Thanks, your answers were sent.')).toBeVisible();
+
+		// Turned off: the link stops working.
+		await expect(page.getByText('last used never')).toBeVisible();
+		await page.reload();
+		await page.getByRole('button', { name: 'Turn off' }).click();
+		await expect(page.getByText('The link no longer works.')).toBeVisible();
+		const gone = await visitor.goto(url);
+		expect(gone?.status()).toBe(404);
+	});
 });
