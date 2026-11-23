@@ -1,22 +1,25 @@
-//! The engine against a real PostgreSQL. Tests share the database (and its
-//! job queue), so each waits for its own run rather than for an empty queue.
+//! The engine against a real PostgreSQL. Each test has a database (and job
+//! queue) of its own: a test process that exits while holding another
+//! test's job would leave it leased past that test's deadline.
 
 use std::time::{Duration, Instant};
 
-use huxley_db::testing::{TestPools, ensure_root, pools, unique};
+use huxley_db::testing::{IsolatedDb, TestPools, ensure_root, isolated, unique};
 use huxley_db::{OrgScope, begin_scoped};
 use huxley_engine::{Engine, RunStatus, StartRun};
 use serde_json::{Value as Json, json};
 use uuid::Uuid;
 
 struct Harness {
+    _db: IsolatedDb,
     pools: TestPools,
     engine: Engine,
     org: Uuid,
 }
 
 async fn harness() -> Option<Harness> {
-    let pools = pools().await?;
+    let db = isolated("engine").await?;
+    let pools = db.pools.clone();
     let root = ensure_root(&pools).await;
     let org = Uuid::now_v7();
     let mut tx = begin_scoped(&pools.app, &OrgScope::System).await.unwrap();
@@ -35,7 +38,12 @@ async fn harness() -> Option<Harness> {
         pools.app.clone(),
         huxley_crypto::Crypto::new(pools.app.clone(), huxley_crypto::testing::key_ring()),
     );
-    Some(Harness { pools, engine, org })
+    Some(Harness {
+        _db: db,
+        pools,
+        engine,
+        org,
+    })
 }
 
 fn document(spec: &str) -> Json {
@@ -608,4 +616,80 @@ async fn subworkflows_stop_at_the_nesting_limit() {
     // The deepest run failed on the limit; the error reaches the root.
     let error = run.error.unwrap().to_string();
     assert!(error.contains("nest at most 8"), "{error}");
+}
+
+#[tokio::test]
+async fn failed_runs_resume_from_the_failed_step() {
+    let Some(h) = harness().await else { return };
+    // Fails until the org variable `resume_flag` exists.
+    let id = h
+        .start(
+            r#"  steps:
+    - { id: first, type: transform, output: "{{ uuid() }}" }
+    - id: loop
+      type: foreach
+      items: "{{ [1, 2, 3] }}"
+      steps:
+        - id: check
+          type: transform
+          output: "{{ vars.resume_flag * item }}"
+  outputs:
+    first: "{{ steps.first.output }}"
+    loop: "{{ steps.loop.output }}"
+  on_error:
+    - { id: report, type: transform, output: reported }
+"#,
+            json!({}),
+        )
+        .await;
+    let failed = h.finish(id).await;
+    assert_eq!(failed.status, RunStatus::Failed, "{failed:?}");
+    let first_output: Json =
+        sqlx::query_scalar("SELECT output FROM step_runs WHERE run_id = $1 AND step_key = 'first'")
+            .bind(id)
+            .fetch_one(&h.pools.owner)
+            .await
+            .unwrap();
+
+    // Fix the cause, then resume.
+    let ctx = huxley_core::RequestContext::system(huxley_core::Via::System);
+    let crypto =
+        huxley_crypto::Crypto::new(h.pools.app.clone(), huxley_crypto::testing::key_ring());
+    let mut tx = begin_scoped(&h.pools.app, &OrgScope::System).await.unwrap();
+    let input = huxley_variables::VariableInput {
+        kind: huxley_variables::VariableType::Number,
+        value: json!(10),
+        description: None,
+        locked: false,
+    };
+    huxley_variables::set(&mut tx, &ctx, &crypto, h.org, "resume_flag", &input)
+        .await
+        .unwrap();
+    tx.commit().await.unwrap();
+    let mut tx = begin_scoped(&h.pools.app, &OrgScope::System).await.unwrap();
+    assert!(h.engine.resume_run(&mut tx, id).await.unwrap());
+    tx.commit().await.unwrap();
+
+    let resumed = h.finish(id).await;
+    assert_eq!(resumed.status, RunStatus::Succeeded, "{resumed:?}");
+    let outputs = resumed.outputs.unwrap();
+    // Steps that had succeeded weren't run again.
+    assert_eq!(outputs["first"], first_output);
+    assert_eq!(outputs["loop"], json!([10, 20, 30]));
+    // The failed attempt is kept, superseded; the retry is attempt 2.
+    let attempts: Vec<(i32, String, bool)> = sqlx::query_as(
+        "SELECT attempt, status::text, superseded FROM step_runs \
+          WHERE run_id = $1 AND step_key = 'check[0]' ORDER BY attempt",
+    )
+    .bind(id)
+    .fetch_all(&h.pools.owner)
+    .await
+    .unwrap();
+    assert_eq!(
+        attempts,
+        vec![(1, "failed".into(), true), (2, "succeeded".into(), false)]
+    );
+    // Only failed runs resume.
+    let mut tx = begin_scoped(&h.pools.app, &OrgScope::System).await.unwrap();
+    assert!(!h.engine.resume_run(&mut tx, id).await.unwrap());
 }

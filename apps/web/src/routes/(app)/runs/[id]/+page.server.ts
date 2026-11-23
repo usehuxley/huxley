@@ -20,6 +20,21 @@ export const load: PageServerLoad = async (event) => {
 };
 
 export const actions: Actions = {
+	resume: async (event) => {
+		const {
+			data,
+			error: problem,
+			response
+		} = await api(event).POST('/api/v1/runs/{id}/resume', {
+			params: { path: { id: event.params.id } }
+		});
+		if (!data) {
+			return fail(response.status, { message: problemMessage(problem, 'Could not resume it.') });
+		}
+		return {
+			message: data.resumed ? 'Resuming from the step that failed.' : 'Only failed runs resume.'
+		};
+	},
 	cancel: async (event) => {
 		const {
 			data,

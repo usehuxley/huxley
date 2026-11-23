@@ -234,6 +234,67 @@ impl Engine {
         Ok(outcome)
     }
 
+    /// Resumes a failed run from where it failed. Failed steps (and those the
+    /// failure cancelled) run again as new attempts; failed control-flow
+    /// steps reopen with their original decision; `on_error` steps are set
+    /// aside so they can run again if needed. Returns false unless the run
+    /// had failed.
+    pub async fn resume_run(&self, conn: &mut PgConnection, run_id: Uuid) -> EngineResult<bool> {
+        let run: Option<RunRow> = sqlx::query_as(
+            "SELECT org_id, workflow_id, workflow_version, document, status, trigger, inputs, \
+                    vars, actor_id, cancel_requested, started_at \
+               FROM runs WHERE id = $1 FOR UPDATE",
+        )
+        .bind(run_id)
+        .fetch_optional(&mut *conn)
+        .await?;
+        let Some(run) = run.filter(|r| r.status == RunStatus::Failed) else {
+            return Ok(false);
+        };
+        let workflow: Workflow = serde_json::from_value(load_document(conn, &run).await?)
+            .map_err(|e| EngineError::Document(e.to_string()))?;
+        let mut on_error = Vec::new();
+        collect_ids(&workflow.spec.on_error, &mut on_error);
+
+        // The latest attempt of each step key, for the updates below.
+        let latest = "s.attempt = (SELECT max(attempt) FROM step_runs l \
+                                    WHERE l.run_id = s.run_id AND l.step_key = s.step_key)";
+        // Reopen failed (or, when the run failed, cancelled) containers,
+        // keeping their decisions.
+        sqlx::query(sqlx::AssertSqlSafe(format!(
+            "UPDATE step_runs s SET status = 'running', error = NULL, finished_at = NULL \
+              WHERE s.run_id = $1 AND NOT s.superseded AND s.status IN ('failed', 'cancelled') \
+                AND s.step_type IN ('if', 'switch', 'foreach', 'parallel', 'try') \
+                AND NOT (s.step_id = ANY($2)) AND {latest}"
+        )))
+        .bind(run_id)
+        .bind(&on_error)
+        .execute(&mut *conn)
+        .await?;
+        // Set aside failed and cancelled steps, and everything on_error did.
+        sqlx::query(sqlx::AssertSqlSafe(format!(
+            "UPDATE step_runs SET superseded = true \
+              WHERE run_id = $1 AND NOT superseded \
+                AND (step_id = ANY($2) OR step_key IN ( \
+                     SELECT s.step_key FROM step_runs s \
+                      WHERE s.run_id = $1 AND NOT s.superseded \
+                        AND s.status IN ('failed', 'cancelled') AND {latest}))"
+        )))
+        .bind(run_id)
+        .bind(&on_error)
+        .execute(&mut *conn)
+        .await?;
+        sqlx::query(
+            "UPDATE runs SET status = 'running', error = NULL, outputs = NULL, finished_at = NULL, \
+                    started_at = NULL WHERE id = $1",
+        )
+        .bind(run_id)
+        .execute(&mut *conn)
+        .await?;
+        queue::enqueue_advance(conn, run.org_id, run_id).await?;
+        Ok(true)
+    }
+
     /// The run's deadline passed: advance it, which fails it.
     pub(crate) async fn deadline(&self, job: &Job, worker: &str) -> EngineResult<()> {
         let mut tx = begin_scoped(&self.db, &OrgScope::System).await?;
@@ -243,6 +304,15 @@ impl Engine {
         queue::complete(&mut tx, job.id, worker).await?;
         tx.commit().await?;
         Ok(())
+    }
+}
+
+fn collect_ids(steps: &[huxley_hwf::Step], out: &mut Vec<String>) {
+    for step in steps {
+        out.push(step.id().to_owned());
+        for (_, block) in step.blocks() {
+            collect_ids(block, out);
+        }
     }
 }
 

@@ -3030,6 +3030,35 @@
 				}
 			}
 		},
+		"/api/v1/runs/{id}/resume": {
+			"post": {
+				"tags": ["workflows"],
+				"summary": "Resumes a failed run from the step that failed: steps that succeeded\naren't run again.",
+				"operationId": "resume_run",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ResumeRunResponse"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
 		"/api/v1/security/mfa-policy": {
 			"get": {
 				"tags": ["security"],
@@ -6559,6 +6588,16 @@
 					},
 					"value": {
 						"description": "The effective value; always `null` for secrets."
+					}
+				}
+			},
+			"ResumeRunResponse": {
+				"type": "object",
+				"required": ["resumed"],
+				"properties": {
+					"resumed": {
+						"type": "boolean",
+						"description": "False unless the run had failed."
 					}
 				}
 			},

@@ -1,4 +1,4 @@
-import { expect, test, type Browser, type Page } from '@playwright/test';
+import { expect, request, test, type Browser, type Page } from '@playwright/test';
 
 // Full-stack: needs the API (with its workers) and a bootstrapped owner.
 const ownerEmail = process.env.E2E_EMAIL;
@@ -130,5 +130,44 @@ test.describe('workflows', () => {
 		await page.getByRole('button', { name: 'Test run the draft' }).click();
 		await expect(page.getByText('Succeeded').first()).toBeVisible({ timeout: 20_000 });
 		await expect(page.getByLabel('Run outputs')).toContainText('"greeting": "Howdy Ada"');
+	});
+
+	test('a failed run resumes after the cause is fixed', async ({ browser }) => {
+		const page = await signIn(browser);
+		const suffix = Date.now().toString(36);
+		const flag = `flag_${suffix}`;
+		await page.goto('/workflows');
+		const key = `resume-${suffix}`;
+		await page.getByLabel('Name').fill(`Greeter ${key}`);
+		await page.getByLabel('Key').fill(key);
+		await page.getByRole('button', { name: 'Create' }).click();
+		await page
+			.getByRole('textbox', { name: 'Workflow YAML' })
+			.fill(definition(key, `{{ vars.${flag}.upper() }} {{ inputs.name }}`));
+		await page.getByRole('button', { name: 'Save draft' }).click();
+		await expect(page.getByRole('list', { name: 'Problems' })).toHaveCount(0);
+		await page.getByRole('textbox', { name: 'Inputs' }).fill('{"name": "Bo"}');
+		await page.getByRole('button', { name: 'Test run the draft' }).click();
+		await expect(page.getByText('Failed').first()).toBeVisible({ timeout: 20_000 });
+
+		// Fix the cause (the variable is missing), then resume.
+		const api = await request.newContext({
+			baseURL: apiUrl,
+			extraHTTPHeaders: { 'x-requested-with': 'huxley' }
+		});
+		await api.post('/api/v1/auth/login', { data: { email: ownerEmail, password: ownerPassword } });
+		const orgs = (await (await api.get('/api/v1/orgs')).json()) as { id: string; name: string }[];
+		const root = orgs.find((o) => o.name === 'E2E MSP')!;
+		const set = await api.put(`/api/v1/orgs/${root.id}/variables/${flag}`, {
+			data: { type: 'string', value: 'hey' }
+		});
+		expect(set.status()).toBe(204);
+		await api.dispose();
+		await page.getByRole('button', { name: 'Resume' }).click();
+		await expect(page.getByText('Succeeded').first()).toBeVisible({ timeout: 20_000 });
+		await expect(page.getByLabel('Run outputs')).toContainText('"greeting": "HEY Bo"');
+
+		await page.goto('/runs?status=succeeded');
+		await expect(page.getByRole('list', { name: 'Runs' })).toContainText(`Greeter ${key}`);
 	});
 });

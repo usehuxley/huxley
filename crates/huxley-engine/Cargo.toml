@@ -37,6 +37,7 @@ zeroize.workspace = true
 secrecy.workspace = true
 sqlx.workspace = true
 tokio.workspace = true
+huxley-variables.workspace = true
 huxley-expr.workspace = true
 huxley-hwf.workspace = true
 huxley-workflows.workspace = true
