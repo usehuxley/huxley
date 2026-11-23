@@ -170,7 +170,10 @@ fn action_changes(before: &Action, after: &Action) -> Vec<Change> {
         required(&before.input_schema),
         required(&after.input_schema),
     );
-    for (name, old_schema) in old_props.into_iter().flatten() {
+    // Sorted, so the report doesn't depend on how maps keep their order.
+    let mut old_sorted: Vec<(&String, &Json)> = old_props.into_iter().flatten().collect();
+    old_sorted.sort_by_key(|(name, _)| *name);
+    for (name, old_schema) in old_sorted {
         match new_props.and_then(|p| p.get(name)) {
             None => changes.push(breaking(format!("input {name} was removed"))),
             Some(new_schema) => {
@@ -186,7 +189,13 @@ fn action_changes(before: &Action, after: &Action) -> Vec<Change> {
             }
         }
     }
-    for name in new_props.into_iter().flatten().map(|(n, _)| n.as_str()) {
+    let mut new_names: Vec<&str> = new_props
+        .into_iter()
+        .flatten()
+        .map(|(n, _)| n.as_str())
+        .collect();
+    new_names.sort_unstable();
+    for name in new_names {
         let is_new = old_props.is_none_or(|p| !p.contains_key(name));
         if new_required.contains(name) && (is_new || !old_required.contains(name)) {
             changes.push(breaking(format!("input {name} is now required")));
