@@ -45,10 +45,40 @@ pub struct Config {
     pub storage: StorageConfig,
     #[serde(default)]
     pub engine: EngineConfig,
+    #[serde(default)]
+    pub runners: RunnersConfig,
     /// Apply migrations at startup. Convenient for single-node installs; larger
     /// deployments run `huxley migrate` as a separate step before rollout.
     #[serde(default)]
     pub migrate_on_start: bool,
+}
+
+/// The runner gateway (ADR-025): where script runners connect with mTLS.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(default)]
+pub struct RunnersConfig {
+    /// Where the API role serves the gateway; unset: no gateway.
+    pub bind: Option<SocketAddr>,
+    /// Names (or IPs) runners use to reach the gateway: its certificate
+    /// covers them.
+    pub hosts: Vec<String>,
+    /// The gateway's address as runners see it, e.g.
+    /// `https://runners.example.com:8443`, told to them at enrolment.
+    pub public_url: Option<String>,
+    /// A PEM bundle of your own CA(s): runners with certificates from it
+    /// are accepted when registered by name.
+    pub client_ca_file: Option<std::path::PathBuf>,
+}
+
+impl Default for RunnersConfig {
+    fn default() -> Self {
+        Self {
+            bind: None,
+            hosts: vec!["localhost".into()],
+            public_url: None,
+            client_ca_file: None,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Deserialize)]

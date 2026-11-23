@@ -1,0 +1,45 @@
+[package]
+name = "huxley-runners"
+description = "Script runners: identity (ADR-025), the gRPC gateway, and the runner protocol"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[dependencies]
+base64.workspace = true
+getrandom.workspace = true
+huxley-core.workspace = true
+huxley-crypto.workspace = true
+huxley-db.workspace = true
+ring.workspace = true
+rustls.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sqlx.workspace = true
+utoipa.workspace = true
+uuid.workspace = true
+x509-parser.workspace = true
+tokio.workspace = true
+tokio-stream.workspace = true
+tokio-util.workspace = true
+zeroize.workspace = true
+prost.workspace = true
+rcgen.workspace = true
+thiserror.workspace = true
+time.workspace = true
+tonic.workspace = true
+tonic-prost.workspace = true
+
+[dev-dependencies]
+huxley-crypto = { workspace = true, features = ["testing"] }
+huxley-db = { workspace = true, features = ["testing"] }
+
+[build-dependencies]
+protox.workspace = true
+tonic-prost-build.workspace = true
+
+[lints]
+workspace = true

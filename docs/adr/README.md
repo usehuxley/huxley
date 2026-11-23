@@ -28,3 +28,4 @@ Decisions that shape Huxley. Add a new ADR by copying `0000-template.md` with th
 | [022](0022-visual-workflow-editor-as-nested-blocks.md) | The visual workflow editor shows nested blocks, not a free-form graph | Accepted |
 | [023](0023-integration-definitions-from-openapi.md) | Integration definitions come from OpenAPI through a tolerant importer | Accepted |
 | [024](0024-callbacks-hand-their-url-over-in-the-step.md) | A callback step hands its URL over itself | Accepted |
+| [025](0025-runner-identity.md) | Runners prove who they are with client certificates from Huxley or from you | Accepted |

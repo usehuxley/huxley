@@ -77,6 +77,11 @@ async fn spawn_api(
     let state =
         huxley_api::AppState::new(db.clone(), auth, crypto.clone(), config.http.api.clone())
             .with_storage(storage);
+    let state = huxley_api::AppState {
+        runner_gateway_url: config.runners.public_url.clone(),
+        ..state
+    };
+    spawn_runner_gateway(tasks, config, db, crypto, shutdown).await?;
     // Real-time notifications: one LISTEN connection per process.
     let broadcaster = state.notifications.clone();
     let (listen_db, listen_stop) = (db.clone(), shutdown.clone());
@@ -224,6 +229,41 @@ fn flatten(
         Some(Ok(Err(e))) => Err(e),
         Some(Err(e)) => Err(anyhow::Error::new(e).context("role task panicked")),
     }
+}
+
+/// The runner gateway (ADR-025), when `runners.bind` is set.
+async fn spawn_runner_gateway(
+    tasks: &mut Tasks,
+    config: &Config,
+    db: &huxley_db::sqlx::PgPool,
+    crypto: &huxley_crypto::Crypto,
+    shutdown: &CancellationToken,
+) -> anyhow::Result<()> {
+    let Some(bind) = config.runners.bind else {
+        return Ok(());
+    };
+    let extra = match &config.runners.client_ca_file {
+        Some(path) => Some(
+            std::fs::read_to_string(path)
+                .with_context(|| format!("failed to read {}", path.display()))?,
+        ),
+        None => None,
+    };
+    let tls = huxley_runners::gateway::tls(db, crypto, &config.runners.hosts, extra.as_deref())
+        .await
+        .context("runner gateway certificate")?;
+    let listener = tokio::net::TcpListener::bind(bind)
+        .await
+        .with_context(|| format!("failed to bind the runner gateway on {bind}"))?;
+    tracing::info!(addr = %bind, "runner gateway listening");
+    let gateway = huxley_runners::gateway::Gateway::new(db.clone(), crypto.clone());
+    let token = shutdown.clone();
+    tasks.spawn(async move {
+        huxley_runners::gateway::serve(gateway, listener, &tls, token)
+            .await
+            .context("runner gateway failed")
+    });
+    Ok(())
 }
 
 #[cfg(test)]

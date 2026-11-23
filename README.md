@@ -77,6 +77,8 @@ Integrations are APIs imported from their OpenAPI or Swagger specs, for workflow
 
 Forms are questions people answer to start workflows; see [docs/forms.md](docs/forms.md).
 
+Script runners execute library scripts in sandboxes, and connect with client certificates; see [docs/runners.md](docs/runners.md).
+
 Then open https://localhost (staff app) and https://portal.localhost (client portal). Set `HUXLEY_DOMAIN` and `HUXLEY_PORTAL_DOMAIN` in `.env` for real hostnames; Caddy obtains certificates automatically.
 
 ### Rotating the key-encryption key
@@ -125,6 +127,10 @@ The server reads, in increasing precedence: built-in defaults, `huxley.toml`, th
 | `HUXLEY_ENGINE__EGRESS__DENIED_HOSTS` | (empty) | Host names workflows may never reach |
 | `HUXLEY_ENGINE__EGRESS__MAX_RESPONSE_BYTES` | `1048576` | Largest response body an HTTP step reads |
 | `HUXLEY_ENGINE__PAYLOAD__SPILL_KB` | `256` | Workflow step inputs and outputs larger than this go to object storage, with a marker in the database; `0` keeps them all in the database |
+| `HUXLEY_RUNNERS__BIND` | (unset) | Where the API role serves the script runner gateway (gRPC, mutual TLS), e.g. `0.0.0.0:8443`. Unset: no gateway. |
+| `HUXLEY_RUNNERS__HOSTS` | `[localhost]` | Names runners use to reach the gateway; its certificate (from Huxley's runner CA) covers them |
+| `HUXLEY_RUNNERS__PUBLIC_URL` | (unset) | The gateway's address as runners see it, e.g. `https://runners.example.com:8443`, told to them at enrolment |
+| `HUXLEY_RUNNERS__CLIENT_CA_FILE` | (unset) | A PEM bundle of your own CA: runners with certificates from it are accepted when registered by name |
 | `HUXLEY_HTTP__BIND` | `0.0.0.0:8080` | API listen address |
 | `HUXLEY_MIGRATE_ON_START` | `false` | Apply migrations at startup |
 | `HUXLEY_ROLES` | `all` | `api`, `worker`, `scheduler`, or `all` |

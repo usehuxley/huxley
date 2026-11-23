@@ -6,6 +6,7 @@
 mod admin;
 mod config;
 mod roles;
+mod runner;
 mod shutdown;
 
 use std::path::PathBuf;
@@ -53,6 +54,11 @@ enum Command {
         #[command(subcommand)]
         command: admin::AdminCommand,
     },
+    /// Run a script runner (enrol it first).
+    Runner {
+        #[command(subcommand)]
+        command: runner::RunnerCommand,
+    },
     /// Probe a running server's /healthz and exit 0 if healthy. Used by
     /// container health checks, since the runtime image has no curl.
     Healthcheck {
@@ -67,6 +73,13 @@ async fn main() -> anyhow::Result<()> {
 
     match cli.command {
         Command::Healthcheck { addr } => healthcheck(addr),
+        Command::Runner { command } => {
+            let telemetry =
+                huxley_telemetry::init(&huxley_telemetry::TelemetryConfig::default(), "runner")?;
+            let result = runner::run(command).await;
+            telemetry.shutdown();
+            result
+        }
         Command::Admin { command } => {
             let config = Config::load(cli.config.as_deref())?;
             let telemetry = huxley_telemetry::init(&config.telemetry, "admin")?;

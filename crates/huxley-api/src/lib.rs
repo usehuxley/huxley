@@ -26,6 +26,7 @@ pub mod passkey_routes;
 pub mod problem;
 pub mod rate_limit;
 mod router;
+mod runner_routes;
 mod script_routes;
 pub mod security_routes;
 pub mod session;
@@ -92,6 +93,8 @@ pub struct AppState {
     pub storage: Storage,
     /// Starts and cancels workflow runs (workers execute them).
     pub engine: huxley_engine::Engine,
+    /// Where runners connect (`runners.public_url`), told to them at enrolment.
+    pub runner_gateway_url: Option<String>,
     pub config: Arc<ApiConfig>,
     pub login_limiter: Arc<RateLimiter>,
 }
@@ -113,6 +116,7 @@ impl AppState {
             run_changes: Broadcaster::for_channel(huxley_engine::runs::RUN_CHANGES),
             storage: Storage::memory(),
             engine,
+            runner_gateway_url: None,
             auth,
             crypto,
             config: Arc::new(config),
