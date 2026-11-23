@@ -835,6 +835,27 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
+	'/api/v1/integrations/actions': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/**
+		 * The actions workflows in an organization can call: those of the
+		 *     nearest integration with each key, in the organization or above. For
+		 *     the workflow editor's action picker.
+		 */
+		get: operations['list_available_actions'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
 	'/api/v1/integrations/{id}': {
 		parameters: {
 			query?: never;
@@ -2179,6 +2200,21 @@ export interface components {
 		ActionChanges: {
 			changes: components['schemas']['Change'][];
 			key: string;
+		};
+		/** @description An action a workflow in some organization can call: for pickers. */
+		ActionOption: {
+			/** @description What a step's `action` says: `<integration>/<action>`. */
+			action: string;
+			deprecated: boolean;
+			group?: string | null;
+			/** @description Input names, required ones first. */
+			inputs: string[];
+			integration: string;
+			integrationName: string;
+			method: string;
+			name: string;
+			path: string;
+			required: string[];
 		};
 		AffectedStep: {
 			action: string;
@@ -5306,6 +5342,28 @@ export interface operations {
 				};
 				content: {
 					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	list_available_actions: {
+		parameters: {
+			query: {
+				/** @description The organization a workflow belongs to. */
+				orgId: string;
+			};
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ActionOption'][];
 				};
 			};
 		};

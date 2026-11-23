@@ -3,7 +3,7 @@
 
 use std::collections::HashMap;
 
-use axum::extract::{DefaultBodyLimit, Path, State};
+use axum::extract::{DefaultBodyLimit, Path, Query, State};
 use axum::http::StatusCode;
 use axum::routing::{get, post, put};
 use axum::{Json, Router};
@@ -14,7 +14,7 @@ use huxley_integrations::store::{
     self, IntegrationDetail, IntegrationSummary, IntegrationVersion, StoreError, UpdatePreview,
 };
 use serde::Deserialize;
-use utoipa::ToSchema;
+use utoipa::{IntoParams, ToSchema};
 use uuid::Uuid;
 
 use crate::authz::Authed;
@@ -26,6 +26,7 @@ pub const MAX_IMPORT_BYTES: usize = huxley_integrations::MAX_SPEC_BYTES + 1024 *
 pub fn routes() -> Router<AppState> {
     Router::new()
         .route("/", get(list).post(create))
+        .route("/actions", get(actions))
         .route("/{id}", get(detail))
         .route("/{id}/spec", put(update))
         .route("/{id}/preview", post(preview))
@@ -278,4 +279,36 @@ pub async fn versions(
     let versions = store::versions(&mut tx, id).await.map_err(map_store)?;
     tx.commit().await.map_err(db_err)?;
     Ok(Json(versions))
+}
+
+#[derive(Debug, Deserialize, IntoParams)]
+#[serde(rename_all = "camelCase")]
+#[into_params(parameter_in = Query)]
+pub struct ActionsQuery {
+    /// The organization a workflow belongs to.
+    pub org_id: Uuid,
+}
+
+/// The actions workflows in an organization can call: those of the
+/// nearest integration with each key, in the organization or above. For
+/// the workflow editor's action picker.
+#[utoipa::path(get, path = "/api/v1/integrations/actions", operation_id = "list_available_actions", tag = "integrations",
+    params(ActionsQuery), responses((status = 200, body = Vec<huxley_integrations::usage::ActionOption>)))]
+pub async fn actions(
+    State(state): State<AppState>,
+    authed: Authed,
+    Query(query): Query<ActionsQuery>,
+) -> ApiResult<Json<Vec<huxley_integrations::usage::ActionOption>>> {
+    authed
+        .require_at(&state, permissions::WORKFLOW_READ, query.org_id)
+        .await?;
+    // Integrations usually live above the workflow's organization.
+    let mut tx = begin_scoped(&state.db, &OrgScope::System)
+        .await
+        .map_err(db_err)?;
+    let options = huxley_integrations::usage::available_actions(&mut tx, query.org_id)
+        .await
+        .map_err(db_err)?;
+    tx.commit().await.map_err(db_err)?;
+    Ok(Json(options))
 }

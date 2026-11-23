@@ -118,6 +118,7 @@
 							readonly={!canWrite || archived}
 							bind:dirty={visualDirty}
 							bind:document={visualDocument}
+							actions={data.actions}
 						/>
 						{#if canWrite && !archived}
 							<div class="flex items-center gap-3">

@@ -2141,6 +2141,39 @@
 				}
 			}
 		},
+		"/api/v1/integrations/actions": {
+			"get": {
+				"tags": ["integrations"],
+				"summary": "The actions workflows in an organization can call: those of the\nnearest integration with each key, in the organization or above. For\nthe workflow editor's action picker.",
+				"operationId": "list_available_actions",
+				"parameters": [
+					{
+						"name": "orgId",
+						"in": "query",
+						"description": "The organization a workflow belongs to.",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "array",
+									"items": {
+										"$ref": "#/components/schemas/ActionOption"
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		},
 		"/api/v1/integrations/{id}": {
 			"get": {
 				"tags": ["integrations"],
@@ -5746,6 +5779,61 @@
 					},
 					"key": {
 						"type": "string"
+					}
+				}
+			},
+			"ActionOption": {
+				"type": "object",
+				"description": "An action a workflow in some organization can call: for pickers.",
+				"required": [
+					"action",
+					"integration",
+					"integrationName",
+					"name",
+					"method",
+					"path",
+					"inputs",
+					"required",
+					"deprecated"
+				],
+				"properties": {
+					"action": {
+						"type": "string",
+						"description": "What a step's `action` says: `<integration>/<action>`."
+					},
+					"deprecated": {
+						"type": "boolean"
+					},
+					"group": {
+						"type": ["string", "null"]
+					},
+					"inputs": {
+						"type": "array",
+						"items": {
+							"type": "string"
+						},
+						"description": "Input names, required ones first."
+					},
+					"integration": {
+						"type": "string"
+					},
+					"integrationName": {
+						"type": "string"
+					},
+					"method": {
+						"type": "string"
+					},
+					"name": {
+						"type": "string"
+					},
+					"path": {
+						"type": "string"
+					},
+					"required": {
+						"type": "array",
+						"items": {
+							"type": "string"
+						}
 					}
 				}
 			},

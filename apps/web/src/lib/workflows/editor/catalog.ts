@@ -4,7 +4,7 @@
  * blocks it holds (ADR-020, ADR-022).
  */
 
-export type FieldKind = 'text' | 'expression' | 'number' | 'boolean' | 'json' | 'select';
+export type FieldKind = 'text' | 'expression' | 'number' | 'boolean' | 'json' | 'select' | 'action';
 
 export interface FieldSpec {
 	/** Dotted path within the step, e.g. `with.url`. */
@@ -75,6 +75,28 @@ export const STEPS: StepSpec[] = [
 			{ path: 'with.title', label: 'Title', kind: 'expression' },
 			{ path: 'with.message', label: 'Message', kind: 'expression' },
 			{ path: 'with.url', label: 'Link', kind: 'text', hint: 'A path in the app, e.g. /runs' }
+		]
+	},
+	{
+		type: 'integration.action',
+		label: 'Integration action',
+		description: 'Call an action of an imported integration.',
+		group: 'Actions',
+		template: { action: '', with: {} },
+		fields: [
+			{ path: 'action', label: 'Action', kind: 'action' },
+			{
+				path: 'connection',
+				label: 'Connection key',
+				kind: 'text',
+				hint: 'Optional; by default the nearest connection to the integration'
+			},
+			{
+				path: 'with',
+				label: 'Inputs',
+				kind: 'json',
+				hint: 'Parameters by name; the request body as body'
+			}
 		]
 	},
 	{
@@ -307,6 +329,8 @@ export function summary(step: Step): string {
 			return `${text(getField(step, 'with.to'))}: ${text(getField(step, 'with.title'))}`;
 		case 'subworkflow':
 			return text(step.workflow);
+		case 'integration.action':
+			return text(step.action);
 		case 'transform':
 			return text(step.output);
 		case 'set_var':

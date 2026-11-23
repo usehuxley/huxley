@@ -448,3 +448,69 @@ async fn action_steps_are_checked_and_updates_show_who_they_break() {
     assert_eq!(preview["diff"]["breaking"], false, "{preview}");
     assert_eq!(preview["affected"], json!([]));
 }
+
+#[tokio::test]
+async fn workflows_see_the_actions_of_the_nearest_integrations() {
+    let Some(pools) = pools().await else { return };
+    let app = app(&pools);
+    let msp = provider_org(&pools).await;
+    let ctx = RequestContext::system(Via::System);
+    let mut tx = begin_scoped(&pools.app, &OrgScope::System).await.unwrap();
+    let client = huxley_orgs::create(
+        &mut tx,
+        &ctx,
+        msp,
+        huxley_orgs::OrgKind::Client,
+        &unique("Client"),
+    )
+    .await
+    .unwrap()
+    .id;
+    tx.commit().await.unwrap();
+    let owner = login(&app, &user(&pools, true).await.1).await;
+    let import = |org: Uuid, spec: &'static str| {
+        let (app, owner) = (app.clone(), owner.clone());
+        async move {
+            call(
+                &app,
+                "POST",
+                "/api/v1/integrations",
+                &owner,
+                Some(json!({ "orgId": org, "key": "widgets", "spec": spec })),
+            )
+            .await
+        }
+    };
+    import(msp, SPEC_V1).await;
+
+    let uri = format!("/api/v1/integrations/actions?orgId={client}");
+    let (status, actions) = call(&app, "GET", &uri, &owner, None).await;
+    assert_eq!(status, StatusCode::OK, "{actions}");
+    // Integrations in the shared test root are visible too: look at ours.
+    let ours = |actions: &Value| -> Vec<Value> {
+        actions
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|a| a["integration"] == "widgets")
+            .cloned()
+            .collect()
+    };
+    let mine = ours(&actions);
+    let keys: Vec<&str> = mine.iter().map(|a| a["action"].as_str().unwrap()).collect();
+    assert_eq!(keys, vec!["widgets/listWidgets", "widgets/listWidgets_2"]);
+    assert_eq!(mine[1]["required"], json!(["id"]));
+
+    // The client's own "widgets" wins over the MSP's.
+    import(client, SPEC_V2).await;
+    let (_, actions) = call(&app, "GET", &uri, &owner, None).await;
+    let mine = ours(&actions);
+    assert_eq!(mine.len(), 1);
+    assert_eq!(mine[0]["action"], "widgets/makeWidget");
+
+    let stranger = login(&app, &user(&pools, false).await.1).await;
+    assert_eq!(
+        call(&app, "GET", &uri, &stranger, None).await.0,
+        StatusCode::NOT_FOUND
+    );
+}

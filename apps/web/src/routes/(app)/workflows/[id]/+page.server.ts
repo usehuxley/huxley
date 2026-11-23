@@ -17,12 +17,16 @@ export const load: PageServerLoad = async (event) => {
 	]);
 	if (workflow.response.status === 404) error(404, 'Workflow not found.');
 	if (!workflow.data) error(503, 'Could not load the workflow.');
+	const actions = await client.GET('/api/v1/integrations/actions', {
+		params: { query: { orgId: workflow.data.orgId } }
+	});
 	// Only those who manage service accounts may pick one to run as.
 	const { user } = await event.parent();
 	const accounts = user.grantedPermissions.includes('service_account:manage')
 		? ((await client.GET('/api/v1/service-accounts')).data ?? [])
 		: [];
 	return {
+		actions: actions.data ?? [],
 		serviceAccounts: accounts
 			.filter((a) => a.status === 'active')
 			.map((a) => ({ id: a.id, name: a.displayName })),
