@@ -9051,6 +9051,10 @@
 				"description": "A trigger as the app shows it.",
 				"required": ["triggerId", "type"],
 				"properties": {
+					"lastError": {
+						"type": ["string", "null"],
+						"description": "Polls: why the last check failed, if it did."
+					},
 					"lastRunAt": {
 						"type": ["string", "null"],
 						"format": "date-time"

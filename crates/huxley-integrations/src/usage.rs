@@ -45,6 +45,19 @@ pub fn action_uses(workflow: &Workflow) -> Vec<ActionUse> {
         }
     }
     let mut out = Vec::new();
+    // Poll triggers call a list action too.
+    for (i, trigger) in workflow.spec.triggers.iter().enumerate() {
+        if let huxley_hwf::Trigger::Poll(p) = trigger
+            && let Some((integration, action)) = p.action.split_once('/')
+        {
+            out.push(ActionUse {
+                path: format!("spec.triggers[{i}]"),
+                step_id: p.id.clone().unwrap_or_else(|| "poll".into()),
+                integration: integration.to_owned(),
+                action: action.to_owned(),
+            });
+        }
+    }
     visit("spec.steps", &workflow.spec.steps, &mut out);
     visit("spec.on_error", &workflow.spec.on_error, &mut out);
     out

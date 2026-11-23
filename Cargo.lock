@@ -2096,6 +2096,7 @@ dependencies = [
 name = "huxley-triggers"
 version = "0.1.0"
 dependencies = [
+ "axum",
  "base64 0.23.1",
  "huxley-core",
  "huxley-crypto",
@@ -2103,6 +2104,7 @@ dependencies = [
  "huxley-engine",
  "huxley-expr",
  "huxley-hwf",
+ "huxley-integrations",
  "huxley-orgs",
  "huxley-variables",
  "huxley-workflows",

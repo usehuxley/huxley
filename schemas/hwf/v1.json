@@ -226,6 +226,13 @@
       ],
       "type": "object"
     },
+    "PollOn": {
+      "enum": [
+        "new",
+        "new_or_changed"
+      ],
+      "type": "string"
+    },
     "RetryPolicy": {
       "additionalProperties": false,
       "properties": {
@@ -1653,6 +1660,65 @@
           "required": [
             "type",
             "event"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "New (or changed) items from an integration's list action, checked at\nan interval.",
+          "properties": {
+            "action": {
+              "description": "The list action: `<integration key>/<action key>`.",
+              "type": "string"
+            },
+            "connection": {
+              "description": "A connection key; default: the nearest one, as for action steps.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "id": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "interval": {
+              "description": "How often to check, e.g. `5m` (at least `1m`).",
+              "type": "string"
+            },
+            "item_id": {
+              "description": "The field that identifies an item (dotted path; default `id`).",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "items": {
+              "description": "Where the list is in the response, as a dotted path (e.g. `value`);\nby default the response is the list.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "on": {
+              "$ref": "#/$defs/PollOn",
+              "default": "new",
+              "description": "Start runs for new items only (default), or for changed ones too."
+            },
+            "type": {
+              "const": "poll",
+              "type": "string"
+            },
+            "with": {
+              "description": "The action's inputs, passed as they are (not expressions)."
+            }
+          },
+          "required": [
+            "type",
+            "action",
+            "interval"
           ],
           "type": "object"
         },
