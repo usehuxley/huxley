@@ -5,13 +5,13 @@ use std::collections::HashMap;
 
 use axum::extract::{DefaultBodyLimit, Path, State};
 use axum::http::StatusCode;
-use axum::routing::{get, put};
+use axum::routing::{get, post, put};
 use axum::{Json, Router};
 use huxley_authz::permissions;
 use huxley_db::{OrgScope, begin_scoped};
 use huxley_integrations::ImportError;
 use huxley_integrations::store::{
-    self, IntegrationDetail, IntegrationSummary, IntegrationVersion, StoreError,
+    self, IntegrationDetail, IntegrationSummary, IntegrationVersion, StoreError, UpdatePreview,
 };
 use serde::Deserialize;
 use utoipa::ToSchema;
@@ -28,6 +28,8 @@ pub fn routes() -> Router<AppState> {
         .route("/", get(list).post(create))
         .route("/{id}", get(detail))
         .route("/{id}/spec", put(update))
+        .route("/{id}/preview", post(preview))
+        .route("/{id}/current", put(set_current))
         .route("/{id}/versions", get(versions))
         .layer(DefaultBodyLimit::max(MAX_IMPORT_BYTES))
 }
@@ -38,7 +40,13 @@ fn db_err(e: impl std::fmt::Display) -> ApiError {
 
 fn map_store(e: StoreError) -> ApiError {
     match e {
-        StoreError::NotFound => ApiError::not_found(),
+        StoreError::NotFound | StoreError::VersionNotFound(_) => ApiError::not_found(),
+        StoreError::Stale(_) => ApiError::new(
+            StatusCode::CONFLICT,
+            "integration-changed",
+            "The integration changed since the preview",
+        )
+        .with_detail(e.to_string()),
         StoreError::KeyTaken(_) => ApiError::conflict(e.to_string()),
         StoreError::InvalidKey => ApiError::validation().with_field_error("key", e.to_string()),
         StoreError::Import(ImportError::TooLarge) => ApiError::new(
@@ -167,15 +175,77 @@ pub async fn detail(
 }
 
 #[derive(Debug, Deserialize, ToSchema)]
-#[serde(deny_unknown_fields)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct UpdateSpecRequest {
+    pub spec: String,
+    /// The version the update was previewed against: if the integration
+    /// has moved on since, nothing is applied (409).
+    pub base_version: Option<i32>,
+}
+
+#[derive(Debug, Deserialize, ToSchema)]
+#[serde(deny_unknown_fields)]
+pub struct PreviewRequest {
     pub spec: String,
 }
 
-/// Imports a newer spec as the integration's next version.
+/// What importing a newer spec would change, and whether any of it can
+/// break workflows or connections. Nothing is saved.
+#[utoipa::path(post, path = "/api/v1/integrations/{id}/preview", operation_id = "preview_integration_update", tag = "integrations",
+    params(("id" = Uuid, Path)), request_body = PreviewRequest,
+    responses((status = 200, body = UpdatePreview), (status = 422, body = ApiError, content_type = "application/problem+json")))]
+pub async fn preview(
+    State(state): State<AppState>,
+    authed: Authed,
+    Path(id): Path<Uuid>,
+    Json(body): Json<PreviewRequest>,
+) -> ApiResult<Json<UpdatePreview>> {
+    authorize(&state, &authed, permissions::INTEGRATION_MANAGE, id).await?;
+    let mut tx = begin_scoped(&state.db, &authed.scope(&state).await?)
+        .await
+        .map_err(db_err)?;
+    let preview = store::preview(&mut tx, id, &body.spec)
+        .await
+        .map_err(map_store)?;
+    tx.commit().await.map_err(db_err)?;
+    Ok(Json(preview))
+}
+
+#[derive(Debug, Deserialize, ToSchema)]
+#[serde(deny_unknown_fields)]
+pub struct SetCurrentRequest {
+    pub version: i32,
+}
+
+/// Makes an earlier imported version current again (a rollback), or a
+/// later one after rolling back.
+#[utoipa::path(put, path = "/api/v1/integrations/{id}/current", operation_id = "set_integration_version", tag = "integrations",
+    params(("id" = Uuid, Path)), request_body = SetCurrentRequest,
+    responses((status = 200, body = IntegrationDetail), (status = 404, body = ApiError, content_type = "application/problem+json")))]
+pub async fn set_current(
+    State(state): State<AppState>,
+    authed: Authed,
+    Path(id): Path<Uuid>,
+    Json(body): Json<SetCurrentRequest>,
+) -> ApiResult<Json<IntegrationDetail>> {
+    authorize(&state, &authed, permissions::INTEGRATION_MANAGE, id).await?;
+    let mut tx = begin_scoped(&state.db, &authed.scope(&state).await?)
+        .await
+        .map_err(db_err)?;
+    let detail = store::set_current(&mut tx, &authed.user.ctx, id, body.version)
+        .await
+        .map_err(map_store)?;
+    tx.commit().await.map_err(db_err)?;
+    Ok(Json(detail))
+}
+
+/// Imports a newer spec as the integration's next version, and makes it
+/// current. Preview it first to see what changes.
 #[utoipa::path(put, path = "/api/v1/integrations/{id}/spec", operation_id = "update_integration_spec", tag = "integrations",
     params(("id" = Uuid, Path)), request_body = UpdateSpecRequest,
-    responses((status = 200, body = IntegrationDetail), (status = 422, body = ApiError, content_type = "application/problem+json")))]
+    responses((status = 200, body = IntegrationDetail),
+              (status = 409, body = ApiError, content_type = "application/problem+json"),
+              (status = 422, body = ApiError, content_type = "application/problem+json")))]
 pub async fn update(
     State(state): State<AppState>,
     authed: Authed,
@@ -186,7 +256,7 @@ pub async fn update(
     let mut tx = begin_scoped(&state.db, &authed.scope(&state).await?)
         .await
         .map_err(db_err)?;
-    let detail = store::update(&mut tx, &authed.user.ctx, id, &body.spec)
+    let detail = store::update(&mut tx, &authed.user.ctx, id, &body.spec, body.base_version)
         .await
         .map_err(map_store)?;
     tx.commit().await.map_err(db_err)?;

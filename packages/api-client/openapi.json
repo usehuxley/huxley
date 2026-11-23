@@ -1908,10 +1908,106 @@
 				}
 			}
 		},
+		"/api/v1/integrations/{id}/current": {
+			"put": {
+				"tags": ["integrations"],
+				"summary": "Makes an earlier imported version current again (a rollback), or a\nlater one after rolling back.",
+				"operationId": "set_integration_version",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/SetCurrentRequest"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/IntegrationDetail"
+								}
+							}
+						}
+					},
+					"404": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/integrations/{id}/preview": {
+			"post": {
+				"tags": ["integrations"],
+				"summary": "What importing a newer spec would change, and whether any of it can\nbreak workflows or connections. Nothing is saved.",
+				"operationId": "preview_integration_update",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/PreviewRequest"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/UpdatePreview"
+								}
+							}
+						}
+					},
+					"422": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
 		"/api/v1/integrations/{id}/spec": {
 			"put": {
 				"tags": ["integrations"],
-				"summary": "Imports a newer spec as the integration's next version.",
+				"summary": "Imports a newer spec as the integration's next version, and makes it\ncurrent. Preview it first to see what changes.",
 				"operationId": "update_integration_spec",
 				"parameters": [
 					{
@@ -1940,6 +2036,15 @@
 							"application/json": {
 								"schema": {
 									"$ref": "#/components/schemas/IntegrationDetail"
+								}
+							}
+						}
+					},
+					"409": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
 								}
 							}
 						}
@@ -5358,6 +5463,21 @@
 					}
 				}
 			},
+			"ActionChanges": {
+				"type": "object",
+				"required": ["key", "changes"],
+				"properties": {
+					"changes": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/Change"
+						}
+					},
+					"key": {
+						"type": "string"
+					}
+				}
+			},
 			"ApiError": {
 				"type": "object",
 				"description": "An RFC 9457 problem details response.",
@@ -5799,6 +5919,19 @@
 					}
 				}
 			},
+			"Change": {
+				"type": "object",
+				"description": "One difference, and whether it can break workflows or connections.",
+				"required": ["breaking", "message"],
+				"properties": {
+					"breaking": {
+						"type": "boolean"
+					},
+					"message": {
+						"type": "string"
+					}
+				}
+			},
 			"ChangePasswordRequest": {
 				"type": "object",
 				"required": ["currentPassword", "newPassword"],
@@ -6072,6 +6205,48 @@
 					"version": {
 						"type": "string",
 						"description": "The API's own version (`info.version`)."
+					}
+				}
+			},
+			"DefinitionDiff": {
+				"type": "object",
+				"required": ["breaking", "added", "removed", "renamed", "changed", "connection"],
+				"properties": {
+					"added": {
+						"type": "array",
+						"items": {
+							"type": "string"
+						}
+					},
+					"breaking": {
+						"type": "boolean",
+						"description": "True if any change can break something already using the integration."
+					},
+					"changed": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/ActionChanges"
+						}
+					},
+					"connection": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/Change"
+						},
+						"description": "Auth and server changes, which matter to connections."
+					},
+					"removed": {
+						"type": "array",
+						"items": {
+							"type": "string"
+						},
+						"description": "Actions that are gone (renamed ones are listed under `renamed`)."
+					},
+					"renamed": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/Rename"
+						}
 					}
 				}
 			},
@@ -7056,6 +7231,16 @@
 				"description": "Provider templates with sensible defaults.",
 				"enum": ["generic", "entra", "google", "okta", "authentik", "keycloak"]
 			},
+			"PreviewRequest": {
+				"type": "object",
+				"required": ["spec"],
+				"properties": {
+					"spec": {
+						"type": "string"
+					}
+				},
+				"additionalProperties": false
+			},
 			"Provider": {
 				"type": "object",
 				"description": "A configured identity provider. The client secret is never returned.",
@@ -7284,6 +7469,19 @@
 							"type": "string"
 						},
 						"description": "Present when this was the user's first second factor. Shown once."
+					}
+				}
+			},
+			"Rename": {
+				"type": "object",
+				"description": "An action that seems to have been renamed: gone under one key, back\nunder another with the same method and path.",
+				"required": ["from", "to"],
+				"properties": {
+					"from": {
+						"type": "string"
+					},
+					"to": {
+						"type": "string"
 					}
 				}
 			},
@@ -7715,6 +7913,17 @@
 					}
 				}
 			},
+			"SetCurrentRequest": {
+				"type": "object",
+				"required": ["version"],
+				"properties": {
+					"version": {
+						"type": "integer",
+						"format": "int32"
+					}
+				},
+				"additionalProperties": false
+			},
 			"SetModuleRequest": {
 				"type": "object",
 				"required": ["enabled"],
@@ -8120,6 +8329,36 @@
 					}
 				}
 			},
+			"UpdatePreview": {
+				"type": "object",
+				"description": "What importing a newer spec would change, without saving anything.",
+				"required": ["baseVersion", "diff", "warnings", "actions", "apiVersion"],
+				"properties": {
+					"actions": {
+						"type": "integer",
+						"minimum": 0
+					},
+					"apiVersion": {
+						"type": "string",
+						"description": "The API's own version, from the newer spec."
+					},
+					"baseVersion": {
+						"type": "integer",
+						"format": "int32",
+						"description": "The version this was compared with; pass it when applying."
+					},
+					"diff": {
+						"$ref": "#/components/schemas/DefinitionDiff"
+					},
+					"warnings": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/Warning"
+						},
+						"description": "What the importer worked around in the newer spec."
+					}
+				}
+			},
 			"UpdateServiceAccountRequest": {
 				"type": "object",
 				"properties": {
@@ -8139,6 +8378,11 @@
 				"type": "object",
 				"required": ["spec"],
 				"properties": {
+					"baseVersion": {
+						"type": ["integer", "null"],
+						"format": "int32",
+						"description": "The version the update was previewed against: if the integration\nhas moved on since, nothing is applied (409)."
+					},
 					"spec": {
 						"type": "string"
 					}

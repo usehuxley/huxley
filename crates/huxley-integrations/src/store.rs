@@ -10,6 +10,7 @@ use time::OffsetDateTime;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
+use crate::diff::{DefinitionDiff, diff};
 use crate::{Definition, ImportError, Warning, import_value, parse};
 
 #[derive(Debug, thiserror::Error)]
@@ -20,6 +21,11 @@ pub enum StoreError {
     KeyTaken(String),
     #[error("the key must be lowercase letters, digits and hyphens, starting with a letter")]
     InvalidKey,
+    #[error("version {0} doesn't exist")]
+    VersionNotFound(i32),
+    /// The integration changed since the update was previewed.
+    #[error("the integration is now at version {0}; preview the update again")]
+    Stale(i32),
     #[error(transparent)]
     Import(#[from] ImportError),
     #[error(transparent)]
@@ -151,19 +157,65 @@ pub async fn create(
     get(conn, id).await
 }
 
-/// Imports a newer spec as the next version. Its key stays; the name and
-/// description follow the new spec.
+/// What importing a newer spec would change, without saving anything.
+#[derive(Debug, Clone, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdatePreview {
+    /// The version this was compared with; pass it when applying.
+    pub base_version: i32,
+    pub diff: DefinitionDiff,
+    /// What the importer worked around in the newer spec.
+    pub warnings: Vec<Warning>,
+    pub actions: usize,
+    /// The API's own version, from the newer spec.
+    pub api_version: String,
+}
+
+/// Compares a newer spec with the current version.
+pub async fn preview(
+    conn: &mut PgConnection,
+    id: Uuid,
+    spec_text: &str,
+) -> StoreResult<UpdatePreview> {
+    let current = get(conn, id).await?;
+    let imported = import_value(parse(spec_text)?)?;
+    Ok(UpdatePreview {
+        base_version: current.summary.current_version,
+        diff: diff(&current.definition, &imported.definition),
+        warnings: imported.warnings,
+        actions: imported.definition.actions.len(),
+        api_version: imported.definition.version,
+    })
+}
+
+/// Imports a newer spec as the next version and makes it current. Its key
+/// stays; the name and description follow the new spec. With
+/// `base_version`, it applies only if that's still the current version
+/// (what the update was previewed against).
 pub async fn update(
     conn: &mut PgConnection,
     ctx: &RequestContext,
     id: Uuid,
     spec_text: &str,
+    base_version: Option<i32>,
 ) -> StoreResult<IntegrationDetail> {
     let spec = parse(spec_text)?;
     let imported = import_value(spec.clone())?;
+    let current: Option<(i32,)> =
+        sqlx::query_as("SELECT current_version FROM integrations WHERE id = $1 FOR UPDATE")
+            .bind(id)
+            .fetch_optional(&mut *conn)
+            .await?;
+    let (current,) = current.ok_or(StoreError::NotFound)?;
+    if base_version.is_some_and(|base| base != current) {
+        return Err(StoreError::Stale(current));
+    }
+    // The next number after every version so far (one may have been
+    // rolled back from).
     let row: Option<(Uuid, i32)> = sqlx::query_as(
-        "UPDATE integrations SET current_version = current_version + 1, name = $2, \
-                description = $3, updated_at = now() \
+        "UPDATE integrations SET current_version = \
+                (SELECT max(version) + 1 FROM integration_versions WHERE integration_id = $1), \
+                name = $2, description = $3, updated_at = now() \
           WHERE id = $1 RETURNING org_id, current_version",
     )
     .bind(id)
@@ -218,6 +270,49 @@ async fn insert_version(
     .execute(conn)
     .await?;
     Ok(())
+}
+
+/// Makes an earlier (or later) imported version current again: a rollback.
+pub async fn set_current(
+    conn: &mut PgConnection,
+    ctx: &RequestContext,
+    id: Uuid,
+    version: i32,
+) -> StoreResult<IntegrationDetail> {
+    let before = summary(&mut *conn, id).await?;
+    let found: Option<(Option<String>, Option<String>)> = sqlx::query_as(
+        "SELECT definition->>'title', definition->>'description' FROM integration_versions \
+          WHERE integration_id = $1 AND version = $2",
+    )
+    .bind(id)
+    .bind(version)
+    .fetch_optional(&mut *conn)
+    .await?;
+    let (title, description) = found.ok_or(StoreError::VersionNotFound(version))?;
+    sqlx::query(
+        "UPDATE integrations SET current_version = $2, name = COALESCE($3, name), \
+                description = $4, updated_at = now() WHERE id = $1",
+    )
+    .bind(id)
+    .bind(version)
+    .bind(title)
+    .bind(description)
+    .execute(&mut *conn)
+    .await?;
+    audit::record(
+        &mut *conn,
+        ctx,
+        AuditRecord::new("integration.version_changed")
+            .org(before.org_id)
+            .target("integration", id)
+            .details(json!({
+                "before": { "currentVersion": before.current_version },
+                "after": { "currentVersion": version },
+            })),
+    )
+    .await
+    .map_err(db)?;
+    get(conn, id).await
 }
 
 /// Integrations visible in the caller's scope, by name.
