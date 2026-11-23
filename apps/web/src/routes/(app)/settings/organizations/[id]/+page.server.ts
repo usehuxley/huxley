@@ -2,7 +2,7 @@ import { error, fail } from '@sveltejs/kit';
 import { isApiProblem } from '@usehuxley/api-client';
 import { readFieldValues } from '#lib/fields/values.ts';
 import { formString } from '#lib/forms.ts';
-import { api } from '#lib/server/api.ts';
+import { api, apiHeaders, apiUrl } from '#lib/server/api.ts';
 import { problemMessage } from '#lib/server/problems.ts';
 import type { Actions, PageServerLoad } from './$types';
 
@@ -10,15 +10,22 @@ export const load: PageServerLoad = async (event) => {
 	const client = api(event);
 	const id = event.params.id;
 	const path = { params: { path: { entity_type: 'organization', id } } };
-	const [org, fields, tags, allTags] = await Promise.all([
+	const [org, fields, tags, allTags, attachments] = await Promise.all([
 		client.GET('/api/v1/orgs/{id}', { params: { path: { id } } }),
 		client.GET('/api/v1/entities/{entity_type}/{id}/fields', path),
 		client.GET('/api/v1/entities/{entity_type}/{id}/tags', path),
-		client.GET('/api/v1/tags')
+		client.GET('/api/v1/tags'),
+		client.GET('/api/v1/entities/{entity_type}/{id}/attachments', path)
 	]);
 	if (org.response.status === 404) error(404, 'Organization not found.');
 	if (!org.data || !fields.data || !tags.data) error(503, 'Could not load the organization.');
-	return { org: org.data, fields: fields.data, tags: tags.data, allTags: allTags.data ?? [] };
+	return {
+		org: org.data,
+		fields: fields.data,
+		tags: tags.data,
+		allTags: allTags.data ?? [],
+		attachments: attachments.data ?? []
+	};
 };
 
 export const actions: Actions = {
@@ -44,6 +51,36 @@ export const actions: Actions = {
 			});
 		}
 		return { message: 'Saved.' };
+	},
+
+	upload: async (event) => {
+		const form = await event.request.formData();
+		const file = form.get('file');
+		if (!(file instanceof File) || file.size === 0) {
+			return fail(400, { message: 'Choose a file to upload.' });
+		}
+		const body = new FormData();
+		body.set('file', file, file.name);
+		const response = await fetch(
+			`${apiUrl}/api/v1/entities/organization/${encodeURIComponent(event.params.id)}/attachments`,
+			{ method: 'POST', headers: apiHeaders(event), body }
+		).catch(() => null);
+		if (response?.status !== 201) {
+			const problem: unknown = await response?.json().catch(() => undefined);
+			return fail(response?.status ?? 503, {
+				message: problemMessage(problem, 'Could not upload the file.')
+			});
+		}
+		return { message: 'Uploaded.' };
+	},
+
+	deleteAttachment: async (event) => {
+		const form = await event.request.formData();
+		const { response } = await api(event).DELETE('/api/v1/attachments/{id}', {
+			params: { path: { id: formString(form, 'id') } }
+		});
+		if (response.status !== 204) return fail(response.status, { message: 'Could not delete it.' });
+		return { message: 'Deleted.' };
 	},
 
 	tag: async (event) => {

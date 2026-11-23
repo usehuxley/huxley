@@ -1,2 +1,2 @@
 # ".." keeps clippy's default list.
-doc-valid-idents = ["OpenAPI", "WebAuthn", "OpenTelemetry", "PostgreSQL", "UUIDv7", "SvelteKit", "SvelteFlow", ".."]
+doc-valid-idents = ["OpenAPI", "WebAuthn", "DigitalOcean", "MinIO", "OpenTelemetry", "PostgreSQL", "UUIDv7", "SvelteKit", "SvelteFlow", ".."]

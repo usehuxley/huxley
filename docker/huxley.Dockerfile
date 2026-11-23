@@ -8,7 +8,8 @@ COPY . .
 RUN --mount=type=cache,target=/usr/local/cargo/registry,sharing=locked \
     --mount=type=cache,target=/src/target,sharing=locked \
     cargo build --release --locked -p huxley-server \
-    && cp target/release/huxley /huxley
+    && cp target/release/huxley /huxley \
+    && mkdir -p /objects
 
 # Distroless: no shell, no package manager, runs as a non-root user.
 FROM gcr.io/distroless/cc-debian13:nonroot
@@ -17,6 +18,10 @@ LABEL org.opencontainers.image.title="huxley" \
       org.opencontainers.image.source="https://github.com/usehuxley/huxley" \
       org.opencontainers.image.licenses="MIT"
 COPY --from=build /huxley /usr/local/bin/huxley
+# Attachments (storage.url). Owned by the runtime user so a named volume
+# mounted here starts out writable.
+COPY --from=build --chown=nonroot:nonroot /objects /var/lib/huxley/objects
+ENV HUXLEY_STORAGE__URL=/var/lib/huxley/objects
 USER nonroot:nonroot
 EXPOSE 8080
 HEALTHCHECK --interval=15s --timeout=5s --start-period=10s --retries=3 \

@@ -1,0 +1,23 @@
+[package]
+name = "huxley-storage"
+description = "Object storage for Huxley: local filesystem, S3-compatible, Azure Blob (design doc §3)"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[dependencies]
+bytes.workspace = true
+object_store.workspace = true
+secrecy.workspace = true
+serde.workspace = true
+thiserror.workspace = true
+url.workspace = true
+
+[dev-dependencies]
+tokio.workspace = true
+
+[lints]
+workspace = true

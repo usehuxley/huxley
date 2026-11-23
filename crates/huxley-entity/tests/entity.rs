@@ -297,3 +297,93 @@ async fn tags_apply_to_records_and_go_when_deleted() {
     ));
     tx.rollback().await.unwrap();
 }
+
+#[tokio::test]
+async fn attachments_store_files_and_respect_scope() {
+    use huxley_entity::attachments::{self, Upload};
+    use huxley_storage::Storage;
+
+    let Some(pools) = pools().await else { return };
+    let root = ensure_root(&pools).await;
+    let storage = Storage::memory().with_max_upload_bytes(1024);
+    let mut tx = begin_scoped(&pools.app, &OrgScope::System).await.unwrap();
+    let client = huxley_orgs::create(&mut tx, &ctx(), root, OrgKind::Client, &unique("Files"))
+        .await
+        .unwrap()
+        .id;
+    let file = |name: &'static str, data: &'static [u8]| Upload {
+        entity_type: ORGANIZATION,
+        entity_id: client,
+        filename: name,
+        content_type: Some("text/plain"),
+        data: bytes::Bytes::from_static(data),
+    };
+
+    let a = attachments::upload(&mut tx, &storage, &ctx(), file("../notes.txt", b"hello"))
+        .await
+        .unwrap();
+    assert_eq!(a.filename, "notes.txt");
+    assert_eq!(a.size_bytes, 5);
+    assert_eq!(
+        a.sha256,
+        "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824"
+    );
+    assert_eq!(
+        &attachments::content(&storage, &a).await.unwrap()[..],
+        b"hello"
+    );
+    assert_eq!(
+        attachments::of_entity(&mut tx, ORGANIZATION, client)
+            .await
+            .unwrap()
+            .len(),
+        1
+    );
+    assert!(matches!(
+        attachments::upload(&mut tx, &storage, &ctx(), file("big.bin", &[0; 2048])).await,
+        Err(EntityError::TooLarge(_))
+    ));
+
+    // Deleting hides it and removes the object.
+    let key_holder = a.clone();
+    attachments::delete(&mut tx, &storage, &ctx(), a.id)
+        .await
+        .unwrap();
+    assert!(
+        attachments::of_entity(&mut tx, ORGANIZATION, client)
+            .await
+            .unwrap()
+            .is_empty()
+    );
+    assert!(matches!(
+        attachments::get(&mut tx, a.id).await,
+        Err(EntityError::NotFound)
+    ));
+    assert!(attachments::content(&storage, &key_holder).await.is_err());
+
+    // RLS: a request scoped to other orgs can't see the record's files.
+    attachments::upload(&mut tx, &storage, &ctx(), file("visible.txt", b"x"))
+        .await
+        .unwrap();
+    tx.commit().await.unwrap();
+    let mut scoped = begin_scoped(&pools.app, &OrgScope::Orgs(vec![root]))
+        .await
+        .unwrap();
+    assert!(
+        attachments::of_entity(&mut scoped, ORGANIZATION, client)
+            .await
+            .unwrap()
+            .is_empty()
+    );
+    scoped.rollback().await.unwrap();
+    let mut own = begin_scoped(&pools.app, &OrgScope::Orgs(vec![client]))
+        .await
+        .unwrap();
+    assert_eq!(
+        attachments::of_entity(&mut own, ORGANIZATION, client)
+            .await
+            .unwrap()
+            .len(),
+        1
+    );
+}

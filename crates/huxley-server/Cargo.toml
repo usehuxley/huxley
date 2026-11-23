@@ -26,6 +26,7 @@ huxley-db.workspace = true
 huxley-email.workspace = true
 huxley-modules.workspace = true
 huxley-notify.workspace = true
+huxley-storage.workspace = true
 huxley-orgs.workspace = true
 base64.workspace = true
 getrandom.workspace = true

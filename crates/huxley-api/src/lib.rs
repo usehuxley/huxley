@@ -39,6 +39,7 @@ use huxley_crypto::Crypto;
 use huxley_db::sqlx::PgPool;
 use huxley_notify::Broadcaster;
 use huxley_sso::SsoService;
+use huxley_storage::Storage;
 use serde::Deserialize;
 
 use crate::rate_limit::RateLimiter;
@@ -76,6 +77,8 @@ pub struct AppState {
     pub sso: SsoService,
     /// Real-time notification fan-out. Run it with [`Broadcaster::run`].
     pub notifications: Broadcaster,
+    /// Object storage for attachments. In-memory until [`AppState::with_storage`].
+    pub storage: Storage,
     pub config: Arc<ApiConfig>,
     pub login_limiter: Arc<RateLimiter>,
 }
@@ -91,10 +94,18 @@ impl AppState {
             sso: SsoService::new(auth.clone(), crypto.clone())
                 .expect("the HTTP client for single sign-on builds"),
             notifications: Broadcaster::new(),
+            storage: Storage::memory(),
             auth,
             crypto,
             config: Arc::new(config),
             login_limiter,
         }
+    }
+
+    /// Uses `storage` for attachments.
+    #[must_use]
+    pub fn with_storage(mut self, storage: Storage) -> Self {
+        self.storage = storage;
+        self
     }
 }

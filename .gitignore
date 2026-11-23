@@ -26,3 +26,5 @@ Thumbs.db
 
 # Test output
 junit.xml
+# Local attachment storage (storage.url default)
+/data/
