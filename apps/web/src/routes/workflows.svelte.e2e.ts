@@ -198,8 +198,15 @@ test.describe('workflows', () => {
 		await page.getByRole('menuitem', { name: /^If/ }).click();
 		const settings = page.getByLabel('Step settings');
 		await expect(settings).toContainText('Branch on a condition.');
-		await settings.getByLabel('Condition').fill("{{ inputs.name == 'Ada' }}");
-		await settings.getByLabel('Condition').blur();
+		// Suggestions complete names inside {{ }}.
+		const condition = settings.getByRole('combobox', { name: 'Condition' });
+		await condition.fill('');
+		await condition.pressSequentially('{{ inputs.na');
+		await expect(page.getByRole('option', { name: /inputs\.name/ })).toBeVisible();
+		await condition.press('Enter');
+		await expect(condition).toHaveValue('{{ inputs.name');
+		await condition.pressSequentially(" == 'Ada' }}");
+		await condition.blur();
 
 		// Inside Then: a transform that reads the first step.
 		await page.getByRole('button', { name: 'Add a step at the start of Then' }).click();
