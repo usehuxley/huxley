@@ -515,7 +515,11 @@ impl Step {
 
     /// Whether control never continues past this step in its block.
     pub const fn ends_block(&self) -> bool {
-        matches!(self, Self::Return(_) | Self::Fail(_))
+        match self {
+            Self::Return(_) => true,
+            Self::Fail(s) => !s.continue_on_error,
+            _ => false,
+        }
     }
 }
 

@@ -1746,6 +1746,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "huxley-engine"
+version = "0.1.0"
+dependencies = [
+ "getrandom 0.4.3",
+ "huxley-core",
+ "huxley-crypto",
+ "huxley-db",
+ "huxley-expr",
+ "huxley-hwf",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "thiserror 2.0.21",
+ "time",
+ "tokio",
+ "tokio-util",
+ "tracing",
+ "uuid",
+ "zeroize",
+]
+
+[[package]]
 name = "huxley-entity"
 version = "0.1.0"
 dependencies = [
@@ -1866,6 +1888,7 @@ dependencies = [
  "huxley-crypto",
  "huxley-db",
  "huxley-email",
+ "huxley-engine",
  "huxley-modules",
  "huxley-notify",
  "huxley-orgs",

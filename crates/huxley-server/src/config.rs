@@ -19,6 +19,7 @@ use huxley_auth::AuthConfig;
 use huxley_crypto::CryptoConfig;
 use huxley_db::DatabaseConfig;
 use huxley_email::EmailConfig;
+use huxley_engine::EngineConfig;
 use huxley_storage::StorageConfig;
 use huxley_telemetry::TelemetryConfig;
 use serde::Deserialize;
@@ -42,6 +43,8 @@ pub struct Config {
     pub email: EmailConfig,
     #[serde(default)]
     pub storage: StorageConfig,
+    #[serde(default)]
+    pub engine: EngineConfig,
     /// Apply migrations at startup. Convenient for single-node installs; larger
     /// deployments run `huxley migrate` as a separate step before rollout.
     #[serde(default)]
