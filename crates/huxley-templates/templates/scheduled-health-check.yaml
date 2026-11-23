@@ -1,0 +1,32 @@
+template:
+  key: scheduled-health-check
+  name: Scheduled health check
+  description: Calls a URL on a schedule and tells your team when it doesn't answer with success.
+  category: Monitoring
+  bindings:
+    - { key: url, label: URL to check, kind: url, default: "https://example.com/health" }
+    - { key: interval, label: How often, kind: text, default: "15m", help: "e.g. 5m, 1h" }
+    - { key: recipients, label: Who to tell, kind: recipients, default: "role:admin" }
+workflow:
+  apiVersion: usehuxley.com/v1
+  kind: Workflow
+  metadata: { key: scheduled-health-check, name: Scheduled health check }
+  spec:
+    triggers:
+      - { type: schedule, interval: "%{interval}" }
+    steps:
+      - id: check
+        type: http.request
+        with: { method: GET, url: "%{url}", allow_error_status: true }
+        timeout: 30s
+        continue_on_error: true
+      - id: alert
+        type: if
+        condition: "{{ steps.check.output.status is not defined or steps.check.output.status >= 400 }}"
+        then:
+          - id: tell
+            type: core.notify
+            with:
+              to: "%{recipients}"
+              title: "%{url} isn't healthy"
+              message: "Status: {{ steps.check.output.status | default(steps.check.output.message | default('no answer')) }}"

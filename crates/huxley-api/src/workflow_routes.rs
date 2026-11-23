@@ -64,7 +64,7 @@ fn db_err(e: impl std::fmt::Display) -> ApiError {
     ApiError::internal(&e)
 }
 
-fn map_workflow(e: WorkflowError) -> ApiError {
+pub(crate) fn map_workflow(e: WorkflowError) -> ApiError {
     match e {
         WorkflowError::NotFound | WorkflowError::VersionNotFound => ApiError::not_found(),
         WorkflowError::KeyTaken(_) | WorkflowError::Archived => ApiError::conflict(e.to_string()),

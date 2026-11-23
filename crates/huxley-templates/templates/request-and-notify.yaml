@@ -1,0 +1,41 @@
+template:
+  key: request-and-notify
+  name: Request and notify
+  description: A form people fill in; each request tells your team, with everything they entered.
+  category: Service requests
+  bindings:
+    - { key: recipients, label: Who to tell, kind: recipients, default: "role:admin",
+        help: "user:<id>, team:<id> or role:<key>, comma-separated" }
+form:
+  name: Request
+  schema:
+    type: object
+    required: [summary]
+    properties:
+      summary: { type: string, title: What do you need?, maxLength: 200 }
+      details: { type: string, title: Details }
+      urgent: { type: boolean, title: It's urgent }
+  ui:
+    order: [summary, details, urgent]
+    details: { widget: textarea }
+workflow:
+  apiVersion: usehuxley.com/v1
+  kind: Workflow
+  metadata: { key: request-and-notify, name: Request and notify }
+  spec:
+    inputs:
+      type: object
+      required: [summary]
+      properties:
+        summary: { type: string }
+        details: { type: string }
+        urgent: { type: boolean }
+    triggers:
+      - { type: form, form: "%{form}" }
+    steps:
+      - id: tell
+        type: core.notify
+        with:
+          to: "%{recipients}"
+          title: "{{ 'Urgent: ' if inputs.urgent else '' }}{{ inputs.summary }}"
+          message: "{{ inputs.details | default('No details.') }} (from {{ actor.id or 'a public link' }})"

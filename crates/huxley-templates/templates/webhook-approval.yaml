@@ -1,0 +1,40 @@
+template:
+  key: webhook-approval
+  name: Approve, then call an API
+  description: Another system posts a request; someone approves it before Huxley calls the API it names.
+  category: Approvals
+  bindings:
+    - { key: approvers, label: Who approves, kind: recipients, default: "role:admin" }
+    - { key: url, label: API to call once approved, kind: url, default: "https://api.example.com/requests" }
+workflow:
+  apiVersion: usehuxley.com/v1
+  kind: Workflow
+  metadata: { key: webhook-approval, name: "Approve, then call an API" }
+  spec:
+    inputs:
+      type: object
+      required: [title]
+      properties:
+        title: { type: string }
+        details: { type: string }
+    triggers:
+      - { type: webhook, response: async }
+    steps:
+      - id: ask
+        type: approval
+        title: "{{ inputs.title }}"
+        message: "{{ inputs.details | default('') }}"
+        approvers: "%{approvers}"
+        expires: 3d
+      - id: decide
+        type: if
+        condition: "{{ steps.ask.output.decision == 'approved' }}"
+        then:
+          - id: call
+            type: http.request
+            with:
+              method: POST
+              url: "%{url}"
+              body: { title: "{{ inputs.title }}", approved_by: "{{ steps.ask.output.by.name }}" }
+    outputs:
+      decision: "{{ steps.ask.output.decision }}"

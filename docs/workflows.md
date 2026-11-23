@@ -41,6 +41,17 @@ spec:
 - **Archive:** stops triggers and runs; history stays. Restore brings the published version's triggers back.
 - **Compare** any two versions, or a version and the draft.
 
+## Templates
+
+**Workflows → start from a template** lists ready-made workflows:
+
+- **Request and notify:** a form, and a workflow that tells your team about each request.
+- **Form that runs a script:** a form whose answers become a library script's parameters.
+- **Approve, then call an API:** a webhook, an approval, then an HTTP request.
+- **Scheduled health check:** calls a URL on a schedule and alerts when it fails.
+
+You fill in a few **bindings**, such as who to tell or which script, and get a **draft**, plus the template's form if it has one, to review and publish. Binding values are checked (recipients, URLs, script keys) and inserted as values, so they can't change the workflow's structure or become expressions. Using a template needs `workflow:write`, and `form:manage` when it includes a form. The API is `GET /api/v1/templates` and `POST /api/v1/templates/{key}/use`.
+
 ## Triggers
 
 | Type | Starts a run when… |

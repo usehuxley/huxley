@@ -1,0 +1,22 @@
+[package]
+name = "huxley-templates"
+description = "Built-in workflow and form templates, and resolving their bindings"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+publish = false
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+serde-saphyr.workspace = true
+thiserror.workspace = true
+utoipa.workspace = true
+
+[dev-dependencies]
+huxley-hwf.workspace = true
+huxley-expr.workspace = true
+
+[lints]
+workspace = true

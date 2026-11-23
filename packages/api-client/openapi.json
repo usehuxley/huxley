@@ -5920,6 +5920,92 @@
 				}
 			}
 		},
+		"/api/v1/templates": {
+			"get": {
+				"tags": ["templates"],
+				"summary": "The templates there are.",
+				"operationId": "list_templates",
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "array",
+									"items": {
+										"$ref": "#/components/schemas/TemplateInfo"
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/templates/{key}/use": {
+			"post": {
+				"tags": ["templates"],
+				"summary": "Creates the template's form (if any) and a draft workflow from it.",
+				"operationId": "use_template",
+				"parameters": [
+					{
+						"name": "key",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string"
+						}
+					}
+				],
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/UseTemplateRequest"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"201": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/UsedTemplate"
+								}
+							}
+						}
+					},
+					"404": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					},
+					"409": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					},
+					"422": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
 		"/api/v1/users": {
 			"get": {
 				"tags": ["users"],
@@ -7517,6 +7603,33 @@
 					}
 				],
 				"description": "How a connection authenticates."
+			},
+			"Binding": {
+				"type": "object",
+				"required": ["key", "label", "kind"],
+				"properties": {
+					"default": {
+						"type": ["string", "null"]
+					},
+					"help": {
+						"type": ["string", "null"]
+					},
+					"key": {
+						"type": "string"
+					},
+					"kind": {
+						"$ref": "#/components/schemas/BindingKind"
+					},
+					"label": {
+						"type": "string"
+					}
+				},
+				"additionalProperties": false
+			},
+			"BindingKind": {
+				"type": "string",
+				"description": "What a binding holds, which decides how it's checked and inserted.",
+				"enum": ["text", "url", "recipients", "script"]
 			},
 			"Body": {
 				"type": "object",
@@ -10745,6 +10858,36 @@
 					}
 				}
 			},
+			"TemplateInfo": {
+				"type": "object",
+				"description": "A template as the gallery shows it.",
+				"required": ["key", "name", "description", "category"],
+				"properties": {
+					"bindings": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/Binding"
+						}
+					},
+					"category": {
+						"type": "string"
+					},
+					"description": {
+						"type": "string"
+					},
+					"hasForm": {
+						"type": "boolean",
+						"description": "Whether using it also creates a form."
+					},
+					"key": {
+						"type": "string"
+					},
+					"name": {
+						"type": "string"
+					}
+				},
+				"additionalProperties": false
+			},
 			"TotpEnrollmentView": {
 				"type": "object",
 				"required": ["secret", "otpauthUri"],
@@ -10888,6 +11031,56 @@
 					"status": {
 						"type": ["string", "null"],
 						"description": "`active` or `disabled`. Disabling signs the user out everywhere."
+					}
+				}
+			},
+			"UseTemplateRequest": {
+				"type": "object",
+				"required": ["orgId", "key", "name"],
+				"properties": {
+					"bindings": {
+						"type": "object",
+						"description": "Values for the template's bindings (missing ones take defaults).",
+						"additionalProperties": {
+							"type": "string"
+						},
+						"propertyNames": {
+							"type": "string"
+						}
+					},
+					"formKey": {
+						"type": ["string", "null"],
+						"description": "The new form's key and name, if the template has one (default: the\nworkflow's key and the template's form name)."
+					},
+					"formName": {
+						"type": ["string", "null"]
+					},
+					"key": {
+						"type": "string",
+						"description": "The new workflow's key and name."
+					},
+					"name": {
+						"type": "string"
+					},
+					"orgId": {
+						"type": "string",
+						"format": "uuid"
+					}
+				},
+				"additionalProperties": false
+			},
+			"UsedTemplate": {
+				"type": "object",
+				"required": ["workflowId"],
+				"properties": {
+					"formId": {
+						"type": ["string", "null"],
+						"format": "uuid"
+					},
+					"workflowId": {
+						"type": "string",
+						"format": "uuid",
+						"description": "The new draft workflow."
 					}
 				}
 			},
@@ -11205,6 +11398,10 @@
 		{
 			"name": "workflows",
 			"description": "Workflows, their versions, and their runs"
+		},
+		{
+			"name": "templates",
+			"description": "Workflow and form templates"
 		},
 		{
 			"name": "runners",

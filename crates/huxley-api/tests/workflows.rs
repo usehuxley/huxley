@@ -1603,3 +1603,91 @@ async fn secret_form_answers_are_kept_out_of_the_record() {
     let (_, shown) = s.get(&s.owner, &format!("/api/v1/runs/{run}")).await;
     assert!(!shown.to_string().contains("90210"), "{shown}");
 }
+
+#[tokio::test]
+async fn templates_become_drafts_with_their_bindings_resolved() {
+    let Some(s) = setup().await else { return };
+    let (status, templates) = s.get(&s.owner, "/api/v1/templates").await;
+    assert_eq!(status, StatusCode::OK);
+    let request = templates
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|t| t["key"] == "request-and-notify")
+        .unwrap();
+    assert_eq!(request["hasForm"], true);
+
+    // A bad binding is pointed out, and nothing is created.
+    let key = key("req");
+    let body = |recipients: &str| {
+        json!({ "orgId": s.org, "key": key, "name": "Laptop requests",
+                "bindings": { "recipients": recipients } })
+    };
+    let (status, problem) = s
+        .post(
+            &s.owner,
+            "/api/v1/templates/request-and-notify/use",
+            body("everyone"),
+        )
+        .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{problem}");
+    assert_eq!(problem["errors"][0]["pointer"], "bindings.recipients");
+
+    let (status, used) = s
+        .post(
+            &s.owner,
+            "/api/v1/templates/request-and-notify/use",
+            body("role:admin, role:technician"),
+        )
+        .await;
+    assert_eq!(status, StatusCode::CREATED, "{used}");
+    let workflow_id = used["workflowId"].as_str().unwrap();
+    let (_, workflow) = s
+        .get(&s.owner, &format!("/api/v1/workflows/{workflow_id}"))
+        .await;
+    assert_eq!(workflow["name"], "Laptop requests");
+    assert_eq!(
+        workflow["currentVersion"],
+        Value::Null,
+        "a draft, not published"
+    );
+    assert_eq!(workflow["diagnostics"], json!([]), "ready to publish");
+    assert_eq!(
+        workflow["draft"]["spec"]["triggers"][0]["form"], key,
+        "its own form"
+    );
+    assert_eq!(
+        workflow["draft"]["spec"]["steps"][0]["with"]["to"],
+        json!(["role:admin", "role:technician"])
+    );
+    let form_id = used["formId"].as_str().unwrap();
+    let (_, form) = s.get(&s.owner, &format!("/api/v1/forms/{form_id}")).await;
+    assert_eq!(form["key"], key);
+
+    // Used again with the same key: the form's key is taken, nothing new.
+    let (status, _) = s
+        .post(
+            &s.owner,
+            "/api/v1/templates/request-and-notify/use",
+            body("role:admin"),
+        )
+        .await;
+    assert_eq!(status, StatusCode::CONFLICT);
+    let workflows: i64 = sqlx::query_scalar("SELECT count(*) FROM workflows WHERE key = $1")
+        .bind(&key)
+        .fetch_one(&s.pools.owner)
+        .await
+        .unwrap();
+    assert_eq!(workflows, 1);
+
+    // Technicians can't create workflows.
+    let (_, tech) = technician(&s).await;
+    let (status, _) = s
+        .post(
+            &tech,
+            "/api/v1/templates/webhook-approval/use",
+            json!({ "orgId": s.org, "key": "x", "name": "X" }),
+        )
+        .await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+}

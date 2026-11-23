@@ -26,6 +26,7 @@ huxley-integrations.workspace = true
 huxley-forms.workspace = true
 huxley-scripts.workspace = true
 huxley-runners.workspace = true
+huxley-templates.workspace = true
 huxley-triggers.workspace = true
 huxley-variables.workspace = true
 huxley-hwf.workspace = true
