@@ -82,7 +82,16 @@ jobs:
       # `check` runs svelte-kit sync, which generates the route types lint relies on.
       - run: pnpm check
       - run: pnpm lint
-      - run: pnpm --filter @usehuxley/web exec playwright install --with-deps chromium
+      # The browser download sometimes stalls forever on runners; cap each
+      # attempt and retry rather than burning the job's 6h default.
+      - name: Install Playwright browser
+        timeout-minutes: 12
+        run: |
+          for attempt in 1 2 3; do
+            timeout 240 pnpm --filter @usehuxley/web exec playwright install --with-deps chromium && exit 0
+            echo "playwright install attempt $attempt failed or stalled; retrying"
+          done
+          exit 1
       - run: pnpm test
 
   e2e:
@@ -143,7 +152,16 @@ jobs:
           for i in $(seq 60); do ./target/debug/huxley healthcheck --addr 127.0.0.1:8080 && exit 0; sleep 1; done
           cat api.log; exit 1
       - run: pnpm install --frozen-lockfile
-      - run: pnpm --filter @usehuxley/web exec playwright install --with-deps chromium
+      # The browser download sometimes stalls forever on runners; cap each
+      # attempt and retry rather than burning the job's 6h default.
+      - name: Install Playwright browser
+        timeout-minutes: 12
+        run: |
+          for attempt in 1 2 3; do
+            timeout 240 pnpm --filter @usehuxley/web exec playwright install --with-deps chromium && exit 0
+            echo "playwright install attempt $attempt failed or stalled; retrying"
+          done
+          exit 1
       # Playwright builds each app and serves it with `vite preview`.
       - run: pnpm test:e2e
       - name: Audit chain is intact after the run
