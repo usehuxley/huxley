@@ -26,7 +26,13 @@ if [ ! -f secrets/db_url ]; then
 	echo "Generated secrets/db_url."
 fi
 
-chmod 644 secrets/db_password secrets/db_url
+if [ ! -f secrets/kek ]; then
+	# 32 random bytes, base64: the key-encryption key for secrets at rest.
+	head -c 32 /dev/urandom | base64 | tr -d '\n' > secrets/kek
+	echo "Generated secrets/kek. Back it up: encrypted data is unrecoverable without it."
+fi
+
+chmod 644 secrets/db_password secrets/db_url secrets/kek
 
 echo
 echo "Next: docker compose up -d --build"

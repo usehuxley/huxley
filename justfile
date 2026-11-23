@@ -4,6 +4,8 @@
 set dotenv-load := false
 
 dev_db := "postgres://huxley:huxley@127.0.0.1:5432/huxley"
+# Fixed key-encryption key for local development only. Never use it elsewhere.
+dev_kek := "ZGV2LW9ubHkta2V5LWRvLW5vdC11c2UtaW4tcHJvZCE="
 
 default:
     @just --list
@@ -19,6 +21,7 @@ dev-down:
 # Run the server with all roles against the dev database, exporting telemetry to otel-lgtm
 server *args:
     HUXLEY_DATABASE__URL={{dev_db}} \
+    HUXLEY_CRYPTO__KEK={{dev_kek}} \
     HUXLEY_MIGRATE_ON_START=true \
     HUXLEY_TELEMETRY__LOG_FORMAT=pretty \
     HUXLEY_TELEMETRY__OTLP_ENDPOINT=http://127.0.0.1:4317 \

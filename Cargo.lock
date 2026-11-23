@@ -805,6 +805,7 @@ dependencies = [
  "huxley-auth",
  "huxley-authz",
  "huxley-core",
+ "huxley-crypto",
  "huxley-db",
  "huxley-modules",
  "huxley-orgs",
@@ -872,6 +873,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "huxley-crypto"
+version = "0.1.0"
+dependencies = [
+ "base64 0.23.1",
+ "getrandom 0.4.3",
+ "huxley-core",
+ "huxley-db",
+ "ring",
+ "secrecy",
+ "serde",
+ "serde_json",
+ "sha2",
+ "sqlx",
+ "thiserror",
+ "tokio",
+ "uuid",
+ "zeroize",
+]
+
+[[package]]
 name = "huxley-db"
 version = "0.1.0"
 dependencies = [
@@ -932,6 +953,7 @@ dependencies = [
  "huxley-auth",
  "huxley-authz",
  "huxley-core",
+ "huxley-crypto",
  "huxley-db",
  "huxley-modules",
  "huxley-orgs",

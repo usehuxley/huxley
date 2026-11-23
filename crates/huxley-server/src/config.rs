@@ -16,6 +16,7 @@ use figment::Figment;
 use figment::providers::{Env, Format as _, Serialized, Toml};
 use huxley_api::ApiConfig;
 use huxley_auth::AuthConfig;
+use huxley_crypto::CryptoConfig;
 use huxley_db::DatabaseConfig;
 use huxley_telemetry::TelemetryConfig;
 use serde::Deserialize;
@@ -33,6 +34,8 @@ pub struct Config {
     pub telemetry: TelemetryConfig,
     #[serde(default)]
     pub auth: AuthConfig,
+    #[serde(default)]
+    pub crypto: CryptoConfig,
     /// Apply migrations at startup. Convenient for single-node installs; larger
     /// deployments run `huxley migrate` as a separate step before rollout.
     #[serde(default)]

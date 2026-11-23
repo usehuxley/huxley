@@ -17,6 +17,7 @@ huxley-api = { path = "crates/huxley-api" }
 huxley-auth = { path = "crates/huxley-auth" }
 huxley-authz = { path = "crates/huxley-authz" }
 huxley-core = { path = "crates/huxley-core" }
+huxley-crypto = { path = "crates/huxley-crypto" }
 huxley-db = { path = "crates/huxley-db" }
 huxley-modules = { path = "crates/huxley-modules" }
 huxley-orgs = { path = "crates/huxley-orgs" }
@@ -43,6 +44,8 @@ argon2 = { version = "0.6", features = ["zeroize"] }
 sha2 = "0.11"
 getrandom = "0.4"
 subtle = "2.6"
+ring = "0.17"
+zeroize = "1.8"
 
 # Config / CLI / errors
 clap = { version = "4.6", features = ["derive", "env"] }

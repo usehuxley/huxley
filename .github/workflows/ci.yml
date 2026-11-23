@@ -92,6 +92,8 @@ jobs:
           --health-interval 2s --health-timeout 5s --health-retries 30
     env:
       HUXLEY_DATABASE__URL: postgres://huxley:huxley@localhost:5432/huxley
+      # Throwaway key for the CI database only.
+      HUXLEY_CRYPTO__KEK: Y2ktb25seS1rZXktZm9yLXRoZS1lMmUtZGF0YWJhc2U=
       HUXLEY_HTTP__BIND: 127.0.0.1:8080
       HUXLEY_HTTP__TRUST_FORWARDED_FOR: "true"
       HUXLEY_HTTP__COOKIE_SECURE: "false"

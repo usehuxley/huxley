@@ -27,6 +27,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use huxley_auth::AuthService;
+use huxley_crypto::Crypto;
 use huxley_db::sqlx::PgPool;
 use serde::Deserialize;
 
@@ -61,12 +62,13 @@ impl Default for ApiConfig {
 pub struct AppState {
     pub db: PgPool,
     pub auth: AuthService,
+    pub crypto: Crypto,
     pub config: Arc<ApiConfig>,
     pub login_limiter: Arc<RateLimiter>,
 }
 
 impl AppState {
-    pub fn new(db: PgPool, auth: AuthService, config: ApiConfig) -> Self {
+    pub fn new(db: PgPool, auth: AuthService, crypto: Crypto, config: ApiConfig) -> Self {
         let login_limiter = Arc::new(RateLimiter::new(
             config.login_attempts_per_minute,
             Duration::from_secs(60),
@@ -74,6 +76,7 @@ impl AppState {
         Self {
             db,
             auth,
+            crypto,
             config: Arc::new(config),
             login_limiter,
         }
