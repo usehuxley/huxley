@@ -4594,6 +4594,38 @@
 				}
 			}
 		},
+		"/api/v1/workflows/{id}/triggers": {
+			"get": {
+				"tags": ["workflows"],
+				"summary": "The published version's triggers: webhook paths and schedule times.",
+				"operationId": "list_workflow_triggers",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "array",
+									"items": {
+										"$ref": "#/components/schemas/TriggerView"
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		},
 		"/api/v1/workflows/{id}/versions": {
 			"get": {
 				"tags": ["workflows"],
@@ -6948,6 +6980,31 @@
 					"secret": {
 						"type": "string",
 						"description": "Base32 secret, for entering into the app by hand."
+					}
+				}
+			},
+			"TriggerView": {
+				"type": "object",
+				"description": "A trigger as the app shows it.",
+				"required": ["triggerId", "type"],
+				"properties": {
+					"lastRunAt": {
+						"type": ["string", "null"],
+						"format": "date-time"
+					},
+					"nextRunAt": {
+						"type": ["string", "null"],
+						"format": "date-time"
+					},
+					"publicId": {
+						"type": ["string", "null"],
+						"description": "Webhooks: the path to POST to, `/hooks/{publicId}`."
+					},
+					"triggerId": {
+						"type": "string"
+					},
+					"type": {
+						"type": "string"
 					}
 				}
 			},

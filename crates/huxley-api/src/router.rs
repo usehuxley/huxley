@@ -15,13 +15,15 @@ use tower_http::timeout::TimeoutLayer;
 use tower_http::trace::TraceLayer;
 
 use crate::{
-    ApiError, AppState, audit_routes, auth_routes, csrf, entity_routes, health, mfa_routes,
-    module_routes, notification_routes, openapi, org_routes, passkey_routes, security_routes,
-    sso_routes, team_routes, token_routes, user_routes, workflow_routes,
+    ApiError, AppState, audit_routes, auth_routes, csrf, entity_routes, health, hook_routes,
+    mfa_routes, module_routes, notification_routes, openapi, org_routes, passkey_routes,
+    security_routes, sso_routes, team_routes, token_routes, user_routes, workflow_routes,
 };
 
 const REQUEST_ID: HeaderName = HeaderName::from_static("x-request-id");
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
+/// Sync webhooks wait up to 5 minutes for their run.
+const HOOK_TIMEOUT: Duration = Duration::from_secs(310);
 const MAX_BODY_BYTES: usize = 2 * 1024 * 1024;
 
 /// Builds the full API router with the standard middleware stack.
@@ -75,13 +77,34 @@ pub fn router(state: AppState) -> Router {
         // 2 MB extractor limit; only the upload route raises it.
         .layer(RequestBodyLimitLayer::new(body_limit));
 
-    Router::new()
+    let main = Router::new()
         .route("/healthz", get(health::healthz))
         .route("/readyz", get(health::readyz))
         .nest("/api/v1", api_v1)
         .fallback(not_found)
-        .layer(stack)
-        .with_state(state)
+        .layer(stack);
+
+    // Webhooks: outside /api/v1 (no sessions or CSRF), with a longer timeout
+    // for sync responses and a smaller body limit.
+    let hooks = Router::new()
+        .route(
+            "/hooks/{public_id}",
+            axum::routing::post(hook_routes::receive),
+        )
+        .layer(
+            ServiceBuilder::new()
+                .layer(SetRequestIdLayer::new(REQUEST_ID, MakeRequestUuid))
+                .layer(TraceLayer::new_for_http().make_span_with(make_span))
+                .layer(PropagateRequestIdLayer::new(REQUEST_ID))
+                .layer(CatchPanicLayer::custom(handle_panic))
+                .layer(TimeoutLayer::with_status_code(
+                    StatusCode::REQUEST_TIMEOUT,
+                    HOOK_TIMEOUT,
+                ))
+                .layer(RequestBodyLimitLayer::new(hook_routes::MAX_BODY)),
+        );
+
+    Router::new().merge(hooks).merge(main).with_state(state)
 }
 
 /// One span per request, continuing the caller's trace if it sent `traceparent`.

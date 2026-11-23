@@ -11,6 +11,7 @@ pub mod context;
 pub mod csrf;
 pub mod entity_routes;
 pub mod health;
+mod hook_routes;
 pub mod idempotency;
 pub mod mfa_routes;
 pub mod module_routes;

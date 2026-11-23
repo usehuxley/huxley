@@ -9,10 +9,13 @@ repository.workspace = true
 publish = false
 
 [dependencies]
+getrandom.workspace = true
 huxley-core.workspace = true
 huxley-db.workspace = true
 huxley-expr.workspace = true
 huxley-hwf.workspace = true
+huxley-orgs.workspace = true
+jiff.workspace = true
 jsonschema.workspace = true
 serde.workspace = true
 serde_json.workspace = true

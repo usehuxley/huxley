@@ -34,6 +34,7 @@ pub fn workflow_routes() -> Router<AppState> {
         .route("/{id}/versions", get(versions))
         .route("/{id}/versions/{version}", get(version))
         .route("/{id}/runs", post(start_run))
+        .route("/{id}/triggers", get(triggers))
 }
 
 pub fn run_routes() -> Router<AppState> {
@@ -590,4 +591,24 @@ pub async fn cancel_run(
     }
     tx.commit().await.map_err(db_err)?;
     Ok(Json(CancelRunResponse { cancelled }))
+}
+
+/// The published version's triggers: webhook paths and schedule times.
+#[utoipa::path(get, path = "/api/v1/workflows/{id}/triggers", operation_id = "list_workflow_triggers", tag = "workflows",
+    params(("id" = Uuid, Path)),
+    responses((status = 200, body = Vec<huxley_workflows::triggers::TriggerView>)))]
+pub async fn triggers(
+    State(state): State<AppState>,
+    authed: Authed,
+    Path(id): Path<Uuid>,
+) -> ApiResult<Json<Vec<huxley_workflows::triggers::TriggerView>>> {
+    authorize(&state, &authed, permissions::WORKFLOW_READ, id).await?;
+    let mut tx = begin_scoped(&state.db, &authed.scope(&state).await?)
+        .await
+        .map_err(db_err)?;
+    let triggers = huxley_workflows::triggers::list(&mut tx, id)
+        .await
+        .map_err(map_workflow)?;
+    tx.commit().await.map_err(db_err)?;
+    Ok(Json(triggers))
 }

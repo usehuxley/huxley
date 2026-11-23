@@ -1707,6 +1707,23 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
+	'/api/v1/workflows/{id}/triggers': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** The published version's triggers: webhook paths and schedule times. */
+		get: operations['list_workflow_triggers'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
 	'/api/v1/workflows/{id}/versions': {
 		parameters: {
 			query?: never;
@@ -2699,6 +2716,17 @@ export interface components {
 			otpauthUri: string;
 			/** @description Base32 secret, for entering into the app by hand. */
 			secret: string;
+		};
+		/** @description A trigger as the app shows it. */
+		TriggerView: {
+			/** Format: date-time */
+			lastRunAt?: string | null;
+			/** Format: date-time */
+			nextRunAt?: string | null;
+			/** @description Webhooks: the path to POST to, `/hooks/{publicId}`. */
+			publicId?: string | null;
+			triggerId: string;
+			type: string;
 		};
 		UnreadCount: {
 			/** Format: int64 */
@@ -6427,6 +6455,27 @@ export interface operations {
 				};
 				content: {
 					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	list_workflow_triggers: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['TriggerView'][];
 				};
 			};
 		};
