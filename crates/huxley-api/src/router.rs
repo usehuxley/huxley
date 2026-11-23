@@ -17,9 +17,9 @@ use tower_http::trace::TraceLayer;
 use crate::{
     ApiError, AppState, approval_routes, audit_routes, auth_routes, connection_routes, csrf,
     entity_routes, form_routes, health, hook_routes, integration_routes, mfa_routes, module_routes,
-    notification_routes, openapi, org_routes, passkey_routes, runner_routes, script_routes,
-    security_routes, sso_routes, team_routes, token_routes, user_routes, variable_routes,
-    workflow_routes,
+    notification_routes, openapi, org_routes, passkey_routes, public_form_routes, runner_routes,
+    script_routes, security_routes, sso_routes, team_routes, token_routes, user_routes,
+    variable_routes, workflow_routes,
 };
 
 const REQUEST_ID: HeaderName = HeaderName::from_static("x-request-id");
@@ -102,6 +102,11 @@ pub fn router(state: AppState) -> Router {
         .route(
             "/hooks/{public_id}",
             axum::routing::post(hook_routes::receive),
+        )
+        // Forms filled in through public links.
+        .route(
+            "/public/forms/{token}",
+            axum::routing::get(public_form_routes::form).post(public_form_routes::submit),
         )
         // Callback URLs of parked wait_for_callback steps.
         .route(

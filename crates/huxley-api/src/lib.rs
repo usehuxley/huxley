@@ -24,6 +24,7 @@ pub mod openapi;
 pub mod org_routes;
 pub mod passkey_routes;
 pub mod problem;
+mod public_form_routes;
 pub mod rate_limit;
 mod router;
 mod runner_routes;
@@ -97,7 +98,12 @@ pub struct AppState {
     pub runner_gateway_url: Option<String>,
     pub config: Arc<ApiConfig>,
     pub login_limiter: Arc<RateLimiter>,
+    /// Public form links, per client address.
+    pub public_limiter: Arc<RateLimiter>,
 }
+
+/// Requests to public form links one client address may make a minute.
+pub const PUBLIC_FORMS_PER_MINUTE: u32 = 30;
 
 impl AppState {
     pub fn new(db: PgPool, auth: AuthService, crypto: Crypto, config: ApiConfig) -> Self {
@@ -121,6 +127,10 @@ impl AppState {
             crypto,
             config: Arc::new(config),
             login_limiter,
+            public_limiter: Arc::new(RateLimiter::new(
+                PUBLIC_FORMS_PER_MINUTE,
+                Duration::from_secs(60),
+            )),
         }
     }
 

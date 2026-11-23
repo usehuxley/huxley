@@ -6,7 +6,7 @@ use axum::routing::{get, post};
 use axum::{Json, Router};
 use huxley_authz::permissions;
 use huxley_db::{OrgScope, begin_scoped};
-use huxley_forms::{Choice, Form, FormError, FormInput, Submitted};
+use huxley_forms::{Choice, Form, FormError, FormInput, LinkView, Submitted};
 use serde::{Deserialize, Serialize};
 use serde_json::Value as JsonValue;
 use time::OffsetDateTime;
@@ -24,6 +24,8 @@ pub fn routes() -> Router<AppState> {
         .route("/{id}/restore", post(restore))
         .route("/{id}/submissions", get(submissions).post(submit))
         .route("/{id}/fields/{name}/options", get(options))
+        .route("/{id}/links", get(list_links).post(create_link))
+        .route("/{id}/links/{link_id}/revoke", post(revoke_link))
 }
 
 fn db_err(e: impl std::fmt::Display) -> ApiError {
@@ -67,6 +69,12 @@ async fn submit_org(
     authed
         .require_at(state, permissions::FORM_SUBMIT, org_id)
         .await?;
+    in_tree(state, form, org_id).await?;
+    Ok(org_id)
+}
+
+/// `org_id` must be the form's organization or one below it.
+async fn in_tree(state: &AppState, form: &Form, org_id: Uuid) -> ApiResult<()> {
     let (Some(form_path), Some(org_path)) = (
         org_path(state, form.org_id).await?,
         org_path(state, org_id).await?,
@@ -77,7 +85,7 @@ async fn submit_org(
         return Err(ApiError::validation()
             .with_field_error("orgId", "the form's organization or one below it"));
     }
-    Ok(org_id)
+    Ok(())
 }
 
 async fn org_path(state: &AppState, org: Uuid) -> ApiResult<Option<String>> {
@@ -281,7 +289,7 @@ pub async fn submit(
         &authed.user.ctx,
         id,
         org_id,
-        Some(authed.user.auth.user.id),
+        huxley_forms::Submitter::User(authed.user.auth.user.id),
         body.answers,
     )
     .await
@@ -316,6 +324,107 @@ pub async fn options(
         .await
         .map_err(map_err)?;
     Ok(Json(choices))
+}
+
+#[derive(Debug, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct CreateLinkRequest {
+    /// What it's for, e.g. "Contoso staff".
+    pub name: String,
+    /// The organization submissions are for: the form's (default) or one
+    /// below it.
+    #[serde(default)]
+    pub org_id: Option<Uuid>,
+    #[serde(default, with = "time::serde::rfc3339::option")]
+    pub expires_at: Option<OffsetDateTime>,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct CreatedLink {
+    /// Shown once: the link is `<web app>/f/<token>`.
+    pub token: String,
+    pub link: LinkView,
+}
+
+/// Links managed here need `form:manage` at the form's organization and
+/// the link's.
+async fn manage(state: &AppState, authed: &Authed, id: Uuid) -> ApiResult<Form> {
+    let form = load(state, authed, id).await?;
+    authed
+        .require_at(state, permissions::FORM_MANAGE, form.org_id)
+        .await?;
+    Ok(form)
+}
+
+/// A public link: anyone with it can fill the form in for one
+/// organization, without signing in. Their runs act as each workflow's
+/// run-as account. Forms that look choices up can't have one.
+#[utoipa::path(post, path = "/api/v1/forms/{id}/links", operation_id = "create_form_link", tag = "forms",
+    params(("id" = Uuid, Path)), request_body = CreateLinkRequest,
+    responses((status = 201, body = CreatedLink), (status = 422, body = ApiError, content_type = "application/problem+json")))]
+pub async fn create_link(
+    State(state): State<AppState>,
+    authed: Authed,
+    Path(id): Path<Uuid>,
+    Json(body): Json<CreateLinkRequest>,
+) -> ApiResult<(StatusCode, Json<CreatedLink>)> {
+    let form = manage(&state, &authed, id).await?;
+    let org_id = body.org_id.unwrap_or(form.org_id);
+    authed
+        .require_at(&state, permissions::FORM_MANAGE, org_id)
+        .await?;
+    in_tree(&state, &form, org_id).await?;
+    let mut tx = begin_scoped(&state.db, &authed.scope(&state).await?)
+        .await
+        .map_err(db_err)?;
+    let (token, link) = huxley_forms::create_link(
+        &mut tx,
+        &authed.user.ctx,
+        &form,
+        org_id,
+        &body.name,
+        body.expires_at,
+    )
+    .await
+    .map_err(map_err)?;
+    tx.commit().await.map_err(db_err)?;
+    Ok((StatusCode::CREATED, Json(CreatedLink { token, link })))
+}
+
+#[utoipa::path(get, path = "/api/v1/forms/{id}/links", operation_id = "list_form_links", tag = "forms",
+    params(("id" = Uuid, Path)), responses((status = 200, body = Vec<LinkView>)))]
+pub async fn list_links(
+    State(state): State<AppState>,
+    authed: Authed,
+    Path(id): Path<Uuid>,
+) -> ApiResult<Json<Vec<LinkView>>> {
+    manage(&state, &authed, id).await?;
+    let mut tx = begin_scoped(&state.db, &authed.scope(&state).await?)
+        .await
+        .map_err(db_err)?;
+    let links = huxley_forms::links(&mut tx, id).await.map_err(map_err)?;
+    tx.commit().await.map_err(db_err)?;
+    Ok(Json(links))
+}
+
+/// Stops a public link working at once.
+#[utoipa::path(post, path = "/api/v1/forms/{id}/links/{link_id}/revoke", operation_id = "revoke_form_link", tag = "forms",
+    params(("id" = Uuid, Path), ("link_id" = Uuid, Path)), responses((status = 200, body = LinkView)))]
+pub async fn revoke_link(
+    State(state): State<AppState>,
+    authed: Authed,
+    Path((id, link_id)): Path<(Uuid, Uuid)>,
+) -> ApiResult<Json<LinkView>> {
+    manage(&state, &authed, id).await?;
+    let mut tx = begin_scoped(&state.db, &authed.scope(&state).await?)
+        .await
+        .map_err(db_err)?;
+    let link = huxley_forms::revoke_link(&mut tx, &authed.user.ctx, id, link_id)
+        .await
+        .map_err(map_err)?;
+    tx.commit().await.map_err(db_err)?;
+    Ok(Json(link))
 }
 
 #[derive(Debug, Serialize, ToSchema, sqlx::FromRow)]

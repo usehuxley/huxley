@@ -1421,3 +1421,139 @@ async fn forms_show_fields_conditionally_and_look_up_choices() {
         "{problem}"
     );
 }
+
+/// A published "Sign up" form (and its workflows): its id, key, and body.
+async fn signup_form(s: &Setup) -> (String, String, Value) {
+    let form_key = key("signup");
+    let (status, form) = s
+        .post(
+            &s.owner,
+            "/api/v1/forms",
+            json!({ "orgId": s.org, "form": {
+            "key": form_key, "name": "Sign up",
+            "schema": { "type": "object", "required": ["name"],
+                        "properties": { "name": { "type": "string", "minLength": 1 } } } } }),
+        )
+        .await;
+    assert_eq!(status, StatusCode::CREATED, "{form}");
+    listen(s, &form_key).await;
+    (form["id"].as_str().unwrap().to_owned(), form_key, form)
+}
+
+#[tokio::test]
+async fn public_links_take_answers_without_signing_in() {
+    let Some(s) = setup().await else { return };
+    let (id, _, _) = signup_form(&s).await;
+
+    // Only form managers make links.
+    let (_, tech) = technician(&s).await;
+    let links = format!("/api/v1/forms/{id}/links");
+    assert_eq!(
+        s.post(&tech, &links, json!({ "name": "x" })).await.0,
+        StatusCode::FORBIDDEN
+    );
+    let (status, created) = s.post(&s.owner, &links, json!({ "name": "Website" })).await;
+    assert_eq!(status, StatusCode::CREATED, "{created}");
+    let token = created["token"].as_str().unwrap().to_owned();
+    assert!(token.starts_with("hxf_"));
+    let link_id = created["link"]["id"].as_str().unwrap().to_owned();
+    let (_, listed) = s.get(&s.owner, &links).await;
+    assert_eq!(listed[0]["name"], "Website");
+    assert!(listed[0].get("token").is_none(), "the token is shown once");
+
+    // Anyone with the link: no session, no CSRF header.
+    let public = format!("/public/forms/{token}");
+    let (status, shown) = call(&s.app, "GET", &public, "", None).await;
+    assert_eq!(status, StatusCode::OK, "{shown}");
+    assert_eq!(shown["name"], "Sign up");
+    let (status, problem) = call(
+        &s.app,
+        "POST",
+        &public,
+        "",
+        Some(json!({ "answers": { "name": "" } })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{problem}");
+    let (status, received) = call(
+        &s.app,
+        "POST",
+        &public,
+        "",
+        Some(json!({ "answers": { "name": "Ada" } })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED, "{received}");
+    assert_eq!(
+        received,
+        json!({ "received": true }),
+        "nothing about the runs"
+    );
+    let (submitted_by, link, runs): (Option<Uuid>, Option<Uuid>, Vec<Uuid>) = sqlx::query_as(
+        "SELECT submitted_by, link_id, run_ids FROM form_submissions WHERE form_id = $1",
+    )
+    .bind(id.parse::<Uuid>().unwrap())
+    .fetch_one(&s.pools.owner)
+    .await
+    .unwrap();
+    assert_eq!(submitted_by, None);
+    assert_eq!(link.map(|l| l.to_string()), Some(link_id.clone()));
+    assert_eq!(runs.len(), 1);
+    let actor: Option<Uuid> = sqlx::query_scalar("SELECT actor_id FROM runs WHERE id = $1")
+        .bind(runs[0])
+        .fetch_one(&s.pools.owner)
+        .await
+        .unwrap();
+    assert_eq!(actor, None, "no run-as account set: the run acts as no one");
+
+    // Revoked, or unknown: gone.
+    let (status, _) = s
+        .post(&s.owner, &format!("{links}/{link_id}/revoke"), json!({}))
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(
+        call(&s.app, "GET", &public, "", None).await.0,
+        StatusCode::NOT_FOUND
+    );
+    let (status, _) = call(
+        &s.app,
+        "POST",
+        &public,
+        "",
+        Some(json!({ "answers": { "name": "Ada" } })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+    assert_eq!(
+        call(&s.app, "GET", "/public/forms/hxf_nope", "", None)
+            .await
+            .0,
+        StatusCode::NOT_FOUND
+    );
+}
+
+#[tokio::test]
+async fn public_forms_never_look_choices_up() {
+    let Some(s) = setup().await else { return };
+    let (id, form_key, form) = signup_form(&s).await;
+    let links = format!("/api/v1/forms/{id}/links");
+    let (status, created) = s.post(&s.owner, &links, json!({ "name": "Website" })).await;
+    assert_eq!(status, StatusCode::CREATED, "{created}");
+    let link_id = created["link"]["id"].as_str().unwrap().to_owned();
+
+    // Looked-up choices can't be added while the form is public.
+    let ui = json!({ "name": { "options_from": { "action": "graph/users", "value": "id" } } });
+    let body = json!({ "key": form_key, "name": "Sign up", "schema": form["schema"], "ui": ui });
+    let update = format!("/api/v1/forms/{id}");
+    let (status, problem) = call(&s.app, "PUT", &update, &s.owner, Some(body.clone())).await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{problem}");
+    assert!(problem.to_string().contains("public links"), "{problem}");
+
+    // Once the link is off it can, and then it can't get a link.
+    s.post(&s.owner, &format!("{links}/{link_id}/revoke"), json!({}))
+        .await;
+    let (status, saved) = call(&s.app, "PUT", &update, &s.owner, Some(body)).await;
+    assert_eq!(status, StatusCode::OK, "{saved}");
+    let (status, problem) = s.post(&s.owner, &links, json!({ "name": "Again" })).await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{problem}");
+}

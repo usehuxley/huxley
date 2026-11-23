@@ -939,6 +939,44 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
+	'/api/v1/forms/{id}/links': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get: operations['list_form_links'];
+		put?: never;
+		/**
+		 * A public link: anyone with it can fill the form in for one
+		 *     organization, without signing in. Their runs act as each workflow's
+		 *     run-as account. Forms that look choices up can't have one.
+		 */
+		post: operations['create_form_link'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/forms/{id}/links/{link_id}/revoke': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/** Stops a public link working at once. */
+		post: operations['revoke_form_link'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
 	'/api/v1/forms/{id}/restore': {
 		parameters: {
 			query?: never;
@@ -2520,6 +2558,24 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
+	'/public/forms/{token}': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** The form a public link opens. */
+		get: operations['get_public_form'];
+		put?: never;
+		/** Submits answers through a public link. */
+		post: operations['submit_public_form'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
 	'/readyz': {
 		parameters: {
 			query?: never;
@@ -2909,6 +2965,18 @@ export interface components {
 			/** Format: uuid */
 			orgId: string;
 		};
+		CreateLinkRequest: {
+			/** Format: date-time */
+			expiresAt?: string | null;
+			/** @description What it's for, e.g. "Contoso staff". */
+			name: string;
+			/**
+			 * Format: uuid
+			 * @description The organization submissions are for: the form's (default) or one
+			 *     below it.
+			 */
+			orgId?: string | null;
+		};
 		CreateOrgRequest: {
 			kind: components['schemas']['OrgKindInput'];
 			name: string;
@@ -2969,6 +3037,11 @@ export interface components {
 			};
 			/** Format: uuid */
 			orgId: string;
+		};
+		CreatedLink: {
+			link: components['schemas']['LinkView'];
+			/** @description Shown once: the link is `<web app>/f/<token>`. */
+			token: string;
 		};
 		CreatedTokenView: components['schemas']['ApiTokenView'] & {
 			/** @description Send as `Authorization: Bearer <token>`. Shown only now. */
@@ -3216,6 +3289,24 @@ export interface components {
 		};
 		/** @enum {string} */
 		Language: 'pwsh' | 'python';
+		/** @description A public link as its managers see it (never the token). */
+		LinkView: {
+			/** Format: date-time */
+			createdAt: string;
+			/** Format: date-time */
+			expiresAt?: string | null;
+			/** Format: uuid */
+			formId: string;
+			/** Format: uuid */
+			id: string;
+			/** Format: date-time */
+			lastUsedAt?: string | null;
+			name: string;
+			/** Format: uuid */
+			orgId: string;
+			/** Format: date-time */
+			revokedAt?: string | null;
+		};
 		/** @description A value set at the org itself. */
 		LocalSetting: {
 			locked: boolean;
@@ -3593,8 +3684,28 @@ export interface components {
 			tenantId?: string | null;
 			trustEmail?: boolean | null;
 		};
+		/** @description What someone with the link sees. */
+		PublicForm: {
+			description?: string | null;
+			name: string;
+			schema: {
+				[key: string]: unknown;
+			};
+			ui: {
+				[key: string]: unknown;
+			};
+		};
+		PublicSubmission: {
+			answers: {
+				[key: string]: unknown;
+			};
+		};
 		PublishRequest: {
 			notes?: string | null;
+		};
+		/** @description Only that it was received: nothing about the runs. */
+		Received: {
+			received: boolean;
 		};
 		RecoveryCodesView: {
 			/** @description Shown only now. Each code signs in once if the authenticator is lost. */
@@ -6176,6 +6287,82 @@ export interface operations {
 				};
 				content: {
 					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	list_form_links: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['LinkView'][];
+				};
+			};
+		};
+	};
+	create_form_link: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['CreateLinkRequest'];
+			};
+		};
+		responses: {
+			201: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['CreatedLink'];
+				};
+			};
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	revoke_form_link: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+				link_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['LinkView'];
 				};
 			};
 		};
@@ -9383,6 +9570,84 @@ export interface operations {
 				};
 				content: {
 					'application/json': components['schemas']['HealthStatus'];
+				};
+			};
+		};
+	};
+	get_public_form: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				token: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['PublicForm'];
+				};
+			};
+			404: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	submit_public_form: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				token: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['PublicSubmission'];
+			};
+		};
+		responses: {
+			201: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['Received'];
+				};
+			};
+			404: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+			429: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
 				};
 			};
 		};
