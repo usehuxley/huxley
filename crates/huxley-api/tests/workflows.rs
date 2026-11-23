@@ -750,3 +750,74 @@ async fn run_as_needs_an_active_service_account_and_the_right_to_assign_it() {
     assert_eq!(status, StatusCode::OK, "{summary}");
     assert_eq!(summary["runAs"], Value::Null);
 }
+
+#[tokio::test]
+async fn approvals_are_for_their_approvers() {
+    // Its own database: this test's engine runs the jobs.
+    let Some(db) = isolated("api_approvals").await else {
+        return;
+    };
+    let s = setup_in(db.pools.clone()).await;
+    let (approver_id, approver_email) = user(&s.pools, false).await;
+    let doc = json!({
+        "apiVersion": "usehuxley.com/v1",
+        "kind": "Workflow",
+        "metadata": { "key": "ask", "name": "Ask" },
+        "spec": { "steps": [
+            { "id": "ask", "type": "approval", "title": "OK?", "approvers": [format!("user:{approver_id}")] }
+        ] }
+    });
+    let (_, created) = s.create(doc).await;
+    let id = created["id"].as_str().unwrap().to_owned();
+    let (status, run) = s
+        .post(
+            &s.owner,
+            &format!("/api/v1/workflows/{id}/runs"),
+            json!({ "test": true }),
+        )
+        .await;
+    assert_eq!(status, StatusCode::CREATED, "{run}");
+    let engine = huxley_engine::Engine::new(s.pools.app.clone(), crypto(&s.pools));
+    let approver = login(&s.app, &approver_email).await;
+    let deadline = Instant::now() + Duration::from_secs(20);
+    let approval = loop {
+        engine.drain("api-test", 20).await.unwrap();
+        let (_, mine) = s.get(&approver, "/api/v1/approvals").await;
+        if let Some(first) = mine.as_array().and_then(|a| a.first()) {
+            break first.clone();
+        }
+        assert!(Instant::now() < deadline, "no approval appeared");
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    };
+    assert_eq!(approval["title"], "OK?");
+    assert_eq!(approval["status"], "pending");
+    let uri = format!("/api/v1/approvals/{}", approval["id"].as_str().unwrap());
+
+    // Someone else neither sees it listed nor can open it.
+    let (_, stranger_email) = user(&s.pools, false).await;
+    let stranger = login(&s.app, &stranger_email).await;
+    let (_, theirs) = s.get(&stranger, "/api/v1/approvals").await;
+    assert_eq!(theirs, json!([]));
+    assert_eq!(s.get(&stranger, &uri).await.0, StatusCode::NOT_FOUND);
+    // The owner can read the run, so can see the approval, but can't decide.
+    assert_eq!(s.get(&s.owner, &uri).await.0, StatusCode::OK);
+    let decision = format!("{uri}/decision");
+    let (status, _) = s
+        .post(&s.owner, &decision, json!({ "decision": "approve" }))
+        .await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+
+    let (status, decided) = s
+        .post(
+            &approver,
+            &decision,
+            json!({ "decision": "reject", "comment": "not now" }),
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK, "{decided}");
+    assert_eq!(decided["status"], "rejected");
+    let (status, _) = s
+        .post(&approver, &decision, json!({ "decision": "approve" }))
+        .await;
+    assert_eq!(status, StatusCode::CONFLICT);
+}

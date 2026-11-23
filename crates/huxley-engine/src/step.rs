@@ -170,6 +170,10 @@ impl Engine {
         record: &Record,
     ) -> Executed {
         match step {
+            Step::Approval(_) => match self.park_approval(run_id, org_id, record, input).await {
+                Ok(executed) => executed,
+                Err(e) => Executed::Failed(error("internal", e.to_string())),
+            },
             Step::WaitForCallback(_) => {
                 match self.park_callback(run_id, org_id, record, input).await {
                     Ok(executed) => executed,

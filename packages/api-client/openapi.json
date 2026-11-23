@@ -10,6 +10,122 @@
 		"version": "0.1.0"
 	},
 	"paths": {
+		"/api/v1/approvals": {
+			"get": {
+				"tags": ["workflows"],
+				"summary": "Approvals waiting for you, then the ones you decided in the last 30 days.",
+				"operationId": "list_my_approvals",
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "array",
+									"items": {
+										"$ref": "#/components/schemas/ApprovalView"
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/approvals/{id}": {
+			"get": {
+				"tags": ["workflows"],
+				"summary": "One approval: for its approvers, and anyone who can read the run.",
+				"operationId": "get_approval",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApprovalView"
+								}
+							}
+						}
+					},
+					"404": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/approvals/{id}/decision": {
+			"post": {
+				"tags": ["workflows"],
+				"summary": "Approves or rejects. The first decision counts; the workflow continues\nwith it as the step's output.",
+				"operationId": "decide_approval",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/DecisionRequest"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApprovalView"
+								}
+							}
+						}
+					},
+					"403": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					},
+					"409": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
 		"/api/v1/attachments/{id}": {
 			"delete": {
 				"tags": ["fields"],
@@ -5940,6 +6056,61 @@
 					}
 				}
 			},
+			"ApprovalStatus": {
+				"type": "string",
+				"enum": ["pending", "approved", "rejected", "expired"]
+			},
+			"ApprovalView": {
+				"type": "object",
+				"description": "An approval as approvers see it.",
+				"required": ["id", "runId", "orgId", "title", "status", "expiresAt", "createdAt"],
+				"properties": {
+					"comment": {
+						"type": ["string", "null"]
+					},
+					"createdAt": {
+						"type": "string",
+						"format": "date-time"
+					},
+					"decidedAt": {
+						"type": ["string", "null"],
+						"format": "date-time"
+					},
+					"decidedBy": {
+						"type": ["string", "null"],
+						"format": "uuid"
+					},
+					"expiresAt": {
+						"type": "string",
+						"format": "date-time"
+					},
+					"id": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"message": {
+						"type": ["string", "null"]
+					},
+					"orgId": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"runId": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"status": {
+						"$ref": "#/components/schemas/ApprovalStatus"
+					},
+					"title": {
+						"type": "string"
+					},
+					"workflowName": {
+						"type": ["string", "null"],
+						"description": "The workflow's name, if the run is of a saved workflow."
+					}
+				}
+			},
 			"ArchiveOrgRequest": {
 				"type": "object",
 				"required": ["version"],
@@ -6720,6 +6891,24 @@
 						"type": ["string", "null"]
 					}
 				}
+			},
+			"Decision": {
+				"type": "string",
+				"enum": ["approve", "reject"]
+			},
+			"DecisionRequest": {
+				"type": "object",
+				"required": ["decision"],
+				"properties": {
+					"comment": {
+						"type": ["string", "null"],
+						"description": "Shown on the run, at most 2000 characters."
+					},
+					"decision": {
+						"$ref": "#/components/schemas/Decision"
+					}
+				},
+				"additionalProperties": false
 			},
 			"Definition": {
 				"type": "object",

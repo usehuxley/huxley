@@ -100,6 +100,29 @@ export const STEPS: StepSpec[] = [
 		]
 	},
 	{
+		type: 'approval',
+		label: 'Approval',
+		description: 'Pause until someone approves or rejects.',
+		group: 'Control flow',
+		template: { title: '', approvers: ['role:admin'], expires: '7d' },
+		fields: [
+			{ path: 'title', label: 'Question', kind: 'expression' },
+			{ path: 'message', label: 'Details', kind: 'expression' },
+			{
+				path: 'approvers',
+				label: 'Approvers',
+				kind: 'json',
+				hint: 'user:<id>, team:<id> or role:<key>; the first decision counts'
+			},
+			{
+				path: 'expires',
+				label: 'Expires after',
+				kind: 'text',
+				hint: 'e.g. 3d; then the step fails'
+			}
+		]
+	},
+	{
 		type: 'wait_for_callback',
 		label: 'Wait for callback',
 		description: 'Pause until another system calls a single-use URL.',
@@ -352,6 +375,8 @@ export function summary(step: Step): string {
 			return text(step.workflow);
 		case 'integration.action':
 			return text(step.action);
+		case 'approval':
+			return text(step.title);
 		case 'wait_for_callback':
 			return `expires after ${text(step.expires ?? '24h')}`;
 		case 'transform':

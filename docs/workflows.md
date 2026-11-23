@@ -61,6 +61,7 @@ spec:
 | `subworkflow` | Runs another published workflow (found by key here or in an organization above) and, by default, waits for its outputs. |
 | `transform` | Computes a value. |
 | `set_var` | Sets run variables, read as `run.vars.<name>`. |
+| `approval` | Pauses until one of the `approvers` (`user:<id>`, `team:<id>`, `role:<key>` at the run's organization) approves or rejects under **Approvals**. They're notified with a link. The first decision counts. Output: `{decision: approved \| rejected, by: {id, name}, comment, decided_at}`. `expires` (default `7d`) fails it with `kind: timeout`. |
 | `wait_for_callback` | Pauses until another system calls a single-use URL, then continues with the request (`method`, `query`, `content_type`, `body`) as output. `send` tells the other system the URL (`{{ callback.url }}`) with an integration action (`action`, `with`) or an HTTP request (`request`). `expires` (default `24h`) is how long it waits before failing with `kind: timeout`. Needs `auth.public_url`. |
 | `wait` | Pauses for a `duration` or `until` a time. |
 | `if`, `switch` | Run one block depending on a condition or a value. |

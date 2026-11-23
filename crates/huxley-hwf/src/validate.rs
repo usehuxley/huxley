@@ -344,6 +344,12 @@ fn one(c: &mut Checker, path: &str, step: &Step) {
         },
         Step::IntegrationAction(s) => integration_action(c, path, s),
         Step::WaitForCallback(s) => wait_for_callback(c, path, s),
+        Step::Approval(s) => {
+            c.duration(&format!("{path}.expires"), s.expires.as_deref());
+            if s.title.trim().is_empty() {
+                c.error(format!("{path}.title"), "is required");
+            }
+        }
         Step::Subworkflow(s) if !is_valid_key(&s.workflow) => {
             c.error(format!("{path}.workflow"), "a workflow key");
         }

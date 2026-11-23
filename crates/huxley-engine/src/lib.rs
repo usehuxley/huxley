@@ -10,6 +10,7 @@
 //! them; they begin once it commits.
 
 mod action;
+pub mod approval;
 mod callback;
 mod egress;
 mod http;

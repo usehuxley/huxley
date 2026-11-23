@@ -9,6 +9,7 @@
 		Boxes,
 		Building2,
 		ChartColumn,
+		CircleCheck,
 		House,
 		Plug,
 		Settings,
@@ -32,6 +33,7 @@
 		...(data.user.grantedPermissions.includes('integration:read')
 			? [{ href: '/integrations', label: 'Integrations', icon: Plug }]
 			: []),
+		{ href: '/approvals', label: 'Approvals', icon: CircleCheck },
 		{ href: '/tickets', label: 'Tickets', icon: Ticket, soon: true },
 		{ href: '/clients', label: 'Clients', icon: Building2, soon: true },
 		{ href: '/assets', label: 'Assets', icon: Boxes, soon: true },
