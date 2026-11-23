@@ -17,8 +17,9 @@ use std::time::Duration;
 use tokio_util::sync::CancellationToken;
 
 use serde_json::Value as Json;
-use tokio::io::AsyncReadExt as _;
+use tokio::io::{AsyncRead, AsyncReadExt as _};
 use tokio::process::Command;
+use tokio::sync::mpsc;
 
 /// Logs kept from a run (stdout and stderr together).
 const MAX_LOGS: usize = 64 * 1024;
@@ -268,7 +269,7 @@ impl Podman {
             ),
             "python" => (
                 &self.python_image,
-                &["python3", "-I", "/huxley/in/wrapper.py"],
+                &["python3", "-I", "-u", "/huxley/in/wrapper.py"],
             ),
             _ => return None,
         };
@@ -320,21 +321,32 @@ impl Podman {
 
     /// Runs `job` in a fresh container.
     pub async fn run(&self, job: &Job) -> Outcome {
-        let outcome = match self.try_run(job).await {
+        self.run_with_logs(job, None).await
+    }
+
+    /// Runs `job`, sending its output to `sink` line by line (scrubbed) as
+    /// it comes.
+    pub async fn run_with_logs(&self, job: &Job, sink: Option<LogSink>) -> Outcome {
+        let outcome = match self.try_run(job, sink).await {
             Ok(outcome) => outcome,
             Err(e) => Outcome::failed(format!("the sandbox failed: {e}"), None, String::new()),
         };
         scrub(outcome, &job.redact)
     }
 
-    async fn try_run(&self, job: &Job) -> std::io::Result<Outcome> {
+    async fn try_run(&self, job: &Job, sink: Option<LogSink>) -> std::io::Result<Outcome> {
         let dir = tempdir()?;
-        let result = self.run_in(job, &dir).await;
+        let result = self.run_in(job, &dir, sink).await;
         let _ = std::fs::remove_dir_all(&dir);
         result
     }
 
-    async fn run_in(&self, job: &Job, dir: &Path) -> std::io::Result<Outcome> {
+    async fn run_in(
+        &self,
+        job: &Job,
+        dir: &Path,
+        sink: Option<LogSink>,
+    ) -> std::io::Result<Outcome> {
         let name = format!("huxley-{}", huxley_core::new_id());
         let Some(args) = self.args(&name, job, dir) else {
             return Ok(Outcome::failed(
@@ -368,23 +380,7 @@ impl Podman {
             .spawn()?;
         let stdout = child.stdout.take();
         let stderr = child.stderr.take();
-        let logs = tokio::spawn(async move {
-            let mut out = Vec::new();
-            let mut err = Vec::new();
-            let read_out = async {
-                if let Some(mut s) = stdout {
-                    let _ = s.read_to_end(&mut out).await;
-                }
-            };
-            let read_err = async {
-                if let Some(mut s) = stderr {
-                    let _ = s.read_to_end(&mut err).await;
-                }
-            };
-            tokio::join!(read_out, read_err);
-            out.extend_from_slice(&err);
-            out
-        });
+        let logs = collect_logs(stdout, stderr, sink, job.redact.clone());
         let status = if let Ok(status) = tokio::time::timeout(job.timeout, child.wait()).await {
             status?
         } else {
@@ -462,16 +458,79 @@ fn prepare(job: &Job, dir: &Path) -> std::io::Result<()> {
 /// Masks the job's secrets in everything reported.
 fn scrub(outcome: Outcome, redact: &[String]) -> Outcome {
     let secrets = || redact.iter().map(String::as_str);
-    let text = |s: &str| match huxley_expr::redact(&Json::String(s.to_owned()), secrets()) {
-        Json::String(s) => s,
-        _ => String::new(),
-    };
     Outcome {
         output: outcome.output.map(|o| huxley_expr::redact(&o, secrets())),
-        error: outcome.error.as_deref().map(text),
-        logs: text(&outcome.logs),
+        error: outcome.error.as_deref().map(|e| scrub_text(e, redact)),
+        logs: scrub_text(&outcome.logs, redact),
         ..outcome
     }
+}
+
+fn scrub_text(text: &str, redact: &[String]) -> String {
+    let secrets = redact.iter().map(String::as_str);
+    match huxley_expr::redact(&Json::String(text.to_owned()), secrets) {
+        Json::String(s) => s,
+        _ => String::new(),
+    }
+}
+
+/// Where a run's output goes as it comes (scrubbed lines).
+pub type LogSink = mpsc::UnboundedSender<String>;
+
+/// The longest piece of output sent as one line.
+const MAX_LINE: usize = 8 * 1024;
+
+/// Reads a pipe, sending each line (or each `MAX_LINE` bytes without one).
+async fn read_lines<R: AsyncRead + Unpin>(mut pipe: R, lines: mpsc::UnboundedSender<Vec<u8>>) {
+    let mut pending = Vec::new();
+    let mut buf = [0u8; 4096];
+    loop {
+        let n = match pipe.read(&mut buf).await {
+            Ok(0) | Err(_) => break,
+            Ok(n) => n,
+        };
+        pending.extend_from_slice(&buf[..n]);
+        while let Some(end) = pending.iter().position(|b| *b == b'\n') {
+            let rest = pending.split_off(end + 1);
+            let _ = lines.send(std::mem::replace(&mut pending, rest));
+        }
+        if pending.len() >= MAX_LINE {
+            let _ = lines.send(std::mem::take(&mut pending));
+        }
+    }
+    if !pending.is_empty() {
+        let _ = lines.send(pending);
+    }
+}
+
+/// Merges stdout and stderr in the order lines arrive, keeping (a bit
+/// more than) what the logs can hold and streaming lines to `sink`.
+fn collect_logs(
+    stdout: Option<tokio::process::ChildStdout>,
+    stderr: Option<tokio::process::ChildStderr>,
+    sink: Option<LogSink>,
+    redact: Vec<String>,
+) -> tokio::task::JoinHandle<Vec<u8>> {
+    let (tx, mut rx) = mpsc::unbounded_channel();
+    if let Some(out) = stdout {
+        tokio::spawn(read_lines(out, tx.clone()));
+    }
+    if let Some(err) = stderr {
+        tokio::spawn(read_lines(err, tx.clone()));
+    }
+    drop(tx);
+    tokio::spawn(async move {
+        let mut all = Vec::new();
+        while let Some(line) = rx.recv().await {
+            if all.len() < MAX_LOGS {
+                if let Some(sink) = &sink {
+                    let _ = sink.send(scrub_text(&String::from_utf8_lossy(&line), &redact));
+                }
+                all.extend_from_slice(&line);
+            }
+        }
+        all
+    })
 }
 
 fn clip(bytes: &[u8]) -> String {

@@ -323,6 +323,13 @@ impl Harness {
 
     /// An integration `vault` with an API key connection.
     async fn api_key_connection(&self, key: &str) {
+        // The org's first data key audits in a transaction of its own:
+        // make it before this one holds the audit chain.
+        let binding = huxley_crypto::Binding {
+            purpose: "test",
+            record: self.org,
+        };
+        self.crypto.encrypt(self.org, binding, b"x").await.unwrap();
         let spec = r"openapi: 3.0.3
 info: { title: Vault, version: '1' }
 servers: [ { url: 'https://vault.example.com/api' } ]
@@ -437,4 +444,51 @@ async fn a_missing_connection_fails_the_step() {
     let error = h.run(run).await.2.unwrap().to_string();
     assert!(error.contains("nope"), "{error}");
     assert!(h.claim().await.is_none());
+}
+
+#[tokio::test]
+async fn running_scripts_output_is_appended_scrubbed_then_replaced() {
+    let Some(h) = harness().await else { return };
+    h.api_key_connection("sk-live-ABCDEF").await;
+    let run = h
+        .start("{ id: run, type: script, script: greet, with: { name: ada }, connections: { VAULT: vault } }")
+        .await;
+    let task = h.claimed().await;
+    let logs = async || -> Option<String> {
+        sqlx::query_scalar("SELECT logs FROM script_tasks WHERE id = $1")
+            .bind(task.id)
+            .fetch_one(&h.pools.owner)
+            .await
+            .unwrap()
+    };
+    h.engine
+        .append_script_logs(h.runner, task.id, "using sk-live-ABCDEF\n")
+        .await
+        .unwrap();
+    h.engine
+        .append_script_logs(h.runner, task.id, "step two\n")
+        .await
+        .unwrap();
+    assert_eq!(
+        logs().await.as_deref(),
+        Some("using «redacted»\nstep two\n")
+    );
+    // Only its runner, only while it runs.
+    let stranger = h
+        .engine
+        .append_script_logs(Uuid::now_v7(), task.id, "x")
+        .await;
+    assert!(matches!(stranger, Err(ReportError::NotYours)));
+    // The whole log arrives with the report.
+    h.engine
+        .report_script(h.runner, task.id, &ok(json!({ "greeting": "hi" })))
+        .await
+        .unwrap();
+    assert_eq!(logs().await.as_deref(), Some("done"));
+    let late = h.engine.append_script_logs(h.runner, task.id, "late").await;
+    assert!(matches!(late, Err(ReportError::NotYours)));
+    h.until("the run finishing", async || {
+        h.run(run).await.0 == RunStatus::Succeeded
+    })
+    .await;
 }

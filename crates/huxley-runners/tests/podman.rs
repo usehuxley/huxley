@@ -277,3 +277,28 @@ async fn https_reaches_the_internet_through_the_proxy() {
     assert_eq!(output["status"], 200, "{outcome:?}");
     assert!(output["body"].as_str().unwrap().contains("Example Domain"));
 }
+
+#[tokio::test]
+async fn output_streams_while_the_script_runs() {
+    let Some(podman) = podman("python").await else {
+        return;
+    };
+    let mut job = python(
+        "import time\nprint('starting with sk-live-ABCDEF')\ntime.sleep(4)\nprint('done')\nresult = 1",
+        json!({}),
+    );
+    job.redact = vec!["sk-live-ABCDEF".into()];
+    let (sink, mut lines) = tokio::sync::mpsc::unbounded_channel();
+    let running = tokio::spawn(async move { podman.run_with_logs(&job, Some(sink)).await });
+    // The first line arrives well before the script finishes, scrubbed.
+    let first = tokio::time::timeout(Duration::from_secs(3), lines.recv())
+        .await
+        .expect("no output while the script ran")
+        .unwrap();
+    assert_eq!(first, "starting with «redacted»\n");
+    assert!(!running.is_finished());
+    let outcome = running.await.unwrap();
+    assert!(outcome.succeeded, "{outcome:?}");
+    assert_eq!(lines.recv().await.as_deref(), Some("done\n"));
+    assert!(outcome.logs.contains("starting with «redacted»\ndone"));
+}

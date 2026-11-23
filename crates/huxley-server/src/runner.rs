@@ -307,7 +307,11 @@ async fn work(state: PathBuf, podman: Podman, languages: Vec<String>, shutdown: 
                 env: task.env.into_iter().collect(),
                 redact: task.redact,
             };
-            let outcome = podman.run(&job).await;
+            let (sink, lines) = tokio::sync::mpsc::unbounded_channel();
+            let forwarding = tokio::spawn(forward_logs(client.clone(), task.id.clone(), lines));
+            let outcome = podman.run_with_logs(&job, Some(sink)).await;
+            // The last lines go out before the report replaces them all.
+            let _ = forwarding.await;
             let report = ReportRequest {
                 task_id: task.id.clone(),
                 succeeded: outcome.succeeded,
@@ -318,6 +322,48 @@ async fn work(state: PathBuf, podman: Podman, languages: Vec<String>, shutdown: 
             };
             if let Err(status) = client.report(report).await {
                 tracing::warn!(task = %task.id, error = %status, "couldn't report the result");
+            }
+        }
+    }
+}
+
+/// How often a running script's new output is sent.
+const LOG_EVERY: Duration = Duration::from_secs(1);
+
+/// Sends a running script's output to the gateway in batches, until the
+/// script is done (the channel closes).
+async fn forward_logs(
+    mut client: huxley_runners::proto::runner_client::RunnerClient<tonic::transport::Channel>,
+    task_id: String,
+    mut lines: tokio::sync::mpsc::UnboundedReceiver<String>,
+) {
+    let mut open = true;
+    while open {
+        let mut text = String::new();
+        let deadline = tokio::time::sleep(LOG_EVERY);
+        tokio::pin!(deadline);
+        loop {
+            tokio::select! {
+                line = lines.recv() => {
+                    let Some(line) = line else {
+                        open = false;
+                        break;
+                    };
+                    text.push_str(&line);
+                    if text.len() >= 16 * 1024 {
+                        break;
+                    }
+                }
+                () = &mut deadline => break,
+            }
+        }
+        if !text.is_empty() {
+            let request = huxley_runners::proto::LogRequest {
+                task_id: task_id.clone(),
+                text,
+            };
+            if let Err(status) = client.log(request).await {
+                tracing::debug!(error = %status, "couldn't send script output");
             }
         }
     }
