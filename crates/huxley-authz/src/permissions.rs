@@ -61,6 +61,8 @@ permissions! {
     JOBS_MANAGE = "platform:jobs:manage", Instance, "See workflow jobs that failed repeatedly and retry them";
     INTEGRATION_READ = "integration:read", Org, "View integrations and their actions";
     INTEGRATION_MANAGE = "integration:manage", Org, "Import integrations from OpenAPI specs and update them";
+    CONNECTION_READ = "connection:read", Org, "View connections (never their secrets)";
+    CONNECTION_MANAGE = "connection:manage", Org, "Create connections and change their credentials";
     VARIABLE_MANAGE = "variable:manage", Org, "Set organization variables and secrets for workflows, and lock them for sub-organizations";
 }
 

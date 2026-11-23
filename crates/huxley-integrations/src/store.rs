@@ -100,7 +100,9 @@ pub fn key_from(title: &str) -> String {
     if key.is_empty() { "api".into() } else { key }
 }
 
-fn valid_key(key: &str) -> bool {
+/// Whether a key is lowercase letters, digits and hyphens, starting with a
+/// letter, at most 64 long.
+pub fn valid_key(key: &str) -> bool {
     key.len() <= 64
         && key.starts_with(|c: char| c.is_ascii_lowercase())
         && key

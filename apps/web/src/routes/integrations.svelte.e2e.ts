@@ -53,11 +53,23 @@ test.describe('integrations', () => {
 		const actions = page.getByRole('list', { name: 'Devices actions' });
 		await expect(actions).toContainText('List devices');
 		await expect(actions).toContainText('post_devices_id_reboot');
-		await expect(page.getByText('Bearer token')).toBeVisible();
+		await expect(page.getByText('Bearer token', { exact: true })).toBeVisible();
 		// The undeclared {id} is noted, not fatal.
 		await expect(page.getByRole('list', { name: 'Import warnings' })).toContainText(
 			"path parameter {id} isn't declared"
 		);
+
+		// A connection with a bearer token: the token is never shown again.
+		const connections = page.getByRole('form', { name: 'New connection' });
+		await connections.getByLabel('Connection name').fill('Lab devices');
+		await connections.getByLabel('Token').fill('t0ken-never-shown');
+		await connections.getByRole('button', { name: 'Create connection' }).click();
+		await expect(page.getByText('Connection Lab devices created.')).toBeVisible();
+		const list = page.getByRole('list', { name: 'Connections' });
+		await expect(list).toContainText('Lab devices');
+		await expect(list).toContainText('token set');
+		await expect(list).toContainText('Ready');
+		await expect(page.locator('body')).not.toContainText('t0ken-never-shown');
 
 		// A newer spec is reviewed first; dropping an action is flagged.
 		const newer = spec(title)

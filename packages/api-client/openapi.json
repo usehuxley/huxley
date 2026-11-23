@@ -1289,6 +1289,184 @@
 				}
 			}
 		},
+		"/api/v1/connections": {
+			"get": {
+				"tags": ["integrations"],
+				"summary": "Connections the caller can see.",
+				"operationId": "list_connections",
+				"parameters": [
+					{
+						"name": "integrationId",
+						"in": "query",
+						"description": "Only connections to this integration.",
+						"required": false,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "array",
+									"items": {
+										"$ref": "#/components/schemas/ConnectionView"
+									}
+								}
+							}
+						}
+					}
+				}
+			},
+			"post": {
+				"tags": ["integrations"],
+				"summary": "Creates a connection. The integration must belong to the connection's\norganization or one above it.",
+				"operationId": "create_connection",
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/CreateConnectionRequest"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"201": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ConnectionView"
+								}
+							}
+						}
+					},
+					"409": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					},
+					"422": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/connections/{id}": {
+			"get": {
+				"tags": ["integrations"],
+				"operationId": "get_connection",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ConnectionView"
+								}
+							}
+						}
+					},
+					"404": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			},
+			"put": {
+				"tags": ["integrations"],
+				"summary": "Changes a connection. Secret fields left out keep their value.",
+				"operationId": "update_connection",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/ConnectionInput"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ConnectionView"
+								}
+							}
+						}
+					},
+					"422": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			},
+			"delete": {
+				"tags": ["integrations"],
+				"operationId": "delete_connection",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"responses": {
+					"204": {}
+				}
+			}
+		},
 		"/api/v1/custom-fields": {
 			"get": {
 				"tags": ["fields"],
@@ -5982,6 +6160,146 @@
 					}
 				}
 			},
+			"ConnectionInput": {
+				"type": "object",
+				"description": "What a connection is made from (or changed to).",
+				"required": ["name"],
+				"properties": {
+					"authScheme": {
+						"type": ["string", "null"],
+						"description": "One of the integration's auth scheme keys; none for open APIs."
+					},
+					"baseUrl": {
+						"type": ["string", "null"]
+					},
+					"key": {
+						"type": ["string", "null"],
+						"description": "Defaults to one made from the name."
+					},
+					"name": {
+						"type": "string"
+					},
+					"secrets": {
+						"type": "object",
+						"description": "Secret values. On update, fields left out keep their value.",
+						"additionalProperties": {
+							"type": "string"
+						},
+						"propertyNames": {
+							"type": "string"
+						}
+					},
+					"serverVariables": {
+						"type": "object",
+						"additionalProperties": {
+							"type": "string"
+						},
+						"propertyNames": {
+							"type": "string"
+						}
+					},
+					"settings": {
+						"type": "object",
+						"additionalProperties": {},
+						"propertyNames": {
+							"type": "string"
+						}
+					},
+					"shared": {
+						"type": "boolean"
+					}
+				},
+				"additionalProperties": false
+			},
+			"ConnectionStatus": {
+				"type": "string",
+				"enum": ["ready", "needs_auth", "error"]
+			},
+			"ConnectionView": {
+				"type": "object",
+				"description": "A connection as shown: settings, and which secrets are set.",
+				"required": [
+					"id",
+					"orgId",
+					"integrationId",
+					"key",
+					"name",
+					"serverVariables",
+					"settings",
+					"secretFields",
+					"shared",
+					"status",
+					"createdAt",
+					"updatedAt"
+				],
+				"properties": {
+					"authScheme": {
+						"type": ["string", "null"]
+					},
+					"baseUrl": {
+						"type": ["string", "null"]
+					},
+					"createdAt": {
+						"type": "string",
+						"format": "date-time"
+					},
+					"id": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"integrationId": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"key": {
+						"type": "string"
+					},
+					"name": {
+						"type": "string"
+					},
+					"orgId": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"secretFields": {
+						"type": "array",
+						"items": {
+							"type": "string"
+						},
+						"description": "Names of the secret fields that have a value."
+					},
+					"serverVariables": {
+						"type": "object",
+						"additionalProperties": {
+							"type": "string"
+						},
+						"propertyNames": {
+							"type": "string"
+						}
+					},
+					"settings": {
+						"type": "object",
+						"additionalProperties": {},
+						"propertyNames": {
+							"type": "string"
+						}
+					},
+					"shared": {
+						"type": "boolean",
+						"description": "Usable by the organizations below this one."
+					},
+					"status": {
+						"$ref": "#/components/schemas/ConnectionStatus"
+					},
+					"statusMessage": {
+						"type": ["string", "null"]
+					},
+					"updatedAt": {
+						"type": "string",
+						"format": "date-time"
+					}
+				}
+			},
 			"CreateAssignmentRequest": {
 				"type": "object",
 				"required": ["roleId", "orgId"],
@@ -6009,6 +6327,24 @@
 						"description": "Grant to this user. Send exactly one of `userId` or `teamId`."
 					}
 				}
+			},
+			"CreateConnectionRequest": {
+				"type": "object",
+				"required": ["orgId", "integrationId", "connection"],
+				"properties": {
+					"connection": {
+						"$ref": "#/components/schemas/ConnectionInput"
+					},
+					"integrationId": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"orgId": {
+						"type": "string",
+						"format": "uuid"
+					}
+				},
+				"additionalProperties": false
 			},
 			"CreateOrgRequest": {
 				"type": "object",
@@ -8698,7 +9034,7 @@
 		},
 		{
 			"name": "integrations",
-			"description": "APIs imported from OpenAPI specs"
+			"description": "APIs imported from OpenAPI specs, and connections to them"
 		}
 	]
 }

@@ -595,6 +595,44 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
+	'/api/v1/connections': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** Connections the caller can see. */
+		get: operations['list_connections'];
+		put?: never;
+		/**
+		 * Creates a connection. The integration must belong to the connection's
+		 *     organization or one above it.
+		 */
+		post: operations['create_connection'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/connections/{id}': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get: operations['get_connection'];
+		/** Changes a connection. Secret fields left out keep their value. */
+		put: operations['update_connection'];
+		post?: never;
+		delete: operations['delete_connection'];
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
 	'/api/v1/custom-fields': {
 		parameters: {
 			query?: never;
@@ -2299,6 +2337,57 @@ export interface components {
 			/** @description A current six-digit code from the app. */
 			code: string;
 		};
+		/** @description What a connection is made from (or changed to). */
+		ConnectionInput: {
+			/** @description One of the integration's auth scheme keys; none for open APIs. */
+			authScheme?: string | null;
+			baseUrl?: string | null;
+			/** @description Defaults to one made from the name. */
+			key?: string | null;
+			name: string;
+			/** @description Secret values. On update, fields left out keep their value. */
+			secrets?: {
+				[key: string]: string;
+			};
+			serverVariables?: {
+				[key: string]: string;
+			};
+			settings?: {
+				[key: string]: unknown;
+			};
+			shared?: boolean;
+		};
+		/** @enum {string} */
+		ConnectionStatus: 'ready' | 'needs_auth' | 'error';
+		/** @description A connection as shown: settings, and which secrets are set. */
+		ConnectionView: {
+			authScheme?: string | null;
+			baseUrl?: string | null;
+			/** Format: date-time */
+			createdAt: string;
+			/** Format: uuid */
+			id: string;
+			/** Format: uuid */
+			integrationId: string;
+			key: string;
+			name: string;
+			/** Format: uuid */
+			orgId: string;
+			/** @description Names of the secret fields that have a value. */
+			secretFields: string[];
+			serverVariables: {
+				[key: string]: string;
+			};
+			settings: {
+				[key: string]: unknown;
+			};
+			/** @description Usable by the organizations below this one. */
+			shared: boolean;
+			status: components['schemas']['ConnectionStatus'];
+			statusMessage?: string | null;
+			/** Format: date-time */
+			updatedAt: string;
+		};
 		CreateAssignmentRequest: {
 			/** @description Also apply to every sub-organization (default true). */
 			inherit?: boolean;
@@ -2316,6 +2405,13 @@ export interface components {
 			 * @description Grant to this user. Send exactly one of `userId` or `teamId`.
 			 */
 			userId?: string | null;
+		};
+		CreateConnectionRequest: {
+			connection: components['schemas']['ConnectionInput'];
+			/** Format: uuid */
+			integrationId: string;
+			/** Format: uuid */
+			orgId: string;
 		};
 		CreateOrgRequest: {
 			kind: components['schemas']['OrgKindInput'];
@@ -4521,6 +4617,148 @@ export interface operations {
 				content: {
 					'application/problem+json': components['schemas']['ApiError'];
 				};
+			};
+		};
+	};
+	list_connections: {
+		parameters: {
+			query?: {
+				/** @description Only connections to this integration. */
+				integrationId?: string;
+			};
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ConnectionView'][];
+				};
+			};
+		};
+	};
+	create_connection: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['CreateConnectionRequest'];
+			};
+		};
+		responses: {
+			201: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ConnectionView'];
+				};
+			};
+			409: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	get_connection: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ConnectionView'];
+				};
+			};
+			404: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	update_connection: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['ConnectionInput'];
+			};
+		};
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ConnectionView'];
+				};
+			};
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	delete_connection: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			204: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content?: never;
 			};
 		};
 	};

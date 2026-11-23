@@ -1,5 +1,6 @@
 import { error, fail } from '@sveltejs/kit';
 import { formString } from '#lib/forms.ts';
+import { connectionFromForm } from '#lib/integrations/connections.ts';
 import { specFrom } from '#lib/integrations/spec.ts';
 import { api } from '#lib/server/api.ts';
 import { problemMessage } from '#lib/server/problems.ts';
@@ -8,13 +9,22 @@ import type { Actions, PageServerLoad } from './$types';
 export const load: PageServerLoad = async (event) => {
 	const client = api(event);
 	const params = { path: { id: event.params.id } };
-	const [integration, versions] = await Promise.all([
+	const [integration, versions, connections, orgs] = await Promise.all([
 		client.GET('/api/v1/integrations/{id}', { params }),
-		client.GET('/api/v1/integrations/{id}/versions', { params })
+		client.GET('/api/v1/integrations/{id}/versions', { params }),
+		client.GET('/api/v1/connections', {
+			params: { query: { integrationId: event.params.id } }
+		}),
+		client.GET('/api/v1/orgs')
 	]);
 	if (integration.response.status === 404) error(404, 'Integration not found.');
 	if (!integration.data) error(503, 'Could not load the integration.');
-	return { integration: integration.data, versions: versions.data ?? [] };
+	return {
+		integration: integration.data,
+		versions: versions.data ?? [],
+		connections: connections.data ?? [],
+		orgs: orgs.data ?? []
+	};
 };
 
 export const actions: Actions = {
@@ -52,6 +62,47 @@ export const actions: Actions = {
 			return fail(response.status, { message: problemMessage(problem, 'Could not apply it.') });
 		}
 		return { message: `Imported as version ${data.currentVersion}.` };
+	},
+	connect: async (event) => {
+		const form = await event.request.formData();
+		const client = api(event);
+		const integration = await client.GET('/api/v1/integrations/{id}', {
+			params: { path: { id: event.params.id } }
+		});
+		const scheme = integration.data?.definition.authSchemes.find(
+			(s) => s.key === formString(form, 'authScheme')
+		);
+		const connection = connectionFromForm(form, scheme?.type);
+		if (!connection.name) return fail(400, { connectMessage: 'Give the connection a name.' });
+		const {
+			data,
+			error: problem,
+			response
+		} = await client.POST('/api/v1/connections', {
+			body: {
+				orgId: formString(form, 'orgId'),
+				integrationId: event.params.id,
+				connection
+			}
+		});
+		if (!data) {
+			return fail(response.status, {
+				connectMessage: problemMessage(problem, 'Could not create the connection.')
+			});
+		}
+		return { message: `Connection ${data.name} created.` };
+	},
+	disconnect: async (event) => {
+		const id = formString(await event.request.formData(), 'connectionId');
+		const { response, error: problem } = await api(event).DELETE('/api/v1/connections/{id}', {
+			params: { path: { id } }
+		});
+		if (!response.ok) {
+			return fail(response.status, {
+				connectMessage: problemMessage(problem, 'Could not delete it.')
+			});
+		}
+		return { message: 'Connection deleted.' };
 	},
 	setCurrent: async (event) => {
 		const version = Number(formString(await event.request.formData(), 'version'));

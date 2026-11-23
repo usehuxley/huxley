@@ -7,6 +7,7 @@
 pub mod audit_routes;
 pub mod auth_routes;
 pub mod authz;
+mod connection_routes;
 pub mod context;
 pub mod csrf;
 pub mod entity_routes;

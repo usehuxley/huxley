@@ -40,9 +40,35 @@ Applying adds the next version and makes it current. If someone else changed the
 
 Every version keeps the spec as it was given and what was imported from it. **Make current** on an earlier version rolls back (`PUT /api/v1/integrations/{id}/current`, `{ "version" }`). The next import still gets a new version number.
 
+## Connections
+
+A connection holds credentials for one of an integration's auth schemes. Create connections on the integration's page, or with `POST /api/v1/connections` (`{ "orgId", "integrationId", "connection": { "name", "authScheme", "settings", "secrets", "baseUrl", "serverVariables", "shared" } }`).
+
+**Where a connection lives:** it belongs to an organization, and its integration must belong to that organization or one above it. For example, an MSP imports an API once, and each client gets a connection with its own credentials. Mark a connection **shared** to let organizations below its owner use it as well.
+
+**What each auth scheme asks for:**
+
+| Auth scheme | Settings | Secrets |
+|---|---|---|
+| API key | | `key` |
+| HTTP basic | `username` | `password` |
+| Bearer token | | `token` |
+| OAuth 2.0, OpenID Connect | `client_id`, `scopes` | `client_secret` |
+
+**How secrets are handled:**
+- Secrets are encrypted with the organization's data key and never shown again. The API and the page only say which ones are set.
+- When you change a connection, secrets you leave out keep their stored value. Switching to a different auth scheme clears them all.
+- The audit log records which secrets changed, never their values.
+
+**Base URL:** a connection uses the spec's first server URL, with its `{variables}` filled from the connection's server variables. If the spec has no servers, or you want another region or a sandbox, give a base URL to override it.
+
+**Signing in:** connections for OAuth 2.0 authorization code (signing in with an account) start as **Needs sign-in**. The sign-in flow and token refresh come next.
+
 ## Permissions
 
 | Permission | Allows |
 |---|---|
 | `integration:read` | Viewing integrations and their actions (technicians and read-only users have it) |
 | `integration:manage` | Importing specs and new versions |
+| `connection:read` | Viewing connections, never their secrets (technicians have it) |
+| `connection:manage` | Creating connections and changing their credentials |
