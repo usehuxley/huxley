@@ -2,6 +2,20 @@
 
 A form is a set of questions people answer to start workflows (design doc §6.8). Find forms under **Forms**: fill one in, or create and edit them with `form:manage`.
 
+## Building a form
+
+The editor's **Fields** view builds a form without any JSON. For each question, choose:
+
+- a label
+- a type: text, long text, email, number, whole number, date, date and time, checkbox, choice, or multiple choice
+- whether it's required
+- help text and a placeholder
+- the choices, for choice and multiple choice
+
+Reorder the fields with the arrows. Each field has a **name in workflows**, which a workflow reads as `inputs.<name>`. It's made from the label until you change it, and uses lowercase letters, digits and underscores. A preview shows the form as people will see it.
+
+**JSON** shows the definition behind the fields, for anything the builder doesn't cover, such as `minLength`, `pattern` or `minimum`. The builder keeps those settings when you switch back.
+
 ## Definition
 
 A form is a **JSON Schema** of its answers (an object), plus **UI hints**.
@@ -16,7 +30,7 @@ A form is a **JSON Schema** of its answers (an object), plus **UI hints**.
 | Number, whole number | `number`, `integer`, with `minimum`, `maximum`, … |
 | Yes / no | `boolean` |
 
-`title` is a field's label, and `required` lists the fields that must be answered. UI hints can set `order` (the fields' order) and, per field, `widget`, `help` and `placeholder`. The editor shows a live preview as you change the definition.
+`title` is a field's label, and `required` lists the fields that must be answered. UI hints can set `order` (the fields' order) and, per field, `widget`, `help` and `placeholder`. The editor shows a live preview as you change it.
 
 ## Starting workflows
 

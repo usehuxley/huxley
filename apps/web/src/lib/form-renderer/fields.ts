@@ -57,7 +57,8 @@ export function fieldsOf(schema: unknown, ui: unknown): Field[] {
 	const order = Array.isArray(hints.order)
 		? hints.order.filter((n): n is string => typeof n === 'string' && n in props)
 		: [];
-	const names = [...order, ...Object.keys(props).filter((n) => !order.includes(n))];
+	// Each field once, even if `order` repeats a name.
+	const names = [...new Set([...order, ...Object.keys(props)])];
 	return names.map((name) => {
 		const field = isObj(props[name]) ? props[name] : {};
 		const hint = isObj(hints[name]) ? hints[name] : {};
