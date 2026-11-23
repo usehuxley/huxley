@@ -112,6 +112,37 @@ async fn org_paths(state: &AppState, orgs: Vec<Uuid>) -> ApiResult<HashMap<Uuid,
     Ok(rows.into_iter().collect())
 }
 
+/// Problems with the draft's `integration.action` steps: integrations and
+/// actions that don't exist for its organization. Looked up as the system,
+/// since integrations usually live in an organization above.
+async fn action_problems(
+    state: &AppState,
+    org_id: Uuid,
+    document: &JsonValue,
+) -> ApiResult<Vec<huxley_hwf::Diagnostic>> {
+    // A document that doesn't parse has its own diagnostics already.
+    let Ok(workflow) = serde_json::from_value::<huxley_hwf::Workflow>(document.clone()) else {
+        return Ok(Vec::new());
+    };
+    let mut tx = begin_scoped(&state.db, &OrgScope::System)
+        .await
+        .map_err(db_err)?;
+    let problems = huxley_integrations::usage::check_actions(&mut tx, org_id, &workflow)
+        .await
+        .map_err(db_err)?;
+    tx.commit().await.map_err(db_err)?;
+    Ok(problems)
+}
+
+async fn with_action_problems(
+    state: &AppState,
+    mut detail: WorkflowDetail,
+) -> ApiResult<WorkflowDetail> {
+    let problems = action_problems(state, detail.summary.org_id, &detail.draft).await?;
+    detail.diagnostics.extend(problems);
+    Ok(detail)
+}
+
 /// The workflow's org, checking `permission` there (404 if not visible).
 async fn authorize(
     state: &AppState,
@@ -197,7 +228,10 @@ pub async fn create(
     .await
     .map_err(map_workflow)?;
     tx.commit().await.map_err(db_err)?;
-    Ok((StatusCode::CREATED, Json(detail)))
+    Ok((
+        StatusCode::CREATED,
+        Json(with_action_problems(&state, detail).await?),
+    ))
 }
 
 #[derive(Debug, Deserialize, ToSchema)]
@@ -247,7 +281,7 @@ pub async fn get_one(
         .await
         .map_err(map_workflow)?;
     tx.commit().await.map_err(db_err)?;
-    Ok(Json(detail))
+    Ok(Json(with_action_problems(&state, detail).await?))
 }
 
 #[derive(Debug, Deserialize, ToSchema)]
@@ -287,7 +321,7 @@ pub async fn save_draft(
     .await
     .map_err(map_workflow)?;
     tx.commit().await.map_err(db_err)?;
-    Ok(Json(detail))
+    Ok(Json(with_action_problems(&state, detail).await?))
 }
 
 #[derive(Debug, Default, Deserialize, ToSchema)]
@@ -312,6 +346,14 @@ pub async fn publish(
     let mut tx = begin_scoped(&state.db, &authed.scope(&state).await?)
         .await
         .map_err(db_err)?;
+    // Every action step must name an integration and action that exist.
+    let draft = huxley_workflows::get(&mut tx, state.engine.expr(), id)
+        .await
+        .map_err(map_workflow)?;
+    let problems = action_problems(&state, draft.summary.org_id, &draft.draft).await?;
+    if !problems.is_empty() {
+        return Err(map_workflow(WorkflowError::Invalid(problems)));
+    }
     let version = huxley_workflows::publish(
         &mut tx,
         &authed.user.ctx,

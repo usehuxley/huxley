@@ -36,7 +36,8 @@ pub struct DefinitionDiff {
     /// True if any change can break something already using the integration.
     pub breaking: bool,
     pub added: Vec<String>,
-    /// Actions that are gone (renamed ones are listed under `renamed`).
+    /// Actions that are gone (renamed ones are listed under `renamed`, and
+    /// keep working under their old key).
     pub removed: Vec<String>,
     pub renamed: Vec<Rename>,
     pub changed: Vec<ActionChanges>,
@@ -133,8 +134,9 @@ pub fn diff(old: &Definition, new: &Definition) -> DefinitionDiff {
     }
 
     let connection = connection_changes(old, new);
+    // Renames aren't breaking: applying the update records an alias, so
+    // steps using the old key keep working.
     let breaking = !removed.is_empty()
-        || !renamed.is_empty()
         || changed.iter().flat_map(|a| &a.changes).any(|c| c.breaking)
         || connection.iter().any(|c| c.breaking);
     DefinitionDiff {

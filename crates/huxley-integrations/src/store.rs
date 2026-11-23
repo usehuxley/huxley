@@ -171,6 +171,9 @@ pub struct UpdatePreview {
     pub actions: usize,
     /// The API's own version, from the newer spec.
     pub api_version: String,
+    /// Published workflows with steps the update would break (among those
+    /// the caller can see).
+    pub affected: Vec<crate::usage::AffectedWorkflow>,
 }
 
 /// Compares a newer spec with the current version.
@@ -179,14 +182,31 @@ pub async fn preview(
     id: Uuid,
     spec_text: &str,
 ) -> StoreResult<UpdatePreview> {
-    let current = get(conn, id).await?;
+    let current = get(&mut *conn, id).await?;
     let imported = import_value(parse(spec_text)?)?;
+    let changes = diff(&current.definition, &imported.definition);
+    let (aliases,): (Json,) = sqlx::query_as(
+        "SELECT aliases FROM integration_versions WHERE integration_id = $1 AND version = $2",
+    )
+    .bind(id)
+    .bind(current.summary.current_version)
+    .fetch_one(&mut *conn)
+    .await?;
+    let affected = crate::usage::affected(
+        conn,
+        current.summary.org_id,
+        &current.summary.key,
+        &aliases,
+        &changes,
+    )
+    .await?;
     Ok(UpdatePreview {
         base_version: current.summary.current_version,
-        diff: diff(&current.definition, &imported.definition),
+        diff: changes,
         warnings: imported.warnings,
         actions: imported.definition.actions.len(),
         api_version: imported.definition.version,
+        affected,
     })
 }
 

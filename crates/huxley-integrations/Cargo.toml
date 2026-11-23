@@ -14,6 +14,7 @@ getrandom.workspace = true
 huxley-core.workspace = true
 huxley-crypto.workspace = true
 huxley-db.workspace = true
+huxley-hwf.workspace = true
 serde.workspace = true
 serde-saphyr.workspace = true
 serde_json.workspace = true

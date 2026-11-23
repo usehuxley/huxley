@@ -1931,6 +1931,7 @@ dependencies = [
  "huxley-core",
  "huxley-crypto",
  "huxley-db",
+ "huxley-hwf",
  "serde",
  "serde-saphyr",
  "serde_json",

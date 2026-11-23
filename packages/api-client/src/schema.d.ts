@@ -2180,6 +2180,18 @@ export interface components {
 			changes: components['schemas']['Change'][];
 			key: string;
 		};
+		AffectedStep: {
+			action: string;
+			problem: string;
+			stepId: string;
+		};
+		/** @description A published workflow an update would break. */
+		AffectedWorkflow: {
+			name: string;
+			steps: components['schemas']['AffectedStep'][];
+			/** Format: uuid */
+			workflowId: string;
+		};
 		/** @description An RFC 9457 problem details response. */
 		ApiError: {
 			detail?: string | null;
@@ -2550,7 +2562,10 @@ export interface components {
 			changed: components['schemas']['ActionChanges'][];
 			/** @description Auth and server changes, which matter to connections. */
 			connection: components['schemas']['Change'][];
-			/** @description Actions that are gone (renamed ones are listed under `renamed`). */
+			/**
+			 * @description Actions that are gone (renamed ones are listed under `renamed`, and
+			 *     keep working under their old key).
+			 */
 			removed: string[];
 			renamed: components['schemas']['Rename'][];
 		};
@@ -3415,6 +3430,11 @@ export interface components {
 		/** @description What importing a newer spec would change, without saving anything. */
 		UpdatePreview: {
 			actions: number;
+			/**
+			 * @description Published workflows with steps the update would break (among those
+			 *     the caller can see).
+			 */
+			affected: components['schemas']['AffectedWorkflow'][];
 			/** @description The API's own version, from the newer spec. */
 			apiVersion: string;
 			/**
