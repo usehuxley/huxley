@@ -58,6 +58,27 @@ pub async fn enqueue_advance(
     notify(conn).await
 }
 
+/// Queues an advance of `run_id` for later (a run waiting for a slot).
+pub async fn enqueue_advance_at(
+    conn: &mut PgConnection,
+    org_id: Uuid,
+    run_id: Uuid,
+    at: OffsetDateTime,
+) -> sqlx::Result<()> {
+    sqlx::query(
+        "INSERT INTO jobs (id, kind, org_id, run_id, run_at) VALUES ($1, 'advance', $2, $3, $4) \
+         ON CONFLICT (run_id) WHERE kind = 'advance' AND locked_by IS NULL AND NOT dead \
+         DO NOTHING",
+    )
+    .bind(huxley_core::new_id())
+    .bind(org_id)
+    .bind(run_id)
+    .bind(at)
+    .execute(conn)
+    .await
+    .map(|_| ())
+}
+
 /// Queues execution of a step, at `run_at` (now if `None`), unless it is
 /// already queued.
 pub async fn enqueue_step(

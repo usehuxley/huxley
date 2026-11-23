@@ -137,6 +137,16 @@ impl Engine {
         let workflow: Workflow =
             serde_json::from_value(document).map_err(|e| EngineError::Document(e.to_string()))?;
         let now = OffsetDateTime::now_utc();
+        // A queued run waits while its workflow is at its concurrency limit.
+        if run.status == RunStatus::Queued
+            && let Some(limit) = workflow.spec.settings.as_ref().and_then(|s| s.concurrency)
+            && at_limit(&mut tx, &run, run_id, limit).await?
+        {
+            queue::enqueue_advance_at(&mut tx, run.org_id, run_id, now + CONCURRENCY_RETRY).await?;
+            queue::complete(&mut tx, job.id, worker).await?;
+            tx.commit().await?;
+            return Ok(());
+        }
         let started_at = run.started_at.unwrap_or(now);
         let timeout = workflow
             .spec
@@ -445,6 +455,37 @@ async fn finish(
         }
     }
     Ok(())
+}
+
+/// How long a run waiting for a concurrency slot waits before checking again.
+const CONCURRENCY_RETRY: std::time::Duration = std::time::Duration::from_secs(2);
+
+/// Whether `limit` runs of this run's workflow are already running in its org.
+/// Serialized per workflow and org, so two advances can't both slip in.
+async fn at_limit(
+    conn: &mut PgConnection,
+    run: &RunRow,
+    run_id: Uuid,
+    limit: u32,
+) -> EngineResult<bool> {
+    let Some(workflow_id) = run.workflow_id else {
+        return Ok(false);
+    };
+    sqlx::query("SELECT pg_advisory_xact_lock(hashtext($1::text || $2::text))")
+        .bind(workflow_id)
+        .bind(run.org_id)
+        .execute(&mut *conn)
+        .await?;
+    let running: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM runs \
+          WHERE workflow_id = $1 AND org_id = $2 AND status = 'running' AND id <> $3",
+    )
+    .bind(workflow_id)
+    .bind(run.org_id)
+    .bind(run_id)
+    .fetch_one(conn)
+    .await?;
+    Ok(running >= i64::from(limit))
 }
 
 /// How deep subworkflows may nest.

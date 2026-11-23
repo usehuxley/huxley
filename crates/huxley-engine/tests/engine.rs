@@ -693,3 +693,64 @@ async fn failed_runs_resume_from_the_failed_step() {
     let mut tx = begin_scoped(&h.pools.app, &OrgScope::System).await.unwrap();
     assert!(!h.engine.resume_run(&mut tx, id).await.unwrap());
 }
+
+#[tokio::test]
+async fn concurrency_limits_queue_runs() {
+    let Some(h) = harness().await else { return };
+    publish(
+        &h,
+        "one-at-a-time",
+        "  settings: { concurrency: 1 }\n  steps:\n    - { id: nap, type: wait, duration: 300ms }\n",
+    )
+    .await;
+    let workflow: Uuid =
+        sqlx::query_scalar("SELECT id FROM workflows WHERE org_id = $1 AND key = 'one-at-a-time'")
+            .bind(h.org)
+            .fetch_one(&h.pools.owner)
+            .await
+            .unwrap();
+    let mut tx = begin_scoped(&h.pools.app, &OrgScope::System).await.unwrap();
+    let mut runs = Vec::new();
+    for _ in 0..3 {
+        runs.push(
+            h.engine
+                .start_run(
+                    &mut tx,
+                    StartRun {
+                        org_id: h.org,
+                        workflow_id: Some(workflow),
+                        version: Some(1),
+                        document: None,
+                        trigger_type: "manual".into(),
+                        trigger: json!({}),
+                        inputs: json!({}),
+                        actor_id: None,
+                    },
+                )
+                .await
+                .unwrap(),
+        );
+    }
+    tx.commit().await.unwrap();
+    let deadline = Instant::now() + Duration::from_secs(20);
+    let mut most = 0;
+    loop {
+        h.engine.drain("test-worker", 20).await.unwrap();
+        let (running, done): (i64, i64) = sqlx::query_as(
+            "SELECT count(*) FILTER (WHERE status = 'running'), \
+                    count(*) FILTER (WHERE status = 'succeeded') \
+               FROM runs WHERE id = ANY($1)",
+        )
+        .bind(&runs)
+        .fetch_one(&h.pools.owner)
+        .await
+        .unwrap();
+        most = most.max(running);
+        if done == 3 {
+            break;
+        }
+        assert!(Instant::now() < deadline, "runs didn't all finish");
+        tokio::time::sleep(Duration::from_millis(25)).await;
+    }
+    assert_eq!(most, 1, "never more than one at a time");
+}
