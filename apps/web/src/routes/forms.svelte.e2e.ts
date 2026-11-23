@@ -28,6 +28,7 @@ test.describe('forms', () => {
 		await page.getByLabel('Name').fill(formName);
 		await page.getByRole('button', { name: 'Create' }).click();
 		await expect(page.getByRole('heading', { level: 1 })).toHaveText('Edit form');
+		await page.getByRole('button', { name: 'JSON', exact: true }).click();
 		await page.getByLabel('Schema').fill(
 			JSON.stringify({
 				type: 'object',
@@ -79,5 +80,60 @@ spec:
 		await page.getByRole('link', { name: 'View run' }).click();
 		await expect(page.getByText('Succeeded').first()).toBeVisible({ timeout: 20_000 });
 		await expect(page.getByLabel('Run outputs')).toContainText('"order": "2 for Ada"');
+	});
+
+	test('the builder makes a form without JSON', async ({ browser }) => {
+		const page = await signIn(browser);
+		const suffix = Date.now().toString(36);
+		const formName = `Onboarding ${suffix}`;
+		await page.goto('/forms');
+		await page.getByLabel('Name').fill(formName);
+		await page.getByRole('button', { name: 'Create' }).click();
+		await expect(page.getByRole('heading', { level: 1 })).toHaveText('Edit form');
+
+		// Start from nothing: drop the starter field.
+		const remove = page.getByRole('button', { name: 'Remove field' });
+		while ((await remove.count()) > 0) await remove.first().click();
+
+		// A required text field, and a choice.
+		await page.getByRole('button', { name: 'Add field' }).click();
+		const first = page.getByRole('group', { name: 'Field 1' });
+		await first.getByLabel('Label').fill('Full name');
+		await expect(first.getByLabel('Name in workflows')).toHaveValue('full_name');
+		await first.getByLabel('Required').check();
+		await page.getByRole('button', { name: 'Add field' }).click();
+		const second = page.getByRole('group', { name: 'Field 2' });
+		await second.getByLabel('Label').fill('Department');
+		await second.getByLabel('Type').selectOption('select');
+		// No choices yet: it can't be saved.
+		await expect(second.getByRole('alert')).toHaveText('Add at least one choice.');
+		await expect(page.getByRole('button', { name: 'Save', exact: true })).toBeDisabled();
+		await second.getByLabel('Choices, one per line').fill('Sales\nSupport');
+		// Department first.
+		await second.getByRole('button', { name: 'Move up' }).click();
+		await expect(page.getByRole('group', { name: 'Field 1' }).getByLabel('Label')).toHaveValue(
+			'Department'
+		);
+		await page.getByRole('button', { name: 'Save', exact: true }).click();
+		await expect(page.getByText('Saved.')).toBeVisible();
+
+		// The JSON behind it.
+		await page.getByRole('button', { name: 'JSON', exact: true }).click();
+		const schema = JSON.parse(await page.getByLabel('Schema').inputValue()) as {
+			required: string[];
+			properties: Record<string, unknown>;
+		};
+		expect(schema.required).toEqual(['full_name']);
+		expect(schema.properties.department).toEqual({
+			type: 'string',
+			title: 'Department',
+			enum: ['Sales', 'Support']
+		});
+
+		// People see it in that order.
+		await page.goto('/forms');
+		await page.getByRole('link', { name: formName }).click();
+		await expect(page.getByLabel('Department')).toBeVisible();
+		await expect(page.getByLabel('Full name *')).toBeVisible();
 	});
 });
