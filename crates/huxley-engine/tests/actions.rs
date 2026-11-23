@@ -76,12 +76,17 @@ async fn token() -> AxumJson<Json> {
     AxumJson(json!({ "access_token": "oauth-token", "expires_in": 3600 }))
 }
 
+/// A token endpoint per tenant (as Microsoft's): the token names it.
+async fn tenant_token(Path(tenant): Path<String>) -> AxumJson<Json> {
+    AxumJson(json!({ "access_token": format!("token-for-{tenant}"), "expires_in": 3600 }))
+}
+
 fn spec(port: u16, list_id: &str) -> String {
     format!(
         r#"
 openapi: 3.0.3
 info: {{ title: Tickets, version: "1" }}
-servers: [{{ url: "http://localhost:{port}/api" }}]
+servers: [{{ url: "http://localhost:{port}/api", variables: {{ tenant: {{ default: "" }} }} }}]
 components:
   securitySchemes:
     key: {{ type: apiKey, in: header, name: X-Key }}
@@ -89,6 +94,10 @@ components:
       type: oauth2
       flows:
         clientCredentials: {{ tokenUrl: "http://localhost:{port}/token", scopes: {{}} }}
+    tenanted:
+      type: oauth2
+      flows:
+        clientCredentials: {{ tokenUrl: "http://localhost:{port}/t/{{tenant}}/token", scopes: {{}} }}
 paths:
   /tickets:
     get:
@@ -151,6 +160,7 @@ async fn harness() -> Option<Harness> {
         .route("/api/tickets", get(list).post(create))
         .route("/api/tickets/{id}", get(one))
         .route("/token", post(token))
+        .route("/t/{tenant}/token", post(tenant_token))
         .with_state(api.clone());
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let port = listener.local_addr().unwrap().port();
@@ -465,4 +475,36 @@ async fn inputs_and_missing_actions_fail_clearly() {
     assert_eq!(h.step_error(run, "gone").await["kind"], "definition");
     assert_eq!(h.step_error(run, "other").await["kind"], "definition");
     assert!(h.seen().is_empty(), "nothing was sent");
+}
+
+#[tokio::test]
+async fn token_urls_take_the_connections_tenant() {
+    let Some(h) = harness().await else { return };
+    let input = ConnectionInput {
+        name: "Contoso".into(),
+        key: Some("contoso".into()),
+        auth_scheme: Some("tenanted".into()),
+        server_variables: [("tenant".to_owned(), json!("contoso.example"))]
+            .into_iter()
+            .collect(),
+        settings: [("client_id".to_owned(), json!("huxley"))]
+            .into_iter()
+            .collect(),
+        secrets: [("client_secret".to_owned(), "s3cret".to_owned())].into(),
+        ..ConnectionInput::default()
+    };
+    let ctx = RequestContext::system(Via::System);
+    let mut tx = begin_scoped(&h.pools.app, &OrgScope::System).await.unwrap();
+    connections::create(&mut tx, &h.crypto, &ctx, h.msp, h.integration, &input)
+        .await
+        .unwrap();
+    tx.commit().await.unwrap();
+    let id = h
+        .start(
+            h.msp,
+            "    - { id: open, type: integration.action, action: tickets/listTickets }\n",
+        )
+        .await;
+    assert_eq!(h.finish(id).await.status, RunStatus::Succeeded);
+    assert_eq!(h.seen()[0]["auth"], "Bearer token-for-contoso.example");
 }

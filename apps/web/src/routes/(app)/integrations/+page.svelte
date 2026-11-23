@@ -56,6 +56,37 @@
 		{/if}
 	</Card>
 
+	{#if canManage && data.catalog.length}
+		<Card
+			title="Built-in integrations"
+			description="Curated for common MSP work. Added to the organization chosen below, then used like any other."
+		>
+			<ul class="flex flex-col divide-y divide-border" aria-label="Built-in integrations">
+				{#each data.catalog as entry (entry.key)}
+					{@const added = data.integrations.some((i) => i.key === entry.key && i.orgId === orgId)}
+					<li class="flex items-center justify-between gap-4 py-3 first:pt-0 last:pb-0">
+						<div class="min-w-0 text-sm">
+							<p class="font-medium text-fg">
+								{entry.name}
+								<Badge tone="neutral">{entry.category}</Badge>
+							</p>
+							<p class="text-xs text-fg-muted">{entry.summary} {entry.actions} actions.</p>
+						</div>
+						{#if added}
+							<span class="text-xs text-fg-muted">Added</span>
+						{:else}
+							<form method="POST" action="?/addBuiltIn" use:enhance>
+								<input type="hidden" name="key" value={entry.key} />
+								<input type="hidden" name="orgId" value={orgId} />
+								<Button type="submit" size="sm">Add {entry.name}</Button>
+							</form>
+						{/if}
+					</li>
+				{/each}
+			</ul>
+		</Card>
+	{/if}
+
 	{#if canManage}
 		<Card
 			title="Import an API"

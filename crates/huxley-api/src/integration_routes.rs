@@ -27,6 +27,8 @@ pub fn routes() -> Router<AppState> {
     Router::new()
         .route("/", get(list).post(create))
         .route("/actions", get(actions))
+        .route("/catalog", get(catalog))
+        .route("/catalog/{key}", post(add_built_in))
         .route("/{id}", get(detail))
         .route("/{id}/spec", put(update))
         .route("/{id}/preview", post(preview))
@@ -153,6 +155,45 @@ pub async fn create(
     )
     .await
     .map_err(map_store)?;
+    tx.commit().await.map_err(db_err)?;
+    Ok((StatusCode::CREATED, Json(detail)))
+}
+
+/// The built-in integrations that can be added.
+#[utoipa::path(get, path = "/api/v1/integrations/catalog", operation_id = "integration_catalog", tag = "integrations",
+    responses((status = 200, body = Vec<huxley_integrations::catalog::CatalogEntry>)))]
+pub async fn catalog(_authed: Authed) -> Json<Vec<huxley_integrations::catalog::CatalogEntry>> {
+    Json(huxley_integrations::catalog::list())
+}
+
+#[derive(Debug, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct AddBuiltInRequest {
+    pub org_id: Uuid,
+}
+
+/// Adds a built-in integration to an organization, under its catalog key.
+#[utoipa::path(post, path = "/api/v1/integrations/catalog/{key}", operation_id = "add_built_in_integration", tag = "integrations",
+    params(("key" = String, Path)), request_body = AddBuiltInRequest,
+    responses((status = 201, body = IntegrationDetail),
+              (status = 404, body = ApiError, content_type = "application/problem+json"),
+              (status = 409, body = ApiError, content_type = "application/problem+json")))]
+pub async fn add_built_in(
+    State(state): State<AppState>,
+    authed: Authed,
+    Path(key): Path<String>,
+    Json(body): Json<AddBuiltInRequest>,
+) -> ApiResult<(StatusCode, Json<IntegrationDetail>)> {
+    authed
+        .require_at(&state, permissions::INTEGRATION_MANAGE, body.org_id)
+        .await?;
+    let mut tx = begin_scoped(&state.db, &authed.scope(&state).await?)
+        .await
+        .map_err(db_err)?;
+    let detail = huxley_integrations::catalog::add(&mut tx, &authed.user.ctx, body.org_id, &key)
+        .await
+        .map_err(map_store)?
+        .ok_or_else(ApiError::not_found)?;
     tx.commit().await.map_err(db_err)?;
     Ok((StatusCode::CREATED, Json(detail)))
 }

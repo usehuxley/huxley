@@ -23,6 +23,25 @@ Published specs often have small mistakes. When the importer can work around one
 
 Only a file that isn't JSON or YAML, isn't OpenAPI or Swagger, or is over the limits is refused.
 
+## Built-in integrations
+
+**Built-in integrations** on the Integrations page are curated specs shipped with Huxley. **Add** puts one in the chosen organization under its own key. From then on it's an ordinary integration: you can update it, pin it, and give it connections.
+
+- **Microsoft Graph** (`msgraph`), for Microsoft 365 and Entra ID:
+  - users: list, get, create, update, delete, revoke sign-in sessions, list group memberships
+  - licences: list SKUs, assign and remove
+  - groups: list, list members, add and remove members
+  - mail: send mail
+
+  **To connect it:**
+  1. Register an app in the tenant's Entra admin center.
+  2. Add a client secret.
+  3. Grant application permissions such as `User.ReadWrite.All`, `Group.ReadWrite.All`, `Organization.Read.All` and `Mail.Send`, with admin consent.
+  4. Make a connection with the scheme **app**: the client ID, the secret, and the **tenant** server variable (the tenant ID or `contoso.onmicrosoft.com`).
+
+  For many client tenants, make a connection per client organization.
+- **Slack** (`slack`): post a message and list channels, with a bot token (`xoxb-…`) that has `chat:write`. Slack answers 200 even when a call fails, so check `ok` in the output.
+
 ## Updating
 
 Vendors change their APIs. To bring an integration up to date, import the newer spec under **Import a newer spec**. You get a review first, and nothing changes until you apply it.
@@ -61,7 +80,7 @@ A connection holds credentials for one of an integration's auth schemes. Create 
 - When you change a connection, secrets you leave out keep their stored value. Switching to a different auth scheme clears them all.
 - The audit log records which secrets changed, never their values.
 
-**Base URL:** a connection uses the spec's first server URL, with its `{variables}` filled from the connection's server variables. If the spec has no servers, or you want another region or a sandbox, give a base URL to override it.
+**Base URL:** a connection uses the spec's first server URL, with its `{variables}` filled from the connection's server variables. If the spec has no servers, or you want another region or a sandbox, give a base URL to override it. Auth URLs can use server variables too, such as a tenant in `https://login.microsoftonline.com/{tenant}/oauth2/v2.0/token`. There, values may only contain letters, digits, dots, hyphens and underscores, so they can't change where the URL points.
 
 **OAuth 2.0:**
 

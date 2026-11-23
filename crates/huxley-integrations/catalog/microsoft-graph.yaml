@@ -1,0 +1,281 @@
+openapi: 3.0.3
+info:
+  title: Microsoft Graph
+  version: v1.0
+  description: >-
+    Users, groups, licenses and mail in a Microsoft 365 tenant, through an
+    Entra app registration with application permissions (for example
+    User.ReadWrite.All, Group.ReadWrite.All, Organization.Read.All,
+    Mail.Send). Set the tenant to the directory (tenant) ID or a verified
+    domain.
+servers:
+  - url: https://graph.microsoft.com/v1.0
+    variables:
+      tenant:
+        default: ""
+        description: The tenant's ID or primary domain, e.g. contoso.onmicrosoft.com
+components:
+  securitySchemes:
+    app:
+      type: oauth2
+      description: An app registration's client ID and secret (client credentials).
+      flows:
+        clientCredentials:
+          tokenUrl: https://login.microsoftonline.com/{tenant}/oauth2/v2.0/token
+          scopes:
+            https://graph.microsoft.com/.default: The app's granted application permissions
+  parameters:
+    user: { name: user, in: path, required: true, description: The user's ID or userPrincipalName, schema: { type: string } }
+    group: { name: group, in: path, required: true, description: The group's ID, schema: { type: string } }
+    filter: { name: $filter, in: query, description: "OData filter, e.g. startswith(displayName,'A')", schema: { type: string } }
+    select: { name: $select, in: query, description: Comma-separated properties to return, schema: { type: string } }
+    top: { name: $top, in: query, description: Page size (1-999), schema: { type: integer, minimum: 1, maximum: 999 } }
+  schemas:
+    User:
+      type: object
+      properties:
+        id: { type: string }
+        displayName: { type: string }
+        userPrincipalName: { type: string }
+        mail: { type: string }
+        accountEnabled: { type: boolean }
+        jobTitle: { type: string }
+        department: { type: string }
+        usageLocation: { type: string }
+    UserList:
+      type: object
+      properties:
+        value: { type: array, items: { $ref: "#/components/schemas/User" } }
+        "@odata.nextLink": { type: string }
+    Group:
+      type: object
+      properties:
+        id: { type: string }
+        displayName: { type: string }
+        mail: { type: string }
+        securityEnabled: { type: boolean }
+        mailEnabled: { type: string }
+    DirectoryObjectList:
+      type: object
+      properties:
+        value: { type: array, items: { type: object } }
+        "@odata.nextLink": { type: string }
+paths:
+  /users:
+    get:
+      operationId: listUsers
+      summary: List users
+      tags: [Users]
+      parameters: [{ $ref: "#/components/parameters/filter" }, { $ref: "#/components/parameters/select" }, { $ref: "#/components/parameters/top" }]
+      responses:
+        "200": { description: The users, content: { application/json: { schema: { $ref: "#/components/schemas/UserList" } } } }
+    post:
+      operationId: createUser
+      summary: Create a user
+      tags: [Users]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [accountEnabled, displayName, mailNickname, userPrincipalName, passwordProfile]
+              properties:
+                accountEnabled: { type: boolean }
+                displayName: { type: string }
+                mailNickname: { type: string }
+                userPrincipalName: { type: string }
+                givenName: { type: string }
+                surname: { type: string }
+                jobTitle: { type: string }
+                department: { type: string }
+                usageLocation: { type: string, description: Two-letter country code; needed before assigning licenses }
+                passwordProfile:
+                  type: object
+                  required: [password]
+                  properties:
+                    password: { type: string }
+                    forceChangePasswordNextSignIn: { type: boolean }
+      responses:
+        "201": { description: The new user, content: { application/json: { schema: { $ref: "#/components/schemas/User" } } } }
+  /users/{user}:
+    get:
+      operationId: getUser
+      summary: Get a user
+      tags: [Users]
+      parameters: [{ $ref: "#/components/parameters/user" }, { $ref: "#/components/parameters/select" }]
+      responses:
+        "200": { description: The user, content: { application/json: { schema: { $ref: "#/components/schemas/User" } } } }
+    patch:
+      operationId: updateUser
+      summary: Update a user (e.g. accountEnabled false to block sign-in)
+      tags: [Users]
+      parameters: [{ $ref: "#/components/parameters/user" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                accountEnabled: { type: boolean }
+                displayName: { type: string }
+                jobTitle: { type: string }
+                department: { type: string }
+                usageLocation: { type: string }
+                passwordProfile:
+                  type: object
+                  properties:
+                    password: { type: string }
+                    forceChangePasswordNextSignIn: { type: boolean }
+      responses:
+        "204": { description: Updated }
+    delete:
+      operationId: deleteUser
+      summary: Delete a user (recoverable for 30 days)
+      tags: [Users]
+      parameters: [{ $ref: "#/components/parameters/user" }]
+      responses:
+        "204": { description: Deleted }
+  /users/{user}/revokeSignInSessions:
+    post:
+      operationId: revokeSignInSessions
+      summary: Sign a user out everywhere
+      tags: [Users]
+      parameters: [{ $ref: "#/components/parameters/user" }]
+      responses:
+        "200": { description: Revoked, content: { application/json: { schema: { type: object, properties: { value: { type: boolean } } } } } }
+  /users/{user}/memberOf:
+    get:
+      operationId: listUserGroups
+      summary: List the groups and roles a user is a member of
+      tags: [Users]
+      parameters: [{ $ref: "#/components/parameters/user" }, { $ref: "#/components/parameters/select" }]
+      responses:
+        "200": { description: Groups and roles, content: { application/json: { schema: { $ref: "#/components/schemas/DirectoryObjectList" } } } }
+  /users/{user}/assignLicense:
+    post:
+      operationId: assignLicense
+      summary: Add or remove a user's licenses
+      tags: [Licenses]
+      parameters: [{ $ref: "#/components/parameters/user" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [addLicenses, removeLicenses]
+              properties:
+                addLicenses:
+                  type: array
+                  items:
+                    type: object
+                    required: [skuId]
+                    properties:
+                      skuId: { type: string }
+                      disabledPlans: { type: array, items: { type: string } }
+                removeLicenses: { type: array, items: { type: string }, description: SKU IDs to remove }
+      responses:
+        "200": { description: The user, content: { application/json: { schema: { $ref: "#/components/schemas/User" } } } }
+  /users/{user}/sendMail:
+    post:
+      operationId: sendMail
+      summary: Send mail as a user (or shared mailbox)
+      tags: [Mail]
+      parameters: [{ $ref: "#/components/parameters/user" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [message]
+              properties:
+                saveToSentItems: { type: boolean }
+                message:
+                  type: object
+                  required: [subject, body, toRecipients]
+                  properties:
+                    subject: { type: string }
+                    body:
+                      type: object
+                      required: [content]
+                      properties:
+                        contentType: { type: string, enum: [Text, HTML] }
+                        content: { type: string }
+                    toRecipients:
+                      type: array
+                      items:
+                        type: object
+                        properties:
+                          emailAddress: { type: object, properties: { address: { type: string }, name: { type: string } } }
+      responses:
+        "202": { description: Accepted }
+  /subscribedSkus:
+    get:
+      operationId: listSubscribedSkus
+      summary: List the tenant's licenses (SKUs) and how many are used
+      tags: [Licenses]
+      responses:
+        "200":
+          description: The SKUs
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  value:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        skuId: { type: string }
+                        skuPartNumber: { type: string }
+                        consumedUnits: { type: integer }
+                        prepaidUnits: { type: object, properties: { enabled: { type: integer } } }
+  /groups:
+    get:
+      operationId: listGroups
+      summary: List groups
+      tags: [Groups]
+      parameters: [{ $ref: "#/components/parameters/filter" }, { $ref: "#/components/parameters/select" }, { $ref: "#/components/parameters/top" }]
+      responses:
+        "200": { description: The groups, content: { application/json: { schema: { type: object, properties: { value: { type: array, items: { $ref: "#/components/schemas/Group" } } } } } } }
+  /groups/{group}/members:
+    get:
+      operationId: listGroupMembers
+      summary: List a group's members
+      tags: [Groups]
+      parameters: [{ $ref: "#/components/parameters/group" }, { $ref: "#/components/parameters/select" }]
+      responses:
+        "200": { description: The members, content: { application/json: { schema: { $ref: "#/components/schemas/DirectoryObjectList" } } } }
+  /groups/{group}/members/$ref:
+    post:
+      operationId: addGroupMember
+      summary: Add a member to a group
+      tags: [Groups]
+      parameters: [{ $ref: "#/components/parameters/group" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: ["@odata.id"]
+              properties:
+                "@odata.id": { type: string, description: "https://graph.microsoft.com/v1.0/directoryObjects/<user ID>" }
+      responses:
+        "204": { description: Added }
+  /groups/{group}/members/{member}/$ref:
+    delete:
+      operationId: removeGroupMember
+      summary: Remove a member from a group
+      tags: [Groups]
+      parameters:
+        - { $ref: "#/components/parameters/group" }
+        - { name: member, in: path, required: true, description: The member's ID, schema: { type: string } }
+      responses:
+        "204": { description: Removed }
+security:
+  - app: [https://graph.microsoft.com/.default]

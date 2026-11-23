@@ -1,0 +1,67 @@
+openapi: 3.0.3
+info:
+  title: Slack
+  version: "1"
+  description: >-
+    Post messages to Slack channels with a bot token (xoxb-…) that has the
+    chat:write scope; invite the bot to the channel first. Slack answers
+    200 even when a call fails: check the response's ok field.
+servers:
+  - url: https://slack.com/api
+components:
+  securitySchemes:
+    bot:
+      type: http
+      scheme: bearer
+      description: A bot user OAuth token (xoxb-…)
+paths:
+  /chat.postMessage:
+    post:
+      operationId: postMessage
+      summary: Post a message to a channel
+      tags: [Messages]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [channel]
+              properties:
+                channel: { type: string, description: A channel ID (C…) or name (#general) }
+                text: { type: string, description: The message, or its fallback text when blocks are given }
+                blocks: { type: array, items: { type: object }, description: Block Kit blocks }
+                thread_ts: { type: string, description: Reply in this message's thread }
+      responses:
+        "200":
+          description: The result (see ok)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+                  error: { type: string }
+                  ts: { type: string }
+                  channel: { type: string }
+  /conversations.list:
+    get:
+      operationId: listChannels
+      summary: List channels the token can see
+      tags: [Channels]
+      parameters:
+        - { name: types, in: query, description: "e.g. public_channel,private_channel", schema: { type: string } }
+        - { name: limit, in: query, schema: { type: integer, maximum: 1000 } }
+        - { name: cursor, in: query, schema: { type: string } }
+      responses:
+        "200":
+          description: The channels
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+                  channels: { type: array, items: { type: object, properties: { id: { type: string }, name: { type: string } } } }
+security:
+  - bot: []

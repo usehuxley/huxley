@@ -79,7 +79,9 @@ pub async fn begin_sign_in(
     );
     let state = random_token();
     let verifier = random_token();
-    let mut url = Url::parse(authorization_url)
+    let authorization_url =
+        connections::fill_auth_url(authorization_url, &integration.definition, &view)?;
+    let mut url = Url::parse(&authorization_url)
         .map_err(|_| invalid("authScheme", "the spec's authorization URL isn't a URL"))?;
     url.query_pairs_mut()
         .append_pair("response_type", "code")

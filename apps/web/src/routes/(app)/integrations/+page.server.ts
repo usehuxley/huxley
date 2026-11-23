@@ -7,15 +7,33 @@ import type { Actions, PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async (event) => {
 	const client = api(event);
-	const [integrations, orgs] = await Promise.all([
+	const [integrations, orgs, catalog] = await Promise.all([
 		client.GET('/api/v1/integrations'),
-		client.GET('/api/v1/orgs')
+		client.GET('/api/v1/orgs'),
+		client.GET('/api/v1/integrations/catalog')
 	]);
 	if (!integrations.data) error(503, 'Could not load integrations.');
-	return { integrations: integrations.data, orgs: orgs.data ?? [] };
+	return { integrations: integrations.data, orgs: orgs.data ?? [], catalog: catalog.data ?? [] };
 };
 
 export const actions: Actions = {
+	addBuiltIn: async (event) => {
+		const form = await event.request.formData();
+		const orgId = formString(form, 'orgId');
+		const key = formString(form, 'key');
+		const {
+			data,
+			error: problem,
+			response
+		} = await api(event).POST('/api/v1/integrations/catalog/{key}', {
+			params: { path: { key } },
+			body: { orgId }
+		});
+		if (!data) {
+			return fail(response.status, { message: problemMessage(problem, 'Could not add it.') });
+		}
+		redirect(303, `/integrations/${data.id}`);
+	},
 	import: async (event) => {
 		const form = await event.request.formData();
 		const orgId = formString(form, 'orgId');

@@ -107,4 +107,17 @@ test.describe('integrations', () => {
 		await expect(page.getByText('Version 1 is current.')).toBeVisible();
 		await expect(actions).toContainText('post_devices_id_reboot');
 	});
+
+	test('a built-in integration is added in one click', async ({ browser }) => {
+		const page = await signIn(browser);
+		await page.goto('/integrations');
+		const builtIns = page.getByRole('list', { name: 'Built-in integrations' });
+		await builtIns.getByRole('button', { name: 'Add Microsoft Graph' }).click();
+		await expect(page.getByRole('heading', { level: 1 })).toHaveText('Microsoft Graph');
+		await expect(page.getByText('listUsers').first()).toBeVisible();
+		await page.goto('/integrations');
+		await expect(
+			page.getByRole('list', { name: 'Built-in integrations' }).getByText('Added').first()
+		).toBeVisible();
+	});
 });
