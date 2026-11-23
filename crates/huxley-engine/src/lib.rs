@@ -34,7 +34,7 @@ use huxley_db::DbError;
 use sqlx::PgPool;
 
 pub use callback::CallbackRequest;
-pub use egress::EgressConfig;
+pub use egress::{Blocked, EgressConfig, allowed_addrs};
 pub use journal::{StepStatus, step_key};
 pub use payload::{PayloadConfig, SPILLED};
 pub use run::{RunStatus, StartRun};

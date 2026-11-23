@@ -29,7 +29,7 @@ The gateway's server certificate comes from Huxley's runner CA, which runners re
 
 Each script runs in its own container, removed afterwards, with:
 
-- **no network** (`--network=none`)
+- **no network of its own** (`--network=none`): HTTP(S) goes through the egress proxy (below), and nothing else gets out
 - a **read-only root filesystem**, plus a 64 MB `/tmp`
 - **no capabilities**, `no-new-privileges`, and the unprivileged user `65534`
 - limits: **512 MB memory and 1 CPU** by default (`--memory`, `--cpus`), and 256 processes
@@ -43,6 +43,27 @@ podman pull docker.io/library/python:3.13-alpine
 ```
 
 It only offers the languages whose images are present. Choose other images with `--pwsh-image` and `--python-image`, for example ones with your modules preinstalled. `--concurrency` (default 2) sets how many scripts run at once. Logs, meaning stdout and stderr up to 64 KB, are kept with the task, and a failed step's error includes the last 4 KB of them.
+
+## Network egress
+
+Scripts reach the internet only through the runner's **egress proxy**. It applies the same policy as HTTP steps:
+
+- **Public addresses only**, by default.
+- **The proxy resolves names itself** and connects only to checked addresses, so DNS rebinding gets nowhere.
+- **Link-local addresses** (cloud metadata such as `169.254.169.254`) are never reachable.
+
+The container has no network interface besides loopback. The proxy is a Unix socket mounted into it, and a relay in the script's wrapper listens on `127.0.0.1:3128`. `HTTP_PROXY` and `HTTPS_PROXY` point at the relay, so `Invoke-RestMethod`, the Microsoft Graph modules, `urllib` and `requests` use it without changes.
+
+Only HTTP and HTTPS work: there are no raw sockets, LDAP or SMB. Work inside a customer's network goes through an integration with a presence there (design doc §6.9).
+
+Runner flags:
+
+| Flag | Effect |
+|---|---|
+| `--egress-allow-private` | Allow private addresses, such as an internal API. Link-local stays blocked. |
+| `--egress-private-host` | Host names that may resolve to private addresses, e.g. `*.corp.example`. Repeatable. |
+| `--egress-denied-host` | Host names scripts may never reach |
+| `--no-network` | No egress at all |
 
 ## Credentials
 
