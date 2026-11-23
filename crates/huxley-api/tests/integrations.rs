@@ -338,3 +338,113 @@ async fn updates_are_previewed_applied_and_rolled_back() {
     assert_eq!(status, StatusCode::OK, "{next}");
     assert_eq!(next["currentVersion"], 3);
 }
+
+fn caller(key: &str, action: &str) -> Value {
+    json!({
+        "apiVersion": "usehuxley.com/v1",
+        "kind": "Workflow",
+        "metadata": { "key": key, "name": format!("Caller {key}") },
+        "spec": { "steps": [
+            { "id": "list", "type": "integration.action", "action": action }
+        ] }
+    })
+}
+
+#[tokio::test]
+async fn action_steps_are_checked_and_updates_show_who_they_break() {
+    let Some(pools) = pools().await else { return };
+    let app = app(&pools);
+    let org = provider_org(&pools).await;
+    let owner = login(&app, &user(&pools, true).await.1).await;
+    let (_, integration) = call(
+        &app,
+        "POST",
+        "/api/v1/integrations",
+        &owner,
+        Some(json!({ "orgId": org, "key": "widgets", "spec": SPEC_V1 })),
+    )
+    .await;
+    let integration_id = integration["id"].as_str().unwrap().to_owned();
+
+    // A step naming an action that doesn't exist is a problem, and blocks
+    // publishing.
+    let (status, wrong) = call(
+        &app,
+        "POST",
+        "/api/v1/workflows",
+        &owner,
+        Some(json!({ "orgId": org, "document": caller("wrong", "widgets/nope") })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED, "{wrong}");
+    assert_eq!(wrong["diagnostics"][0]["path"], "spec.steps[0].action");
+    let wrong_id = wrong["id"].as_str().unwrap();
+    let (status, problem) = call(
+        &app,
+        "POST",
+        &format!("/api/v1/workflows/{wrong_id}/publish"),
+        &owner,
+        Some(json!({})),
+    )
+    .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{problem}");
+    assert_eq!(problem["errors"][0]["pointer"], "spec.steps[0].action");
+
+    // A correct one publishes.
+    let (_, good) = call(
+        &app,
+        "POST",
+        "/api/v1/workflows",
+        &owner,
+        Some(json!({ "orgId": org, "document": caller("good", "widgets/listWidgets") })),
+    )
+    .await;
+    assert_eq!(good["diagnostics"], json!([]));
+    let good_id = good["id"].as_str().unwrap().to_owned();
+    let (status, _) = call(
+        &app,
+        "POST",
+        &format!("/api/v1/workflows/{good_id}/publish"),
+        &owner,
+        Some(json!({})),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+
+    // Removing listWidgets would break it: the preview says which step.
+    let (_, preview) = call(
+        &app,
+        "POST",
+        &format!("/api/v1/integrations/{integration_id}/preview"),
+        &owner,
+        Some(json!({ "spec": SPEC_V2 })),
+    )
+    .await;
+    assert_eq!(preview["affected"][0]["workflowId"], good_id.as_str());
+    assert_eq!(preview["affected"][0]["steps"][0]["stepId"], "list");
+    assert_eq!(
+        preview["affected"][0]["steps"][0]["problem"],
+        "the action is removed"
+    );
+
+    // A rename (same method and path) breaks nothing: an alias keeps it.
+    // (The second listWidgets, imported as listWidgets_2, becomes getWidget.)
+    let at = SPEC_V1.rfind("operationId: listWidgets").unwrap();
+    let renamed = format!(
+        "{}operationId: getWidget{}",
+        &SPEC_V1[..at],
+        &SPEC_V1[at + "operationId: listWidgets".len()..]
+    );
+    let (_, preview) = call(
+        &app,
+        "POST",
+        &format!("/api/v1/integrations/{integration_id}/preview"),
+        &owner,
+        Some(json!({ "spec": renamed })),
+    )
+    .await;
+    assert_eq!(preview["diff"]["renamed"][0]["from"], "listWidgets_2");
+    assert_eq!(preview["diff"]["renamed"][0]["to"], "getWidget");
+    assert_eq!(preview["diff"]["breaking"], false, "{preview}");
+    assert_eq!(preview["affected"], json!([]));
+}

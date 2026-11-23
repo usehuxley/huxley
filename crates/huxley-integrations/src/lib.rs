@@ -18,6 +18,7 @@ pub mod oauth;
 mod refs;
 pub mod store;
 mod swagger;
+pub mod usage;
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value as Json;

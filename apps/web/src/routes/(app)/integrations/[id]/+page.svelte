@@ -324,9 +324,37 @@
 						<p class="font-mono text-xs">{diff.removed.join(', ')}</p>
 					</div>
 				{/if}
+				{#if preview.affected.length}
+					<div>
+						<p class="font-medium text-danger">Workflows this would break</p>
+						<ul class="flex flex-col gap-1" aria-label="Affected workflows">
+							{#each preview.affected as workflow (workflow.workflowId)}
+								<li>
+									<a
+										href={resolve('/(app)/workflows/[id]', { id: workflow.workflowId })}
+										class="text-accent hover:underline"
+									>
+										{workflow.name}
+									</a>
+									<ul class="ml-4 list-disc text-danger">
+										{#each workflow.steps as step (step.stepId)}
+											<li>
+												<span class="font-mono text-xs">{step.stepId}</span>
+												({step.action}): {step.problem}
+											</li>
+										{/each}
+									</ul>
+								</li>
+							{/each}
+						</ul>
+					</div>
+				{/if}
 				{#if diff.renamed.length}
 					<div>
-						<p class="font-medium text-danger">Renamed actions (same method and path)</p>
+						<p class="font-medium text-fg">Renamed actions</p>
+						<p class="text-xs text-fg-muted">
+							Same method and path under a new key. Workflows using the old key keep working.
+						</p>
 						<ul class="font-mono text-xs">
 							{#each diff.renamed as r (r.from)}<li>{r.from} → {r.to}</li>{/each}
 						</ul>

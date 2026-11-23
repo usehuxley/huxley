@@ -36,7 +36,7 @@ spec:
 ## Lifecycle
 
 - **Draft:** saved at any time, even with problems; the editor lists what would stop it publishing, with where each problem is.
-- **Publish:** makes the draft the next immutable version, after checking its structure and every expression (unknown names, references to steps that can't have run yet). Runs always pin to a version.
+- **Publish:** makes the draft the next immutable version, after checking its structure, every expression (unknown names, references to steps that can't have run yet), and every `integration.action` step (the integration exists for the workflow's organization and has the action). Runs always pin to a version, and to the integration versions current when they start.
 - **Test run:** runs the draft without publishing it (needs edit rights).
 - **Archive:** stops triggers and runs; history stays. Restore brings the published version's triggers back.
 - **Compare** any two versions, or a version and the draft.

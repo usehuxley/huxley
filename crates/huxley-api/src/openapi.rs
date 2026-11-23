@@ -345,6 +345,8 @@ use crate::workflow_routes::{
         huxley_integrations::diff::Change,
         huxley_integrations::diff::ActionChanges,
         huxley_integrations::diff::Rename,
+        huxley_integrations::usage::AffectedWorkflow,
+        huxley_integrations::usage::AffectedStep,
         huxley_integrations::store::IntegrationSummary,
         huxley_integrations::store::IntegrationDetail,
         huxley_integrations::store::IntegrationVersion,

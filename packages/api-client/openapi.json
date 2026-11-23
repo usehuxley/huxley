@@ -5749,6 +5749,41 @@
 					}
 				}
 			},
+			"AffectedStep": {
+				"type": "object",
+				"required": ["stepId", "action", "problem"],
+				"properties": {
+					"action": {
+						"type": "string"
+					},
+					"problem": {
+						"type": "string"
+					},
+					"stepId": {
+						"type": "string"
+					}
+				}
+			},
+			"AffectedWorkflow": {
+				"type": "object",
+				"description": "A published workflow an update would break.",
+				"required": ["workflowId", "name", "steps"],
+				"properties": {
+					"name": {
+						"type": "string"
+					},
+					"steps": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/AffectedStep"
+						}
+					},
+					"workflowId": {
+						"type": "string",
+						"format": "uuid"
+					}
+				}
+			},
 			"ApiError": {
 				"type": "object",
 				"description": "An RFC 9457 problem details response.",
@@ -6669,7 +6704,7 @@
 						"items": {
 							"type": "string"
 						},
-						"description": "Actions that are gone (renamed ones are listed under `renamed`)."
+						"description": "Actions that are gone (renamed ones are listed under `renamed`, and\nkeep working under their old key)."
 					},
 					"renamed": {
 						"type": "array",
@@ -8786,11 +8821,18 @@
 			"UpdatePreview": {
 				"type": "object",
 				"description": "What importing a newer spec would change, without saving anything.",
-				"required": ["baseVersion", "diff", "warnings", "actions", "apiVersion"],
+				"required": ["baseVersion", "diff", "warnings", "actions", "apiVersion", "affected"],
 				"properties": {
 					"actions": {
 						"type": "integer",
 						"minimum": 0
+					},
+					"affected": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/AffectedWorkflow"
+						},
+						"description": "Published workflows with steps the update would break (among those\nthe caller can see)."
 					},
 					"apiVersion": {
 						"type": "string",
