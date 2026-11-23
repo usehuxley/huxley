@@ -29,6 +29,7 @@ use crate::security_routes::{self, SetRequirementRequest};
 use crate::sso_routes::{
     self, ProviderDetail, SsoCallbackRequest, StartSsoRequest, StartSsoResponse,
 };
+use crate::team_routes::{self, TeamDetail, TeamInput};
 use crate::token_routes::{
     self, ApiTokenView, CreateServiceAccountRequest, CreateTokenRequest, CreatedTokenView,
     ServiceAccountView, UpdateServiceAccountRequest,
@@ -92,6 +93,14 @@ use crate::user_routes::{
         security_routes::set_role,
         security_routes::set_org,
         sso_routes::list_buttons,
+        team_routes::list,
+        team_routes::get_team,
+        team_routes::create,
+        team_routes::update,
+        team_routes::remove,
+        team_routes::add_member,
+        team_routes::remove_member,
+        team_routes::of_user,
         token_routes::list_own,
         token_routes::create_own,
         token_routes::revoke_own,
@@ -154,6 +163,10 @@ use crate::user_routes::{
         SetModuleResponse,
         SetRequirementRequest,
         StartSsoRequest,
+        TeamInput,
+        TeamDetail,
+        huxley_authz::teams::Team,
+        huxley_authz::teams::TeamMember,
         ApiTokenView,
         CreateTokenRequest,
         CreatedTokenView,

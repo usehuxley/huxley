@@ -167,9 +167,19 @@ pub fn map_org(error: OrgError) -> ApiError {
 pub fn map_authz(error: AuthzError) -> ApiError {
     match error {
         AuthzError::Forbidden => ApiError::forbidden(),
-        AuthzError::RoleNotFound | AuthzError::AssignmentNotFound | AuthzError::OrgNotFound => {
-            ApiError::not_found()
+        AuthzError::OwnerToTeam => {
+            ApiError::conflict("The Owner role is granted to individual people, not teams.")
         }
+        AuthzError::TeamNameTaken => ApiError::conflict("A team with this name already exists."),
+        AuthzError::InvalidTeamName => ApiError::validation().with_field_error(
+            "/name",
+            "Enter a name of 1 to 100 characters (description up to 500).",
+        ),
+        AuthzError::RoleNotFound
+        | AuthzError::AssignmentNotFound
+        | AuthzError::OrgNotFound
+        | AuthzError::TeamNotFound
+        | AuthzError::UserNotFound => ApiError::not_found(),
         AuthzError::AlreadyAssigned => {
             ApiError::conflict("The user already has this role at this organization.")
         }

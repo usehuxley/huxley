@@ -663,7 +663,7 @@
 			"get": {
 				"tags": ["auth"],
 				"summary": "The signed-in user's passkeys.",
-				"operationId": "list",
+				"operationId": "list_passkeys",
 				"responses": {
 					"200": {
 						"content": {
@@ -778,7 +778,7 @@
 			"delete": {
 				"tags": ["auth"],
 				"summary": "Removes a passkey. Removing the last second factor also deletes the\nrecovery codes.",
-				"operationId": "remove",
+				"operationId": "remove_passkey",
 				"parameters": [
 					{
 						"name": "id",
@@ -807,7 +807,7 @@
 			"patch": {
 				"tags": ["auth"],
 				"summary": "Renames a passkey.",
-				"operationId": "rename",
+				"operationId": "rename_passkey",
 				"parameters": [
 					{
 						"name": "id",
@@ -2105,6 +2105,297 @@
 				}
 			}
 		},
+		"/api/v1/teams": {
+			"get": {
+				"tags": ["users"],
+				"summary": "Teams. Anyone who can view users can view teams.",
+				"operationId": "list_teams",
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "array",
+									"items": {
+										"$ref": "#/components/schemas/Team"
+									}
+								}
+							}
+						}
+					},
+					"403": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			},
+			"post": {
+				"tags": ["users"],
+				"operationId": "create_team",
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/TeamInput"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"201": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Team"
+								}
+							}
+						}
+					},
+					"409": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/teams/of-user/{user_id}": {
+			"get": {
+				"tags": ["users"],
+				"summary": "The teams a user belongs to.",
+				"operationId": "list_user_teams",
+				"parameters": [
+					{
+						"name": "user_id",
+						"in": "path",
+						"description": "User id",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "array",
+									"items": {
+										"$ref": "#/components/schemas/Team"
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/teams/{id}": {
+			"get": {
+				"tags": ["users"],
+				"summary": "A team with its members and role assignments.",
+				"operationId": "get_team",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"description": "Team id",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/TeamDetail"
+								}
+							}
+						}
+					},
+					"404": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			},
+			"put": {
+				"tags": ["users"],
+				"operationId": "update_team",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"description": "Team id",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/TeamInput"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Team"
+								}
+							}
+						}
+					},
+					"404": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			},
+			"delete": {
+				"tags": ["users"],
+				"summary": "Deletes a team and the roles it held. Members keep their own roles.",
+				"operationId": "delete_team",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"description": "Team id",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"responses": {
+					"204": {},
+					"404": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/teams/{id}/members/{user_id}": {
+			"put": {
+				"tags": ["users"],
+				"summary": "Adds a user to a team (idempotent). They get the team's roles at once.",
+				"operationId": "add_team_member",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"description": "Team id",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					},
+					{
+						"name": "user_id",
+						"in": "path",
+						"description": "User id",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"responses": {
+					"204": {},
+					"404": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			},
+			"delete": {
+				"tags": ["users"],
+				"summary": "Removes a user from a team. They lose the team's roles at once.",
+				"operationId": "remove_team_member",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"description": "Team id",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					},
+					{
+						"name": "user_id",
+						"in": "path",
+						"description": "User id",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"responses": {
+					"204": {},
+					"404": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
 		"/api/v1/users": {
 			"get": {
 				"tags": ["users"],
@@ -2500,7 +2791,6 @@
 				"type": "object",
 				"required": [
 					"id",
-					"userId",
 					"roleId",
 					"roleKey",
 					"roleName",
@@ -2538,9 +2828,18 @@
 					"roleName": {
 						"type": "string"
 					},
+					"teamId": {
+						"type": ["string", "null"],
+						"format": "uuid",
+						"description": "Set for an assignment to a team."
+					},
+					"teamName": {
+						"type": ["string", "null"]
+					},
 					"userId": {
-						"type": "string",
-						"format": "uuid"
+						"type": ["string", "null"],
+						"format": "uuid",
+						"description": "Set for an assignment to a user."
 					}
 				}
 			},
@@ -2668,7 +2967,7 @@
 			},
 			"CreateAssignmentRequest": {
 				"type": "object",
-				"required": ["userId", "roleId", "orgId"],
+				"required": ["roleId", "orgId"],
 				"properties": {
 					"inherit": {
 						"type": "boolean",
@@ -2682,9 +2981,15 @@
 						"type": "string",
 						"format": "uuid"
 					},
+					"teamId": {
+						"type": ["string", "null"],
+						"format": "uuid",
+						"description": "Grant to this team; its members receive the role."
+					},
 					"userId": {
-						"type": "string",
-						"format": "uuid"
+						"type": ["string", "null"],
+						"format": "uuid",
+						"description": "Grant to this user. Send exactly one of `userId` or `teamId`."
 					}
 				}
 			},
@@ -3647,6 +3952,93 @@
 					"state": {
 						"type": "string",
 						"description": "Bind to the browser (e.g. an `HttpOnly` cookie) and check it equals the\n`state` the provider returns before calling `/callback`."
+					}
+				}
+			},
+			"Team": {
+				"type": "object",
+				"required": ["id", "name", "description", "memberCount", "createdAt"],
+				"properties": {
+					"createdAt": {
+						"type": "string",
+						"format": "date-time"
+					},
+					"description": {
+						"type": "string"
+					},
+					"id": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"memberCount": {
+						"type": "integer",
+						"format": "int64"
+					},
+					"name": {
+						"type": "string"
+					}
+				}
+			},
+			"TeamDetail": {
+				"allOf": [
+					{
+						"$ref": "#/components/schemas/Team"
+					},
+					{
+						"type": "object",
+						"required": ["members", "assignments"],
+						"properties": {
+							"assignments": {
+								"type": "array",
+								"items": {
+									"$ref": "#/components/schemas/Assignment"
+								},
+								"description": "The team's role assignments that the caller can see."
+							},
+							"members": {
+								"type": "array",
+								"items": {
+									"$ref": "#/components/schemas/TeamMember"
+								}
+							}
+						}
+					}
+				]
+			},
+			"TeamInput": {
+				"type": "object",
+				"required": ["name"],
+				"properties": {
+					"description": {
+						"type": "string"
+					},
+					"name": {
+						"type": "string"
+					}
+				}
+			},
+			"TeamMember": {
+				"type": "object",
+				"description": "A member, with enough about the user to display them.",
+				"required": ["userId", "displayName", "email", "kind", "addedAt"],
+				"properties": {
+					"addedAt": {
+						"type": "string",
+						"format": "date-time"
+					},
+					"displayName": {
+						"type": "string"
+					},
+					"email": {
+						"type": "string"
+					},
+					"kind": {
+						"type": "string",
+						"description": "`human` or `service`."
+					},
+					"userId": {
+						"type": "string",
+						"format": "uuid"
 					}
 				}
 			},

@@ -22,6 +22,7 @@ mod router;
 pub mod security_routes;
 pub mod session;
 pub mod sso_routes;
+pub mod team_routes;
 pub mod token_routes;
 pub mod user_routes;
 

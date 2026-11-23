@@ -92,7 +92,7 @@ pub struct RenamePasskeyRequest {
 }
 
 /// The signed-in user's passkeys.
-#[utoipa::path(get, path = "/api/v1/auth/passkeys", tag = "auth",
+#[utoipa::path(get, path = "/api/v1/auth/passkeys", operation_id = "list_passkeys", tag = "auth",
     responses((status = 200, body = Vec<PasskeyView>)))]
 pub async fn list(
     State(state): State<AppState>,
@@ -166,7 +166,7 @@ pub async fn finish_registration(
 }
 
 /// Renames a passkey.
-#[utoipa::path(patch, path = "/api/v1/auth/passkeys/{id}", tag = "auth",
+#[utoipa::path(patch, path = "/api/v1/auth/passkeys/{id}", operation_id = "rename_passkey", tag = "auth",
     params(("id" = Uuid, Path, description = "Passkey id")),
     request_body = RenamePasskeyRequest,
     responses((status = 200, body = PasskeyView), (status = 404, body = ApiError, content_type = "application/problem+json")))]
@@ -186,7 +186,7 @@ pub async fn rename(
 
 /// Removes a passkey. Removing the last second factor also deletes the
 /// recovery codes.
-#[utoipa::path(delete, path = "/api/v1/auth/passkeys/{id}", tag = "auth",
+#[utoipa::path(delete, path = "/api/v1/auth/passkeys/{id}", operation_id = "remove_passkey", tag = "auth",
     params(("id" = Uuid, Path, description = "Passkey id")),
     responses((status = 204), (status = 404, body = ApiError, content_type = "application/problem+json")))]
 pub async fn remove(

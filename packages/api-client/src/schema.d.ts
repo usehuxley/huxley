@@ -325,7 +325,7 @@ export interface paths {
 			cookie?: never;
 		};
 		/** The signed-in user's passkeys. */
-		get: operations['list'];
+		get: operations['list_passkeys'];
 		put?: never;
 		/** Finishes adding a passkey with the browser's answer. */
 		post: operations['finish_registration'];
@@ -366,11 +366,11 @@ export interface paths {
 		 * Removes a passkey. Removing the last second factor also deletes the
 		 *     recovery codes.
 		 */
-		delete: operations['remove'];
+		delete: operations['remove_passkey'];
 		options?: never;
 		head?: never;
 		/** Renames a passkey. */
-		patch: operations['rename'];
+		patch: operations['rename_passkey'];
 		trace?: never;
 	};
 	'/api/v1/auth/password': {
@@ -827,6 +827,76 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
+	'/api/v1/teams': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** Teams. Anyone who can view users can view teams. */
+		get: operations['list_teams'];
+		put?: never;
+		post: operations['create_team'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/teams/of-user/{user_id}': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** The teams a user belongs to. */
+		get: operations['list_user_teams'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/teams/{id}': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** A team with its members and role assignments. */
+		get: operations['get_team'];
+		put: operations['update_team'];
+		post?: never;
+		/** Deletes a team and the roles it held. Members keep their own roles. */
+		delete: operations['delete_team'];
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/teams/{id}/members/{user_id}': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		/** Adds a user to a team (idempotent). They get the team's roles at once. */
+		put: operations['add_team_member'];
+		post?: never;
+		/** Removes a user from a team. They lose the team's roles at once. */
+		delete: operations['remove_team_member'];
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
 	'/api/v1/users': {
 		parameters: {
 			query?: never;
@@ -980,8 +1050,17 @@ export interface components {
 			roleId: string;
 			roleKey: string;
 			roleName: string;
-			/** Format: uuid */
-			userId: string;
+			/**
+			 * Format: uuid
+			 * @description Set for an assignment to a team.
+			 */
+			teamId?: string | null;
+			teamName?: string | null;
+			/**
+			 * Format: uuid
+			 * @description Set for an assignment to a user.
+			 */
+			userId?: string | null;
 		};
 		AuditEventView: {
 			action: string;
@@ -1047,8 +1126,16 @@ export interface components {
 			orgId: string;
 			/** Format: uuid */
 			roleId: string;
-			/** Format: uuid */
-			userId: string;
+			/**
+			 * Format: uuid
+			 * @description Grant to this team; its members receive the role.
+			 */
+			teamId?: string | null;
+			/**
+			 * Format: uuid
+			 * @description Grant to this user. Send exactly one of `userId` or `teamId`.
+			 */
+			userId?: string | null;
 		};
 		CreateOrgRequest: {
 			kind: components['schemas']['OrgKindInput'];
@@ -1453,6 +1540,36 @@ export interface components {
 			 *     `state` the provider returns before calling `/callback`.
 			 */
 			state: string;
+		};
+		Team: {
+			/** Format: date-time */
+			createdAt: string;
+			description: string;
+			/** Format: uuid */
+			id: string;
+			/** Format: int64 */
+			memberCount: number;
+			name: string;
+		};
+		TeamDetail: components['schemas']['Team'] & {
+			/** @description The team's role assignments that the caller can see. */
+			assignments: components['schemas']['Assignment'][];
+			members: components['schemas']['TeamMember'][];
+		};
+		TeamInput: {
+			description?: string;
+			name: string;
+		};
+		/** @description A member, with enough about the user to display them. */
+		TeamMember: {
+			/** Format: date-time */
+			addedAt: string;
+			displayName: string;
+			email: string;
+			/** @description `human` or `service`. */
+			kind: string;
+			/** Format: uuid */
+			userId: string;
 		};
 		TotpEnrollmentView: {
 			/** @description `otpauth://` URI to show as a QR code. */
@@ -2066,7 +2183,7 @@ export interface operations {
 			};
 		};
 	};
-	list: {
+	list_passkeys: {
 		parameters: {
 			query?: never;
 			header?: never;
@@ -2167,7 +2284,7 @@ export interface operations {
 			};
 		};
 	};
-	remove: {
+	remove_passkey: {
 		parameters: {
 			query?: never;
 			header?: never;
@@ -2195,7 +2312,7 @@ export interface operations {
 			};
 		};
 	};
-	rename: {
+	rename_passkey: {
 		parameters: {
 			query?: never;
 			header?: never;
@@ -3232,6 +3349,238 @@ export interface operations {
 				id: string;
 				/** @description Token id */
 				token_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			204: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content?: never;
+			};
+			404: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	list_teams: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['Team'][];
+				};
+			};
+			403: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	create_team: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['TeamInput'];
+			};
+		};
+		responses: {
+			201: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['Team'];
+				};
+			};
+			409: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	list_user_teams: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				/** @description User id */
+				user_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['Team'][];
+				};
+			};
+		};
+	};
+	get_team: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				/** @description Team id */
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['TeamDetail'];
+				};
+			};
+			404: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	update_team: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				/** @description Team id */
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['TeamInput'];
+			};
+		};
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['Team'];
+				};
+			};
+			404: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	delete_team: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				/** @description Team id */
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			204: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content?: never;
+			};
+			404: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	add_team_member: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				/** @description Team id */
+				id: string;
+				/** @description User id */
+				user_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			204: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content?: never;
+			};
+			404: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	remove_team_member: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				/** @description Team id */
+				id: string;
+				/** @description User id */
+				user_id: string;
 			};
 			cookie?: never;
 		};
