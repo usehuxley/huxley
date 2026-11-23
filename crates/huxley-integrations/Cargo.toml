@@ -1,0 +1,19 @@
+[package]
+name = "huxley-integrations"
+description = "Integration definitions imported from OpenAPI specs (design doc §7.1, ADR-023)"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[dependencies]
+serde.workspace = true
+serde-saphyr.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+utoipa.workspace = true
+
+[lints]
+workspace = true
