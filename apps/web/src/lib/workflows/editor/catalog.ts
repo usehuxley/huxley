@@ -89,6 +89,19 @@ export const STEPS: StepSpec[] = [
 		]
 	},
 	{
+		type: 'core.email',
+		label: 'Send email',
+		description: 'Email any address through the instance’s mail server.',
+		group: 'Actions',
+		template: { with: { to: '', subject: '', text: '' } },
+		fields: [
+			{ path: 'with.to', label: 'To', kind: 'json', hint: 'An address, or a list (at most 20)' },
+			{ path: 'with.subject', label: 'Subject', kind: 'expression' },
+			{ path: 'with.text', label: 'Text', kind: 'expression' },
+			{ path: 'with.html', label: 'HTML (optional)', kind: 'expression' }
+		]
+	},
+	{
 		type: 'core.notify',
 		label: 'Notify',
 		description: 'Tell people in the app and by email.',
@@ -408,6 +421,8 @@ export function summary(step: Step): string {
 			return text(step.title);
 		case 'script':
 			return text(step.script);
+		case 'core.email':
+			return text(isStep(step.with) ? step.with.subject : '');
 		case 'wait_for_callback':
 			return `expires after ${text(step.expires ?? '24h')}`;
 		case 'transform':

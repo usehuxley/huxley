@@ -1926,6 +1926,7 @@ dependencies = [
  "huxley-core",
  "huxley-crypto",
  "huxley-db",
+ "huxley-email",
  "huxley-expr",
  "huxley-hwf",
  "huxley-integrations",

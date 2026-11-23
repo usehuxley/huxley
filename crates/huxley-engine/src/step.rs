@@ -204,6 +204,10 @@ impl Engine {
                 Err(e) => Executed::Failed(error("internal", e.to_string())),
             },
             Step::Notify(_) => Executed::Notify(input.clone()),
+            Step::Email(_) => match self.send_email(input).await {
+                Ok(output) => Executed::Done(output),
+                Err(failure) => Executed::Failed(failure),
+            },
             Step::Subworkflow(_) => Executed::Subworkflow(input.clone()),
             Step::Wait(_) => {
                 let until = input["until"]

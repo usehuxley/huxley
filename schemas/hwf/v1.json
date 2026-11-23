@@ -96,6 +96,35 @@
       ],
       "type": "string"
     },
+    "EmailMessage": {
+      "additionalProperties": false,
+      "description": "An email to send (`core.email`).",
+      "properties": {
+        "html": {
+          "description": "An HTML body, sent alongside the text.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "subject": {
+          "type": "string"
+        },
+        "text": {
+          "description": "The plain-text body.",
+          "type": "string"
+        },
+        "to": {
+          "description": "An address or a list of them (at most 20); each gets their own copy."
+        }
+      },
+      "required": [
+        "to",
+        "subject",
+        "text"
+      ],
+      "type": "object"
+    },
     "HmacAlgorithm": {
       "enum": [
         "sha256",
@@ -1572,6 +1601,69 @@
             },
             "with": {
               "$ref": "#/$defs/Notification"
+            }
+          },
+          "required": [
+            "type",
+            "id",
+            "with"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Send an email to any address, through the instance's mail server.",
+          "properties": {
+            "continue_on_error": {
+              "description": "Record the error as the step's output and carry on.",
+              "type": "boolean"
+            },
+            "description": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "id": {
+              "description": "Unique in the workflow: lowercase letters, digits, underscores.\nOther steps read this step's output as `steps.<id>.output`.",
+              "type": "string"
+            },
+            "if": {
+              "description": "Skip the step unless this expression is true.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "name": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "retry": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/RetryPolicy"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "timeout": {
+              "description": "Fail the attempt after this long, e.g. `30s`.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "type": {
+              "const": "core.email",
+              "type": "string"
+            },
+            "with": {
+              "$ref": "#/$defs/EmailMessage"
             }
           },
           "required": [
