@@ -475,31 +475,38 @@ pub async fn send_batch(
 #[derive(Debug, Clone)]
 pub struct Broadcaster {
     sender: broadcast::Sender<Uuid>,
+    channel: &'static str,
 }
 
 impl Broadcaster {
+    /// Users with new notifications, from [`CHANNEL`].
     pub fn new() -> Self {
-        let (sender, _) = broadcast::channel(1024);
-        Self { sender }
+        Self::for_channel(CHANNEL)
     }
 
-    /// Receives the ids of users with new notifications.
+    /// Ids signalled on another `pg_notify` channel.
+    pub fn for_channel(channel: &'static str) -> Self {
+        let (sender, _) = broadcast::channel(1024);
+        Self { sender, channel }
+    }
+
+    /// Receives the ids signalled on the channel.
     pub fn subscribe(&self) -> broadcast::Receiver<Uuid> {
         self.sender.subscribe()
     }
 
-    /// Listens on [`CHANNEL`] until `shutdown`, reconnecting after errors.
+    /// Listens on the channel until `shutdown`, reconnecting after errors.
     pub async fn run(self, db: PgPool, shutdown: CancellationToken) {
         loop {
             let listen = async {
                 let mut listener = PgListener::connect_with(&db).await?;
-                listener.listen(CHANNEL).await?;
-                tracing::info!("listening for notifications");
+                listener.listen(self.channel).await?;
+                tracing::info!(channel = self.channel, "listening");
                 loop {
                     let message = listener.recv().await?;
-                    if let Ok(user_id) = message.payload().parse::<Uuid>() {
+                    if let Ok(id) = message.payload().parse::<Uuid>() {
                         // No subscribers is fine.
-                        let _ = self.sender.send(user_id);
+                        let _ = self.sender.send(id);
                     }
                 }
                 #[allow(unreachable_code)]
@@ -509,7 +516,7 @@ impl Broadcaster {
                 () = shutdown.cancelled() => return,
                 result = listen => {
                     if let Err(error) = result {
-                        tracing::warn!(%error, "notification listener stopped; reconnecting");
+                        tracing::warn!(%error, channel = self.channel, "listener stopped; reconnecting");
                     }
                 }
             }

@@ -1,24 +1,36 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
-	import { invalidateAll } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { ArrowLeft } from '@lucide/svelte';
 	import { Button, Card } from '@usehuxley/ui';
 	import RunStatusBadge from '#lib/workflows/RunStatusBadge.svelte';
 	import type { PageProps } from './$types';
 
+	type Run = PageProps['data']['run'];
+
 	let { data, form }: PageProps = $props();
-	let run = $derived(data.run);
+	// The latest pushed state, for the loaded run it was pushed for: a fresh
+	// load (after resuming, say) takes over until the stream catches up.
+	let live = $state<{ base: Run; run: Run } | null>(null);
+	let run = $derived(live?.base === data.run ? live.run : data.run);
 	let active = $derived(run.status === 'queued' || run.status === 'running');
 	let canCancel = $derived(
 		data.user.grantedPermissions.includes(run.workflowVersion ? 'workflow:run' : 'workflow:write')
 	);
 
-	// Follow a run in progress.
+	const isActive = (r: Run) => r.status === 'queued' || r.status === 'running';
+
+	// Follow a run in progress: the server pushes each change.
 	$effect(() => {
-		if (!active) return;
-		const timer = setInterval(() => void invalidateAll(), 1000);
-		return () => clearInterval(timer);
+		const base = data.run;
+		if (!isActive(base)) return;
+		const source = new EventSource(resolve('/(app)/runs/[id]/stream', { id: base.id }));
+		source.addEventListener('run', (e) => {
+			const next = JSON.parse((e as MessageEvent<string>).data) as Run;
+			live = { base, run: next };
+			if (!isActive(next)) source.close();
+		});
+		return () => source.close();
 	});
 
 	function json(value: unknown): string {

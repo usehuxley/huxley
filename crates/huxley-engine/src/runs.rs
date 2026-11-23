@@ -9,6 +9,10 @@ use uuid::Uuid;
 
 use crate::{RunStatus, StepStatus};
 
+/// `pg_notify` channel signalled with a run's id whenever the run or one of
+/// its steps changes (a trigger on `runs` and `step_runs`).
+pub const RUN_CHANGES: &str = "huxley_run_changes";
+
 #[derive(Debug, Clone, Serialize, ToSchema, sqlx::FromRow)]
 #[serde(rename_all = "camelCase")]
 pub struct RunSummary {

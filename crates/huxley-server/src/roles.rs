@@ -84,6 +84,13 @@ async fn spawn_api(
         broadcaster.run(listen_db, listen_stop).await;
         Ok(())
     });
+    // Live run views: likewise, one LISTEN connection per process.
+    let run_changes = state.run_changes.clone();
+    let (listen_db, listen_stop) = (db.clone(), shutdown.clone());
+    tasks.spawn(async move {
+        run_changes.run(listen_db, listen_stop).await;
+        Ok(())
+    });
     let app =
         huxley_api::router(state).into_make_service_with_connect_info::<std::net::SocketAddr>();
     let token = shutdown.clone();
