@@ -44,6 +44,8 @@ jobs:
       HUXLEY_TEST_VAULT_ADDR: http://localhost:8200
       HUXLEY_TEST_VAULT_TOKEN: ci-root
       HUXLEY_REQUIRE_VAULT_TESTS: "1"
+      # Fail rather than skip the script sandbox tests (rootless Podman).
+      HUXLEY_REQUIRE_PODMAN_TESTS: "1"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # v1
@@ -56,6 +58,11 @@ jobs:
           tool: cargo-nextest
       - run: cargo fmt --all -- --check
       - run: cargo clippy --workspace --all-targets --locked -- -D warnings
+      - name: Pull the script runner images
+        run: |
+          podman version
+          podman pull -q docker.io/library/python:3.13-alpine
+          podman pull -q mcr.microsoft.com/powershell:7.5-alpine-3.20
       - run: cargo nextest run --workspace --locked --profile ci
       - run: cargo test --workspace --locked --doc
 
