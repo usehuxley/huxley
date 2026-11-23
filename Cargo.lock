@@ -1699,6 +1699,7 @@ dependencies = [
  "huxley-engine",
  "huxley-entity",
  "huxley-expr",
+ "huxley-forms",
  "huxley-hwf",
  "huxley-integrations",
  "huxley-modules",
@@ -1908,6 +1909,29 @@ dependencies = [
  "serde_json",
  "sha2 0.11.1",
  "thiserror 2.0.21",
+ "uuid",
+]
+
+[[package]]
+name = "huxley-forms"
+version = "0.1.0"
+dependencies = [
+ "huxley-core",
+ "huxley-crypto",
+ "huxley-db",
+ "huxley-engine",
+ "huxley-expr",
+ "huxley-hwf",
+ "huxley-workflows",
+ "jsonschema",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "thiserror 2.0.21",
+ "time",
+ "tokio",
+ "tracing",
+ "utoipa",
  "uuid",
 ]
 

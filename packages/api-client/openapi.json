@@ -2192,6 +2192,297 @@
 				}
 			}
 		},
+		"/api/v1/forms": {
+			"get": {
+				"tags": ["forms"],
+				"summary": "Forms you can fill in or manage.",
+				"operationId": "list_forms",
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "array",
+									"items": {
+										"$ref": "#/components/schemas/Form"
+									}
+								}
+							}
+						}
+					}
+				}
+			},
+			"post": {
+				"tags": ["forms"],
+				"operationId": "create_form",
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/CreateFormRequest"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"201": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Form"
+								}
+							}
+						}
+					},
+					"409": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					},
+					"422": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/forms/{id}": {
+			"get": {
+				"tags": ["forms"],
+				"operationId": "get_form",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Form"
+								}
+							}
+						}
+					},
+					"404": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			},
+			"put": {
+				"tags": ["forms"],
+				"summary": "Replaces a form's definition (its key stays).",
+				"operationId": "update_form",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/FormInput"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Form"
+								}
+							}
+						}
+					},
+					"422": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/forms/{id}/archive": {
+			"post": {
+				"tags": ["forms"],
+				"summary": "Archives a form: it can't be submitted until restored.",
+				"operationId": "archive_form",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Form"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/forms/{id}/restore": {
+			"post": {
+				"tags": ["forms"],
+				"operationId": "restore_form",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Form"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/forms/{id}/submissions": {
+			"get": {
+				"tags": ["forms"],
+				"summary": "The latest submissions, for people who manage the form.",
+				"operationId": "list_form_submissions",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "array",
+									"items": {
+										"$ref": "#/components/schemas/SubmissionView"
+									}
+								}
+							}
+						}
+					}
+				}
+			},
+			"post": {
+				"tags": ["forms"],
+				"summary": "Submits answers. Starts the published workflows with a form trigger\nfor this form, as you; answers that don't fit are a 422 per field.",
+				"operationId": "submit_form",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/SubmitRequest"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"201": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Submitted"
+								}
+							}
+						}
+					},
+					"409": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					},
+					"422": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
 		"/api/v1/integrations": {
 			"get": {
 				"tags": ["integrations"],
@@ -6733,6 +7024,20 @@
 				},
 				"additionalProperties": false
 			},
+			"CreateFormRequest": {
+				"type": "object",
+				"required": ["orgId", "form"],
+				"properties": {
+					"form": {
+						"$ref": "#/components/schemas/FormInput"
+					},
+					"orgId": {
+						"type": "string",
+						"format": "uuid"
+					}
+				},
+				"additionalProperties": false
+			},
 			"CreateOrgRequest": {
 				"type": "object",
 				"required": ["parentId", "kind", "name"],
@@ -7170,6 +7475,97 @@
 						"description": "A label to tell passkeys apart, e.g. \"Work laptop\"."
 					}
 				}
+			},
+			"Form": {
+				"type": "object",
+				"required": [
+					"id",
+					"orgId",
+					"key",
+					"name",
+					"schema",
+					"ui",
+					"archived",
+					"createdAt",
+					"updatedAt"
+				],
+				"properties": {
+					"archived": {
+						"type": "boolean"
+					},
+					"createdAt": {
+						"type": "string",
+						"format": "date-time"
+					},
+					"description": {
+						"type": ["string", "null"]
+					},
+					"id": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"key": {
+						"type": "string"
+					},
+					"name": {
+						"type": "string"
+					},
+					"orgId": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"schema": {
+						"type": "object",
+						"description": "JSON Schema of the answers.",
+						"additionalProperties": {},
+						"propertyNames": {
+							"type": "string"
+						}
+					},
+					"ui": {
+						"type": "object",
+						"description": "UI hints: `order`, and per field `widget`, `help`, `placeholder`.",
+						"additionalProperties": {},
+						"propertyNames": {
+							"type": "string"
+						}
+					},
+					"updatedAt": {
+						"type": "string",
+						"format": "date-time"
+					}
+				}
+			},
+			"FormInput": {
+				"type": "object",
+				"description": "A form's definition, to create or replace it.",
+				"required": ["key", "name", "schema"],
+				"properties": {
+					"description": {
+						"type": ["string", "null"]
+					},
+					"key": {
+						"type": "string"
+					},
+					"name": {
+						"type": "string"
+					},
+					"schema": {
+						"type": "object",
+						"additionalProperties": {},
+						"propertyNames": {
+							"type": "string"
+						}
+					},
+					"ui": {
+						"type": "object",
+						"additionalProperties": {},
+						"propertyNames": {
+							"type": "string"
+						}
+					}
+				},
+				"additionalProperties": false
 			},
 			"GrantSource": {
 				"type": "object",
@@ -8905,6 +9301,87 @@
 				"type": "string",
 				"enum": ["running", "waiting", "succeeded", "failed", "skipped", "cancelled"]
 			},
+			"SubmissionView": {
+				"type": "object",
+				"required": ["id", "orgId", "data", "runIds", "createdAt"],
+				"properties": {
+					"createdAt": {
+						"type": "string",
+						"format": "date-time"
+					},
+					"data": {
+						"type": "object",
+						"additionalProperties": {},
+						"propertyNames": {
+							"type": "string"
+						}
+					},
+					"id": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"orgId": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"runIds": {
+						"type": "array",
+						"items": {
+							"type": "string",
+							"format": "uuid"
+						}
+					},
+					"submittedBy": {
+						"type": ["string", "null"],
+						"format": "uuid"
+					}
+				}
+			},
+			"SubmitRequest": {
+				"type": "object",
+				"required": ["answers"],
+				"properties": {
+					"answers": {
+						"type": "object",
+						"additionalProperties": {},
+						"propertyNames": {
+							"type": "string"
+						}
+					},
+					"orgId": {
+						"type": ["string", "null"],
+						"format": "uuid",
+						"description": "The organization it's for: the form's (default) or one below it."
+					}
+				},
+				"additionalProperties": false
+			},
+			"Submitted": {
+				"type": "object",
+				"description": "What a submission started.",
+				"required": ["submissionId", "runs", "skipped"],
+				"properties": {
+					"runs": {
+						"type": "array",
+						"items": {
+							"type": "string",
+							"format": "uuid"
+						},
+						"description": "The runs it started, one per workflow with a trigger for the form."
+					},
+					"skipped": {
+						"type": "array",
+						"items": {
+							"type": "string"
+						},
+						"description": "Workflows that didn't start because the answers don't fit their\ninputs (a mismatch between the form and the workflow)."
+					},
+					"submissionId": {
+						"type": "string",
+						"format": "uuid"
+					}
+				}
+			},
 			"Tag": {
 				"type": "object",
 				"required": ["id", "name", "color", "description", "usage"],
@@ -9472,6 +9949,10 @@
 		{
 			"name": "workflows",
 			"description": "Workflows, their versions, and their runs"
+		},
+		{
+			"name": "forms",
+			"description": "Forms people fill in to start workflows"
 		},
 		{
 			"name": "integrations",
