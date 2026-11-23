@@ -294,6 +294,14 @@ pub async fn is_active(conn: &mut PgConnection, key: &str) -> Result<bool, DbErr
 pub enum SetError {
     #[error(transparent)]
     Module(#[from] ModuleError),
+    #[error("organization not found")]
+    OrgNotFound,
+    #[error("modules can only be narrowed at provider organizations below the root")]
+    NotAProviderOrg,
+    #[error("the module is turned off for the whole instance")]
+    OffInstanceWide,
+    #[error("{0} turned this module off for its organizations")]
+    NarrowedAbove(String),
     #[error(transparent)]
     Db(#[from] DbError),
 }
@@ -373,6 +381,201 @@ pub async fn set_enabled(
         .await?;
     }
     Ok(changes)
+}
+
+/// A module's state at one organization.
+#[derive(Debug, Clone, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct OrgModuleState {
+    #[serde(flatten)]
+    pub module: Module,
+    /// On for the instance.
+    pub enabled: bool,
+    /// On for this organization (instance-wide and not narrowed).
+    pub enabled_here: bool,
+    /// Running here: enabled here and released.
+    pub active: bool,
+    /// The provider org that turned it off here (this org or an ancestor).
+    pub narrowed_by: Option<NarrowedBy>,
+}
+
+#[derive(Debug, Clone, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct NarrowedBy {
+    pub org_id: Uuid,
+    pub org_name: String,
+}
+
+/// Per-org overrides on `org_id`'s chain (itself and ancestors below the
+/// root), shallowest first: (module, org id, org name).
+async fn narrowings(
+    conn: &mut PgConnection,
+    org_id: Uuid,
+) -> Result<Vec<(String, Uuid, String)>, DbError> {
+    Ok(sqlx::query_as(
+        "SELECT s.module_key, o.id, o.name FROM module_settings s \
+           JOIN organizations o ON o.id = s.org_id AND o.parent_id IS NOT NULL \
+          WHERE NOT s.enabled \
+            AND o.path @> (SELECT path FROM organizations WHERE id = $1) \
+          ORDER BY nlevel(o.path)",
+    )
+    .bind(org_id)
+    .fetch_all(conn)
+    .await?)
+}
+
+/// Modules on at `org_id`: the instance set minus modules a provider org on
+/// its chain turned off. Run in system scope.
+pub async fn enabled_set_at(
+    conn: &mut PgConnection,
+    org_id: Uuid,
+) -> Result<BTreeSet<&'static str>, DbError> {
+    let mut set = enabled_set(conn).await?;
+    for (key, _, _) in narrowings(conn, org_id).await? {
+        set.remove(key.as_str());
+    }
+    Ok(set)
+}
+
+/// Whether a module is active at `org_id`. Run in system scope.
+pub async fn is_active_at(
+    conn: &mut PgConnection,
+    key: &str,
+    org_id: Uuid,
+) -> Result<bool, DbError> {
+    let Some(module) = find(key) else {
+        return Ok(false);
+    };
+    Ok(module.released && enabled_set_at(conn, org_id).await?.contains(key))
+}
+
+/// Every module with its state at `org_id`.
+pub async fn states_at(
+    conn: &mut PgConnection,
+    org_id: Uuid,
+) -> Result<Vec<OrgModuleState>, DbError> {
+    let instance = enabled_set(conn).await?;
+    let narrowed = narrowings(conn, org_id).await?;
+    Ok(REGISTRY
+        .iter()
+        .map(|m| {
+            let narrowed_by = narrowed
+                .iter()
+                .find(|(k, _, _)| k == m.key)
+                .map(|(_, id, name)| NarrowedBy {
+                    org_id: *id,
+                    org_name: name.clone(),
+                });
+            let enabled = instance.contains(m.key);
+            let enabled_here = enabled && narrowed_by.is_none();
+            OrgModuleState {
+                module: *m,
+                enabled,
+                enabled_here,
+                active: enabled_here && m.released,
+                narrowed_by,
+            }
+        })
+        .collect())
+}
+
+/// Turns a module off (or back on) for a provider org below the root and its
+/// sub-organizations (design doc §8.0: narrowed per provider org). Only
+/// narrows: a module off for the instance can't be turned on here. Run in
+/// system scope after checking `platform:modules:manage`.
+pub async fn set_for_org(
+    conn: &mut PgConnection,
+    ctx: &RequestContext,
+    org_id: Uuid,
+    key: &str,
+    enabled: bool,
+) -> Result<bool, SetError> {
+    let module = find(key).ok_or_else(|| ModuleError::Unknown(key.to_owned()))?;
+    sqlx::query("SELECT pg_advisory_xact_lock(hashtext('huxley_module_settings'))")
+        .execute(&mut *conn)
+        .await?;
+    let org: Option<(Option<Uuid>, String)> = sqlx::query_as(
+        "SELECT parent_id, kind::text FROM organizations WHERE id = $1 AND status = 'active'",
+    )
+    .bind(org_id)
+    .fetch_optional(&mut *conn)
+    .await?;
+    match org {
+        None => return Err(SetError::OrgNotFound),
+        Some((None, _)) => return Err(SetError::NotAProviderOrg),
+        Some((Some(_), kind)) if kind != "provider" => return Err(SetError::NotAProviderOrg),
+        Some(_) => {}
+    }
+    let here = enabled_set_at(conn, org_id).await?;
+    let chain = narrowings(conn, org_id).await?;
+    let own = chain
+        .iter()
+        .any(|(k, id, _)| k == module.key && *id == org_id);
+    if enabled {
+        if let Some((_, _, name)) = chain
+            .iter()
+            .find(|(k, id, _)| k == module.key && *id != org_id)
+        {
+            return Err(SetError::NarrowedAbove(name.clone()));
+        }
+        if !own {
+            return Ok(false);
+        }
+        if !enabled_set(conn).await?.contains(module.key) {
+            return Err(SetError::OffInstanceWide);
+        }
+        let missing: Vec<&'static str> = dependencies(module.key)
+            .into_iter()
+            .filter(|d| !here.contains(d))
+            .collect();
+        if !missing.is_empty() {
+            return Err(ModuleError::MissingDependencies(missing).into());
+        }
+        sqlx::query("DELETE FROM module_settings WHERE org_id = $1 AND module_key = $2")
+            .bind(org_id)
+            .bind(module.key)
+            .execute(&mut *conn)
+            .await?;
+    } else {
+        if !here.contains(module.key) {
+            return Ok(false);
+        }
+        disable_check(module.key, &here)?;
+        sqlx::query(
+            "INSERT INTO module_settings (org_id, module_key, enabled, updated_by) VALUES ($1, $2, false, $3) \
+             ON CONFLICT (org_id, module_key) DO UPDATE SET enabled = false, updated_at = now(), updated_by = excluded.updated_by",
+        )
+        .bind(org_id)
+        .bind(module.key)
+        .bind(ctx.actor.id())
+        .execute(&mut *conn)
+        .await?;
+    }
+    let action = if enabled {
+        "module.restored_for_org"
+    } else {
+        "module.narrowed_for_org"
+    };
+    audit::record(
+        conn,
+        ctx,
+        AuditRecord::new(action)
+            .org(org_id)
+            .details(json!({ "module": module.key })),
+    )
+    .await?;
+    outbox::emit(
+        conn,
+        DomainEvent {
+            event_type: action,
+            org_id: Some(org_id),
+            subject_type: "organization",
+            subject_id: org_id,
+            payload: json!({ "module": module.key }),
+        },
+    )
+    .await?;
+    Ok(true)
 }
 
 /// Applies a bootstrap preset. Run in system scope on a new instance.

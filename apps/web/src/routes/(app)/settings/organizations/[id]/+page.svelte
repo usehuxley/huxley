@@ -9,6 +9,7 @@
 
 	let { data, form }: PageProps = $props();
 	let canEdit = $derived(data.user.grantedPermissions.includes('org:update'));
+	let canManageModules = $derived(data.user.grantedPermissions.includes('platform:modules:manage'));
 	let fieldErrors = $derived(
 		(form && 'fieldErrors' in form ? form.fieldErrors : {}) as Record<string, string>
 	);
@@ -156,6 +157,44 @@
 			{notify}
 		/>
 	</Card>
+
+	{#if data.org.kind === 'provider' && data.org.parentId && data.modules.some((m) => m.enabled)}
+		<Card
+			title="Modules"
+			description="Turn off modules this provider and its clients don't use. Modules off for the whole instance aren't listed."
+		>
+			<ul class="flex flex-col divide-y divide-border">
+				{#each data.modules.filter((m) => m.enabled) as m (m.key)}
+					{@const own = m.narrowedBy?.orgId === data.org.id}
+					<li
+						class="flex items-center justify-between gap-4 py-3 first:pt-0 last:pb-0"
+						data-testid="module-{m.key}"
+					>
+						<div class="min-w-0">
+							<p class="text-sm font-medium text-fg">{m.name}</p>
+							<p class="text-sm text-fg-muted">
+								{#if m.enabledHere}On{:else if own}Off here and below{:else}Off: turned off by {m
+										.narrowedBy?.orgName}{/if}
+							</p>
+						</div>
+						{#if canManageModules && (m.enabledHere || own)}
+							<form method="POST" action="?/module" use:enhance={notify}>
+								<input type="hidden" name="key" value={m.key} />
+								<input type="hidden" name="enabled" value={m.enabledHere ? 'false' : 'true'} />
+								<Button
+									type="submit"
+									size="sm"
+									aria-label="{m.enabledHere ? 'Turn off' : 'Turn on'} {m.name}"
+								>
+									{m.enabledHere ? 'Turn off here' : 'Turn back on'}
+								</Button>
+							</form>
+						{/if}
+					</li>
+				{/each}
+			</ul>
+		</Card>
+	{/if}
 
 	<Card title="Custom fields" description="Fields your administrators defined for organizations.">
 		{#if data.fields.length === 0}

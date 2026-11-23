@@ -943,6 +943,46 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
+	'/api/v1/orgs/{id}/modules': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/**
+		 * Every module's state at an organization, including narrowing by a
+		 *     provider org on its chain.
+		 */
+		get: operations['list_org_modules'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/orgs/{id}/modules/{key}': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		/**
+		 * Turns a module off for a provider organization (below the root) and its
+		 *     sub-organizations, or back on. Only narrows what the instance has on.
+		 */
+		put: operations['set_org_module'];
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
 	'/api/v1/orgs/{id}/move': {
 		parameters: {
 			query?: never;
@@ -1933,6 +1973,11 @@ export interface components {
 			/** Format: int32 */
 			version: number;
 		};
+		NarrowedBy: {
+			/** Format: uuid */
+			orgId: string;
+			orgName: string;
+		};
 		/** @description Settings for a new field. `key` is optional (derived from the label). */
 		NewField: {
 			entityType: string;
@@ -1973,6 +2018,16 @@ export interface components {
 		OrgKind: 'provider' | 'client';
 		/** @enum {string} */
 		OrgKindInput: 'provider' | 'client';
+		/** @description A module's state at one organization. */
+		OrgModuleState: components['schemas']['Module'] & {
+			/** @description Running here: enabled here and released. */
+			active: boolean;
+			/** @description On for the instance. */
+			enabled: boolean;
+			/** @description On for this organization (instance-wide and not narrowed). */
+			enabledHere: boolean;
+			narrowedBy?: components['schemas']['NarrowedBy'] | null;
+		};
 		/** @description An org in a resolution. */
 		OrgRef: {
 			/** Format: uuid */
@@ -2219,6 +2274,10 @@ export interface components {
 			/** @description Modules whose setting changed, in the order they were applied. */
 			changed: string[];
 			modules: components['schemas']['ModuleState'][];
+		};
+		SetOrgModuleRequest: {
+			/** @description `false` turns it off here and below; `true` removes that. */
+			enabled: boolean;
 		};
 		SetRequirementRequest: {
 			required: boolean;
@@ -4199,6 +4258,64 @@ export interface operations {
 				};
 				content: {
 					'application/json': components['schemas']['Organization'];
+				};
+			};
+			409: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	list_org_modules: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				/** @description Organization id */
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['OrgModuleState'][];
+				};
+			};
+		};
+	};
+	set_org_module: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				/** @description Provider organization id */
+				id: string;
+				/** @description Module key */
+				key: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['SetOrgModuleRequest'];
+			};
+		};
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['OrgModuleState'][];
 				};
 			};
 			409: {

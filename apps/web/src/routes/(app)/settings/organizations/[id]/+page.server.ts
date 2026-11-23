@@ -10,13 +10,14 @@ export const load: PageServerLoad = async (event) => {
 	const client = api(event);
 	const id = event.params.id;
 	const path = { params: { path: { entity_type: 'organization', id } } };
-	const [org, fields, tags, allTags, attachments, settings] = await Promise.all([
+	const [org, fields, tags, allTags, attachments, settings, modules] = await Promise.all([
 		client.GET('/api/v1/orgs/{id}', { params: { path: { id } } }),
 		client.GET('/api/v1/entities/{entity_type}/{id}/fields', path),
 		client.GET('/api/v1/entities/{entity_type}/{id}/tags', path),
 		client.GET('/api/v1/tags'),
 		client.GET('/api/v1/entities/{entity_type}/{id}/attachments', path),
-		client.GET('/api/v1/orgs/{id}/settings', { params: { path: { id } } })
+		client.GET('/api/v1/orgs/{id}/settings', { params: { path: { id } } }),
+		client.GET('/api/v1/orgs/{id}/modules', { params: { path: { id } } })
 	]);
 	if (org.response.status === 404) error(404, 'Organization not found.');
 	if (!org.data || !fields.data || !tags.data) error(503, 'Could not load the organization.');
@@ -26,7 +27,8 @@ export const load: PageServerLoad = async (event) => {
 		tags: tags.data,
 		allTags: allTags.data ?? [],
 		attachments: attachments.data ?? [],
-		settings: settings.data ?? []
+		settings: settings.data ?? [],
+		modules: modules.data ?? []
 	};
 };
 
@@ -82,6 +84,22 @@ export const actions: Actions = {
 			});
 		}
 		return { message: 'Now inherited.' };
+	},
+
+	module: async (event) => {
+		const form = await event.request.formData();
+		const key = formString(form, 'key');
+		const enabled = form.get('enabled') === 'true';
+		const { error: problem, response } = await api(event).PUT('/api/v1/orgs/{id}/modules/{key}', {
+			params: { path: { id: event.params.id, key } },
+			body: { enabled }
+		});
+		if (response.status !== 200) {
+			return fail(response.status, {
+				message: problemMessage(problem, 'Could not change the module.')
+			});
+		}
+		return { message: enabled ? 'Turned back on here.' : 'Turned off here and below.' };
 	},
 
 	upload: async (event) => {
