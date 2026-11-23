@@ -24,6 +24,7 @@ huxley-email = { path = "crates/huxley-email" }
 huxley-entity = { path = "crates/huxley-entity" }
 huxley-modules = { path = "crates/huxley-modules" }
 huxley-notify = { path = "crates/huxley-notify" }
+huxley-expr = { path = "crates/huxley-expr" }
 huxley-hwf = { path = "crates/huxley-hwf" }
 huxley-orgs = { path = "crates/huxley-orgs" }
 huxley-storage = { path = "crates/huxley-storage" }
@@ -50,6 +51,10 @@ base64 = "0.23"
 # Workflow documents (HWF): YAML with parse budgets, and the published JSON Schema.
 serde-saphyr = { version = "2.2", default-features = false, features = ["deserialize", "serialize"] }
 schemars = "1.2"
+# Expressions (ADR-005): sandboxed, no loaders; fuel bounds evaluation.
+minijinja = { version = "3.1", default-features = false, features = ["builtins", "debug", "fuel", "json", "serde", "urlencode", "preserve_order", "std_collections", "adjacent_loop_items", "loop_controls"] }
+regex = "1"
+minijinja-contrib = { version = "3.1", features = ["pycompat", "datetime", "timezone"] }
 
 # Crypto
 argon2 = { version = "0.6", features = ["zeroize"] }
