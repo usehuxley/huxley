@@ -98,6 +98,13 @@ pub fn router(state: AppState) -> Router {
             "/hooks/{public_id}",
             axum::routing::post(hook_routes::receive),
         )
+        // Callback URLs of parked wait_for_callback steps.
+        .route(
+            "/callbacks/{token}",
+            axum::routing::post(hook_routes::callback)
+                .put(hook_routes::callback)
+                .get(hook_routes::callback),
+        )
         .layer(
             ServiceBuilder::new()
                 .layer(SetRequestIdLayer::new(REQUEST_ID, MakeRequestUuid))

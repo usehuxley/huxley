@@ -296,3 +296,17 @@ async fn webhook_runs_act_as_the_run_as_account() {
         .unwrap();
     assert_eq!(runs, 1);
 }
+
+#[tokio::test]
+async fn unknown_callbacks_are_not_found() {
+    let Some(pools) = pools().await else { return };
+    let app = app(&pools);
+    let (status, _) = post(
+        &app,
+        "/callbacks/not-a-real-token",
+        &[],
+        r#"{"status":"done"}"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+}

@@ -185,3 +185,37 @@ async fn wait_for(state: &AppState, run: Uuid, wait: Duration) -> Result<Respons
         tokio::time::sleep(Duration::from_millis(100)).await;
     }
 }
+
+/// `/callbacks/{token}`: an external system calling back a parked
+/// `wait_for_callback` step. The token is the credential; the URL works
+/// once. Unknown, used and expired tokens all answer 404 alike.
+pub async fn callback(
+    State(state): State<AppState>,
+    Path(token): Path<String>,
+    method: axum::http::Method,
+    Query(query): Query<BTreeMap<String, String>>,
+    headers: HeaderMap,
+    body: Bytes,
+) -> Response {
+    let content_type = headers
+        .get(axum::http::header::CONTENT_TYPE)
+        .and_then(|v| v.to_str().ok())
+        .map(str::to_owned);
+    let body = if body.is_empty() {
+        JsonValue::Null
+    } else {
+        serde_json::from_slice(&body)
+            .unwrap_or_else(|_| JsonValue::String(String::from_utf8_lossy(&body).into_owned()))
+    };
+    let request = huxley_engine::CallbackRequest {
+        method: method.to_string(),
+        query: serde_json::to_value(query).unwrap_or(JsonValue::Null),
+        content_type,
+        body,
+    };
+    match state.engine.complete_callback(&token, request).await {
+        Ok(true) => (StatusCode::OK, Json(json!({ "ok": true }))).into_response(),
+        Ok(false) => ApiError::not_found().into_response(),
+        Err(e) => ApiError::internal(&e).into_response(),
+    }
+}

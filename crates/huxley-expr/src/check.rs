@@ -164,6 +164,7 @@ const NOT_EXPRESSIONS: &[&str] = &[
     "wait",
     "action",
     "connection",
+    "expires",
 ];
 
 impl Checker<'_> {
@@ -228,10 +229,15 @@ impl Checker<'_> {
             index: 0,
             frames: Vec::new(),
         });
+        let mut site_names = names.to_vec();
+        // A callback step's `send` can read its URL.
+        if matches!(step, Step::WaitForCallback(_)) {
+            site_names.push("callback".into());
+        }
         let site = Site {
             step: Some(step.id()),
             place,
-            names: names.to_vec(),
+            names: site_names,
         };
         let json = serde_json::to_value(step).unwrap_or(Json::Null);
         if let Json::Object(map) = &json {

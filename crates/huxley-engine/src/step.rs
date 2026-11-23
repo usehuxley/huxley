@@ -48,7 +48,7 @@ fn find<'a>(spec: &'a Spec, id: &str) -> Option<&'a Step> {
 }
 
 /// What executing a step came to.
-enum Executed {
+pub(crate) enum Executed {
     Done(Json),
     Failed(Json),
     /// Not due yet (a `wait` claimed early): run again at this time.
@@ -136,16 +136,18 @@ impl Engine {
             .and_then(huxley_hwf::duration::parse)
             .unwrap_or(DEFAULT_STEP_TIMEOUT);
         let input = record.input.clone().unwrap_or(Json::Null);
-        let executed =
-            match tokio::time::timeout(timeout, self.execute(step, &input, run_id, run.org_id))
-                .await
-            {
-                Ok(executed) => executed,
-                Err(_) => Executed::Failed(error(
-                    "timeout",
-                    format!("the step didn't finish within {}s", timeout.as_secs()),
-                )),
-            };
+        let executed = match tokio::time::timeout(
+            timeout,
+            self.execute(step, &input, run_id, run.org_id, &record),
+        )
+        .await
+        {
+            Ok(executed) => executed,
+            Err(_) => Executed::Failed(error(
+                "timeout",
+                format!("the step didn't finish within {}s", timeout.as_secs()),
+            )),
+        };
         let retry = step.common().retry.cloned();
         self.record(
             job,
@@ -159,8 +161,21 @@ impl Engine {
         .await
     }
 
-    async fn execute(&self, step: &Step, input: &Json, run_id: Uuid, org_id: Uuid) -> Executed {
+    async fn execute(
+        &self,
+        step: &Step,
+        input: &Json,
+        run_id: Uuid,
+        org_id: Uuid,
+        record: &Record,
+    ) -> Executed {
         match step {
+            Step::WaitForCallback(_) => {
+                match self.park_callback(run_id, org_id, record, input).await {
+                    Ok(executed) => executed,
+                    Err(e) => Executed::Failed(error("internal", e.to_string())),
+                }
+            }
             Step::HttpRequest(_) => match crate::http::request(&self.egress, input).await {
                 Ok(output) => Executed::Done(output),
                 Err(failure) => Executed::Failed(failure),

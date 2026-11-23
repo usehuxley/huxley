@@ -151,7 +151,8 @@ pub async fn serve(config: Config, roles: BTreeSet<Role>) -> anyhow::Result<()> 
                 // Workflow runs: any number of worker processes share the queue.
                 let engine =
                     huxley_engine::Engine::with_config(db.clone(), crypto.clone(), &config.engine)
-                        .with_storage(storage.clone());
+                        .with_storage(storage.clone())
+                        .with_public_url(config.auth.public_url.clone());
                 let worker_config = huxley_engine::WorkerConfig::from(&config.engine);
                 let stop = shutdown.clone();
                 let events = (engine.clone(), crypto.clone(), shutdown.clone());
@@ -170,7 +171,8 @@ pub async fn serve(config: Config, roles: BTreeSet<Role>) -> anyhow::Result<()> 
                 // Schedule triggers; one leader at a time across processes.
                 let engine =
                     huxley_engine::Engine::with_config(db.clone(), crypto.clone(), &config.engine)
-                        .with_storage(storage.clone());
+                        .with_storage(storage.clone())
+                        .with_public_url(config.auth.public_url.clone());
                 let stop = shutdown.clone();
                 tasks.spawn(async move {
                     huxley_triggers::run_scheduler(engine, stop).await;

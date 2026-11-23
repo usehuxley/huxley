@@ -7,7 +7,8 @@ use std::collections::BTreeMap;
 
 use huxley_expr::{Engine as Expr, ExprError, Scope};
 use huxley_hwf::{
-    ForeachStep, IfStep, Join, ParallelStep, Step, SwitchStep, TryStep, WaitStep, Workflow,
+    ForeachStep, IfStep, Join, ParallelStep, Step, SwitchStep, TryStep, WaitForCallbackStep,
+    WaitStep, Workflow,
 };
 use serde_json::{Map, Value as Json, json};
 use time::OffsetDateTime;
@@ -34,6 +35,8 @@ pub struct RunContext {
     /// Organization variables (`vars`).
     pub org_vars: Json,
     pub secrets: BTreeMap<String, String>,
+    /// Where callback URLs point (`auth.public_url`), if set.
+    pub public_url: Option<String>,
 }
 
 /// How a block or step stands after this pass.
@@ -312,6 +315,7 @@ impl<'a> Walker<'a> {
                 let value = json!({ "workflow": s.workflow, "inputs": s.inputs, "wait": s.wait });
                 self.external(step, &value, frame)
             }
+            Step::WaitForCallback(s) => self.callback_step(step, s, frame),
             Step::IntegrationAction(s) => {
                 let value =
                     json!({ "action": s.action, "connection": s.connection, "inputs": s.inputs });
@@ -401,6 +405,66 @@ impl<'a> Walker<'a> {
             }
             Err(e) => self.settle_new(step, frame, Err(e)),
         }
+    }
+
+    /// `wait_for_callback`: makes the step's single-use URL, evaluates
+    /// `send` with `callback.url` in scope, and schedules the step job that
+    /// records it, sends it, and parks until it's called or expires. The
+    /// token is a credential, so the input is sealed.
+    fn callback_step(&mut self, step: &Step, s: &WaitForCallbackStep, frame: &Frame) -> Flow {
+        let Some(base) = self.ctx.public_url.clone() else {
+            return self.settle_new(
+                step,
+                frame,
+                Err(error(
+                    "definition",
+                    "callbacks need an address: set auth.public_url",
+                )),
+            );
+        };
+        let Some(expires) = huxley_hwf::duration::parse(s.expires.as_deref().unwrap_or("24h"))
+        else {
+            return self.settle_new(
+                step,
+                frame,
+                Err(error("definition", "expires isn't a duration")),
+            );
+        };
+        let mut bytes = [0u8; 32];
+        getrandom::fill(&mut bytes).expect("the OS random source works");
+        let token =
+            base64::Engine::encode(&base64::engine::general_purpose::URL_SAFE_NO_PAD, bytes);
+        let url = format!("{}/callbacks/{token}", base.trim_end_matches('/'));
+        let send = match &s.send {
+            Some(send) => {
+                let inner = frame.with("callback", json!({ "url": url }));
+                let value = serde_json::to_value(send).unwrap_or(Json::Null);
+                match self.eval(&value, &inner) {
+                    Ok((value, _)) => value,
+                    Err(e) => return self.settle_new(step, frame, Err(e)),
+                }
+            }
+            None => Json::Null,
+        };
+        let mut record = Record::new(
+            step.id(),
+            step.type_name(),
+            &frame.indices,
+            StepStatus::Running,
+        );
+        record.input = Some(json!({
+            "token": token,
+            "url": url,
+            "expires_at": (self.now + expires).format(&Rfc3339).unwrap_or_default(),
+            "send": send,
+        }));
+        record.tainted = true;
+        self.schedules.push(Schedule {
+            step_key: record.step_key.clone(),
+            run_at: None,
+        });
+        self.journal.put(record);
+        Flow::Pending
     }
 
     fn wait(&mut self, step: &Step, s: &WaitStep, frame: &Frame) -> Flow {
