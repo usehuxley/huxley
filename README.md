@@ -67,7 +67,7 @@ docker compose run --rm huxley admin bootstrap \
 
 `bootstrap` creates the root organization and the first user (with the Owner role), and prints a generated password once. Change it from your profile after signing in. If every owner is locked out, `huxley admin create-user --owner` creates a new owner.
 
-Users add passkeys and turn on two-factor authentication (an authenticator app, with single-use recovery codes) from their profile. A passkey works both as the second factor after a password and on its own for passwordless sign-in. Under Settings → Security, administrators can require two-factor authentication for everyone, for particular roles, or for particular organizations; people it covers who haven't set it up can only do that until they have. If someone loses both, an administrator can remove it under Settings → Users; only an owner can do that for another owner.
+Users add passkeys and turn on two-factor authentication (an authenticator app, with single-use recovery codes) from their profile. A passkey works both as the second factor after a password and on its own for passwordless sign-in. Under Settings → Single sign-on, administrators connect Microsoft Entra ID, Google, Okta, Authentik, Keycloak, or any OpenID Connect provider, restrict it to their email domains, optionally create accounts on first sign-in, and map group or app-role claims to roles (see ADR-019). Under Settings → Security, administrators can require two-factor authentication for everyone, for particular roles, or for particular organizations; people it covers who haven't set it up can only do that until they have. If someone loses both, an administrator can remove it under Settings → Users; only an owner can do that for another owner.
 
 The preset chooses which feature modules start on: `automation` (none: Huxley as an automation engine only), `service-desk`, or `full`. Change them any time under Settings → Modules. Modules not yet released stay off until a release includes them.
 
@@ -85,7 +85,7 @@ The server reads, in increasing precedence: built-in defaults, `huxley.toml`, th
 |---|---|---|
 | `HUXLEY_DATABASE__URL` | (required) | PostgreSQL connection URL |
 | `HUXLEY_CRYPTO__KEK` | (required) | Key-encryption key for secrets at rest: 32 random bytes, base64 (`huxley admin generate-kek`). Back it up: without it, encrypted data is unrecoverable. |
-| `HUXLEY_AUTH__PUBLIC_URL` | (unset) | The staff app's URL as browsers see it, e.g. `https://huxley.example.com`. Enables passkeys, which are bound to its host name: changing the host later invalidates registered passkeys. |
+| `HUXLEY_AUTH__PUBLIC_URL` | (unset) | The staff app's URL as browsers see it, e.g. `https://huxley.example.com`. Enables passkeys, which are bound to its host name (changing the host later invalidates registered passkeys), and single sign-on, whose redirect URI is `<public URL>/login/oidc/callback`. |
 | `HUXLEY_CRYPTO__RETIRED_KEKS` | (empty) | Previous KEKs as a list, e.g. `[old1, old2]`, during rotation |
 | `HUXLEY_HTTP__BIND` | `0.0.0.0:8080` | API listen address |
 | `HUXLEY_MIGRATE_ON_START` | `false` | Apply migrations at startup |

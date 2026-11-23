@@ -533,7 +533,7 @@ impl AuthService {
             return Err(AuthError::InvalidPasskey);
         }
         let success = self
-            .finish_login(&mut tx, ctx, user_id, now, "passkey")
+            .finish_login(&mut tx, ctx, user_id, now, "passkey", true)
             .await?;
         tx.commit().await?;
         Ok(success)

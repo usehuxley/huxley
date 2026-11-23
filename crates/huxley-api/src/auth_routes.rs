@@ -180,7 +180,12 @@ impl From<MfaMethod> for MfaMethodView {
 #[serde(tag = "status", rename_all = "camelCase")]
 pub enum LoginResponse {
     /// Signed in; the session cookie is set.
-    SignedIn { user: UserView },
+    SignedIn {
+        user: UserView,
+        /// Where to go next (single sign-on remembers it across the redirect).
+        #[serde(skip_serializing_if = "Option::is_none")]
+        next: Option<String>,
+    },
     /// The password was right; finish with `POST /api/v1/auth/login/mfa`.
     #[serde(rename_all = "camelCase")]
     MfaRequired {
@@ -192,7 +197,7 @@ pub enum LoginResponse {
     },
 }
 
-fn rate_limit(state: &AppState, ctx: &huxley_core::RequestContext) -> ApiResult<()> {
+pub(crate) fn rate_limit(state: &AppState, ctx: &huxley_core::RequestContext) -> ApiResult<()> {
     if let Some(ip) = ctx.ip
         && !state.login_limiter.check(ip)
     {
@@ -206,7 +211,7 @@ fn rate_limit(state: &AppState, ctx: &huxley_core::RequestContext) -> ApiResult<
     Ok(())
 }
 
-fn signed_in(state: &AppState, success: LoginSuccess) -> Response {
+pub(crate) fn signed_in(state: &AppState, success: LoginSuccess, next: Option<String>) -> Response {
     let cookie = session::set_cookie(
         &success.token,
         success.expires_at,
@@ -219,6 +224,7 @@ fn signed_in(state: &AppState, success: LoginSuccess) -> Response {
         ],
         Json(LoginResponse::SignedIn {
             user: success.user.into(),
+            next,
         }),
     )
         .into_response()
@@ -248,7 +254,7 @@ pub async fn login(
         .await
         .map_err(map_auth_error)?;
     Ok(match outcome {
-        LoginOutcome::SignedIn(success) => signed_in(&state, success),
+        LoginOutcome::SignedIn(success) => signed_in(&state, success, None),
         LoginOutcome::MfaRequired(challenge) => (
             [(header::CACHE_CONTROL, "no-store")],
             Json(LoginResponse::MfaRequired {
@@ -339,7 +345,7 @@ pub async fn login_mfa(
         .complete_mfa(&ctx, &body.challenge, factor)
         .await
         .map_err(map_auth_error)?;
-    Ok(signed_in(&state, success))
+    Ok(signed_in(&state, success, None))
 }
 
 /// Options for answering an MFA challenge with a passkey. Finish with
@@ -411,7 +417,7 @@ pub async fn login_passkey(
         .finish_passkey_login(&ctx, body.ceremony, &body.credential)
         .await
         .map_err(map_auth_error)?;
-    Ok(signed_in(&state, success))
+    Ok(signed_in(&state, success, None))
 }
 
 /// Sign-in methods offered by this server.

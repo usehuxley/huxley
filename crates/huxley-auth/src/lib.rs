@@ -124,6 +124,10 @@ pub struct Session {
 pub struct Authenticated {
     pub session_id: Uuid,
     pub user: User,
+    /// The session's sign-in was multi-factor (a second factor, a passkey,
+    /// or SSO the provider reported as MFA). Satisfies the MFA policy even
+    /// for users with no Huxley second factor.
+    pub session_mfa: bool,
 }
 
 /// The result of a correct password.
@@ -295,6 +299,51 @@ pub async fn create_user(
     )
     .await?;
     Ok(user)
+}
+
+/// Creates a user who signs in through an external identity provider and has
+/// no password. Runs in the caller's transaction.
+pub async fn create_external_user(
+    conn: &mut PgConnection,
+    ctx: &RequestContext,
+    email: &str,
+    display_name: &str,
+    provider: &str,
+) -> AuthResult<User> {
+    let email = normalize_email(email)?;
+    let display_name = normalize_display_name(display_name).unwrap_or_else(|_| email.clone());
+    let id = huxley_core::new_id();
+    let user: User = sqlx::query_as(
+        "INSERT INTO users (id, email, display_name) VALUES ($1, $2, $3) \
+         RETURNING id, email, display_name, status, last_login_at, created_at, false AS mfa_enabled",
+    )
+    .bind(id)
+    .bind(&email)
+    .bind(&display_name)
+    .fetch_one(&mut *conn)
+    .await?;
+    audit::record(
+        conn,
+        ctx,
+        AuditRecord::new("user.created")
+            .target("user", id)
+            .details(json!({
+                "after": { "email": email, "displayName": display_name },
+                "provisionedBy": provider,
+            })),
+    )
+    .await?;
+    Ok(user)
+}
+
+/// Finds a user by email, case-insensitively.
+pub async fn find_user_by_email(conn: &mut PgConnection, email: &str) -> AuthResult<Option<User>> {
+    Ok(
+        sqlx::query_as(select_user!("WHERE lower(email) = lower($1)"))
+            .bind(email.trim())
+            .fetch_optional(conn)
+            .await?,
+    )
 }
 
 pub async fn find_user(conn: &mut PgConnection, id: Uuid) -> AuthResult<Option<User>> {
@@ -475,10 +524,44 @@ impl AuthService {
         }
 
         let success = self
-            .finish_login(&mut tx, ctx, row.id, now, "password")
+            .finish_login(&mut tx, ctx, row.id, now, "password", false)
             .await?;
         tx.commit().await?;
         Ok(LoginOutcome::SignedIn(success))
+    }
+
+    /// Starts a session for a user an external identity provider vouched for
+    /// (SSO), inside the caller's transaction. Disabled users are refused.
+    /// `mfa` says whether the provider's sign-in counts as multi-factor.
+    pub async fn start_external_session(
+        &self,
+        conn: &mut PgConnection,
+        ctx: &RequestContext,
+        user_id: Uuid,
+        method: &str,
+        mfa: bool,
+    ) -> AuthResult<LoginSuccess> {
+        let (status,): (UserStatus,) =
+            sqlx::query_as("SELECT status FROM users WHERE id = $1 FOR UPDATE")
+                .bind(user_id)
+                .fetch_optional(&mut *conn)
+                .await?
+                .ok_or(AuthError::UserNotFound)?;
+        if status == UserStatus::Disabled {
+            return Err(AuthError::InvalidCredentials);
+        }
+        self.finish_login(conn, ctx, user_id, OffsetDateTime::now_utc(), method, mfa)
+            .await
+    }
+
+    /// The database pool, for services built on top of authentication.
+    pub fn db(&self) -> &PgPool {
+        &self.db
+    }
+
+    /// The configured public URL of the staff app, if any.
+    pub fn public_url(&self) -> Option<&str> {
+        self.config.public_url.as_deref()
     }
 
     /// Starts a session and loads the user, inside the caller's transaction.
@@ -489,9 +572,11 @@ impl AuthService {
         user_id: Uuid,
         now: OffsetDateTime,
         method: &str,
+        mfa: bool,
     ) -> AuthResult<LoginSuccess> {
-        let (session_id, token, expires_at) =
-            self.start_session(conn, ctx, user_id, now, method).await?;
+        let (session_id, token, expires_at) = self
+            .start_session(conn, ctx, user_id, now, method, mfa)
+            .await?;
         let user = find_user(conn, user_id)
             .await?
             .ok_or(AuthError::InvalidCredentials)?;
@@ -564,6 +649,7 @@ impl AuthService {
         user_id: Uuid,
         now: OffsetDateTime,
         method: &str,
+        mfa: bool,
     ) -> AuthResult<(Uuid, String, OffsetDateTime)> {
         sqlx::query(
             "UPDATE users SET failed_login_count = 0, locked_until = NULL, last_login_at = now() \
@@ -579,8 +665,9 @@ impl AuthService {
         let idle_expires_at = (now + self.config.idle()).min(absolute_expires_at);
         sqlx::query(
             "INSERT INTO sessions \
-                (id, user_id, token_hash, idle_expires_at, absolute_expires_at, ip, user_agent) \
-             VALUES ($1, $2, $3, $4, $5, $6::inet, $7)",
+                (id, user_id, token_hash, idle_expires_at, absolute_expires_at, ip, user_agent, \
+                 auth_method, mfa) \
+             VALUES ($1, $2, $3, $4, $5, $6::inet, $7, $8, $9)",
         )
         .bind(session_id)
         .bind(user_id)
@@ -589,6 +676,8 @@ impl AuthService {
         .bind(absolute_expires_at)
         .bind(ctx.ip.map(|ip| ip.to_string()))
         .bind(ctx.user_agent_truncated())
+        .bind(method)
+        .bind(mfa)
         .execute(&mut *conn)
         .await?;
 
@@ -597,7 +686,7 @@ impl AuthService {
             &ctx.clone().with_actor(Actor::User(user_id)),
             AuditRecord::new("auth.login_succeeded")
                 .target("session", session_id)
-                .details(json!({ "method": method })),
+                .details(json!({ "method": method, "mfa": mfa })),
         )
         .await?;
         Ok((session_id, token.secret, absolute_expires_at))
@@ -630,17 +719,19 @@ impl AuthService {
             return Ok(None);
         }
         let hash = token::hash(secret);
-        let row: Option<(Uuid, Uuid, Option<OffsetDateTime>, OffsetDateTime)> = sqlx::query_as(
-            "SELECT s.id, s.user_id, s.last_seen_at, s.absolute_expires_at \
+        let row: Option<(Uuid, Uuid, Option<OffsetDateTime>, OffsetDateTime, bool)> =
+            sqlx::query_as(
+                "SELECT s.id, s.user_id, s.last_seen_at, s.absolute_expires_at, s.mfa \
                FROM sessions s JOIN users u ON u.id = s.user_id \
               WHERE s.token_hash = $1 AND s.revoked_at IS NULL \
                 AND s.idle_expires_at > now() AND s.absolute_expires_at > now() \
                 AND u.status = 'active'",
-        )
-        .bind(&hash)
-        .fetch_optional(&self.db)
-        .await?;
-        let Some((session_id, user_id, last_seen_at, absolute_expires_at)) = row else {
+            )
+            .bind(&hash)
+            .fetch_optional(&self.db)
+            .await?;
+        let Some((session_id, user_id, last_seen_at, absolute_expires_at, session_mfa)) = row
+        else {
             return Ok(None);
         };
 
@@ -660,7 +751,11 @@ impl AuthService {
         let mut conn = self.db.acquire().await?;
         Ok(find_user(&mut conn, user_id)
             .await?
-            .map(|user| Authenticated { session_id, user }))
+            .map(|user| Authenticated {
+                session_id,
+                user,
+                session_mfa,
+            }))
     }
 
     /// Ends the current session.

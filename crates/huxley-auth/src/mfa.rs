@@ -377,7 +377,7 @@ impl AuthService {
             SecondFactor::Passkey { .. } => "password+passkey",
         };
         let success = self
-            .finish_login(&mut tx, ctx, user_id, now, method)
+            .finish_login(&mut tx, ctx, user_id, now, method, true)
             .await?;
         tx.commit().await?;
         Ok(success)

@@ -59,7 +59,9 @@ impl Authed {
 
     /// Policy requires a second factor and the user has none.
     pub fn mfa_setup_required(&self) -> bool {
-        self.principal.requires_mfa && !self.user.auth.user.mfa_enabled
+        self.principal.requires_mfa
+            && !self.user.auth.user.mfa_enabled
+            && !self.user.auth.session_mfa
     }
 
     /// Requires an instance-wide permission.

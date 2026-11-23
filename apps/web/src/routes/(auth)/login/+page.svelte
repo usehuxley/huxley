@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { enhance, type SubmitFunction } from '$app/forms';
 	import { goto } from '$app/navigation';
+	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
 	import { onMount } from 'svelte';
 	import { Button, Field, Input } from '@usehuxley/ui';
@@ -32,7 +33,9 @@
 		return data.mfaMethods;
 	});
 	let has = (m: Method) => methods?.includes(m) ?? false;
-	let message = $derived(passkeyError ?? (form?.message ? String(form.message) : null));
+	let message = $derived(
+		passkeyError ?? (form?.message ? String(form.message) : null) ?? data.ssoError
+	);
 
 	let next = $derived(page.url.searchParams.get('next'));
 
@@ -218,9 +221,11 @@
 					</Button>
 				</form>
 
-				<div class="my-5 flex items-center gap-3 text-xs text-fg-subtle">
-					<span class="h-px flex-1 bg-border"></span>or<span class="h-px flex-1 bg-border"></span>
-				</div>
+				{#if (data.passkeysEnabled && supported) || data.ssoProviders.length > 0}
+					<div class="my-5 flex items-center gap-3 text-xs text-fg-subtle">
+						<span class="h-px flex-1 bg-border"></span>or<span class="h-px flex-1 bg-border"></span>
+					</div>
+				{/if}
 
 				<div class="flex flex-col gap-2">
 					{#if data.passkeysEnabled && supported}
@@ -228,9 +233,18 @@
 							Sign in with a passkey
 						</Button>
 					{/if}
-					<Button block disabled title="Single sign-on arrives later in Phase 1">
-						Sign in with Microsoft
-					</Button>
+					{#each data.ssoProviders as provider (provider.key)}
+						<!-- eslint-disable svelte/no-navigation-without-resolve -- resolve() plus a query string -->
+						<a
+							href={resolve('/(auth)/login/oidc/start/[key]', { key: provider.key }) +
+								(next ? `?next=${encodeURIComponent(next)}` : '')}
+							data-sveltekit-reload
+							class="inline-flex h-9 w-full items-center justify-center gap-2 rounded-control border border-border-strong bg-surface px-4 text-sm font-medium text-fg hover:bg-surface-sunken"
+						>
+							Sign in with {provider.name}
+						</a>
+						<!-- eslint-enable svelte/no-navigation-without-resolve -->
+					{/each}
 				</div>
 			{/if}
 		</div>

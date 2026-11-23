@@ -10,15 +10,46 @@ export const load: PageServerLoad = async (event) => {
 	const { cookies, url } = event;
 	// Already signed in: skip the form. The app layout re-checks the session.
 	if (cookies.get(SESSION_COOKIE)) redirect(303, safeNext(url.searchParams.get('next')));
-	const methods = await api(event)
-		.GET('/api/v1/auth/methods', { signal: AbortSignal.timeout(5000) })
-		.then((r) => r.data)
-		.catch(() => undefined);
+	const client = api(event);
+	const [methods, sso] = await Promise.all([
+		client
+			.GET('/api/v1/auth/methods', { signal: AbortSignal.timeout(5000) })
+			.then((r) => r.data)
+			.catch(() => undefined),
+		client
+			.GET('/api/v1/auth/oidc/providers', { signal: AbortSignal.timeout(5000) })
+			.then((r) => r.data)
+			.catch(() => undefined)
+	]);
 	return {
 		passkeysEnabled: methods?.passkeys ?? false,
+		ssoProviders: sso ?? [],
+		ssoError: ssoErrorMessage(url.searchParams.get('sso_error')),
 		mfaMethods: getChallenge(cookies)?.methods ?? null
 	};
 };
+
+/** Text for `?sso_error=` set by the single sign-on callback. */
+function ssoErrorMessage(code: string | null): string | null {
+	switch (code) {
+		case null:
+			return null;
+		case 'no-account':
+			return "There's no Huxley account for that identity. Ask an administrator for access.";
+		case 'domain-not-allowed':
+			return "That sign-in option isn't set up for your email domain.";
+		case 'unverified-email':
+			return "Your identity provider didn't confirm your email address.";
+		case 'disabled':
+			return 'Your Huxley account is disabled.';
+		case 'cancelled':
+			return 'Sign-in was cancelled.';
+		case 'unavailable':
+			return 'That sign-in option is unavailable right now.';
+		default:
+			return "Single sign-on couldn't be completed. Try again.";
+	}
+}
 
 const UNAVAILABLE = 'Huxley is unavailable right now. Try again shortly.';
 const RATE_LIMITED = 'Too many sign-in attempts. Wait a minute and try again.';
