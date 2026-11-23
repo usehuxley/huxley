@@ -1726,6 +1726,23 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
+	'/api/v1/runs/{id}/steps/{key}/{attempt}/script': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** A script step attempt's task: where it ran, how it ended, its logs. */
+		get: operations['get_step_script'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
 	'/api/v1/runs/{id}/steps/{key}/{attempt}/{field}': {
 		parameters: {
 			query?: never;
@@ -3951,6 +3968,27 @@ export interface components {
 			color?: string;
 			description?: string;
 			name: string;
+		};
+		/** @enum {string} */
+		TaskStatus: 'queued' | 'running' | 'succeeded' | 'failed';
+		/** @description A script step attempt's task, as the run page shows it. */
+		TaskView: {
+			/** Format: date-time */
+			claimedAt?: string | null;
+			/** Format: date-time */
+			createdAt: string;
+			error?: string | null;
+			/** Format: int32 */
+			exitCode?: number | null;
+			/** Format: date-time */
+			finishedAt?: string | null;
+			/** @description Its stdout and stderr (scrubbed, at most 64 KiB), once it's done. */
+			logs?: string | null;
+			/** @description The runner it ran on. */
+			runnerName?: string | null;
+			/** Format: int32 */
+			scriptVersion: number;
+			status: components['schemas']['TaskStatus'];
 		};
 		Team: {
 			/** Format: date-time */
@@ -7523,6 +7561,37 @@ export interface operations {
 				};
 				content: {
 					'application/json': components['schemas']['ResumeRunResponse'];
+				};
+			};
+		};
+	};
+	get_step_script: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+				key: string;
+				attempt: number;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['TaskView'];
+				};
+			};
+			404: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
 				};
 			};
 		};

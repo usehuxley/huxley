@@ -225,6 +225,7 @@ use crate::workflow_routes::{
         workflow_routes::retry_job,
 
         workflow_routes::step_payload,
+        workflow_routes::step_script,
         workflow_routes::triggers,
         crate::variable_routes::list,
         crate::variable_routes::set,
@@ -361,6 +362,8 @@ use crate::workflow_routes::{
         crate::form_routes::CreateFormRequest,
         crate::script_routes::CreateScriptRequest,
         crate::runner_routes::RunnerNameRequest,
+        huxley_engine::script::TaskView,
+        huxley_engine::script::TaskStatus,
         crate::runner_routes::EnrollmentToken,
         crate::runner_routes::EnrollRequest,
         crate::runner_routes::EnrollResponse,

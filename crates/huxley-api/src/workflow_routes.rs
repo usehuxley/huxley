@@ -57,6 +57,7 @@ pub fn run_routes() -> Router<AppState> {
         .route("/{id}/cancel", post(cancel_run))
         .route("/{id}/resume", post(resume_run))
         .route("/{id}/steps/{key}/{attempt}/{field}", get(step_payload))
+        .route("/{id}/steps/{key}/{attempt}/script", get(step_script))
 }
 
 fn db_err(e: impl std::fmt::Display) -> ApiError {
@@ -865,6 +866,31 @@ pub async fn retry_job(
     }
     tx.commit().await.map_err(db_err)?;
     Ok(Json(RetryJobResponse { retried }))
+}
+
+/// A script step attempt's task: where it ran, how it ended, its logs.
+#[utoipa::path(get, path = "/api/v1/runs/{id}/steps/{key}/{attempt}/script",
+    operation_id = "get_step_script", tag = "workflows",
+    params(("id" = Uuid, Path), ("key" = String, Path), ("attempt" = i32, Path)),
+    responses((status = 200, body = huxley_engine::script::TaskView),
+              (status = 404, body = ApiError, content_type = "application/problem+json")))]
+pub async fn step_script(
+    State(state): State<AppState>,
+    authed: Authed,
+    Path((id, key, attempt)): Path<(Uuid, String, i32)>,
+) -> ApiResult<Json<huxley_engine::script::TaskView>> {
+    // Checks the caller may read the run; the rest needs the system scope
+    // (runner names).
+    load_run(&state, &authed, id).await?;
+    let mut tx = begin_scoped(&state.db, &OrgScope::System)
+        .await
+        .map_err(db_err)?;
+    let view = huxley_engine::script::task_view(&mut tx, id, &key, attempt)
+        .await
+        .map_err(db_err)?
+        .ok_or_else(ApiError::not_found)?;
+    tx.commit().await.map_err(db_err)?;
+    Ok(Json(view))
 }
 
 /// A step attempt's full input or output. Values over the spill threshold
