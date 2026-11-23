@@ -71,6 +71,8 @@ Users add passkeys and turn on two-factor authentication (an authenticator app, 
 
 The preset chooses which feature modules start on: `automation` (none: Huxley as an automation engine only), `service-desk`, or `full`. Change them any time under Settings → Modules. Modules not yet released stay off until a release includes them.
 
+Workflows (the Workflows section of the staff app) automate tasks on a schedule, from webhooks, from events, or on demand; see [docs/workflows.md](docs/workflows.md).
+
 Then open https://localhost (staff app) and https://portal.localhost (client portal). Set `HUXLEY_DOMAIN` and `HUXLEY_PORTAL_DOMAIN` in `.env` for real hostnames; Caddy obtains certificates automatically.
 
 ### Rotating the key-encryption key
