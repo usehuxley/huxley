@@ -225,6 +225,12 @@ impl Engine {
         })
     }
 
+    /// Whether `name` is a built-in function or global (`range`, `now`,
+    /// `uuid`, `dict`…) rather than something the scope must provide.
+    pub fn is_global(&self, name: &str) -> bool {
+        self.env.globals().any(|(global, _)| global == name)
+    }
+
     /// Compiles a string and returns the names it reads, as dotted paths
     /// (`steps.build_upn.output`). Literals return nothing.
     pub fn references(&self, text: &str) -> Result<Vec<String>, ExprError> {
