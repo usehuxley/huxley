@@ -271,6 +271,14 @@
 		</Card>
 
 		<Card title="Versions">
+			{#if data.versions.length > 0}
+				<a
+					href={resolve('/(app)/workflows/[id]/compare', { id: workflow.id })}
+					class="mb-3 inline-block text-sm text-accent hover:underline"
+				>
+					Compare versions
+				</a>
+			{/if}
 			{#if data.versions.length === 0}
 				<p class="text-sm text-fg-muted">Not published yet.</p>
 			{:else}
