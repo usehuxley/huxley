@@ -1217,6 +1217,88 @@
         },
         {
           "additionalProperties": false,
+          "description": "Park until one of the approvers approves or rejects.",
+          "properties": {
+            "approvers": {
+              "description": "Who may decide: `user:<id>`, `team:<id>`, `role:<key>` (holders at the\nrun's organization). The first decision counts."
+            },
+            "continue_on_error": {
+              "description": "Record the error as the step's output and carry on.",
+              "type": "boolean"
+            },
+            "description": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "expires": {
+              "description": "How long approvers have, e.g. `3d` (default `7d`). After that the\nstep fails with `kind: timeout`.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "id": {
+              "description": "Unique in the workflow: lowercase letters, digits, underscores.\nOther steps read this step's output as `steps.<id>.output`.",
+              "type": "string"
+            },
+            "if": {
+              "description": "Skip the step unless this expression is true.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "message": {
+              "description": "More detail for approvers.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "name": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "retry": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/RetryPolicy"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "timeout": {
+              "description": "Fail the attempt after this long, e.g. `30s`.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "title": {
+              "description": "What's being decided; shown to approvers.",
+              "type": "string"
+            },
+            "type": {
+              "const": "approval",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "id",
+            "title",
+            "approvers"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
           "description": "End the run successfully.",
           "properties": {
             "continue_on_error": {

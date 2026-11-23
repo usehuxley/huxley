@@ -4,6 +4,60 @@
  */
 
 export interface paths {
+	'/api/v1/approvals': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** Approvals waiting for you, then the ones you decided in the last 30 days. */
+		get: operations['list_my_approvals'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/approvals/{id}': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** One approval: for its approvers, and anyone who can read the run. */
+		get: operations['get_approval'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/approvals/{id}/decision': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/**
+		 * Approves or rejects. The first decision counts; the workflow continues
+		 *     with it as the step's output.
+		 */
+		post: operations['decide_approval'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
 	'/api/v1/attachments/{id}': {
 		parameters: {
 			query?: never;
@@ -2253,6 +2307,31 @@ export interface components {
 			name: string;
 			scopes: string[];
 		};
+		/** @enum {string} */
+		ApprovalStatus: 'pending' | 'approved' | 'rejected' | 'expired';
+		/** @description An approval as approvers see it. */
+		ApprovalView: {
+			comment?: string | null;
+			/** Format: date-time */
+			createdAt: string;
+			/** Format: date-time */
+			decidedAt?: string | null;
+			/** Format: uuid */
+			decidedBy?: string | null;
+			/** Format: date-time */
+			expiresAt: string;
+			/** Format: uuid */
+			id: string;
+			message?: string | null;
+			/** Format: uuid */
+			orgId: string;
+			/** Format: uuid */
+			runId: string;
+			status: components['schemas']['ApprovalStatus'];
+			title: string;
+			/** @description The workflow's name, if the run is of a saved workflow. */
+			workflowName?: string | null;
+		};
 		ArchiveOrgRequest: {
 			/** Format: int32 */
 			version: number;
@@ -2578,6 +2657,13 @@ export interface components {
 			/** Format: uuid */
 			runId?: string | null;
 			stepKey?: string | null;
+		};
+		/** @enum {string} */
+		Decision: 'approve' | 'reject';
+		DecisionRequest: {
+			/** @description Shown on the run, at most 2000 characters. */
+			comment?: string | null;
+			decision: components['schemas']['Decision'];
 		};
 		/** @description An API, as Huxley uses it. */
 		Definition: {
@@ -3618,6 +3704,95 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+	list_my_approvals: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApprovalView'][];
+				};
+			};
+		};
+	};
+	get_approval: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApprovalView'];
+				};
+			};
+			404: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	decide_approval: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['DecisionRequest'];
+			};
+		};
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ApprovalView'];
+				};
+			};
+			403: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+			409: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
 	delete_attachment: {
 		parameters: {
 			query?: never;

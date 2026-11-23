@@ -371,7 +371,7 @@ ui:
   - `runner-pwsh`: PowerShell 7 with a curated module set (Microsoft.Graph, ExchangeOnlineManagement, PnP) plus per-org extra modules allowed by an admin.
   - `runner-python`: CPython with a curated base, plus an admin-approved requirements lock per script.
   - `runner-js`: Deno (permission flags restrict network and filesystem).
-- Each execution runs in an **ephemeral, non-root, read-only-rootfs container or microVM sandbox** (gVisor/Firecracker when available, plain hardened container otherwise). It has CPU, memory, and time limits, a network egress policy (inherits the SSRF policy, §12.6), and no access to Huxley's database or secrets other than what's injected for that step.
+- Each execution runs in an **ephemeral, non-root, read-only-rootfs container or microVM sandbox** (gVisor/Firecracker when available, plain hardened container otherwise). By default the runner starts it with **rootless Podman** inside its own container; installs on Kubernetes can have runners start **Jobs** instead (with a gVisor runtime class where available). Runners never get the Docker socket. It has CPU, memory, and time limits, a network egress policy (inherits the SSRF policy, §12.6), and no access to Huxley's database or secrets other than what's injected for that step.
 - Credentials are injected as short-lived environment variables or files. They are scrubbed from output streams.
 - **On-prem execution goes through integrations.** Runners execute scripts that act on cloud APIs. Work *inside* a customer network (AD, on-prem Exchange, file servers, endpoints) is done by calling an integration that already has a presence there. Examples:
   - An RMM's "run script on device" action (NinjaOne, Datto RMM, ConnectWise Automate, N-able), with the result collected by polling or `wait_for_callback`.
@@ -990,6 +990,7 @@ The TypeScript SDK lives in the monorepo (`packages/sdk`), so it changes in lock
 | Domain | `usehuxley.com` | Header, §15 |
 | Automation-only deployments | Every non-core feature is a module that can be turned off, instance-wide or per provider org. | §8.0, ADR-017 |
 | Observability | OpenTelemetry throughout | §13.3, ADR-015 |
+| Script sandboxes (2026-11-23) | Runners start each script in a rootless Podman container inside the runner container by default; Kubernetes Jobs (with a gVisor runtime class where available) are an option for installs on Kubernetes. Runners never get the Docker socket. | §6.9 |
 
 ### 18.2 Still open
 

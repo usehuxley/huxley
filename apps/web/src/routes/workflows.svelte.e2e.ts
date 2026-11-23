@@ -253,4 +253,45 @@ test.describe('workflows', () => {
 		await expect(page.getByLabel('Service account')).toHaveValue(/.+/);
 		await expect(page.getByLabel('Service account').locator('option:checked')).toHaveText(bot);
 	});
+
+	test('an approval waits for a decision', async ({ browser }) => {
+		const page = await signIn(browser);
+		const key = `approve-${Date.now().toString(36)}`;
+		await page.goto('/workflows');
+		await page.getByLabel('Name').fill(`Approve ${key}`);
+		await page.getByLabel('Key').fill(key);
+		await page.getByRole('button', { name: 'Create' }).click();
+		await page.getByRole('tab', { name: 'YAML' }).click();
+		await page.getByRole('textbox', { name: 'Workflow YAML' }).fill(`apiVersion: usehuxley.com/v1
+kind: Workflow
+metadata: { key: ${key}, name: Approve ${key} }
+spec:
+  steps:
+    - id: ask
+      type: approval
+      title: "Buy licenses for ${key}?"
+      approvers: [role:owner]
+  outputs:
+    decision: "{{ steps.ask.output.decision }}"
+    comment: "{{ steps.ask.output.comment }}"
+`);
+		await page.getByRole('button', { name: 'Save draft' }).click();
+		await expect(page.getByText('Draft saved. It is ready to publish.')).toBeVisible();
+		await page.getByRole('button', { name: 'Test run the draft' }).click();
+		await expect(page.getByRole('heading', { level: 1 })).toHaveText('Run');
+		const run = page.url();
+		await expect(page.getByText('Waiting').first()).toBeVisible({ timeout: 20_000 });
+
+		await page.getByRole('link', { name: 'Approvals' }).click();
+		const card = page.getByRole('region', { name: 'Waiting for you' });
+		await expect(card).toContainText(`Buy licenses for ${key}?`);
+		await card.getByLabel('Comment (optional)').last().fill('Go ahead');
+		await card.getByRole('button', { name: 'Approve' }).last().click();
+		await expect(page.getByText('Approved.')).toBeVisible();
+
+		await page.goto(run);
+		await expect(page.getByText('Succeeded').first()).toBeVisible({ timeout: 20_000 });
+		await expect(page.getByLabel('Run outputs')).toContainText('"decision": "approved"');
+		await expect(page.getByLabel('Run outputs')).toContainText('"comment": "Go ahead"');
+	});
 });

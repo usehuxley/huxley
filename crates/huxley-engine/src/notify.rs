@@ -51,24 +51,18 @@ fn targets(to: &Json) -> Result<Vec<Target>, Json> {
         .collect()
 }
 
-/// Sends the notification. The outer result is infrastructure; the inner one
-/// is the step's outcome.
-pub(crate) async fn send(
+/// The people `to` names (`user:<id>`, `team:<id>`, `role:<key>` at
+/// `org_id`). The outer result is infrastructure; the inner one says what's
+/// wrong with `to`.
+pub(crate) async fn recipients(
     conn: &mut PgConnection,
     org_id: Uuid,
-    input: &Json,
-) -> EngineResult<Result<Json, Json>> {
-    let targets = match targets(&input["to"]) {
+    to: &Json,
+) -> EngineResult<Result<Vec<Uuid>, Json>> {
+    let targets = match targets(to) {
         Ok(targets) => targets,
         Err(e) => return Ok(Err(e)),
     };
-    let title = input["title"].as_str().unwrap_or_default().trim();
-    if title.is_empty() {
-        return Ok(Err(error("definition", "a notification needs a title")));
-    }
-    let message = input["message"].as_str().unwrap_or_default();
-    let link = input["url"].as_str().filter(|u| u.starts_with('/'));
-
     let mut users: Vec<Uuid> = Vec::new();
     for target in targets {
         let found: Vec<(Uuid,)> = match target {
@@ -107,10 +101,30 @@ pub(crate) async fn send(
         if users.len() > MAX_RECIPIENTS {
             return Ok(Err(error(
                 "limit",
-                format!("a notification goes to at most {MAX_RECIPIENTS} people"),
+                format!("at most {MAX_RECIPIENTS} people"),
             )));
         }
     }
+    Ok(Ok(users))
+}
+
+/// Sends the notification. The outer result is infrastructure; the inner one
+/// is the step's outcome.
+pub(crate) async fn send(
+    conn: &mut PgConnection,
+    org_id: Uuid,
+    input: &Json,
+) -> EngineResult<Result<Json, Json>> {
+    let title = input["title"].as_str().unwrap_or_default().trim();
+    if title.is_empty() {
+        return Ok(Err(error("definition", "a notification needs a title")));
+    }
+    let users = match recipients(&mut *conn, org_id, &input["to"]).await? {
+        Ok(users) => users,
+        Err(e) => return Ok(Err(e)),
+    };
+    let message = input["message"].as_str().unwrap_or_default();
+    let link = input["url"].as_str().filter(|u| u.starts_with('/'));
 
     let mut sent = 0;
     for user_id in &users {

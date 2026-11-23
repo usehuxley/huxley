@@ -286,6 +286,9 @@ pub enum Step {
     /// Park until an external system calls a single-use URL.
     #[serde(rename = "wait_for_callback")]
     WaitForCallback(WaitForCallbackStep),
+    /// Park until one of the approvers approves or rejects.
+    #[serde(rename = "approval")]
+    Approval(ApprovalStep),
     /// End the run successfully.
     #[serde(rename = "return")]
     Return(ReturnStep),
@@ -435,6 +438,21 @@ pub struct CallbackSend {
     pub request: Option<HttpRequest>,
 }
 
+step!(ApprovalStep {
+    /// What's being decided; shown to approvers.
+    pub title: String,
+    /// More detail for approvers.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub message: Option<String>,
+    /// Who may decide: `user:<id>`, `team:<id>`, `role:<key>` (holders at the
+    /// run's organization). The first decision counts.
+    pub approvers: Value,
+    /// How long approvers have, e.g. `3d` (default `7d`). After that the
+    /// step fails with `kind: timeout`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub expires: Option<String>,
+});
+
 step!(SubworkflowStep {
     /// The other workflow's key.
     pub workflow: String,
@@ -500,6 +518,7 @@ impl Step {
             Wait,
             Subworkflow,
             WaitForCallback,
+            Approval,
             Return,
             Fail,
             Notify
@@ -525,6 +544,7 @@ impl Step {
             Self::Wait(_) => "wait",
             Self::Subworkflow(_) => "subworkflow",
             Self::WaitForCallback(_) => "wait_for_callback",
+            Self::Approval(_) => "approval",
             Self::Return(_) => "return",
             Self::Fail(_) => "fail",
             Self::Notify(_) => "core.notify",
