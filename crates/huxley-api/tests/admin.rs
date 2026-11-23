@@ -1269,3 +1269,163 @@ async fn notification_preferences_over_http() {
     .await;
     assert_eq!(status, StatusCode::CONFLICT);
 }
+
+#[tokio::test]
+async fn custom_fields_over_http() {
+    let Some(pools) = pools().await else { return };
+    let root = ensure_root(&pools).await;
+    let app = app(&pools);
+    let owner = login(&app, &user(&pools, true).await).await;
+    let (_, client) = call(
+        &app,
+        "POST",
+        "/api/v1/orgs",
+        Some(&owner),
+        Some(json!({ "parentId": root, "kind": "client", "name": unique("Fieldco") })),
+    )
+    .await;
+    let client_id = client["id"].as_str().unwrap().to_owned();
+
+    // A reader (technician at the client) and an outsider.
+    let reader_email = user(&pools, false).await;
+    let reader = login(&app, &reader_email).await;
+    let (_, me) = call(&app, "GET", "/api/v1/auth/me", Some(&reader), None).await;
+    let (_, roles) = call(&app, "GET", "/api/v1/roles", Some(&owner), None).await;
+    let tech = roles
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|r| r["key"] == "technician")
+        .unwrap()["id"]
+        .clone();
+    let grant = json!({ "userId": me["id"], "roleId": tech, "orgId": client_id });
+    call(
+        &app,
+        "POST",
+        "/api/v1/role-assignments",
+        Some(&owner),
+        Some(grant),
+    )
+    .await;
+    let outsider = login(&app, &user(&pools, false).await).await;
+
+    // Only field managers define fields. (Key is unique per run.)
+    let key = format!("seats_{}", uuid::Uuid::now_v7().simple());
+    let def = json!({ "entityType": "organization", "key": key, "label": "Seats", "fieldType": "number" });
+    let (status, _) = call(
+        &app,
+        "POST",
+        "/api/v1/custom-fields",
+        Some(&reader),
+        Some(def.clone()),
+    )
+    .await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+    let (status, field) = call(
+        &app,
+        "POST",
+        "/api/v1/custom-fields",
+        Some(&owner),
+        Some(def),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED, "{field}");
+    let uri = format!("/api/v1/entities/organization/{client_id}/fields");
+
+    // Owners set values; the reader can read but not write; outsiders see nothing.
+    let body = json!({ "values": { key.as_str(): 40 } });
+    let (status, values) = call(&app, "PATCH", &uri, Some(&owner), Some(body.clone())).await;
+    assert_eq!(status, StatusCode::OK, "{values}");
+    let (status, values) = call(&app, "GET", &uri, Some(&reader), None).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(
+        values
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|v| v["key"] == key.as_str())
+            .unwrap()["value"],
+        40
+    );
+    let (status, _) = call(&app, "PATCH", &uri, Some(&reader), Some(body)).await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+    let (status, _) = call(&app, "GET", &uri, Some(&outsider), None).await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+    let bad = json!({ "values": { key.as_str(): "forty" } });
+    let (status, err) = call(&app, "PATCH", &uri, Some(&owner), Some(bad)).await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+    assert_eq!(err["errors"][0]["pointer"], format!("/{key}"));
+
+    // Clean up the definition so other tests don't see it.
+    let archive = format!(
+        "/api/v1/custom-fields/{}/archive",
+        field["id"].as_str().unwrap()
+    );
+    let (status, _) = call(
+        &app,
+        "POST",
+        &archive,
+        Some(&owner),
+        Some(json!({ "archived": true })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+}
+
+#[tokio::test]
+async fn tags_over_http() {
+    let Some(pools) = pools().await else { return };
+    let root = ensure_root(&pools).await;
+    let app = app(&pools);
+    let owner = login(&app, &user(&pools, true).await).await;
+    let body = json!({ "parentId": root, "kind": "client", "name": unique("Tagco") });
+    let (_, client) = call(&app, "POST", "/api/v1/orgs", Some(&owner), Some(body)).await;
+    let client_id = client["id"].as_str().unwrap().to_owned();
+    let reader = login(&app, &user(&pools, false).await).await;
+    let (_, me) = call(&app, "GET", "/api/v1/auth/me", Some(&reader), None).await;
+    let (_, roles) = call(&app, "GET", "/api/v1/roles", Some(&owner), None).await;
+    let tech = roles
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|r| r["key"] == "technician")
+        .unwrap()["id"]
+        .clone();
+    let grant = json!({ "userId": me["id"], "roleId": tech, "orgId": client_id });
+    call(
+        &app,
+        "POST",
+        "/api/v1/role-assignments",
+        Some(&owner),
+        Some(grant),
+    )
+    .await;
+
+    // Tags.
+    let (status, tag) = call(
+        &app,
+        "POST",
+        "/api/v1/tags",
+        Some(&owner),
+        Some(json!({ "name": unique("Managed"), "color": "success" })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED);
+    let tag_uri = format!(
+        "/api/v1/entities/organization/{client_id}/tags/{}",
+        tag["id"].as_str().unwrap()
+    );
+    let (status, _) = call(&app, "PUT", &tag_uri, Some(&reader), None).await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+    let (status, _) = call(&app, "PUT", &tag_uri, Some(&owner), None).await;
+    assert_eq!(status, StatusCode::NO_CONTENT);
+    let (_, on) = call(
+        &app,
+        "GET",
+        &format!("/api/v1/entities/organization/{client_id}/tags"),
+        Some(&reader),
+        None,
+    )
+    .await;
+    assert_eq!(on[0]["id"], tag["id"]);
+}

@@ -13,6 +13,7 @@
 		teams: resolve('/(app)/settings/teams'),
 		'service-accounts': resolve('/(app)/settings/service-accounts'),
 		audit: resolve('/(app)/settings/audit'),
+		fields: resolve('/(app)/settings/fields'),
 		modules: resolve('/(app)/settings/modules'),
 		security: resolve('/(app)/settings/security'),
 		sso: resolve('/(app)/settings/sso')

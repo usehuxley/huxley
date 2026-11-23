@@ -21,6 +21,7 @@ huxley-crypto = { path = "crates/huxley-crypto" }
 huxley-sso = { path = "crates/huxley-sso" }
 huxley-db = { path = "crates/huxley-db" }
 huxley-email = { path = "crates/huxley-email" }
+huxley-entity = { path = "crates/huxley-entity" }
 huxley-modules = { path = "crates/huxley-modules" }
 huxley-notify = { path = "crates/huxley-notify" }
 huxley-orgs = { path = "crates/huxley-orgs" }

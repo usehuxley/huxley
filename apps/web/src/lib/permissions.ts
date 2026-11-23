@@ -5,6 +5,7 @@ export const SETTINGS_SECTIONS = [
 	{ key: 'teams', label: 'Teams', permission: 'user:read' },
 	{ key: 'service-accounts', label: 'Service accounts', permission: 'service_account:manage' },
 	{ key: 'audit', label: 'Audit log', permission: 'audit:read' },
+	{ key: 'fields', label: 'Fields & tags', permission: 'custom_field:manage' },
 	{ key: 'modules', label: 'Modules', permission: 'platform:modules:manage' },
 	{ key: 'security', label: 'Security', permission: 'security:policy:manage' },
 	{ key: 'sso', label: 'Single sign-on', permission: 'security:policy:manage' }
