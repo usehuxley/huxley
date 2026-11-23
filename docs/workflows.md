@@ -57,6 +57,7 @@ spec:
 |---|---|
 | `http.request` | Calls an API. Output: `{status, headers, body}`. 4xx/5xx fail the step (with `status`, so retries can match) unless `allow_error_status`. Only public addresses are reachable unless the operator allows private ones; cloud metadata addresses never are. |
 | `core.notify` | Notifies `user:<id>`, `team:<id>`, `role:<key>` (holders at the run's organization), in the app and by email. Sent exactly once. |
+| `integration.action` | Calls an action of an imported integration: `action: <integration>/<action>`, inputs under `with` (parameters by name, the request body as `body`), and optionally `connection: <key>`. Output: the response body. See [integrations.md](integrations.md#calling-actions). |
 | `subworkflow` | Runs another published workflow (found by key here or in an organization above) and, by default, waits for its outputs. |
 | `transform` | Computes a value. |
 | `set_var` | Sets run variables, read as `run.vars.<name>`. |

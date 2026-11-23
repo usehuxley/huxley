@@ -312,6 +312,11 @@ impl<'a> Walker<'a> {
                 let value = json!({ "workflow": s.workflow, "inputs": s.inputs, "wait": s.wait });
                 self.external(step, &value, frame)
             }
+            Step::IntegrationAction(s) => {
+                let value =
+                    json!({ "action": s.action, "connection": s.connection, "inputs": s.inputs });
+                self.external(step, &value, frame)
+            }
             Step::If(s) => self.if_step(step, s, frame),
             Step::Switch(s) => self.switch_step(step, s, frame),
             Step::Foreach(s) => self.foreach_step(step, s, frame),

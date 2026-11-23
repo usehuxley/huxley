@@ -498,6 +498,80 @@
         },
         {
           "additionalProperties": false,
+          "description": "Call an action of an imported integration through a connection.",
+          "properties": {
+            "action": {
+              "description": "`<integration key>/<action key>`, e.g. `tickets-api/createTicket`.",
+              "type": "string"
+            },
+            "connection": {
+              "description": "A connection key. Default: the nearest connection to the\nintegration that the run's organization can use.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "continue_on_error": {
+              "description": "Record the error as the step's output and carry on.",
+              "type": "boolean"
+            },
+            "description": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "id": {
+              "description": "Unique in the workflow: lowercase letters, digits, underscores.\nOther steps read this step's output as `steps.<id>.output`.",
+              "type": "string"
+            },
+            "if": {
+              "description": "Skip the step unless this expression is true.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "name": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "retry": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/RetryPolicy"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "timeout": {
+              "description": "Fail the attempt after this long, e.g. `30s`.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "type": {
+              "const": "integration.action",
+              "type": "string"
+            },
+            "with": {
+              "description": "The action's inputs: its parameters by name, and `body`."
+            }
+          },
+          "required": [
+            "type",
+            "id",
+            "action"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
           "description": "Run `then` or `else` depending on a condition.",
           "properties": {
             "condition": {

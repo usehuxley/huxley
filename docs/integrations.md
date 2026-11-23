@@ -71,6 +71,31 @@ A connection holds credentials for one of an integration's auth schemes. Create 
   - If the provider revokes the sign-in, the connection goes back to **Needs sign-in**, with the reason shown.
 - **Both:** a connection fetches or refreshes one token at a time, so concurrent workflow steps don't compete for it. Token requests follow the same outbound rules as HTTP steps (`HUXLEY_ENGINE__EGRESS__*`).
 
+## Calling actions
+
+Workflows call an integration's actions with the `integration.action` step:
+
+```yaml
+- id: open
+  type: integration.action
+  action: tickets/listTickets         # <integration key>/<action key>
+  with: { status: open }              # parameters by name; the request body as `body`
+- id: create
+  type: integration.action
+  action: tickets/createTicket
+  connection: contoso                 # optional
+  with:
+    body: { subject: "{{ inputs.subject }}" }
+```
+
+- **Integration:** found by key in the run's organization or the nearest organization above it that has one.
+- **Version:** a run uses the integration version that was current when it started, so an update mid-run can't change what it calls. Any integration it couldn't see at the start is pinned when the run first calls it.
+- **Renamed actions:** an action the vendor renamed (same method and path) is still found under its old key. Updates carry these aliases forward.
+- **Connection:** the one named, or else the nearest connection to the integration: the run's organization's own first, then **shared** ones from organizations above. If none fits, the step fails with `kind: connection`.
+- **Inputs:** checked against the action's input schema before anything is sent. A mismatch fails with `kind: inputs` and lists the problems.
+- **The request:** built from the action's method, path and parameter locations, and authenticated from the connection (including OAuth 2.0 tokens). It's sent like an `http.request` step, so the same outbound rules, response size limit, error kinds and retries apply. The step's output is the response body.
+- **Supported bodies:** JSON, form-encoded and text. Multipart bodies aren't supported yet.
+
 ## Permissions
 
 | Permission | Allows |

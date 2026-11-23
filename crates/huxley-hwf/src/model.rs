@@ -259,6 +259,9 @@ pub enum Step {
     /// Make an HTTP request.
     #[serde(rename = "http.request")]
     HttpRequest(HttpRequestStep),
+    /// Call an action of an imported integration through a connection.
+    #[serde(rename = "integration.action")]
+    IntegrationAction(IntegrationActionStep),
     /// Run `then` or `else` depending on a condition.
     #[serde(rename = "if")]
     If(IfStep),
@@ -388,6 +391,18 @@ step!(WaitStep {
     pub until: Option<String>,
 });
 
+step!(IntegrationActionStep {
+    /// `<integration key>/<action key>`, e.g. `tickets-api/createTicket`.
+    pub action: String,
+    /// A connection key. Default: the nearest connection to the
+    /// integration that the run's organization can use.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub connection: Option<String>,
+    /// The action's inputs: its parameters by name, and `body`.
+    #[serde(default, rename = "with", skip_serializing_if = "Option::is_none")]
+    pub inputs: Option<Value>,
+});
+
 step!(SubworkflowStep {
     /// The other workflow's key.
     pub workflow: String,
@@ -444,6 +459,7 @@ impl Step {
             Transform,
             SetVar,
             HttpRequest,
+            IntegrationAction,
             If,
             Switch,
             Foreach,
@@ -467,6 +483,7 @@ impl Step {
             Self::Transform(_) => "transform",
             Self::SetVar(_) => "set_var",
             Self::HttpRequest(_) => "http.request",
+            Self::IntegrationAction(_) => "integration.action",
             Self::If(_) => "if",
             Self::Switch(_) => "switch",
             Self::Foreach(_) => "foreach",

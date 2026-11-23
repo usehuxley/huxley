@@ -1854,6 +1854,7 @@ dependencies = [
  "huxley-storage",
  "huxley-variables",
  "huxley-workflows",
+ "jsonschema",
  "reqwest 0.13.5",
  "secrecy",
  "serde",

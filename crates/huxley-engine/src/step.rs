@@ -136,13 +136,16 @@ impl Engine {
             .and_then(huxley_hwf::duration::parse)
             .unwrap_or(DEFAULT_STEP_TIMEOUT);
         let input = record.input.clone().unwrap_or(Json::Null);
-        let executed = match tokio::time::timeout(timeout, self.execute(step, &input)).await {
-            Ok(executed) => executed,
-            Err(_) => Executed::Failed(error(
-                "timeout",
-                format!("the step didn't finish within {}s", timeout.as_secs()),
-            )),
-        };
+        let executed =
+            match tokio::time::timeout(timeout, self.execute(step, &input, run_id, run.org_id))
+                .await
+            {
+                Ok(executed) => executed,
+                Err(_) => Executed::Failed(error(
+                    "timeout",
+                    format!("the step didn't finish within {}s", timeout.as_secs()),
+                )),
+            };
         let retry = step.common().retry.cloned();
         self.record(
             job,
@@ -156,11 +159,16 @@ impl Engine {
         .await
     }
 
-    async fn execute(&self, step: &Step, input: &Json) -> Executed {
+    async fn execute(&self, step: &Step, input: &Json, run_id: Uuid, org_id: Uuid) -> Executed {
         match step {
             Step::HttpRequest(_) => match crate::http::request(&self.egress, input).await {
                 Ok(output) => Executed::Done(output),
                 Err(failure) => Executed::Failed(failure),
+            },
+            Step::IntegrationAction(_) => match self.call_action(run_id, org_id, input).await {
+                Ok(Ok(output)) => Executed::Done(output),
+                Ok(Err(failure)) => Executed::Failed(failure),
+                Err(e) => Executed::Failed(error("internal", e.to_string())),
             },
             Step::Notify(_) => Executed::Notify(input.clone()),
             Step::Subworkflow(_) => Executed::Subworkflow(input.clone()),
