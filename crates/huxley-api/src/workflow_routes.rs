@@ -8,7 +8,7 @@ use axum::routing::{get, post, put};
 use axum::{Json, Router};
 use huxley_authz::permissions;
 use huxley_db::{OrgScope, begin_scoped};
-use huxley_engine::runs::{self, RunDetail, RunFilter, RunSummary};
+use huxley_engine::runs::{self, PayloadField, RunDetail, RunFilter, RunSummary};
 use huxley_engine::{RunStatus, StartRun};
 use huxley_workflows::{
     DiagnosticView, Version, VersionSummary, WorkflowDetail, WorkflowError, WorkflowStatus,
@@ -49,6 +49,7 @@ pub fn run_routes() -> Router<AppState> {
         .route("/{id}", get(get_run))
         .route("/{id}/cancel", post(cancel_run))
         .route("/{id}/resume", post(resume_run))
+        .route("/{id}/steps/{key}/{attempt}/{field}", get(step_payload))
 }
 
 fn db_err(e: impl std::fmt::Display) -> ApiError {
@@ -714,4 +715,56 @@ pub async fn retry_job(
     }
     tx.commit().await.map_err(db_err)?;
     Ok(Json(RetryJobResponse { retried }))
+}
+
+/// A step attempt's full input or output. Values over the spill threshold
+/// are kept in object storage, and the run shows a `$spilled` marker in
+/// their place; this returns the value itself either way.
+#[utoipa::path(get, path = "/api/v1/runs/{id}/steps/{key}/{attempt}/{field}",
+    operation_id = "get_step_payload", tag = "workflows",
+    params(("id" = Uuid, Path), ("key" = String, Path, description = "Step key, e.g. `add_member[2]`"),
+           ("attempt" = i32, Path), ("field" = PayloadField, Path)),
+    responses((status = 200, body = serde_json::Value), (status = 404, body = ApiError, content_type = "application/problem+json")))]
+pub async fn step_payload(
+    State(state): State<AppState>,
+    authed: Authed,
+    Path((id, key, attempt, field)): Path<(Uuid, String, i32, PayloadField)>,
+) -> ApiResult<Json<JsonValue>> {
+    // Checks the caller may read the run.
+    load_run(&state, &authed, id).await?;
+    let mut tx = begin_scoped(&state.db, &authed.scope(&state).await?)
+        .await
+        .map_err(db_err)?;
+    let reference = runs::payload_ref(&mut tx, id, &key, attempt, field)
+        .await
+        .map_err(db_err)?
+        .ok_or_else(ApiError::not_found)?;
+    let inline: Option<JsonValue> = if reference.is_none() {
+        let column = match field {
+            PayloadField::Input => "input",
+            PayloadField::Output => "output",
+        };
+        sqlx::query_scalar(sqlx::AssertSqlSafe(format!(
+            "SELECT {column} FROM step_runs WHERE run_id = $1 AND step_key = $2 AND attempt = $3"
+        )))
+        .bind(id)
+        .bind(&key)
+        .bind(attempt)
+        .fetch_one(&mut *tx)
+        .await
+        .map_err(db_err)?
+    } else {
+        None
+    };
+    tx.commit().await.map_err(db_err)?;
+    match reference {
+        Some(reference) => Ok(Json(
+            state
+                .engine
+                .load_payload(&reference)
+                .await
+                .map_err(db_err)?,
+        )),
+        None => Ok(Json(inline.unwrap_or(JsonValue::Null))),
+    }
 }

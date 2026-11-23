@@ -9,7 +9,7 @@ use huxley_api::{ApiConfig, AppState, router};
 use huxley_auth::{AuthConfig, AuthService};
 use huxley_core::{RequestContext, Via};
 use huxley_crypto::Crypto;
-use huxley_db::testing::{TestPools, ensure_root, pools, unique};
+use huxley_db::testing::{TestPools, ensure_root, isolated, pools, unique};
 use huxley_db::{OrgScope, begin_scoped};
 use serde_json::{Value, json};
 use tower::ServiceExt as _;
@@ -151,16 +151,19 @@ struct Setup {
 }
 
 async fn setup() -> Option<Setup> {
-    let pools = pools().await?;
+    Some(setup_in(pools().await?).await)
+}
+
+async fn setup_in(pools: TestPools) -> Setup {
     let org = provider_org(&pools).await;
     let app = app(&pools);
     let owner = login(&app, &user(&pools, true).await.1).await;
-    Some(Setup {
+    Setup {
         pools,
         app,
         org,
         owner,
-    })
+    }
 }
 
 fn key(prefix: &str) -> String {
@@ -445,4 +448,116 @@ async fn dead_jobs_are_listed_and_retried_by_admins() {
         .execute(&s.pools.owner)
         .await
         .unwrap();
+}
+
+#[tokio::test]
+async fn spilled_step_outputs_are_fetched_in_full() {
+    // Its own database: an engine in another test process (without this
+    // test's store) mustn't run this test's jobs.
+    let Some(db) = isolated("api_spill").await else {
+        return;
+    };
+    let s = setup_in(db.pools.clone()).await;
+    // An app and an engine that share one store, spilling anything over 1 KB.
+    let storage = huxley_storage::Storage::memory();
+    let auth = AuthService::new(s.pools.app.clone(), AuthConfig::default(), crypto(&s.pools));
+    let app = router(
+        AppState::new(
+            s.pools.app.clone(),
+            auth,
+            crypto(&s.pools),
+            ApiConfig {
+                login_attempts_per_minute: 1000,
+                ..ApiConfig::default()
+            },
+        )
+        .with_storage(storage.clone()),
+    );
+    let engine = huxley_engine::Engine::with_config(
+        s.pools.app.clone(),
+        crypto(&s.pools),
+        &huxley_engine::EngineConfig {
+            payload: huxley_engine::PayloadConfig { spill_kb: 1 },
+            ..huxley_engine::EngineConfig::default()
+        },
+    )
+    .with_storage(storage);
+
+    let mut doc = document(
+        &key("spill"),
+        &json!([
+            { "id": "big", "type": "transform", "output": "{{ range(2000) | join(',') }}" },
+            { "id": "small", "type": "transform", "output": "{{ inputs.name }}" }
+        ]),
+    );
+    doc["spec"]["outputs"] = json!({});
+    let (_, created) = s.create(doc).await;
+    let id = created["id"].as_str().unwrap().to_owned();
+    let (status, started) = call(
+        &app,
+        "POST",
+        &format!("/api/v1/workflows/{id}/runs"),
+        &s.owner,
+        Some(json!({ "inputs": { "name": "Ada" }, "test": true })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED, "{started}");
+    let run_id = started["id"].as_str().unwrap().to_owned();
+    let deadline = Instant::now() + Duration::from_secs(20);
+    let run = loop {
+        engine.drain("api-test", 50).await.unwrap();
+        let (_, run) = call(
+            &app,
+            "GET",
+            &format!("/api/v1/runs/{run_id}"),
+            &s.owner,
+            None,
+        )
+        .await;
+        if run["status"] == "succeeded" {
+            break run;
+        }
+        assert!(Instant::now() < deadline, "run didn't finish: {run}");
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    };
+
+    let expected: String = (0..2000)
+        .map(|i| i.to_string())
+        .collect::<Vec<_>>()
+        .join(",");
+    let big = &run["steps"][0];
+    assert_eq!(big["stepKey"], "big");
+    assert!(
+        big["output"]["$spilled"]["bytes"].as_u64().unwrap() > 1024,
+        "{big}"
+    );
+    let payload = |key: &str, field: &str| {
+        let uri = format!("/api/v1/runs/{run_id}/steps/{key}/1/{field}");
+        let (app, cookie) = (app.clone(), s.owner.clone());
+        async move { call(&app, "GET", &uri, &cookie, None).await }
+    };
+    assert_eq!(
+        payload("big", "output").await,
+        (StatusCode::OK, json!(expected))
+    );
+    // Values that weren't spilled come straight from the row.
+    assert_eq!(
+        payload("small", "output").await,
+        (StatusCode::OK, json!("Ada"))
+    );
+    assert_eq!(payload("nope", "output").await.0, StatusCode::NOT_FOUND);
+    assert_eq!(payload("big", "sideways").await.0, StatusCode::BAD_REQUEST);
+
+    // Someone without access to the run can't read it.
+    let (_, email) = user(&s.pools, false).await;
+    let stranger = login(&app, &email).await;
+    let (status, _) = call(
+        &app,
+        "GET",
+        &format!("/api/v1/runs/{run_id}/steps/big/1/output"),
+        &stranger,
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
 }

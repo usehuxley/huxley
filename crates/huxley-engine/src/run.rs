@@ -9,6 +9,7 @@ use time::OffsetDateTime;
 use uuid::Uuid;
 
 use crate::journal::Journal;
+use crate::payload::Payloads;
 use crate::queue::{self, Job};
 use crate::walk::{Outcome, RunContext, Walker, error};
 use crate::{Engine, EngineError, EngineResult};
@@ -127,7 +128,16 @@ impl Engine {
             return Ok(());
         };
         if run.cancel_requested {
-            finish(&mut tx, run_id, job.id, RunStatus::Cancelled, None, None).await?;
+            finish(
+                &mut tx,
+                &self.payloads,
+                run_id,
+                job.id,
+                RunStatus::Cancelled,
+                None,
+                None,
+            )
+            .await?;
             queue::complete(&mut tx, job.id, worker).await?;
             tx.commit().await?;
             return Ok(());
@@ -172,6 +182,7 @@ impl Engine {
             Outcome::Succeeded(outputs) => {
                 finish(
                     &mut tx,
+                    &self.payloads,
                     run_id,
                     job.id,
                     RunStatus::Succeeded,
@@ -183,6 +194,7 @@ impl Engine {
             Outcome::Failed(error) => {
                 finish(
                     &mut tx,
+                    &self.payloads,
                     run_id,
                     job.id,
                     RunStatus::Failed,
@@ -208,7 +220,9 @@ impl Engine {
         now: OffsetDateTime,
     ) -> EngineResult<Outcome> {
         let mut journal = Journal::load(tx, run_id).await?;
-        journal.unseal(&self.crypto, run_id).await?;
+        journal
+            .hydrate(&self.crypto, &self.payloads, run_id)
+            .await?;
         let org_id = run.org_id;
         let variables = huxley_variables::for_run(tx, &self.crypto, org_id).await?;
         let mut ctx = RunContext {
@@ -228,7 +242,9 @@ impl Engine {
         let mut walker = Walker::new(&self.expr, &mut ctx, &mut journal, now);
         let outcome = walker.run(workflow);
         let schedules = std::mem::take(&mut walker.schedules);
-        journal.persist(tx, run_id, org_id, &self.crypto).await?;
+        journal
+            .persist(tx, run_id, org_id, &self.crypto, &self.payloads)
+            .await?;
         for schedule in schedules {
             queue::enqueue_step(tx, org_id, run_id, &schedule.step_key, schedule.run_at).await?;
         }
@@ -368,8 +384,10 @@ fn meta(
 
 /// Ends a run: any steps still in flight are cancelled and its other queued
 /// jobs removed.
+#[allow(clippy::too_many_arguments)]
 async fn finish(
     conn: &mut PgConnection,
+    payloads: &Payloads,
     run_id: Uuid,
     keep_job: Uuid,
     status: RunStatus,
@@ -411,12 +429,14 @@ async fn finish(
     }
 
     // A subworkflow that was waited for completes its parent's step.
-    let parent: Option<(Option<Uuid>, Option<String>)> =
-        sqlx::query_as("SELECT parent_run_id, parent_step_key FROM runs WHERE id = $1")
-            .bind(run_id)
-            .fetch_optional(&mut *conn)
-            .await?;
-    if let Some((Some(parent_run), Some(parent_key))) = parent {
+    let parent: Option<(Option<Uuid>, Option<String>, Option<Uuid>)> = sqlx::query_as(
+        "SELECT r.parent_run_id, r.parent_step_key, p.org_id \
+           FROM runs r LEFT JOIN runs p ON p.id = r.parent_run_id WHERE r.id = $1",
+    )
+    .bind(run_id)
+    .fetch_optional(&mut *conn)
+    .await?;
+    if let Some((Some(parent_run), Some(parent_key), Some(parent_org))) = parent {
         let (step_status, step_output, step_error) = match status {
             RunStatus::Succeeded => ("succeeded", outputs.or(Some(json!({}))), None),
             other => (
@@ -433,9 +453,12 @@ async fn finish(
                 })),
             ),
         };
+        let (step_output, output_ref) = payloads
+            .store(parent_org, parent_run, step_output.as_ref())
+            .await?;
         let updated: Option<(Uuid,)> = sqlx::query_as(
             "UPDATE step_runs s SET status = $3::step_status, output = $4, error = $5, \
-                    finished_at = now() \
+                    output_ref = $6, finished_at = now() \
                FROM runs p \
               WHERE s.run_id = $1 AND s.step_key = $2 AND p.id = s.run_id \
                 AND s.status = 'running' \
@@ -448,6 +471,7 @@ async fn finish(
         .bind(step_status)
         .bind(step_output)
         .bind(step_error)
+        .bind(output_ref)
         .fetch_optional(&mut *conn)
         .await?;
         if let Some((parent_org,)) = updated {

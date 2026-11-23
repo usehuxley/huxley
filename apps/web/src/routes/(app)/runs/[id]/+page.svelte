@@ -24,6 +24,19 @@
 	function json(value: unknown): string {
 		return JSON.stringify(value, null, 2);
 	}
+	/** Size of a value kept in object storage (its row holds a marker), or null. */
+	function spilled(value: unknown): number | null {
+		if (typeof value !== 'object' || value === null || !('$spilled' in value)) return null;
+		const marker = value.$spilled;
+		if (typeof marker !== 'object' || marker === null || !('bytes' in marker)) return null;
+		const bytes = marker.bytes;
+		return typeof bytes === 'number' ? bytes : null;
+	}
+	function size(bytes: number): string {
+		return bytes < 1024 * 1024
+			? `${Math.round(bytes / 1024)} KB`
+			: `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+	}
 	function when(value: string | null | undefined): string {
 		return value ? new Date(value).toLocaleString() : '—';
 	}
@@ -106,7 +119,26 @@
 								</span>
 							</summary>
 							<div class="mt-2 grid gap-2 md:grid-cols-2">
-								{#if step.input !== null && step.input !== undefined}
+								{#if spilled(step.input) !== null}
+									<div>
+										<p class="text-xs font-medium text-fg-muted">Input</p>
+										<p class="mt-1 text-xs text-fg-muted">
+											Too large to show here ({size(spilled(step.input) ?? 0)}).
+											<a
+												class="text-accent underline"
+												href={resolve('/(app)/runs/[id]/steps/[key]/[attempt]/[field]', {
+													id: run.id,
+													key: step.stepKey,
+													attempt: String(step.attempt),
+													field: 'input'
+												})}
+												download
+											>
+												Download JSON
+											</a>
+										</p>
+									</div>
+								{:else if step.input !== null && step.input !== undefined}
 									<div>
 										<p class="text-xs font-medium text-fg-muted">Input</p>
 										<pre
@@ -122,6 +154,25 @@
 											class="mt-1 max-h-80 overflow-auto rounded-control bg-surface-sunken p-2 text-xs text-fg">{json(
 												step.error
 											)}</pre>
+									</div>
+								{:else if spilled(step.output) !== null}
+									<div>
+										<p class="text-xs font-medium text-fg-muted">Output</p>
+										<p class="mt-1 text-xs text-fg-muted">
+											Too large to show here ({size(spilled(step.output) ?? 0)}).
+											<a
+												class="text-accent underline"
+												href={resolve('/(app)/runs/[id]/steps/[key]/[attempt]/[field]', {
+													id: run.id,
+													key: step.stepKey,
+													attempt: String(step.attempt),
+													field: 'output'
+												})}
+												download
+											>
+												Download JSON
+											</a>
+										</p>
 									</div>
 								{:else if step.output !== null && step.output !== undefined}
 									<div>

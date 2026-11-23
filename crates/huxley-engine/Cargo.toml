@@ -17,6 +17,7 @@ huxley-db.workspace = true
 huxley-expr.workspace = true
 huxley-hwf.workspace = true
 huxley-notify.workspace = true
+huxley-storage.workspace = true
 huxley-variables.workspace = true
 huxley-workflows.workspace = true
 reqwest.workspace = true

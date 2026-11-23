@@ -13,7 +13,7 @@ use time::OffsetDateTime;
 use time::format_description::well_known::Rfc3339;
 use uuid::Uuid;
 
-use crate::journal::{self, Record, StepStatus};
+use crate::journal::{Record, StepStatus};
 use crate::queue::{self, Job};
 use crate::run::RunStatus;
 use crate::walk::error;
@@ -110,10 +110,7 @@ impl Engine {
         if record.status.is_settled() {
             return self.settle(job, worker, Some(run.org_id)).await;
         }
-        if let Some(sealed) = &record.input_sealed {
-            let purpose = journal::purpose("input", &record);
-            record.input = Some(journal::open(&self.crypto, run_id, &purpose, sealed).await?);
-        }
+        record.hydrate(&self.crypto, &self.payloads, run_id).await?;
         let workflow: Workflow =
             serde_json::from_value(document).map_err(|e| EngineError::Document(e.to_string()))?;
         let Some(step) = find(&workflow.spec, &record.step_id) else {
@@ -308,12 +305,14 @@ impl Engine {
                 return Ok(());
             }
             Executed::Done(output) => {
+                let (output, output_ref) =
+                    self.payloads.store(org_id, run_id, Some(&output)).await?;
                 set_result(
                     &mut tx,
                     run_id,
                     attempted,
                     StepStatus::Succeeded,
-                    Some(&output),
+                    (output.as_ref(), output_ref.as_deref()),
                     None,
                 )
                 .await?;
@@ -324,7 +323,7 @@ impl Engine {
                     run_id,
                     attempted,
                     StepStatus::Failed,
-                    None,
+                    (None, None),
                     Some(&failure),
                 )
                 .await?;
@@ -355,7 +354,7 @@ async fn latest(
 ) -> sqlx::Result<Option<Record>> {
     sqlx::query_as(
         "SELECT step_key, step_id, step_type, attempt, status, input, output, error, tainted, \
-                input_sealed, output_tainted, output_sealed \
+                input_sealed, output_tainted, output_sealed, input_ref, output_ref \
            FROM step_runs WHERE run_id = $1 AND step_key = $2 AND NOT superseded \
           ORDER BY attempt DESC LIMIT 1",
     )
@@ -370,11 +369,12 @@ async fn set_result(
     run_id: Uuid,
     record: &Record,
     status: StepStatus,
-    output: Option<&Json>,
+    (output, output_ref): (Option<&Json>, Option<&str>),
     error: Option<&Json>,
 ) -> sqlx::Result<()> {
     sqlx::query(
-        "UPDATE step_runs SET status = $4, output = $5, error = $6, finished_at = now() \
+        "UPDATE step_runs SET status = $4, output = $5, error = $6, output_ref = $7, \
+                finished_at = now() \
           WHERE run_id = $1 AND step_key = $2 AND attempt = $3",
     )
     .bind(run_id)
@@ -383,6 +383,7 @@ async fn set_result(
     .bind(status)
     .bind(output)
     .bind(error)
+    .bind(output_ref)
     .execute(conn)
     .await
     .map(|_| ())

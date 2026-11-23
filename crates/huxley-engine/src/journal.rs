@@ -11,6 +11,7 @@ use uuid::Uuid;
 use zeroize::Zeroizing;
 
 use crate::EngineError;
+use crate::payload::Payloads;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, utoipa::ToSchema, sqlx::Type)]
 #[sqlx(type_name = "step_status", rename_all = "lowercase")]
@@ -65,6 +66,9 @@ pub struct Record {
     pub input_sealed: Option<Vec<u8>>,
     pub output_tainted: bool,
     pub output_sealed: Option<Vec<u8>>,
+    /// Object storage keys of spilled values (see `payload`).
+    pub input_ref: Option<String>,
+    pub output_ref: Option<String>,
     #[sqlx(skip)]
     pub indices: Vec<usize>,
     /// Changed in memory since it was loaded.
@@ -73,6 +77,26 @@ pub struct Record {
 }
 
 impl Record {
+    /// Decrypts this record's sealed values and loads its spilled ones.
+    pub async fn hydrate(
+        &mut self,
+        crypto: &Crypto,
+        payloads: &Payloads,
+        run_id: Uuid,
+    ) -> Result<(), EngineError> {
+        if let Some(sealed) = &self.input_sealed {
+            self.input = Some(open(crypto, run_id, &purpose("input", self), sealed).await?);
+        } else if let Some(key) = &self.input_ref {
+            self.input = Some(payloads.load(key).await?);
+        }
+        if let Some(sealed) = &self.output_sealed {
+            self.output = Some(open(crypto, run_id, &purpose("output", self), sealed).await?);
+        } else if let Some(key) = &self.output_ref {
+            self.output = Some(payloads.load(key).await?);
+        }
+        Ok(())
+    }
+
     pub fn new(step_id: &str, step_type: &str, indices: &[usize], status: StepStatus) -> Self {
         Self {
             step_key: step_key(step_id, indices),
@@ -87,6 +111,8 @@ impl Record {
             input_sealed: None,
             output_tainted: false,
             output_sealed: None,
+            input_ref: None,
+            output_ref: None,
             indices: indices.to_vec(),
             dirty: true,
         }
@@ -105,7 +131,8 @@ impl Journal {
     pub async fn load(conn: &mut PgConnection, run_id: Uuid) -> sqlx::Result<Self> {
         let rows: Vec<Record> = sqlx::query_as(
             "SELECT DISTINCT ON (step_key) step_key, step_id, step_type, attempt, status, input, \
-                    output, error, tainted, input_sealed, output_tainted, output_sealed \
+                    output, error, tainted, input_sealed, output_tainted, output_sealed, \
+                    input_ref, output_ref \
                FROM step_runs WHERE run_id = $1 AND NOT superseded \
               ORDER BY step_key, attempt DESC",
         )
@@ -180,57 +207,69 @@ impl Journal {
         Json::Object(steps)
     }
 
-    /// Decrypts sealed inputs and outputs into memory, after [`Journal::load`].
-    pub async fn unseal(&mut self, crypto: &Crypto, run_id: Uuid) -> Result<(), EngineError> {
+    /// Brings the real inputs and outputs into memory after
+    /// [`Journal::load`]: decrypts sealed ones and loads spilled ones.
+    pub async fn hydrate(
+        &mut self,
+        crypto: &Crypto,
+        payloads: &Payloads,
+        run_id: Uuid,
+    ) -> Result<(), EngineError> {
         for record in self.records.values_mut() {
-            if let Some(sealed) = &record.input_sealed {
-                record.input = Some(open(crypto, run_id, &purpose("input", record), sealed).await?);
-            }
-            if let Some(sealed) = &record.output_sealed {
-                record.output =
-                    Some(open(crypto, run_id, &purpose("output", record), sealed).await?);
-            }
+            record.hydrate(crypto, payloads, run_id).await?;
         }
         Ok(())
     }
 
     /// Writes changed records. Tainted inputs and outputs are stored
-    /// redacted, with the real value encrypted alongside.
+    /// redacted, with the real value encrypted alongside; large untainted
+    /// ones are spilled to object storage.
     pub async fn persist(
         &mut self,
         conn: &mut PgConnection,
         run_id: Uuid,
         org_id: Uuid,
         crypto: &Crypto,
+        payloads: &Payloads,
     ) -> Result<(), EngineError> {
         for record in self.records.values_mut().filter(|r| r.dirty) {
-            let (input, input_sealed) = match (&record.input, record.tainted) {
+            let (input, input_sealed, input_ref) = match (&record.input, record.tainted) {
                 (Some(value), true) => (
                     Some(Json::String(REDACTED.into())),
                     Some(seal(crypto, org_id, run_id, &purpose("input", record), value).await?),
+                    None,
                 ),
-                (value, _) => (value.clone(), None),
+                (value, _) => {
+                    let (value, key) = payloads.store(org_id, run_id, value.as_ref()).await?;
+                    (value, None, key)
+                }
             };
-            let (output, output_sealed) = match (&record.output, record.output_tainted) {
+            let (output, output_sealed, output_ref) = match (&record.output, record.output_tainted)
+            {
                 (Some(value), true) => (
                     Some(Json::String(REDACTED.into())),
                     Some(seal(crypto, org_id, run_id, &purpose("output", record), value).await?),
+                    None,
                 ),
-                (value, _) => (value.clone(), None),
+                (value, _) => {
+                    let (value, key) = payloads.store(org_id, run_id, value.as_ref()).await?;
+                    (value, None, key)
+                }
             };
             sqlx::query(
                 "INSERT INTO step_runs (run_id, step_key, attempt, org_id, step_id, step_type, \
                         status, input, output, error, tainted, input_sealed, output_tainted, \
-                        output_sealed, finished_at) \
+                        output_sealed, finished_at, input_ref, output_ref) \
                  VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, \
-                         CASE WHEN $15 THEN now() END) \
+                         CASE WHEN $15 THEN now() END, $16, $17) \
                  ON CONFLICT (run_id, step_key, attempt) DO UPDATE SET \
                         status = EXCLUDED.status, input = EXCLUDED.input, \
                         output = EXCLUDED.output, error = EXCLUDED.error, \
                         tainted = EXCLUDED.tainted, input_sealed = EXCLUDED.input_sealed, \
                         output_tainted = EXCLUDED.output_tainted, \
                         output_sealed = EXCLUDED.output_sealed, \
-                        finished_at = EXCLUDED.finished_at",
+                        finished_at = EXCLUDED.finished_at, \
+                        input_ref = EXCLUDED.input_ref, output_ref = EXCLUDED.output_ref",
             )
             .bind(run_id)
             .bind(&record.step_key)
@@ -247,8 +286,12 @@ impl Journal {
             .bind(record.output_tainted)
             .bind(&output_sealed)
             .bind(record.status.is_settled())
+            .bind(&input_ref)
+            .bind(&output_ref)
             .execute(&mut *conn)
             .await?;
+            record.input_ref = input_ref;
+            record.output_ref = output_ref;
             record.dirty = false;
         }
         Ok(())

@@ -754,3 +754,89 @@ async fn concurrency_limits_queue_runs() {
     }
     assert_eq!(most, 1, "never more than one at a time");
 }
+
+#[tokio::test]
+async fn large_payloads_spill_to_object_storage() {
+    let Some(mut h) = harness().await else { return };
+    let storage = huxley_storage::Storage::memory();
+    let config = huxley_engine::EngineConfig {
+        payload: huxley_engine::PayloadConfig { spill_kb: 1 },
+        ..huxley_engine::EngineConfig::default()
+    };
+    h.engine = Engine::with_config(
+        h.pools.app.clone(),
+        huxley_crypto::Crypto::new(h.pools.app.clone(), huxley_crypto::testing::key_ring()),
+        &config,
+    )
+    .with_storage(storage.clone());
+    // About 14 KB: over the 1 KB threshold.
+    publish(
+        &h,
+        "big-child",
+        "  steps:\n    - { id: make, type: transform, output: \"{{ range(3000) | join(',') }}\" }\n  outputs: { list: \"{{ steps.make.output }}\" }\n",
+    )
+    .await;
+    let id = h
+        .start(
+            r#"  steps:
+    - { id: big, type: transform, output: "{{ range(3000) | join(',') }}" }
+    - id: each
+      type: foreach
+      items: "{{ [1, 2] }}"
+      steps:
+        - { id: pause, type: wait, duration: 5ms }
+        - { id: again, type: transform, output: "{{ steps.big.output }}" }
+    - { id: child, type: subworkflow, workflow: big-child }
+  outputs:
+    size: "{{ steps.big.output | length }}"
+    same: "{{ steps.each.output[1] == steps.big.output }}"
+    child: "{{ steps.child.output.list == steps.big.output }}"
+"#,
+            json!({}),
+        )
+        .await;
+    let run = h.finish(id).await;
+    assert_eq!(run.status, RunStatus::Succeeded, "{run:?}");
+    let expected: String = (0..3000)
+        .map(|i| i.to_string())
+        .collect::<Vec<_>>()
+        .join(",");
+    assert_eq!(
+        run.outputs.unwrap(),
+        json!({ "size": expected.len(), "same": true, "child": true })
+    );
+
+    // The rows hold markers; the values are in storage.
+    let rows: Vec<(String, Option<Json>, Option<String>)> = sqlx::query_as(
+        "SELECT step_key, output, output_ref FROM step_runs \
+          WHERE run_id = $1 AND step_key IN ('big', 'again[1]', 'child') ORDER BY step_key",
+    )
+    .bind(id)
+    .fetch_all(&h.pools.owner)
+    .await
+    .unwrap();
+    assert_eq!(rows.len(), 3, "{rows:?}");
+    for (key, output, reference) in rows {
+        let output = output.unwrap();
+        assert!(
+            output[huxley_engine::SPILLED]["bytes"].as_u64().unwrap() > 1024,
+            "{key}: {output}"
+        );
+        let reference = reference.unwrap_or_else(|| panic!("{key} has no output_ref"));
+        let stored = h.engine.load_payload(&reference).await.unwrap();
+        if key == "child" {
+            assert_eq!(stored, json!({ "list": expected }), "{key}");
+        } else {
+            assert_eq!(stored, json!(expected), "{key}");
+        }
+    }
+    // Small values stay in the row.
+    let pause: (Option<String>,) = sqlx::query_as(
+        "SELECT output_ref FROM step_runs WHERE run_id = $1 AND step_key = 'pause[0]'",
+    )
+    .bind(id)
+    .fetch_one(&h.pools.owner)
+    .await
+    .unwrap();
+    assert_eq!(pause.0, None);
+}

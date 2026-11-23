@@ -122,6 +122,10 @@ pub async fn serve(config: Config, roles: BTreeSet<Role>) -> anyhow::Result<()> 
     let shutdown = CancellationToken::new();
     shutdown::spawn_signal_listener(shutdown.clone());
 
+    // Workers spill large step payloads to object storage; the scheduler
+    // and event dispatcher start runs with the same engine settings.
+    let storage = huxley_storage::Storage::from_config(&config.storage)?;
+
     let mut tasks = JoinSet::new();
     for role in &roles {
         match role {
@@ -139,7 +143,8 @@ pub async fn serve(config: Config, roles: BTreeSet<Role>) -> anyhow::Result<()> 
                 });
                 // Workflow runs: any number of worker processes share the queue.
                 let engine =
-                    huxley_engine::Engine::with_config(db.clone(), crypto.clone(), &config.engine);
+                    huxley_engine::Engine::with_config(db.clone(), crypto.clone(), &config.engine)
+                        .with_storage(storage.clone());
                 let worker_config = huxley_engine::WorkerConfig::from(&config.engine);
                 let stop = shutdown.clone();
                 let events = (engine.clone(), crypto.clone(), shutdown.clone());
@@ -157,7 +162,8 @@ pub async fn serve(config: Config, roles: BTreeSet<Role>) -> anyhow::Result<()> 
             Role::Scheduler => {
                 // Schedule triggers; one leader at a time across processes.
                 let engine =
-                    huxley_engine::Engine::with_config(db.clone(), crypto.clone(), &config.engine);
+                    huxley_engine::Engine::with_config(db.clone(), crypto.clone(), &config.engine)
+                        .with_storage(storage.clone());
                 let stop = shutdown.clone();
                 tasks.spawn(async move {
                     huxley_triggers::run_scheduler(engine, stop).await;
