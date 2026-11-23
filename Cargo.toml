@@ -30,6 +30,7 @@ huxley-hwf = { path = "crates/huxley-hwf" }
 huxley-orgs = { path = "crates/huxley-orgs" }
 huxley-storage = { path = "crates/huxley-storage" }
 huxley-telemetry = { path = "crates/huxley-telemetry" }
+huxley-workflows = { path = "crates/huxley-workflows" }
 
 # Async / HTTP
 tokio = { version = "1.54", features = ["macros", "rt-multi-thread", "signal", "net", "time"] }
@@ -52,6 +53,8 @@ base64 = "0.23"
 # Workflow documents (HWF): YAML with parse budgets, and the published JSON Schema.
 serde-saphyr = { version = "2.2", default-features = false, features = ["deserialize", "serialize"] }
 schemars = "1.2"
+# Run inputs against a workflow's input schema. No remote or file $ref resolution.
+jsonschema = { version = "0.63", default-features = false }
 # Expressions (ADR-005): sandboxed, no loaders; fuel bounds evaluation.
 minijinja = { version = "3.1", default-features = false, features = ["builtins", "debug", "fuel", "json", "serde", "urlencode", "preserve_order", "std_collections", "adjacent_loop_items", "loop_controls"] }
 regex = "1"

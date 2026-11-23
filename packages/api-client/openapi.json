@@ -2777,6 +2777,133 @@
 				}
 			}
 		},
+		"/api/v1/runs": {
+			"get": {
+				"tags": ["workflows"],
+				"summary": "Runs the caller can view, newest first.",
+				"operationId": "list_runs",
+				"parameters": [
+					{
+						"name": "workflowId",
+						"in": "query",
+						"required": false,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					},
+					{
+						"name": "status",
+						"in": "query",
+						"required": false,
+						"schema": {
+							"$ref": "#/components/schemas/RunStatus"
+						}
+					},
+					{
+						"name": "before",
+						"in": "query",
+						"description": "Runs older than this run id (for paging).",
+						"required": false,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					},
+					{
+						"name": "limit",
+						"in": "query",
+						"description": "At most this many (default 50, at most 200).",
+						"required": false,
+						"schema": {
+							"type": "integer",
+							"format": "int64"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "array",
+									"items": {
+										"$ref": "#/components/schemas/RunSummary"
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/runs/{id}": {
+			"get": {
+				"tags": ["workflows"],
+				"summary": "A run with every step that has started.",
+				"operationId": "get_run",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/RunDetail"
+								}
+							}
+						}
+					},
+					"404": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/runs/{id}/cancel": {
+			"post": {
+				"tags": ["workflows"],
+				"summary": "Asks a run to stop. Steps in flight finish; nothing new starts.",
+				"operationId": "cancel_run",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/CancelRunResponse"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
 		"/api/v1/security/mfa-policy": {
 			"get": {
 				"tags": ["security"],
@@ -4115,6 +4242,435 @@
 				}
 			}
 		},
+		"/api/v1/workflows": {
+			"get": {
+				"tags": ["workflows"],
+				"summary": "Workflows the caller can view.",
+				"operationId": "list_workflows",
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "array",
+									"items": {
+										"$ref": "#/components/schemas/WorkflowSummary"
+									}
+								}
+							}
+						}
+					}
+				}
+			},
+			"post": {
+				"tags": ["workflows"],
+				"summary": "Creates a workflow from a draft document.",
+				"operationId": "create_workflow",
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/CreateWorkflowRequest"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"201": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/WorkflowDetail"
+								}
+							}
+						}
+					},
+					"409": {
+						"description": "Key already used in the org",
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					},
+					"422": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/workflows/validate": {
+			"post": {
+				"tags": ["workflows"],
+				"summary": "Checks a document without saving it.",
+				"operationId": "validate_workflow",
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/ValidateRequest"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ValidateResponse"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/workflows/{id}": {
+			"get": {
+				"tags": ["workflows"],
+				"operationId": "get_workflow",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/WorkflowDetail"
+								}
+							}
+						}
+					},
+					"404": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/workflows/{id}/archive": {
+			"post": {
+				"tags": ["workflows"],
+				"summary": "Archives a workflow: it can't be edited or run until restored.",
+				"operationId": "archive_workflow",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/WorkflowSummary"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/workflows/{id}/draft": {
+			"put": {
+				"tags": ["workflows"],
+				"summary": "Saves the draft. Fails with 409 if someone else saved since `revision`.",
+				"operationId": "save_workflow_draft",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/SaveDraftRequest"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/WorkflowDetail"
+								}
+							}
+						}
+					},
+					"409": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					},
+					"422": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/workflows/{id}/publish": {
+			"post": {
+				"tags": ["workflows"],
+				"summary": "Publishes the draft as a new version. 422 lists its problems if it has any.",
+				"operationId": "publish_workflow",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/PublishRequest"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Version"
+								}
+							}
+						}
+					},
+					"422": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/workflows/{id}/restore": {
+			"post": {
+				"tags": ["workflows"],
+				"operationId": "restore_workflow",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/WorkflowSummary"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/workflows/{id}/runs": {
+			"post": {
+				"tags": ["workflows"],
+				"summary": "Starts a manual run: of the latest published version, or a test run of\nthe draft.",
+				"operationId": "start_workflow_run",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/StartRunRequest"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"201": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/StartRunResponse"
+								}
+							}
+						}
+					},
+					"409": {
+						"description": "Archived, or nothing published yet",
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					},
+					"422": {
+						"description": "Invalid inputs or draft",
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/workflows/{id}/versions": {
+			"get": {
+				"tags": ["workflows"],
+				"operationId": "list_workflow_versions",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "array",
+									"items": {
+										"$ref": "#/components/schemas/VersionSummary"
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/workflows/{id}/versions/{version}": {
+			"get": {
+				"tags": ["workflows"],
+				"operationId": "get_workflow_version",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					},
+					{
+						"name": "version",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "integer",
+							"format": "int32"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Version"
+								}
+							}
+						}
+					},
+					"404": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
 		"/healthz": {
 			"get": {
 				"tags": ["system"],
@@ -4446,6 +5002,16 @@
 					}
 				}
 			},
+			"CancelRunResponse": {
+				"type": "object",
+				"required": ["cancelled"],
+				"properties": {
+					"cancelled": {
+						"type": "boolean",
+						"description": "False if the run had already finished."
+					}
+				}
+			},
 			"CeremonyView": {
 				"type": "object",
 				"description": "The first half of a WebAuthn ceremony.",
@@ -4628,6 +5194,20 @@
 					}
 				}
 			},
+			"CreateWorkflowRequest": {
+				"type": "object",
+				"required": ["orgId", "document"],
+				"properties": {
+					"document": {
+						"type": "object",
+						"description": "An HWF document. It may be incomplete, but needs `metadata.key` and\n`metadata.name`."
+					},
+					"orgId": {
+						"type": "string",
+						"format": "uuid"
+					}
+				}
+			},
 			"CreatedTokenView": {
 				"allOf": [
 					{
@@ -4644,6 +5224,20 @@
 						}
 					}
 				]
+			},
+			"DiagnosticView": {
+				"type": "object",
+				"description": "A problem with a workflow document, and where it is.",
+				"required": ["path", "message"],
+				"properties": {
+					"message": {
+						"type": "string"
+					},
+					"path": {
+						"type": "string",
+						"description": "e.g. `spec.steps[2].then[0].id`"
+					}
+				}
 			},
 			"EntityType": {
 				"type": "object",
@@ -5669,6 +6263,14 @@
 					}
 				}
 			},
+			"PublishRequest": {
+				"type": "object",
+				"properties": {
+					"notes": {
+						"type": ["string", "null"]
+					}
+				}
+			},
 			"RecoveryCodesView": {
 				"type": "object",
 				"required": ["recoveryCodes"],
@@ -5831,6 +6433,104 @@
 					"roleId": {
 						"type": "string",
 						"format": "uuid"
+					}
+				}
+			},
+			"RunDetail": {
+				"allOf": [
+					{
+						"$ref": "#/components/schemas/RunSummary"
+					},
+					{
+						"type": "object",
+						"required": ["inputs", "trigger", "cancelRequested", "steps"],
+						"properties": {
+							"cancelRequested": {
+								"type": "boolean"
+							},
+							"inputs": {
+								"type": "object"
+							},
+							"outputs": {
+								"type": ["object", "null"]
+							},
+							"steps": {
+								"type": "array",
+								"items": {
+									"$ref": "#/components/schemas/StepRunView"
+								},
+								"description": "Every step that has started, in the order it started."
+							},
+							"trigger": {
+								"type": "object"
+							}
+						}
+					}
+				]
+			},
+			"RunStatus": {
+				"type": "string",
+				"enum": ["queued", "running", "succeeded", "failed", "cancelled"]
+			},
+			"RunSummary": {
+				"type": "object",
+				"required": ["id", "orgId", "status", "triggerType", "createdAt"],
+				"properties": {
+					"actorId": {
+						"type": ["string", "null"],
+						"format": "uuid"
+					},
+					"createdAt": {
+						"type": "string",
+						"format": "date-time"
+					},
+					"error": {
+						"type": ["object", "null"]
+					},
+					"finishedAt": {
+						"type": ["string", "null"],
+						"format": "date-time"
+					},
+					"id": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"orgId": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"startedAt": {
+						"type": ["string", "null"],
+						"format": "date-time"
+					},
+					"status": {
+						"$ref": "#/components/schemas/RunStatus"
+					},
+					"triggerType": {
+						"type": "string"
+					},
+					"workflowId": {
+						"type": ["string", "null"],
+						"format": "uuid"
+					},
+					"workflowVersion": {
+						"type": ["integer", "null"],
+						"format": "int32",
+						"description": "`null` for a test run of the draft."
+					}
+				}
+			},
+			"SaveDraftRequest": {
+				"type": "object",
+				"required": ["revision", "document"],
+				"properties": {
+					"document": {
+						"type": "object"
+					},
+					"revision": {
+						"type": "integer",
+						"format": "int32",
+						"description": "The revision this edit is based on."
 					}
 				}
 			},
@@ -6014,6 +6714,28 @@
 					}
 				}
 			},
+			"StartRunRequest": {
+				"type": "object",
+				"properties": {
+					"inputs": {
+						"type": "object"
+					},
+					"test": {
+						"type": "boolean",
+						"description": "Run the draft instead of the latest published version (needs\npermission to edit the workflow)."
+					}
+				}
+			},
+			"StartRunResponse": {
+				"type": "object",
+				"required": ["id"],
+				"properties": {
+					"id": {
+						"type": "string",
+						"format": "uuid"
+					}
+				}
+			},
 			"StartSsoRequest": {
 				"type": "object",
 				"required": ["provider"],
@@ -6041,6 +6763,52 @@
 						"description": "Bind to the browser (e.g. an `HttpOnly` cookie) and check it equals the\n`state` the provider returns before calling `/callback`."
 					}
 				}
+			},
+			"StepRunView": {
+				"type": "object",
+				"description": "The latest attempt of a step.",
+				"required": ["stepKey", "stepId", "stepType", "attempt", "status", "startedAt"],
+				"properties": {
+					"attempt": {
+						"type": "integer",
+						"format": "int32"
+					},
+					"error": {
+						"type": ["object", "null"]
+					},
+					"finishedAt": {
+						"type": ["string", "null"],
+						"format": "date-time"
+					},
+					"input": {
+						"type": ["object", "null"],
+						"description": "The evaluated input (or a control-flow step's decision); `«redacted»`\nwhen it came from a secret."
+					},
+					"output": {
+						"type": ["object", "null"]
+					},
+					"startedAt": {
+						"type": "string",
+						"format": "date-time"
+					},
+					"status": {
+						"$ref": "#/components/schemas/StepStatus"
+					},
+					"stepId": {
+						"type": "string"
+					},
+					"stepKey": {
+						"type": "string",
+						"description": "Step id plus loop indices, e.g. `add_member[2]`."
+					},
+					"stepType": {
+						"type": "string"
+					}
+				}
+			},
+			"StepStatus": {
+				"type": "string",
+				"enum": ["running", "waiting", "succeeded", "failed", "skipped", "cancelled"]
 			},
 			"Tag": {
 				"type": "object",
@@ -6285,6 +7053,28 @@
 					}
 				}
 			},
+			"ValidateRequest": {
+				"type": "object",
+				"required": ["document"],
+				"properties": {
+					"document": {
+						"type": "object"
+					}
+				}
+			},
+			"ValidateResponse": {
+				"type": "object",
+				"required": ["diagnostics"],
+				"properties": {
+					"diagnostics": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/DiagnosticView"
+						},
+						"description": "Empty when the document is ready to publish."
+					}
+				}
+			},
 			"VerifyEmailRequest": {
 				"type": "object",
 				"required": ["token"],
@@ -6292,6 +7082,116 @@
 					"token": {
 						"type": "string",
 						"description": "From the emailed link."
+					}
+				}
+			},
+			"Version": {
+				"allOf": [
+					{
+						"$ref": "#/components/schemas/VersionSummary"
+					},
+					{
+						"type": "object",
+						"required": ["document"],
+						"properties": {
+							"document": {
+								"type": "object"
+							}
+						}
+					}
+				]
+			},
+			"VersionSummary": {
+				"type": "object",
+				"required": ["version", "publishedAt"],
+				"properties": {
+					"notes": {
+						"type": ["string", "null"]
+					},
+					"publishedAt": {
+						"type": "string",
+						"format": "date-time"
+					},
+					"publishedBy": {
+						"type": ["string", "null"],
+						"format": "uuid"
+					},
+					"version": {
+						"type": "integer",
+						"format": "int32"
+					}
+				}
+			},
+			"WorkflowDetail": {
+				"allOf": [
+					{
+						"$ref": "#/components/schemas/WorkflowSummary"
+					},
+					{
+						"type": "object",
+						"required": ["draft", "diagnostics"],
+						"properties": {
+							"diagnostics": {
+								"type": "array",
+								"items": {
+									"$ref": "#/components/schemas/DiagnosticView"
+								},
+								"description": "Problems that would stop the draft being published. Empty when it's ready."
+							},
+							"draft": {
+								"type": "object",
+								"description": "The HWF document being edited."
+							}
+						}
+					}
+				],
+				"description": "A workflow with its draft and the draft's problems."
+			},
+			"WorkflowStatus": {
+				"type": "string",
+				"enum": ["active", "archived"]
+			},
+			"WorkflowSummary": {
+				"type": "object",
+				"required": ["id", "orgId", "key", "name", "status", "revision", "createdAt", "updatedAt"],
+				"properties": {
+					"createdAt": {
+						"type": "string",
+						"format": "date-time"
+					},
+					"currentVersion": {
+						"type": ["integer", "null"],
+						"format": "int32",
+						"description": "The latest published version, if any."
+					},
+					"description": {
+						"type": ["string", "null"]
+					},
+					"id": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"key": {
+						"type": "string"
+					},
+					"name": {
+						"type": "string"
+					},
+					"orgId": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"revision": {
+						"type": "integer",
+						"format": "int32",
+						"description": "Increases with every draft save."
+					},
+					"status": {
+						"$ref": "#/components/schemas/WorkflowStatus"
+					},
+					"updatedAt": {
+						"type": "string",
+						"format": "date-time"
 					}
 				}
 			}
@@ -6333,6 +7233,10 @@
 		{
 			"name": "notifications",
 			"description": "Your notifications and how you receive them"
+		},
+		{
+			"name": "workflows",
+			"description": "Workflows, their versions, and their runs"
 		}
 	]
 }

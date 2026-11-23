@@ -17,7 +17,7 @@ use tower_http::trace::TraceLayer;
 use crate::{
     ApiError, AppState, audit_routes, auth_routes, csrf, entity_routes, health, mfa_routes,
     module_routes, notification_routes, openapi, org_routes, passkey_routes, security_routes,
-    sso_routes, team_routes, token_routes, user_routes,
+    sso_routes, team_routes, token_routes, user_routes, workflow_routes,
 };
 
 const REQUEST_ID: HeaderName = HeaderName::from_static("x-request-id");
@@ -45,6 +45,8 @@ pub fn router(state: AppState) -> Router {
         .nest("/modules", module_routes::routes())
         .nest("/teams", team_routes::routes())
         .nest("/notifications", notification_routes::routes())
+        .nest("/workflows", workflow_routes::workflow_routes())
+        .nest("/runs", workflow_routes::run_routes())
         .nest("/security", security_routes::routes())
         .merge(user_routes::routes())
         .merge(entity_routes::routes())

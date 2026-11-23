@@ -41,6 +41,10 @@ use crate::user_routes::{
     self, CreateAssignmentRequest, CreateUserRequest, CreateUserResponse, UpdateUserRequest,
     UserPage,
 };
+use crate::workflow_routes::{
+    self, CancelRunResponse, CreateWorkflowRequest, PublishRequest, SaveDraftRequest,
+    StartRunRequest, StartRunResponse, ValidateRequest, ValidateResponse,
+};
 
 #[derive(Debug, OpenApi)]
 #[openapi(
@@ -161,6 +165,20 @@ use crate::user_routes::{
         sso_routes::update_provider,
         sso_routes::delete_provider,
         sso_routes::set_role_mappings,
+        workflow_routes::list,
+        workflow_routes::create,
+        workflow_routes::validate,
+        workflow_routes::get_one,
+        workflow_routes::save_draft,
+        workflow_routes::publish,
+        workflow_routes::archive,
+        workflow_routes::restore,
+        workflow_routes::versions,
+        workflow_routes::version,
+        workflow_routes::start_run,
+        workflow_routes::list_runs,
+        workflow_routes::get_run,
+        workflow_routes::cancel_run,
     ),
     components(schemas(HealthStatus, ApiError, FieldError, LoginRequest, ChangePasswordRequest, UserView, SessionView,
         MeView,
@@ -258,6 +276,25 @@ use crate::user_routes::{
         huxley_sso::MfaTrust,
         huxley_authz::mfa_policy::MfaPolicy,
         huxley_authz::mfa_policy::PolicyOrg,
+        CreateWorkflowRequest,
+        SaveDraftRequest,
+        PublishRequest,
+        ValidateRequest,
+        ValidateResponse,
+        StartRunRequest,
+        StartRunResponse,
+        CancelRunResponse,
+        huxley_workflows::WorkflowSummary,
+        huxley_workflows::WorkflowDetail,
+        huxley_workflows::WorkflowStatus,
+        huxley_workflows::DiagnosticView,
+        huxley_workflows::VersionSummary,
+        huxley_workflows::Version,
+        huxley_engine::RunStatus,
+        huxley_engine::StepStatus,
+        huxley_engine::runs::RunSummary,
+        huxley_engine::runs::RunDetail,
+        huxley_engine::runs::StepRunView,
     )),
     tags(
         (name = "system", description = "Health and platform metadata"),
@@ -269,6 +306,7 @@ use crate::user_routes::{
         (name = "security", description = "Sign-in security policy"),
         (name = "fields", description = "Custom fields and tags on records"),
         (name = "notifications", description = "Your notifications and how you receive them"),
+        (name = "workflows", description = "Workflows, their versions, and their runs"),
     ),
 )]
 pub struct ApiDoc;

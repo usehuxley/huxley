@@ -1134,6 +1134,57 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
+	'/api/v1/runs': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** Runs the caller can view, newest first. */
+		get: operations['list_runs'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/runs/{id}': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** A run with every step that has started. */
+		get: operations['get_run'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/runs/{id}/cancel': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/** Asks a run to stop. Steps in flight finish; nothing new starts. */
+		post: operations['cancel_run'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
 	'/api/v1/security/mfa-policy': {
 		parameters: {
 			query?: never;
@@ -1518,6 +1569,176 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
+	'/api/v1/workflows': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** Workflows the caller can view. */
+		get: operations['list_workflows'];
+		put?: never;
+		/** Creates a workflow from a draft document. */
+		post: operations['create_workflow'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/workflows/validate': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/** Checks a document without saving it. */
+		post: operations['validate_workflow'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/workflows/{id}': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get: operations['get_workflow'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/workflows/{id}/archive': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/** Archives a workflow: it can't be edited or run until restored. */
+		post: operations['archive_workflow'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/workflows/{id}/draft': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		/** Saves the draft. Fails with 409 if someone else saved since `revision`. */
+		put: operations['save_workflow_draft'];
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/workflows/{id}/publish': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/** Publishes the draft as a new version. 422 lists its problems if it has any. */
+		post: operations['publish_workflow'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/workflows/{id}/restore': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		post: operations['restore_workflow'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/workflows/{id}/runs': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/**
+		 * Starts a manual run: of the latest published version, or a test run of
+		 *     the draft.
+		 */
+		post: operations['start_workflow_run'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/workflows/{id}/versions': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get: operations['list_workflow_versions'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/workflows/{id}/versions/{version}': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get: operations['get_workflow_version'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
 	'/healthz': {
 		parameters: {
 			query?: never;
@@ -1666,6 +1887,10 @@ export interface components {
 			/** @description "Forgot password" works (email and `auth.public_url` are configured). */
 			passwordReset: boolean;
 		};
+		CancelRunResponse: {
+			/** @description False if the run had already finished. */
+			cancelled: boolean;
+		};
 		/** @description The first half of a WebAuthn ceremony. */
 		CeremonyView: {
 			/**
@@ -1763,9 +1988,24 @@ export interface components {
 			invited: boolean;
 			user: components['schemas']['UserView'];
 		};
+		CreateWorkflowRequest: {
+			/**
+			 * @description An HWF document. It may be incomplete, but needs `metadata.key` and
+			 *     `metadata.name`.
+			 */
+			document: Record<string, never>;
+			/** Format: uuid */
+			orgId: string;
+		};
 		CreatedTokenView: components['schemas']['ApiTokenView'] & {
 			/** @description Send as `Authorization: Bearer <token>`. Shown only now. */
 			tokenSecret: string;
+		};
+		/** @description A problem with a workflow document, and where it is. */
+		DiagnosticView: {
+			message: string;
+			/** @description e.g. `spec.steps[2].then[0].id` */
+			path: string;
 		};
 		/** @description An entity type that supports custom fields and tags. */
 		EntityType: {
@@ -2189,6 +2429,9 @@ export interface components {
 			tenantId?: string | null;
 			trustEmail?: boolean | null;
 		};
+		PublishRequest: {
+			notes?: string | null;
+		};
 		RecoveryCodesView: {
 			/** @description Shown only now. Each code signs in once if the authenticator is lost. */
 			recoveryCodes: string[];
@@ -2240,6 +2483,48 @@ export interface components {
 			orgId: string;
 			/** Format: uuid */
 			roleId: string;
+		};
+		RunDetail: components['schemas']['RunSummary'] & {
+			cancelRequested: boolean;
+			inputs: Record<string, never>;
+			outputs?: Record<string, never> | null;
+			/** @description Every step that has started, in the order it started. */
+			steps: components['schemas']['StepRunView'][];
+			trigger: Record<string, never>;
+		};
+		/** @enum {string} */
+		RunStatus: 'queued' | 'running' | 'succeeded' | 'failed' | 'cancelled';
+		RunSummary: {
+			/** Format: uuid */
+			actorId?: string | null;
+			/** Format: date-time */
+			createdAt: string;
+			error?: Record<string, never> | null;
+			/** Format: date-time */
+			finishedAt?: string | null;
+			/** Format: uuid */
+			id: string;
+			/** Format: uuid */
+			orgId: string;
+			/** Format: date-time */
+			startedAt?: string | null;
+			status: components['schemas']['RunStatus'];
+			triggerType: string;
+			/** Format: uuid */
+			workflowId?: string | null;
+			/**
+			 * Format: int32
+			 * @description `null` for a test run of the draft.
+			 */
+			workflowVersion?: number | null;
+		};
+		SaveDraftRequest: {
+			document: Record<string, never>;
+			/**
+			 * Format: int32
+			 * @description The revision this edit is based on.
+			 */
+			revision: number;
 		};
 		SelectOption: {
 			label: string;
@@ -2311,6 +2596,18 @@ export interface components {
 			code: string;
 			state: string;
 		};
+		StartRunRequest: {
+			inputs?: Record<string, never>;
+			/**
+			 * @description Run the draft instead of the latest published version (needs
+			 *     permission to edit the workflow).
+			 */
+			test?: boolean;
+		};
+		StartRunResponse: {
+			/** Format: uuid */
+			id: string;
+		};
 		StartSsoRequest: {
 			/** @description A same-site path to return to afterwards. */
 			next?: string | null;
@@ -2326,6 +2623,29 @@ export interface components {
 			 */
 			state: string;
 		};
+		/** @description The latest attempt of a step. */
+		StepRunView: {
+			/** Format: int32 */
+			attempt: number;
+			error?: Record<string, never> | null;
+			/** Format: date-time */
+			finishedAt?: string | null;
+			/**
+			 * @description The evaluated input (or a control-flow step's decision); `«redacted»`
+			 *     when it came from a secret.
+			 */
+			input?: Record<string, never> | null;
+			output?: Record<string, never> | null;
+			/** Format: date-time */
+			startedAt: string;
+			status: components['schemas']['StepStatus'];
+			stepId: string;
+			/** @description Step id plus loop indices, e.g. `add_member[2]`. */
+			stepKey: string;
+			stepType: string;
+		};
+		/** @enum {string} */
+		StepStatus: 'running' | 'waiting' | 'succeeded' | 'failed' | 'skipped' | 'cancelled';
 		Tag: {
 			/** @description One of neutral, accent, success, warning, danger, info. */
 			color: string;
@@ -2423,9 +2743,61 @@ export interface components {
 			/** @description `active` or `disabled`. */
 			status: string;
 		};
+		ValidateRequest: {
+			document: Record<string, never>;
+		};
+		ValidateResponse: {
+			/** @description Empty when the document is ready to publish. */
+			diagnostics: components['schemas']['DiagnosticView'][];
+		};
 		VerifyEmailRequest: {
 			/** @description From the emailed link. */
 			token: string;
+		};
+		Version: components['schemas']['VersionSummary'] & {
+			document: Record<string, never>;
+		};
+		VersionSummary: {
+			notes?: string | null;
+			/** Format: date-time */
+			publishedAt: string;
+			/** Format: uuid */
+			publishedBy?: string | null;
+			/** Format: int32 */
+			version: number;
+		};
+		/** @description A workflow with its draft and the draft's problems. */
+		WorkflowDetail: components['schemas']['WorkflowSummary'] & {
+			/** @description Problems that would stop the draft being published. Empty when it's ready. */
+			diagnostics: components['schemas']['DiagnosticView'][];
+			/** @description The HWF document being edited. */
+			draft: Record<string, never>;
+		};
+		/** @enum {string} */
+		WorkflowStatus: 'active' | 'archived';
+		WorkflowSummary: {
+			/** Format: date-time */
+			createdAt: string;
+			/**
+			 * Format: int32
+			 * @description The latest published version, if any.
+			 */
+			currentVersion?: number | null;
+			description?: string | null;
+			/** Format: uuid */
+			id: string;
+			key: string;
+			name: string;
+			/** Format: uuid */
+			orgId: string;
+			/**
+			 * Format: int32
+			 * @description Increases with every draft save.
+			 */
+			revision: number;
+			status: components['schemas']['WorkflowStatus'];
+			/** Format: date-time */
+			updatedAt: string;
 		};
 	};
 	responses: never;
@@ -4659,6 +5031,82 @@ export interface operations {
 			};
 		};
 	};
+	list_runs: {
+		parameters: {
+			query?: {
+				workflowId?: string;
+				status?: components['schemas']['RunStatus'];
+				/** @description Runs older than this run id (for paging). */
+				before?: string;
+				/** @description At most this many (default 50, at most 200). */
+				limit?: number;
+			};
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['RunSummary'][];
+				};
+			};
+		};
+	};
+	get_run: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['RunDetail'];
+				};
+			};
+			404: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	cancel_run: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['CancelRunResponse'];
+				};
+			};
+		};
+	};
 	get_policy: {
 		parameters: {
 			query?: never;
@@ -5701,6 +6149,327 @@ export interface operations {
 				};
 				content: {
 					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+			404: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	list_workflows: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['WorkflowSummary'][];
+				};
+			};
+		};
+	};
+	create_workflow: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['CreateWorkflowRequest'];
+			};
+		};
+		responses: {
+			201: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['WorkflowDetail'];
+				};
+			};
+			/** @description Key already used in the org */
+			409: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	validate_workflow: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['ValidateRequest'];
+			};
+		};
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ValidateResponse'];
+				};
+			};
+		};
+	};
+	get_workflow: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['WorkflowDetail'];
+				};
+			};
+			404: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	archive_workflow: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['WorkflowSummary'];
+				};
+			};
+		};
+	};
+	save_workflow_draft: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['SaveDraftRequest'];
+			};
+		};
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['WorkflowDetail'];
+				};
+			};
+			409: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	publish_workflow: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['PublishRequest'];
+			};
+		};
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['Version'];
+				};
+			};
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	restore_workflow: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['WorkflowSummary'];
+				};
+			};
+		};
+	};
+	start_workflow_run: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['StartRunRequest'];
+			};
+		};
+		responses: {
+			201: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['StartRunResponse'];
+				};
+			};
+			/** @description Archived, or nothing published yet */
+			409: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+			/** @description Invalid inputs or draft */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	list_workflow_versions: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['VersionSummary'][];
+				};
+			};
+		};
+	};
+	get_workflow_version: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+				version: number;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['Version'];
 				};
 			};
 			404: {

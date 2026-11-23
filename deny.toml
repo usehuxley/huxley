@@ -52,6 +52,9 @@ exceptions = [
   # 0BSD is public-domain equivalent (no conditions at all), more permissive
   # than MIT. Needed by lettre for email encoding. Approved 2026-11-23.
   { crate = "quoted_printable", allow = ["0BSD"] },
+  # MIT-0 is MIT without the attribution condition. Needed by fluent-uri,
+  # which jsonschema (and boon, the alternative) use. Pending maintainer review.
+  { crate = "borrow-or-share", allow = ["MIT-0"] },
 ]
 
 [bans]

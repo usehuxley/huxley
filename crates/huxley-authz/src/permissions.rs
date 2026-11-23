@@ -54,6 +54,10 @@ permissions! {
     TEAM_MANAGE = "team:manage", Instance, "Create teams and manage their members";
     SERVICE_ACCOUNT_MANAGE = "service_account:manage", Instance, "Create service accounts and manage their API tokens";
     SECURITY_POLICY_MANAGE = "security:policy:manage", Instance, "Set sign-in security policy, such as requiring two-factor authentication";
+    WORKFLOW_READ = "workflow:read", Org, "View workflows and their runs";
+    WORKFLOW_WRITE = "workflow:write", Org, "Create and edit workflow drafts, and test-run them";
+    WORKFLOW_PUBLISH = "workflow:publish", Org, "Publish and archive workflows";
+    WORKFLOW_RUN = "workflow:run", Org, "Start and cancel runs of published workflows";
 }
 
 /// Wildcard granting every permission.
