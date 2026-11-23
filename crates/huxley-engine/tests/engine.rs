@@ -54,6 +54,10 @@ struct RunRow {
 
 impl Harness {
     async fn start(&self, spec: &str, inputs: Json) -> Uuid {
+        self.start_in(self.org, spec, inputs).await
+    }
+
+    async fn start_in(&self, org: Uuid, spec: &str, inputs: Json) -> Uuid {
         let mut tx = begin_scoped(&self.pools.app, &OrgScope::System)
             .await
             .unwrap();
@@ -62,7 +66,7 @@ impl Harness {
             .start_run(
                 &mut tx,
                 StartRun {
-                    org_id: self.org,
+                    org_id: org,
                     workflow_id: None,
                     version: None,
                     document: Some(document(spec)),
@@ -367,6 +371,11 @@ async fn decisions_are_journaled_once() {
 
 /// Publishes a workflow in the harness org.
 async fn publish(h: &Harness, key: &str, spec: &str) {
+    publish_in(h, h.org, key, spec).await;
+}
+
+/// Publishes a workflow in `org`.
+async fn publish_in(h: &Harness, org: Uuid, key: &str, spec: &str) {
     let yaml = format!(
         "apiVersion: usehuxley.com/v1\nkind: Workflow\nmetadata: {{ key: {key}, name: {key} }}\nspec:\n{spec}"
     );
@@ -374,7 +383,7 @@ async fn publish(h: &Harness, key: &str, spec: &str) {
     let ctx = huxley_core::RequestContext::system(huxley_core::Via::System);
     let expr = huxley_expr::Engine::new();
     let mut tx = begin_scoped(&h.pools.app, &OrgScope::System).await.unwrap();
-    let created = huxley_workflows::create(&mut tx, &ctx, &expr, h.org, document)
+    let created = huxley_workflows::create(&mut tx, &ctx, &expr, org, document)
         .await
         .unwrap();
     huxley_workflows::publish(&mut tx, &ctx, &expr, created.summary.id, None)
@@ -483,4 +492,120 @@ async fn cancelling_a_parent_cancels_its_children() {
     tx.commit().await.unwrap();
     assert_eq!(h.finish(id).await.status, RunStatus::Cancelled);
     assert_eq!(h.finish(child).await.status, RunStatus::Cancelled);
+}
+
+/// Adds a client org under `parent`.
+async fn client_org(h: &Harness, parent: Uuid) -> Uuid {
+    let org = Uuid::now_v7();
+    let mut tx = begin_scoped(&h.pools.app, &OrgScope::System).await.unwrap();
+    sqlx::query(
+        "INSERT INTO organizations (id, parent_id, kind, name, path) \
+         VALUES ($1, $2, 'client', $3, '')",
+    )
+    .bind(org)
+    .bind(parent)
+    .bind(unique("client"))
+    .execute(&mut *tx)
+    .await
+    .unwrap();
+    tx.commit().await.unwrap();
+    org
+}
+
+#[tokio::test]
+async fn subworkflows_are_found_on_the_nearest_ancestor() {
+    let Some(h) = harness().await else { return };
+    // provider (h.org) → client → site. "shared" is published on the
+    // provider and overridden on the client; "only-top" is only on the
+    // provider.
+    let client = client_org(&h, h.org).await;
+    let site = client_org(&h, client).await;
+    publish(
+        &h,
+        "shared",
+        "  steps:\n    - { id: x, type: transform, output: 1 }\n  outputs: { from: provider }\n",
+    )
+    .await;
+    publish_in(
+        &h,
+        client,
+        "shared",
+        "  steps:\n    - { id: x, type: transform, output: 1 }\n  outputs: { from: client }\n",
+    )
+    .await;
+    publish(
+        &h,
+        "only-top",
+        "  steps:\n    - { id: x, type: transform, output: 1 }\n  outputs: { from: provider }\n",
+    )
+    .await;
+    let spec = r#"  steps:
+    - { id: shared, type: subworkflow, workflow: shared }
+    - { id: top, type: subworkflow, workflow: only-top }
+  outputs:
+    shared: "{{ steps.shared.output.from }}"
+    top: "{{ steps.top.output.from }}"
+"#;
+    let id = h.start_in(site, spec, json!({})).await;
+    let run = h.finish(id).await;
+    assert_eq!(run.status, RunStatus::Succeeded, "{run:?}");
+    assert_eq!(
+        run.outputs.unwrap(),
+        json!({ "shared": "client", "top": "provider" })
+    );
+    // Children run in the caller's org, not where the workflow lives.
+    let orgs: Vec<Uuid> = sqlx::query_scalar("SELECT org_id FROM runs WHERE parent_run_id = $1")
+        .bind(id)
+        .fetch_all(&h.pools.owner)
+        .await
+        .unwrap();
+    assert_eq!(orgs, vec![site, site]);
+
+    // A workflow published only below the caller isn't visible to it.
+    let below = h
+        .start(
+            "  steps:\n    - { id: call, type: subworkflow, workflow: shared, continue_on_error: true }\n  outputs: { from: \"{{ steps.call.output.from }}\" }\n",
+            json!({}),
+        )
+        .await;
+    assert_eq!(
+        h.finish(below).await.outputs.unwrap(),
+        json!({ "from": "provider" })
+    );
+}
+
+#[tokio::test]
+async fn subworkflows_stop_at_the_nesting_limit() {
+    let Some(h) = harness().await else { return };
+    // A workflow that calls itself forever.
+    publish(
+        &h,
+        "forever",
+        "  steps:\n    - { id: again, type: subworkflow, workflow: forever }\n",
+    )
+    .await;
+    let id = h
+        .start(
+            "  steps:\n    - { id: call, type: subworkflow, workflow: forever }\n",
+            json!({}),
+        )
+        .await;
+    let run = h.finish(id).await;
+    assert_eq!(run.status, RunStatus::Failed, "{run:?}");
+    // The whole tree, root included, is at most 8 runs deep.
+    let depth: i64 = sqlx::query_scalar(
+        "WITH RECURSIVE tree AS ( \
+             SELECT id, 1 AS depth FROM runs WHERE id = $1 \
+             UNION ALL \
+             SELECT r.id, t.depth + 1 FROM runs r JOIN tree t ON r.parent_run_id = t.id) \
+         SELECT max(depth)::int8 FROM tree",
+    )
+    .bind(id)
+    .fetch_one(&h.pools.owner)
+    .await
+    .unwrap();
+    assert_eq!(depth, 8);
+    // The deepest run failed on the limit; the error reaches the root.
+    let error = run.error.unwrap().to_string();
+    assert!(error.contains("nest at most 8"), "{error}");
 }
