@@ -71,6 +71,10 @@ The preset chooses which feature modules start on: `automation` (none: Huxley as
 
 Then open https://localhost (staff app) and https://portal.localhost (client portal). Set `HUXLEY_DOMAIN` and `HUXLEY_PORTAL_DOMAIN` in `.env` for real hostnames; Caddy obtains certificates automatically.
 
+### Rotating the key-encryption key
+
+Secrets are encrypted with per-provider-org data keys, which are in turn encrypted ("wrapped") by the KEK. To rotate the KEK: generate a new one, set it as `HUXLEY_CRYPTO__KEK` with the old one in `HUXLEY_CRYPTO__RETIRED_KEKS`, restart, run `huxley admin rewrap-keys`, then remove the retired key. The server refuses to start if any stored data key was wrapped by a KEK it doesn't have.
+
 ### Configuration
 
 The server reads, in increasing precedence: built-in defaults, `huxley.toml`, then `HUXLEY_<SECTION>__<KEY>` environment variables. Any variable can instead be supplied as a file by appending `_FILE` (for Docker and Kubernetes secrets).
@@ -78,6 +82,8 @@ The server reads, in increasing precedence: built-in defaults, `huxley.toml`, th
 | Variable | Default | Purpose |
 |---|---|---|
 | `HUXLEY_DATABASE__URL` | (required) | PostgreSQL connection URL |
+| `HUXLEY_CRYPTO__KEK` | (required) | Key-encryption key for secrets at rest: 32 random bytes, base64 (`huxley admin generate-kek`). Back it up: without it, encrypted data is unrecoverable. |
+| `HUXLEY_CRYPTO__RETIRED_KEKS` | (empty) | Previous KEKs as a list, e.g. `[old1, old2]`, during rotation |
 | `HUXLEY_HTTP__BIND` | `0.0.0.0:8080` | API listen address |
 | `HUXLEY_MIGRATE_ON_START` | `false` | Apply migrations at startup |
 | `HUXLEY_ROLES` | `all` | `api`, `worker`, `scheduler`, or `all` |

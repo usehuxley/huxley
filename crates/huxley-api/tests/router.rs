@@ -6,6 +6,7 @@ use http::{Request, StatusCode};
 use http_body_util::BodyExt as _;
 use huxley_api::{ApiConfig, AppState, router};
 use huxley_auth::{AuthConfig, AuthService};
+use huxley_crypto::{Crypto, KeyRing};
 use huxley_db::DatabaseConfig;
 use secrecy::SecretString;
 use tower::ServiceExt as _;
@@ -19,7 +20,8 @@ fn app() -> axum::Router {
     };
     let db = huxley_db::connect(&config).expect("lazy pool");
     let auth = AuthService::new(db.clone(), AuthConfig::default());
-    router(AppState::new(db, auth, ApiConfig::default()))
+    let crypto = Crypto::new(db.clone(), KeyRing::ephemeral());
+    router(AppState::new(db, auth, crypto, ApiConfig::default()))
 }
 
 async fn send(uri: &str) -> (StatusCode, http::HeaderMap, serde_json::Value) {

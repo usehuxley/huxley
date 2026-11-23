@@ -12,6 +12,7 @@ name: huxley
 
 x-huxley-env: &huxley-env
   HUXLEY_DATABASE__URL_FILE: /run/secrets/db_url
+  HUXLEY_CRYPTO__KEK_FILE: /run/secrets/kek
   HUXLEY_TELEMETRY__LOG_FORMAT: json
   HUXLEY_TELEMETRY__ENVIRONMENT: ${HUXLEY_ENVIRONMENT:-production}
   HUXLEY_TELEMETRY__OTLP_ENDPOINT: ${HUXLEY_OTLP_ENDPOINT:-}
@@ -43,7 +44,7 @@ services:
     build: { context: ../.., dockerfile: docker/huxley.Dockerfile }
     command: ["migrate"]
     environment: *huxley-env
-    secrets: [db_url]
+    secrets: [db_url, kek]
     depends_on:
       postgres: { condition: service_healthy }
     restart: "no"
@@ -54,7 +55,7 @@ services:
     command: ["serve", "--roles", "all"]
     restart: unless-stopped
     environment: *huxley-env
-    secrets: [db_url]
+    secrets: [db_url, kek]
     depends_on:
       migrate: { condition: service_completed_successfully }
 
@@ -127,6 +128,10 @@ secrets:
     file: ./secrets/db_password
   db_url:
     file: ./secrets/db_url
+  # Key-encryption key for secrets at rest. Back it up with the database:
+  # without it, encrypted data cannot be recovered.
+  kek:
+    file: ./secrets/kek
 
 volumes:
   postgres-data:

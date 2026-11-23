@@ -63,6 +63,11 @@ pub async fn serve(config: Config, roles: BTreeSet<Role>) -> anyhow::Result<()> 
         owner.close().await;
     }
     let db = huxley_db::connect(db_config)?;
+    let crypto = huxley_crypto::Crypto::new(db.clone(), config.crypto.key_ring()?);
+    crypto
+        .verify_keys()
+        .await
+        .context("stored data keys cannot be unwrapped with the configured key-encryption keys")?;
 
     let shutdown = CancellationToken::new();
     shutdown::spawn_signal_listener(shutdown.clone());
@@ -76,7 +81,12 @@ pub async fn serve(config: Config, roles: BTreeSet<Role>) -> anyhow::Result<()> 
                     .with_context(|| format!("failed to bind {}", config.http.bind))?;
                 tracing::info!(addr = %config.http.bind, "api role listening");
                 let auth = huxley_auth::AuthService::new(db.clone(), config.auth.clone());
-                let state = huxley_api::AppState::new(db.clone(), auth, config.http.api.clone());
+                let state = huxley_api::AppState::new(
+                    db.clone(),
+                    auth,
+                    crypto.clone(),
+                    config.http.api.clone(),
+                );
                 let app = huxley_api::router(state)
                     .into_make_service_with_connect_info::<std::net::SocketAddr>();
                 let token = shutdown.clone();

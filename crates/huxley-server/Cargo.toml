@@ -21,6 +21,7 @@ huxley-api.workspace = true
 huxley-auth.workspace = true
 huxley-authz.workspace = true
 huxley-core.workspace = true
+huxley-crypto.workspace = true
 huxley-db.workspace = true
 huxley-modules.workspace = true
 huxley-orgs.workspace = true

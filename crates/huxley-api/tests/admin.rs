@@ -6,6 +6,7 @@ use http_body_util::BodyExt as _;
 use huxley_api::{ApiConfig, AppState, router};
 use huxley_auth::{AuthConfig, AuthService};
 use huxley_core::{RequestContext, Via};
+use huxley_crypto::{Crypto, KeyRing};
 use huxley_db::testing::{TestPools, ensure_root, pools, unique};
 use huxley_db::{OrgScope, begin_scoped};
 use serde_json::{Value, json};
@@ -19,7 +20,8 @@ fn app(pools: &TestPools) -> axum::Router {
         login_attempts_per_minute: 1000,
         ..ApiConfig::default()
     };
-    router(AppState::new(pools.app.clone(), auth, config))
+    let crypto = Crypto::new(pools.app.clone(), KeyRing::ephemeral());
+    router(AppState::new(pools.app.clone(), auth, crypto, config))
 }
 
 async fn user(pools: &TestPools, owner: bool) -> String {
@@ -339,6 +341,7 @@ async fn module_toggles_need_permission_and_gate_disabled_modules() {
     let state = AppState::new(
         pools.app.clone(),
         AuthService::new(pools.app.clone(), AuthConfig::default()),
+        Crypto::new(pools.app.clone(), KeyRing::ephemeral()),
         ApiConfig::default(),
     );
     let gate = huxley_api::module_routes::require_module(&state, "servicedesk").await;

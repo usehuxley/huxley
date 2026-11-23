@@ -54,11 +54,24 @@ pub enum AdminCommand {
     /// Recompute the audit log hash chain and report whether it is intact.
     /// Exits non-zero if any record was altered or removed.
     VerifyAudit,
+    /// Print a new random key-encryption key for `crypto.kek`. Needs no
+    /// database or configuration.
+    GenerateKek,
+    /// Re-wrap every data key under the active key-encryption key. Run after
+    /// rotating `crypto.kek` (with the old key in `crypto.retired_keks`); once
+    /// it succeeds the retired keys can be removed.
+    RewrapKeys,
 }
 
 pub async fn run(config: &Config, command: AdminCommand) -> anyhow::Result<()> {
+    if let AdminCommand::GenerateKek = command {
+        println!("{}", huxley_crypto::generate_key_base64());
+        return Ok(());
+    }
     let db_config = config.database()?;
     match command {
+        AdminCommand::GenerateKek => unreachable!("handled above"),
+        AdminCommand::RewrapKeys => rewrap_keys(config, db_config).await,
         AdminCommand::Bootstrap {
             org_name,
             email,
@@ -139,6 +152,19 @@ pub async fn run(config: &Config, command: AdminCommand) -> anyhow::Result<()> {
             }
         }
     }
+}
+
+async fn rewrap_keys(config: &Config, db_config: &huxley_db::DatabaseConfig) -> anyhow::Result<()> {
+    let db = huxley_db::connect(db_config)?;
+    let crypto = huxley_crypto::Crypto::new(db, config.crypto.key_ring()?);
+    let count = crypto
+        .rewrap(&RequestContext::system(Via::Cli), None)
+        .await?;
+    println!("Re-wrapped {count} data key(s) under the active key-encryption key.");
+    if !config.crypto.retired_keks.is_empty() {
+        println!("The retired keys are no longer needed; remove them from crypto.retired_keks.");
+    }
+    Ok(())
 }
 
 /// Returns `(password, was_generated)`.

@@ -1,0 +1,31 @@
+[package]
+name = "huxley-crypto"
+description = "Envelope encryption for Huxley secrets at rest (design doc §12)"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[dependencies]
+base64.workspace = true
+getrandom.workspace = true
+huxley-core.workspace = true
+huxley-db.workspace = true
+ring.workspace = true
+secrecy.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+sqlx.workspace = true
+thiserror.workspace = true
+uuid.workspace = true
+zeroize.workspace = true
+
+[dev-dependencies]
+huxley-db = { workspace = true, features = ["testing"] }
+tokio.workspace = true
+
+[lints]
+workspace = true
