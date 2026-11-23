@@ -23,3 +23,4 @@ Decisions that shape Huxley. Add a new ADR by copying `0000-template.md` with th
 | [017](0017-toggleable-feature-modules.md) | Everything outside the core platform is a toggleable feature module | Accepted |
 | [018](0018-envelope-encryption-with-config-kek-and-per-provider-deks.md) | Envelope encryption with a configured KEK and per-provider-org data keys | Accepted |
 | [019](0019-sso-account-linking-and-role-sync.md) | SSO account linking, role sync, and MFA trust | Accepted |
+| [020](0020-structured-control-flow-in-hwf.md) | Structured control flow in HWF | Accepted |

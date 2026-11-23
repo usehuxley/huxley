@@ -273,7 +273,7 @@ ui:
   nodes: { build_upn: { x: 120, y: 80 }, create_user: { x: 120, y: 200 } }
 ```
 
-**Flow semantics.** Steps run in order by default. Explicit edges (`next`, `branches`) build arbitrary DAGs. Control-flow nodes provide structure:
+**Flow semantics.** Steps run in order. Control-flow nodes own nested blocks of steps; there are no free-form edges (ADR-020):
 
 | Node | Purpose |
 |---|---|
