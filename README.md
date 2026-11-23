@@ -86,6 +86,8 @@ The server reads, in increasing precedence: built-in defaults, `huxley.toml`, th
 | `HUXLEY_DATABASE__URL` | (required) | PostgreSQL connection URL |
 | `HUXLEY_CRYPTO__KEK` | (required) | Key-encryption key for secrets at rest: 32 random bytes, base64 (`huxley admin generate-kek`). Back it up: without it, encrypted data is unrecoverable. |
 | `HUXLEY_AUTH__PUBLIC_URL` | (unset) | The staff app's URL as browsers see it, e.g. `https://huxley.example.com`. Enables passkeys, which are bound to its host name (changing the host later invalidates registered passkeys), and single sign-on, whose redirect URI is `<public URL>/login/oidc/callback`. |
+| `HUXLEY_EMAIL__SMTP_URL` | (unset) | SMTP server for password reset, invitations, and verification, e.g. `smtps://user:pass@smtp.example.com` or `smtp://user:pass@host:587?tls=required`. Unset or empty: email is off. Links need `HUXLEY_AUTH__PUBLIC_URL`. |
+| `HUXLEY_EMAIL__FROM` | (required with SMTP) | From address, e.g. `Huxley <huxley@example.com>` |
 | `HUXLEY_CRYPTO__RETIRED_KEKS` | (empty) | Previous KEKs as a list, e.g. `[old1, old2]`, during rotation |
 | `HUXLEY_HTTP__BIND` | `0.0.0.0:8080` | API listen address |
 | `HUXLEY_MIGRATE_ON_START` | `false` | Apply migrations at startup |

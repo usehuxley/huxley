@@ -24,6 +24,7 @@ export const load: PageServerLoad = async (event) => {
 		mfa: mfa.data,
 		passkeys: passkeys.data,
 		passkeysEnabled: methods.data?.passkeys ?? false,
+		emailEnabled: methods.data?.passwordReset ?? false,
 		tokens: tokens.data ?? [],
 		permissions: permissions.data ?? []
 	};
@@ -170,6 +171,14 @@ export const actions: Actions = {
 			return fail(response.status, { tokens: { error: 'Could not revoke the token.' } });
 		}
 		return { tokens: { revoked: true } };
+	},
+
+	sendVerification: async (event) => {
+		const { response } = await api(event).POST('/api/v1/auth/email/verification');
+		if (response.status !== 202) {
+			return fail(response.status, { verification: { error: 'Could not send the email.' } });
+		}
+		return { verification: { sent: true } };
 	},
 
 	revokeSession: async (event) => {

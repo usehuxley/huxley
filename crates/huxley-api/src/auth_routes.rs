@@ -28,6 +28,10 @@ pub fn routes() -> Router<AppState> {
         .route("/login/passkey/options", post(login_passkey_options))
         .route("/login/passkey", post(login_passkey))
         .route("/methods", get(methods))
+        .route("/password-reset", post(request_password_reset))
+        .route("/password-reset/confirm", post(confirm_password_reset))
+        .route("/email/verification", post(request_email_verification))
+        .route("/email/verify", post(verify_email))
         .route("/logout", post(logout))
         .route("/me", get(me))
         .route("/password", post(change_password))
@@ -57,6 +61,8 @@ pub struct UserView {
     pub mfa_enabled: bool,
     /// `human` or `service` (a service account, which uses API tokens).
     pub kind: String,
+    /// The user has proved they receive mail at `email`.
+    pub email_verified: bool,
 }
 
 impl From<User> for UserView {
@@ -72,6 +78,7 @@ impl From<User> for UserView {
             .to_owned(),
             last_login_at: user.last_login_at,
             mfa_enabled: user.mfa_enabled,
+            email_verified: user.email_verified,
             kind: match user.kind {
                 huxley_auth::UserKind::Human => "human",
                 huxley_auth::UserKind::Service => "service",
@@ -150,6 +157,15 @@ pub(crate) fn map_auth_error(error: AuthError) -> ApiError {
         AuthError::WrongCurrentPassword => {
             ApiError::validation().with_field_error("/password", "The password is incorrect.")
         }
+        AuthError::InvalidEmailToken => ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "invalid-link",
+            "This link is invalid or has expired",
+        )
+        .with_detail("Links work once and expire. Ask for a new one."),
+        AuthError::EmailNotConfigured => ApiError::unavailable(
+            "Email isn't configured on this server (email.smtp_url and auth.public_url).",
+        ),
         AuthError::InvalidCredentials => ApiError::new(
             StatusCode::UNAUTHORIZED,
             "invalid-credentials",
@@ -310,6 +326,8 @@ pub struct MfaChallengeRequest {
 pub struct AuthMethodsView {
     /// Passkeys are configured (`auth.public_url` is set).
     pub passkeys: bool,
+    /// "Forgot password" works (email and `auth.public_url` are configured).
+    pub password_reset: bool,
 }
 
 /// Completes sign-in with a second factor. Send exactly one of `code` or
@@ -427,12 +445,119 @@ pub async fn login_passkey(
     Ok(signed_in(&state, success, None))
 }
 
+#[derive(Debug, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct PasswordResetRequest {
+    pub email: String,
+}
+
+#[derive(Debug, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ConfirmPasswordResetRequest {
+    /// From the emailed link.
+    pub token: String,
+    #[schema(format = Password)]
+    pub new_password: String,
+}
+
+#[derive(Debug, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct VerifyEmailRequest {
+    /// From the emailed link.
+    pub token: String,
+}
+
+/// Emails a password reset link if the address belongs to an account with a
+/// password. Responds the same way whether or not it does.
+#[utoipa::path(post, path = "/api/v1/auth/password-reset", tag = "auth",
+    request_body = PasswordResetRequest,
+    responses(
+        (status = 202, description = "If the account exists and can reset, a link is on its way"),
+        (status = 429, body = ApiError, content_type = "application/problem+json"),
+        (status = 503, description = "Email isn't configured", body = ApiError, content_type = "application/problem+json"),
+    ))]
+pub async fn request_password_reset(
+    State(state): State<AppState>,
+    ClientInfo(ctx): ClientInfo,
+    Json(body): Json<PasswordResetRequest>,
+) -> ApiResult<StatusCode> {
+    rate_limit(&state, &ctx)?;
+    state
+        .auth
+        .request_password_reset(&ctx, &body.email)
+        .await
+        .map_err(map_auth_error)?;
+    Ok(StatusCode::ACCEPTED)
+}
+
+/// Sets a new password with a reset or invitation link. Signs out every
+/// session; sign in again afterwards.
+#[utoipa::path(post, path = "/api/v1/auth/password-reset/confirm", tag = "auth",
+    request_body = ConfirmPasswordResetRequest,
+    responses(
+        (status = 204, description = "Password set"),
+        (status = 400, description = "Invalid or expired link", body = ApiError, content_type = "application/problem+json"),
+        (status = 422, description = "Password too weak", body = ApiError, content_type = "application/problem+json"),
+    ))]
+pub async fn confirm_password_reset(
+    State(state): State<AppState>,
+    ClientInfo(ctx): ClientInfo,
+    Json(body): Json<ConfirmPasswordResetRequest>,
+) -> ApiResult<StatusCode> {
+    rate_limit(&state, &ctx)?;
+    state
+        .auth
+        .reset_password(&ctx, &body.token, &body.new_password)
+        .await
+        .map_err(|e| match e {
+            AuthError::WeakPassword(e) => {
+                ApiError::validation().with_field_error("/newPassword", e.to_string())
+            }
+            other => map_auth_error(other),
+        })?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+/// Emails the signed-in user a link to verify their address.
+#[utoipa::path(post, path = "/api/v1/auth/email/verification", tag = "auth",
+    responses((status = 202), (status = 503, body = ApiError, content_type = "application/problem+json")))]
+pub async fn request_email_verification(
+    State(state): State<AppState>,
+    user: CurrentUser,
+) -> ApiResult<StatusCode> {
+    state
+        .auth
+        .request_email_verification(&user.ctx, &user.auth.user)
+        .await
+        .map_err(map_auth_error)?;
+    Ok(StatusCode::ACCEPTED)
+}
+
+/// Verifies an address with the emailed link. No session needed.
+#[utoipa::path(post, path = "/api/v1/auth/email/verify", tag = "auth",
+    request_body = VerifyEmailRequest,
+    responses((status = 204), (status = 400, body = ApiError, content_type = "application/problem+json")))]
+pub async fn verify_email(
+    State(state): State<AppState>,
+    ClientInfo(ctx): ClientInfo,
+    Json(body): Json<VerifyEmailRequest>,
+) -> ApiResult<StatusCode> {
+    rate_limit(&state, &ctx)?;
+    state
+        .auth
+        .verify_email(&ctx, &body.token)
+        .await
+        .map_err(map_auth_error)?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
 /// Sign-in methods offered by this server.
 #[utoipa::path(get, path = "/api/v1/auth/methods", tag = "auth",
     responses((status = 200, body = AuthMethodsView)))]
 pub async fn methods(State(state): State<AppState>) -> Json<AuthMethodsView> {
     Json(AuthMethodsView {
         passkeys: state.auth.passkeys_enabled(),
+        password_reset: state.auth.email_enabled(),
     })
 }
 

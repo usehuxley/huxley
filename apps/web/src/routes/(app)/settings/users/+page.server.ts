@@ -11,7 +11,8 @@ export const load: PageServerLoad = async (event) => {
 	});
 	if (response.status === 403) error(403, 'You do not have access to users.');
 	if (!data) error(503, 'Could not load users.');
-	return { page: data, cursor };
+	const methods = await api(event).GET('/api/v1/auth/methods');
+	return { page: data, cursor, emailEnabled: methods.data?.passwordReset ?? false };
 };
 
 export const actions: Actions = {
@@ -20,8 +21,9 @@ export const actions: Actions = {
 		const email = formString(form, 'email');
 		const displayName = formString(form, 'displayName');
 		const password = formString(form, 'password');
+		const invite = form.get('invite') === 'on';
 		const { data, error: problem } = await api(event).POST('/api/v1/users', {
-			body: { email, displayName, password: password || null }
+			body: { email, displayName, password: invite ? null : password || null, invite }
 		});
 		if (!data) {
 			return fail(400, {
@@ -32,7 +34,8 @@ export const actions: Actions = {
 		}
 		return {
 			created: { id: data.user.id, email: data.user.email },
-			generatedPassword: data.generatedPassword ?? null
+			generatedPassword: data.generatedPassword ?? null,
+			invited: data.invited
 		};
 	}
 };

@@ -21,6 +21,40 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
+	'/api/v1/auth/email/verification': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/** Emails the signed-in user a link to verify their address. */
+		post: operations['request_email_verification'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/auth/email/verify': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/** Verifies an address with the emailed link. No session needed. */
+		post: operations['verify_email'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
 	'/api/v1/auth/login': {
 		parameters: {
 			query?: never;
@@ -384,6 +418,46 @@ export interface paths {
 		put?: never;
 		/** Changes the signed-in user's password. Signs out all their other sessions. */
 		post: operations['change_password'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/auth/password-reset': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/**
+		 * Emails a password reset link if the address belongs to an account with a
+		 *     password. Responds the same way whether or not it does.
+		 */
+		post: operations['request_password_reset'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/auth/password-reset/confirm': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/**
+		 * Sets a new password with a reset or invitation link. Signs out every
+		 *     session; sign in again afterwards.
+		 */
+		post: operations['confirm_password_reset'];
 		delete?: never;
 		options?: never;
 		head?: never;
@@ -1094,6 +1168,8 @@ export interface components {
 		AuthMethodsView: {
 			/** @description Passkeys are configured (`auth.public_url` is set). */
 			passkeys: boolean;
+			/** @description "Forgot password" works (email and `auth.public_url` are configured). */
+			passwordReset: boolean;
 		};
 		/** @description The first half of a WebAuthn ceremony. */
 		CeremonyView: {
@@ -1114,6 +1190,12 @@ export interface components {
 			currentPassword: string;
 			/** Format: password */
 			newPassword: string;
+		};
+		ConfirmPasswordResetRequest: {
+			/** Format: password */
+			newPassword: string;
+			/** @description From the emailed link. */
+			token: string;
 		};
 		ConfirmTotpRequest: {
 			/** @description A current six-digit code from the app. */
@@ -1164,14 +1246,22 @@ export interface components {
 			displayName: string;
 			email: string;
 			/**
+			 * @description Email the user an invitation to choose their own password instead.
+			 *     Needs email to be configured.
+			 */
+			invite?: boolean;
+			/**
 			 * Format: password
-			 * @description Initial password. If omitted, one is generated and returned once.
+			 * @description Initial password. If omitted (and not inviting), one is generated and
+			 *     returned once.
 			 */
 			password?: string | null;
 		};
 		CreateUserResponse: {
 			/** @description Present only when Huxley generated the password. Shown once. */
 			generatedPassword?: string | null;
+			/** @description An invitation email was sent. */
+			invited: boolean;
 			user: components['schemas']['UserView'];
 		};
 		CreatedTokenView: components['schemas']['ApiTokenView'] & {
@@ -1367,6 +1457,9 @@ export interface components {
 			 * @description The user's current password, re-checked before the change.
 			 */
 			password: string;
+		};
+		PasswordResetRequest: {
+			email: string;
 		};
 		Permission: {
 			description: string;
@@ -1603,6 +1696,8 @@ export interface components {
 		UserView: {
 			displayName: string;
 			email: string;
+			/** @description The user has proved they receive mail at `email`. */
+			emailVerified: boolean;
 			/** Format: uuid */
 			id: string;
 			/** @description `human` or `service` (a service account, which uses API tokens). */
@@ -1613,6 +1708,10 @@ export interface components {
 			mfaEnabled: boolean;
 			/** @description `active` or `disabled`. */
 			status: string;
+		};
+		VerifyEmailRequest: {
+			/** @description From the emailed link. */
+			token: string;
 		};
 	};
 	responses: never;
@@ -1648,6 +1747,60 @@ export interface operations {
 				};
 			};
 			403: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	request_email_verification: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			202: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content?: never;
+			};
+			503: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	verify_email: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['VerifyEmailRequest'];
+			};
+		};
+		responses: {
+			204: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content?: never;
+			};
+			400: {
 				headers: {
 					[name: string]: unknown;
 				};
@@ -2367,6 +2520,85 @@ export interface operations {
 				content?: never;
 			};
 			/** @description Current password wrong or new password too weak */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	request_password_reset: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['PasswordResetRequest'];
+			};
+		};
+		responses: {
+			/** @description If the account exists and can reset, a link is on its way */
+			202: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content?: never;
+			};
+			429: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+			/** @description Email isn't configured */
+			503: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	confirm_password_reset: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['ConfirmPasswordResetRequest'];
+			};
+		};
+		responses: {
+			/** @description Password set */
+			204: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content?: never;
+			};
+			/** @description Invalid or expired link */
+			400: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+			/** @description Password too weak */
 			422: {
 				headers: {
 					[name: string]: unknown;

@@ -15,6 +15,7 @@ getrandom.workspace = true
 huxley-core.workspace = true
 huxley-crypto.workspace = true
 huxley-db.workspace = true
+huxley-email.workspace = true
 ring.workspace = true
 serde.workspace = true
 serde_json.workspace = true
@@ -31,6 +32,7 @@ zeroize.workspace = true
 
 [dev-dependencies]
 huxley-crypto = { workspace = true, features = ["testing"] }
+huxley-email.workspace = true
 huxley-db = { workspace = true, features = ["testing"] }
 passkey = { version = "0.6", features = ["rust-crypto"] }
 async-trait = "0.1"

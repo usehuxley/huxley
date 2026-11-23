@@ -90,6 +90,9 @@ jobs:
         options: >-
           --health-cmd "pg_isready -U huxley -d huxley"
           --health-interval 2s --health-timeout 5s --health-retries 30
+      mailpit:
+        image: axllent/mailpit:v1.34.0
+        ports: ["1025:1025", "8025:8025"]
     env:
       HUXLEY_DATABASE__URL: postgres://huxley:huxley@localhost:5432/huxley
       # Throwaway key for the CI database only.
@@ -102,6 +105,10 @@ jobs:
       HUXLEY_HTTP__LOGIN_ATTEMPTS_PER_MINUTE: "200"
       # Passkeys are bound to the origin the browser sees: Playwright's preview server.
       HUXLEY_AUTH__PUBLIC_URL: http://localhost:4173
+      # Real SMTP to Mailpit; the email e2e tests read it through its API.
+      HUXLEY_EMAIL__SMTP_URL: smtp://127.0.0.1:1025
+      HUXLEY_EMAIL__FROM: Huxley <huxley@example.com>
+      MAILPIT_URL: http://127.0.0.1:8025
       HUXLEY_API_URL: http://127.0.0.1:8080
       E2E_EMAIL: e2e@example.com
       E2E_PASSWORD: e2e test passphrase

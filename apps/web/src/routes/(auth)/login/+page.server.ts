@@ -23,6 +23,9 @@ export const load: PageServerLoad = async (event) => {
 	]);
 	return {
 		passkeysEnabled: methods?.passkeys ?? false,
+		passwordReset: methods?.passwordReset ?? false,
+		notice:
+			url.searchParams.get('reset') === 'done' ? 'Your password is set. Sign in with it.' : null,
 		ssoProviders: sso ?? [],
 		ssoError: ssoErrorMessage(url.searchParams.get('sso_error')),
 		mfaMethods: getChallenge(cookies)?.methods ?? null

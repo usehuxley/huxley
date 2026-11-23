@@ -8,8 +8,9 @@ use utoipa::OpenApi;
 
 use crate::audit_routes::{self, AuditEventView, AuditPage};
 use crate::auth_routes::{
-    self, AuthMethodsView, ChangePasswordRequest, LoginMfaRequest, LoginRequest, LoginResponse,
-    MeView, MfaChallengeRequest, MfaMethodView, PasskeyAnswer, SessionView, UserView,
+    self, AuthMethodsView, ChangePasswordRequest, ConfirmPasswordResetRequest, LoginMfaRequest,
+    LoginRequest, LoginResponse, MeView, MfaChallengeRequest, MfaMethodView, PasskeyAnswer,
+    PasswordResetRequest, SessionView, UserView, VerifyEmailRequest,
 };
 use crate::health::{self, HealthStatus};
 use crate::mfa_routes::{
@@ -55,6 +56,10 @@ use crate::user_routes::{
         auth_routes::login_passkey_options,
         auth_routes::login_passkey,
         auth_routes::methods,
+        auth_routes::request_password_reset,
+        auth_routes::confirm_password_reset,
+        auth_routes::request_email_verification,
+        auth_routes::verify_email,
         passkey_routes::list,
         passkey_routes::begin_registration,
         passkey_routes::finish_registration,
@@ -125,6 +130,9 @@ use crate::user_routes::{
         LoginResponse,
         LoginMfaRequest,
         PasskeyAnswer,
+        PasswordResetRequest,
+        ConfirmPasswordResetRequest,
+        VerifyEmailRequest,
         MfaChallengeRequest,
         AuthMethodsView,
         PasskeyView,

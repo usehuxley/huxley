@@ -20,6 +20,7 @@ huxley-core = { path = "crates/huxley-core" }
 huxley-crypto = { path = "crates/huxley-crypto" }
 huxley-sso = { path = "crates/huxley-sso" }
 huxley-db = { path = "crates/huxley-db" }
+huxley-email = { path = "crates/huxley-email" }
 huxley-modules = { path = "crates/huxley-modules" }
 huxley-orgs = { path = "crates/huxley-orgs" }
 huxley-telemetry = { path = "crates/huxley-telemetry" }
@@ -50,6 +51,7 @@ zeroize = "1.8"
 # MPL-2.0: licence exception approved for these crates only (ADR-012, deny.toml).
 webauthn-rs = { version = "0.6", features = ["danger-allow-state-serialisation", "conditional-ui"] }
 url = "2"
+lettre = { version = "0.11", default-features = false, features = ["builder", "smtp-transport", "pool", "hostname", "tokio1-rustls-tls"] }
 openidconnect = { version = "4.1", default-features = false, features = ["reqwest", "rustls-tls", "accept-string-booleans"] }
 
 # Config / CLI / errors
