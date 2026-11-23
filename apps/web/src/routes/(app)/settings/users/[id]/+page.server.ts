@@ -7,12 +7,16 @@ import type { Actions, PageServerLoad } from './$types';
 export const load: PageServerLoad = async (event) => {
 	const client = api(event);
 	const id = event.params.id;
-	const [person, assignments, roles, orgs, teams] = await Promise.all([
+	const orgParam = event.url.searchParams.get('org');
+	const [person, assignments, roles, orgs, teams, effective] = await Promise.all([
 		client.GET('/api/v1/users/{id}', { params: { path: { id } } }),
 		client.GET('/api/v1/users/{id}/assignments', { params: { path: { id } } }),
 		client.GET('/api/v1/roles'),
 		client.GET('/api/v1/orgs'),
-		client.GET('/api/v1/teams/of-user/{user_id}', { params: { path: { user_id: id } } })
+		client.GET('/api/v1/teams/of-user/{user_id}', { params: { path: { user_id: id } } }),
+		client.GET('/api/v1/users/{id}/effective-permissions', {
+			params: { path: { id }, query: { orgId: orgParam ?? undefined } }
+		})
 	]);
 	if (person.response.status === 404) error(404, 'User not found.');
 	if (!person.data || !assignments.data) error(503, 'Could not load this user.');
@@ -22,7 +26,9 @@ export const load: PageServerLoad = async (event) => {
 		// Users who can't assign roles may still view; the API decides.
 		roles: roles.data ?? [],
 		orgs: (orgs.data ?? []).filter((o) => o.status === 'active'),
-		teams: teams.data ?? []
+		teams: teams.data ?? [],
+		effective: effective.data ?? null,
+		effectiveOrg: orgParam
 	};
 };
 

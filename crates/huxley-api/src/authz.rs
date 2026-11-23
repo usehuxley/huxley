@@ -167,6 +167,17 @@ pub fn map_org(error: OrgError) -> ApiError {
 pub fn map_authz(error: AuthzError) -> ApiError {
     match error {
         AuthzError::Forbidden => ApiError::forbidden(),
+        AuthzError::SystemRole => ApiError::conflict("System roles can't be changed or deleted."),
+        AuthzError::RoleInUse(n) => ApiError::conflict(format!(
+            "The role is assigned {n} time(s). Remove those assignments first."
+        )),
+        AuthzError::RoleKeyTaken => ApiError::conflict("A role with this key already exists."),
+        AuthzError::InvalidRole(message) => {
+            ApiError::validation().with_field_error("/permissions", message)
+        }
+        AuthzError::Escalation(missing) => ApiError::forbidden().with_detail(format!(
+            "You can only grant permissions you hold yourself. Missing: {missing}."
+        )),
         AuthzError::OwnerToTeam => {
             ApiError::conflict("The Owner role is granted to individual people, not teams.")
         }

@@ -11,6 +11,7 @@
 		organizations: resolve('/(app)/settings/organizations'),
 		users: resolve('/(app)/settings/users'),
 		teams: resolve('/(app)/settings/teams'),
+		roles: resolve('/(app)/settings/roles'),
 		'service-accounts': resolve('/(app)/settings/service-accounts'),
 		audit: resolve('/(app)/settings/audit'),
 		fields: resolve('/(app)/settings/fields'),

@@ -9,8 +9,10 @@
 //! conditions arrive, evaluation moves to Cedar (ADR-006) behind the same
 //! `Principal::can` interface.
 
+pub mod explain;
 pub mod mfa_policy;
 pub mod permissions;
+pub mod roles;
 pub mod teams;
 
 use huxley_core::RequestContext;
@@ -141,6 +143,16 @@ pub enum AuthzError {
     ServiceAccountOwner,
     #[error("the Owner role can't be assigned to a team")]
     OwnerToTeam,
+    #[error("system roles can't be changed")]
+    SystemRole,
+    #[error("the role is assigned {0} time(s); remove those assignments first")]
+    RoleInUse(i64),
+    #[error("a role with this key already exists")]
+    RoleKeyTaken,
+    #[error("{0}")]
+    InvalidRole(String),
+    #[error("you can only grant permissions you hold yourself: {0}")]
+    Escalation(String),
     #[error("team not found")]
     TeamNotFound,
     #[error("user not found")]
@@ -170,6 +182,7 @@ impl From<sqlx::Error> for AuthzError {
             }
             Some("role_assignments_owner_not_team") => Self::OwnerToTeam,
             Some("teams_name_unique") => Self::TeamNameTaken,
+            Some("roles_key_key") => Self::RoleKeyTaken,
             _ => Self::Db(DbError::Sqlx(error)),
         }
     }
