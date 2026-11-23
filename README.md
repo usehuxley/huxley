@@ -73,6 +73,8 @@ The preset chooses which feature modules start on: `automation` (none: Huxley as
 
 Workflows (the Workflows section of the staff app) automate tasks on a schedule, from webhooks, from events, or on demand; see [docs/workflows.md](docs/workflows.md).
 
+Integrations are APIs imported from their OpenAPI or Swagger specs, for workflows to call; see [docs/integrations.md](docs/integrations.md).
+
 Then open https://localhost (staff app) and https://portal.localhost (client portal). Set `HUXLEY_DOMAIN` and `HUXLEY_PORTAL_DOMAIN` in `.env` for real hostnames; Caddy obtains certificates automatically.
 
 ### Rotating the key-encryption key

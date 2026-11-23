@@ -16,6 +16,11 @@ const METHODS: [&str; 8] = [
 
 /// Imports a spec given as JSON or YAML text.
 pub fn import(text: &str) -> Result<Imported, ImportError> {
+    import_value(parse(text)?)
+}
+
+/// Reads a spec's JSON or YAML text, within the size limit.
+pub fn parse(text: &str) -> Result<Json, ImportError> {
     if text.len() > MAX_SPEC_BYTES {
         return Err(ImportError::TooLarge);
     }
@@ -29,7 +34,7 @@ pub fn import(text: &str) -> Result<Imported, ImportError> {
         serde_saphyr::from_str_with_options(text, options)
             .map_err(|e| ImportError::Parse(e.to_string()))?
     };
-    import_value(doc)
+    Ok(doc)
 }
 
 /// Imports a spec that's already been parsed.

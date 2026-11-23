@@ -13,6 +13,7 @@ pub mod entity_routes;
 pub mod health;
 mod hook_routes;
 pub mod idempotency;
+mod integration_routes;
 pub mod mfa_routes;
 pub mod module_routes;
 pub mod notification_routes;

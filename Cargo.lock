@@ -1700,6 +1700,7 @@ dependencies = [
  "huxley-entity",
  "huxley-expr",
  "huxley-hwf",
+ "huxley-integrations",
  "huxley-modules",
  "huxley-notify",
  "huxley-orgs",
@@ -1923,11 +1924,17 @@ dependencies = [
 name = "huxley-integrations"
 version = "0.1.0"
 dependencies = [
+ "huxley-core",
+ "huxley-db",
  "serde",
  "serde-saphyr",
  "serde_json",
+ "sqlx",
  "thiserror 2.0.21",
+ "time",
+ "tokio",
  "utoipa",
+ "uuid",
 ]
 
 [[package]]

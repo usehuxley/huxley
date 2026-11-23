@@ -13,13 +13,14 @@
 
 mod import;
 mod refs;
+pub mod store;
 mod swagger;
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use serde_json::Value as Json;
 use utoipa::ToSchema;
 
-pub use import::{import, import_value};
+pub use import::{import, import_value, parse};
 
 /// Largest spec accepted, in bytes.
 pub const MAX_SPEC_BYTES: usize = 20 * 1024 * 1024;
@@ -39,7 +40,7 @@ pub enum ImportError {
 }
 
 /// An API, as Huxley uses it.
-#[derive(Debug, Clone, PartialEq, Serialize, ToSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct Definition {
     pub title: String,
@@ -54,7 +55,7 @@ pub struct Definition {
 }
 
 /// A base URL, possibly with `{variables}` that connections fill in.
-#[derive(Debug, Clone, PartialEq, Serialize, ToSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct Server {
     pub url: String,
@@ -62,7 +63,7 @@ pub struct Server {
     pub variables: Vec<ServerVariable>,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, ToSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ServerVariable {
     pub name: String,
@@ -73,7 +74,7 @@ pub struct ServerVariable {
 }
 
 /// How a connection authenticates.
-#[derive(Debug, Clone, PartialEq, Serialize, ToSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct AuthScheme {
     /// The spec's name for it (the `securitySchemes` key).
@@ -83,7 +84,7 @@ pub struct AuthScheme {
     pub kind: AuthKind,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, ToSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema)]
 #[serde(tag = "type", rename_all = "camelCase")]
 pub enum AuthKind {
     /// A key sent in a header, query parameter or cookie.
@@ -113,7 +114,7 @@ pub enum AuthKind {
     },
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, ToSchema)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "lowercase")]
 pub enum ParamLocation {
     Path,
@@ -123,7 +124,7 @@ pub enum ParamLocation {
 }
 
 /// One operation.
-#[derive(Debug, Clone, PartialEq, Serialize, ToSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct Action {
     /// Unique in the definition: the `operationId` made safe, or
@@ -150,7 +151,7 @@ pub struct Action {
     pub deprecated: bool,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, ToSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct Parameter {
     pub name: String,
@@ -159,7 +160,7 @@ pub struct Parameter {
     pub description: Option<String>,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, ToSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct Body {
     /// e.g. `application/json`, `application/x-www-form-urlencoded`.
@@ -168,7 +169,7 @@ pub struct Body {
 }
 
 /// Something the importer skipped or guessed, and where.
-#[derive(Debug, Clone, PartialEq, Serialize, ToSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema)]
 pub struct Warning {
     /// A JSON pointer into the spec, e.g. `/paths/~1users/get`.
     pub pointer: String,
@@ -176,7 +177,7 @@ pub struct Warning {
 }
 
 /// A definition and what came up while importing it.
-#[derive(Debug, Clone, PartialEq, Serialize, ToSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema)]
 pub struct Imported {
     pub definition: Definition,
     pub warnings: Vec<Warning>,

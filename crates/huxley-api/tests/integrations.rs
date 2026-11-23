@@ -1,0 +1,260 @@
+//! Integration endpoints over HTTP, against a real PostgreSQL.
+
+use axum::body::Body;
+use http::{Request, StatusCode};
+use http_body_util::BodyExt as _;
+use huxley_api::{ApiConfig, AppState, router};
+use huxley_auth::{AuthConfig, AuthService};
+use huxley_core::{RequestContext, Via};
+use huxley_crypto::Crypto;
+use huxley_db::testing::{TestPools, ensure_root, pools, unique};
+use huxley_db::{OrgScope, begin_scoped};
+use serde_json::{Value, json};
+use tower::ServiceExt as _;
+use uuid::Uuid;
+
+const PASSWORD: &str = "integration api passphrase";
+
+const SPEC_V1: &str = r#"
+openapi: 3.0.3
+info: { title: Widget Service, version: "1.0" }
+servers: [{ url: "https://widgets.example.com" }]
+components:
+  securitySchemes:
+    key: { type: apiKey, in: header, name: X-Key }
+security: [{ key: [] }]
+paths:
+  /widgets:
+    get:
+      operationId: listWidgets
+      responses:
+        "200":
+          description: ok
+          content: { application/json: { schema: { type: array, items: { type: string } } } }
+  /widgets/{id}:
+    get:
+      operationId: listWidgets
+      responses: { "200": { description: ok } }
+"#;
+
+const SPEC_V2: &str = r#"{
+  "openapi": "3.1.0",
+  "info": { "title": "Widget Service", "version": "2.0" },
+  "paths": { "/widgets": { "post": { "operationId": "makeWidget", "responses": { "201": { "description": "made" } } } } }
+}"#;
+
+fn crypto(pools: &TestPools) -> Crypto {
+    Crypto::new(pools.app.clone(), huxley_crypto::testing::key_ring())
+}
+
+fn app(pools: &TestPools) -> axum::Router {
+    let auth = AuthService::new(pools.app.clone(), AuthConfig::default(), crypto(pools));
+    let config = ApiConfig {
+        login_attempts_per_minute: 1000,
+        ..ApiConfig::default()
+    };
+    router(AppState::new(
+        pools.app.clone(),
+        auth,
+        crypto(pools),
+        config,
+    ))
+}
+
+async fn user(pools: &TestPools, owner: bool) -> (Uuid, String) {
+    let email = format!("{}@example.com", unique("int").replace(' ', "."));
+    let ctx = RequestContext::system(Via::System);
+    let mut tx = begin_scoped(&pools.app, &OrgScope::System).await.unwrap();
+    let u = huxley_auth::create_user(&mut tx, &ctx, &email, "Integration User", PASSWORD)
+        .await
+        .unwrap();
+    if owner {
+        huxley_authz::grant_root_owner(&mut tx, &ctx, u.id)
+            .await
+            .unwrap();
+    }
+    tx.commit().await.unwrap();
+    (u.id, email)
+}
+
+async fn call(
+    app: &axum::Router,
+    method: &str,
+    uri: &str,
+    cookie: &str,
+    body: Option<Value>,
+) -> (StatusCode, Value) {
+    let req = Request::builder()
+        .method(method)
+        .uri(uri)
+        .header("x-requested-with", "huxley")
+        .header("cookie", cookie);
+    let req = match body {
+        Some(b) => req
+            .header("content-type", "application/json")
+            .body(Body::from(b.to_string())),
+        None => req.body(Body::empty()),
+    }
+    .unwrap();
+    let res = app.clone().oneshot(req).await.unwrap();
+    let status = res.status();
+    let bytes = res.into_body().collect().await.unwrap().to_bytes();
+    (
+        status,
+        serde_json::from_slice(&bytes).unwrap_or(Value::Null),
+    )
+}
+
+async fn login(app: &axum::Router, email: &str) -> String {
+    let req = Request::post("/api/v1/auth/login")
+        .header("x-requested-with", "huxley")
+        .header("content-type", "application/json")
+        .body(Body::from(
+            json!({ "email": email, "password": PASSWORD }).to_string(),
+        ))
+        .unwrap();
+    let res = app.clone().oneshot(req).await.unwrap();
+    assert_eq!(res.status(), StatusCode::OK);
+    let cookie = res.headers()["set-cookie"].to_str().unwrap();
+    cookie.split(';').next().unwrap().to_owned()
+}
+
+async fn provider_org(pools: &TestPools) -> Uuid {
+    let root = ensure_root(pools).await;
+    let ctx = RequestContext::system(Via::System);
+    let mut tx = begin_scoped(&pools.app, &OrgScope::System).await.unwrap();
+    let org = huxley_orgs::create(
+        &mut tx,
+        &ctx,
+        root,
+        huxley_orgs::OrgKind::Provider,
+        &unique("Int"),
+    )
+    .await
+    .unwrap();
+    tx.commit().await.unwrap();
+    org.id
+}
+
+#[tokio::test]
+async fn specs_import_as_versioned_integrations() {
+    let Some(pools) = pools().await else { return };
+    let app = app(&pools);
+    let org = provider_org(&pools).await;
+    let owner = login(&app, &user(&pools, true).await.1).await;
+
+    let (status, created) = call(
+        &app,
+        "POST",
+        "/api/v1/integrations",
+        &owner,
+        Some(json!({ "orgId": org, "spec": SPEC_V1 })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED, "{created}");
+    let id = created["id"].as_str().unwrap().to_owned();
+    assert_eq!(created["key"], "widget-service");
+    assert_eq!(created["currentVersion"], 1);
+    let actions = created["definition"]["actions"].as_array().unwrap();
+    assert_eq!(actions.len(), 2);
+    assert_eq!(actions[0]["auth"], json!(["key"]));
+    let warnings: Vec<&str> = created["warnings"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|w| w["message"].as_str().unwrap())
+        .collect();
+    assert_eq!(
+        warnings,
+        vec![
+            "operation id \"listWidgets\" is used twice; this one is \"listWidgets_2\"",
+            "path parameter {id} isn't declared; added as a string",
+        ]
+    );
+
+    // The same key again in this org is a conflict; a bad spec is a 422.
+    let again = json!({ "orgId": org, "spec": SPEC_V1 });
+    let (status, _) = call(&app, "POST", "/api/v1/integrations", &owner, Some(again)).await;
+    assert_eq!(status, StatusCode::CONFLICT);
+    let bad = json!({ "orgId": org, "key": "other", "spec": "title: not a spec" });
+    let (status, problem) = call(&app, "POST", "/api/v1/integrations", &owner, Some(bad)).await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{problem}");
+    assert_eq!(problem["errors"][0]["pointer"], "spec");
+
+    // A newer spec becomes version 2.
+    let (status, updated) = call(
+        &app,
+        "PUT",
+        &format!("/api/v1/integrations/{id}/spec"),
+        &owner,
+        Some(json!({ "spec": SPEC_V2 })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{updated}");
+    assert_eq!(updated["currentVersion"], 2);
+    assert_eq!(updated["definition"]["actions"][0]["key"], "makeWidget");
+    let (_, versions) = call(
+        &app,
+        "GET",
+        &format!("/api/v1/integrations/{id}/versions"),
+        &owner,
+        None,
+    )
+    .await;
+    assert_eq!(versions[0]["version"], 2);
+    assert_eq!(versions[0]["sourceFormat"], "3.1.0");
+    assert_eq!(versions[1]["apiVersion"], "1.0");
+    assert_eq!(versions[1]["actions"], 2);
+    assert_eq!(versions[1]["warnings"], 2);
+
+    let (_, list) = call(&app, "GET", "/api/v1/integrations", &owner, None).await;
+    assert!(
+        list.as_array()
+            .unwrap()
+            .iter()
+            .any(|i| i["id"] == id.as_str())
+    );
+}
+
+#[tokio::test]
+async fn people_without_access_see_and_change_nothing() {
+    let Some(pools) = pools().await else { return };
+    let app = app(&pools);
+    let org = provider_org(&pools).await;
+    let owner = login(&app, &user(&pools, true).await.1).await;
+    let (_, created) = call(
+        &app,
+        "POST",
+        "/api/v1/integrations",
+        &owner,
+        Some(json!({ "orgId": org, "spec": SPEC_V1 })),
+    )
+    .await;
+    let id = created["id"].as_str().unwrap().to_owned();
+
+    let stranger = login(&app, &user(&pools, false).await.1).await;
+    let uri = format!("/api/v1/integrations/{id}");
+    assert_eq!(
+        call(&app, "GET", &uri, &stranger, None).await.0,
+        StatusCode::NOT_FOUND
+    );
+    let (_, list) = call(&app, "GET", "/api/v1/integrations", &stranger, None).await;
+    assert!(
+        !list
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|i| i["id"] == id.as_str())
+    );
+    let import = json!({ "orgId": org, "key": "mine", "spec": SPEC_V1 });
+    // An org they can't see doesn't exist for them.
+    let (status, _) = call(
+        &app,
+        "POST",
+        "/api/v1/integrations",
+        &stranger,
+        Some(import),
+    )
+    .await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+}

@@ -734,6 +734,78 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
+	'/api/v1/integrations': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** Integrations the caller can view. */
+		get: operations['list_integrations'];
+		put?: never;
+		/**
+		 * Imports a spec as a new integration. Problems the importer worked
+		 *     around are returned as `warnings`; an unusable spec is a 422 on `spec`.
+		 */
+		post: operations['import_integration'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/integrations/{id}': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** An integration with its current definition. */
+		get: operations['get_integration'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/integrations/{id}/spec': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		/** Imports a newer spec as the integration's next version. */
+		put: operations['update_integration_spec'];
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/integrations/{id}/versions': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** Every imported version, newest first. */
+		get: operations['list_integration_versions'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
 	'/api/v1/jobs/dead': {
 		parameters: {
 			query?: never;
@@ -1954,6 +2026,33 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
 	schemas: {
+		/** @description One operation. */
+		Action: {
+			/**
+			 * @description Auth scheme keys any one of which works; empty means none is needed
+			 *     (or the spec doesn't say).
+			 */
+			auth: string[];
+			body?: components['schemas']['Body'] | null;
+			deprecated: boolean;
+			description?: string | null;
+			/** @description The first tag, for grouping. */
+			group?: string | null;
+			/** @description One object schema: each parameter by name, plus `body`. */
+			inputSchema: Record<string, never>;
+			/**
+			 * @description Unique in the definition: the `operationId` made safe, or
+			 *     `<method>_<path>` when there is none.
+			 */
+			key: string;
+			method: string;
+			name: string;
+			/** @description The JSON schema of the first successful response, if it has one. */
+			outputSchema?: Record<string, never> | null;
+			parameters: components['schemas']['Parameter'][];
+			/** @description The path template, e.g. `/users/{id}`. */
+			path: string;
+		};
 		/** @description An RFC 9457 problem details response. */
 		ApiError: {
 			detail?: string | null;
@@ -2057,12 +2156,58 @@ export interface components {
 			items: components['schemas']['AuditEventView'][];
 			nextCursor?: string | null;
 		};
+		AuthKind:
+			| {
+					location: components['schemas']['ParamLocation'];
+					name: string;
+					/** @enum {string} */
+					type: 'apiKey';
+			  }
+			| {
+					/** @enum {string} */
+					type: 'basic';
+			  }
+			| {
+					format?: string | null;
+					/** @enum {string} */
+					type: 'bearer';
+			  }
+			| {
+					scopes: string[];
+					tokenUrl: string;
+					/** @enum {string} */
+					type: 'oAuth2ClientCredentials';
+			  }
+			| {
+					authorizationUrl: string;
+					refreshUrl?: string | null;
+					scopes: string[];
+					tokenUrl: string;
+					/** @enum {string} */
+					type: 'oAuth2AuthorizationCode';
+			  }
+			| {
+					discoveryUrl: string;
+					/** @enum {string} */
+					type: 'openIdConnect';
+			  };
 		/** @description Sign-in methods this server offers, for the sign-in page. */
 		AuthMethodsView: {
 			/** @description Passkeys are configured (`auth.public_url` is set). */
 			passkeys: boolean;
 			/** @description "Forgot password" works (email and `auth.public_url` are configured). */
 			passwordReset: boolean;
+		};
+		/** @description How a connection authenticates. */
+		AuthScheme: components['schemas']['AuthKind'] & {
+			description?: string | null;
+			/** @description The spec's name for it (the `securitySchemes` key). */
+			key: string;
+		};
+		Body: {
+			/** @description e.g. `application/json`, `application/x-www-form-urlencoded`. */
+			contentType: string;
+			required: boolean;
 		};
 		CancelRunResponse: {
 			/** @description False if the run had already finished. */
@@ -2196,6 +2341,18 @@ export interface components {
 			runId?: string | null;
 			stepKey?: string | null;
 		};
+		/** @description An API, as Huxley uses it. */
+		Definition: {
+			actions: components['schemas']['Action'][];
+			authSchemes: components['schemas']['AuthScheme'][];
+			description?: string | null;
+			servers: components['schemas']['Server'][];
+			/** @description Which format it came from: `3.1.0`, `3.0.3`, `2.0`, … */
+			sourceFormat: string;
+			title: string;
+			/** @description The API's own version (`info.version`). */
+			version: string;
+		};
 		/** @description A problem with a workflow document, and where it is. */
 		DiagnosticView: {
 			message: string;
@@ -2287,6 +2444,50 @@ export interface components {
 			/** @description Always `ok` when the response is 200. */
 			status: string;
 			version: string;
+		};
+		ImportRequest: {
+			/** @description Defaults to one made from the spec's title. */
+			key?: string | null;
+			/** Format: uuid */
+			orgId: string;
+			/** @description The OpenAPI 3.x or Swagger 2.0 document, as JSON or YAML text. */
+			spec: string;
+		};
+		/** @description An integration with its current definition. */
+		IntegrationDetail: components['schemas']['IntegrationSummary'] & {
+			definition: components['schemas']['Definition'];
+			/** @description What the importer skipped or guessed in the current version. */
+			warnings: components['schemas']['Warning'][];
+		};
+		IntegrationSummary: {
+			/** Format: date-time */
+			createdAt: string;
+			/** Format: int32 */
+			currentVersion: number;
+			description?: string | null;
+			/** Format: uuid */
+			id: string;
+			key: string;
+			name: string;
+			/** Format: uuid */
+			orgId: string;
+			/** Format: date-time */
+			updatedAt: string;
+		};
+		IntegrationVersion: {
+			/** Format: int32 */
+			actions: number;
+			/** @description The API's own version, from the spec. */
+			apiVersion: string;
+			/** Format: date-time */
+			importedAt: string;
+			/** Format: uuid */
+			importedBy?: string | null;
+			sourceFormat: string;
+			/** Format: int32 */
+			version: number;
+			/** Format: int32 */
+			warnings: number;
 		};
 		/** @description A value set at the org itself. */
 		LocalSetting: {
@@ -2492,6 +2693,14 @@ export interface components {
 			 * @description Optimistic concurrency token. Send it back when updating.
 			 */
 			version: number;
+		};
+		/** @enum {string} */
+		ParamLocation: 'path' | 'query' | 'header' | 'cookie';
+		Parameter: {
+			description?: string | null;
+			location: components['schemas']['ParamLocation'];
+			name: string;
+			required: boolean;
 		};
 		/** @description The browser's answer to a passkey sign-in ceremony. */
 		PasskeyAnswer: {
@@ -2769,6 +2978,19 @@ export interface components {
 			label: string;
 			value: string;
 		};
+		/** @description A base URL, possibly with `{variables}` that connections fill in. */
+		Server: {
+			description?: string | null;
+			url: string;
+			variables: components['schemas']['ServerVariable'][];
+		};
+		ServerVariable: {
+			default: string;
+			description?: string | null;
+			name: string;
+			/** @description Allowed values, if the spec limits them. */
+			options: string[];
+		};
 		ServiceAccountView: components['schemas']['UserView'] & {
 			description: string;
 		};
@@ -2970,6 +3192,9 @@ export interface components {
 			/** @description `active` or `disabled`. Disabled accounts' tokens stop working. */
 			status?: string | null;
 		};
+		UpdateSpecRequest: {
+			spec: string;
+		};
 		UpdateUserRequest: {
 			displayName?: string | null;
 			/** @description `active` or `disabled`. Disabling signs the user out everywhere. */
@@ -3032,6 +3257,12 @@ export interface components {
 			publishedBy?: string | null;
 			/** Format: int32 */
 			version: number;
+		};
+		/** @description Something the importer skipped or guessed, and where. */
+		Warning: {
+			message: string;
+			/** @description A JSON pointer into the spec, e.g. `/paths/~1users/get`. */
+			pointer: string;
 		};
 		/** @description A workflow with its draft and the draft's problems. */
 		WorkflowDetail: components['schemas']['WorkflowSummary'] & {
@@ -4533,6 +4764,147 @@ export interface operations {
 				};
 				content: {
 					'application/json': components['schemas']['EntityType'][];
+				};
+			};
+		};
+	};
+	list_integrations: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['IntegrationSummary'][];
+				};
+			};
+		};
+	};
+	import_integration: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['ImportRequest'];
+			};
+		};
+		responses: {
+			201: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['IntegrationDetail'];
+				};
+			};
+			409: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	get_integration: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['IntegrationDetail'];
+				};
+			};
+			404: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	update_integration_spec: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['UpdateSpecRequest'];
+			};
+		};
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['IntegrationDetail'];
+				};
+			};
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	list_integration_versions: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['IntegrationVersion'][];
 				};
 			};
 		};
