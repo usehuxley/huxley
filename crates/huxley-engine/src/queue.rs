@@ -251,3 +251,46 @@ pub async fn delete_for_run(
             .rows_affected(),
     )
 }
+
+/// A job that used up its attempts.
+#[derive(Debug, Clone, serde::Serialize, utoipa::ToSchema, sqlx::FromRow)]
+#[serde(rename_all = "camelCase")]
+pub struct DeadJob {
+    pub id: Uuid,
+    pub kind: String,
+    pub org_id: Option<Uuid>,
+    pub run_id: Option<Uuid>,
+    pub step_key: Option<String>,
+    pub attempts: i32,
+    pub last_error: Option<String>,
+    #[serde(with = "time::serde::rfc3339")]
+    pub created_at: OffsetDateTime,
+}
+
+/// Dead-lettered jobs, newest first.
+pub async fn dead(conn: &mut PgConnection, limit: i64) -> sqlx::Result<Vec<DeadJob>> {
+    sqlx::query_as(
+        "SELECT id, kind, org_id, run_id, step_key, attempts, last_error, created_at \
+           FROM jobs WHERE dead ORDER BY created_at DESC LIMIT $1",
+    )
+    .bind(limit.clamp(1, 500))
+    .fetch_all(conn)
+    .await
+}
+
+/// Puts a dead job back in the queue with fresh attempts. Returns false if
+/// it wasn't dead (or doesn't exist).
+pub async fn retry_dead(conn: &mut PgConnection, job: Uuid) -> sqlx::Result<bool> {
+    let updated = sqlx::query(
+        "UPDATE jobs SET dead = false, attempts = 0, run_at = now(), locked_by = NULL, \
+                locked_until = NULL WHERE id = $1 AND dead",
+    )
+    .bind(job)
+    .execute(&mut *conn)
+    .await?
+    .rows_affected();
+    if updated == 1 {
+        notify(conn).await?;
+    }
+    Ok(updated == 1)
+}

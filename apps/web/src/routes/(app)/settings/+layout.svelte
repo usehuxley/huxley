@@ -16,6 +16,7 @@
 		audit: resolve('/(app)/settings/audit'),
 		fields: resolve('/(app)/settings/fields'),
 		modules: resolve('/(app)/settings/modules'),
+		jobs: resolve('/(app)/settings/jobs'),
 		security: resolve('/(app)/settings/security'),
 		sso: resolve('/(app)/settings/sso')
 	};

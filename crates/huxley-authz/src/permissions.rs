@@ -58,6 +58,7 @@ permissions! {
     WORKFLOW_WRITE = "workflow:write", Org, "Create and edit workflow drafts, and test-run them";
     WORKFLOW_PUBLISH = "workflow:publish", Org, "Publish and archive workflows";
     WORKFLOW_RUN = "workflow:run", Org, "Start and cancel runs of published workflows";
+    JOBS_MANAGE = "platform:jobs:manage", Instance, "See workflow jobs that failed repeatedly and retry them";
     VARIABLE_MANAGE = "variable:manage", Org, "Set organization variables and secrets for workflows, and lock them for sub-organizations";
 }
 

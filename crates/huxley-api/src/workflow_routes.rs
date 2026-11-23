@@ -37,6 +37,12 @@ pub fn workflow_routes() -> Router<AppState> {
         .route("/{id}/triggers", get(triggers))
 }
 
+pub fn job_routes() -> Router<AppState> {
+    Router::new()
+        .route("/dead", get(dead_jobs))
+        .route("/{id}/retry", post(retry_job))
+}
+
 pub fn run_routes() -> Router<AppState> {
     Router::new()
         .route("/", get(list_runs))
@@ -655,4 +661,57 @@ pub async fn resume_run(
     }
     tx.commit().await.map_err(db_err)?;
     Ok(Json(ResumeRunResponse { resumed }))
+}
+
+/// Workflow jobs that failed repeatedly and were set aside (dead letters).
+/// A dead step job has already failed its step: resume the run instead.
+#[utoipa::path(get, path = "/api/v1/jobs/dead", operation_id = "list_dead_jobs", tag = "workflows",
+    responses((status = 200, body = Vec<huxley_engine::queue::DeadJob>)))]
+pub async fn dead_jobs(
+    State(state): State<AppState>,
+    authed: Authed,
+) -> ApiResult<Json<Vec<huxley_engine::queue::DeadJob>>> {
+    authed.require_instance(permissions::JOBS_MANAGE)?;
+    let mut tx = begin_scoped(&state.db, &OrgScope::System)
+        .await
+        .map_err(db_err)?;
+    let jobs = huxley_engine::queue::dead(&mut tx, 200)
+        .await
+        .map_err(db_err)?;
+    tx.commit().await.map_err(db_err)?;
+    Ok(Json(jobs))
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct RetryJobResponse {
+    /// False if the job wasn't dead (or doesn't exist).
+    pub retried: bool,
+}
+
+/// Puts a dead job back in the queue with fresh attempts.
+#[utoipa::path(post, path = "/api/v1/jobs/{id}/retry", operation_id = "retry_job", tag = "workflows",
+    params(("id" = Uuid, Path)), responses((status = 200, body = RetryJobResponse)))]
+pub async fn retry_job(
+    State(state): State<AppState>,
+    authed: Authed,
+    Path(id): Path<Uuid>,
+) -> ApiResult<Json<RetryJobResponse>> {
+    authed.require_instance(permissions::JOBS_MANAGE)?;
+    let mut tx = begin_scoped(&state.db, &OrgScope::System)
+        .await
+        .map_err(db_err)?;
+    let retried = huxley_engine::queue::retry_dead(&mut tx, id)
+        .await
+        .map_err(db_err)?;
+    if retried {
+        huxley_db::audit::record(
+            &mut tx,
+            &authed.user.ctx,
+            huxley_db::audit::AuditRecord::new("workflow.job_retried").target("job", id),
+        )
+        .await
+        .map_err(db_err)?;
+    }
+    tx.commit().await.map_err(db_err)?;
+    Ok(Json(RetryJobResponse { retried }))
 }

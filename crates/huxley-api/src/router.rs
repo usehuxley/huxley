@@ -50,6 +50,7 @@ pub fn router(state: AppState) -> Router {
         .nest("/notifications", notification_routes::routes())
         .nest("/workflows", workflow_routes::workflow_routes())
         .nest("/runs", workflow_routes::run_routes())
+        .nest("/jobs", workflow_routes::job_routes())
         .nest("/security", security_routes::routes())
         .merge(user_routes::routes())
         .merge(entity_routes::routes())

@@ -405,3 +405,44 @@ async fn strangers_see_nothing_and_validation_is_open() {
     assert_eq!(status, StatusCode::OK);
     assert_eq!(checked["diagnostics"].as_array().map(Vec::len), Some(1));
 }
+
+#[tokio::test]
+async fn dead_jobs_are_listed_and_retried_by_admins() {
+    let Some(s) = setup().await else { return };
+    let job = Uuid::now_v7();
+    // A dead advance for a run that doesn't exist: harmless once retried.
+    sqlx::query(
+        "INSERT INTO jobs (id, kind, run_id, attempts, dead, last_error, run_at) \
+         VALUES ($1, 'advance', $2, 10, true, 'database went away', now() + interval '1 hour')",
+    )
+    .bind(job)
+    .bind(Uuid::now_v7())
+    .execute(&s.pools.owner)
+    .await
+    .unwrap();
+    let (status, dead) = s.get(&s.owner, "/api/v1/jobs/dead").await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(
+        dead.as_array()
+            .unwrap()
+            .iter()
+            .any(|j| j["id"] == job.to_string() && j["lastError"] == "database went away")
+    );
+    let (_, tech) = with_technician(&s).await;
+    assert_eq!(
+        s.get(&tech, "/api/v1/jobs/dead").await.0,
+        StatusCode::FORBIDDEN
+    );
+
+    let retry = format!("/api/v1/jobs/{job}/retry");
+    let (status, body) = s.post(&s.owner, &retry, json!({})).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["retried"], true);
+    let (_, again) = s.post(&s.owner, &retry, json!({})).await;
+    assert_eq!(again["retried"], false);
+    sqlx::query("DELETE FROM jobs WHERE id = $1")
+        .bind(job)
+        .execute(&s.pools.owner)
+        .await
+        .unwrap();
+}
