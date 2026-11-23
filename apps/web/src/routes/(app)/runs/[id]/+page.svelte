@@ -11,7 +11,8 @@
 	let { data, form }: PageProps = $props();
 	// The latest pushed state, for the loaded run it was pushed for: a fresh
 	// load (after resuming, say) takes over until the stream catches up.
-	let live = $state<{ base: Run; run: Run } | null>(null);
+	// Raw: a deep proxy would break the identity check below.
+	let live = $state.raw<{ base: Run; run: Run } | null>(null);
 	let run = $derived(live?.base === data.run ? live.run : data.run);
 	let active = $derived(run.status === 'queued' || run.status === 'running');
 	let canCancel = $derived(

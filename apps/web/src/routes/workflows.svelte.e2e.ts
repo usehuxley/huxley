@@ -28,6 +28,10 @@ spec:
     properties:
       name: { type: string }
   steps:
+    # Still running when the run page loads: it must follow the run live.
+    - id: pause
+      type: wait
+      duration: 1s
     - id: greet
       type: transform
       output: "${output}"
