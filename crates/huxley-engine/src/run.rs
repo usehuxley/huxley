@@ -200,6 +200,7 @@ impl Engine {
         let mut journal = Journal::load(tx, run_id).await?;
         journal.unseal(&self.crypto, run_id).await?;
         let org_id = run.org_id;
+        let variables = huxley_variables::for_run(tx, &self.crypto, org_id).await?;
         let mut ctx = RunContext {
             run_id,
             org_id,
@@ -211,8 +212,8 @@ impl Engine {
             },
             meta: meta(workflow, run.workflow_version, started_at),
             actor: json!({ "id": run.actor_id }),
-            org_vars: json!({}),
-            secrets: std::collections::BTreeMap::new(),
+            org_vars: Json::Object(variables.vars),
+            secrets: variables.secrets,
         };
         let mut walker = Walker::new(&self.expr, &mut ctx, &mut journal, now);
         let outcome = walker.run(workflow);

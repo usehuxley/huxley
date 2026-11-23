@@ -1707,6 +1707,7 @@ dependencies = [
  "huxley-storage",
  "huxley-telemetry",
  "huxley-triggers",
+ "huxley-variables",
  "huxley-workflows",
  "ring",
  "secrecy",
@@ -1847,6 +1848,7 @@ dependencies = [
  "huxley-expr",
  "huxley-hwf",
  "huxley-notify",
+ "huxley-variables",
  "reqwest 0.13.5",
  "serde",
  "serde_json",
@@ -2065,6 +2067,7 @@ dependencies = [
  "huxley-expr",
  "huxley-hwf",
  "huxley-orgs",
+ "huxley-variables",
  "huxley-workflows",
  "ring",
  "serde_json",
@@ -2075,6 +2078,23 @@ dependencies = [
  "tokio",
  "tokio-util",
  "tracing",
+ "uuid",
+]
+
+[[package]]
+name = "huxley-variables"
+version = "0.1.0"
+dependencies = [
+ "huxley-core",
+ "huxley-crypto",
+ "huxley-db",
+ "huxley-orgs",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "thiserror 2.0.21",
+ "tokio",
+ "utoipa",
  "uuid",
 ]
 

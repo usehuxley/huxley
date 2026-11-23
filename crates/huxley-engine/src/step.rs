@@ -229,6 +229,22 @@ impl Engine {
             },
             other => other,
         };
+        // A step given a secret may echo it back (an API reflecting its
+        // Authorization header): mask the org's secret values in what's kept.
+        let executed = if attempted.tainted {
+            let secrets = huxley_variables::for_run(&mut tx, &self.crypto, org_id)
+                .await?
+                .secrets;
+            let mask =
+                |value: &Json| huxley_expr::redact(value, secrets.values().map(String::as_str));
+            match executed {
+                Executed::Done(output) => Executed::Done(mask(&output)),
+                Executed::Failed(failure) => Executed::Failed(mask(&failure)),
+                other => other,
+            }
+        } else {
+            executed
+        };
         let mut settled = true;
         match executed {
             Executed::NotYet(at) => {

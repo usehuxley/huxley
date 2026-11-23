@@ -17,7 +17,8 @@ use tower_http::trace::TraceLayer;
 use crate::{
     ApiError, AppState, audit_routes, auth_routes, csrf, entity_routes, health, hook_routes,
     mfa_routes, module_routes, notification_routes, openapi, org_routes, passkey_routes,
-    security_routes, sso_routes, team_routes, token_routes, user_routes, workflow_routes,
+    security_routes, sso_routes, team_routes, token_routes, user_routes, variable_routes,
+    workflow_routes,
 };
 
 const REQUEST_ID: HeaderName = HeaderName::from_static("x-request-id");
@@ -53,6 +54,7 @@ pub fn router(state: AppState) -> Router {
         .merge(user_routes::routes())
         .merge(entity_routes::routes())
         .merge(module_routes::org_routes())
+        .merge(variable_routes::routes())
         .merge(entity_routes::attachment_routes(
             usize::try_from(state.storage.max_upload_bytes())
                 .unwrap_or(usize::MAX)

@@ -10,15 +10,18 @@ export const load: PageServerLoad = async (event) => {
 	const client = api(event);
 	const id = event.params.id;
 	const path = { params: { path: { entity_type: 'organization', id } } };
-	const [org, fields, tags, allTags, attachments, settings, modules] = await Promise.all([
-		client.GET('/api/v1/orgs/{id}', { params: { path: { id } } }),
-		client.GET('/api/v1/entities/{entity_type}/{id}/fields', path),
-		client.GET('/api/v1/entities/{entity_type}/{id}/tags', path),
-		client.GET('/api/v1/tags'),
-		client.GET('/api/v1/entities/{entity_type}/{id}/attachments', path),
-		client.GET('/api/v1/orgs/{id}/settings', { params: { path: { id } } }),
-		client.GET('/api/v1/orgs/{id}/modules', { params: { path: { id } } })
-	]);
+	const [org, fields, tags, allTags, attachments, settings, modules, variables] = await Promise.all(
+		[
+			client.GET('/api/v1/orgs/{id}', { params: { path: { id } } }),
+			client.GET('/api/v1/entities/{entity_type}/{id}/fields', path),
+			client.GET('/api/v1/entities/{entity_type}/{id}/tags', path),
+			client.GET('/api/v1/tags'),
+			client.GET('/api/v1/entities/{entity_type}/{id}/attachments', path),
+			client.GET('/api/v1/orgs/{id}/settings', { params: { path: { id } } }),
+			client.GET('/api/v1/orgs/{id}/modules', { params: { path: { id } } }),
+			client.GET('/api/v1/orgs/{id}/variables', { params: { path: { id } } })
+		]
+	);
 	if (org.response.status === 404) error(404, 'Organization not found.');
 	if (!org.data || !fields.data || !tags.data) error(503, 'Could not load the organization.');
 	return {
@@ -28,7 +31,8 @@ export const load: PageServerLoad = async (event) => {
 		allTags: allTags.data ?? [],
 		attachments: attachments.data ?? [],
 		settings: settings.data ?? [],
-		modules: modules.data ?? []
+		modules: modules.data ?? [],
+		variables: variables.data ?? null
 	};
 };
 
@@ -84,6 +88,47 @@ export const actions: Actions = {
 			});
 		}
 		return { message: 'Now inherited.' };
+	},
+
+	variable: async (event) => {
+		const form = await event.request.formData();
+		const key = formString(form, 'key').trim();
+		const kind = formString(form, 'type') as 'string' | 'number' | 'bool' | 'json' | 'secret';
+		const raw = formString(form, 'value');
+		let value: unknown = raw;
+		if (kind === 'number') value = Number(raw);
+		if (kind === 'bool') value = ['true', 'yes', '1', 'on'].includes(raw.trim().toLowerCase());
+		if (kind === 'json') {
+			try {
+				value = JSON.parse(raw);
+			} catch {
+				return fail(400, { message: 'The value must be valid JSON.' });
+			}
+		}
+		const { error: problem, response } = await api(event).PUT('/api/v1/orgs/{id}/variables/{key}', {
+			params: { path: { id: event.params.id, key } },
+			body: { type: kind, value, locked: form.get('locked') === 'on' }
+		});
+		if (response.status !== 204) {
+			return fail(response.status, {
+				message: problemMessage(problem, 'Could not save the variable.')
+			});
+		}
+		return { message: `Saved ${key}.` };
+	},
+
+	clearVariable: async (event) => {
+		const form = await event.request.formData();
+		const { error: problem, response } = await api(event).DELETE(
+			'/api/v1/orgs/{id}/variables/{key}',
+			{ params: { path: { id: event.params.id, key: formString(form, 'key') } } }
+		);
+		if (response.status !== 204) {
+			return fail(response.status, {
+				message: problemMessage(problem, 'Could not remove the variable.')
+			});
+		}
+		return { message: 'Removed.' };
 	},
 
 	module: async (event) => {

@@ -387,3 +387,72 @@ async fn notify_reaches_users_teams_and_roles() {
     assert_eq!(status, RunStatus::Failed);
     assert_eq!(error.unwrap()["kind"], "definition");
 }
+
+#[tokio::test]
+async fn variables_and_secrets_reach_steps_but_not_the_record() {
+    let Some(h) = harness(1 << 20).await else {
+        return;
+    };
+    let (port, _) = mock_server().await;
+    let ctx = huxley_core::RequestContext::system(huxley_core::Via::System);
+    let crypto =
+        huxley_crypto::Crypto::new(h.pools.app.clone(), huxley_crypto::testing::key_ring());
+    for (key, kind, value) in [
+        (
+            "path",
+            huxley_variables::VariableType::String,
+            json!("echo"),
+        ),
+        (
+            "api_token",
+            huxley_variables::VariableType::Secret,
+            json!("tok-SECRET-42"),
+        ),
+    ] {
+        let mut tx = begin_scoped(&h.pools.app, &OrgScope::System).await.unwrap();
+        let input = huxley_variables::VariableInput {
+            kind,
+            value,
+            description: None,
+            locked: false,
+        };
+        huxley_variables::set(&mut tx, &ctx, &crypto, h.org, key, &input)
+            .await
+            .unwrap();
+        tx.commit().await.unwrap();
+    }
+    let (id, status, outputs, error) = h
+        .run(&format!(
+            r#"  steps:
+    - id: call
+      type: http.request
+      with:
+        url: "http://localhost:{port}/{{{{ vars.path }}}}"
+        headers: {{ Authorization: "Bearer {{{{ secrets.api_token }}}}" }}
+  outputs: {{ auth: "{{{{ steps.call.output.body.auth }}}}" }}
+"#
+        ))
+        .await;
+    assert_eq!(status, RunStatus::Succeeded, "{error:?}");
+    // The server got the real token; the record and outputs never hold it.
+    assert_eq!(outputs.unwrap(), json!({ "auth": "Bearer «redacted»" }));
+    let (input, output, tainted): (Json, Json, bool) = sqlx::query_as(
+        "SELECT input, output, tainted FROM step_runs WHERE run_id = $1 AND step_key = 'call'",
+    )
+    .bind(id)
+    .fetch_one(&h.pools.owner)
+    .await
+    .unwrap();
+    assert!(tainted);
+    assert_eq!(input, json!("«redacted»"));
+    assert_eq!(output["body"]["auth"], "Bearer «redacted»");
+    let everything: String = sqlx::query_scalar(
+        "SELECT string_agg(coalesce(input::text, '') || coalesce(output::text, ''), '') \
+           FROM step_runs WHERE run_id = $1",
+    )
+    .bind(id)
+    .fetch_one(&h.pools.owner)
+    .await
+    .unwrap();
+    assert!(!everything.contains("tok-SECRET-42"));
+}
