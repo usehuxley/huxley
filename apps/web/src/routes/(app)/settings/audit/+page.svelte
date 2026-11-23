@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { ShieldCheck } from '@lucide/svelte';
-	import { Badge, Button, Input } from '@usehuxley/ui';
+	import { resolve } from '$app/paths';
+	import { Badge, Button, Input, Select } from '@usehuxley/ui';
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
@@ -52,6 +53,25 @@
 				class="w-48"
 			/>
 			<Button type="submit" size="md">Filter</Button>
+		</form>
+		<form
+			method="GET"
+			action={resolve('/(app)/settings/audit/export')}
+			data-sveltekit-reload
+			class="flex gap-2"
+		>
+			<input type="hidden" name="action" value={data.action} />
+			<label for="audit-format" class="sr-only">Export format</label>
+			<Select
+				id="audit-format"
+				name="format"
+				value="csv"
+				options={[
+					{ value: 'csv', label: 'CSV' },
+					{ value: 'jsonl', label: 'JSON lines' }
+				]}
+			/>
+			<Button type="submit" size="md">Export</Button>
 		</form>
 	</header>
 
