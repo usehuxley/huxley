@@ -11,6 +11,7 @@
 		ChartColumn,
 		CircleCheck,
 		ClipboardList,
+		FileCode,
 		House,
 		Plug,
 		Settings,
@@ -30,6 +31,9 @@
 		{ href: '/', label: 'Home', icon: House },
 		...(data.user.grantedPermissions.includes('workflow:read')
 			? [{ href: '/workflows', label: 'Workflows', icon: Workflow }]
+			: []),
+		...(data.user.grantedPermissions.includes('script:read')
+			? [{ href: '/scripts', label: 'Scripts', icon: FileCode }]
 			: []),
 		...(data.user.grantedPermissions.includes('integration:read')
 			? [{ href: '/integrations', label: 'Integrations', icon: Plug }]

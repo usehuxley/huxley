@@ -86,6 +86,12 @@ The run page shows each step as it starts and finishes, with its input, output o
 
 A run started by hand acts as whoever started it. Runs started by a schedule, webhook or event act as the workflow's **run-as** service account (set on the workflow page), or as no one if none is set; subworkflows act as their parent. The identity is `actor.id` in expressions and is recorded on the run. Setting it needs `workflow:publish` and `service_account:manage`, since whoever hands out an account's identity could act as it. If the account is disabled, triggers start nothing (a webhook answers 409) until it's re-enabled or changed.
 
+## Scripts
+
+**Scripts** is a library of PowerShell 7 and Python 3 scripts. Each save is a new, numbered version, and earlier versions stay readable. Every script has a JSON Schema of its parameters, which a step running it will ask for. A library at an organization is shared with the organizations below it.
+
+Running scripts is next. The `script` step will send them to sandboxed runners: rootless Podman containers by default, or Kubernetes Jobs (design doc §6.9). It needs `script:read` to view scripts and `script:manage` to change them.
+
 ## Permissions
 
 | Permission | Allows |

@@ -65,6 +65,8 @@ permissions! {
     CONNECTION_MANAGE = "connection:manage", Org, "Create connections and change their credentials";
     FORM_SUBMIT = "form:submit", Org, "Fill in forms, which starts their workflows";
     FORM_MANAGE = "form:manage", Org, "Create and change forms";
+    SCRIPT_READ = "script:read", Org, "View scripts in the library";
+    SCRIPT_MANAGE = "script:manage", Org, "Add scripts to the library and change them";
     VARIABLE_MANAGE = "variable:manage", Org, "Set organization variables and secrets for workflows, and lock them for sub-organizations";
 }
 

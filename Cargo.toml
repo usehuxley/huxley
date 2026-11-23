@@ -30,6 +30,7 @@ huxley-hwf = { path = "crates/huxley-hwf" }
 huxley-forms = { path = "crates/huxley-forms" }
 huxley-integrations = { path = "crates/huxley-integrations" }
 huxley-orgs = { path = "crates/huxley-orgs" }
+huxley-scripts = { path = "crates/huxley-scripts" }
 huxley-storage = { path = "crates/huxley-storage" }
 huxley-telemetry = { path = "crates/huxley-telemetry" }
 huxley-triggers = { path = "crates/huxley-triggers" }
