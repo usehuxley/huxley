@@ -34,6 +34,7 @@ utoipa.workspace = true
 uuid.workspace = true
 
 [dev-dependencies]
+huxley-email.workspace = true
 huxley-crypto = { workspace = true, features = ["testing"] }
 huxley-db = { workspace = true, features = ["testing"] }
 huxley-auth.workspace = true

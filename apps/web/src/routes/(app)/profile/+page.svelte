@@ -140,6 +140,25 @@
 		</div>
 	{/if}
 
+	<Card title="Email" description={data.user.email}>
+		{#snippet actions()}
+			<Badge tone={data.user.emailVerified ? 'success' : 'warning'}>
+				{data.user.emailVerified ? 'Verified' : 'Not verified'}
+			</Badge>
+		{/snippet}
+		{#if form && 'verification' in form && form.verification && 'sent' in form.verification}
+			<p role="status" class="text-sm text-fg">Check your inbox for a verification link.</p>
+		{:else if !data.user.emailVerified && data.emailEnabled}
+			<form method="POST" action="?/sendVerification" use:enhance>
+				<Button type="submit" size="sm">Send verification email</Button>
+			</form>
+		{:else if !data.user.emailVerified}
+			<p class="text-sm text-fg-muted">Email isn't set up on this server yet.</p>
+		{:else}
+			<p class="text-sm text-fg-muted">Password resets and notifications go here.</p>
+		{/if}
+	</Card>
+
 	<Card title="Change password" description="Changing it signs you out everywhere else.">
 		<form
 			method="POST"

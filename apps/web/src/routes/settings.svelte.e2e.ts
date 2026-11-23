@@ -37,7 +37,7 @@ test.describe('settings (as the bootstrap owner)', () => {
 		await page.getByRole('link', { name: 'Users' }).click();
 		await page.getByRole('button', { name: 'Add user' }).click();
 		await page.getByLabel('Name').fill('Taylor Tech');
-		await page.getByLabel('Email').fill(userEmail);
+		await page.locator('#new-email').fill(userEmail);
 		await page.getByRole('button', { name: 'Create user' }).click();
 		await expect(page.getByText(`Created ${userEmail}.`)).toBeVisible();
 		await expect(page.getByText('Temporary password, shown only once')).toBeVisible();

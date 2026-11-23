@@ -63,6 +63,10 @@ pub async fn serve(config: Config, roles: BTreeSet<Role>) -> anyhow::Result<()> 
         owner.close().await;
     }
     config.auth.validate()?;
+    let mailer = huxley_email::Mailer::from_config(&config.email)?;
+    if mailer.enabled() && config.auth.public_url.is_none() {
+        tracing::warn!("email is configured but auth.public_url isn't: emails need it for links");
+    }
     let db = huxley_db::connect(db_config)?;
     let crypto = huxley_crypto::Crypto::new(db.clone(), config.crypto.key_ring()?);
     crypto
@@ -82,7 +86,8 @@ pub async fn serve(config: Config, roles: BTreeSet<Role>) -> anyhow::Result<()> 
                     .with_context(|| format!("failed to bind {}", config.http.bind))?;
                 tracing::info!(addr = %config.http.bind, "api role listening");
                 let auth =
-                    huxley_auth::AuthService::new(db.clone(), config.auth.clone(), crypto.clone());
+                    huxley_auth::AuthService::new(db.clone(), config.auth.clone(), crypto.clone())
+                        .with_mailer(mailer.clone());
                 let state = huxley_api::AppState::new(
                     db.clone(),
                     auth,

@@ -23,6 +23,7 @@
 			}
 		};
 	};
+	let invite = $state(false);
 </script>
 
 <svelte:head>
@@ -32,6 +33,9 @@
 {#if form && 'created' in form && form.created}
 	<div role="status" class="rounded-card border border-success/30 bg-success-soft p-4 text-sm">
 		<p class="font-medium text-fg">Created {form.created.email}.</p>
+		{#if form.invited}
+			<p class="mt-1 text-fg-muted">An invitation to choose a password is on its way.</p>
+		{/if}
 		{#if form.generatedPassword}
 			<p class="mt-1 text-fg-muted">
 				Temporary password, shown only once:
@@ -121,15 +125,27 @@
 		<Field label="Email" for="new-email" required>
 			<Input id="new-email" name="email" type="email" required autocomplete="off" />
 		</Field>
-		<Field label="Password" for="new-password" hint="Leave blank to generate a temporary password.">
-			<Input
-				id="new-password"
-				name="password"
-				type="password"
-				minlength={12}
-				autocomplete="new-password"
-			/>
-		</Field>
+		{#if data.emailEnabled}
+			<label class="flex items-center gap-2 text-sm text-fg">
+				<input type="checkbox" name="invite" bind:checked={invite} />
+				Email them an invitation to choose their own password
+			</label>
+		{/if}
+		{#if !invite}
+			<Field
+				label="Password"
+				for="new-password"
+				hint="Leave blank to generate a temporary password."
+			>
+				<Input
+					id="new-password"
+					name="password"
+					type="password"
+					minlength={12}
+					autocomplete="new-password"
+				/>
+			</Field>
+		{/if}
 		<div class="flex justify-end gap-2">
 			<Button onclick={() => (open = false)}>Cancel</Button>
 			<Button type="submit" variant="primary">Create user</Button>

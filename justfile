@@ -28,6 +28,8 @@ server *args:
     HUXLEY_HTTP__TRUST_FORWARDED_FOR=true \
     HUXLEY_HTTP__COOKIE_SECURE=false \
     HUXLEY_AUTH__PUBLIC_URL=http://localhost:5173 \
+    HUXLEY_EMAIL__SMTP_URL=smtp://127.0.0.1:1025 \
+    HUXLEY_EMAIL__FROM="Huxley <huxley@localhost>" \
     cargo run -p huxley-server -- serve {{args}}
 
 # Create the root organization and first user in the dev database (prints a generated password)

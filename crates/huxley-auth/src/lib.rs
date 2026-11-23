@@ -6,6 +6,7 @@
 //! OIDC and API tokens build on the same pieces.
 
 pub mod api_tokens;
+pub mod email_flows;
 pub mod mfa;
 pub mod passkey;
 pub mod password;
@@ -115,6 +116,9 @@ pub struct User {
     pub last_login_at: Option<OffsetDateTime>,
     pub created_at: OffsetDateTime,
     pub kind: UserKind,
+    /// The user proved they receive mail at `email` (a verification link, a
+    /// password reset, or an identity provider vouching for it).
+    pub email_verified: bool,
     /// Has a confirmed second factor.
     pub mfa_enabled: bool,
 }
@@ -217,6 +221,10 @@ pub enum AuthError {
     PasskeyAlreadyRegistered,
     #[error("passkey not found")]
     PasskeyNotFound,
+    #[error("the link is invalid or has expired")]
+    InvalidEmailToken,
+    #[error("email is not configured (email.smtp_url and auth.public_url)")]
+    EmailNotConfigured,
     #[error("invalid token name")]
     InvalidTokenName,
     #[error("invalid token expiry: {0}")]
@@ -275,6 +283,7 @@ macro_rules! select_user {
     ($rest:literal) => {
         concat!(
             "SELECT id, email, display_name, status, last_login_at, created_at, kind, \
+                    email_verified_at IS NOT NULL AS email_verified, \
                     (EXISTS (SELECT 1 FROM user_totp t \
                              WHERE t.user_id = users.id AND t.confirmed_at IS NOT NULL) \
                      OR EXISTS (SELECT 1 FROM user_passkeys k WHERE k.user_id = users.id)) AS mfa_enabled \
@@ -300,7 +309,8 @@ pub async fn create_user(
     let id = huxley_core::new_id();
     let user: User = sqlx::query_as(
         "INSERT INTO users (id, email, display_name) VALUES ($1, $2, $3) \
-         RETURNING id, email, display_name, status, last_login_at, created_at, kind, false AS mfa_enabled",
+         RETURNING id, email, display_name, status, last_login_at, created_at, kind, \
+                   email_verified_at IS NOT NULL AS email_verified, false AS mfa_enabled",
     )
     .bind(id)
     .bind(&email)
@@ -336,8 +346,9 @@ pub async fn create_external_user(
     let display_name = normalize_display_name(display_name).unwrap_or_else(|_| email.clone());
     let id = huxley_core::new_id();
     let user: User = sqlx::query_as(
-        "INSERT INTO users (id, email, display_name) VALUES ($1, $2, $3) \
-         RETURNING id, email, display_name, status, last_login_at, created_at, kind, false AS mfa_enabled",
+        "INSERT INTO users (id, email, display_name, email_verified_at) VALUES ($1, $2, $3, now()) \
+         RETURNING id, email, display_name, status, last_login_at, created_at, kind, \
+                   email_verified_at IS NOT NULL AS email_verified, false AS mfa_enabled",
     )
     .bind(id)
     .bind(&email)
@@ -410,6 +421,7 @@ pub async fn update_user(
                 status = coalesce($3, status), version = version + 1 \
           WHERE id = $1 \
          RETURNING id, email, display_name, status, last_login_at, created_at, kind, \
+                   email_verified_at IS NOT NULL AS email_verified, \
                    (EXISTS (SELECT 1 FROM user_totp t \
                              WHERE t.user_id = users.id AND t.confirmed_at IS NOT NULL) \
                      OR EXISTS (SELECT 1 FROM user_passkeys k WHERE k.user_id = users.id)) AS mfa_enabled",
@@ -452,6 +464,8 @@ pub struct AuthService {
     crypto: Crypto,
     /// The WebAuthn relying party, when `public_url` is set.
     webauthn: Option<std::sync::Arc<webauthn_rs::Webauthn>>,
+    /// Sends password reset, invitation, and verification emails.
+    mailer: huxley_email::Mailer,
 }
 
 #[derive(sqlx::FromRow)]
@@ -476,7 +490,15 @@ impl AuthService {
             config,
             crypto,
             webauthn,
+            mailer: huxley_email::Mailer::disabled(),
         }
+    }
+
+    /// Enables emails (password reset, invitations, verification).
+    #[must_use]
+    pub fn with_mailer(mut self, mailer: huxley_email::Mailer) -> Self {
+        self.mailer = mailer;
+        self
     }
 
     pub fn config(&self) -> &AuthConfig {

@@ -1016,3 +1016,123 @@ async fn team_assignments_are_validated() {
     .await;
     assert_eq!(status, StatusCode::CONFLICT);
 }
+
+/// An app whose emails land in memory, with a public URL for links.
+fn app_with_mail(
+    pools: &TestPools,
+) -> (
+    axum::Router,
+    std::sync::Arc<std::sync::Mutex<Vec<huxley_email::Email>>>,
+) {
+    let (mailer, outbox) = huxley_email::Mailer::memory();
+    let crypto = Crypto::new(pools.app.clone(), huxley_crypto::testing::key_ring());
+    let auth = AuthService::new(
+        pools.app.clone(),
+        AuthConfig {
+            public_url: Some("https://huxley.example.com".into()),
+            ..AuthConfig::default()
+        },
+        crypto.clone(),
+    )
+    .with_mailer(mailer);
+    let config = ApiConfig {
+        login_attempts_per_minute: 1000,
+        ..ApiConfig::default()
+    };
+    (
+        router(AppState::new(pools.app.clone(), auth, crypto, config)),
+        outbox,
+    )
+}
+
+async fn wait_for_mail(
+    outbox: &std::sync::Arc<std::sync::Mutex<Vec<huxley_email::Email>>>,
+    to: &str,
+) -> huxley_email::Email {
+    for _ in 0..50 {
+        if let Some(m) = outbox.lock().unwrap().iter().find(|m| m.to == to) {
+            return m.clone();
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+    }
+    panic!("no email to {to}");
+}
+
+fn link_token(email: &huxley_email::Email) -> String {
+    let start = email.text.find("?token=").unwrap() + "?token=".len();
+    email.text[start..]
+        .split_whitespace()
+        .next()
+        .unwrap()
+        .to_owned()
+}
+
+#[tokio::test]
+async fn password_reset_and_invitations_over_http() {
+    let Some(pools) = pools().await else { return };
+    ensure_root(&pools).await;
+    let (app, outbox) = app_with_mail(&pools);
+    let (_, methods) = call(&app, "GET", "/api/v1/auth/methods", None, None).await;
+    assert_eq!(methods["passwordReset"], true);
+
+    // Reset: same answer for known and unknown addresses.
+    let email = user(&pools, false).await;
+    let (status, _, _) = post_anonymous(
+        &app,
+        "/api/v1/auth/password-reset",
+        json!({ "email": email }),
+    )
+    .await;
+    assert_eq!(status, StatusCode::ACCEPTED);
+    let unknown = json!({ "email": "nobody-here-at-all@example.com" });
+    let (status, _, _) = post_anonymous(&app, "/api/v1/auth/password-reset", unknown).await;
+    assert_eq!(status, StatusCode::ACCEPTED);
+    let token = link_token(&wait_for_mail(&outbox, &email).await);
+    let confirm = json!({ "token": token, "newPassword": "a fresh new passphrase" });
+    let (status, _, _) =
+        post_anonymous(&app, "/api/v1/auth/password-reset/confirm", confirm.clone()).await;
+    assert_eq!(status, StatusCode::NO_CONTENT);
+    let (status, _, err) =
+        post_anonymous(&app, "/api/v1/auth/password-reset/confirm", confirm).await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(err["type"], "https://usehuxley.com/problems/invalid-link");
+    let creds = json!({ "email": email, "password": "a fresh new passphrase" });
+    let (status, cookie, _) = post_anonymous(&app, "/api/v1/auth/login", creds).await;
+    assert_eq!(status, StatusCode::OK);
+    let (_, me) = call(&app, "GET", "/api/v1/auth/me", cookie.as_deref(), None).await;
+    assert_eq!(me["emailVerified"], true);
+
+    // Invitations: no password shown; the invitee sets one.
+    let owner = login(&app, &user(&pools, true).await).await;
+    let invitee = format!("{}@example.com", unique("invitee").replace(' ', "."));
+    let body = json!({ "email": invitee, "displayName": "Ivy Invitee", "invite": true });
+    let (status, created) = call(&app, "POST", "/api/v1/users", Some(&owner), Some(body)).await;
+    assert_eq!(status, StatusCode::CREATED, "{created}");
+    assert_eq!(created["invited"], true);
+    assert!(created["generatedPassword"].is_null());
+    let mail = wait_for_mail(&outbox, &invitee).await;
+    assert!(mail.subject.contains("invited"));
+    let confirm = json!({ "token": link_token(&mail), "newPassword": "my own chosen passphrase" });
+    let (status, _, _) = post_anonymous(&app, "/api/v1/auth/password-reset/confirm", confirm).await;
+    assert_eq!(status, StatusCode::NO_CONTENT);
+}
+
+#[tokio::test]
+async fn email_features_report_when_email_is_off() {
+    let Some(pools) = pools().await else { return };
+    ensure_root(&pools).await;
+    let app = app(&pools);
+    let (_, methods) = call(&app, "GET", "/api/v1/auth/methods", None, None).await;
+    assert_eq!(methods["passwordReset"], false);
+    let (status, _, _) = post_anonymous(
+        &app,
+        "/api/v1/auth/password-reset",
+        json!({ "email": "a@example.com" }),
+    )
+    .await;
+    assert_eq!(status, StatusCode::SERVICE_UNAVAILABLE);
+    let owner = login(&app, &user(&pools, true).await).await;
+    let body = json!({ "email": "inv@example.com", "displayName": "Inv", "invite": true });
+    let (status, _) = call(&app, "POST", "/api/v1/users", Some(&owner), Some(body)).await;
+    assert_eq!(status, StatusCode::SERVICE_UNAVAILABLE);
+}

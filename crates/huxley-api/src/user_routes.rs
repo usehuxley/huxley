@@ -117,9 +117,14 @@ pub async fn get_user(
 pub struct CreateUserRequest {
     pub email: String,
     pub display_name: String,
-    /// Initial password. If omitted, one is generated and returned once.
+    /// Initial password. If omitted (and not inviting), one is generated and
+    /// returned once.
     #[schema(format = Password)]
     pub password: Option<String>,
+    /// Email the user an invitation to choose their own password instead.
+    /// Needs email to be configured.
+    #[serde(default)]
+    pub invite: bool,
 }
 
 #[derive(Debug, Serialize, ToSchema)]
@@ -128,6 +133,8 @@ pub struct CreateUserResponse {
     pub user: UserView,
     /// Present only when Huxley generated the password. Shown once.
     pub generated_password: Option<String>,
+    /// An invitation email was sent.
+    pub invited: bool,
 }
 
 /// Creates a local user. The new user has no roles until one is assigned.
@@ -143,8 +150,13 @@ pub async fn create_user(
     Json(body): Json<CreateUserRequest>,
 ) -> ApiResult<(StatusCode, Json<CreateUserResponse>)> {
     authed.require_instance(permissions::USER_CREATE)?;
+    if body.invite && !state.auth.email_enabled() {
+        return Err(ApiError::unavailable(
+            "Invitations need email: set email.smtp_url, email.from, and auth.public_url.",
+        ));
+    }
     let (password, generated) = match body.password {
-        Some(p) if !p.is_empty() => (p, false),
+        Some(p) if !p.is_empty() && !body.invite => (p, false),
         _ => {
             let mut bytes = [0u8; 18];
             getrandom::fill(&mut bytes).map_err(|e| ApiError::internal(&e))?;
@@ -162,11 +174,28 @@ pub async fn create_user(
     .await
     .map_err(map_auth)?;
     tx.commit().await.map_err(db_err)?;
+    if body.invite {
+        // The random password above is never shown: the invitation replaces it.
+        state
+            .auth
+            .send_invitation(
+                &authed.user.ctx,
+                user.id,
+                &authed.user.auth.user.display_name,
+            )
+            .await
+            .map_err(|e| {
+                ApiError::unavailable(format!(
+                    "The user was created, but the invitation failed: {e}"
+                ))
+            })?;
+    }
     Ok((
         StatusCode::CREATED,
         Json(CreateUserResponse {
             user: user.into(),
-            generated_password: generated.then_some(password),
+            generated_password: (generated && !body.invite).then_some(password),
+            invited: body.invite,
         }),
     ))
 }

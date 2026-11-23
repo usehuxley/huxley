@@ -21,6 +21,8 @@ x-huxley-env: &huxley-env
   HUXLEY_HTTP__TRUST_FORWARDED_FOR: "true"
   # Passkeys are bound to the staff app's host name.
   HUXLEY_AUTH__PUBLIC_URL: https://${HUXLEY_DOMAIN:-localhost}
+  HUXLEY_EMAIL__SMTP_URL: ${HUXLEY_SMTP_URL:-}
+  HUXLEY_EMAIL__FROM: ${HUXLEY_EMAIL_FROM:-Huxley <huxley@example.com>}
 
 services:
   postgres:

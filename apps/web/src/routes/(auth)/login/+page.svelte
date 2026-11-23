@@ -102,6 +102,14 @@
 		</div>
 
 		<div class="rounded-card border border-border bg-surface p-6 shadow-card">
+			{#if data.notice && !message}
+				<p
+					role="status"
+					class="mb-4 rounded-control border border-success/30 bg-success-soft px-3 py-2 text-sm text-fg"
+				>
+					{data.notice}
+				</p>
+			{/if}
 			{#if message}
 				<p
 					role="alert"
@@ -207,6 +215,14 @@
 							value={form && 'email' in form && typeof form.email === 'string' ? form.email : ''}
 						/>
 					</Field>
+					{#if data.passwordReset}
+						<a
+							href={resolve('/(auth)/forgot-password')}
+							class="-mb-2 self-end text-sm text-accent hover:underline"
+						>
+							Forgot password?
+						</a>
+					{/if}
 					<Field label="Password" for="password">
 						<Input
 							id="password"
