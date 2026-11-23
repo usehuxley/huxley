@@ -25,6 +25,7 @@ use crate::passkey_routes::{
     RenamePasskeyRequest,
 };
 use crate::problem::{ApiError, FieldError};
+use crate::security_routes::{self, SetRequirementRequest};
 use crate::user_routes::{
     self, CreateAssignmentRequest, CreateUserRequest, CreateUserResponse, UpdateUserRequest,
     UserPage,
@@ -80,6 +81,9 @@ use crate::user_routes::{
         audit_routes::list,
         module_routes::list,
         module_routes::set,
+        security_routes::get_policy,
+        security_routes::set_role,
+        security_routes::set_org,
     ),
     components(schemas(HealthStatus, ApiError, FieldError, LoginRequest, ChangePasswordRequest, UserView, SessionView,
         MeView,
@@ -122,6 +126,9 @@ use crate::user_routes::{
         huxley_modules::ModuleState,
         SetModuleRequest,
         SetModuleResponse,
+        SetRequirementRequest,
+        huxley_authz::mfa_policy::MfaPolicy,
+        huxley_authz::mfa_policy::PolicyOrg,
     )),
     tags(
         (name = "system", description = "Health and platform metadata"),
@@ -130,6 +137,7 @@ use crate::user_routes::{
         (name = "users", description = "Users, roles, and role assignments"),
         (name = "audit", description = "The audit log"),
         (name = "modules", description = "Feature modules that can be turned on or off"),
+        (name = "security", description = "Sign-in security policy"),
     ),
 )]
 pub struct ApiDoc;

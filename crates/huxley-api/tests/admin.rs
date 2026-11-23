@@ -569,3 +569,93 @@ async fn passkey_endpoints_without_a_public_url() {
     let (status, _, _) = post_anonymous(&app, "/api/v1/auth/login/mfa", both).await;
     assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
 }
+
+#[tokio::test]
+async fn mfa_policy_blocks_until_a_second_factor_is_set_up() {
+    let Some(pools) = pools().await else { return };
+    let root = ensure_root(&pools).await;
+    let app = app(&pools);
+    let owner = login(&app, &user(&pools, true).await).await;
+
+    // A role of its own, so flagging it can't affect other tests.
+    let role_id = uuid::Uuid::now_v7();
+    sqlx::query(
+        "INSERT INTO roles (id, key, name, description, is_system, permissions) \
+         VALUES ($1, $2, $3, 'test', false, '{org:read}')",
+    )
+    .bind(role_id)
+    .bind(format!("mfa_{}", role_id.simple()))
+    .bind(unique("Mfa role"))
+    .execute(&pools.owner)
+    .await
+    .unwrap();
+    let email = user(&pools, false).await;
+    let member = login(&app, &email).await;
+    let (_, me) = call(&app, "GET", "/api/v1/auth/me", Some(&member), None).await;
+    let member_id = me["id"].as_str().unwrap().to_owned();
+    let grant = json!({ "userId": member_id, "roleId": role_id, "orgId": root });
+    let (status, _) = call(
+        &app,
+        "POST",
+        "/api/v1/role-assignments",
+        Some(&owner),
+        Some(grant),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED);
+    let (status, _) = call(&app, "GET", "/api/v1/orgs", Some(&member), None).await;
+    assert_eq!(status, StatusCode::OK);
+
+    // Only policy managers can change policy.
+    let uri = format!("/api/v1/security/mfa-policy/roles/{role_id}");
+    let on = json!({ "required": true });
+    let (status, _) = call(&app, "PUT", &uri, Some(&member), Some(on.clone())).await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+    let (status, _) = call(&app, "PUT", &uri, Some(&owner), Some(on)).await;
+    assert_eq!(status, StatusCode::NO_CONTENT);
+    let (_, policy) = call(
+        &app,
+        "GET",
+        "/api/v1/security/mfa-policy",
+        Some(&owner),
+        None,
+    )
+    .await;
+    assert!(
+        policy["roleIds"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|r| r == &json!(role_id))
+    );
+
+    // The member's existing session is now limited to setting up MFA.
+    let (status, err) = call(&app, "GET", "/api/v1/orgs", Some(&member), None).await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+    assert_eq!(
+        err["type"],
+        "https://usehuxley.com/problems/mfa-setup-required"
+    );
+    let (status, me) = call(&app, "GET", "/api/v1/auth/me", Some(&member), None).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(me["mfaSetupRequired"], true);
+    let (status, _) = call(&app, "GET", "/api/v1/auth/sessions", Some(&member), None).await;
+    assert_eq!(status, StatusCode::OK);
+
+    // Setting up an authenticator lifts the block.
+    enroll_totp(&app, &member).await;
+    let (status, _) = call(&app, "GET", "/api/v1/orgs", Some(&member), None).await;
+    assert_eq!(status, StatusCode::OK);
+    let (_, me) = call(&app, "GET", "/api/v1/auth/me", Some(&member), None).await;
+    assert_eq!(me["mfaSetupRequired"], false);
+
+    // Owners aren't covered by this role, so they're unaffected throughout.
+    let (status, me) = call(&app, "GET", "/api/v1/auth/me", Some(&owner), None).await;
+    assert_eq!(
+        (status, me["mfaSetupRequired"].clone()),
+        (StatusCode::OK, json!(false))
+    );
+    let off = json!({ "required": false });
+    let (status, _) = call(&app, "PUT", &uri, Some(&owner), Some(off)).await;
+    assert_eq!(status, StatusCode::NO_CONTENT);
+}

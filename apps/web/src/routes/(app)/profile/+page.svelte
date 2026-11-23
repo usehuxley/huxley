@@ -118,6 +118,20 @@
 		</p>
 	</div>
 
+	{#if data.user.mfaSetupRequired}
+		<div
+			role="alert"
+			class="rounded-card border border-warning/40 bg-warning-soft p-4 text-sm text-fg"
+			data-testid="mfa-required"
+		>
+			<p class="font-medium">Two-factor authentication is required</p>
+			<p class="mt-1 text-fg-muted">
+				Your organization requires a second factor. Add a passkey or set up an authenticator app
+				below to continue using Huxley.
+			</p>
+		</div>
+	{/if}
+
 	<Card title="Change password" description="Changing it signs you out everywhere else.">
 		<form
 			method="POST"

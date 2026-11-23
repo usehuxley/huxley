@@ -454,7 +454,10 @@ pub async fn logout(
         (status = 401, description = "Not signed in", body = ApiError,
             content_type = "application/problem+json"),
     ))]
-pub async fn me(State(state): State<AppState>, authed: Authed) -> ApiResult<Json<MeView>> {
+pub async fn me(State(state): State<AppState>, user: CurrentUser) -> ApiResult<Json<MeView>> {
+    // Not the enforcing extractor: the app needs to learn that setup is
+    // required, and this is how it finds out.
+    let authed = Authed::load(user, &state).await?;
     let mut tx = huxley_db::begin_scoped(&state.db, &huxley_db::OrgScope::System)
         .await
         .map_err(|e| ApiError::internal(&e))?;
@@ -470,6 +473,7 @@ pub async fn me(State(state): State<AppState>, authed: Authed) -> ApiResult<Json
         active_modules,
         granted_permissions: authed.principal.granted_anywhere(),
         is_owner: authed.principal.is_owner(),
+        mfa_setup_required: authed.mfa_setup_required(),
         user: authed.user.auth.user.into(),
     }))
 }
@@ -487,6 +491,10 @@ pub struct MeView {
     pub is_owner: bool,
     /// Feature modules that are enabled and released.
     pub active_modules: Vec<&'static str>,
+    /// Policy requires a second factor and the user has none. Until they add
+    /// one, every API call except profile and MFA setup returns
+    /// `403 mfa-setup-required`.
+    pub mfa_setup_required: bool,
 }
 
 /// The signed-in user's active sessions.

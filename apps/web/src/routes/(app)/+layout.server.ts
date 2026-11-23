@@ -20,5 +20,10 @@ export const load: LayoutServerLoad = async (event) => {
 	if (!result.data) {
 		error(503, 'The Huxley API is unavailable. Try again shortly.');
 	}
+	// Policy requires a second factor and the user has none: the API refuses
+	// everything else until they add one from their profile.
+	if (result.data.mfaSetupRequired && event.url.pathname !== '/profile') {
+		redirect(303, '/profile');
+	}
 	return { user: result.data };
 };

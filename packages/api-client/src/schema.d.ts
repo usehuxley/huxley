@@ -544,6 +544,63 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
+	'/api/v1/security/mfa-policy': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** Who must have a second factor. */
+		get: operations['get_policy'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/security/mfa-policy/orgs/{id}': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		/**
+		 * Requires (or stops requiring) a second factor for users who can reach an
+		 *     organization. On the root organization, that's every user.
+		 */
+		put: operations['set_org'];
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/security/mfa-policy/roles/{id}': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		/**
+		 * Requires (or stops requiring) a second factor for holders of a role.
+		 *     Holders without one can only set one up until they do.
+		 */
+		put: operations['set_role'];
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
 	'/api/v1/users': {
 		parameters: {
 			query?: never;
@@ -831,6 +888,12 @@ export interface components {
 			grantedPermissions: string[];
 			/** @description Holds the Owner role at the root organization. */
 			isOwner: boolean;
+			/**
+			 * @description Policy requires a second factor and the user has none. Until they add
+			 *     one, every API call except profile and MFA setup returns
+			 *     `403 mfa-setup-required`.
+			 */
+			mfaSetupRequired: boolean;
 		};
 		MfaChallengeRequest: {
 			/** @description From the `mfaRequired` response. */
@@ -841,6 +904,15 @@ export interface components {
 		 * @enum {string}
 		 */
 		MfaMethodView: 'totp' | 'passkey' | 'recoveryCode';
+		/** @description The whole MFA policy at a glance. */
+		MfaPolicy: {
+			/** @description Every user must have a second factor (set on the root organization). */
+			everyone: boolean;
+			/** @description Organizations whose users must have a second factor. */
+			orgs: components['schemas']['PolicyOrg'][];
+			/** @description Roles whose holders must have a second factor. */
+			roleIds: string[];
+		};
 		MfaStatusView: {
 			/**
 			 * Format: int64
@@ -949,6 +1021,14 @@ export interface components {
 		 * @enum {string}
 		 */
 		PermissionScope: 'org' | 'instance';
+		/** @description An organization that requires MFA. */
+		PolicyOrg: {
+			/** Format: uuid */
+			id: string;
+			/** @description The root: the requirement covers every user. */
+			isRoot: boolean;
+			name: string;
+		};
 		RecoveryCodesView: {
 			/** @description Shown only now. Each code signs in once if the authenticator is lost. */
 			recoveryCodes: string[];
@@ -969,6 +1049,8 @@ export interface components {
 			key: string;
 			name: string;
 			permissions: string[];
+			/** @description Holders must have a second factor. */
+			requireMfa: boolean;
 		};
 		SessionView: {
 			/** Format: date-time */
@@ -996,6 +1078,9 @@ export interface components {
 			/** @description Modules whose setting changed, in the order they were applied. */
 			changed: string[];
 			modules: components['schemas']['ModuleState'][];
+		};
+		SetRequirementRequest: {
+			required: boolean;
 		};
 		TotpEnrollmentView: {
 			/** @description `otpauth://` URI to show as a QR code. */
@@ -2109,6 +2194,113 @@ export interface operations {
 				};
 				content: {
 					'application/json': components['schemas']['Role'][];
+				};
+			};
+		};
+	};
+	get_policy: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['MfaPolicy'];
+				};
+			};
+			403: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	set_org: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				/** @description Organization id */
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['SetRequirementRequest'];
+			};
+		};
+		responses: {
+			204: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content?: never;
+			};
+			403: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+			404: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	set_role: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				/** @description Role id */
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['SetRequirementRequest'];
+			};
+		};
+		responses: {
+			204: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content?: never;
+			};
+			403: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+			404: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
 				};
 			};
 		};
