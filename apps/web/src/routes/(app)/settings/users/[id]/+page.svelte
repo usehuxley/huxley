@@ -92,6 +92,23 @@
 		{/if}
 	</Card>
 
+	<Card title="Teams" description="This user also gets the roles of every team they're in.">
+		{#if data.teams.length === 0}
+			<p class="text-sm text-fg-muted">Not in any team.</p>
+		{:else}
+			<div class="flex flex-wrap gap-2">
+				{#each data.teams as team (team.id)}
+					<a
+						href={resolve('/(app)/settings/teams/[id]', { id: team.id })}
+						class="rounded-full bg-surface-sunken px-3 py-1 text-sm text-fg hover:underline"
+					>
+						{team.name}
+					</a>
+				{/each}
+			</div>
+		{/if}
+	</Card>
+
 	<Card title="Roles" description="What this user can do, and where.">
 		{#if data.assignments.length === 0}
 			<p class="text-sm text-fg-muted">No roles yet. This user can sign in but sees nothing.</p>

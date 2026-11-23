@@ -11,6 +11,7 @@
 
 pub mod mfa_policy;
 pub mod permissions;
+pub mod teams;
 
 use huxley_core::RequestContext;
 use huxley_db::audit::{self, AuditRecord};
@@ -138,6 +139,16 @@ pub enum AuthzError {
     LastOwner,
     #[error("service accounts can't hold the Owner role")]
     ServiceAccountOwner,
+    #[error("the Owner role can't be assigned to a team")]
+    OwnerToTeam,
+    #[error("team not found")]
+    TeamNotFound,
+    #[error("user not found")]
+    UserNotFound,
+    #[error("a team with this name already exists")]
+    TeamNameTaken,
+    #[error("invalid team name")]
+    InvalidTeamName,
     #[error(transparent)]
     Db(#[from] DbError),
 }
@@ -145,7 +156,11 @@ pub enum AuthzError {
 impl From<sqlx::Error> for AuthzError {
     fn from(error: sqlx::Error) -> Self {
         match violated_constraint(&error) {
-            Some("role_assignments_unique") => Self::AlreadyAssigned,
+            Some("role_assignments_unique" | "role_assignments_team_unique") => {
+                Self::AlreadyAssigned
+            }
+            Some("role_assignments_owner_not_team") => Self::OwnerToTeam,
+            Some("teams_name_unique") => Self::TeamNameTaken,
             _ => Self::Db(DbError::Sqlx(error)),
         }
     }
@@ -170,7 +185,8 @@ pub async fn load_principal(conn: &mut PgConnection, user_id: Uuid) -> AuthzResu
            FROM role_assignments a \
            JOIN roles r ON r.id = a.role_id \
            JOIN organizations o ON o.id = a.org_id AND o.status = 'active' \
-          WHERE a.user_id = $1",
+          WHERE a.user_id = $1 \
+             OR a.team_id IN (SELECT team_id FROM team_members WHERE user_id = $1)",
     )
     .bind(user_id)
     .fetch_all(&mut *conn)
@@ -264,7 +280,11 @@ pub async fn list_roles(conn: &mut PgConnection) -> AuthzResult<Vec<Role>> {
 #[serde(rename_all = "camelCase")]
 pub struct Assignment {
     pub id: Uuid,
-    pub user_id: Uuid,
+    /// Set for an assignment to a user.
+    pub user_id: Option<Uuid>,
+    /// Set for an assignment to a team.
+    pub team_id: Option<Uuid>,
+    pub team_name: Option<String>,
     pub role_id: Uuid,
     pub role_key: String,
     pub role_name: String,
@@ -275,9 +295,10 @@ pub struct Assignment {
     pub created_at: OffsetDateTime,
 }
 
-const SELECT_ASSIGNMENTS: &str = "SELECT a.id, a.user_id, a.role_id, r.key AS role_key, r.name AS role_name, \
-    a.org_id, o.name AS org_name, a.inherit, a.created_at \
-    FROM role_assignments a JOIN roles r ON r.id = a.role_id JOIN organizations o ON o.id = a.org_id";
+pub(crate) const SELECT_ASSIGNMENTS: &str = "SELECT a.id, a.user_id, a.team_id, t.name AS team_name, a.role_id, \
+    r.key AS role_key, r.name AS role_name, a.org_id, o.name AS org_name, a.inherit, a.created_at \
+    FROM role_assignments a JOIN roles r ON r.id = a.role_id JOIN organizations o ON o.id = a.org_id \
+    LEFT JOIN teams t ON t.id = a.team_id";
 
 /// A user's assignments that are visible in the current RLS scope.
 pub async fn user_assignments(
@@ -303,15 +324,61 @@ pub(crate) async fn role_by_id(conn: &mut PgConnection, role_id: Uuid) -> AuthzR
     .ok_or(AuthzError::RoleNotFound)
 }
 
-/// Grants a role. The caller must hold `role_assignment:manage` at the org;
-/// granting Owner additionally requires being an owner. Run in system scope
-/// after the permission check (the target org may be outside the caller's
-/// RLS scope only if they lack access, which the check already rejected).
+/// Who receives a role assignment.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Assignee {
+    User(Uuid),
+    Team(Uuid),
+}
+
+impl Assignee {
+    fn kind(&self) -> &'static str {
+        match self {
+            Self::User(_) => "user",
+            Self::Team(_) => "team",
+        }
+    }
+
+    fn id(&self) -> Uuid {
+        match self {
+            Self::User(id) | Self::Team(id) => *id,
+        }
+    }
+}
+
+/// Grants a role to a user. See [`assign_to`].
 pub async fn assign(
     conn: &mut PgConnection,
     ctx: &RequestContext,
     actor: &Principal,
     user_id: Uuid,
+    role_id: Uuid,
+    org_id: Uuid,
+    inherit: bool,
+) -> AuthzResult<Assignment> {
+    assign_to(
+        conn,
+        ctx,
+        actor,
+        Assignee::User(user_id),
+        role_id,
+        org_id,
+        inherit,
+    )
+    .await
+}
+
+/// Grants a role to a user or team. The caller must hold
+/// `role_assignment:manage` at the org; granting Owner additionally requires
+/// being an owner, and goes to people only (not teams or service accounts).
+/// Run in system scope after the permission check (the target org may be
+/// outside the caller's RLS scope only if they lack access, which the check
+/// already rejected).
+pub async fn assign_to(
+    conn: &mut PgConnection,
+    ctx: &RequestContext,
+    actor: &Principal,
+    assignee: Assignee,
     role_id: Uuid,
     org_id: Uuid,
     inherit: bool,
@@ -324,7 +391,17 @@ pub async fn assign(
     if role.key == OWNER_ROLE && !actor.is_owner() {
         return Err(AuthzError::OwnerOnly);
     }
-    if role.key == OWNER_ROLE {
+    let (user_id, team_id) = match assignee {
+        Assignee::User(id) => (Some(id), None),
+        Assignee::Team(id) => {
+            teams::get(conn, id).await?;
+            (None, Some(id))
+        }
+    };
+    if role.key == OWNER_ROLE && team_id.is_some() {
+        return Err(AuthzError::OwnerToTeam);
+    }
+    if let (OWNER_ROLE, Some(user_id)) = (role.key.as_str(), user_id) {
         let (service,): (bool,) =
             sqlx::query_as("SELECT kind = 'service' FROM users WHERE id = $1")
                 .bind(user_id)
@@ -336,11 +413,12 @@ pub async fn assign(
     }
     let id = huxley_core::new_id();
     sqlx::query(
-        "INSERT INTO role_assignments (id, user_id, role_id, org_id, inherit, created_by) \
-         VALUES ($1, $2, $3, $4, $5, $6)",
+        "INSERT INTO role_assignments (id, user_id, team_id, role_id, org_id, inherit, created_by) \
+         VALUES ($1, $2, $3, $4, $5, $6, $7)",
     )
     .bind(id)
     .bind(user_id)
+    .bind(team_id)
     .bind(role_id)
     .bind(org_id)
     .bind(inherit)
@@ -352,7 +430,7 @@ pub async fn assign(
         ctx,
         AuditRecord::new("role.assigned")
             .org(org_id)
-            .target("user", user_id)
+            .target(assignee.kind(), assignee.id())
             .details(json!({ "role": role.key, "inherit": inherit, "assignmentId": id })),
     )
     .await?;
@@ -412,7 +490,17 @@ pub async fn unassign(
         ctx,
         AuditRecord::new("role.unassigned")
             .org(assignment.org_id)
-            .target("user", assignment.user_id)
+            .target(
+                if assignment.team_id.is_some() {
+                    "team"
+                } else {
+                    "user"
+                },
+                assignment
+                    .user_id
+                    .or(assignment.team_id)
+                    .unwrap_or_default(),
+            )
             .details(json!({ "role": assignment.role_key, "assignmentId": assignment_id })),
     )
     .await?;

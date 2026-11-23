@@ -293,7 +293,10 @@ pub async fn list_assignments(
 #[derive(Debug, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct CreateAssignmentRequest {
-    pub user_id: Uuid,
+    /// Grant to this user. Send exactly one of `userId` or `teamId`.
+    pub user_id: Option<Uuid>,
+    /// Grant to this team; its members receive the role.
+    pub team_id: Option<Uuid>,
     pub role_id: Uuid,
     pub org_id: Uuid,
     /// Also apply to every sub-organization (default true).
@@ -321,15 +324,25 @@ pub async fn create_assignment(
     let mut tx = begin_scoped(&state.db, &OrgScope::System)
         .await
         .map_err(db_err)?;
-    huxley_auth::find_user(&mut tx, body.user_id)
-        .await
-        .map_err(map_auth)?
-        .ok_or_else(ApiError::not_found)?;
-    let assignment = huxley_authz::assign(
+    let assignee = match (body.user_id, body.team_id) {
+        (Some(user_id), None) => {
+            huxley_auth::find_user(&mut tx, user_id)
+                .await
+                .map_err(map_auth)?
+                .ok_or_else(ApiError::not_found)?;
+            huxley_authz::Assignee::User(user_id)
+        }
+        (None, Some(team_id)) => huxley_authz::Assignee::Team(team_id),
+        _ => {
+            return Err(ApiError::validation()
+                .with_field_error("/userId", "Send exactly one of `userId` or `teamId`."));
+        }
+    };
+    let assignment = huxley_authz::assign_to(
         &mut tx,
         &authed.user.ctx,
         &authed.principal,
-        body.user_id,
+        assignee,
         body.role_id,
         body.org_id,
         body.inherit,

@@ -7,11 +7,12 @@ import type { Actions, PageServerLoad } from './$types';
 export const load: PageServerLoad = async (event) => {
 	const client = api(event);
 	const id = event.params.id;
-	const [person, assignments, roles, orgs] = await Promise.all([
+	const [person, assignments, roles, orgs, teams] = await Promise.all([
 		client.GET('/api/v1/users/{id}', { params: { path: { id } } }),
 		client.GET('/api/v1/users/{id}/assignments', { params: { path: { id } } }),
 		client.GET('/api/v1/roles'),
-		client.GET('/api/v1/orgs')
+		client.GET('/api/v1/orgs'),
+		client.GET('/api/v1/teams/of-user/{user_id}', { params: { path: { user_id: id } } })
 	]);
 	if (person.response.status === 404) error(404, 'User not found.');
 	if (!person.data || !assignments.data) error(503, 'Could not load this user.');
@@ -20,7 +21,8 @@ export const load: PageServerLoad = async (event) => {
 		assignments: assignments.data,
 		// Users who can't assign roles may still view; the API decides.
 		roles: roles.data ?? [],
-		orgs: (orgs.data ?? []).filter((o) => o.status === 'active')
+		orgs: (orgs.data ?? []).filter((o) => o.status === 'active'),
+		teams: teams.data ?? []
 	};
 };
 

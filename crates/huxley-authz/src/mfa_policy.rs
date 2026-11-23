@@ -2,7 +2,8 @@
 //!
 //! Policy lives in two flags: `roles.require_mfa` and
 //! `organizations.require_mfa`. A user is covered if they hold a role with the
-//! flag (at any org), or can reach an org with the flag: assigned at it or a
+//! flag (at any org, directly or through a team), or can reach an org with
+//! the flag: assigned at it or a
 //! descendant of it, or at an ancestor with inheritance. The root org's flag
 //! covers everyone, with or without roles.
 //!
@@ -28,7 +29,8 @@ pub async fn user_requires_mfa(conn: &mut PgConnection, user_id: Uuid) -> AuthzR
                 SELECT 1 FROM role_assignments a \
                   JOIN roles r ON r.id = a.role_id \
                   JOIN organizations o ON o.id = a.org_id AND o.status = 'active' \
-                 WHERE a.user_id = $1 \
+                 WHERE (a.user_id = $1 OR a.team_id IN \
+                        (SELECT team_id FROM team_members WHERE user_id = $1)) \
                    AND (r.require_mfa OR EXISTS ( \
                         SELECT 1 FROM organizations p \
                          WHERE p.require_mfa AND p.status = 'active' \

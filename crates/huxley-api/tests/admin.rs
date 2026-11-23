@@ -878,3 +878,141 @@ async fn service_accounts_use_tokens_and_roles_but_cannot_sign_in() {
     let (status, _) = call(&app, "GET", &uri, Some(&owner), None).await;
     assert_eq!(status, StatusCode::NOT_FOUND);
 }
+
+#[tokio::test]
+async fn team_roles_reach_members_over_http() {
+    let Some(pools) = pools().await else { return };
+    let root = ensure_root(&pools).await;
+    let app = app(&pools);
+    let owner = login(&app, &user(&pools, true).await).await;
+    let member_email = user(&pools, false).await;
+    let member = login(&app, &member_email).await;
+    let (_, me) = call(&app, "GET", "/api/v1/auth/me", Some(&member), None).await;
+    let member_id = me["id"].as_str().unwrap().to_owned();
+
+    // Only team managers create teams.
+    let body = json!({ "name": unique("Service desk"), "description": "Tier 1" });
+    let (status, _) = call(
+        &app,
+        "POST",
+        "/api/v1/teams",
+        Some(&member),
+        Some(body.clone()),
+    )
+    .await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+    let (status, team) = call(&app, "POST", "/api/v1/teams", Some(&owner), Some(body)).await;
+    assert_eq!(status, StatusCode::CREATED, "{team}");
+    let team_id = team["id"].as_str().unwrap().to_owned();
+
+    let (_, roles) = call(&app, "GET", "/api/v1/roles", Some(&owner), None).await;
+    let role = |key: &str| {
+        roles
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|r| r["key"] == key)
+            .unwrap()["id"]
+            .clone()
+    };
+    let grant = json!({ "teamId": team_id, "roleId": role("read_only"), "orgId": root });
+    let (status, assignment) = call(
+        &app,
+        "POST",
+        "/api/v1/role-assignments",
+        Some(&owner),
+        Some(grant),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED, "{assignment}");
+    assert_eq!(assignment["teamId"], json!(team_id));
+    // Joining the team grants Read-only; leaving takes it away.
+    let (status, _) = call(&app, "GET", "/api/v1/audit", Some(&member), None).await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+    let uri = format!("/api/v1/teams/{team_id}/members/{member_id}");
+    let (status, _) = call(&app, "PUT", &uri, Some(&owner), None).await;
+    assert_eq!(status, StatusCode::NO_CONTENT);
+    let (status, _) = call(&app, "GET", "/api/v1/audit", Some(&member), None).await;
+    assert_eq!(status, StatusCode::OK);
+
+    let (status, detail) = call(
+        &app,
+        "GET",
+        &format!("/api/v1/teams/{team_id}"),
+        Some(&owner),
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(detail["memberCount"], 1);
+    assert_eq!(detail["members"][0]["email"], member_email.as_str());
+    assert_eq!(detail["assignments"][0]["roleKey"], "read_only");
+    let (_, of_user) = call(
+        &app,
+        "GET",
+        &format!("/api/v1/teams/of-user/{member_id}"),
+        Some(&owner),
+        None,
+    )
+    .await;
+    assert_eq!(of_user[0]["id"], json!(team_id));
+
+    let (status, _) = call(&app, "DELETE", &uri, Some(&owner), None).await;
+    assert_eq!(status, StatusCode::NO_CONTENT);
+    let (status, _) = call(&app, "GET", "/api/v1/audit", Some(&member), None).await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+
+    let (status, _) = call(
+        &app,
+        "DELETE",
+        &format!("/api/v1/teams/{team_id}"),
+        Some(&owner),
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::NO_CONTENT);
+}
+
+#[tokio::test]
+async fn team_assignments_are_validated() {
+    let Some(pools) = pools().await else { return };
+    let root = ensure_root(&pools).await;
+    let app = app(&pools);
+    let owner = login(&app, &user(&pools, true).await).await;
+    let member = login(&app, &user(&pools, false).await).await;
+    let (_, me) = call(&app, "GET", "/api/v1/auth/me", Some(&member), None).await;
+    let member_id = me["id"].as_str().unwrap().to_owned();
+    let body = json!({ "name": unique("Checks") });
+    let (_, team) = call(&app, "POST", "/api/v1/teams", Some(&owner), Some(body)).await;
+    let team_id = team["id"].as_str().unwrap().to_owned();
+    let (_, roles) = call(&app, "GET", "/api/v1/roles", Some(&owner), None).await;
+    let role = |key: &str| {
+        roles
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|r| r["key"] == key)
+            .unwrap()["id"]
+            .clone()
+    };
+    let both = json!({ "teamId": team_id, "userId": member_id, "roleId": role("read_only"), "orgId": root });
+    let (status, _) = call(
+        &app,
+        "POST",
+        "/api/v1/role-assignments",
+        Some(&owner),
+        Some(both),
+    )
+    .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+    let owner_grant = json!({ "teamId": team_id, "roleId": role("owner"), "orgId": root });
+    let (status, _) = call(
+        &app,
+        "POST",
+        "/api/v1/role-assignments",
+        Some(&owner),
+        Some(owner_grant),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CONFLICT);
+}
