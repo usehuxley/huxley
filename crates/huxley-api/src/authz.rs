@@ -13,6 +13,10 @@ use crate::session::CurrentUser;
 use crate::{ApiError, ApiResult, AppState};
 
 /// A signed-in user and their grants. Handlers check permissions through it.
+///
+/// Extracting it also enforces the MFA policy: a user whom policy requires
+/// to have a second factor, and who has none, gets `403 mfa-setup-required`
+/// until they set one up (those routes take [`CurrentUser`] instead).
 #[derive(Debug, Clone)]
 pub struct Authed {
     pub user: CurrentUser,
@@ -24,6 +28,25 @@ impl FromRequestParts<AppState> for Authed {
 
     async fn from_request_parts(parts: &mut Parts, state: &AppState) -> Result<Self, ApiError> {
         let user = CurrentUser::from_request_parts(parts, state).await?;
+        let authed = Self::load(user, state).await?;
+        if authed.mfa_setup_required() {
+            return Err(ApiError::new(
+                StatusCode::FORBIDDEN,
+                "mfa-setup-required",
+                "Two-factor authentication is required",
+            )
+            .with_detail(
+                "Your organization requires two-factor authentication. Add a passkey or an \
+                 authenticator app from your profile to continue.",
+            ));
+        }
+        Ok(authed)
+    }
+}
+
+impl Authed {
+    /// Loads the user's grants without enforcing the MFA policy.
+    pub async fn load(user: CurrentUser, state: &AppState) -> ApiResult<Self> {
         let mut tx = begin_scoped(&state.db, &OrgScope::System)
             .await
             .map_err(|e| ApiError::internal(&e))?;
@@ -33,9 +56,12 @@ impl FromRequestParts<AppState> for Authed {
         tx.commit().await.map_err(|e| ApiError::internal(&e))?;
         Ok(Self { user, principal })
     }
-}
 
-impl Authed {
+    /// Policy requires a second factor and the user has none.
+    pub fn mfa_setup_required(&self) -> bool {
+        self.principal.requires_mfa && !self.user.auth.user.mfa_enabled
+    }
+
     /// Requires an instance-wide permission.
     pub fn require_instance(&self, permission: &str) -> ApiResult<()> {
         if self.principal.can_instance(permission) {

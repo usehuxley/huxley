@@ -1282,6 +1282,133 @@
 				}
 			}
 		},
+		"/api/v1/security/mfa-policy": {
+			"get": {
+				"tags": ["security"],
+				"summary": "Who must have a second factor.",
+				"operationId": "get_policy",
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/MfaPolicy"
+								}
+							}
+						}
+					},
+					"403": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/security/mfa-policy/orgs/{id}": {
+			"put": {
+				"tags": ["security"],
+				"summary": "Requires (or stops requiring) a second factor for users who can reach an\norganization. On the root organization, that's every user.",
+				"operationId": "set_org",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"description": "Organization id",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/SetRequirementRequest"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"204": {},
+					"403": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					},
+					"404": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/security/mfa-policy/roles/{id}": {
+			"put": {
+				"tags": ["security"],
+				"summary": "Requires (or stops requiring) a second factor for holders of a role.\nHolders without one can only set one up until they do.",
+				"operationId": "set_role",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"description": "Role id",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/SetRequirementRequest"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"204": {},
+					"403": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					},
+					"404": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
 		"/api/v1/users": {
 			"get": {
 				"tags": ["users"],
@@ -1999,7 +2126,7 @@
 					},
 					{
 						"type": "object",
-						"required": ["grantedPermissions", "isOwner", "activeModules"],
+						"required": ["grantedPermissions", "isOwner", "activeModules", "mfaSetupRequired"],
 						"properties": {
 							"activeModules": {
 								"type": "array",
@@ -2018,6 +2145,10 @@
 							"isOwner": {
 								"type": "boolean",
 								"description": "Holds the Owner role at the root organization."
+							},
+							"mfaSetupRequired": {
+								"type": "boolean",
+								"description": "Policy requires a second factor and the user has none. Until they add\none, every API call except profile and MFA setup returns\n`403 mfa-setup-required`."
 							}
 						}
 					}
@@ -2038,6 +2169,32 @@
 				"type": "string",
 				"description": "Second-factor methods offered for a challenge.",
 				"enum": ["totp", "passkey", "recoveryCode"]
+			},
+			"MfaPolicy": {
+				"type": "object",
+				"description": "The whole MFA policy at a glance.",
+				"required": ["everyone", "roleIds", "orgs"],
+				"properties": {
+					"everyone": {
+						"type": "boolean",
+						"description": "Every user must have a second factor (set on the root organization)."
+					},
+					"orgs": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/PolicyOrg"
+						},
+						"description": "Organizations whose users must have a second factor."
+					},
+					"roleIds": {
+						"type": "array",
+						"items": {
+							"type": "string",
+							"format": "uuid"
+						},
+						"description": "Roles whose holders must have a second factor."
+					}
+				}
 			},
 			"MfaStatusView": {
 				"type": "object",
@@ -2249,6 +2406,24 @@
 				"description": "Where a permission is evaluated.",
 				"enum": ["org", "instance"]
 			},
+			"PolicyOrg": {
+				"type": "object",
+				"description": "An organization that requires MFA.",
+				"required": ["id", "name", "isRoot"],
+				"properties": {
+					"id": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"isRoot": {
+						"type": "boolean",
+						"description": "The root: the requirement covers every user."
+					},
+					"name": {
+						"type": "string"
+					}
+				}
+			},
 			"RecoveryCodesView": {
 				"type": "object",
 				"required": ["recoveryCodes"],
@@ -2289,7 +2464,7 @@
 			},
 			"Role": {
 				"type": "object",
-				"required": ["id", "key", "name", "description", "isSystem", "permissions"],
+				"required": ["id", "key", "name", "description", "isSystem", "permissions", "requireMfa"],
 				"properties": {
 					"description": {
 						"type": "string"
@@ -2312,6 +2487,10 @@
 						"items": {
 							"type": "string"
 						}
+					},
+					"requireMfa": {
+						"type": "boolean",
+						"description": "Holders must have a second factor."
 					}
 				}
 			},
@@ -2376,6 +2555,15 @@
 						"items": {
 							"$ref": "#/components/schemas/ModuleState"
 						}
+					}
+				}
+			},
+			"SetRequirementRequest": {
+				"type": "object",
+				"required": ["required"],
+				"properties": {
+					"required": {
+						"type": "boolean"
 					}
 				}
 			},
@@ -2488,6 +2676,10 @@
 		{
 			"name": "modules",
 			"description": "Feature modules that can be turned on or off"
+		},
+		{
+			"name": "security",
+			"description": "Sign-in security policy"
 		}
 	]
 }

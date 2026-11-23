@@ -67,7 +67,7 @@ docker compose run --rm huxley admin bootstrap \
 
 `bootstrap` creates the root organization and the first user (with the Owner role), and prints a generated password once. Change it from your profile after signing in. If every owner is locked out, `huxley admin create-user --owner` creates a new owner.
 
-Users add passkeys and turn on two-factor authentication (an authenticator app, with single-use recovery codes) from their profile. A passkey works both as the second factor after a password and on its own for passwordless sign-in. If someone loses both, an administrator can remove it under Settings → Users; only an owner can do that for another owner.
+Users add passkeys and turn on two-factor authentication (an authenticator app, with single-use recovery codes) from their profile. A passkey works both as the second factor after a password and on its own for passwordless sign-in. Under Settings → Security, administrators can require two-factor authentication for everyone, for particular roles, or for particular organizations; people it covers who haven't set it up can only do that until they have. If someone loses both, an administrator can remove it under Settings → Users; only an owner can do that for another owner.
 
 The preset chooses which feature modules start on: `automation` (none: Huxley as an automation engine only), `service-desk`, or `full`. Change them any time under Settings → Modules. Modules not yet released stay off until a release includes them.
 

@@ -3,7 +3,8 @@ export const SETTINGS_SECTIONS = [
 	{ key: 'organizations', label: 'Organizations', permission: 'org:read' },
 	{ key: 'users', label: 'Users', permission: 'user:read' },
 	{ key: 'audit', label: 'Audit log', permission: 'audit:read' },
-	{ key: 'modules', label: 'Modules', permission: 'platform:modules:manage' }
+	{ key: 'modules', label: 'Modules', permission: 'platform:modules:manage' },
+	{ key: 'security', label: 'Security', permission: 'security:policy:manage' }
 ] as const;
 
 export type SettingsSection = (typeof SETTINGS_SECTIONS)[number];

@@ -11,7 +11,8 @@
 		organizations: resolve('/(app)/settings/organizations'),
 		users: resolve('/(app)/settings/users'),
 		audit: resolve('/(app)/settings/audit'),
-		modules: resolve('/(app)/settings/modules')
+		modules: resolve('/(app)/settings/modules'),
+		security: resolve('/(app)/settings/security')
 	};
 </script>
 

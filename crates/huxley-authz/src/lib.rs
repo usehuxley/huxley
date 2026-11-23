@@ -9,6 +9,7 @@
 //! conditions arrive, evaluation moves to Cedar (ADR-006) behind the same
 //! `Principal::can` interface.
 
+pub mod mfa_policy;
 pub mod permissions;
 
 use huxley_core::RequestContext;
@@ -60,6 +61,8 @@ pub struct Principal {
     pub grants: Vec<Grant>,
     /// Path of the root organization, for instance-wide checks.
     pub root_path: Option<String>,
+    /// Policy requires this user to have a second factor ([`mfa_policy`]).
+    pub requires_mfa: bool,
 }
 
 impl Principal {
@@ -154,6 +157,7 @@ pub async fn load_principal(conn: &mut PgConnection, user_id: Uuid) -> AuthzResu
         sqlx::query_as("SELECT path::text FROM organizations WHERE parent_id IS NULL")
             .fetch_optional(&mut *conn)
             .await?;
+    let requires_mfa = mfa_policy::user_requires_mfa(conn, user_id).await?;
     Ok(Principal {
         user_id,
         grants: rows
@@ -167,6 +171,7 @@ pub async fn load_principal(conn: &mut PgConnection, user_id: Uuid) -> AuthzResu
             })
             .collect(),
         root_path: root_path.map(|(p,)| p),
+        requires_mfa,
     })
 }
 
@@ -220,11 +225,14 @@ pub struct Role {
     pub description: String,
     pub is_system: bool,
     pub permissions: Vec<String>,
+    /// Holders must have a second factor.
+    pub require_mfa: bool,
 }
 
 pub async fn list_roles(conn: &mut PgConnection) -> AuthzResult<Vec<Role>> {
     Ok(sqlx::query_as(
-        "SELECT id, key, name, description, is_system, permissions FROM roles ORDER BY is_system DESC, name",
+        "SELECT id, key, name, description, is_system, permissions, require_mfa FROM roles \
+         ORDER BY is_system DESC, name",
     )
     .fetch_all(conn)
     .await?)
@@ -262,9 +270,10 @@ pub async fn user_assignments(
     .await?)
 }
 
-async fn role_by_id(conn: &mut PgConnection, role_id: Uuid) -> AuthzResult<Role> {
+pub(crate) async fn role_by_id(conn: &mut PgConnection, role_id: Uuid) -> AuthzResult<Role> {
     sqlx::query_as(
-        "SELECT id, key, name, description, is_system, permissions FROM roles WHERE id = $1",
+        "SELECT id, key, name, description, is_system, permissions, require_mfa \
+           FROM roles WHERE id = $1",
     )
     .bind(role_id)
     .fetch_optional(conn)
@@ -455,6 +464,7 @@ mod tests {
             user_id: Uuid::nil(),
             grants,
             root_path: Some("root".to_owned()),
+            requires_mfa: false,
         }
     }
 
