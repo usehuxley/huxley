@@ -12,6 +12,7 @@ mod connection_routes;
 pub mod context;
 pub mod csrf;
 pub mod entity_routes;
+mod form_routes;
 pub mod health;
 mod hook_routes;
 pub mod idempotency;

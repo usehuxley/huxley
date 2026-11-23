@@ -1,0 +1,34 @@
+[package]
+name = "huxley-forms"
+description = "Forms: definitions, validation and submissions that start workflows (design doc §6.8)"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[dependencies]
+huxley-core.workspace = true
+huxley-db.workspace = true
+huxley-engine.workspace = true
+huxley-workflows.workspace = true
+jsonschema.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sqlx.workspace = true
+thiserror.workspace = true
+time.workspace = true
+tracing.workspace = true
+utoipa.workspace = true
+uuid.workspace = true
+
+[dev-dependencies]
+huxley-crypto = { workspace = true, features = ["testing"] }
+huxley-db = { workspace = true, features = ["testing"] }
+huxley-expr.workspace = true
+huxley-hwf.workspace = true
+tokio.workspace = true
+
+[lints]
+workspace = true

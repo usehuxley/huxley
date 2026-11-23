@@ -75,6 +75,8 @@ Workflows (the Workflows section of the staff app) automate tasks on a schedule,
 
 Integrations are APIs imported from their OpenAPI or Swagger specs, for workflows to call; see [docs/integrations.md](docs/integrations.md).
 
+Forms are questions people answer to start workflows; see [docs/forms.md](docs/forms.md).
+
 Then open https://localhost (staff app) and https://portal.localhost (client portal). Set `HUXLEY_DOMAIN` and `HUXLEY_PORTAL_DOMAIN` in `.env` for real hostnames; Caddy obtains certificates automatically.
 
 ### Rotating the key-encryption key

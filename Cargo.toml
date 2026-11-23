@@ -27,6 +27,7 @@ huxley-notify = { path = "crates/huxley-notify" }
 huxley-engine = { path = "crates/huxley-engine" }
 huxley-expr = { path = "crates/huxley-expr" }
 huxley-hwf = { path = "crates/huxley-hwf" }
+huxley-forms = { path = "crates/huxley-forms" }
 huxley-integrations = { path = "crates/huxley-integrations" }
 huxley-orgs = { path = "crates/huxley-orgs" }
 huxley-storage = { path = "crates/huxley-storage" }

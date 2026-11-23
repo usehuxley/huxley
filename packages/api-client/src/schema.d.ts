@@ -868,6 +868,94 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
+	'/api/v1/forms': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** Forms you can fill in or manage. */
+		get: operations['list_forms'];
+		put?: never;
+		post: operations['create_form'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/forms/{id}': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get: operations['get_form'];
+		/** Replaces a form's definition (its key stays). */
+		put: operations['update_form'];
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/forms/{id}/archive': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/** Archives a form: it can't be submitted until restored. */
+		post: operations['archive_form'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/forms/{id}/restore': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		post: operations['restore_form'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/forms/{id}/submissions': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** The latest submissions, for people who manage the form. */
+		get: operations['list_form_submissions'];
+		put?: never;
+		/**
+		 * Submits answers. Starts the published workflows with a form trigger
+		 *     for this form, as you; answers that don't fit are a 422 per field.
+		 */
+		post: operations['submit_form'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
 	'/api/v1/integrations': {
 		parameters: {
 			query?: never;
@@ -2582,6 +2670,11 @@ export interface components {
 			/** Format: uuid */
 			orgId: string;
 		};
+		CreateFormRequest: {
+			form: components['schemas']['FormInput'];
+			/** Format: uuid */
+			orgId: string;
+		};
 		CreateOrgRequest: {
 			kind: components['schemas']['OrgKindInput'];
 			name: string;
@@ -2766,6 +2859,40 @@ export interface components {
 			credential: Record<string, never>;
 			/** @description A label to tell passkeys apart, e.g. "Work laptop". */
 			name: string;
+		};
+		Form: {
+			archived: boolean;
+			/** Format: date-time */
+			createdAt: string;
+			description?: string | null;
+			/** Format: uuid */
+			id: string;
+			key: string;
+			name: string;
+			/** Format: uuid */
+			orgId: string;
+			/** @description JSON Schema of the answers. */
+			schema: {
+				[key: string]: unknown;
+			};
+			/** @description UI hints: `order`, and per field `widget`, `help`, `placeholder`. */
+			ui: {
+				[key: string]: unknown;
+			};
+			/** Format: date-time */
+			updatedAt: string;
+		};
+		/** @description A form's definition, to create or replace it. */
+		FormInput: {
+			description?: string | null;
+			key: string;
+			name: string;
+			schema: {
+				[key: string]: unknown;
+			};
+			ui?: {
+				[key: string]: unknown;
+			};
 		};
 		/** @description One grant that gives a permission. */
 		GrantSource: {
@@ -3472,6 +3599,42 @@ export interface components {
 		};
 		/** @enum {string} */
 		StepStatus: 'running' | 'waiting' | 'succeeded' | 'failed' | 'skipped' | 'cancelled';
+		SubmissionView: {
+			/** Format: date-time */
+			createdAt: string;
+			data: {
+				[key: string]: unknown;
+			};
+			/** Format: uuid */
+			id: string;
+			/** Format: uuid */
+			orgId: string;
+			runIds: string[];
+			/** Format: uuid */
+			submittedBy?: string | null;
+		};
+		SubmitRequest: {
+			answers: {
+				[key: string]: unknown;
+			};
+			/**
+			 * Format: uuid
+			 * @description The organization it's for: the form's (default) or one below it.
+			 */
+			orgId?: string | null;
+		};
+		/** @description What a submission started. */
+		Submitted: {
+			/** @description The runs it started, one per workflow with a trigger for the form. */
+			runs: string[];
+			/**
+			 * @description Workflows that didn't start because the answers don't fit their
+			 *     inputs (a mismatch between the form and the workflow).
+			 */
+			skipped: string[];
+			/** Format: uuid */
+			submissionId: string;
+		};
 		Tag: {
 			/** @description One of neutral, accent, success, warning, danger, info. */
 			color: string;
@@ -5461,6 +5624,230 @@ export interface operations {
 				};
 				content: {
 					'application/json': components['schemas']['EntityType'][];
+				};
+			};
+		};
+	};
+	list_forms: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['Form'][];
+				};
+			};
+		};
+	};
+	create_form: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['CreateFormRequest'];
+			};
+		};
+		responses: {
+			201: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['Form'];
+				};
+			};
+			409: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	get_form: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['Form'];
+				};
+			};
+			404: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	update_form: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['FormInput'];
+			};
+		};
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['Form'];
+				};
+			};
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	archive_form: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['Form'];
+				};
+			};
+		};
+	};
+	restore_form: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['Form'];
+				};
+			};
+		};
+	};
+	list_form_submissions: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['SubmissionView'][];
+				};
+			};
+		};
+	};
+	submit_form: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['SubmitRequest'];
+			};
+		};
+		responses: {
+			201: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['Submitted'];
+				};
+			};
+			409: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
 				};
 			};
 		};

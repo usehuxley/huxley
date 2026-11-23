@@ -821,3 +821,157 @@ async fn approvals_are_for_their_approvers() {
         .await;
     assert_eq!(status, StatusCode::CONFLICT);
 }
+
+#[tokio::test]
+async fn forms_start_their_workflows_for_the_org_they_are_for() {
+    let Some(s) = setup().await else { return };
+    let ctx = RequestContext::system(Via::System);
+    let mut tx = begin_scoped(&s.pools.app, &OrgScope::System).await.unwrap();
+    let client = huxley_orgs::create(
+        &mut tx,
+        &ctx,
+        s.org,
+        huxley_orgs::OrgKind::Client,
+        &unique("Client"),
+    )
+    .await
+    .unwrap()
+    .id;
+    tx.commit().await.unwrap();
+    let form_key = key("new-user");
+
+    // A definition that isn't an object schema is refused at that field.
+    let bad = json!({ "orgId": s.org, "form": {
+        "key": form_key, "name": "New user", "schema": { "type": "string" } } });
+    let (status, problem) = s.post(&s.owner, "/api/v1/forms", bad).await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{problem}");
+    assert_eq!(problem["errors"][0]["pointer"], "schema.type");
+
+    let schema = json!({
+        "type": "object",
+        "required": ["name", "seats"],
+        "properties": {
+            "name": { "type": "string", "minLength": 1 },
+            "seats": { "type": "integer", "minimum": 1 }
+        }
+    });
+    let (status, form) = s
+        .post(
+            &s.owner,
+            "/api/v1/forms",
+            json!({ "orgId": s.org, "form": {
+            "key": form_key, "name": "New user", "schema": schema } }),
+        )
+        .await;
+    assert_eq!(status, StatusCode::CREATED, "{form}");
+    let form_id = form["id"].as_str().unwrap().to_owned();
+
+    // Two workflows listen for it; one wants an input the form doesn't have.
+    listen(&s, &form_key).await;
+    // A technician fills it in for the client.
+    let (tech_id, tech) = technician(&s).await;
+    let submit = format!("/api/v1/forms/{form_id}/submissions");
+    let (status, problem) = s
+        .post(
+            &tech,
+            &submit,
+            json!({ "orgId": client, "answers": { "name": "Ada", "seats": 0 } }),
+        )
+        .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{problem}");
+    assert_eq!(problem["errors"][0]["pointer"], "answers/seats");
+
+    let (status, submitted) = s
+        .post(
+            &tech,
+            &submit,
+            json!({ "orgId": client, "answers": { "name": "Ada", "seats": 2 } }),
+        )
+        .await;
+    assert_eq!(status, StatusCode::CREATED, "{submitted}");
+    assert_eq!(submitted["runs"].as_array().unwrap().len(), 1);
+    assert_eq!(submitted["skipped"], json!(["picky"]));
+    let run: Uuid = submitted["runs"][0].as_str().unwrap().parse().unwrap();
+    let (org, kind, actor, inputs): (Uuid, String, Option<Uuid>, Value) =
+        sqlx::query_as("SELECT org_id, trigger_type, actor_id, inputs FROM runs WHERE id = $1")
+            .bind(run)
+            .fetch_one(&s.pools.owner)
+            .await
+            .unwrap();
+    assert_eq!(org, client, "runs happen in the org it was for");
+    assert_eq!(kind, "form");
+    assert_eq!(actor, Some(tech_id), "form runs act as the submitter");
+    assert_eq!(inputs, json!({ "name": "Ada", "seats": 2 }));
+
+    // An organization outside the form's tree is refused.
+    let elsewhere = provider_org(&s.pools).await;
+    let (status, _) = s
+        .post(
+            &s.owner,
+            &submit,
+            json!({ "orgId": elsewhere, "answers": { "name": "A", "seats": 1 } }),
+        )
+        .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+
+    // Strangers can't see or submit it.
+    let (_, stranger_email) = user(&s.pools, false).await;
+    let stranger = login(&s.app, &stranger_email).await;
+    assert_eq!(
+        s.get(&stranger, &format!("/api/v1/forms/{form_id}"))
+            .await
+            .0,
+        StatusCode::NOT_FOUND
+    );
+}
+
+/// Publishes two workflows with a trigger for `form_key`: one whose inputs
+/// fit the form, and "picky", which wants an input it doesn't have.
+async fn listen(s: &Setup, form_key: &str) {
+    for (wf_key, inputs) in [
+        (
+            "onboard",
+            json!({ "type": "object", "required": ["name"], "properties": { "name": { "type": "string" } } }),
+        ),
+        (
+            "picky",
+            json!({ "type": "object", "required": ["department"], "properties": { "department": { "type": "string" } } }),
+        ),
+    ] {
+        let doc = json!({
+            "apiVersion": "usehuxley.com/v1", "kind": "Workflow",
+            "metadata": { "key": key(wf_key), "name": wf_key },
+            "spec": {
+                "inputs": inputs,
+                "triggers": [{ "type": "form", "form": form_key }],
+                "steps": [{ "id": "hi", "type": "transform", "output": "hi" }]
+            }
+        });
+        let (_, created) = s.create(doc).await;
+        let id = created["id"].as_str().unwrap().to_owned();
+        let (status, _) = s
+            .post(
+                &s.owner,
+                &format!("/api/v1/workflows/{id}/publish"),
+                json!({}),
+            )
+            .await;
+        assert_eq!(status, StatusCode::OK);
+    }
+}
+
+/// A technician at the setup's organization, signed in.
+async fn technician(s: &Setup) -> (Uuid, String) {
+    let (tech_id, tech_email) = user(&s.pools, false).await;
+    sqlx::query(
+        "INSERT INTO role_assignments (id, user_id, role_id, org_id) \
+         SELECT $1, $2, id, $3 FROM roles WHERE key = 'technician'",
+    )
+    .bind(Uuid::now_v7())
+    .bind(tech_id)
+    .bind(s.org)
+    .execute(&s.pools.owner)
+    .await
+    .unwrap();
+    (tech_id, login(&s.app, &tech_email).await)
+}
