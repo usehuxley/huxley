@@ -142,8 +142,15 @@ pub async fn serve(config: Config, roles: BTreeSet<Role>) -> anyhow::Result<()> 
                     huxley_engine::Engine::with_config(db.clone(), crypto.clone(), &config.engine);
                 let worker_config = huxley_engine::WorkerConfig::from(&config.engine);
                 let stop = shutdown.clone();
+                let events = (engine.clone(), crypto.clone(), shutdown.clone());
                 tasks.spawn(async move {
                     huxley_engine::run_workers(engine, worker_config, stop).await;
+                    Ok(())
+                });
+                // Domain events to event triggers.
+                tasks.spawn(async move {
+                    huxley_triggers::events::run_event_dispatcher(events.0, events.1, events.2)
+                        .await;
                     Ok(())
                 });
             }
