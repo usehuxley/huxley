@@ -1,11 +1,15 @@
 //! `/api/v1/workflows` and `/api/v1/runs`: workflow definitions and runs.
 
 use std::collections::HashMap;
+use std::convert::Infallible;
+use std::time::{Duration, Instant};
 
 use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
+use axum::response::sse::{Event, KeepAlive, Sse};
 use axum::routing::{get, post, put};
 use axum::{Json, Router};
+use futures_util::Stream;
 use huxley_authz::permissions;
 use huxley_db::{OrgScope, begin_scoped};
 use huxley_engine::runs::{self, PayloadField, RunDetail, RunFilter, RunSummary};
@@ -16,6 +20,7 @@ use huxley_workflows::{
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{Value as JsonValue, json};
+use tokio::sync::broadcast::error::{RecvError, TryRecvError};
 use utoipa::{IntoParams, ToSchema};
 use uuid::Uuid;
 
@@ -47,6 +52,7 @@ pub fn run_routes() -> Router<AppState> {
     Router::new()
         .route("/", get(list_runs))
         .route("/{id}", get(get_run))
+        .route("/{id}/stream", get(stream_run))
         .route("/{id}/cancel", post(cancel_run))
         .route("/{id}/resume", post(resume_run))
         .route("/{id}/steps/{key}/{attempt}/{field}", get(step_payload))
@@ -557,6 +563,71 @@ pub async fn get_run(
     Path(id): Path<Uuid>,
 ) -> ApiResult<Json<RunDetail>> {
     Ok(Json(load_run(&state, &authed, id).await?))
+}
+
+/// A run stream ends after this long; the browser reconnects.
+const RUN_STREAM_LIFETIME: Duration = Duration::from_secs(600);
+/// Changes closer together than this are sent as one update.
+const RUN_STREAM_DEBOUNCE: Duration = Duration::from_millis(250);
+
+/// Server-Sent Events: a `run` event with the run (as `GET /runs/{id}`
+/// returns it) when the stream opens and after each change, at most four a
+/// second. Ends once the run has finished, or after ten minutes (reconnect
+/// to continue).
+#[utoipa::path(get, path = "/api/v1/runs/{id}/stream", operation_id = "stream_run", tag = "workflows",
+    params(("id" = Uuid, Path)),
+    responses((status = 200, description = "text/event-stream of `run` events", content_type = "text/event-stream"),
+              (status = 404, body = ApiError, content_type = "application/problem+json")))]
+pub async fn stream_run(
+    State(state): State<AppState>,
+    authed: Authed,
+    Path(id): Path<Uuid>,
+) -> ApiResult<Sse<impl Stream<Item = Result<Event, Infallible>>>> {
+    // Subscribe first, so a change between the first read and here isn't missed.
+    let rx = state.run_changes.subscribe();
+    let first = load_run(&state, &authed, id).await?;
+    let scope = authed.scope(&state).await?;
+    let db = state.db.clone();
+    let deadline = Instant::now() + RUN_STREAM_LIFETIME;
+
+    let stream =
+        futures_util::stream::unfold((rx, Some(first), false), move |(mut rx, pending, done)| {
+            let (db, scope) = (db.clone(), scope.clone());
+            async move {
+                if done {
+                    return None;
+                }
+                if let Some(run) = pending {
+                    let finished = run.summary.status.is_finished();
+                    let event = Event::default().event("run").json_data(&run).ok()?;
+                    return Some((Ok(event), (rx, None, finished)));
+                }
+                // Wait for a change to this run.
+                loop {
+                    let remaining = deadline.checked_duration_since(Instant::now())?;
+                    match tokio::time::timeout(remaining, rx.recv()).await {
+                        Err(_) | Ok(Err(RecvError::Closed)) => return None,
+                        Ok(Ok(changed)) if changed != id => {}
+                        // Ours, or we fell behind and may have missed ours.
+                        Ok(Ok(_) | Err(RecvError::Lagged(_))) => break,
+                    }
+                }
+                // Let a burst of changes settle, then send the latest state.
+                tokio::time::sleep(RUN_STREAM_DEBOUNCE).await;
+                // (Skips what queued up meanwhile; lagging is fine here.)
+                while !matches!(
+                    rx.try_recv(),
+                    Err(TryRecvError::Empty | TryRecvError::Closed)
+                ) {}
+                let mut tx = begin_scoped(&db, &scope).await.ok()?;
+                let run = runs::get(&mut tx, id).await.ok()??;
+                tx.commit().await.ok()?;
+                let finished = run.summary.status.is_finished();
+                let event = Event::default().event("run").json_data(&run).ok()?;
+                Some((Ok(event), (rx, None, finished)))
+            }
+        });
+    Ok(Sse::new(stream).keep_alive(KeepAlive::default()))
 }
 
 #[derive(Debug, Serialize, ToSchema)]

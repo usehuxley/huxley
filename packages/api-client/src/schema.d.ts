@@ -1301,6 +1301,28 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
+	'/api/v1/runs/{id}/stream': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/**
+		 * Server-Sent Events: a `run` event with the run (as `GET /runs/{id}`
+		 *     returns it) when the stream opens and after each change, at most four a
+		 *     second. Ends once the run has finished, or after ten minutes (reconnect
+		 *     to continue).
+		 */
+		get: operations['stream_run'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
 	'/api/v1/security/mfa-policy': {
 		parameters: {
 			query?: never;
@@ -5497,6 +5519,36 @@ export interface operations {
 				};
 				content: {
 					'application/json': unknown;
+				};
+			};
+			404: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	stream_run: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			/** @description text/event-stream of `run` events */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'text/event-stream': unknown;
 				};
 			};
 			404: {

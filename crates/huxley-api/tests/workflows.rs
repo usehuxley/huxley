@@ -561,3 +561,133 @@ async fn spilled_step_outputs_are_fetched_in_full() {
     .await;
     assert_eq!(status, StatusCode::NOT_FOUND);
 }
+
+/// Reads SSE `run` events from a response body until it ends.
+async fn run_events(body: axum::body::Body, until: Duration) -> Vec<Value> {
+    use futures_util::StreamExt as _;
+    let mut stream = body.into_data_stream();
+    let mut buffer = String::new();
+    let mut events = Vec::new();
+    let deadline = Instant::now() + until;
+    while let Some(remaining) = deadline.checked_duration_since(Instant::now()) {
+        let Ok(Some(chunk)) = tokio::time::timeout(remaining, stream.next()).await else {
+            break;
+        };
+        buffer.push_str(&String::from_utf8_lossy(&chunk.unwrap()));
+        while let Some(end) = buffer.find("\n\n") {
+            let frame: String = buffer.drain(..end + 2).collect();
+            if frame.lines().any(|l| l == "event: run") {
+                let data: String = frame
+                    .lines()
+                    .filter_map(|l| l.strip_prefix("data: "))
+                    .collect();
+                events.push(serde_json::from_str(&data).unwrap());
+            }
+        }
+    }
+    events
+}
+
+#[tokio::test]
+async fn run_streams_follow_a_run_until_it_finishes() {
+    // Its own database: this test's engine runs the jobs.
+    let Some(db) = isolated("api_stream").await else {
+        return;
+    };
+    let pools = db.pools.clone();
+    let auth = AuthService::new(pools.app.clone(), AuthConfig::default(), crypto(&pools));
+    let state = AppState::new(
+        pools.app.clone(),
+        auth,
+        crypto(&pools),
+        ApiConfig {
+            login_attempts_per_minute: 1000,
+            ..ApiConfig::default()
+        },
+    );
+    let stop = tokio_util::sync::CancellationToken::new();
+    tokio::spawn(
+        state
+            .run_changes
+            .clone()
+            .run(pools.app.clone(), stop.clone()),
+    );
+    let app = router(state);
+    let org = provider_org(&pools).await;
+    let owner = login(&app, &user(&pools, true).await.1).await;
+    let mut doc = document(
+        &key("live"),
+        &json!([
+            { "id": "first", "type": "transform", "output": 1 },
+            { "id": "pause", "type": "wait", "duration": "50ms" },
+            { "id": "last", "type": "transform", "output": 2 }
+        ]),
+    );
+    doc["spec"]["outputs"] = json!({ "last": "{{ steps.last.output }}" });
+    let (_, created) = call(
+        &app,
+        "POST",
+        "/api/v1/workflows",
+        &owner,
+        Some(json!({ "orgId": org, "document": doc })),
+    )
+    .await;
+    let id = created["id"].as_str().unwrap().to_owned();
+    let (status, started) = call(
+        &app,
+        "POST",
+        &format!("/api/v1/workflows/{id}/runs"),
+        &owner,
+        Some(json!({ "inputs": { "name": "Ada" }, "test": true })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED, "{started}");
+    let run_id = started["id"].as_str().unwrap().to_owned();
+    tokio::time::sleep(Duration::from_millis(300)).await; // let it LISTEN
+
+    let response = app
+        .clone()
+        .oneshot(
+            Request::get(format!("/api/v1/runs/{run_id}/stream"))
+                .header("cookie", &owner)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let events = tokio::spawn(run_events(response.into_body(), Duration::from_secs(20)));
+    let engine = huxley_engine::Engine::new(pools.app.clone(), crypto(&pools));
+    let deadline = Instant::now() + Duration::from_secs(20);
+    while !events.is_finished() {
+        engine.drain("api-test", 50).await.unwrap();
+        assert!(Instant::now() < deadline, "the stream didn't end");
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    }
+    let events = events.await.unwrap();
+    stop.cancel();
+
+    assert!(events.len() >= 2, "{events:?}");
+    assert_eq!(events[0]["id"], run_id.as_str());
+    assert_eq!(events[0]["status"], "queued");
+    let last = events.last().unwrap();
+    assert_eq!(
+        last["status"], "succeeded",
+        "the stream ends on the finished run"
+    );
+    assert_eq!(last["outputs"], json!({ "last": 2 }));
+    assert_eq!(last["steps"].as_array().unwrap().len(), 3);
+
+    // Someone who can't see the run can't stream it.
+    let (_, email) = user(&pools, false).await;
+    let stranger = login(&app, &email).await;
+    let (status, _) = call(
+        &app,
+        "GET",
+        &format!("/api/v1/runs/{run_id}/stream"),
+        &stranger,
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+}

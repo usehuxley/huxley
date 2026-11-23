@@ -80,6 +80,9 @@ pub struct AppState {
     pub sso: SsoService,
     /// Real-time notification fan-out. Run it with [`Broadcaster::run`].
     pub notifications: Broadcaster,
+    /// Run ids whose run or steps changed, for live run views. Run it with
+    /// [`Broadcaster::run`].
+    pub run_changes: Broadcaster,
     /// Object storage for attachments. In-memory until [`AppState::with_storage`].
     pub storage: Storage,
     /// Starts and cancels workflow runs (workers execute them).
@@ -100,6 +103,7 @@ impl AppState {
             sso: SsoService::new(auth.clone(), crypto.clone())
                 .expect("the HTTP client for single sign-on builds"),
             notifications: Broadcaster::new(),
+            run_changes: Broadcaster::for_channel(huxley_engine::runs::RUN_CHANGES),
             storage: Storage::memory(),
             engine,
             auth,

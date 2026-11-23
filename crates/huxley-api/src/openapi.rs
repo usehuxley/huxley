@@ -178,6 +178,7 @@ use crate::workflow_routes::{
         workflow_routes::start_run,
         workflow_routes::list_runs,
         workflow_routes::get_run,
+        workflow_routes::stream_run,
         workflow_routes::cancel_run,
         workflow_routes::resume_run,
         workflow_routes::dead_jobs,

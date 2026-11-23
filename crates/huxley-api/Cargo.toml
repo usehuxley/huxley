@@ -51,6 +51,7 @@ huxley-crypto = { workspace = true, features = ["testing"] }
 huxley-db = { workspace = true, features = ["testing"] }
 huxley-auth.workspace = true
 http-body-util = "0.1"
+tokio-util.workspace = true
 secrecy.workspace = true
 
 [lints]
