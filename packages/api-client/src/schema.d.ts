@@ -616,6 +616,27 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
+	'/api/v1/connections/sign-in/complete': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/**
+		 * Finishes a sign-in the caller started: exchanges the provider's code
+		 *     for tokens. Each `state` works once, for ten minutes, for the person
+		 *     who started it.
+		 */
+		post: operations['complete_connection_sign_in'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
 	'/api/v1/connections/{id}': {
 		parameters: {
 			query?: never;
@@ -628,6 +649,27 @@ export interface paths {
 		put: operations['update_connection'];
 		post?: never;
 		delete: operations['delete_connection'];
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/connections/{id}/sign-in': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/**
+		 * Starts signing in a connection that uses OAuth 2.0 authorization code.
+		 *     The redirect URI is always the app's own callback, never the caller's
+		 *     choice.
+		 */
+		post: operations['begin_connection_sign_in'];
+		delete?: never;
 		options?: never;
 		head?: never;
 		patch?: never;
@@ -3227,6 +3269,16 @@ export interface components {
 		 * @enum {string}
 		 */
 		SettingKind: 'text' | 'timezone' | 'color' | 'email' | 'prefix';
+		SignInComplete: {
+			/** @description The `code` the provider sent back. */
+			code: string;
+			/** @description The `state` the provider sent back. */
+			state: string;
+		};
+		SignInStart: {
+			/** @description Send the browser here; the provider returns it to the callback. */
+			authorizeUrl: string;
+		};
 		SsoCallbackRequest: {
 			code: string;
 			state: string;
@@ -4681,6 +4733,45 @@ export interface operations {
 			};
 		};
 	};
+	complete_connection_sign_in: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['SignInComplete'];
+			};
+		};
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ConnectionView'];
+				};
+			};
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+			502: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
 	get_connection: {
 		parameters: {
 			query?: never;
@@ -4759,6 +4850,43 @@ export interface operations {
 					[name: string]: unknown;
 				};
 				content?: never;
+			};
+		};
+	};
+	begin_connection_sign_in: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['SignInStart'];
+				};
+			};
+			409: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
 			};
 		};
 	};

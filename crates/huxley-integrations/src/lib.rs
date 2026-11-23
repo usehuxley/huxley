@@ -14,6 +14,7 @@
 pub mod connections;
 pub mod diff;
 mod import;
+pub mod oauth;
 mod refs;
 pub mod store;
 mod swagger;

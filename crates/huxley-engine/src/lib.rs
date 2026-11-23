@@ -13,6 +13,7 @@ mod egress;
 mod http;
 mod journal;
 mod notify;
+pub mod oauth;
 mod payload;
 pub mod queue;
 mod run;

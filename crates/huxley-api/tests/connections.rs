@@ -277,3 +277,151 @@ async fn connections_are_checked_before_saving() {
     assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{problem}");
     assert_eq!(problem["errors"][0]["pointer"], "integrationId");
 }
+
+const OAUTH_SPEC: &str = r#"
+openapi: 3.0.3
+info: { title: Signed API, version: "1" }
+servers: [{ url: "https://signed.example.com" }]
+components:
+  securitySchemes:
+    user:
+      type: oauth2
+      flows:
+        authorizationCode:
+          authorizationUrl: https://login.example.com/authorize
+          tokenUrl: https://login.example.com/token
+          scopes: { read: Read }
+paths:
+  /me:
+    get: { responses: { "200": { description: ok } } }
+"#;
+
+#[tokio::test]
+async fn sign_in_redirects_to_the_provider_and_back_to_the_app() {
+    let Some(pools) = pools().await else { return };
+    // Without a public URL, providers couldn't send anyone back.
+    let plain = app(&pools);
+    let app = app_with_public_url(&pools);
+    let msp = provider_org(&pools).await;
+    let email = user(&pools, true).await.1;
+    let owner = login(&app, &email).await;
+    let (_, integration) = call(
+        &app,
+        "POST",
+        "/api/v1/integrations",
+        &owner,
+        Some(json!({ "orgId": msp, "spec": OAUTH_SPEC })),
+    )
+    .await;
+    let (status, connection) = call(
+        &app,
+        "POST",
+        "/api/v1/connections",
+        &owner,
+        Some(json!({
+            "orgId": msp,
+            "integrationId": integration["id"],
+            "connection": { "name": "Me", "authScheme": "user",
+                            "settings": { "client_id": "huxley-app" },
+                            "secrets": { "client_secret": "s" } }
+        })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED, "{connection}");
+    assert_eq!(connection["status"], "needs_auth");
+    let start = format!(
+        "/api/v1/connections/{}/sign-in",
+        connection["id"].as_str().unwrap()
+    );
+
+    let plain_owner = login(&plain, &email).await;
+    let (status, _) = call(&plain, "POST", &start, &plain_owner, None).await;
+    assert_eq!(status, StatusCode::CONFLICT);
+
+    let (status, started) = call(&app, "POST", &start, &owner, None).await;
+    assert_eq!(status, StatusCode::OK, "{started}");
+    let url = started["authorizeUrl"].as_str().unwrap();
+    assert!(
+        url.starts_with("https://login.example.com/authorize?"),
+        "{url}"
+    );
+    assert!(url.contains("client_id=huxley-app"));
+    assert!(
+        url.contains(
+            "redirect_uri=https%3A%2F%2Fhuxley.example.com%2Fintegrations%2Foauth%2Fcallback"
+        ),
+        "{url}"
+    );
+    assert!(url.contains("code_challenge_method=S256"));
+
+    // A made-up state is refused before any provider is called.
+    let (status, problem) = call(
+        &app,
+        "POST",
+        "/api/v1/connections/sign-in/complete",
+        &owner,
+        Some(json!({ "state": "made-up", "code": "c" })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{problem}");
+    assert_eq!(problem["errors"][0]["pointer"], "state");
+}
+
+fn app_with_public_url(pools: &TestPools) -> axum::Router {
+    let config = AuthConfig {
+        public_url: Some("https://huxley.example.com/".into()),
+        ..AuthConfig::default()
+    };
+    let auth = AuthService::new(pools.app.clone(), config, crypto(pools));
+    router(AppState::new(
+        pools.app.clone(),
+        auth,
+        crypto(pools),
+        ApiConfig {
+            login_attempts_per_minute: 1000,
+            ..ApiConfig::default()
+        },
+    ))
+}
+
+#[tokio::test]
+async fn only_sign_in_connections_start_a_sign_in() {
+    let Some(pools) = pools().await else { return };
+    let app = app_with_public_url(&pools);
+    let msp = provider_org(&pools).await;
+    let owner = login(&app, &user(&pools, true).await.1).await;
+    // Connections that don't sign in can't start one.
+    let (_, basic) = call(
+        &app,
+        "POST",
+        "/api/v1/integrations",
+        &owner,
+        Some(json!({ "orgId": msp, "spec": SPEC })),
+    )
+    .await;
+    let (_, other) = call(
+        &app,
+        "POST",
+        "/api/v1/connections",
+        &owner,
+        Some(json!({
+            "orgId": msp,
+            "integrationId": basic["id"],
+            "connection": { "name": "Basic", "authScheme": "basic",
+                            "settings": { "username": "u" }, "secrets": { "password": "p" } }
+        })),
+    )
+    .await;
+    let (status, _) = call(
+        &app,
+        "POST",
+        &format!(
+            "/api/v1/connections/{}/sign-in",
+            other["id"].as_str().unwrap()
+        ),
+        &owner,
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+}

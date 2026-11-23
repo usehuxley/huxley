@@ -38,7 +38,7 @@ pub enum ConnectionError {
 
 pub type ConnectionResult<T> = Result<T, ConnectionError>;
 
-fn invalid(field: &str, message: impl Into<String>) -> ConnectionError {
+pub(crate) fn invalid(field: &str, message: impl Into<String>) -> ConnectionError {
     ConnectionError::Invalid(field.to_owned(), message.into())
 }
 
