@@ -1,0 +1,370 @@
+//! Organization settings with inheritance and lock (design doc §5.2-5.3).
+//!
+//! A value set at an org applies to it and every descendant; the nearest
+//! wins. A value can be **locked**, and then descendants can't override it:
+//! the shallowest lock wins, and writing below one is refused. Keys and
+//! their types are registered here, like permissions. Run in system scope
+//! after the caller's permission check (resolution reads ancestors).
+
+use huxley_core::RequestContext;
+use huxley_db::audit::{self, AuditRecord};
+use serde::Serialize;
+use serde_json::json;
+use sqlx::PgConnection;
+use utoipa::ToSchema;
+use uuid::Uuid;
+
+use crate::{OrgError, OrgResult};
+
+/// How a setting's value is validated (and edited in the UI).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub enum SettingKind {
+    /// Free text, up to 100 characters.
+    Text,
+    /// An IANA time zone name, e.g. `Europe/Berlin`.
+    Timezone,
+    /// `#rrggbb`.
+    Color,
+    Email,
+    /// A short uppercase prefix for numbers, e.g. `T` in `T-1042`.
+    Prefix,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct SettingDef {
+    pub key: &'static str,
+    pub group: &'static str,
+    pub label: &'static str,
+    pub description: &'static str,
+    pub kind: SettingKind,
+    /// Used when no org in the chain sets a value.
+    pub default: Option<&'static str>,
+}
+
+macro_rules! settings {
+    ($( $ident:ident = $key:literal, $group:literal, $kind:ident, $default:expr, $label:literal, $desc:literal; )*) => {
+        $( pub const $ident: &str = $key; )*
+        /// Every setting, in display order.
+        pub const ALL: &[SettingDef] = &[
+            $( SettingDef { key: $key, group: $group, label: $label, description: $desc, kind: SettingKind::$kind, default: $default }, )*
+        ];
+    };
+}
+
+settings! {
+    TIMEZONE = "general.timezone", "General", Timezone, Some("UTC"), "Time zone",
+        "Used for business hours, schedules, and dates in emails.";
+    BRAND_NAME = "branding.name", "Branding", Text, None, "Brand name",
+        "Shown to clients in the portal and emails. Defaults to the organization's name.";
+    BRAND_ACCENT = "branding.accent_color", "Branding", Color, Some("#4f46e5"), "Accent color",
+        "Buttons and links in the portal and emails.";
+    BRAND_SUPPORT_EMAIL = "branding.support_email", "Branding", Email, None, "Support email",
+        "Where clients are told to write for help.";
+    TICKET_PREFIX = "numbering.ticket_prefix", "Numbering", Prefix, Some("T"), "Ticket prefix",
+        "Ticket numbers look like T-1042.";
+    QUOTE_PREFIX = "numbering.quote_prefix", "Numbering", Prefix, Some("Q"), "Quote prefix",
+        "Quote numbers look like Q-1042.";
+    INVOICE_PREFIX = "numbering.invoice_prefix", "Numbering", Prefix, Some("INV"), "Invoice prefix",
+        "Invoice numbers look like INV-1042.";
+}
+
+pub fn def(key: &str) -> Option<&'static SettingDef> {
+    ALL.iter().find(|d| d.key == key)
+}
+
+/// Checks and normalizes a value for `kind`.
+pub fn validate(kind: SettingKind, raw: &str) -> Result<String, String> {
+    let value = raw.trim();
+    let ok = match kind {
+        SettingKind::Text => {
+            !value.is_empty()
+                && value.chars().count() <= 100
+                && !value.chars().any(char::is_control)
+        }
+        SettingKind::Timezone => {
+            value == "UTC"
+                || (value.len() <= 64
+                    && value.contains('/')
+                    && value.split('/').all(|part| {
+                        part.starts_with(|c: char| c.is_ascii_uppercase())
+                            && part
+                                .chars()
+                                .all(|c| c.is_ascii_alphanumeric() || "_+-".contains(c))
+                    }))
+        }
+        SettingKind::Color => {
+            value.len() == 7
+                && value.starts_with('#')
+                && value[1..].chars().all(|c| c.is_ascii_hexdigit())
+        }
+        SettingKind::Email => {
+            value.len() <= 254
+                && value.split_once('@').is_some_and(|(local, domain)| {
+                    !local.is_empty()
+                        && domain.contains('.')
+                        && !domain.starts_with('.')
+                        && !domain.ends_with('.')
+                })
+                && !value.chars().any(|c| c.is_whitespace() || c.is_control())
+        }
+        SettingKind::Prefix => {
+            (1..=8).contains(&value.len())
+                && value.starts_with(|c: char| c.is_ascii_uppercase())
+                && value
+                    .chars()
+                    .all(|c| c.is_ascii_uppercase() || c.is_ascii_digit())
+        }
+    };
+    if !ok {
+        return Err(match kind {
+            SettingKind::Text => "Enter 1 to 100 characters.",
+            SettingKind::Timezone => "Choose a time zone such as Europe/Berlin.",
+            SettingKind::Color => "Use a hex color such as #4f46e5.",
+            SettingKind::Email => "Enter an email address.",
+            SettingKind::Prefix => {
+                "Use 1 to 8 uppercase letters or digits, starting with a letter."
+            }
+        }
+        .into());
+    }
+    Ok(match kind {
+        SettingKind::Color => value.to_ascii_lowercase(),
+        _ => value.to_owned(),
+    })
+}
+
+/// An org in a resolution.
+#[derive(Debug, Clone, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct OrgRef {
+    pub id: Uuid,
+    pub name: String,
+}
+
+/// A value set at the org itself.
+#[derive(Debug, Clone, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct LocalSetting {
+    pub value: String,
+    pub locked: bool,
+}
+
+/// A setting's effective value at an org, and why.
+#[derive(Debug, Clone, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ResolvedSetting {
+    #[serde(flatten)]
+    pub def: SettingDef,
+    /// The effective value (`None`: unset, use the documented fallback).
+    pub value: Option<String>,
+    /// Where `value` comes from; `None` means the built-in default.
+    pub source: Option<OrgRef>,
+    /// Set when an ancestor locked this key: it can't be changed here.
+    pub locked_by: Option<OrgRef>,
+    /// The value set at this org, if any (ignored while an ancestor's lock applies).
+    pub local: Option<LocalSetting>,
+}
+
+#[derive(sqlx::FromRow)]
+struct Candidate {
+    key: String,
+    value: serde_json::Value,
+    locked: bool,
+    org_id: Uuid,
+    org_name: String,
+}
+
+/// Every setting at `org_id`. One query over the org and its ancestors.
+pub async fn resolve(conn: &mut PgConnection, org_id: Uuid) -> OrgResult<Vec<ResolvedSetting>> {
+    crate::get(conn, org_id).await?;
+    // Nearest first.
+    let candidates: Vec<Candidate> = sqlx::query_as(
+        "SELECT s.key, s.value, s.locked, s.org_id, o.name AS org_name \
+           FROM org_settings s \
+           JOIN organizations o ON o.id = s.org_id \
+          WHERE o.path @> (SELECT path FROM organizations WHERE id = $1) \
+          ORDER BY nlevel(o.path) DESC",
+    )
+    .bind(org_id)
+    .fetch_all(conn)
+    .await?;
+    Ok(ALL
+        .iter()
+        .map(|def| {
+            let chain: Vec<&Candidate> = candidates.iter().filter(|c| c.key == def.key).collect();
+            let as_text = |v: &serde_json::Value| v.as_str().map(str::to_owned);
+            let local = chain.iter().find(|c| c.org_id == org_id).and_then(|c| {
+                as_text(&c.value).map(|value| LocalSetting {
+                    value,
+                    locked: c.locked,
+                })
+            });
+            // The shallowest lock wins; otherwise the nearest value.
+            let winner = chain
+                .iter()
+                .rev()
+                .find(|c| c.locked)
+                .or_else(|| chain.first());
+            let locked_by = chain
+                .iter()
+                .rev()
+                .find(|c| c.locked && c.org_id != org_id)
+                .map(|c| OrgRef {
+                    id: c.org_id,
+                    name: c.org_name.clone(),
+                });
+            ResolvedSetting {
+                def: *def,
+                value: winner
+                    .and_then(|c| as_text(&c.value))
+                    .or_else(|| def.default.map(str::to_owned)),
+                source: winner.map(|c| OrgRef {
+                    id: c.org_id,
+                    name: c.org_name.clone(),
+                }),
+                locked_by,
+                local,
+            }
+        })
+        .collect())
+}
+
+/// One setting's effective value at `org_id` (`None`: unset).
+pub async fn value(conn: &mut PgConnection, org_id: Uuid, key: &str) -> OrgResult<Option<String>> {
+    Ok(resolve(conn, org_id)
+        .await?
+        .into_iter()
+        .find(|s| s.def.key == key)
+        .and_then(|s| s.value))
+}
+
+async fn ancestor_lock(
+    conn: &mut PgConnection,
+    org_id: Uuid,
+    key: &str,
+) -> OrgResult<Option<String>> {
+    let row: Option<(String,)> = sqlx::query_as(
+        "SELECT o.name FROM org_settings s \
+           JOIN organizations o ON o.id = s.org_id \
+          WHERE s.key = $2 AND s.locked AND s.org_id <> $1 \
+            AND o.path @> (SELECT path FROM organizations WHERE id = $1) \
+          ORDER BY nlevel(o.path) LIMIT 1",
+    )
+    .bind(org_id)
+    .bind(key)
+    .fetch_optional(conn)
+    .await?;
+    Ok(row.map(|(name,)| name))
+}
+
+/// Sets `key` at `org_id` (for it and its descendants), optionally locked.
+pub async fn set(
+    conn: &mut PgConnection,
+    ctx: &RequestContext,
+    org_id: Uuid,
+    key: &str,
+    raw: &str,
+    locked: bool,
+) -> OrgResult<()> {
+    let def = def(key).ok_or(OrgError::UnknownSetting)?;
+    let value = validate(def.kind, raw).map_err(OrgError::InvalidSetting)?;
+    crate::get(conn, org_id).await?;
+    if let Some(by) = ancestor_lock(conn, org_id, key).await? {
+        return Err(OrgError::SettingLocked(by));
+    }
+    sqlx::query(
+        "INSERT INTO org_settings (org_id, key, value, locked, updated_by) VALUES ($1, $2, $3, $4, $5) \
+         ON CONFLICT (org_id, key) DO UPDATE \
+            SET value = EXCLUDED.value, locked = EXCLUDED.locked, updated_by = EXCLUDED.updated_by, updated_at = now()",
+    )
+    .bind(org_id)
+    .bind(key)
+    .bind(json!(value))
+    .bind(locked)
+    .bind(ctx.actor.id())
+    .execute(&mut *conn)
+    .await?;
+    audit::record(
+        conn,
+        ctx,
+        AuditRecord::new("org.setting_changed")
+            .org(org_id)
+            .target("organization", org_id)
+            .details(json!({ "key": key, "value": value, "locked": locked })),
+    )
+    .await?;
+    Ok(())
+}
+
+/// Removes the value set at `org_id`, so it inherits again.
+pub async fn clear(
+    conn: &mut PgConnection,
+    ctx: &RequestContext,
+    org_id: Uuid,
+    key: &str,
+) -> OrgResult<()> {
+    def(key).ok_or(OrgError::UnknownSetting)?;
+    crate::get(conn, org_id).await?;
+    let removed = sqlx::query("DELETE FROM org_settings WHERE org_id = $1 AND key = $2")
+        .bind(org_id)
+        .bind(key)
+        .execute(&mut *conn)
+        .await?
+        .rows_affected();
+    if removed > 0 {
+        audit::record(
+            conn,
+            ctx,
+            AuditRecord::new("org.setting_cleared")
+                .org(org_id)
+                .target("organization", org_id)
+                .details(json!({ "key": key })),
+        )
+        .await?;
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn values_are_validated_per_kind() {
+        assert_eq!(
+            validate(SettingKind::Color, " #ABCDEF ").unwrap(),
+            "#abcdef"
+        );
+        assert!(validate(SettingKind::Color, "red").is_err());
+        assert!(validate(SettingKind::Timezone, "Europe/Berlin").is_ok());
+        assert!(validate(SettingKind::Timezone, "America/Argentina/Buenos_Aires").is_ok());
+        assert!(validate(SettingKind::Timezone, "UTC").is_ok());
+        assert!(validate(SettingKind::Timezone, "../etc/passwd").is_err());
+        assert!(validate(SettingKind::Prefix, "INV2").is_ok());
+        assert!(validate(SettingKind::Prefix, "inv").is_err());
+        assert!(validate(SettingKind::Prefix, "TOOLONGPFX").is_err());
+        assert!(validate(SettingKind::Email, "help@acme.example").is_ok());
+        assert!(validate(SettingKind::Email, "nope").is_err());
+        assert!(validate(SettingKind::Text, "").is_err());
+    }
+
+    #[test]
+    fn registry_keys_are_unique_and_defaults_valid() {
+        let mut keys: Vec<_> = ALL.iter().map(|d| d.key).collect();
+        keys.sort_unstable();
+        keys.dedup();
+        assert_eq!(keys.len(), ALL.len());
+        for d in ALL {
+            if let Some(default) = d.default {
+                assert_eq!(
+                    validate(d.kind, default).as_deref(),
+                    Ok(default),
+                    "{}",
+                    d.key
+                );
+            }
+        }
+    }
+}

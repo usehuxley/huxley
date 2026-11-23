@@ -963,6 +963,44 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
+	'/api/v1/orgs/{id}/settings': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/**
+		 * Every setting at an organization: the effective value, where it comes
+		 *     from (this org, an ancestor, or the default), and any ancestor lock.
+		 */
+		get: operations['list_org_settings'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/orgs/{id}/settings/{key}': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		/** Sets a value at this organization, for it and its sub-organizations. */
+		put: operations['set_org_setting'];
+		post?: never;
+		/** Removes this organization's value, so it inherits again. */
+		delete: operations['clear_org_setting'];
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
 	'/api/v1/permissions': {
 		parameters: {
 			query?: never;
@@ -1775,6 +1813,11 @@ export interface components {
 			status: string;
 			version: string;
 		};
+		/** @description A value set at the org itself. */
+		LocalSetting: {
+			locked: boolean;
+			value: string;
+		};
 		LoginMfaRequest: {
 			/** @description From the `mfaRequired` response. */
 			challenge: string;
@@ -1930,6 +1973,12 @@ export interface components {
 		OrgKind: 'provider' | 'client';
 		/** @enum {string} */
 		OrgKindInput: 'provider' | 'client';
+		/** @description An org in a resolution. */
+		OrgRef: {
+			/** Format: uuid */
+			id: string;
+			name: string;
+		};
 		/** @enum {string} */
 		OrgStatus: 'active' | 'archived';
 		Organization: {
@@ -2097,6 +2146,14 @@ export interface components {
 		RenamePasskeyRequest: {
 			name: string;
 		};
+		/** @description A setting's effective value at an org, and why. */
+		ResolvedSetting: components['schemas']['SettingDef'] & {
+			local?: components['schemas']['LocalSetting'] | null;
+			lockedBy?: components['schemas']['OrgRef'] | null;
+			source?: components['schemas']['OrgRef'] | null;
+			/** @description The effective value (`None`: unset, use the documented fallback). */
+			value?: string | null;
+		};
 		Role: {
 			description: string;
 			/** Format: uuid */
@@ -2166,12 +2223,31 @@ export interface components {
 		SetRequirementRequest: {
 			required: boolean;
 		};
+		SetSettingRequest: {
+			/** @description Stop sub-organizations from overriding it. */
+			locked?: boolean;
+			value: string;
+		};
 		SetValuesRequest: {
 			/** @description Field key → value. `null` clears a value. Other fields are unchanged. */
 			values: {
 				[key: string]: unknown;
 			};
 		};
+		SettingDef: {
+			/** @description Used when no org in the chain sets a value. */
+			default?: string | null;
+			description: string;
+			group: string;
+			key: string;
+			kind: components['schemas']['SettingKind'];
+			label: string;
+		};
+		/**
+		 * @description How a setting's value is validated (and edited in the UI).
+		 * @enum {string}
+		 */
+		SettingKind: 'text' | 'timezone' | 'color' | 'email' | 'prefix';
 		SsoCallbackRequest: {
 			code: string;
 			state: string;
@@ -4166,6 +4242,101 @@ export interface operations {
 				content: {
 					'application/problem+json': components['schemas']['ApiError'];
 				};
+			};
+		};
+	};
+	list_org_settings: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				/** @description Organization id */
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ResolvedSetting'][];
+				};
+			};
+			404: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	set_org_setting: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				/** @description Organization id */
+				id: string;
+				/** @description Setting key */
+				key: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['SetSettingRequest'];
+			};
+		};
+		responses: {
+			204: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content?: never;
+			};
+			/** @description Locked by an ancestor */
+			409: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	clear_org_setting: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				/** @description Organization id */
+				id: string;
+				/** @description Setting key */
+				key: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			204: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content?: never;
 			};
 		};
 	};
