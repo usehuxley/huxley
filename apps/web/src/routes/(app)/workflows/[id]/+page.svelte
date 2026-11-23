@@ -1,0 +1,246 @@
+<script lang="ts">
+	import { enhance, type SubmitFunction } from '$app/forms';
+	import { resolve } from '$app/paths';
+	import { ArrowLeft } from '@lucide/svelte';
+	import { Badge, Button, Card, Field, Input, toast } from '@usehuxley/ui';
+	import RunStatusBadge from '#lib/workflows/RunStatusBadge.svelte';
+	import type { PageProps } from './$types';
+
+	let { data, form }: PageProps = $props();
+	let workflow = $derived(data.workflow);
+	let granted = $derived(data.user.grantedPermissions);
+	let canWrite = $derived(granted.includes('workflow:write'));
+	let canPublish = $derived(granted.includes('workflow:publish'));
+	let canRun = $derived(granted.includes('workflow:run'));
+	let archived = $derived(workflow.status === 'archived');
+
+	// Keep unsaved edits when a save fails; take the server's copy otherwise.
+	let yaml = $state('');
+	let edited = $state(false);
+	$effect(() => {
+		if (form && 'yaml' in form && typeof form.yaml === 'string') yaml = form.yaml;
+		else if (!edited) yaml = data.yaml;
+	});
+	let inputs = $state('{}');
+
+	const notify: SubmitFunction = () => {
+		return async ({ result, update }) => {
+			await update({ reset: false });
+			if (result.type === 'success') edited = false;
+			if ((result.type === 'success' || result.type === 'failure') && result.data?.message) {
+				toast.push({
+					title: String(result.data.message),
+					tone: result.type === 'success' ? 'success' : 'danger'
+				});
+			}
+		};
+	};
+
+	function when(value: string | null | undefined): string {
+		return value ? new Date(value).toLocaleString() : '';
+	}
+</script>
+
+<svelte:head>
+	<title>{workflow.name} · Workflows · Huxley</title>
+</svelte:head>
+
+<div class="mx-auto flex max-w-5xl flex-col gap-6">
+	<a
+		href={resolve('/(app)/workflows')}
+		class="flex w-fit items-center gap-1 text-sm text-fg-muted hover:text-fg"
+	>
+		<ArrowLeft size={16} /> All workflows
+	</a>
+
+	<header class="flex flex-wrap items-start justify-between gap-4">
+		<div>
+			<h1 class="text-2xl font-semibold text-fg">{workflow.name}</h1>
+			<p class="mt-1 font-mono text-xs text-fg-muted">{workflow.key}</p>
+			{#if workflow.description}<p class="mt-2 text-sm text-fg-muted">
+					{workflow.description}
+				</p>{/if}
+		</div>
+		<div class="flex items-center gap-2">
+			{#if archived}
+				<Badge tone="neutral">Archived</Badge>
+			{:else if workflow.currentVersion}
+				<Badge tone="success">Version {workflow.currentVersion} published</Badge>
+			{:else}
+				<Badge tone="warning">Not published</Badge>
+			{/if}
+			{#if canPublish}
+				<form method="POST" action={archived ? '?/restore' : '?/archive'} use:enhance={notify}>
+					<Button type="submit" variant="secondary" size="sm">
+						{archived ? 'Restore' : 'Archive'}
+					</Button>
+				</form>
+			{/if}
+		</div>
+	</header>
+
+	<Card
+		title="Definition"
+		description="The draft, in the Huxley Workflow Format. Saving keeps it as a draft; publishing makes it the version that runs."
+	>
+		<form method="POST" action="?/save" class="flex flex-col gap-3" use:enhance={notify}>
+			<input type="hidden" name="revision" value={workflow.revision} />
+			<label class="sr-only" for="yaml">Workflow YAML</label>
+			<textarea
+				id="yaml"
+				name="yaml"
+				bind:value={yaml}
+				oninput={() => (edited = true)}
+				readonly={!canWrite || archived}
+				spellcheck="false"
+				rows={Math.min(40, Math.max(14, yaml.split('\n').length + 2))}
+				class="w-full rounded-control border border-border bg-surface-sunken p-3 font-mono text-sm text-fg focus:border-accent focus:outline-none"
+			></textarea>
+			{#if workflow.diagnostics.length > 0}
+				<div class="rounded-control border border-warning/40 bg-warning/5 p-3" role="status">
+					<p class="text-sm font-medium text-fg">
+						{workflow.diagnostics.length} problem{workflow.diagnostics.length === 1 ? '' : 's'} to fix
+						before publishing
+					</p>
+					<ul class="mt-2 flex flex-col gap-1" aria-label="Problems">
+						{#each workflow.diagnostics as problem, i (i)}
+							<li class="text-sm text-fg-muted">
+								{#if problem.path}<code class="text-fg">{problem.path}</code>:
+								{/if}{problem.message}
+							</li>
+						{/each}
+					</ul>
+				</div>
+			{/if}
+			{#if canWrite && !archived}
+				<div class="flex items-center gap-3">
+					<Button type="submit">Save draft</Button>
+					{#if edited}<span class="text-sm text-fg-muted">Unsaved changes</span>{/if}
+				</div>
+			{/if}
+		</form>
+		{#if canPublish && !archived}
+			<form
+				method="POST"
+				action="?/publish"
+				class="mt-4 flex flex-wrap items-end gap-3 border-t border-border pt-4"
+				use:enhance={notify}
+			>
+				<Field label="Release notes" for="notes" hint="Optional">
+					<Input id="notes" name="notes" maxlength={500} />
+				</Field>
+				<Button
+					type="submit"
+					variant="secondary"
+					disabled={edited || workflow.diagnostics.length > 0}
+				>
+					Publish version {(workflow.currentVersion ?? 0) + 1}
+				</Button>
+				{#if edited}<span class="text-sm text-fg-muted">Save first</span>{/if}
+			</form>
+		{/if}
+	</Card>
+
+	{#if !archived && (canRun || canWrite)}
+		<Card title="Run" description="Inputs as JSON. A test run uses the saved draft.">
+			<form method="POST" action="?/run" class="flex flex-col gap-3" use:enhance>
+				<label class="sr-only" for="inputs">Inputs</label>
+				<textarea
+					id="inputs"
+					name="inputs"
+					bind:value={inputs}
+					rows="4"
+					spellcheck="false"
+					class="w-full rounded-control border border-border bg-surface-sunken p-3 font-mono text-sm text-fg focus:border-accent focus:outline-none"
+				></textarea>
+				<div class="flex flex-wrap gap-2">
+					{#if canRun}
+						<Button type="submit" disabled={!workflow.currentVersion}>
+							Run version {workflow.currentVersion ?? '—'}
+						</Button>
+					{/if}
+					{#if canWrite}
+						<Button
+							type="submit"
+							name="test"
+							value="true"
+							variant="secondary"
+							disabled={workflow.diagnostics.length > 0}
+						>
+							Test run the draft
+						</Button>
+					{/if}
+				</div>
+				{#if form && 'runMessage' in form && form.runMessage}
+					<p class="text-sm text-danger" role="alert">{form.runMessage}</p>
+				{/if}
+			</form>
+		</Card>
+	{/if}
+
+	<Card title="Recent runs">
+		{#if data.runs.length === 0}
+			<p class="text-sm text-fg-muted">No runs yet.</p>
+		{:else}
+			<ul class="flex flex-col divide-y divide-border" aria-label="Recent runs">
+				{#each data.runs as run (run.id)}
+					<li class="flex items-center justify-between gap-4 py-2 first:pt-0 last:pb-0">
+						<a
+							href={resolve('/(app)/runs/[id]', { id: run.id })}
+							class="text-sm text-fg hover:underline"
+						>
+							{when(run.createdAt)}
+						</a>
+						<span class="flex items-center gap-2 text-xs text-fg-muted">
+							{run.workflowVersion ? `v${run.workflowVersion}` : 'test'} · {run.triggerType}
+							<RunStatusBadge status={run.status} />
+						</span>
+					</li>
+				{/each}
+			</ul>
+		{/if}
+	</Card>
+
+	<div class="grid gap-6 md:grid-cols-2">
+		<Card title="Triggers" description="From the published version.">
+			{#if data.triggers.length === 0}
+				<p class="text-sm text-fg-muted">
+					{workflow.currentVersion ? 'Started by hand only.' : 'Publish to activate triggers.'}
+				</p>
+			{:else}
+				<ul class="flex flex-col gap-3">
+					{#each data.triggers as trigger (trigger.triggerId)}
+						<li class="text-sm">
+							<span class="font-medium text-fg">{trigger.triggerId}</span>
+							<span class="text-fg-muted">({trigger.type})</span>
+							{#if trigger.publicId}
+								<p class="mt-1 font-mono text-xs break-all text-fg-muted">
+									POST {data.publicUrl}/hooks/{trigger.publicId}
+								</p>
+							{/if}
+							{#if trigger.nextRunAt}
+								<p class="mt-1 text-xs text-fg-muted">Next run {when(trigger.nextRunAt)}</p>
+							{/if}
+						</li>
+					{/each}
+				</ul>
+			{/if}
+		</Card>
+
+		<Card title="Versions">
+			{#if data.versions.length === 0}
+				<p class="text-sm text-fg-muted">Not published yet.</p>
+			{:else}
+				<ul class="flex flex-col gap-2">
+					{#each data.versions as version (version.version)}
+						<li class="text-sm">
+							<span class="font-medium text-fg">Version {version.version}</span>
+							<span class="text-fg-muted"> · {when(version.publishedAt)}</span>
+							{#if version.notes}<p class="text-fg-muted">{version.notes}</p>{/if}
+						</li>
+					{/each}
+				</ul>
+			{/if}
+		</Card>
+	</div>
+</div>

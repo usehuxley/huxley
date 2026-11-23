@@ -25,7 +25,9 @@
 	let canSeeSettings = $derived(visibleSections(data.user.grantedPermissions).length > 0);
 	let nav: NavItem[] = $derived([
 		{ href: '/', label: 'Home', icon: House },
-		{ href: '/workflows', label: 'Workflows', icon: Workflow, soon: true },
+		...(data.user.grantedPermissions.includes('workflow:read')
+			? [{ href: '/workflows', label: 'Workflows', icon: Workflow }]
+			: []),
 		{ href: '/tickets', label: 'Tickets', icon: Ticket, soon: true },
 		{ href: '/clients', label: 'Clients', icon: Building2, soon: true },
 		{ href: '/assets', label: 'Assets', icon: Boxes, soon: true },
@@ -42,6 +44,13 @@
 			keywords: ['admin', 'roles', 'permissions', 'organizations', 'users', 'audit'],
 			group: 'Navigate',
 			run: () => goto(resolve('/(app)/settings'))
+		},
+		{
+			id: 'workflows',
+			label: 'Go to Workflows',
+			keywords: ['automation', 'runs'],
+			group: 'Navigate',
+			run: () => goto(resolve('/(app)/workflows'))
 		},
 		{
 			id: 'profile',

@@ -2010,7 +2010,9 @@ export interface components {
 			 * @description An HWF document. It may be incomplete, but needs `metadata.key` and
 			 *     `metadata.name`.
 			 */
-			document: Record<string, never>;
+			document: {
+				[key: string]: unknown;
+			};
 			/** Format: uuid */
 			orgId: string;
 		};
@@ -2503,11 +2505,17 @@ export interface components {
 		};
 		RunDetail: components['schemas']['RunSummary'] & {
 			cancelRequested: boolean;
-			inputs: Record<string, never>;
-			outputs?: Record<string, never> | null;
+			inputs: {
+				[key: string]: unknown;
+			};
+			outputs?: {
+				[key: string]: unknown;
+			} | null;
 			/** @description Every step that has started, in the order it started. */
 			steps: components['schemas']['StepRunView'][];
-			trigger: Record<string, never>;
+			trigger: {
+				[key: string]: unknown;
+			};
 		};
 		/** @enum {string} */
 		RunStatus: 'queued' | 'running' | 'succeeded' | 'failed' | 'cancelled';
@@ -2516,7 +2524,9 @@ export interface components {
 			actorId?: string | null;
 			/** Format: date-time */
 			createdAt: string;
-			error?: Record<string, never> | null;
+			error?: {
+				[key: string]: unknown;
+			} | null;
 			/** Format: date-time */
 			finishedAt?: string | null;
 			/** Format: uuid */
@@ -2536,7 +2546,9 @@ export interface components {
 			workflowVersion?: number | null;
 		};
 		SaveDraftRequest: {
-			document: Record<string, never>;
+			document: {
+				[key: string]: unknown;
+			};
 			/**
 			 * Format: int32
 			 * @description The revision this edit is based on.
@@ -2614,7 +2626,9 @@ export interface components {
 			state: string;
 		};
 		StartRunRequest: {
-			inputs?: Record<string, never>;
+			inputs?: {
+				[key: string]: unknown;
+			};
 			/**
 			 * @description Run the draft instead of the latest published version (needs
 			 *     permission to edit the workflow).
@@ -2644,15 +2658,15 @@ export interface components {
 		StepRunView: {
 			/** Format: int32 */
 			attempt: number;
-			error?: Record<string, never> | null;
+			error?: unknown;
 			/** Format: date-time */
 			finishedAt?: string | null;
 			/**
 			 * @description The evaluated input (or a control-flow step's decision); `«redacted»`
 			 *     when it came from a secret.
 			 */
-			input?: Record<string, never> | null;
-			output?: Record<string, never> | null;
+			input?: unknown;
+			output?: unknown;
 			/** Format: date-time */
 			startedAt: string;
 			status: components['schemas']['StepStatus'];
@@ -2772,7 +2786,9 @@ export interface components {
 			status: string;
 		};
 		ValidateRequest: {
-			document: Record<string, never>;
+			document: {
+				[key: string]: unknown;
+			};
 		};
 		ValidateResponse: {
 			/** @description Empty when the document is ready to publish. */
@@ -2783,7 +2799,9 @@ export interface components {
 			token: string;
 		};
 		Version: components['schemas']['VersionSummary'] & {
-			document: Record<string, never>;
+			document: {
+				[key: string]: unknown;
+			};
 		};
 		VersionSummary: {
 			notes?: string | null;
@@ -2799,7 +2817,9 @@ export interface components {
 			/** @description Problems that would stop the draft being published. Empty when it's ready. */
 			diagnostics: components['schemas']['DiagnosticView'][];
 			/** @description The HWF document being edited. */
-			draft: Record<string, never>;
+			draft: {
+				[key: string]: unknown;
+			};
 		};
 		/** @enum {string} */
 		WorkflowStatus: 'active' | 'archived';

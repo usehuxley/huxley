@@ -1,0 +1,97 @@
+import { expect, test, type Browser, type Page } from '@playwright/test';
+
+// Full-stack: needs the API (with its workers) and a bootstrapped owner.
+const ownerEmail = process.env.E2E_EMAIL;
+const ownerPassword = process.env.E2E_PASSWORD;
+const apiUrl = process.env.HUXLEY_API_URL;
+
+async function signIn(browser: Browser): Promise<Page> {
+	const page = await (await browser.newContext()).newPage();
+	await page.goto('/login');
+	await page.getByLabel('Email').fill(ownerEmail!);
+	await page.getByLabel('Password').fill(ownerPassword!);
+	await page.getByRole('button', { name: 'Sign in', exact: true }).click();
+	await expect(page.getByRole('heading', { level: 1 })).toHaveText('Welcome to Huxley');
+	return page;
+}
+
+function definition(key: string, output: string): string {
+	return `apiVersion: usehuxley.com/v1
+kind: Workflow
+metadata:
+  key: ${key}
+  name: Greeter ${key}
+spec:
+  inputs:
+    type: object
+    required: [name]
+    properties:
+      name: { type: string }
+  steps:
+    - id: greet
+      type: transform
+      output: "${output}"
+    - id: names
+      type: foreach
+      items: "{{ ['a', 'b'] }}"
+      steps:
+        - id: shout
+          type: transform
+          output: "{{ item | upper }}"
+  outputs:
+    greeting: "{{ steps.greet.output }}"
+    letters: "{{ steps.names.output }}"
+`;
+}
+
+test.describe('workflows', () => {
+	test.skip(
+		!ownerEmail || !ownerPassword || !apiUrl,
+		'set E2E_EMAIL, E2E_PASSWORD, and HUXLEY_API_URL'
+	);
+
+	test('build, publish and run a workflow', async ({ browser }) => {
+		const page = await signIn(browser);
+		await page.getByRole('link', { name: 'Workflows' }).click();
+		await expect(page.getByRole('heading', { level: 1 })).toHaveText('Workflows');
+
+		const key = `greeter-${Date.now().toString(36)}`;
+		await page.getByLabel('Name').fill(`Greeter ${key}`);
+		await page.getByLabel('Key').fill(key);
+		await page.getByRole('button', { name: 'Create' }).click();
+		await expect(page.getByRole('heading', { level: 1 })).toHaveText(`Greeter ${key}`);
+		await expect(page.getByText('Not published', { exact: true })).toBeVisible();
+
+		// A broken reference saves, and is reported.
+		const editor = page.getByRole('textbox', { name: 'Workflow YAML' });
+		await editor.fill(definition(key, 'Hi {{ steps.nope.output }}'));
+		await page.getByRole('button', { name: 'Save draft' }).click();
+		const problems = page.getByRole('list', { name: 'Problems' });
+		await expect(problems).toContainText('there is no step "nope"');
+		await expect(page.getByRole('button', { name: 'Publish version 1' })).toBeDisabled();
+
+		// Fixed, saved and published.
+		await editor.fill(definition(key, 'Hi {{ inputs.name }}'));
+		await page.getByRole('button', { name: 'Save draft' }).click();
+		await expect(problems).toHaveCount(0);
+		await page.getByLabel('Release notes').fill('First version');
+		await page.getByRole('button', { name: 'Publish version 1' }).click();
+		await expect(page.getByText('Version 1 published')).toBeVisible();
+
+		// Run it; the run page follows it to the end.
+		await page.getByRole('textbox', { name: 'Inputs' }).fill('{"name": "Ada"}');
+		await page.getByRole('button', { name: 'Run version 1' }).click();
+		await expect(page.getByRole('heading', { level: 1 })).toHaveText('Run');
+		await expect(page.getByText('Succeeded').first()).toBeVisible({ timeout: 20_000 });
+		const outputs = page.getByLabel('Run outputs');
+		await expect(outputs).toContainText('"greeting": "Hi Ada"');
+		await expect(outputs).toContainText('"B"');
+		await expect(page.getByRole('list', { name: 'Steps' })).toContainText('shout[1]');
+
+		// Back on the workflow, the run is listed.
+		await page.getByRole('link', { name: `Greeter ${key}` }).click();
+		await expect(
+			page.getByRole('list', { name: 'Recent runs' }).getByText('Succeeded')
+		).toBeVisible();
+	});
+});
