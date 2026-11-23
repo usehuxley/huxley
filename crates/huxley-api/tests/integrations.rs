@@ -258,3 +258,83 @@ async fn people_without_access_see_and_change_nothing() {
     .await;
     assert_eq!(status, StatusCode::NOT_FOUND);
 }
+
+#[tokio::test]
+async fn updates_are_previewed_applied_and_rolled_back() {
+    let Some(pools) = pools().await else { return };
+    let app = app(&pools);
+    let org = provider_org(&pools).await;
+    let owner = login(&app, &user(&pools, true).await.1).await;
+    let (_, created) = call(
+        &app,
+        "POST",
+        "/api/v1/integrations",
+        &owner,
+        Some(json!({ "orgId": org, "key": "widgets", "spec": SPEC_V1 })),
+    )
+    .await;
+    let id = created["id"].as_str().unwrap().to_owned();
+    let base = format!("/api/v1/integrations/{id}");
+
+    // V2 drops both listWidgets actions and the API key: breaking.
+    let (status, preview) = call(
+        &app,
+        "POST",
+        &format!("{base}/preview"),
+        &owner,
+        Some(json!({ "spec": SPEC_V2 })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{preview}");
+    assert_eq!(preview["baseVersion"], 1);
+    assert_eq!(preview["diff"]["breaking"], true);
+    assert_eq!(preview["diff"]["added"], json!(["makeWidget"]));
+    assert_eq!(
+        preview["diff"]["removed"],
+        json!(["listWidgets", "listWidgets_2"])
+    );
+    assert!(
+        preview["diff"]["connection"][0]["message"]
+            .as_str()
+            .unwrap()
+            .contains("auth scheme key was removed")
+    );
+    // Previewing saves nothing.
+    let (_, still) = call(&app, "GET", &base, &owner, None).await;
+    assert_eq!(still["currentVersion"], 1);
+
+    // Applying against a version that's no longer current is refused.
+    let spec = format!("{base}/spec");
+    let (status, _) = call(
+        &app,
+        "PUT",
+        &spec,
+        &owner,
+        Some(json!({ "spec": SPEC_V2, "baseVersion": 1 })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    let (status, problem) = call(
+        &app,
+        "PUT",
+        &spec,
+        &owner,
+        Some(json!({ "spec": SPEC_V1, "baseVersion": 1 })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CONFLICT, "{problem}");
+
+    // Roll back to version 1; its actions are current again.
+    let current = format!("{base}/current");
+    let (status, rolled) = call(&app, "PUT", &current, &owner, Some(json!({ "version": 1 }))).await;
+    assert_eq!(status, StatusCode::OK, "{rolled}");
+    assert_eq!(rolled["currentVersion"], 1);
+    assert_eq!(rolled["definition"]["actions"][0]["key"], "listWidgets");
+    let (status, _) = call(&app, "PUT", &current, &owner, Some(json!({ "version": 9 }))).await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+
+    // The next import after a rollback doesn't reuse version 2.
+    let (status, next) = call(&app, "PUT", &spec, &owner, Some(json!({ "spec": SPEC_V2 }))).await;
+    assert_eq!(status, StatusCode::OK, "{next}");
+    assert_eq!(next["currentVersion"], 3);
+}

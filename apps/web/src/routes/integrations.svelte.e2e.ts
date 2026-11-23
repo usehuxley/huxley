@@ -59,10 +59,23 @@ test.describe('integrations', () => {
 			"path parameter {id} isn't declared"
 		);
 
-		// A newer spec becomes version 2.
-		await page.getByLabel('Or paste the newer spec').fill(spec(title).replace('"1.0"', '"1.1"'));
-		await page.getByRole('button', { name: 'Import as a new version' }).click();
+		// A newer spec is reviewed first; dropping an action is flagged.
+		const newer = spec(title)
+			.replace('"1.0"', '"1.1"')
+			.replace(/ {2}\/devices\/\{id\}\/reboot:[\s\S]*$/, '');
+		await page.getByLabel('Or paste the newer spec').fill(newer);
+		await page.getByRole('button', { name: 'Review changes' }).click();
+		const review = page.getByRole('region', { name: 'Update review' });
+		await expect(review).toContainText('can break workflows or connections');
+		await expect(review).toContainText('post_devices_id_reboot');
+		await expect(page.getByRole('list', { name: 'Versions' })).not.toContainText('Version 2');
+		await review.getByRole('button', { name: 'Apply as a new version' }).click();
 		await expect(page.getByText('Imported as version 2.')).toBeVisible();
 		await expect(page.getByRole('list', { name: 'Versions' })).toContainText('Version 2');
+
+		// Roll back: version 1 is current again, with its reboot action.
+		await page.getByRole('button', { name: 'Make current' }).click();
+		await expect(page.getByText('Version 1 is current.')).toBeVisible();
+		await expect(actions).toContainText('post_devices_id_reboot');
 	});
 });

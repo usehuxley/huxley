@@ -11,6 +11,7 @@
 //! (a missing `info.version`, a stray field, a dangling `$ref`) become
 //! [`Warning`]s instead of failing the whole import.
 
+pub mod diff;
 mod import;
 mod refs;
 pub mod store;

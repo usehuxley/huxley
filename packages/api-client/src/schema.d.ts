@@ -772,6 +772,46 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
+	'/api/v1/integrations/{id}/current': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		/**
+		 * Makes an earlier imported version current again (a rollback), or a
+		 *     later one after rolling back.
+		 */
+		put: operations['set_integration_version'];
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/integrations/{id}/preview': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/**
+		 * What importing a newer spec would change, and whether any of it can
+		 *     break workflows or connections. Nothing is saved.
+		 */
+		post: operations['preview_integration_update'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
 	'/api/v1/integrations/{id}/spec': {
 		parameters: {
 			query?: never;
@@ -780,7 +820,10 @@ export interface paths {
 			cookie?: never;
 		};
 		get?: never;
-		/** Imports a newer spec as the integration's next version. */
+		/**
+		 * Imports a newer spec as the integration's next version, and makes it
+		 *     current. Preview it first to see what changes.
+		 */
 		put: operations['update_integration_spec'];
 		post?: never;
 		delete?: never;
@@ -2053,6 +2096,10 @@ export interface components {
 			/** @description The path template, e.g. `/users/{id}`. */
 			path: string;
 		};
+		ActionChanges: {
+			changes: components['schemas']['Change'][];
+			key: string;
+		};
 		/** @description An RFC 9457 problem details response. */
 		ApiError: {
 			detail?: string | null;
@@ -2227,6 +2274,11 @@ export interface components {
 			 */
 			options: Record<string, never>;
 		};
+		/** @description One difference, and whether it can break workflows or connections. */
+		Change: {
+			breaking: boolean;
+			message: string;
+		};
 		ChangePasswordRequest: {
 			/** Format: password */
 			currentPassword: string;
@@ -2352,6 +2404,17 @@ export interface components {
 			title: string;
 			/** @description The API's own version (`info.version`). */
 			version: string;
+		};
+		DefinitionDiff: {
+			added: string[];
+			/** @description True if any change can break something already using the integration. */
+			breaking: boolean;
+			changed: components['schemas']['ActionChanges'][];
+			/** @description Auth and server changes, which matter to connections. */
+			connection: components['schemas']['Change'][];
+			/** @description Actions that are gone (renamed ones are listed under `renamed`). */
+			removed: string[];
+			renamed: components['schemas']['Rename'][];
 		};
 		/** @description A problem with a workflow document, and where it is. */
 		DiagnosticView: {
@@ -2772,6 +2835,9 @@ export interface components {
 		 * @enum {string}
 		 */
 		Preset: 'generic' | 'entra' | 'google' | 'okta' | 'authentik' | 'keycloak';
+		PreviewRequest: {
+			spec: string;
+		};
 		/** @description A configured identity provider. The client secret is never returned. */
 		Provider: {
 			allowedDomains: string[];
@@ -2848,6 +2914,14 @@ export interface components {
 			passkey: components['schemas']['PasskeyView'];
 			/** @description Present when this was the user's first second factor. Shown once. */
 			recoveryCodes?: string[] | null;
+		};
+		/**
+		 * @description An action that seems to have been renamed: gone under one key, back
+		 *     under another with the same method and path.
+		 */
+		Rename: {
+			from: string;
+			to: string;
 		};
 		RenamePasskeyRequest: {
 			name: string;
@@ -3007,6 +3081,10 @@ export interface components {
 			/** Format: date-time */
 			lastSeenAt?: string | null;
 			userAgent?: string | null;
+		};
+		SetCurrentRequest: {
+			/** Format: int32 */
+			version: number;
 		};
 		SetModuleRequest: {
 			enabled: boolean;
@@ -3186,6 +3264,20 @@ export interface components {
 			 */
 			version: number;
 		};
+		/** @description What importing a newer spec would change, without saving anything. */
+		UpdatePreview: {
+			actions: number;
+			/** @description The API's own version, from the newer spec. */
+			apiVersion: string;
+			/**
+			 * Format: int32
+			 * @description The version this was compared with; pass it when applying.
+			 */
+			baseVersion: number;
+			diff: components['schemas']['DefinitionDiff'];
+			/** @description What the importer worked around in the newer spec. */
+			warnings: components['schemas']['Warning'][];
+		};
 		UpdateServiceAccountRequest: {
 			description?: string | null;
 			name?: string | null;
@@ -3193,6 +3285,12 @@ export interface components {
 			status?: string | null;
 		};
 		UpdateSpecRequest: {
+			/**
+			 * Format: int32
+			 * @description The version the update was previewed against: if the integration
+			 *     has moved on since, nothing is applied (409).
+			 */
+			baseVersion?: number | null;
 			spec: string;
 		};
 		UpdateUserRequest: {
@@ -4855,6 +4953,72 @@ export interface operations {
 			};
 		};
 	};
+	set_integration_version: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['SetCurrentRequest'];
+			};
+		};
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['IntegrationDetail'];
+				};
+			};
+			404: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	preview_integration_update: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['PreviewRequest'];
+			};
+		};
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['UpdatePreview'];
+				};
+			};
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
 	update_integration_spec: {
 		parameters: {
 			query?: never;
@@ -4876,6 +5040,14 @@ export interface operations {
 				};
 				content: {
 					'application/json': components['schemas']['IntegrationDetail'];
+				};
+			};
+			409: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
 				};
 			};
 			422: {

@@ -151,29 +151,129 @@
 		</Card>
 	</div>
 
+	{#if form && 'preview' in form && form.preview}
+		{@const preview = form.preview}
+		{@const diff = preview.diff}
+		<Card
+			title="Review the update"
+			description="Compared with version {preview.baseVersion}. Nothing changes until you apply it."
+		>
+			<div class="flex flex-col gap-3 text-sm" aria-label="Update review" role="region">
+				{#if diff.breaking}
+					<p class="rounded-control bg-danger/10 p-2 text-danger" role="alert">
+						Some changes can break workflows or connections that use this integration.
+					</p>
+				{:else if diff.added.length + diff.changed.length + diff.connection.length === 0}
+					<p class="text-fg-muted">No changes to actions, authentication or servers.</p>
+				{:else}
+					<p class="text-fg">Nothing here should break what already uses it.</p>
+				{/if}
+				{#if diff.removed.length}
+					<div>
+						<p class="font-medium text-danger">Removed actions</p>
+						<p class="font-mono text-xs">{diff.removed.join(', ')}</p>
+					</div>
+				{/if}
+				{#if diff.renamed.length}
+					<div>
+						<p class="font-medium text-danger">Renamed actions (same method and path)</p>
+						<ul class="font-mono text-xs">
+							{#each diff.renamed as r (r.from)}<li>{r.from} → {r.to}</li>{/each}
+						</ul>
+					</div>
+				{/if}
+				{#if diff.changed.length}
+					<div>
+						<p class="font-medium text-fg">Changed actions</p>
+						<ul class="flex flex-col gap-1">
+							{#each diff.changed as action (action.key)}
+								<li>
+									<span class="font-mono text-xs">{action.key}</span>
+									<ul class="ml-4 list-disc">
+										{#each action.changes as change, i (i)}
+											<li class={change.breaking ? 'text-danger' : 'text-fg-muted'}>
+												{change.message}
+											</li>
+										{/each}
+									</ul>
+								</li>
+							{/each}
+						</ul>
+					</div>
+				{/if}
+				{#if diff.added.length}
+					<div>
+						<p class="font-medium text-fg">New actions</p>
+						<p class="font-mono text-xs">{diff.added.join(', ')}</p>
+					</div>
+				{/if}
+				{#if diff.connection.length}
+					<div>
+						<p class="font-medium text-fg">Authentication and servers</p>
+						<ul class="ml-4 list-disc">
+							{#each diff.connection as change, i (i)}
+								<li class={change.breaking ? 'text-danger' : 'text-fg-muted'}>
+									{change.message}
+								</li>
+							{/each}
+						</ul>
+					</div>
+				{/if}
+				{#if preview.warnings.length}
+					<p class="text-fg-muted">
+						{preview.warnings.length} import notes, shown once it's applied.
+					</p>
+				{/if}
+				<form method="POST" action="?/update" use:enhance class="flex gap-2">
+					<input type="hidden" name="baseVersion" value={preview.baseVersion} />
+					<textarea name="spec" hidden>{form.spec}</textarea>
+					<Button type="submit" variant={diff.breaking ? 'danger' : 'primary'}>
+						Apply as a new version
+					</Button>
+					<a
+						href={resolve('/(app)/integrations/[id]', { id: integration.id })}
+						class="self-center text-sm text-fg-muted hover:text-fg"
+					>
+						Cancel
+					</a>
+				</form>
+			</div>
+		</Card>
+	{/if}
+
 	<Card title="Versions">
 		<ul class="flex flex-col gap-2 text-sm" aria-label="Versions">
 			{#each data.versions as version (version.version)}
-				<li>
-					<span class="font-medium text-fg">Version {version.version}</span>
-					<span class="text-fg-muted">
-						· {version.actions} actions
-						{#if version.warnings}· {version.warnings} notes{/if}
-						· {when(version.importedAt)}
+				<li class="flex items-center justify-between gap-2">
+					<span>
+						<span class="font-medium text-fg">Version {version.version}</span>
+						<span class="text-fg-muted">
+							· {version.actions} actions
+							{#if version.warnings}· {version.warnings} notes{/if}
+							· {when(version.importedAt)}
+						</span>
 					</span>
+					{#if version.version === integration.currentVersion}
+						<Badge tone="success">Current</Badge>
+					{:else if canManage}
+						<form method="POST" action="?/setCurrent" use:enhance>
+							<input type="hidden" name="version" value={version.version} />
+							<Button type="submit" variant="ghost" size="sm">Make current</Button>
+						</form>
+					{/if}
 				</li>
 			{/each}
 		</ul>
 		{#if canManage}
 			<form
 				method="POST"
-				action="?/update"
+				action="?/preview"
 				enctype="multipart/form-data"
 				class="mt-4 flex flex-col gap-2"
 				use:enhance={() => {
 					updating = true;
 					return async ({ update }) => {
-						await update({ reset: true });
+						await update({ reset: false });
 						updating = false;
 					};
 				}}
@@ -189,11 +289,13 @@
 				></textarea>
 				<div>
 					<Button type="submit" variant="secondary" disabled={updating}>
-						{updating ? 'Importing…' : 'Import as a new version'}
+						{updating ? 'Reading…' : 'Review changes'}
 					</Button>
 				</div>
 			</form>
-			{#if form?.message}<p class="mt-2 text-sm text-fg" role="status">{form.message}</p>{/if}
+		{/if}
+		{#if form && 'message' in form && form.message}
+			<p class="mt-2 text-sm text-fg" role="status">{form.message}</p>
 		{/if}
 	</Card>
 </div>
