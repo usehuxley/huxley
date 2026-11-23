@@ -1689,3 +1689,84 @@ async fn custom_roles_and_the_explainer_over_http() {
     .await;
     assert_eq!(status, StatusCode::CONFLICT);
 }
+
+async fn raw_get(
+    app: &axum::Router,
+    uri: &str,
+    cookie: &str,
+) -> (StatusCode, axum::http::HeaderMap, String) {
+    let req = Request::get(uri)
+        .header("cookie", cookie)
+        .body(Body::empty())
+        .unwrap();
+    let res = app.clone().oneshot(req).await.unwrap();
+    let (status, headers) = (res.status(), res.headers().clone());
+    let bytes = res.into_body().collect().await.unwrap().to_bytes();
+    (status, headers, String::from_utf8(bytes.to_vec()).unwrap())
+}
+
+#[tokio::test]
+async fn audit_export_streams_every_event_in_order() {
+    let Some(pools) = pools().await else { return };
+    ensure_root(&pools).await;
+    let app = app(&pools);
+    let owner = login(&app, &user(&pools, true).await).await;
+    let member = login(&app, &user(&pools, false).await).await;
+    let (status, _, _) = raw_get(&app, "/api/v1/audit/export", &member).await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+
+    let (before,): (i64,) = sqlx::query_as("SELECT count(*) FROM audit_events")
+        .fetch_one(&pools.owner)
+        .await
+        .unwrap();
+    let (status, headers, body) = raw_get(&app, "/api/v1/audit/export", &owner).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(headers["content-type"], "application/x-ndjson");
+    assert!(
+        headers["content-disposition"]
+            .to_str()
+            .unwrap()
+            .contains(".jsonl")
+    );
+    let rows: Vec<Value> = body
+        .lines()
+        .map(|l| serde_json::from_str(l).unwrap())
+        .collect();
+    // Every event (batches of 1000 join seamlessly), oldest first, no repeats.
+    assert!(
+        i64::try_from(rows.len()).unwrap() > before,
+        "{} rows, {before} before",
+        rows.len()
+    );
+    assert!(
+        rows.windows(2)
+            .all(|w| w[0]["seq"].as_i64() < w[1]["seq"].as_i64())
+    );
+    assert_eq!(rows[0]["hash"].as_str().unwrap().len(), 64);
+    assert!(
+        rows.iter().any(|r| r["action"] == "audit.exported"),
+        "the export audits itself"
+    );
+
+    let (status, headers, body) =
+        raw_get(&app, "/api/v1/audit/export?format=csv&action=auth.", &owner).await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(
+        headers["content-type"]
+            .to_str()
+            .unwrap()
+            .starts_with("text/csv")
+    );
+    let mut lines = body.lines();
+    assert!(lines.next().unwrap().starts_with("seq,id,occurred_at,"));
+    assert!(lines.all(|l| l.contains(",auth.")));
+
+    let (status, _, body) = raw_get(
+        &app,
+        "/api/v1/audit/export?from=2999-01-01T00:00:00Z",
+        &owner,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body, "");
+}

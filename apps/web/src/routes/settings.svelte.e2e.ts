@@ -1,3 +1,4 @@
+import { readFile } from 'node:fs/promises';
 import { expect, test, type Page } from '@playwright/test';
 
 // Full-stack: needs the API with a bootstrapped owner (see page.svelte.e2e.ts).
@@ -54,7 +55,20 @@ test.describe('settings (as the bootstrap owner)', () => {
 		await page.getByRole('link', { name: 'Audit log' }).click();
 		await page.getByLabel('Filter by action prefix').fill('role.assigned');
 		await page.getByRole('button', { name: 'Filter' }).click();
+		await expect(page).toHaveURL(/action=role\.assigned/);
 		await expect(page.getByText('role: technician').first()).toBeVisible();
+
+		// …and exports it, filtered, as CSV.
+		await page.getByLabel('Export format').selectOption('csv');
+		const downloading = page.waitForEvent('download');
+		await page.getByRole('button', { name: 'Export' }).click();
+		const download = await downloading;
+		expect(download.suggestedFilename()).toMatch(/^huxley-audit-\d+\.csv$/);
+		const csv = await readFile(await download.path(), 'utf8');
+		const [header, ...rows] = csv.trim().split('\n');
+		expect(header).toMatch(/^seq,id,occurred_at,/);
+		expect(rows.length).toBeGreaterThan(0);
+		expect(rows.filter((r) => !r.includes(',role.assigned,'))).toEqual([]);
 	});
 
 	test('owner turns a module on with its dependencies, then off', async ({ page }) => {

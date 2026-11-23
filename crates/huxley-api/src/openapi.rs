@@ -98,6 +98,7 @@ use crate::user_routes::{
         user_routes::effective_permissions,
         user_routes::list_permissions,
         audit_routes::list,
+        audit_routes::export,
         module_routes::list,
         module_routes::set,
         security_routes::get_policy,

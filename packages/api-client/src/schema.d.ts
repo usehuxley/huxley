@@ -59,6 +59,27 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
+	'/api/v1/audit/export': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/**
+		 * Downloads the audit log, oldest first, as JSON lines or CSV. Streams in
+		 *     batches, so large logs don't need to fit in memory. Each row carries its
+		 *     chain hashes. The export itself is audited.
+		 */
+		get: operations['export_audit_events'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
 	'/api/v1/auth/email/verification': {
 		parameters: {
 			query?: never;
@@ -2361,6 +2382,42 @@ export interface operations {
 				};
 				content: {
 					'application/json': components['schemas']['AuditPage'];
+				};
+			};
+			403: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	export_audit_events: {
+		parameters: {
+			query?: {
+				format?: 'jsonl' | 'csv';
+				/** @description Only actions starting with this prefix. */
+				action?: string | null;
+				/** @description Events at or after this time (RFC 3339). */
+				from?: string | null;
+				/** @description Events before this time (RFC 3339). */
+				to?: string | null;
+			};
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			/** @description The events */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/x-ndjson': unknown;
 				};
 			};
 			403: {
