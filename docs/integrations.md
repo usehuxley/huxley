@@ -62,7 +62,14 @@ A connection holds credentials for one of an integration's auth schemes. Create 
 
 **Base URL:** a connection uses the spec's first server URL, with its `{variables}` filled from the connection's server variables. If the spec has no servers, or you want another region or a sandbox, give a base URL to override it.
 
-**Signing in:** connections for OAuth 2.0 authorization code (signing in with an account) start as **Needs sign-in**. The sign-in flow and token refresh come next.
+**OAuth 2.0:**
+
+- **Client credentials:** the connection fetches a token when one is needed, and reuses it until a minute before it expires.
+- **Authorization code:** the connection starts as **Needs sign-in**. Someone with `connection:manage` presses **Sign in**, signs in at the provider, and is sent back to `<auth.public_url>/integrations/oauth/callback`. That URL is the one to register with the provider, so `auth.public_url` must be set.
+  - The sign-in uses PKCE (S256) and a single-use `state` that only the person who started it can complete, within ten minutes.
+  - Tokens are encrypted, kept apart from the credentials you entered, and refreshed before they expire. A rotated refresh token is kept.
+  - If the provider revokes the sign-in, the connection goes back to **Needs sign-in**, with the reason shown.
+- **Both:** a connection fetches or refreshes one token at a time, so concurrent workflow steps don't compete for it. Token requests follow the same outbound rules as HTTP steps (`HUXLEY_ENGINE__EGRESS__*`).
 
 ## Permissions
 

@@ -1,4 +1,4 @@
-import { error, fail } from '@sveltejs/kit';
+import { error, fail, redirect } from '@sveltejs/kit';
 import { formString } from '#lib/forms.ts';
 import { connectionFromForm } from '#lib/integrations/connections.ts';
 import { specFrom } from '#lib/integrations/spec.ts';
@@ -20,6 +20,7 @@ export const load: PageServerLoad = async (event) => {
 	if (integration.response.status === 404) error(404, 'Integration not found.');
 	if (!integration.data) error(503, 'Could not load the integration.');
 	return {
+		signedIn: event.url.searchParams.get('signedIn'),
 		integration: integration.data,
 		versions: versions.data ?? [],
 		connections: connections.data ?? [],
@@ -91,6 +92,23 @@ export const actions: Actions = {
 			});
 		}
 		return { message: `Connection ${data.name} created.` };
+	},
+	/** Sends the browser to the provider to sign the connection in. */
+	signIn: async (event) => {
+		const id = formString(await event.request.formData(), 'connectionId');
+		const {
+			data,
+			error: problem,
+			response
+		} = await api(event).POST('/api/v1/connections/{id}/sign-in', {
+			params: { path: { id } }
+		});
+		if (!data) {
+			return fail(response.status, {
+				connectMessage: problemMessage(problem, 'Could not start the sign-in.')
+			});
+		}
+		redirect(303, data.authorizeUrl);
 	},
 	disconnect: async (event) => {
 		const id = formString(await event.request.formData(), 'connectionId');

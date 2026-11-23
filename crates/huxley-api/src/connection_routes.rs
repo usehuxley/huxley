@@ -4,13 +4,13 @@
 
 use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
-use axum::routing::get;
+use axum::routing::{get, post};
 use axum::{Json, Router};
 use huxley_authz::permissions;
 use huxley_db::{OrgScope, begin_scoped};
 use huxley_integrations::connections::{self, ConnectionError, ConnectionInput, ConnectionView};
 use huxley_integrations::store::{self, StoreError};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use utoipa::{IntoParams, ToSchema};
 use uuid::Uuid;
 
@@ -21,6 +21,8 @@ pub fn routes() -> Router<AppState> {
     Router::new()
         .route("/", get(list).post(create))
         .route("/{id}", get(detail).put(update).delete(remove))
+        .route("/{id}/sign-in", post(begin_sign_in))
+        .route("/sign-in/complete", post(complete_sign_in))
 }
 
 fn db_err(e: impl std::fmt::Display) -> ApiError {
@@ -217,4 +219,97 @@ pub async fn remove(
         .map_err(map_err)?;
     tx.commit().await.map_err(db_err)?;
     Ok(StatusCode::NO_CONTENT)
+}
+
+/// Where providers send people back after signing in: the web app's
+/// callback, under `auth.public_url`.
+const CALLBACK_PATH: &str = "/integrations/oauth/callback";
+
+#[derive(Debug, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct SignInStart {
+    /// Send the browser here; the provider returns it to the callback.
+    pub authorize_url: String,
+}
+
+/// Starts signing in a connection that uses OAuth 2.0 authorization code.
+/// The redirect URI is always the app's own callback, never the caller's
+/// choice.
+#[utoipa::path(post, path = "/api/v1/connections/{id}/sign-in", operation_id = "begin_connection_sign_in", tag = "integrations",
+    params(("id" = Uuid, Path)),
+    responses((status = 200, body = SignInStart),
+              (status = 409, body = ApiError, content_type = "application/problem+json"),
+              (status = 422, body = ApiError, content_type = "application/problem+json")))]
+pub async fn begin_sign_in(
+    State(state): State<AppState>,
+    authed: Authed,
+    Path(id): Path<Uuid>,
+) -> ApiResult<Json<SignInStart>> {
+    authorize(&state, &authed, permissions::CONNECTION_MANAGE, id).await?;
+    let Some(public_url) = state.auth.config().public_url.as_deref() else {
+        return Err(ApiError::conflict(
+            "set auth.public_url so providers can send people back after signing in",
+        ));
+    };
+    let redirect_uri = format!("{}{CALLBACK_PATH}", public_url.trim_end_matches('/'));
+    let mut tx = begin_scoped(&state.db, &authed.scope(&state).await?)
+        .await
+        .map_err(db_err)?;
+    let authorize_url = huxley_integrations::oauth::begin_sign_in(
+        &mut tx,
+        id,
+        authed.user.auth.user.id,
+        &redirect_uri,
+    )
+    .await
+    .map_err(map_err)?;
+    tx.commit().await.map_err(db_err)?;
+    Ok(Json(SignInStart { authorize_url }))
+}
+
+#[derive(Debug, Deserialize, ToSchema)]
+#[serde(deny_unknown_fields)]
+pub struct SignInComplete {
+    /// The `state` the provider sent back.
+    pub state: String,
+    /// The `code` the provider sent back.
+    pub code: String,
+}
+
+/// Finishes a sign-in the caller started: exchanges the provider's code
+/// for tokens. Each `state` works once, for ten minutes, for the person
+/// who started it.
+#[utoipa::path(post, path = "/api/v1/connections/sign-in/complete", operation_id = "complete_connection_sign_in", tag = "integrations",
+    request_body = SignInComplete,
+    responses((status = 200, body = ConnectionView),
+              (status = 422, body = ApiError, content_type = "application/problem+json"),
+              (status = 502, body = ApiError, content_type = "application/problem+json")))]
+pub async fn complete_sign_in(
+    State(state): State<AppState>,
+    authed: Authed,
+    Json(body): Json<SignInComplete>,
+) -> ApiResult<Json<ConnectionView>> {
+    let scope = authed.scope(&state).await?;
+    let view = state
+        .engine
+        .complete_sign_in(
+            &authed.user.ctx,
+            &scope,
+            authed.user.auth.user.id,
+            &body.state,
+            &body.code,
+        )
+        .await
+        .map_err(|e| match e {
+            huxley_engine::oauth::TokenError::Connection(e) => map_err(e),
+            huxley_engine::oauth::TokenError::Failed(message)
+            | huxley_engine::oauth::TokenError::NeedsSignIn(message) => ApiError::new(
+                StatusCode::BAD_GATEWAY,
+                "sign-in-failed",
+                "The provider didn't complete the sign-in",
+            )
+            .with_detail(message),
+            huxley_engine::oauth::TokenError::Engine(e) => ApiError::internal(&e),
+        })?;
+    Ok(Json(view))
 }

@@ -182,6 +182,9 @@
 		title="Connections"
 		description="Credentials for calling this API. Organizations below the owner can use shared ones; secrets are never shown again."
 	>
+		{#if data.signedIn}
+			<p class="mb-3 text-sm text-fg" role="status">Signed in {data.signedIn}.</p>
+		{/if}
 		{#if data.connections.length === 0}
 			<p class="text-sm text-fg-muted">No connections yet.</p>
 		{:else}
@@ -195,12 +198,19 @@
 							</p>
 							<p class="font-mono text-xs text-fg-muted">
 								{connection.key} · {orgName.get(connection.orgId) ?? 'Unknown organization'}
+								{#if connection.statusMessage}· {connection.statusMessage}{/if}
 								· {connection.authScheme ?? 'no auth'}
 								{#if connection.secretFields.length}· {connection.secretFields.join(', ')} set{/if}
 							</p>
 						</div>
 						<div class="flex items-center gap-2">
 							<Badge tone={statusTone(connection.status)}>{statusLabel(connection.status)}</Badge>
+							{#if canConnect && connection.status === 'needs_auth'}
+								<form method="POST" action="?/signIn">
+									<input type="hidden" name="connectionId" value={connection.id} />
+									<Button type="submit" size="sm">Sign in</Button>
+								</form>
+							{/if}
 							{#if canConnect}
 								<form method="POST" action="?/disconnect" use:enhance>
 									<input type="hidden" name="connectionId" value={connection.id} />
