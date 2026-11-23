@@ -9,6 +9,7 @@ pub mod auth_routes;
 pub mod authz;
 pub mod context;
 pub mod csrf;
+pub mod entity_routes;
 pub mod health;
 pub mod idempotency;
 pub mod mfa_routes;

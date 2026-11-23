@@ -1473,6 +1473,7 @@ dependencies = [
  "huxley-crypto",
  "huxley-db",
  "huxley-email",
+ "huxley-entity",
  "huxley-modules",
  "huxley-notify",
  "huxley-orgs",
@@ -1597,6 +1598,24 @@ dependencies = [
  "thiserror 2.0.21",
  "tokio",
  "tracing",
+]
+
+[[package]]
+name = "huxley-entity"
+version = "0.1.0"
+dependencies = [
+ "huxley-core",
+ "huxley-db",
+ "huxley-orgs",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "thiserror 2.0.21",
+ "time",
+ "tokio",
+ "url",
+ "utoipa",
+ "uuid",
 ]
 
 [[package]]

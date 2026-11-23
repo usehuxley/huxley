@@ -19,6 +19,7 @@ huxley-authz.workspace = true
 huxley-core.workspace = true
 huxley-crypto.workspace = true
 huxley-db.workspace = true
+huxley-entity.workspace = true
 huxley-modules.workspace = true
 huxley-notify.workspace = true
 futures-util.workspace = true

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { resolve } from '$app/paths';
 	import { enhance, type SubmitFunction } from '$app/forms';
 	import { Building2, FolderTree } from '@lucide/svelte';
 	import { Badge, Button, Dialog, Field, Input, Select, toast } from '@usehuxley/ui';
@@ -79,11 +80,14 @@
 				style="padding-left: {org.depth * 1.25}rem"
 			>
 				<Building2 size={16} class="shrink-0 text-fg-subtle" />
-				<span
-					class="font-medium text-fg {org.status === 'archived' ? 'line-through opacity-60' : ''}"
+				<a
+					href={resolve('/(app)/settings/organizations/[id]', { id: org.id })}
+					class="font-medium text-fg hover:underline {org.status === 'archived'
+						? 'line-through opacity-60'
+						: ''}"
 				>
 					{org.name}
-				</span>
+				</a>
 				<Badge tone={org.kind === 'provider' ? 'accent' : 'neutral'}>{org.kind}</Badge>
 				{#if org.status === 'archived'}<Badge tone="warning">archived</Badge>{/if}
 				{#if canManage && org.status === 'active'}

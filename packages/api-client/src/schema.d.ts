@@ -536,6 +536,127 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
+	'/api/v1/custom-fields': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** Custom field definitions for a record type. */
+		get: operations['list_fields'];
+		put?: never;
+		post: operations['create_field'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/custom-fields/{id}': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		/**
+		 * Changes a field's label, help, options, required flag, scope, or order.
+		 *     Its key and type can't change.
+		 */
+		patch: operations['update_field'];
+		trace?: never;
+	};
+	'/api/v1/custom-fields/{id}/archive': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/** Archives (hides) or restores a field. Stored values are kept. */
+		post: operations['archive_field'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/entities/{entity_type}/{id}/fields': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** The custom fields that apply to a record, with values. */
+		get: operations['get_values'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		/** Sets custom field values on a record. */
+		patch: operations['set_values'];
+		trace?: never;
+	};
+	'/api/v1/entities/{entity_type}/{id}/tags': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get: operations['entity_tags'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/entities/{entity_type}/{id}/tags/{tag_id}': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put: operations['apply_tag'];
+		post?: never;
+		delete: operations['remove_tag'];
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/entity-types': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** Record types that support custom fields and tags. */
+		get: operations['entity_types'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
 	'/api/v1/modules': {
 		parameters: {
 			query?: never;
@@ -1021,6 +1142,39 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
+	'/api/v1/tags': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get: operations['list_tags'];
+		put?: never;
+		post: operations['create_tag'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/tags/{id}': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put: operations['update_tag'];
+		post?: never;
+		/** Deletes a tag and removes it from every record. */
+		delete: operations['delete_tag'];
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
 	'/api/v1/teams': {
 		parameters: {
 			query?: never;
@@ -1231,6 +1385,9 @@ export interface components {
 			/** Format: int32 */
 			version: number;
 		};
+		ArchiveRequest: {
+			archived: boolean;
+		};
 		Assignment: {
 			/** Format: date-time */
 			createdAt: string;
@@ -1392,11 +1549,67 @@ export interface components {
 			/** @description Send as `Authorization: Bearer <token>`. Shown only now. */
 			tokenSecret: string;
 		};
+		/** @description An entity type that supports custom fields and tags. */
+		EntityType: {
+			key: string;
+			label: string;
+		};
+		/**
+		 * @description Changes to a field. The key and type never change (stored values depend
+		 *     on them).
+		 */
+		FieldChanges: {
+			/** @description Apply the field to every org again (removes the scope). */
+			clearScope?: boolean;
+			help?: string | null;
+			label?: string | null;
+			options?: components['schemas']['SelectOption'][] | null;
+			/** Format: int32 */
+			position?: number | null;
+			required?: boolean | null;
+			/**
+			 * Format: uuid
+			 * @description Limit the field to this org's subtree.
+			 */
+			scopeOrgId?: string | null;
+		};
+		FieldDef: {
+			/** Format: date-time */
+			archivedAt?: string | null;
+			entityType: string;
+			fieldType: components['schemas']['FieldType'];
+			help: string;
+			/** Format: uuid */
+			id: string;
+			key: string;
+			label: string;
+			options: components['schemas']['SelectOption'][];
+			/** Format: int32 */
+			position: number;
+			required: boolean;
+			/** Format: uuid */
+			scopeOrgId?: string | null;
+		};
 		/** @description A field-level validation error. */
 		FieldError: {
 			message: string;
 			/** @description JSON Pointer to the invalid field, e.g. `/name`. */
 			pointer: string;
+		};
+		/** @enum {string} */
+		FieldType:
+			| 'text'
+			| 'long_text'
+			| 'number'
+			| 'boolean'
+			| 'date'
+			| 'select'
+			| 'multi_select'
+			| 'url'
+			| 'email';
+		/** @description A field that applies to an entity, with its value (null when unset). */
+		FieldValue: components['schemas']['FieldDef'] & {
+			value: Record<string, never>;
 		};
 		FinishRegistrationRequest: {
 			/** Format: uuid */
@@ -1525,6 +1738,20 @@ export interface components {
 			parentId: string;
 			/** Format: int32 */
 			version: number;
+		};
+		/** @description Settings for a new field. `key` is optional (derived from the label). */
+		NewField: {
+			entityType: string;
+			fieldType: components['schemas']['FieldType'];
+			help?: string;
+			key?: string | null;
+			label: string;
+			options?: components['schemas']['SelectOption'][];
+			/** Format: int32 */
+			position?: number;
+			required?: boolean;
+			/** Format: uuid */
+			scopeOrgId?: string | null;
 		};
 		Notification: {
 			body: string;
@@ -1732,6 +1959,10 @@ export interface components {
 			/** Format: uuid */
 			roleId: string;
 		};
+		SelectOption: {
+			label: string;
+			value: string;
+		};
 		ServiceAccountView: components['schemas']['UserView'] & {
 			description: string;
 		};
@@ -1765,6 +1996,12 @@ export interface components {
 		SetRequirementRequest: {
 			required: boolean;
 		};
+		SetValuesRequest: {
+			/** @description Field key → value. `null` clears a value. Other fields are unchanged. */
+			values: {
+				[key: string]: unknown;
+			};
+		};
 		SsoCallbackRequest: {
 			code: string;
 			state: string;
@@ -1783,6 +2020,24 @@ export interface components {
 			 *     `state` the provider returns before calling `/callback`.
 			 */
 			state: string;
+		};
+		Tag: {
+			/** @description One of neutral, accent, success, warning, danger, info. */
+			color: string;
+			description: string;
+			/** Format: uuid */
+			id: string;
+			name: string;
+			/**
+			 * Format: int64
+			 * @description How many records carry the tag (that the caller can see).
+			 */
+			usage: number;
+		};
+		TagInput: {
+			color?: string;
+			description?: string;
+			name: string;
 		};
 		Team: {
 			/** Format: date-time */
@@ -2891,6 +3146,286 @@ export interface operations {
 			};
 		};
 	};
+	list_fields: {
+		parameters: {
+			query: {
+				entityType: string;
+				includeArchived?: boolean;
+			};
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['FieldDef'][];
+				};
+			};
+		};
+	};
+	create_field: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['NewField'];
+			};
+		};
+		responses: {
+			201: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['FieldDef'];
+				};
+			};
+			409: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	update_field: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				/** @description Field id */
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['FieldChanges'];
+			};
+		};
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['FieldDef'];
+				};
+			};
+			404: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	archive_field: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				/** @description Field id */
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['ArchiveRequest'];
+			};
+		};
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['FieldDef'];
+				};
+			};
+		};
+	};
+	get_values: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				/** @description e.g. organization */
+				entity_type: string;
+				/** @description Record id */
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['FieldValue'][];
+				};
+			};
+			404: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	set_values: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				/** @description e.g. organization */
+				entity_type: string;
+				/** @description Record id */
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['SetValuesRequest'];
+			};
+		};
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['FieldValue'][];
+				};
+			};
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	entity_tags: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				/** @description e.g. organization */
+				entity_type: string;
+				/** @description Record id */
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['Tag'][];
+				};
+			};
+		};
+	};
+	apply_tag: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				/** @description e.g. organization */
+				entity_type: string;
+				/** @description Record id */
+				id: string;
+				/** @description Tag id */
+				tag_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			204: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content?: never;
+			};
+		};
+	};
+	remove_tag: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				/** @description e.g. organization */
+				entity_type: string;
+				/** @description Record id */
+				id: string;
+				/** @description Tag id */
+				tag_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			204: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content?: never;
+			};
+		};
+	};
+	entity_types: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['EntityType'][];
+				};
+			};
+		};
+	};
 	list_modules: {
 		parameters: {
 			query?: never;
@@ -3915,6 +4450,102 @@ export interface operations {
 				content: {
 					'application/problem+json': components['schemas']['ApiError'];
 				};
+			};
+		};
+	};
+	list_tags: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['Tag'][];
+				};
+			};
+		};
+	};
+	create_tag: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['TagInput'];
+			};
+		};
+		responses: {
+			201: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['Tag'];
+				};
+			};
+			409: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	update_tag: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				/** @description Tag id */
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['TagInput'];
+			};
+		};
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['Tag'];
+				};
+			};
+		};
+	};
+	delete_tag: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				/** @description Tag id */
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			204: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content?: never;
 			};
 		};
 	};
