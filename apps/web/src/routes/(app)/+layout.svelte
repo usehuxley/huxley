@@ -10,6 +10,7 @@
 		Building2,
 		ChartColumn,
 		House,
+		Plug,
 		Settings,
 		Ticket,
 		Workflow
@@ -27,6 +28,9 @@
 		{ href: '/', label: 'Home', icon: House },
 		...(data.user.grantedPermissions.includes('workflow:read')
 			? [{ href: '/workflows', label: 'Workflows', icon: Workflow }]
+			: []),
+		...(data.user.grantedPermissions.includes('integration:read')
+			? [{ href: '/integrations', label: 'Integrations', icon: Plug }]
 			: []),
 		{ href: '/tickets', label: 'Tickets', icon: Ticket, soon: true },
 		{ href: '/clients', label: 'Clients', icon: Building2, soon: true },
@@ -51,6 +55,13 @@
 			keywords: ['automation', 'runs'],
 			group: 'Navigate',
 			run: () => goto(resolve('/(app)/workflows'))
+		},
+		{
+			id: 'integrations',
+			label: 'Go to Integrations',
+			keywords: ['openapi', 'api', 'connectors'],
+			group: 'Navigate',
+			run: () => goto(resolve('/(app)/integrations'))
 		},
 		{
 			id: 'profile',

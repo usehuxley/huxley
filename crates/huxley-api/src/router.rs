@@ -16,9 +16,9 @@ use tower_http::trace::TraceLayer;
 
 use crate::{
     ApiError, AppState, audit_routes, auth_routes, csrf, entity_routes, health, hook_routes,
-    mfa_routes, module_routes, notification_routes, openapi, org_routes, passkey_routes,
-    security_routes, sso_routes, team_routes, token_routes, user_routes, variable_routes,
-    workflow_routes,
+    integration_routes, mfa_routes, module_routes, notification_routes, openapi, org_routes,
+    passkey_routes, security_routes, sso_routes, team_routes, token_routes, user_routes,
+    variable_routes, workflow_routes,
 };
 
 const REQUEST_ID: HeaderName = HeaderName::from_static("x-request-id");
@@ -29,11 +29,13 @@ const MAX_BODY_BYTES: usize = 2 * 1024 * 1024;
 
 /// Builds the full API router with the standard middleware stack.
 pub fn router(state: AppState) -> Router {
-    let body_limit = MAX_BODY_BYTES.max(
-        usize::try_from(state.storage.max_upload_bytes())
-            .unwrap_or(usize::MAX)
-            .saturating_add(1024 * 1024),
-    );
+    let body_limit = MAX_BODY_BYTES
+        .max(
+            usize::try_from(state.storage.max_upload_bytes())
+                .unwrap_or(usize::MAX)
+                .saturating_add(1024 * 1024),
+        )
+        .max(integration_routes::MAX_IMPORT_BYTES);
     let api_v1 = Router::new()
         .route("/openapi.json", get(openapi::openapi_json))
         .nest("/auth", auth_routes::routes())
@@ -51,6 +53,7 @@ pub fn router(state: AppState) -> Router {
         .nest("/workflows", workflow_routes::workflow_routes())
         .nest("/runs", workflow_routes::run_routes())
         .nest("/jobs", workflow_routes::job_routes())
+        .nest("/integrations", integration_routes::routes())
         .nest("/security", security_routes::routes())
         .merge(user_routes::routes())
         .merge(entity_routes::routes())
@@ -76,8 +79,8 @@ pub fn router(state: AppState) -> Router {
             StatusCode::REQUEST_TIMEOUT,
             REQUEST_TIMEOUT,
         ))
-        // The hard cap fits the largest upload. JSON bodies keep axum's own
-        // 2 MB extractor limit; only the upload route raises it.
+        // The hard cap fits the largest upload or spec import. JSON bodies
+        // keep axum's own 2 MB extractor limit; only those routes raise it.
         .layer(RequestBodyLimitLayer::new(body_limit));
 
     let main = Router::new()
