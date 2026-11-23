@@ -1,0 +1,37 @@
+[package]
+name = "huxley-sso"
+description = "OIDC single sign-on for Huxley: providers, sign-in, JIT provisioning, role mapping"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[dependencies]
+base64.workspace = true
+huxley-auth.workspace = true
+huxley-core.workspace = true
+huxley-crypto.workspace = true
+huxley-db.workspace = true
+openidconnect.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sqlx.workspace = true
+thiserror.workspace = true
+time.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+url.workspace = true
+utoipa.workspace = true
+uuid.workspace = true
+
+[dev-dependencies]
+axum.workspace = true
+chrono = { version = "0.4", default-features = false, features = ["clock"] }
+sha2.workspace = true
+huxley-crypto = { workspace = true, features = ["testing"] }
+huxley-db = { workspace = true, features = ["testing"] }
+
+[lints]
+workspace = true

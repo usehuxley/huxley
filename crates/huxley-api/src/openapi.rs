@@ -26,6 +26,9 @@ use crate::passkey_routes::{
 };
 use crate::problem::{ApiError, FieldError};
 use crate::security_routes::{self, SetRequirementRequest};
+use crate::sso_routes::{
+    self, ProviderDetail, SsoCallbackRequest, StartSsoRequest, StartSsoResponse,
+};
 use crate::user_routes::{
     self, CreateAssignmentRequest, CreateUserRequest, CreateUserResponse, UpdateUserRequest,
     UserPage,
@@ -84,6 +87,15 @@ use crate::user_routes::{
         security_routes::get_policy,
         security_routes::set_role,
         security_routes::set_org,
+        sso_routes::list_buttons,
+        sso_routes::start,
+        sso_routes::callback,
+        sso_routes::list_providers,
+        sso_routes::get_provider,
+        sso_routes::create_provider,
+        sso_routes::update_provider,
+        sso_routes::delete_provider,
+        sso_routes::set_role_mappings,
     ),
     components(schemas(HealthStatus, ApiError, FieldError, LoginRequest, ChangePasswordRequest, UserView, SessionView,
         MeView,
@@ -127,6 +139,16 @@ use crate::user_routes::{
         SetModuleRequest,
         SetModuleResponse,
         SetRequirementRequest,
+        StartSsoRequest,
+        StartSsoResponse,
+        SsoCallbackRequest,
+        ProviderDetail,
+        huxley_sso::Provider,
+        huxley_sso::ProviderInput,
+        huxley_sso::ProviderButton,
+        huxley_sso::RoleMapping,
+        huxley_sso::Preset,
+        huxley_sso::MfaTrust,
         huxley_authz::mfa_policy::MfaPolicy,
         huxley_authz::mfa_policy::PolicyOrg,
     )),

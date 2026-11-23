@@ -21,6 +21,7 @@ pub mod rate_limit;
 mod router;
 pub mod security_routes;
 pub mod session;
+pub mod sso_routes;
 pub mod user_routes;
 
 pub use problem::{ApiError, ApiResult};
@@ -32,6 +33,7 @@ use std::time::Duration;
 use huxley_auth::AuthService;
 use huxley_crypto::Crypto;
 use huxley_db::sqlx::PgPool;
+use huxley_sso::SsoService;
 use serde::Deserialize;
 
 use crate::rate_limit::RateLimiter;
@@ -66,6 +68,7 @@ pub struct AppState {
     pub db: PgPool,
     pub auth: AuthService,
     pub crypto: Crypto,
+    pub sso: SsoService,
     pub config: Arc<ApiConfig>,
     pub login_limiter: Arc<RateLimiter>,
 }
@@ -78,6 +81,8 @@ impl AppState {
         ));
         Self {
             db,
+            sso: SsoService::new(auth.clone(), crypto.clone())
+                .expect("the HTTP client for single sign-on builds"),
             auth,
             crypto,
             config: Arc::new(config),

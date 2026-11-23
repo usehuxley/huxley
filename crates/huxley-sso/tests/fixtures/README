@@ -1,0 +1,2 @@
+# Test-only RSA key for the mock identity provider in tests/sso.rs.
+# It signs ID tokens in tests and is not used anywhere else.

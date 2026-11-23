@@ -9,6 +9,18 @@ import { SESSION_COOKIE, parseSessionCookie } from '#lib/session.ts';
 const MFA_COOKIE = 'hx_mfa';
 const MFA_COOKIE_OPTIONS = { path: '/login', httpOnly: true, sameSite: 'strict' } as const;
 
+/**
+ * Binds a single sign-on attempt to the browser that started it. `Lax`, not
+ * `Strict`: the provider's redirect back is a cross-site navigation, which
+ * `Strict` cookies don't accompany.
+ */
+export const OIDC_COOKIE = 'hx_oidc';
+export const OIDC_COOKIE_OPTIONS = {
+	path: '/login/oidc',
+	httpOnly: true,
+	sameSite: 'lax'
+} as const;
+
 export type MfaMethod = 'totp' | 'passkey' | 'recoveryCode';
 
 export function setChallenge(

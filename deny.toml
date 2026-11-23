@@ -9,10 +9,16 @@ version = 2
 yanked = "deny"
 ignore = [
   # Marvin attack: timing leaks recover an RSA *private* key during decryption
-  # or signing. `rsa` comes in only through webauthn-rs (crypto-glue), which
-  # uses it to verify RS256 passkey signatures with public keys. Huxley holds
+  # or signing. `rsa` comes in through webauthn-rs (crypto-glue), which
+  # uses it to verify RS256 passkey signatures with public keys, and through
+  # openidconnect to verify RS256 ID token signatures. Huxley holds
   # no RSA private keys. Revisit if anything starts using RSA private keys.
-  { id = "RUSTSEC-2023-0071", reason = "rsa is used only for public-key signature verification (passkeys)" },
+  { id = "RUSTSEC-2023-0071", reason = "rsa is used only for public-key signature verification (passkeys, OIDC ID tokens)" },
+  # chrono is marked unmaintained (informational, no known vulnerability). It
+  # comes in only through openidconnect/oauth2, which use it for token
+  # timestamps. Huxley's own code uses `time`. Revisit when openidconnect
+  # moves off chrono, or if a vulnerability is reported.
+  { id = "RUSTSEC-2026-0543", reason = "informational unmaintained notice; only via openidconnect/oauth2" },
 ]
 
 [licenses]

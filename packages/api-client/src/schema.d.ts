@@ -260,6 +260,63 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
+	'/api/v1/auth/oidc/callback': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/**
+		 * Completes single sign-on with the provider's `code` and `state`. Sets the
+		 *     session cookie.
+		 */
+		post: operations['callback'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/auth/oidc/providers': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** Enabled sign-in options, for the sign-in page. */
+		get: operations['list_buttons'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/auth/oidc/start': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/**
+		 * Starts single sign-on. The provider redirects back to
+		 *     `{auth.public_url}/login/oidc/callback` with `code` and `state`.
+		 */
+		post: operations['start'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
 	'/api/v1/auth/passkeys': {
 		parameters: {
 			query?: never;
@@ -601,6 +658,66 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
+	'/api/v1/security/sso/providers': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** Configured identity providers. */
+		get: operations['list_providers'];
+		put?: never;
+		/** Adds an identity provider. */
+		post: operations['create_provider'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/security/sso/providers/{id}': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** One provider with its role mappings. */
+		get: operations['get_provider'];
+		/** Replaces a provider's settings. Omit `clientSecret` to keep the stored one. */
+		put: operations['update_provider'];
+		post?: never;
+		/**
+		 * Deletes a provider, the identities linked to it, and the roles its
+		 *     mappings granted. Users are kept.
+		 */
+		delete: operations['delete_provider'];
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/security/sso/providers/{id}/role-mappings': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		/**
+		 * Replaces a provider's claim → role mappings. Applied at each user's next
+		 *     sign-in. The Owner role can't be mapped.
+		 */
+		put: operations['set_role_mappings'];
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
 	'/api/v1/users': {
 		parameters: {
 			query?: never;
@@ -864,6 +981,8 @@ export interface components {
 		/** @description The result of a sign-in step. */
 		LoginResponse:
 			| {
+					/** @description Where to go next (single sign-on remembers it across the redirect). */
+					next?: string | null;
 					/** @enum {string} */
 					status: 'signedIn';
 					user: components['schemas']['UserView'];
@@ -927,6 +1046,11 @@ export interface components {
 			/** @description An authenticator app is set up and required at sign-in. */
 			totpEnabled: boolean;
 		};
+		/**
+		 * @description When an SSO sign-in counts as multi-factor for the MFA policy.
+		 * @enum {string}
+		 */
+		MfaTrust: 'never' | 'amr' | 'always';
 		/** @description A feature module's manifest. */
 		Module: {
 			description: string;
@@ -1029,6 +1153,76 @@ export interface components {
 			isRoot: boolean;
 			name: string;
 		};
+		/**
+		 * @description Provider templates with sensible defaults.
+		 * @enum {string}
+		 */
+		Preset: 'generic' | 'entra' | 'google' | 'okta' | 'authentik' | 'keycloak';
+		/** @description A configured identity provider. The client secret is never returned. */
+		Provider: {
+			allowedDomains: string[];
+			clientId: string;
+			/** Format: date-time */
+			createdAt: string;
+			enabled: boolean;
+			hasClientSecret: boolean;
+			/** Format: uuid */
+			id: string;
+			issuerUrl: string;
+			jitProvisioning: boolean;
+			key: string;
+			mfaTrust: components['schemas']['MfaTrust'];
+			name: string;
+			preset: components['schemas']['Preset'];
+			roleClaim?: string | null;
+			scopes: string[];
+			trustEmail: boolean;
+			/** Format: date-time */
+			updatedAt: string;
+			/** Format: int32 */
+			version: number;
+		};
+		/** @description A sign-in button: the enabled providers, without configuration details. */
+		ProviderButton: {
+			key: string;
+			name: string;
+			preset: components['schemas']['Preset'];
+		};
+		/** @description A provider with its role mappings. */
+		ProviderDetail: components['schemas']['Provider'] & {
+			/** @description Register this as the redirect URI at the provider. */
+			redirectUri?: string | null;
+			roleMappings: components['schemas']['RoleMapping'][];
+		};
+		/**
+		 * @description Settings for creating or replacing a provider. Optional fields fall back
+		 *     to the preset's defaults.
+		 */
+		ProviderInput: {
+			/** @description At least one. Only addresses in these domains may sign in. */
+			allowedDomains: string[];
+			clientId: string;
+			/**
+			 * Format: password
+			 * @description Write-only. Omit on update to keep the stored secret.
+			 */
+			clientSecret?: string | null;
+			enabled?: boolean;
+			/** @description Required except for `entra` (derived from `tenantId`) and `google`. */
+			issuerUrl?: string | null;
+			jitProvisioning?: boolean;
+			/** @description Lowercase letters, digits, and dashes; appears in sign-in URLs. */
+			key: string;
+			mfaTrust?: components['schemas']['MfaTrust'] | null;
+			/** @description Shown on the sign-in button, e.g. "Microsoft". */
+			name: string;
+			preset: components['schemas']['Preset'];
+			roleClaim?: string | null;
+			scopes?: string[] | null;
+			/** @description Entra directory (tenant) id. */
+			tenantId?: string | null;
+			trustEmail?: boolean | null;
+		};
 		RecoveryCodesView: {
 			/** @description Shown only now. Each code signs in once if the authenticator is lost. */
 			recoveryCodes: string[];
@@ -1051,6 +1245,16 @@ export interface components {
 			permissions: string[];
 			/** @description Holders must have a second factor. */
 			requireMfa: boolean;
+		};
+		/** @description A claim value → role at an org. */
+		RoleMapping: {
+			/** @description The group id, app role, or other value of the provider's role claim. */
+			claimValue: string;
+			inherit?: boolean;
+			/** Format: uuid */
+			orgId: string;
+			/** Format: uuid */
+			roleId: string;
 		};
 		SessionView: {
 			/** Format: date-time */
@@ -1081,6 +1285,25 @@ export interface components {
 		};
 		SetRequirementRequest: {
 			required: boolean;
+		};
+		SsoCallbackRequest: {
+			code: string;
+			state: string;
+		};
+		StartSsoRequest: {
+			/** @description A same-site path to return to afterwards. */
+			next?: string | null;
+			/** @description The provider's key. */
+			provider: string;
+		};
+		StartSsoResponse: {
+			/** @description Send the browser here. */
+			authorizationUrl: string;
+			/**
+			 * @description Bind to the browser (e.g. an `HttpOnly` cookie) and check it equals the
+			 *     `state` the provider returns before calling `/callback`.
+			 */
+			state: string;
 		};
 		TotpEnrollmentView: {
 			/** @description `otpauth://` URI to show as a QR code. */
@@ -1585,6 +1808,98 @@ export interface operations {
 			};
 			/** @description Wrong password */
 			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	callback: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['SsoCallbackRequest'];
+			};
+		};
+		responses: {
+			/** @description Signed in; session cookie set */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['LoginResponse'];
+				};
+			};
+			/** @description Sign-in refused; `type` says why */
+			401: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+			429: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	list_buttons: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ProviderButton'][];
+				};
+			};
+		};
+	};
+	start: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['StartSsoRequest'];
+			};
+		};
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['StartSsoResponse'];
+				};
+			};
+			/** @description No such enabled provider */
+			404: {
 				headers: {
 					[name: string]: unknown;
 				};
@@ -2296,6 +2611,196 @@ export interface operations {
 				};
 			};
 			404: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	list_providers: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['Provider'][];
+				};
+			};
+			403: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	create_provider: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['ProviderInput'];
+			};
+		};
+		responses: {
+			201: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['Provider'];
+				};
+			};
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	get_provider: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				/** @description Provider id */
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ProviderDetail'];
+				};
+			};
+			404: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	update_provider: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				/** @description Provider id */
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['ProviderInput'];
+			};
+		};
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['Provider'];
+				};
+			};
+			404: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	delete_provider: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				/** @description Provider id */
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			204: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content?: never;
+			};
+			404: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	set_role_mappings: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				/** @description Provider id */
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['RoleMapping'][];
+			};
+		};
+		responses: {
+			204: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content?: never;
+			};
+			422: {
 				headers: {
 					[name: string]: unknown;
 				};

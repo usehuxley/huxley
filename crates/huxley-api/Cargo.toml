@@ -21,6 +21,7 @@ huxley-crypto.workspace = true
 huxley-db.workspace = true
 huxley-modules.workspace = true
 huxley-orgs.workspace = true
+huxley-sso.workspace = true
 huxley-telemetry.workspace = true
 serde.workspace = true
 serde_json.workspace = true

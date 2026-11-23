@@ -12,7 +12,8 @@
 		users: resolve('/(app)/settings/users'),
 		audit: resolve('/(app)/settings/audit'),
 		modules: resolve('/(app)/settings/modules'),
-		security: resolve('/(app)/settings/security')
+		security: resolve('/(app)/settings/security'),
+		sso: resolve('/(app)/settings/sso')
 	};
 </script>
 
