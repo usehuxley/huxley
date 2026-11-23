@@ -80,6 +80,9 @@ pub struct SandboxArgs {
     /// CPUs per script container.
     #[arg(long, env = "HUXLEY_RUNNER_CPUS", default_value = "1")]
     cpus: String,
+    /// Pull the script images when starting (for a fresh runner container).
+    #[arg(long, env = "HUXLEY_RUNNER_PULL_IMAGES")]
+    pull_images: bool,
     /// Give scripts no network at all (not even through the egress proxy).
     #[arg(long, env = "HUXLEY_RUNNER_NO_NETWORK")]
     no_network: bool,
@@ -135,6 +138,11 @@ pub async fn run(command: RunnerCommand) -> anyhow::Result<()> {
             let podman = sandbox.podman();
             if !podman.available().await {
                 bail!("Podman isn't available here (`{}`)", podman.binary);
+            }
+            if sandbox.pull_images {
+                for image in podman.pull().await {
+                    tracing::warn!(%image, "couldn't pull a script image");
+                }
             }
             let languages = podman.languages().await;
             if languages.is_empty() {

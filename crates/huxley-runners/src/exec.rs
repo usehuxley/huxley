@@ -218,6 +218,24 @@ impl Podman {
             .is_ok_and(|s| s.success())
     }
 
+    /// Pulls the script images (only when the operator asks: scripts
+    /// never trigger a pull). Returns the ones that failed.
+    pub async fn pull(&self) -> Vec<String> {
+        let mut failed = Vec::new();
+        for image in [&self.pwsh_image, &self.python_image] {
+            let ok = Command::new(&self.binary)
+                .args(["pull", "--quiet", image])
+                .stdout(Stdio::null())
+                .status()
+                .await
+                .is_ok_and(|s| s.success());
+            if !ok {
+                failed.push(image.clone());
+            }
+        }
+        failed
+    }
+
     /// The languages whose images are present locally.
     pub async fn languages(&self) -> Vec<String> {
         let mut found = Vec::new();
