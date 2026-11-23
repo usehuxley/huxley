@@ -37,6 +37,17 @@ export const actions: Actions = {
 		return { message: status === 'disabled' ? 'User disabled and signed out.' : 'User enabled.' };
 	},
 
+	resetMfa: async (event) => {
+		const { error: problem } = await api(event).DELETE('/api/v1/users/{id}/mfa', {
+			params: { path: { id: event.params.id } }
+		});
+		if (problem)
+			return fail(400, {
+				message: problemMessage(problem, 'Could not reset two-factor authentication.')
+			});
+		return { message: 'Two-factor authentication removed. The user was signed out.' };
+	},
+
 	assign: async (event) => {
 		const form = await event.request.formData();
 		const { error: problem } = await api(event).POST('/api/v1/role-assignments', {

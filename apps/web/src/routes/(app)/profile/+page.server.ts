@@ -2,13 +2,23 @@ import { error, fail } from '@sveltejs/kit';
 import { isApiProblem } from '@usehuxley/api-client';
 import { formString } from '#lib/forms.ts';
 import { api } from '#lib/server/api.ts';
+import { problemMessage } from '#lib/server/problems.ts';
+import { qrSvg } from '#lib/server/qr.ts';
 import type { Actions, PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async (event) => {
-	const { data } = await api(event).GET('/api/v1/auth/sessions');
-	if (!data) error(503, 'Could not load your sessions.');
-	return { sessions: data };
+	const client = api(event);
+	const [sessions, mfa] = await Promise.all([
+		client.GET('/api/v1/auth/sessions'),
+		client.GET('/api/v1/auth/mfa')
+	]);
+	if (!sessions.data || !mfa.data) error(503, 'Could not load your profile.');
+	return { sessions: sessions.data, mfa: mfa.data };
 };
+
+async function enrollmentView(secret: string, otpauthUri: string) {
+	return { secret, otpauthUri, qr: await qrSvg(otpauthUri) };
+}
 
 export const actions: Actions = {
 	changePassword: async (event) => {
@@ -35,6 +45,78 @@ export const actions: Actions = {
 		if (Object.keys(errors).length === 0)
 			errors.form = 'Could not change your password. Try again.';
 		return fail(response.status, { password: { errors } });
+	},
+
+	startTotp: async (event) => {
+		const form = await event.request.formData();
+		const password = formString(form, 'password');
+		const {
+			data,
+			error: problem,
+			response
+		} = await api(event).POST('/api/v1/auth/mfa/totp', {
+			body: { password }
+		});
+		if (!data) {
+			return fail(response.status, {
+				mfa: { error: problemMessage(problem, 'Could not start setup. Try again.') }
+			});
+		}
+		return { mfa: { enrollment: await enrollmentView(data.secret, data.otpauthUri) } };
+	},
+
+	confirmTotp: async (event) => {
+		const form = await event.request.formData();
+		const code = formString(form, 'code');
+		// Echoed back from the setup step so a mistyped code can be retried
+		// without starting over. It's the user's own secret on their own page.
+		const secret = formString(form, 'secret');
+		const otpauthUri = formString(form, 'otpauthUri');
+		const { data, response } = await api(event).POST('/api/v1/auth/mfa/totp/confirm', {
+			body: { code }
+		});
+		if (!data) {
+			return fail(response.status, {
+				mfa: {
+					enrollment: await enrollmentView(secret, otpauthUri),
+					error:
+						response.status === 401
+							? 'That code is not valid. Check the time on your device and try again.'
+							: 'Could not finish setup. Start again.'
+				}
+			});
+		}
+		return { mfa: { recoveryCodes: data.recoveryCodes, enabled: true } };
+	},
+
+	disableTotp: async (event) => {
+		const form = await event.request.formData();
+		const password = formString(form, 'password');
+		const { error: problem, response } = await api(event).POST('/api/v1/auth/mfa/totp/disable', {
+			body: { password }
+		});
+		if (response.status !== 204) {
+			return fail(response.status, {
+				mfa: { error: problemMessage(problem, 'Could not turn off two-factor authentication.') }
+			});
+		}
+		return { mfa: { disabled: true } };
+	},
+
+	regenerateCodes: async (event) => {
+		const form = await event.request.formData();
+		const password = formString(form, 'password');
+		const {
+			data,
+			error: problem,
+			response
+		} = await api(event).POST('/api/v1/auth/mfa/recovery-codes', { body: { password } });
+		if (!data) {
+			return fail(response.status, {
+				mfa: { error: problemMessage(problem, 'Could not create new recovery codes.') }
+			});
+		}
+		return { mfa: { recoveryCodes: data.recoveryCodes } };
 	},
 
 	revokeSession: async (event) => {

@@ -79,7 +79,7 @@
 		"/api/v1/auth/login": {
 			"post": {
 				"tags": ["auth"],
-				"summary": "Signs in with email and password. Sets the session cookie.",
+				"summary": "Signs in with email and password. Sets the session cookie, or asks for a\nsecond factor if the user has one.",
 				"operationId": "login",
 				"requestBody": {
 					"content": {
@@ -93,17 +93,66 @@
 				},
 				"responses": {
 					"200": {
-						"description": "Signed in; session cookie set",
+						"description": "Signed in (session cookie set), or a second factor is required",
 						"content": {
 							"application/json": {
 								"schema": {
-									"$ref": "#/components/schemas/UserView"
+									"$ref": "#/components/schemas/LoginResponse"
 								}
 							}
 						}
 					},
 					"401": {
 						"description": "Wrong email or password, or the account is disabled or locked",
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					},
+					"429": {
+						"description": "Too many attempts from this address",
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/auth/login/mfa": {
+			"post": {
+				"tags": ["auth"],
+				"summary": "Completes sign-in with a second factor. Send exactly one of `code` or\n`recoveryCode`.",
+				"operationId": "login_mfa",
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/LoginMfaRequest"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"200": {
+						"description": "Signed in; session cookie set",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/LoginResponse"
+								}
+							}
+						}
+					},
+					"401": {
+						"description": "Wrong code, or the challenge expired or ran out of attempts",
 						"content": {
 							"application/problem+json": {
 								"schema": {
@@ -155,6 +204,210 @@
 					},
 					"401": {
 						"description": "Not signed in",
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/auth/mfa": {
+			"get": {
+				"tags": ["auth"],
+				"summary": "The signed-in user's MFA setup.",
+				"operationId": "status",
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/MfaStatusView"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/auth/mfa/recovery-codes": {
+			"post": {
+				"tags": ["auth"],
+				"summary": "Replaces the recovery codes. The old ones stop working.",
+				"operationId": "regenerate_recovery_codes",
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/PasswordConfirmation"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/RecoveryCodesView"
+								}
+							}
+						}
+					},
+					"409": {
+						"description": "MFA not set up",
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					},
+					"422": {
+						"description": "Wrong password",
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/auth/mfa/totp": {
+			"post": {
+				"tags": ["auth"],
+				"summary": "Starts setting up an authenticator app. Returns the secret to scan; the\napp isn't required at sign-in until `/totp/confirm` succeeds.",
+				"operationId": "begin_totp",
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/PasswordConfirmation"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/TotpEnrollmentView"
+								}
+							}
+						}
+					},
+					"409": {
+						"description": "Already set up",
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					},
+					"422": {
+						"description": "Wrong password",
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/auth/mfa/totp/confirm": {
+			"post": {
+				"tags": ["auth"],
+				"summary": "Finishes authenticator setup with a code from the app. Returns recovery\ncodes (shown once) and signs out the user's other sessions.",
+				"operationId": "confirm_totp",
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/ConfirmTotpRequest"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/RecoveryCodesView"
+								}
+							}
+						}
+					},
+					"401": {
+						"description": "Wrong code",
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					},
+					"409": {
+						"description": "No setup in progress",
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/auth/mfa/totp/disable": {
+			"post": {
+				"tags": ["auth"],
+				"summary": "Turns off the authenticator app and deletes recovery codes.",
+				"operationId": "disable_totp",
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/PasswordConfirmation"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"204": {
+						"description": "Turned off"
+					},
+					"409": {
+						"description": "Not set up",
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					},
+					"422": {
+						"description": "Wrong password",
 						"content": {
 							"application/problem+json": {
 								"schema": {
@@ -914,6 +1167,48 @@
 				}
 			}
 		},
+		"/api/v1/users/{id}/mfa": {
+			"delete": {
+				"tags": ["users"],
+				"summary": "Removes a user's second factors (authenticator app and recovery codes) and\nsigns them out everywhere, for when they've lost access to both. Only an\nowner can reset an owner's MFA.",
+				"operationId": "reset_mfa",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"description": "User id",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"responses": {
+					"204": {
+						"description": "MFA removed; the user signs in with a password and can set it up again"
+					},
+					"403": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					},
+					"404": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
 		"/healthz": {
 			"get": {
 				"tags": ["system"],
@@ -1135,6 +1430,16 @@
 					}
 				}
 			},
+			"ConfirmTotpRequest": {
+				"type": "object",
+				"required": ["code"],
+				"properties": {
+					"code": {
+						"type": "string",
+						"description": "A current six-digit code from the app."
+					}
+				}
+			},
 			"CreateAssignmentRequest": {
 				"type": "object",
 				"required": ["userId", "roleId", "orgId"],
@@ -1230,6 +1535,24 @@
 					}
 				}
 			},
+			"LoginMfaRequest": {
+				"type": "object",
+				"required": ["challenge"],
+				"properties": {
+					"challenge": {
+						"type": "string",
+						"description": "From the `mfaRequired` response."
+					},
+					"code": {
+						"type": ["string", "null"],
+						"description": "A six-digit code from the authenticator app."
+					},
+					"recoveryCode": {
+						"type": ["string", "null"],
+						"description": "One of the user's recovery codes. Each works once."
+					}
+				}
+			},
 			"LoginRequest": {
 				"type": "object",
 				"required": ["email", "password"],
@@ -1242,6 +1565,50 @@
 						"format": "password"
 					}
 				}
+			},
+			"LoginResponse": {
+				"oneOf": [
+					{
+						"type": "object",
+						"description": "Signed in; the session cookie is set.",
+						"required": ["user", "status"],
+						"properties": {
+							"status": {
+								"type": "string",
+								"enum": ["signedIn"]
+							},
+							"user": {
+								"$ref": "#/components/schemas/UserView"
+							}
+						}
+					},
+					{
+						"type": "object",
+						"description": "The password was right; finish with `POST /api/v1/auth/login/mfa`.",
+						"required": ["challenge", "expiresAt", "methods", "status"],
+						"properties": {
+							"challenge": {
+								"type": "string",
+								"description": "Pass to `/login/mfa`. Valid for a few minutes and a few attempts."
+							},
+							"expiresAt": {
+								"type": "string",
+								"format": "date-time"
+							},
+							"methods": {
+								"type": "array",
+								"items": {
+									"$ref": "#/components/schemas/MfaMethodView"
+								}
+							},
+							"status": {
+								"type": "string",
+								"enum": ["mfaRequired"]
+							}
+						}
+					}
+				],
+				"description": "The result of a sign-in step."
 			},
 			"MeView": {
 				"allOf": [
@@ -1274,6 +1641,26 @@
 					}
 				],
 				"description": "The signed-in user plus permission hints for the UI."
+			},
+			"MfaMethodView": {
+				"type": "string",
+				"description": "Second-factor methods offered for a challenge.",
+				"enum": ["totp", "recoveryCode"]
+			},
+			"MfaStatusView": {
+				"type": "object",
+				"required": ["totpEnabled", "recoveryCodesRemaining"],
+				"properties": {
+					"recoveryCodesRemaining": {
+						"type": "integer",
+						"format": "int64",
+						"description": "Unused recovery codes left."
+					},
+					"totpEnabled": {
+						"type": "boolean",
+						"description": "An authenticator app is set up and required at sign-in."
+					}
+				}
 			},
 			"Module": {
 				"type": "object",
@@ -1398,6 +1785,17 @@
 					}
 				}
 			},
+			"PasswordConfirmation": {
+				"type": "object",
+				"required": ["password"],
+				"properties": {
+					"password": {
+						"type": "string",
+						"format": "password",
+						"description": "The user's current password, re-checked before the change."
+					}
+				}
+			},
 			"Permission": {
 				"type": "object",
 				"required": ["key", "description", "scope"],
@@ -1417,6 +1815,19 @@
 				"type": "string",
 				"description": "Where a permission is evaluated.",
 				"enum": ["org", "instance"]
+			},
+			"RecoveryCodesView": {
+				"type": "object",
+				"required": ["recoveryCodes"],
+				"properties": {
+					"recoveryCodes": {
+						"type": "array",
+						"items": {
+							"type": "string"
+						},
+						"description": "Shown only now. Each code signs in once if the authenticator is lost."
+					}
+				}
 			},
 			"Role": {
 				"type": "object",
@@ -1510,6 +1921,20 @@
 					}
 				}
 			},
+			"TotpEnrollmentView": {
+				"type": "object",
+				"required": ["secret", "otpauthUri"],
+				"properties": {
+					"otpauthUri": {
+						"type": "string",
+						"description": "`otpauth://` URI to show as a QR code."
+					},
+					"secret": {
+						"type": "string",
+						"description": "Base32 secret, for entering into the app by hand."
+					}
+				}
+			},
 			"UpdateOrgRequest": {
 				"type": "object",
 				"required": ["name", "version"],
@@ -1553,7 +1978,7 @@
 			},
 			"UserView": {
 				"type": "object",
-				"required": ["id", "email", "displayName", "status"],
+				"required": ["id", "email", "displayName", "status", "mfaEnabled"],
 				"properties": {
 					"displayName": {
 						"type": "string"
@@ -1568,6 +1993,10 @@
 					"lastLoginAt": {
 						"type": ["string", "null"],
 						"format": "date-time"
+					},
+					"mfaEnabled": {
+						"type": "boolean",
+						"description": "Has a second factor (authenticator app) set up."
 					},
 					"status": {
 						"type": "string",

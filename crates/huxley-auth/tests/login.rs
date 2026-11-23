@@ -2,6 +2,7 @@
 
 use huxley_auth::{AuthConfig, AuthError, AuthService, create_user};
 use huxley_core::{RequestContext, Via};
+use huxley_crypto::Crypto;
 use huxley_db::testing::{TestPools, pools, unique};
 
 const PASSWORD: &str = "a perfectly fine passphrase";
@@ -21,7 +22,11 @@ async fn user(pools: &TestPools) -> String {
 }
 
 fn service(pools: &TestPools) -> AuthService {
-    AuthService::new(pools.app.clone(), AuthConfig::default())
+    AuthService::new(
+        pools.app.clone(),
+        AuthConfig::default(),
+        Crypto::new(pools.app.clone(), huxley_crypto::testing::key_ring()),
+    )
 }
 
 #[tokio::test]
@@ -34,6 +39,8 @@ async fn login_creates_a_session_that_authenticates() {
     let login = auth
         .login(&ctx(), &email.to_uppercase(), PASSWORD)
         .await
+        .unwrap()
+        .into_session()
         .unwrap();
     assert!(login.token.starts_with("hxs_"));
 
@@ -69,6 +76,7 @@ async fn repeated_failures_lock_the_account() {
             lockout_threshold: 3,
             ..AuthConfig::default()
         },
+        Crypto::new(pools.app.clone(), huxley_crypto::testing::key_ring()),
     );
 
     for _ in 0..3 {
@@ -96,15 +104,30 @@ async fn logout_and_revocation_end_sessions() {
     let email = user(&pools).await;
     let auth = service(&pools);
 
-    let first = auth.login(&ctx(), &email, PASSWORD).await.unwrap();
-    let second = auth.login(&ctx(), &email, PASSWORD).await.unwrap();
+    let first = auth
+        .login(&ctx(), &email, PASSWORD)
+        .await
+        .unwrap()
+        .into_session()
+        .unwrap();
+    let second = auth
+        .login(&ctx(), &email, PASSWORD)
+        .await
+        .unwrap()
+        .into_session()
+        .unwrap();
 
     auth.logout(&ctx(), first.session_id).await.unwrap();
     assert!(auth.authenticate(&first.token).await.unwrap().is_none());
 
     // A user may revoke their own other session, but not someone else's.
     let other = user(&pools).await;
-    let stranger = auth.login(&ctx(), &other, PASSWORD).await.unwrap();
+    let stranger = auth
+        .login(&ctx(), &other, PASSWORD)
+        .await
+        .unwrap()
+        .into_session()
+        .unwrap();
     let denied = auth
         .revoke_own_session(&ctx(), stranger.user.id, second.session_id)
         .await;
@@ -121,7 +144,12 @@ async fn disabled_users_cannot_log_in_or_use_sessions() {
     let Some(pools) = pools().await else { return };
     let email = user(&pools).await;
     let auth = service(&pools);
-    let login = auth.login(&ctx(), &email, PASSWORD).await.unwrap();
+    let login = auth
+        .login(&ctx(), &email, PASSWORD)
+        .await
+        .unwrap()
+        .into_session()
+        .unwrap();
 
     sqlx::query("UPDATE users SET status = 'disabled' WHERE id = $1")
         .bind(login.user.id)
@@ -164,8 +192,18 @@ async fn changing_the_password_revokes_other_sessions() {
     let Some(pools) = pools().await else { return };
     let email = user(&pools).await;
     let auth = service(&pools);
-    let here = auth.login(&ctx(), &email, PASSWORD).await.unwrap();
-    let elsewhere = auth.login(&ctx(), &email, PASSWORD).await.unwrap();
+    let here = auth
+        .login(&ctx(), &email, PASSWORD)
+        .await
+        .unwrap()
+        .into_session()
+        .unwrap();
+    let elsewhere = auth
+        .login(&ctx(), &email, PASSWORD)
+        .await
+        .unwrap()
+        .into_session()
+        .unwrap();
 
     let wrong = auth
         .change_password(

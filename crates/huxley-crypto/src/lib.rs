@@ -14,6 +14,8 @@
 //! Ciphertext layout: `0x01 || dek_id (16) || nonce (12) || ciphertext || tag (16)`.
 
 mod keyring;
+#[cfg(feature = "testing")]
+pub mod testing;
 
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};

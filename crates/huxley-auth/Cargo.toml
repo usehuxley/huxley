@@ -13,17 +13,22 @@ argon2.workspace = true
 base64.workspace = true
 getrandom.workspace = true
 huxley-core.workspace = true
+huxley-crypto.workspace = true
 huxley-db.workspace = true
+ring.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 sqlx.workspace = true
 sha2.workspace = true
+subtle.workspace = true
 thiserror.workspace = true
 time.workspace = true
 tracing.workspace = true
 uuid.workspace = true
+zeroize.workspace = true
 
 [dev-dependencies]
+huxley-crypto = { workspace = true, features = ["testing"] }
 huxley-db = { workspace = true, features = ["testing"] }
 tokio.workspace = true
 

@@ -23,6 +23,7 @@ pub fn routes() -> Router<AppState> {
         .route("/users", get(list_users).post(create_user))
         .route("/users/{id}", get(get_user).patch(update_user))
         .route("/users/{id}/assignments", get(list_assignments))
+        .route("/users/{id}/mfa", delete(reset_mfa))
         .route("/role-assignments", post(create_assignment))
         .route("/role-assignments/{id}", delete(delete_assignment))
         .route("/roles", get(list_roles))
@@ -207,6 +208,47 @@ pub async fn update_user(
     .map_err(map_auth)?;
     tx.commit().await.map_err(db_err)?;
     Ok(Json(user.into()))
+}
+
+/// Removes a user's second factors (authenticator app and recovery codes) and
+/// signs them out everywhere, for when they've lost access to both. Only an
+/// owner can reset an owner's MFA.
+#[utoipa::path(delete, path = "/api/v1/users/{id}/mfa", tag = "users",
+    params(("id" = Uuid, Path, description = "User id")),
+    responses(
+        (status = 204, description = "MFA removed; the user signs in with a password and can set it up again"),
+        (status = 403, body = ApiError, content_type = "application/problem+json"),
+        (status = 404, body = ApiError, content_type = "application/problem+json"),
+    ))]
+pub async fn reset_mfa(
+    State(state): State<AppState>,
+    authed: Authed,
+    Path(id): Path<Uuid>,
+) -> ApiResult<StatusCode> {
+    authed.require_instance(permissions::USER_UPDATE)?;
+    if id == authed.principal.user_id {
+        return Err(ApiError::conflict(
+            "Reset your own MFA from your profile instead.",
+        ));
+    }
+    let mut tx = begin_scoped(&state.db, &OrgScope::System)
+        .await
+        .map_err(db_err)?;
+    huxley_auth::find_user(&mut tx, id)
+        .await
+        .map_err(map_auth)?
+        .ok_or_else(ApiError::not_found)?;
+    let target = huxley_authz::load_principal(&mut tx, id)
+        .await
+        .map_err(map_authz)?;
+    if target.is_owner() && !authed.principal.is_owner() {
+        return Err(ApiError::forbidden().with_detail("Only an owner can reset an owner's MFA."));
+    }
+    huxley_auth::mfa::reset_mfa(&mut tx, &authed.user.ctx, id)
+        .await
+        .map_err(map_auth)?;
+    tx.commit().await.map_err(db_err)?;
+    Ok(StatusCode::NO_CONTENT)
 }
 
 /// A user's role assignments that the caller can see.

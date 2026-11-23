@@ -23,6 +23,10 @@ thiserror.workspace = true
 uuid.workspace = true
 zeroize.workspace = true
 
+[features]
+# A fixed key ring for other crates' integration tests.
+testing = []
+
 [dev-dependencies]
 huxley-db = { workspace = true, features = ["testing"] }
 tokio.workspace = true

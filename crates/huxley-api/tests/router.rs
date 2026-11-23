@@ -19,7 +19,11 @@ fn app() -> axum::Router {
         statement_timeout_ms: 1_000,
     };
     let db = huxley_db::connect(&config).expect("lazy pool");
-    let auth = AuthService::new(db.clone(), AuthConfig::default());
+    let auth = AuthService::new(
+        db.clone(),
+        AuthConfig::default(),
+        Crypto::new(db.clone(), KeyRing::ephemeral()),
+    );
     let crypto = Crypto::new(db.clone(), KeyRing::ephemeral());
     router(AppState::new(db, auth, crypto, ApiConfig::default()))
 }
