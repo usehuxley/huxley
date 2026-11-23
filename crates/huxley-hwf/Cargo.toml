@@ -1,0 +1,19 @@
+[package]
+name = "huxley-hwf"
+description = "The Huxley Workflow Format: types, parsing, validation, JSON Schema (design doc §6.2, ADR-004)"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[dependencies]
+schemars.workspace = true
+serde.workspace = true
+serde-saphyr.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+
+[lints]
+workspace = true
