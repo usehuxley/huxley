@@ -1,5 +1,8 @@
 //! Starting, advancing, cancelling and finishing runs.
 
+use std::collections::BTreeSet;
+
+use huxley_crypto::Binding;
 use huxley_db::{OrgScope, begin_scoped};
 use huxley_hwf::Workflow;
 use serde::Serialize;
@@ -47,6 +50,22 @@ pub struct StartRun {
     pub actor_id: Option<Uuid>,
 }
 
+/// The purpose secret run inputs are encrypted under.
+const SECRET_INPUTS: &str = "run_secret_inputs";
+
+/// The inputs a workflow marks secret (`writeOnly: true`).
+pub fn secret_input_names(document: &Json) -> BTreeSet<String> {
+    document["spec"]["inputs"]["properties"]
+        .as_object()
+        .map(|p| {
+            p.iter()
+                .filter(|(_, schema)| schema["writeOnly"] == json!(true))
+                .map(|(name, _)| name.clone())
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
 #[derive(sqlx::FromRow)]
 struct RunRow {
     org_id: Uuid,
@@ -66,27 +85,22 @@ impl Engine {
     /// Creates a run and queues its first advance, in the caller's
     /// transaction (which must be able to see `org_id`).
     pub async fn start_run(&self, conn: &mut PgConnection, start: StartRun) -> EngineResult<Uuid> {
+        self.start_run_with_secrets(conn, start, &BTreeSet::new())
+            .await
+    }
+
+    /// [`Self::start_run`], also keeping `secret` inputs encrypted (as if
+    /// the workflow marked them `writeOnly`), e.g. a form's secret fields.
+    pub async fn start_run_with_secrets(
+        &self,
+        conn: &mut PgConnection,
+        start: StartRun,
+        secret: &BTreeSet<String>,
+    ) -> EngineResult<Uuid> {
         if start.version.is_some() == start.document.is_some() {
             return Err(EngineError::InvalidStart);
         }
         let id = huxley_core::new_id();
-        sqlx::query(
-            "INSERT INTO runs (id, org_id, workflow_id, workflow_version, document, trigger_type, \
-                    trigger, inputs, actor_id) \
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)",
-        )
-        .bind(id)
-        .bind(start.org_id)
-        .bind(start.workflow_id)
-        .bind(start.version)
-        .bind(&start.document)
-        .bind(&start.trigger_type)
-        .bind(&start.trigger)
-        .bind(&start.inputs)
-        .bind(start.actor_id)
-        .execute(&mut *conn)
-        .await?;
-        // Integrations stay at the version current now for the whole run.
         let document = match (&start.document, start.workflow_id, start.version) {
             (Some(document), _, _) => Some(document.clone()),
             (None, Some(workflow), Some(version)) => sqlx::query_scalar(
@@ -98,11 +112,125 @@ impl Engine {
             .await?,
             _ => None,
         };
+        // Secret (writeOnly) inputs are kept encrypted, not in `inputs`.
+        let mut secret_names = document
+            .as_ref()
+            .map(secret_input_names)
+            .unwrap_or_default();
+        secret_names.extend(secret.iter().cloned());
+        let (inputs, sealed) = self
+            .seal_secret_inputs(start.org_id, id, &start.inputs, &secret_names)
+            .await?;
+        sqlx::query(
+            "INSERT INTO runs (id, org_id, workflow_id, workflow_version, document, trigger_type, \
+                    trigger, inputs, actor_id, inputs_sealed) \
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)",
+        )
+        .bind(id)
+        .bind(start.org_id)
+        .bind(start.workflow_id)
+        .bind(start.version)
+        .bind(&start.document)
+        .bind(&start.trigger_type)
+        .bind(&start.trigger)
+        .bind(&inputs)
+        .bind(start.actor_id)
+        .bind(sealed)
+        .execute(&mut *conn)
+        .await?;
+        // Integrations stay at the version current now for the whole run.
         if let Some(document) = document {
             crate::action::pin(&mut *conn, id, start.org_id, &document).await?;
         }
         queue::enqueue_advance(conn, start.org_id, id).await?;
         Ok(id)
+    }
+
+    /// Splits secret inputs off: the inputs to store (secrets replaced by a
+    /// marker) and the secrets, encrypted.
+    async fn seal_secret_inputs(
+        &self,
+        org_id: Uuid,
+        run_id: Uuid,
+        inputs: &Json,
+        secret_names: &BTreeSet<String>,
+    ) -> EngineResult<(Json, Option<Vec<u8>>)> {
+        let Some(object) = inputs.as_object() else {
+            return Ok((inputs.clone(), None));
+        };
+        let secrets: Map<String, Json> = object
+            .iter()
+            .filter(|(k, v)| secret_names.contains(*k) && !v.is_null())
+            .map(|(k, v)| (k.clone(), v.clone()))
+            .collect();
+        if secrets.is_empty() {
+            return Ok((inputs.clone(), None));
+        }
+        let mut shown = object.clone();
+        for name in secrets.keys() {
+            shown.insert(name.clone(), json!(huxley_expr::REDACTED));
+        }
+        let sealed = self
+            .crypto
+            .encrypt(
+                org_id,
+                Binding {
+                    purpose: SECRET_INPUTS,
+                    record: run_id,
+                },
+                &serde_json::to_vec(&Json::Object(secrets)).unwrap_or_default(),
+            )
+            .await?;
+        Ok((Json::Object(shown), Some(sealed)))
+    }
+
+    /// A run's secret inputs, decrypted (empty if it has none).
+    pub(crate) async fn secret_inputs(
+        &self,
+        conn: &mut PgConnection,
+        run_id: Uuid,
+    ) -> EngineResult<Map<String, Json>> {
+        let sealed: Option<Option<Vec<u8>>> =
+            sqlx::query_scalar("SELECT inputs_sealed FROM runs WHERE id = $1")
+                .bind(run_id)
+                .fetch_optional(&mut *conn)
+                .await?;
+        let Some(Some(sealed)) = sealed else {
+            return Ok(Map::new());
+        };
+        let plain = self
+            .crypto
+            .decrypt(
+                Binding {
+                    purpose: SECRET_INPUTS,
+                    record: run_id,
+                },
+                &sealed,
+            )
+            .await?;
+        Ok(serde_json::from_slice(&plain).unwrap_or_default())
+    }
+
+    /// Every secret value a run can touch, for redaction: the
+    /// organization's secrets and the run's secret inputs.
+    pub(crate) async fn secret_values(
+        &self,
+        conn: &mut PgConnection,
+        org_id: Uuid,
+        run_id: Uuid,
+    ) -> EngineResult<Vec<String>> {
+        let mut values: Vec<String> = huxley_variables::for_run(&mut *conn, &self.crypto, org_id)
+            .await?
+            .secrets
+            .into_values()
+            .collect();
+        values.extend(
+            self.secret_inputs(conn, run_id)
+                .await?
+                .into_values()
+                .map(|v| v.as_str().map_or_else(|| v.to_string(), str::to_owned)),
+        );
+        Ok(values)
     }
 
     /// Asks a queued or running run to stop. Returns false if it had
@@ -240,10 +368,24 @@ impl Engine {
             .await?;
         let org_id = run.org_id;
         let variables = huxley_variables::for_run(tx, &self.crypto, org_id).await?;
+        let secret_inputs = self.secret_inputs(tx, run_id).await?;
+        let mut inputs = run.inputs;
+        let mut secrets = variables.secrets;
+        if let Some(object) = inputs.as_object_mut() {
+            for (name, value) in &secret_inputs {
+                object.insert(name.clone(), value.clone());
+                // So whatever a tainted step echoes gets masked too.
+                let text = value
+                    .as_str()
+                    .map_or_else(|| value.to_string(), str::to_owned);
+                secrets.insert(format!("\u{0}input:{name}"), text);
+            }
+        }
         let mut ctx = RunContext {
             run_id,
             org_id,
-            inputs: run.inputs,
+            inputs,
+            secret_inputs: secret_inputs.keys().cloned().collect(),
             trigger: run.trigger,
             vars: match run.vars {
                 Json::Object(vars) => vars,
@@ -252,7 +394,7 @@ impl Engine {
             meta: meta(workflow, run.workflow_version, started_at),
             actor: json!({ "id": run.actor_id }),
             org_vars: Json::Object(variables.vars),
-            secrets: variables.secrets,
+            secrets,
             public_url: self.public_url.clone(),
         };
         let mut walker = Walker::new(&self.expr, &mut ctx, &mut journal, now);

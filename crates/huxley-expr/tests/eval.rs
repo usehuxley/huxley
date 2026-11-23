@@ -223,3 +223,33 @@ fn references_lists_what_an_expression_reads() {
     assert_eq!(engine.references("no jinja").unwrap(), Vec::<String>::new());
     assert!(engine.references("{{ oops(").is_err());
 }
+
+#[test]
+fn secret_inputs_taint_what_reads_them() {
+    let engine = Engine::new();
+    let secret: std::collections::BTreeSet<String> = ["password".to_owned()].into();
+    let scope = Scope::new().with_partly_secret(
+        "inputs",
+        &json!({ "name": "ada", "password": "hunter2-hunter2" }),
+        &secret,
+    );
+    let plain = engine.eval(&json!("{{ inputs.name }}"), &scope).unwrap();
+    assert_eq!(plain.value, json!("ada"));
+    assert!(!plain.tainted);
+    let read = engine
+        .eval(&json!("{{ inputs.password }}"), &scope)
+        .unwrap();
+    assert_eq!(read.value, json!("hunter2-hunter2"));
+    assert!(read.tainted);
+    for expr in [
+        "{{ inputs.password | length }}",
+        "{{ inputs['password'] }}",
+        "{{ inputs | tojson }}",
+        "{% for k in inputs %}{{ k }}{% endfor %}",
+    ] {
+        assert!(engine.eval(&json!(expr), &scope).unwrap().tainted, "{expr}");
+    }
+    // A whole-value expression keeps types, as for plain inputs.
+    let all = engine.eval(&json!("{{ inputs }}"), &scope).unwrap();
+    assert!(all.tainted);
+}

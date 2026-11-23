@@ -143,15 +143,18 @@
 					<input
 						id={id(field)}
 						class={inputClass}
-						type={field.kind === 'email'
-							? 'email'
-							: field.kind === 'date'
-								? 'date'
-								: field.kind === 'datetime'
-									? 'datetime-local'
-									: field.kind === 'number' || field.kind === 'integer'
-										? 'number'
-										: 'text'}
+						autocomplete={field.kind === 'secret' ? 'off' : undefined}
+						type={field.kind === 'secret'
+							? 'password'
+							: field.kind === 'email'
+								? 'email'
+								: field.kind === 'date'
+									? 'date'
+									: field.kind === 'datetime'
+										? 'datetime-local'
+										: field.kind === 'number' || field.kind === 'integer'
+											? 'number'
+											: 'text'}
 						step={field.kind === 'integer' ? '1' : field.kind === 'number' ? 'any' : undefined}
 						placeholder={field.placeholder}
 						required={field.required}

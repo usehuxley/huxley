@@ -76,6 +76,58 @@ impl Object for SecretsObject {
     }
 }
 
+/// An object some of whose keys are secret (e.g. `inputs` with a
+/// `writeOnly` input): reading one, or iterating the object, taints the
+/// evaluation like reading `secrets.*`.
+#[derive(Debug)]
+pub(crate) struct PartlySecret {
+    values: BTreeMap<String, Value>,
+    secret: std::collections::BTreeSet<String>,
+    touched: Arc<AtomicBool>,
+}
+
+impl PartlySecret {
+    pub(crate) fn new(
+        values: BTreeMap<String, Value>,
+        secret: std::collections::BTreeSet<String>,
+        touched: Arc<AtomicBool>,
+    ) -> Self {
+        Self {
+            values,
+            secret,
+            touched,
+        }
+    }
+}
+
+impl Object for PartlySecret {
+    fn repr(self: &Arc<Self>) -> ObjectRepr {
+        ObjectRepr::Map
+    }
+
+    fn get_value(self: &Arc<Self>, key: &Value) -> Option<Value> {
+        let name = key.as_str()?;
+        let value = self.values.get(name)?;
+        if self.secret.contains(name) {
+            self.touched.store(true, Ordering::Relaxed);
+        }
+        Some(value.clone())
+    }
+
+    fn enumerate(self: &Arc<Self>) -> minijinja::value::Enumerator {
+        // Listing or serializing the whole object reads the secrets too.
+        if self.values.keys().any(|k| self.secret.contains(k)) {
+            self.touched.store(true, Ordering::Relaxed);
+        }
+        minijinja::value::Enumerator::Values(
+            self.values
+                .keys()
+                .map(|k| Value::from(k.as_str()))
+                .collect(),
+        )
+    }
+}
+
 /// A random password from an unambiguous alphabet.
 fn generate(length: usize) -> String {
     // Rejection sampling keeps the distribution uniform.
