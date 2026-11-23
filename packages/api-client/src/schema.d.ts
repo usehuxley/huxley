@@ -734,6 +734,43 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
+	'/api/v1/jobs/dead': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/**
+		 * Workflow jobs that failed repeatedly and were set aside (dead letters).
+		 *     A dead step job has already failed its step: resume the run instead.
+		 */
+		get: operations['list_dead_jobs'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/jobs/{id}/retry': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/** Puts a dead job back in the queue with fresh attempts. */
+		post: operations['retry_job'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
 	'/api/v1/modules': {
 		parameters: {
 			query?: never;
@@ -2078,6 +2115,22 @@ export interface components {
 			/** @description Send as `Authorization: Bearer <token>`. Shown only now. */
 			tokenSecret: string;
 		};
+		/** @description A job that used up its attempts. */
+		DeadJob: {
+			/** Format: int32 */
+			attempts: number;
+			/** Format: date-time */
+			createdAt: string;
+			/** Format: uuid */
+			id: string;
+			kind: string;
+			lastError?: string | null;
+			/** Format: uuid */
+			orgId?: string | null;
+			/** Format: uuid */
+			runId?: string | null;
+			stepKey?: string | null;
+		};
 		/** @description A problem with a workflow document, and where it is. */
 		DiagnosticView: {
 			message: string;
@@ -2546,6 +2599,10 @@ export interface components {
 		ResumeRunResponse: {
 			/** @description False unless the run had failed. */
 			resumed: boolean;
+		};
+		RetryJobResponse: {
+			/** @description False if the job wasn't dead (or doesn't exist). */
+			retried: boolean;
 		};
 		Role: {
 			description: string;
@@ -4391,6 +4448,46 @@ export interface operations {
 				};
 				content: {
 					'application/json': components['schemas']['EntityType'][];
+				};
+			};
+		};
+	};
+	list_dead_jobs: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['DeadJob'][];
+				};
+			};
+		};
+	};
+	retry_job: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['RetryJobResponse'];
 				};
 			};
 		};

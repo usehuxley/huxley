@@ -1805,6 +1805,56 @@
 				}
 			}
 		},
+		"/api/v1/jobs/dead": {
+			"get": {
+				"tags": ["workflows"],
+				"summary": "Workflow jobs that failed repeatedly and were set aside (dead letters).\nA dead step job has already failed its step: resume the run instead.",
+				"operationId": "list_dead_jobs",
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "array",
+									"items": {
+										"$ref": "#/components/schemas/DeadJob"
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/jobs/{id}/retry": {
+			"post": {
+				"tags": ["workflows"],
+				"summary": "Puts a dead job back in the queue with fresh attempts.",
+				"operationId": "retry_job",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/RetryJobResponse"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
 		"/api/v1/modules": {
 			"get": {
 				"tags": ["modules"],
@@ -5416,6 +5466,42 @@
 					}
 				]
 			},
+			"DeadJob": {
+				"type": "object",
+				"description": "A job that used up its attempts.",
+				"required": ["id", "kind", "attempts", "createdAt"],
+				"properties": {
+					"attempts": {
+						"type": "integer",
+						"format": "int32"
+					},
+					"createdAt": {
+						"type": "string",
+						"format": "date-time"
+					},
+					"id": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"kind": {
+						"type": "string"
+					},
+					"lastError": {
+						"type": ["string", "null"]
+					},
+					"orgId": {
+						"type": ["string", "null"],
+						"format": "uuid"
+					},
+					"runId": {
+						"type": ["string", "null"],
+						"format": "uuid"
+					},
+					"stepKey": {
+						"type": ["string", "null"]
+					}
+				}
+			},
 			"DiagnosticView": {
 				"type": "object",
 				"description": "A problem with a workflow document, and where it is.",
@@ -6598,6 +6684,16 @@
 					"resumed": {
 						"type": "boolean",
 						"description": "False unless the run had failed."
+					}
+				}
+			},
+			"RetryJobResponse": {
+				"type": "object",
+				"required": ["retried"],
+				"properties": {
+					"retried": {
+						"type": "boolean",
+						"description": "False if the job wasn't dead (or doesn't exist)."
 					}
 				}
 			},
