@@ -46,6 +46,9 @@ getrandom = "0.4"
 subtle = "2.6"
 ring = "0.17"
 zeroize = "1.8"
+# MPL-2.0: licence exception approved for these crates only (ADR-012, deny.toml).
+webauthn-rs = { version = "0.6", features = ["danger-allow-state-serialisation", "conditional-ui"] }
+url = "2"
 
 # Config / CLI / errors
 clap = { version = "4.6", features = ["derive", "env"] }

@@ -26,6 +26,8 @@ pub fn routes() -> Router<AppState> {
 pub struct MfaStatusView {
     /// An authenticator app is set up and required at sign-in.
     pub totp_enabled: bool,
+    /// Registered passkeys.
+    pub passkeys: i64,
     /// Unused recovery codes left.
     pub recovery_codes_remaining: i64,
 }
@@ -79,6 +81,7 @@ pub async fn status(
         .map_err(map_auth_error)?;
     Ok(Json(MfaStatusView {
         totp_enabled: status.totp_enabled,
+        passkeys: status.passkeys,
         recovery_codes_remaining: status.recovery_codes_remaining,
     }))
 }

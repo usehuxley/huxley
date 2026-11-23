@@ -100,6 +100,8 @@ jobs:
       # Every browser test signs in from 127.0.0.1; the default 20/min is too
       # tight for the whole suite.
       HUXLEY_HTTP__LOGIN_ATTEMPTS_PER_MINUTE: "200"
+      # Passkeys are bound to the origin the browser sees: Playwright's preview server.
+      HUXLEY_AUTH__PUBLIC_URL: http://localhost:4173
       HUXLEY_API_URL: http://127.0.0.1:8080
       E2E_EMAIL: e2e@example.com
       E2E_PASSWORD: e2e test passphrase

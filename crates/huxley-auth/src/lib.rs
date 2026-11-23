@@ -2,10 +2,11 @@
 //!
 //! Local accounts (Argon2id passwords), server-side sessions with idle and
 //! absolute timeouts, login lockout with backoff, and TOTP multi-factor
-//! authentication with recovery codes ([`mfa`]). Passkeys, OIDC, and API
-//! tokens build on the same pieces.
+//! authentication with recovery codes ([`mfa`]), and passkeys ([`passkey`]).
+//! OIDC and API tokens build on the same pieces.
 
 pub mod mfa;
+pub mod passkey;
 pub mod password;
 pub mod token;
 pub mod totp;
@@ -21,7 +22,9 @@ use time::{Duration, OffsetDateTime};
 use uuid::Uuid;
 
 pub use mfa::{MfaChallenge, MfaMethod, MfaStatus, SecondFactor, TotpEnrollment};
+pub use passkey::{Ceremony, PasskeyInfo, RegisteredPasskey};
 pub use password::PasswordPolicyError;
+pub use webauthn_rs::prelude::{PublicKeyCredential, RegisterPublicKeyCredential};
 
 /// Authentication settings (`[auth]` in `huxley.toml`, or `HUXLEY_AUTH__*`).
 #[derive(Debug, Clone, Deserialize)]
@@ -37,6 +40,10 @@ pub struct AuthConfig {
     pub lockout_base_seconds: i64,
     /// Upper bound on a single lockout.
     pub lockout_max_seconds: i64,
+    /// The staff web app's public URL as users' browsers see it, e.g.
+    /// `https://huxley.example.com`. Passkeys are bound to its host name and
+    /// are unavailable while this is unset.
+    pub public_url: Option<String>,
 }
 
 impl Default for AuthConfig {
@@ -47,11 +54,17 @@ impl Default for AuthConfig {
             lockout_threshold: 5,
             lockout_base_seconds: 60,
             lockout_max_seconds: 3600,
+            public_url: None,
         }
     }
 }
 
 impl AuthConfig {
+    /// Checks settings that can't be checked by deserializing alone.
+    pub fn validate(&self) -> AuthResult<()> {
+        passkey::relying_party(self).map(|_| ())
+    }
+
     fn idle(&self) -> Duration {
         Duration::minutes(self.session_idle_minutes)
     }
@@ -172,6 +185,20 @@ pub enum AuthError {
     MfaNotEnabled,
     #[error("no authenticator setup is in progress")]
     NoPendingEnrollment,
+    #[error("auth.public_url must be an absolute http(s) URL with a host name")]
+    InvalidPublicUrl,
+    #[error("passkeys are not configured: set auth.public_url")]
+    PasskeysNotConfigured,
+    #[error("the passkey could not be verified")]
+    InvalidPasskey,
+    #[error("the passkey request has expired; start again")]
+    InvalidCeremony,
+    #[error("invalid passkey name")]
+    InvalidPasskeyName,
+    #[error("this passkey is already registered")]
+    PasskeyAlreadyRegistered,
+    #[error("passkey not found")]
+    PasskeyNotFound,
     #[error("the instance has no root organization; run `huxley admin bootstrap`")]
     NoRootOrg,
     #[error(transparent)]
@@ -222,8 +249,9 @@ macro_rules! select_user {
     ($rest:literal) => {
         concat!(
             "SELECT id, email, display_name, status, last_login_at, created_at, \
-                    EXISTS (SELECT 1 FROM user_totp t \
-                             WHERE t.user_id = users.id AND t.confirmed_at IS NOT NULL) AS mfa_enabled \
+                    (EXISTS (SELECT 1 FROM user_totp t \
+                             WHERE t.user_id = users.id AND t.confirmed_at IS NOT NULL) \
+                     OR EXISTS (SELECT 1 FROM user_passkeys k WHERE k.user_id = users.id)) AS mfa_enabled \
                FROM users ",
             $rest
         )
@@ -308,8 +336,9 @@ pub async fn update_user(
                 status = coalesce($3, status), version = version + 1 \
           WHERE id = $1 \
          RETURNING id, email, display_name, status, last_login_at, created_at, \
-                   EXISTS (SELECT 1 FROM user_totp t \
-                            WHERE t.user_id = users.id AND t.confirmed_at IS NOT NULL) AS mfa_enabled",
+                   (EXISTS (SELECT 1 FROM user_totp t \
+                             WHERE t.user_id = users.id AND t.confirmed_at IS NOT NULL) \
+                     OR EXISTS (SELECT 1 FROM user_passkeys k WHERE k.user_id = users.id)) AS mfa_enabled",
     )
     .bind(id)
     .bind(display_name.as_deref())
@@ -347,6 +376,8 @@ pub struct AuthService {
     db: PgPool,
     config: AuthConfig,
     crypto: Crypto,
+    /// The WebAuthn relying party, when `public_url` is set.
+    webauthn: Option<std::sync::Arc<webauthn_rs::Webauthn>>,
 }
 
 #[derive(sqlx::FromRow)]
@@ -359,8 +390,19 @@ struct LoginRow {
 }
 
 impl AuthService {
+    /// Call [`AuthConfig::validate`] first: an invalid `public_url` here
+    /// just leaves passkeys off.
     pub fn new(db: PgPool, config: AuthConfig, crypto: Crypto) -> Self {
-        Self { db, config, crypto }
+        let webauthn = passkey::relying_party(&config)
+            .ok()
+            .flatten()
+            .map(std::sync::Arc::new);
+        Self {
+            db,
+            config,
+            crypto,
+            webauthn,
+        }
     }
 
     pub fn config(&self) -> &AuthConfig {

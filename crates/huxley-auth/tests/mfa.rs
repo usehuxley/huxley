@@ -320,6 +320,7 @@ async fn disabling_and_admin_reset_remove_the_requirement() {
         auth.mfa_status(id).await.unwrap(),
         huxley_auth::MfaStatus {
             totp_enabled: false,
+            passkeys: 0,
             recovery_codes_remaining: 0
         }
     );

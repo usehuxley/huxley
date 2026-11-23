@@ -62,6 +62,7 @@ pub async fn serve(config: Config, roles: BTreeSet<Role>) -> anyhow::Result<()> 
             .context("migrations failed")?;
         owner.close().await;
     }
+    config.auth.validate()?;
     let db = huxley_db::connect(db_config)?;
     let crypto = huxley_crypto::Crypto::new(db.clone(), config.crypto.key_ring()?);
     crypto

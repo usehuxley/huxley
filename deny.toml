@@ -7,6 +7,13 @@ all-features = true
 [advisories]
 version = 2
 yanked = "deny"
+ignore = [
+  # Marvin attack: timing leaks recover an RSA *private* key during decryption
+  # or signing. `rsa` comes in only through webauthn-rs (crypto-glue), which
+  # uses it to verify RS256 passkey signatures with public keys. Huxley holds
+  # no RSA private keys. Revisit if anything starts using RSA private keys.
+  { id = "RUSTSEC-2023-0071", reason = "rsa is used only for public-key signature verification (passkeys)" },
+]
 
 [licenses]
 version = 2
@@ -26,6 +33,16 @@ allow = [
   "Zlib",
   "CDLA-Permissive-2.0",
   "Unlicense",
+]
+# Reviewed exceptions (ADR-012). MPL-2.0 is file-level copyleft: using these
+# crates unmodified doesn't affect Huxley's MIT license. Scoped to the
+# webauthn-rs project's crates; don't widen to other MPL crates without review.
+exceptions = [
+  { crate = "webauthn-rs", allow = ["MPL-2.0"] },
+  { crate = "webauthn-rs-core", allow = ["MPL-2.0"] },
+  { crate = "webauthn-rs-proto", allow = ["MPL-2.0"] },
+  { crate = "webauthn-attestation-ca", allow = ["MPL-2.0"] },
+  { crate = "crypto-glue", allow = ["MPL-2.0"] },
 ]
 
 [bans]

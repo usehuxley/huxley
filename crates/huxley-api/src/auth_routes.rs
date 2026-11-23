@@ -6,7 +6,8 @@ use axum::response::{IntoResponse, Response};
 use axum::routing::{delete, get, post};
 use axum::{Json, Router};
 use huxley_auth::{
-    AuthError, LoginOutcome, LoginSuccess, MfaMethod, SecondFactor, Session, User, UserStatus,
+    AuthError, LoginOutcome, LoginSuccess, MfaMethod, PublicKeyCredential, SecondFactor, Session,
+    User, UserStatus,
 };
 use serde::{Deserialize, Serialize};
 use time::OffsetDateTime;
@@ -15,6 +16,7 @@ use uuid::Uuid;
 
 use crate::authz::Authed;
 use crate::context::ClientInfo;
+use crate::passkey_routes::CeremonyView;
 use crate::session::{self, CurrentUser};
 use crate::{ApiError, ApiResult, AppState};
 
@@ -22,6 +24,10 @@ pub fn routes() -> Router<AppState> {
     Router::new()
         .route("/login", post(login))
         .route("/login/mfa", post(login_mfa))
+        .route("/login/mfa/passkey", post(login_mfa_passkey_options))
+        .route("/login/passkey/options", post(login_passkey_options))
+        .route("/login/passkey", post(login_passkey))
+        .route("/methods", get(methods))
         .route("/logout", post(logout))
         .route("/me", get(me))
         .route("/password", post(change_password))
@@ -118,6 +124,22 @@ pub(crate) fn map_auth_error(error: AuthError) -> ApiError {
         AuthError::NoPendingEnrollment => {
             ApiError::conflict("Start authenticator setup before confirming it.")
         }
+        AuthError::InvalidPasskey => ApiError::new(
+            StatusCode::UNAUTHORIZED,
+            "invalid-passkey",
+            "The passkey could not be verified",
+        ),
+        AuthError::InvalidCeremony => ApiError::validation()
+            .with_field_error("/ceremony", "The passkey request expired. Try again."),
+        AuthError::InvalidPasskeyName => {
+            ApiError::validation().with_field_error("/name", "Enter a name of 1 to 100 characters.")
+        }
+        AuthError::PasskeyAlreadyRegistered => {
+            ApiError::conflict("This passkey is already registered.")
+        }
+        AuthError::PasskeysNotConfigured => ApiError::unavailable(
+            "Passkeys aren't configured on this server (auth.public_url is not set).",
+        ),
         AuthError::WrongCurrentPassword => {
             ApiError::validation().with_field_error("/password", "The password is incorrect.")
         }
@@ -126,7 +148,7 @@ pub(crate) fn map_auth_error(error: AuthError) -> ApiError {
             "invalid-credentials",
             "Invalid email or password",
         ),
-        AuthError::SessionNotFound => ApiError::not_found(),
+        AuthError::SessionNotFound | AuthError::PasskeyNotFound => ApiError::not_found(),
         AuthError::WeakPassword(e) => {
             ApiError::validation().with_field_error("/newPassword", e.to_string())
         }
@@ -139,6 +161,7 @@ pub(crate) fn map_auth_error(error: AuthError) -> ApiError {
 #[serde(rename_all = "camelCase")]
 pub enum MfaMethodView {
     Totp,
+    Passkey,
     RecoveryCode,
 }
 
@@ -146,6 +169,7 @@ impl From<MfaMethod> for MfaMethodView {
     fn from(method: MfaMethod) -> Self {
         match method {
             MfaMethod::Totp => Self::Totp,
+            MfaMethod::Passkey => Self::Passkey,
             MfaMethod::RecoveryCode => Self::RecoveryCode,
         }
     }
@@ -246,6 +270,33 @@ pub struct LoginMfaRequest {
     pub code: Option<String>,
     /// One of the user's recovery codes. Each works once.
     pub recovery_code: Option<String>,
+    /// A passkey answer to `/login/mfa/passkey`.
+    pub passkey: Option<PasskeyAnswer>,
+}
+
+/// The browser's answer to a passkey sign-in ceremony.
+#[derive(Debug, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct PasskeyAnswer {
+    pub ceremony: Uuid,
+    /// `credential.toJSON()` from `navigator.credentials.get`.
+    #[schema(value_type = Object)]
+    pub credential: PublicKeyCredential,
+}
+
+#[derive(Debug, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct MfaChallengeRequest {
+    /// From the `mfaRequired` response.
+    pub challenge: String,
+}
+
+/// Sign-in methods this server offers, for the sign-in page.
+#[derive(Debug, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct AuthMethodsView {
+    /// Passkeys are configured (`auth.public_url` is set).
+    pub passkeys: bool,
 }
 
 /// Completes sign-in with a second factor. Send exactly one of `code` or
@@ -265,12 +316,22 @@ pub async fn login_mfa(
     Json(body): Json<LoginMfaRequest>,
 ) -> ApiResult<Response> {
     rate_limit(&state, &ctx)?;
-    let factor = match (body.code.as_deref(), body.recovery_code.as_deref()) {
-        (Some(code), None) => SecondFactor::Totp(code),
-        (None, Some(code)) => SecondFactor::RecoveryCode(code),
+    let factor = match (
+        body.code.as_deref(),
+        body.recovery_code.as_deref(),
+        body.passkey.as_ref(),
+    ) {
+        (Some(code), None, None) => SecondFactor::Totp(code),
+        (None, Some(code), None) => SecondFactor::RecoveryCode(code),
+        (None, None, Some(answer)) => SecondFactor::Passkey {
+            ceremony: answer.ceremony,
+            credential: &answer.credential,
+        },
         _ => {
-            return Err(ApiError::validation()
-                .with_field_error("/code", "Send either `code` or `recoveryCode`."));
+            return Err(ApiError::validation().with_field_error(
+                "/code",
+                "Send exactly one of `code`, `recoveryCode`, or `passkey`.",
+            ));
         }
     };
     let success = state
@@ -279,6 +340,87 @@ pub async fn login_mfa(
         .await
         .map_err(map_auth_error)?;
     Ok(signed_in(&state, success))
+}
+
+/// Options for answering an MFA challenge with a passkey. Finish with
+/// `POST /api/v1/auth/login/mfa` and a `passkey` answer.
+#[utoipa::path(post, path = "/api/v1/auth/login/mfa/passkey", tag = "auth",
+    request_body = MfaChallengeRequest,
+    responses(
+        (status = 200, body = CeremonyView),
+        (status = 401, description = "The challenge expired", body = ApiError, content_type = "application/problem+json"),
+        (status = 409, description = "The user has no passkeys", body = ApiError, content_type = "application/problem+json"),
+    ))]
+pub async fn login_mfa_passkey_options(
+    State(state): State<AppState>,
+    ClientInfo(ctx): ClientInfo,
+    Json(body): Json<MfaChallengeRequest>,
+) -> ApiResult<Response> {
+    rate_limit(&state, &ctx)?;
+    let ceremony = state
+        .auth
+        .begin_mfa_passkey(&body.challenge)
+        .await
+        .map_err(map_auth_error)?;
+    Ok((
+        [(header::CACHE_CONTROL, "no-store")],
+        Json(CeremonyView::from(ceremony)),
+    )
+        .into_response())
+}
+
+/// Options for passwordless sign-in with a passkey.
+#[utoipa::path(post, path = "/api/v1/auth/login/passkey/options", tag = "auth",
+    responses(
+        (status = 200, body = CeremonyView),
+        (status = 503, description = "Passkeys aren't configured", body = ApiError, content_type = "application/problem+json"),
+    ))]
+pub async fn login_passkey_options(
+    State(state): State<AppState>,
+    ClientInfo(ctx): ClientInfo,
+) -> ApiResult<Response> {
+    rate_limit(&state, &ctx)?;
+    let ceremony = state
+        .auth
+        .begin_passkey_login()
+        .await
+        .map_err(map_auth_error)?;
+    Ok((
+        [(header::CACHE_CONTROL, "no-store")],
+        Json(CeremonyView::from(ceremony)),
+    )
+        .into_response())
+}
+
+/// Signs in with a passkey alone. A passkey verifies the user on the device,
+/// so no second factor is asked for.
+#[utoipa::path(post, path = "/api/v1/auth/login/passkey", tag = "auth",
+    request_body = PasskeyAnswer,
+    responses(
+        (status = 200, description = "Signed in; session cookie set", body = LoginResponse),
+        (status = 401, description = "The passkey could not be verified", body = ApiError, content_type = "application/problem+json"),
+    ))]
+pub async fn login_passkey(
+    State(state): State<AppState>,
+    ClientInfo(ctx): ClientInfo,
+    Json(body): Json<PasskeyAnswer>,
+) -> ApiResult<Response> {
+    rate_limit(&state, &ctx)?;
+    let success = state
+        .auth
+        .finish_passkey_login(&ctx, body.ceremony, &body.credential)
+        .await
+        .map_err(map_auth_error)?;
+    Ok(signed_in(&state, success))
+}
+
+/// Sign-in methods offered by this server.
+#[utoipa::path(get, path = "/api/v1/auth/methods", tag = "auth",
+    responses((status = 200, body = AuthMethodsView)))]
+pub async fn methods(State(state): State<AppState>) -> Json<AuthMethodsView> {
+    Json(AuthMethodsView {
+        passkeys: state.auth.passkeys_enabled(),
+    })
 }
 
 /// Signs out the current session and clears the cookie.

@@ -1,42 +1,33 @@
-import { fail, redirect, type Cookies, type RequestEvent } from '@sveltejs/kit';
+import { fail, redirect, type RequestEvent } from '@sveltejs/kit';
 import { isApiProblem } from '@usehuxley/api-client';
 import { formString } from '#lib/forms.ts';
 import { api } from '#lib/server/api.ts';
-import { SESSION_COOKIE, parseSessionCookie, safeNext } from '#lib/session.ts';
+import { adoptSession, clearChallenge, getChallenge, setChallenge } from '#lib/server/signin.ts';
+import { SESSION_COOKIE, safeNext } from '#lib/session.ts';
 import type { Actions, PageServerLoad } from './$types';
 
-/**
- * Holds the MFA challenge between the password and code steps. HttpOnly so
- * page scripts can't read it, and scoped to the login page.
- */
-const MFA_COOKIE = 'hx_mfa';
-const MFA_COOKIE_OPTIONS = { path: '/login', httpOnly: true, sameSite: 'strict' } as const;
-
-export const load: PageServerLoad = ({ cookies, url }) => {
+export const load: PageServerLoad = async (event) => {
+	const { cookies, url } = event;
 	// Already signed in: skip the form. The app layout re-checks the session.
 	if (cookies.get(SESSION_COOKIE)) redirect(303, safeNext(url.searchParams.get('next')));
-	return { mfaPending: Boolean(cookies.get(MFA_COOKIE)) };
+	const methods = await api(event)
+		.GET('/api/v1/auth/methods', { signal: AbortSignal.timeout(5000) })
+		.then((r) => r.data)
+		.catch(() => undefined);
+	return {
+		passkeysEnabled: methods?.passkeys ?? false,
+		mfaMethods: getChallenge(cookies)?.methods ?? null
+	};
 };
 
 const UNAVAILABLE = 'Huxley is unavailable right now. Try again shortly.';
 const RATE_LIMITED = 'Too many sign-in attempts. Wait a minute and try again.';
 
-/** Copies the API's session cookie onto this origin and leaves the login page. */
 function finishSignIn(event: RequestEvent, setCookie: string | null) {
-	const session = parseSessionCookie(setCookie);
-	if (!session) return fail(502, { message: 'Sign-in failed unexpectedly. Try again.' });
-	event.cookies.delete(MFA_COOKIE, MFA_COOKIE_OPTIONS);
-	event.cookies.set(SESSION_COOKIE, session.token, {
-		path: '/',
-		httpOnly: true,
-		sameSite: 'lax',
-		maxAge: session.maxAge
-	});
+	if (!adoptSession(event.cookies, setCookie)) {
+		return fail(502, { message: 'Sign-in failed unexpectedly. Try again.' });
+	}
 	redirect(303, safeNext(event.url.searchParams.get('next')));
-}
-
-function clearChallenge(cookies: Cookies) {
-	cookies.delete(MFA_COOKIE, MFA_COOKIE_OPTIONS);
 }
 
 export const actions: Actions = {
@@ -62,39 +53,45 @@ export const actions: Actions = {
 		if (!result.data) return fail(401, { email, message: 'Invalid email or password.' });
 
 		if (result.data.status === 'mfaRequired') {
-			const seconds = Math.floor((Date.parse(result.data.expiresAt) - Date.now()) / 1000);
-			event.cookies.set(MFA_COOKIE, result.data.challenge, {
-				...MFA_COOKIE_OPTIONS,
-				maxAge: Math.max(seconds, 1)
-			});
-			return { mfa: true };
+			setChallenge(
+				event.cookies,
+				result.data.challenge,
+				result.data.methods,
+				result.data.expiresAt
+			);
+			return { mfa: true, methods: result.data.methods };
 		}
 		return finishSignIn(event, result.response.headers.get('set-cookie'));
 	},
 
 	mfa: async (event) => {
-		const challenge = event.cookies.get(MFA_COOKIE);
+		const challenge = getChallenge(event.cookies);
 		if (!challenge) {
 			return fail(401, { expired: true, message: 'Sign-in timed out. Enter your password again.' });
 		}
 		const form = await event.request.formData();
 		const code = formString(form, 'code').trim();
 		const recoveryCode = formString(form, 'recoveryCode').trim();
+		const methods = challenge.methods;
 		if (!code && !recoveryCode) {
-			return fail(400, { mfa: true, message: 'Enter the code from your authenticator app.' });
+			return fail(400, { mfa: true, methods, message: 'Enter your code.' });
 		}
 
 		let result;
 		try {
 			result = await api(event).POST('/api/v1/auth/login/mfa', {
-				body: recoveryCode ? { challenge, recoveryCode } : { challenge, code },
+				body: recoveryCode
+					? { challenge: challenge.token, recoveryCode }
+					: { challenge: challenge.token, code },
 				signal: AbortSignal.timeout(10000)
 			});
 		} catch {
-			return fail(503, { mfa: true, message: UNAVAILABLE });
+			return fail(503, { mfa: true, methods, message: UNAVAILABLE });
 		}
 
-		if (result.response.status === 429) return fail(429, { mfa: true, message: RATE_LIMITED });
+		if (result.response.status === 429) {
+			return fail(429, { mfa: true, methods, message: RATE_LIMITED });
+		}
 		if (!result.data) {
 			const expired =
 				isApiProblem(result.error) && result.error.type.endsWith('/mfa-challenge-expired');
@@ -107,6 +104,7 @@ export const actions: Actions = {
 			}
 			return fail(401, {
 				mfa: true,
+				methods,
 				message: recoveryCode ? 'That recovery code is not valid.' : 'That code is not valid.'
 			});
 		}

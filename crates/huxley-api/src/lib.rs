@@ -15,6 +15,7 @@ pub mod mfa_routes;
 pub mod module_routes;
 pub mod openapi;
 pub mod org_routes;
+pub mod passkey_routes;
 pub mod problem;
 pub mod rate_limit;
 mod router;

@@ -19,6 +19,8 @@ x-huxley-env: &huxley-env
   # Every request reaches the API through Caddy or the web apps, which set
   # X-Forwarded-For to the real client address.
   HUXLEY_HTTP__TRUST_FORWARDED_FOR: "true"
+  # Passkeys are bound to the staff app's host name.
+  HUXLEY_AUTH__PUBLIC_URL: https://${HUXLEY_DOMAIN:-localhost}
 
 services:
   postgres:

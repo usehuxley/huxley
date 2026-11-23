@@ -27,6 +27,7 @@ server *args:
     HUXLEY_TELEMETRY__OTLP_ENDPOINT=http://127.0.0.1:4317 \
     HUXLEY_HTTP__TRUST_FORWARDED_FOR=true \
     HUXLEY_HTTP__COOKIE_SECURE=false \
+    HUXLEY_AUTH__PUBLIC_URL=http://localhost:5173 \
     cargo run -p huxley-server -- serve {{args}}
 
 # Create the root organization and first user in the dev database (prints a generated password)

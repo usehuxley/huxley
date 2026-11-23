@@ -1,6 +1,9 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
+	import { invalidateAll } from '$app/navigation';
+	import { onMount } from 'svelte';
 	import { Badge, Button, Card, Field, Input, toast } from '@usehuxley/ui';
+	import { createPasskey, isCancelled, passkeysSupported, postJson } from '#lib/passkey.ts';
 	import type { PageProps } from './$types';
 
 	let { data, form }: PageProps = $props();
@@ -22,6 +25,52 @@
 	let mfaForm = $derived((form && 'mfa' in form ? form.mfa : {}) as MfaForm);
 	/** Groups the base32 secret in fours so it's easier to type. */
 	const grouped = (secret: string) => secret.replace(/(.{4})/g, '$1 ').trim();
+
+	let passkeySupported = $state(false);
+	let passkeyName = $state('Passkey');
+	let passkeyPassword = $state('');
+	let addingPasskey = $state(false);
+	let passkeyError = $state<string | null>(null);
+	/** Recovery codes issued with a first passkey, shown once. */
+	let passkeyCodes = $state<string[] | null>(null);
+	let shownCodes = $derived(passkeyCodes ?? mfaForm.recoveryCodes ?? null);
+
+	onMount(() => {
+		passkeySupported = passkeysSupported();
+	});
+
+	async function addPasskey(event: SubmitEvent) {
+		event.preventDefault();
+		addingPasskey = true;
+		passkeyError = null;
+		try {
+			const start = await postJson<{ ceremony: string; options: never; message?: string }>(
+				'/profile/passkeys/options',
+				{ password: passkeyPassword }
+			);
+			if (!start.ok) {
+				passkeyError = start.data.message ?? 'Could not start adding a passkey.';
+				return;
+			}
+			const credential = await createPasskey(start.data.options);
+			const finish = await postJson<{ recoveryCodes?: string[] | null; message?: string }>(
+				'/profile/passkeys',
+				{ ceremony: start.data.ceremony, name: passkeyName, credential }
+			);
+			if (!finish.ok) {
+				passkeyError = finish.data.message ?? 'Could not add the passkey.';
+				return;
+			}
+			passkeyCodes = finish.data.recoveryCodes ?? null;
+			passkeyPassword = '';
+			toast.push({ title: 'Passkey added', tone: 'success' });
+			await invalidateAll();
+		} catch (error) {
+			if (!isCancelled(error)) passkeyError = "Your browser couldn't create a passkey.";
+		} finally {
+			addingPasskey = false;
+		}
+	}
 
 	const dateFormat = new Intl.DateTimeFormat(undefined, {
 		dateStyle: 'medium',
@@ -65,7 +114,7 @@
 	<div>
 		<h1 class="text-2xl font-semibold text-fg">Your profile</h1>
 		<p class="mt-1 text-fg-muted">
-			Manage your password, two-factor authentication, and where you're signed in.
+			Manage your password, passkeys, two-factor authentication, and where you're signed in.
 		</p>
 	</div>
 
@@ -130,50 +179,74 @@
 	</Card>
 
 	<Card
-		title="Two-factor authentication"
-		description="Ask for a code from an authenticator app when you sign in."
+		title="Passkeys"
+		description="Sign in with your fingerprint, face, or device PIN instead of a password and code."
+	>
+		<div class="flex flex-col gap-4">
+			{#if passkeyError}
+				<p role="alert" class="text-sm text-danger">{passkeyError}</p>
+			{/if}
+			{#if data.passkeys.length > 0}
+				<ul class="flex flex-col divide-y divide-border">
+					{#each data.passkeys as passkey (passkey.id)}
+						<li class="flex items-center justify-between gap-4 py-3 first:pt-0 last:pb-0">
+							<div class="min-w-0">
+								<p class="text-sm font-medium text-fg">{passkey.name}</p>
+								<p class="mt-0.5 text-sm text-fg-muted">
+									Added {formatDate(passkey.createdAt)} · Last used {formatDate(passkey.lastUsedAt)}
+								</p>
+							</div>
+							<form method="POST" action="?/deletePasskey" use:enhance>
+								<input type="hidden" name="id" value={passkey.id} />
+								<Button type="submit" size="sm" aria-label="Remove {passkey.name}">Remove</Button>
+							</form>
+						</li>
+					{/each}
+				</ul>
+			{/if}
+			{#if !data.passkeysEnabled}
+				<p class="text-sm text-fg-muted">
+					Passkeys aren't available: an administrator needs to set this server's public URL.
+				</p>
+			{:else if !passkeySupported}
+				<p class="text-sm text-fg-muted">This browser doesn't support passkeys.</p>
+			{:else}
+				<form class="flex flex-wrap items-end gap-2" onsubmit={addPasskey}>
+					<Field label="Name" for="passkeyName">
+						<Input id="passkeyName" name="name" bind:value={passkeyName} maxlength={100} required />
+					</Field>
+					<Field label="Password" for="passkeyPassword">
+						<Input
+							id="passkeyPassword"
+							name="password"
+							type="password"
+							autocomplete="current-password"
+							bind:value={passkeyPassword}
+							required
+						/>
+					</Field>
+					<Button type="submit" variant="primary" disabled={addingPasskey}>
+						{addingPasskey ? 'Waiting for your device…' : 'Add a passkey'}
+					</Button>
+				</form>
+			{/if}
+		</div>
+	</Card>
+
+	<Card
+		title="Authenticator app"
+		description="Enter a six-digit code from an app when you sign in."
 	>
 		<div class="flex flex-col gap-4">
 			{#if mfaForm.error}
 				<p role="alert" class="text-sm text-danger">{mfaForm.error}</p>
 			{/if}
 
-			{#if mfaForm.recoveryCodes}
-				<div class="rounded-control border border-warning/40 bg-warning-soft p-4">
-					<p class="text-sm font-medium text-fg">Save your recovery codes</p>
-					<p class="mt-1 text-sm text-fg-muted">
-						If you lose your authenticator, each code signs you in once. They're shown only now:
-						store them in your password manager.
-					</p>
-					<ul class="mt-3 grid grid-cols-2 gap-x-6 gap-y-1 font-mono text-sm text-fg">
-						{#each mfaForm.recoveryCodes as code (code)}
-							<li>{code}</li>
-						{/each}
-					</ul>
-				</div>
-			{/if}
-
 			{#if data.mfa.totpEnabled}
 				<p class="flex items-center gap-2 text-sm text-fg">
-					<Badge tone="success">On</Badge>
-					Authenticator app · {data.mfa.recoveryCodesRemaining} recovery code{data.mfa
-						.recoveryCodesRemaining === 1
-						? ''
-						: 's'} left
+					<Badge tone="success">On</Badge> Codes from your authenticator app are accepted.
 				</p>
-				<div class="flex flex-col gap-4 sm:flex-row sm:items-end">
-					<form method="POST" action="?/regenerateCodes" class="flex items-end gap-2" use:enhance>
-						<Field label="Password" for="regenPassword">
-							<Input
-								id="regenPassword"
-								name="password"
-								type="password"
-								autocomplete="current-password"
-								required
-							/>
-						</Field>
-						<Button type="submit">New recovery codes</Button>
-					</form>
+				<div>
 					<form
 						method="POST"
 						action="?/disableTotp"
@@ -241,9 +314,7 @@
 					</li>
 				</ol>
 			{:else}
-				<p class="flex items-center gap-2 text-sm text-fg-muted">
-					<Badge>Off</Badge> Only your password protects your account.
-				</p>
+				<p class="flex items-center gap-2 text-sm text-fg-muted"><Badge>Off</Badge> Not set up.</p>
 				<form method="POST" action="?/startTotp" class="flex items-end gap-2" use:enhance>
 					<Field label="Password" for="totpPassword">
 						<Input
@@ -259,6 +330,46 @@
 			{/if}
 		</div>
 	</Card>
+
+	{#if shownCodes || data.mfa.totpEnabled || data.mfa.passkeys > 0}
+		<Card
+			title="Recovery codes"
+			description="Each code signs you in once if you lose your passkeys and authenticator."
+		>
+			<div class="flex flex-col gap-4">
+				{#if shownCodes}
+					<div class="rounded-control border border-warning/40 bg-warning-soft p-4">
+						<p class="text-sm font-medium text-fg">Save your recovery codes</p>
+						<p class="mt-1 text-sm text-fg-muted">
+							They're shown only now: store them in your password manager.
+						</p>
+						<ul class="mt-3 grid grid-cols-2 gap-x-6 gap-y-1 font-mono text-sm text-fg">
+							{#each shownCodes as code (code)}
+								<li>{code}</li>
+							{/each}
+						</ul>
+					</div>
+				{/if}
+				<p class="text-sm text-fg">
+					{data.mfa.recoveryCodesRemaining} recovery code{data.mfa.recoveryCodesRemaining === 1
+						? ''
+						: 's'} left
+				</p>
+				<form method="POST" action="?/regenerateCodes" class="flex items-end gap-2" use:enhance>
+					<Field label="Password" for="regenPassword">
+						<Input
+							id="regenPassword"
+							name="password"
+							type="password"
+							autocomplete="current-password"
+							required
+						/>
+					</Field>
+					<Button type="submit">New recovery codes</Button>
+				</form>
+			</div>
+		</Card>
+	{/if}
 
 	<Card title="Active sessions" description="Devices currently signed in to your account.">
 		<ul class="flex flex-col divide-y divide-border">
