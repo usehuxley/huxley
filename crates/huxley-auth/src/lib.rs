@@ -858,6 +858,13 @@ impl AuthService {
                 .details(json!({ "otherSessionsRevoked": revoked })),
         )
         .await?;
+        notify_security(
+            &mut tx,
+            user_id,
+            huxley_notify::kinds::PASSWORD_CHANGED,
+            "Your password was changed",
+        )
+        .await?;
         tx.commit().await?;
         Ok(())
     }
@@ -912,6 +919,32 @@ impl AuthService {
         tx.commit().await?;
         Ok(())
     }
+}
+
+/// Tells a user about a change to their account's security, in their
+/// notifications and by email. Runs in the caller's transaction.
+pub(crate) async fn notify_security(
+    conn: &mut PgConnection,
+    user_id: Uuid,
+    kind: &'static str,
+    title: &str,
+) -> AuthResult<()> {
+    huxley_notify::notify(
+        conn,
+        huxley_notify::Notice {
+            user_id,
+            kind,
+            title,
+            body: "If this wasn't you, reset your password and tell your Huxley administrator straight away.",
+            link: Some("/profile"),
+        },
+    )
+    .await
+    .map_err(|e| match e {
+        huxley_notify::NotifyError::Db(e) => AuthError::Db(DbError::Sqlx(e)),
+        other => AuthError::Db(DbError::Sqlx(sqlx::Error::Protocol(other.to_string()))),
+    })?;
+    Ok(())
 }
 
 /// Checks a signed-in user's password (re-authentication before sensitive

@@ -11,6 +11,7 @@ publish = false
 [dependencies]
 huxley-core.workspace = true
 huxley-db.workspace = true
+huxley-notify.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 sqlx.workspace = true

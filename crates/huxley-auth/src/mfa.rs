@@ -231,6 +231,13 @@ pub async fn reset_mfa(
             .details(json!({ "hadMfa": had, "sessionsRevoked": revoked })),
     )
     .await?;
+    crate::notify_security(
+        conn,
+        user_id,
+        huxley_notify::kinds::MFA_CHANGED,
+        "An administrator removed your two-factor authentication",
+    )
+    .await?;
     Ok(had)
 }
 
@@ -510,6 +517,13 @@ impl AuthService {
                 .details(json!({ "method": "totp", "otherSessionsRevoked": revoked })),
         )
         .await?;
+        crate::notify_security(
+            &mut tx,
+            user_id,
+            huxley_notify::kinds::MFA_CHANGED,
+            "An authenticator app was turned on",
+        )
+        .await?;
         tx.commit().await?;
         Ok(codes)
     }
@@ -541,6 +555,13 @@ impl AuthService {
             AuditRecord::new("auth.mfa_disabled")
                 .target("user", user_id)
                 .details(json!({ "method": "totp" })),
+        )
+        .await?;
+        crate::notify_security(
+            &mut tx,
+            user_id,
+            huxley_notify::kinds::MFA_CHANGED,
+            "Your authenticator app was turned off",
         )
         .await?;
         tx.commit().await?;

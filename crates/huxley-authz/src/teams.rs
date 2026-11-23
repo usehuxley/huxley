@@ -192,6 +192,21 @@ pub async fn add_member(
                 .details(json!({ "user": user_id })),
         )
         .await?;
+        if ctx.actor.id() != Some(user_id) {
+            let team = get(conn, team_id).await?;
+            let title = format!("You were added to the team {}", team.name);
+            huxley_notify::notify(
+                conn,
+                huxley_notify::Notice {
+                    user_id,
+                    kind: huxley_notify::kinds::TEAM_JOINED,
+                    title: &title,
+                    body: "You now have the team's roles as well as your own.",
+                    link: None,
+                },
+            )
+            .await?;
+        }
     }
     Ok(())
 }

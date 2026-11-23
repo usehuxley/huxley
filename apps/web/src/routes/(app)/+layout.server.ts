@@ -25,5 +25,10 @@ export const load: LayoutServerLoad = async (event) => {
 	if (result.data.mfaSetupRequired && event.url.pathname !== '/profile') {
 		redirect(303, '/profile');
 	}
-	return { user: result.data };
+	event.depends('app:notifications');
+	const unread = await api(event)
+		.GET('/api/v1/notifications/unread-count')
+		.then((r) => r.data?.unreadCount ?? 0)
+		.catch(() => 0);
+	return { user: result.data, unreadNotifications: unread };
 };
