@@ -6,6 +6,7 @@
 //! - [`webhook`]: verifying webhook requests (HMAC, bearer, basic).
 //! - [`find_webhook`] and [`start`]: what the webhook endpoint calls.
 
+pub mod events;
 pub mod webhook;
 
 use std::time::Duration;
