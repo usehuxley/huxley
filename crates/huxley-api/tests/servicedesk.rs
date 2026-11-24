@@ -886,3 +886,144 @@ async fn module_gate() {
             .any(|x| x["id"] == t["id"])
     );
 }
+
+/// Runs SQL in system scope with uuid binds.
+async fn exec(pools: &TestPools, sql: &str, binds: &[Uuid]) {
+    let mut tx = begin_scoped(&pools.app, &OrgScope::System).await.unwrap();
+    let mut q = sqlx::query(sqlx::AssertSqlSafe(sql.to_owned()));
+    for b in binds {
+        q = q.bind(*b);
+    }
+    q.execute(&mut *tx).await.unwrap();
+    tx.commit().await.unwrap();
+}
+
+/// The requester adds a public note to a ticket at Acme.
+async fn requester_wrote(s: &Setup, ticket: Uuid) {
+    let contact = Uuid::now_v7();
+    exec(
+        &s.pools,
+        "INSERT INTO crm_contacts (id, org_id, first_name) VALUES ($1, $2, 'Ada')",
+        &[contact, s.acme],
+    )
+    .await;
+    exec(
+        &s.pools,
+        "INSERT INTO sd_ticket_notes (id, ticket_id, org_id, kind, body, author_contact_id) \
+         VALUES (gen_random_uuid(), $1, $2, 'public', 'Still broken', $3)",
+        &[ticket, s.acme, contact],
+    )
+    .await;
+}
+
+/// A ticket at Acme misses its resolution target.
+async fn breach(s: &Setup, ticket: Uuid) {
+    exec(
+        &s.pools,
+        "INSERT INTO sd_ticket_sla (ticket_id, org_id, policy_name, calendar, targets, resolution_breached_at) \
+         VALUES ($1, $2, 'Test', '{\"kind\": \"always\"}', '{}', now()) \
+         ON CONFLICT (ticket_id) DO UPDATE SET resolution_breached_at = now()",
+        &[ticket, s.acme],
+    )
+    .await;
+}
+
+#[tokio::test]
+async fn my_work_puts_what_needs_attention_first() {
+    let Some(s) = setup().await else { return };
+    let (tech, email) = user(&s.pools, Some(("technician", s.provider))).await;
+    let cookie = login(&s.app, &email).await;
+    let other = user(&s.pools, Some(("technician", s.provider))).await.0;
+    let team = Uuid::now_v7();
+    exec(
+        &s.pools,
+        "INSERT INTO teams (id, name) VALUES ($1, 'Desk ' || $1::text)",
+        &[team],
+    )
+    .await;
+    exec(
+        &s.pools,
+        "INSERT INTO team_members (team_id, user_id) VALUES ($1, $2)",
+        &[team, tech],
+    )
+    .await;
+    let queue = s
+        .ok(
+            &s.owner,
+            "POST",
+            "/api/v1/queues",
+            Some(json!({ "orgId": s.provider, "name": unique("Mine"), "teamIds": [team] })),
+        )
+        .await;
+    let qid = queue["id"].as_str().unwrap();
+    let mine = |title: &str| json!({ "orgId": s.acme, "title": title, "assigneeUserId": tech });
+    let working = s.ticket(&s.owner, mine("Working on it")).await;
+    let fresh = s.ticket(&s.owner, mine("Just in")).await;
+    let replied = s.ticket(&s.owner, mine("They wrote back")).await;
+    let breached = s.ticket(&s.owner, mine("Overdue")).await;
+    let id = |t: &Value| t["id"].as_str().unwrap().parse::<Uuid>().unwrap();
+    for t in [&working, &replied] {
+        s.ok(&cookie, "POST", &format!("{}/status", url(t)),
+             Some(json!({ "status": "in_progress", "version": s.ok(&cookie, "GET", &url(t), None).await["version"] })))
+            .await;
+    }
+    // The requester's public note is the latest on one; another is overdue.
+    requester_wrote(&s, id(&replied)).await;
+    breach(&s, id(&breached)).await;
+    // Not mine: someone else's, the team's (nobody in it), the queue's.
+    s.ticket(
+        &s.owner,
+        json!({ "orgId": s.acme, "title": "Theirs", "assigneeUserId": other }),
+    )
+    .await;
+    let teams = s
+        .ticket(
+            &s.owner,
+            json!({ "orgId": s.acme, "title": "Team's", "assigneeTeamId": team }),
+        )
+        .await;
+    let waiting = s
+        .ticket(
+            &s.owner,
+            json!({ "orgId": s.globex, "title": "Waiting", "queueId": qid }),
+        )
+        .await;
+
+    let work = s.ok(&cookie, "GET", "/api/v1/my-work", None).await;
+    let titles: Vec<&str> = work["mine"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|t| t["title"].as_str().unwrap())
+        .collect();
+    assert_eq!(
+        titles,
+        ["Overdue", "They wrote back", "Just in", "Working on it"]
+    );
+    assert_eq!(
+        work["attention"],
+        json!({
+            breached["id"].as_str().unwrap(): "breached",
+            replied["id"].as_str().unwrap(): "replied",
+            fresh["id"].as_str().unwrap(): "new",
+        })
+    );
+    assert_eq!(
+        work["team"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|t| &t["id"])
+            .collect::<Vec<_>>(),
+        [&teams["id"]]
+    );
+    let queues = work["queues"].as_array().unwrap();
+    assert_eq!(queues.len(), 1);
+    assert_eq!(
+        (
+            queues[0]["unassigned"].as_i64(),
+            &queues[0]["tickets"][0]["id"]
+        ),
+        (Some(1), &waiting["id"])
+    );
+}

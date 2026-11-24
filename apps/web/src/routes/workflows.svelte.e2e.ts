@@ -78,6 +78,7 @@ test.describe('workflows', () => {
 		// Fixed, saved and published.
 		await editor.fill(definition(key, 'Hi {{ inputs.name }}'));
 		await page.getByRole('button', { name: 'Save draft' }).click();
+		await expect(page.getByText('Draft saved. It is ready to publish.')).toBeVisible();
 		await expect(problems).toHaveCount(0);
 		await page.getByLabel('Release notes').fill('First version');
 		await page.getByRole('button', { name: 'Publish version 1' }).click();
@@ -136,6 +137,8 @@ test.describe('workflows', () => {
 			.getByRole('textbox', { name: 'Workflow YAML' })
 			.fill(definition(key, `{{ vars.${word} }} {{ inputs.name }}`));
 		await page.getByRole('button', { name: 'Save draft' }).click();
+		// Saved before it runs: otherwise the run can take the earlier draft.
+		await expect(page.getByText('Draft saved. It is ready to publish.')).toBeVisible();
 		await expect(page.getByRole('list', { name: 'Problems' })).toHaveCount(0);
 		await page.getByRole('textbox', { name: 'Inputs' }).fill('{"name": "Ada"}');
 		await page.getByRole('button', { name: 'Test run the draft' }).click();
@@ -157,6 +160,8 @@ test.describe('workflows', () => {
 			.getByRole('textbox', { name: 'Workflow YAML' })
 			.fill(definition(key, `{{ vars.${flag}.upper() }} {{ inputs.name }}`));
 		await page.getByRole('button', { name: 'Save draft' }).click();
+		// Saved before it runs: otherwise the run can take the earlier draft.
+		await expect(page.getByText('Draft saved. It is ready to publish.')).toBeVisible();
 		await expect(page.getByRole('list', { name: 'Problems' })).toHaveCount(0);
 		await page.getByRole('textbox', { name: 'Inputs' }).fill('{"name": "Bo"}');
 		await page.getByRole('button', { name: 'Test run the draft' }).click();

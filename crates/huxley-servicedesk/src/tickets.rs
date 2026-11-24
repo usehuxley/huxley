@@ -85,7 +85,7 @@ pub struct Ticket {
     pub sla_paused: bool,
 }
 
-const SELECT: &str = "SELECT t.id, t.number_prefix || '-' || t.number AS reference, t.number, t.org_id, \
+pub(crate) const SELECT: &str = "SELECT t.id, t.number_prefix || '-' || t.number AS reference, t.number, t.org_id, \
     o.name AS org_name, ty.key AS type_key, ty.name AS type_name, s.key AS status_key, \
     s.name AS status_name, s.category AS status_category, t.title, t.description, t.impact, t.urgency, \
     t.priority, t.priority_overridden, t.queue_id, q.name AS queue_name, t.requester_id, \

@@ -9,6 +9,7 @@ pub use huxley_core::calendar;
 pub mod config;
 pub mod dispatch;
 pub mod mail;
+pub mod my_work;
 pub mod queues;
 pub mod sla;
 pub mod tickets;

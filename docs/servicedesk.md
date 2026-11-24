@@ -20,6 +20,22 @@ A ticket belongs to the organization it's for, usually a client, and is visible 
 
 **Editing.** Edits send back the `version` that was read. If someone changed the ticket in between, the edit is refused with `409` rather than overwriting their change.
 
+## My work
+
+**My work** in the sidebar is a technician's start of the day:
+
+- **Assigned to me:** your open tickets, with what needs attention first:
+  1. **SLA missed:** a response or resolution target has passed.
+  2. **Requester replied:** their public note is the latest one.
+  3. **Due soon:** the next SLA target is within 4 hours.
+  4. **New:** not started yet.
+
+  Within each group, the ticket due soonest comes first, then by priority and age.
+- **My teams:** open tickets assigned to a team you're in, but to nobody in it yet.
+- **Your queues:** each queue you're a member of (directly or through a team), with its unassigned open tickets, the most urgent first.
+
+`GET /api/v1/my-work` returns the same.
+
 ## Statuses
 
 Every status belongs to one of five categories: `new`, `open`, `pending`, `resolved` or `closed`. Views, SLAs and reports work with the category, so a status can be named anything.
@@ -242,6 +258,7 @@ Workflows can open, read, find, update and dispatch tickets and add notes, with 
 | `POST /api/v1/tickets/{id}/status` | Change the status, with a `resolution` where it's needed |
 | `GET`, `POST /api/v1/tickets/{id}/notes` | Read or add notes |
 | `GET /api/v1/tickets/{id}/activity` | Read the timeline |
+| `GET /api/v1/my-work` | Your tickets (with why they need attention), your teams' unclaimed tickets, and what's unassigned in your queues |
 | `GET`, `POST /api/v1/queues`, and `GET`, `PUT`, `DELETE /api/v1/queues/{id}` | Read and manage queues, including `dispatch` (`manual`, `round_robin`, `load` or `skills`) |
 | `GET /api/v1/servicedesk/types` | Read ticket types, their statuses and allowed changes |
 | `GET /api/v1/servicedesk/priority-matrix` | Read the priority table |

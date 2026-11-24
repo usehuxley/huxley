@@ -14,6 +14,7 @@
 		Database,
 		FileCode,
 		House,
+		ListTodo,
 		Plug,
 		Settings,
 		Sparkles,
@@ -34,6 +35,10 @@
 	);
 	let nav: NavItem[] = $derived([
 		{ href: '/', label: 'Home', icon: House },
+		...(data.user.activeModules.includes('servicedesk') &&
+		data.user.grantedPermissions.includes('ticket:read')
+			? [{ href: '/my-work', label: 'My work', icon: ListTodo }]
+			: []),
 		...(data.user.grantedPermissions.includes('workflow:read')
 			? [{ href: '/workflows', label: 'Workflows', icon: Workflow }]
 			: []),

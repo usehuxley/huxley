@@ -4641,6 +4641,24 @@
 				}
 			}
 		},
+		"/api/v1/my-work": {
+			"get": {
+				"tags": ["servicedesk"],
+				"summary": "Your work: your open tickets (most in need of attention first, with\nwhy), your teams' tickets nobody has, and what's unassigned in your\nqueues.",
+				"operationId": "my_work",
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/MyWork"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
 		"/api/v1/notifications": {
 			"get": {
 				"tags": ["notifications"],
@@ -14845,6 +14863,44 @@
 					}
 				}
 			},
+			"MyWork": {
+				"type": "object",
+				"required": ["mine", "attention", "team", "queues"],
+				"properties": {
+					"attention": {
+						"type": "object",
+						"description": "Why a ticket of yours needs attention, by id: `breached` (an SLA\ntarget was missed), `replied` (the requester wrote last), `due_soon`\n(an SLA target is due within 4 hours) or `new` (not yet started).",
+						"additionalProperties": {
+							"type": "string"
+						},
+						"propertyNames": {
+							"type": "string",
+							"format": "uuid"
+						}
+					},
+					"mine": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/Ticket"
+						},
+						"description": "Open tickets assigned to you, most in need of attention first."
+					},
+					"queues": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/QueueWork"
+						},
+						"description": "The queues you're a member of (or through a team), with their\nunassigned open tickets."
+					},
+					"team": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/Ticket"
+						},
+						"description": "Open tickets assigned to one of your teams but to nobody in it."
+					}
+				}
+			},
 			"NarrowedBy": {
 				"type": "object",
 				"required": ["orgId", "orgName"],
@@ -16198,6 +16254,31 @@
 					}
 				},
 				"additionalProperties": false
+			},
+			"QueueWork": {
+				"type": "object",
+				"required": ["queueId", "name", "unassigned", "tickets"],
+				"properties": {
+					"name": {
+						"type": "string"
+					},
+					"queueId": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"tickets": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/Ticket"
+						},
+						"description": "The most urgent of them, oldest first within a priority."
+					},
+					"unassigned": {
+						"type": "integer",
+						"format": "int64",
+						"description": "How many open tickets in it nobody (person or team) has."
+					}
+				}
 			},
 			"RateLimit": {
 				"type": "object",

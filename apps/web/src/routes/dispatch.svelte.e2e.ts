@@ -57,7 +57,7 @@ test.describe('dispatch', () => {
 	);
 	test.skip(preset === 'automation', 'the servicedesk module is off in this run');
 
-	test('a round-robin queue assigns its new tickets', async ({ page }) => {
+	test('a round-robin queue assigns its new tickets, which show in My work', async ({ page }) => {
 		const stamp = Date.now().toString(36);
 		const queue = `Dispatch ${stamp}`;
 		const title = `Monitor flickers ${stamp}`;
@@ -97,5 +97,15 @@ test.describe('dispatch', () => {
 				timeout: 500
 			});
 		}).toPass({ timeout: 20_000 });
+
+		// It's in My work, new, and the queue has nothing left waiting.
+		await page.getByRole('link', { name: 'My work' }).click();
+		await expect(page.getByRole('heading', { level: 1 })).toHaveText('My work');
+		const mine = page.getByRole('list', { name: 'Assigned to me' });
+		await expect(
+			mine.getByRole('listitem').filter({ hasText: title }).getByText('New')
+		).toBeVisible();
+		await expect(page.getByText(queue, { exact: true })).toBeVisible();
+		await expect(page.getByRole('list', { name: `Unassigned in ${queue}` })).toBeHidden();
 	});
 });

@@ -43,6 +43,7 @@ pub fn routes() -> Router<AppState> {
             "/queues/{id}",
             get(get_queue).put(update_queue).delete(archive_queue),
         )
+        .route("/my-work", get(my_work))
         .route("/tickets", get(list_tickets).post(create_ticket))
         .route("/tickets/{id}", get(get_ticket).patch(update_ticket))
         .route("/tickets/{id}/status", post(change_status))
@@ -256,6 +257,29 @@ pub async fn archive_queue(
     })
     .await?;
     Ok(StatusCode::NO_CONTENT)
+}
+
+/// Your work: your open tickets (most in need of attention first, with
+/// why), your teams' tickets nobody has, and what's unassigned in your
+/// queues.
+#[utoipa::path(get, path = "/api/v1/my-work", tag = "servicedesk",
+    responses((status = 200, body = huxley_servicedesk::my_work::MyWork)))]
+pub async fn my_work(
+    State(state): State<AppState>,
+    authed: Authed,
+) -> ApiResult<Json<huxley_servicedesk::my_work::MyWork>> {
+    require_module(&state, MODULE).await?;
+    let me = authed.user.auth.user.id;
+    let scope = authed
+        .module_scope(&state, permissions::TICKET_READ, MODULE)
+        .await?;
+    let now = time::OffsetDateTime::now_utc();
+    Ok(Json(
+        scoped(&state, &scope, async |tx| {
+            huxley_servicedesk::my_work::of(tx, me, now).await
+        })
+        .await?,
+    ))
 }
 
 /// Tickets you can see, most urgent first. `assignee=me` means you.

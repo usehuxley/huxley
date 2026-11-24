@@ -16,6 +16,18 @@ async function signIn(browser: Browser): Promise<Page> {
 }
 
 // These share the organization's one AI provider, so they run in order.
+/**
+ * Chooses the OpenAI-compatible provider. Its Base URL field appears once
+ * the page reacts to the choice, and a choice made before it's ready is
+ * lost, so choose until the field shows.
+ */
+async function chooseCompatible(page: Page) {
+	await expect(async () => {
+		await page.getByLabel('Provider', { exact: true }).selectOption('openai_compatible');
+		await expect(page.getByLabel('Base URL')).toBeVisible({ timeout: 1000 });
+	}).toPass({ timeout: 15_000 });
+}
+
 test.describe('AI settings and the assistant', () => {
 	test.describe.configure({ mode: 'serial' });
 	test.skip(!ownerEmail || !ownerPassword, 'set E2E_EMAIL and E2E_PASSWORD');
@@ -35,7 +47,7 @@ test.describe('AI settings and the assistant', () => {
 	test('a provider is set, tested, logged and removed', async ({ browser }) => {
 		const page = await signIn(browser);
 		await page.goto('/settings/ai');
-		await page.getByLabel('Provider', { exact: true }).selectOption('openai_compatible');
+		await chooseCompatible(page);
 		await page.getByLabel('Model').fill('local-model');
 		// Nothing answers at a .invalid host: the test fails without reaching any real service.
 		await page.getByLabel('Base URL').fill('https://ai.example.invalid/v1');
@@ -106,7 +118,7 @@ test.describe('AI settings and the assistant', () => {
 		try {
 			const page = await signIn(browser);
 			await page.goto('/settings/ai');
-			await page.getByLabel('Provider', { exact: true }).selectOption('openai_compatible');
+			await chooseCompatible(page);
 			await page.getByLabel('Model').fill('mock');
 			await page.getByLabel('Base URL').fill(`http://127.0.0.1:${port}/v1`);
 			await page.getByLabel('API key').fill('sk-e2e-mock');
