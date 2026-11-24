@@ -13,6 +13,12 @@ export const SETTINGS_SECTIONS = [
 		permission: 'servicedesk:configure',
 		module: 'servicedesk'
 	},
+	{
+		key: 'sla',
+		label: 'SLA policies',
+		permission: 'servicedesk:configure',
+		module: 'servicedesk'
+	},
 	{ key: 'modules', label: 'Modules', permission: 'platform:modules:manage' },
 	{ key: 'jobs', label: 'Workflow jobs', permission: 'platform:jobs:manage' },
 	{ key: 'runners', label: 'Script runners', permission: 'platform:runners:manage' },

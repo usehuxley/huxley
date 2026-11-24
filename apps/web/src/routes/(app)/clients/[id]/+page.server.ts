@@ -1,6 +1,6 @@
 import { error, fail, redirect } from '@sveltejs/kit';
 import { isApiProblem } from '@usehuxley/api-client';
-import { DAYS } from '#lib/crm/labels.ts';
+import { hoursFromForm } from '#lib/crm/hours.ts';
 import { formString } from '#lib/forms.ts';
 import { api } from '#lib/server/api.ts';
 import { problemMessage } from '#lib/server/problems.ts';
@@ -46,11 +46,7 @@ function fieldErrors(problem: unknown): Record<string, string> {
 
 /** A site from the site form: address, timezone and one range a day. */
 function siteBody(form: FormData) {
-	const hours: Record<string, string[][]> = {};
-	for (const { key } of DAYS) {
-		if (form.get(`open_${key}`) !== 'on') continue;
-		hours[key] = [[formString(form, `from_${key}`), formString(form, `to_${key}`)]];
-	}
+	const hours = hoursFromForm(form);
 	const version = formString(form, 'version');
 	return {
 		name: formString(form, 'name'),

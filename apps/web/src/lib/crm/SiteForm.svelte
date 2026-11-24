@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { Field, Input } from '@usehuxley/ui';
-	import { DAYS } from './labels.ts';
+	import HoursFields from './HoursFields.svelte';
 
 	/** A site to edit, or none for a new one. */
 	type Site = {
@@ -33,8 +33,6 @@
 		}
 	})();
 	const browserZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-	// A day's first range (more can be set through the API).
-	const range = (day: string) => site?.hours?.[day]?.[0] ?? null;
 	const id = (name: string) => `${prefix}-${name}`;
 </script>
 
@@ -89,34 +87,6 @@
 		The company's primary site
 	</label>
 </div>
-<fieldset class="mt-4">
-	<legend class="text-sm font-medium text-fg">Opening hours</legend>
-	{#if errors.hours}<p class="text-sm text-danger">{errors.hours}</p>{/if}
-	<div class="mt-2 flex flex-col gap-1.5">
-		{#each DAYS as day (day.key)}
-			{@const open = range(day.key)}
-			<div class="grid grid-cols-[7rem_1fr_1fr] items-center gap-2 text-sm">
-				<label class="flex items-center gap-2 text-fg">
-					<input
-						type="checkbox"
-						name="open_{day.key}"
-						checked={site ? open !== null : !['sat', 'sun'].includes(day.key)}
-					/>
-					{day.label}
-				</label>
-				<Input
-					type="time"
-					name="from_{day.key}"
-					value={open?.[0] ?? '09:00'}
-					aria-label="{day.label} opens"
-				/>
-				<Input
-					type="time"
-					name="to_{day.key}"
-					value={open?.[1] ?? '17:00'}
-					aria-label="{day.label} closes"
-				/>
-			</div>
-		{/each}
-	</div>
-</fieldset>
+<div class="mt-4">
+	<HoursFields hours={site?.hours ?? null} error={errors.hours} />
+</div>

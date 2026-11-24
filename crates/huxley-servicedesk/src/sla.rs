@@ -36,7 +36,7 @@ pub struct Policy {
     /// `client_site`, `policy` or `always`.
     pub hours_source: String,
     /// `{"mon": [["09:00", "17:00"]], …}`.
-    #[schema(value_type = Object)]
+    #[schema(value_type = std::collections::HashMap<String, Vec<Vec<String>>>)]
     pub hours: Json,
     /// For the policy's hours; none: the organization's time zone.
     pub timezone: Option<String>,
@@ -56,8 +56,9 @@ pub struct PolicyInput {
     /// `client_site` (default), `policy` or `always`.
     #[serde(default)]
     pub hours_source: Option<String>,
+    /// `{"mon": [["09:00", "17:00"]], …}`.
     #[serde(default)]
-    #[schema(value_type = Option<Object>)]
+    #[schema(value_type = Option<std::collections::HashMap<String, Vec<Vec<String>>>>)]
     pub hours: Option<Json>,
     #[serde(default)]
     pub timezone: Option<String>,
