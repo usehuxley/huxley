@@ -122,6 +122,21 @@ The first public note from a person sets the ticket's **first response** time.
 
 **History.** Every change appears on the ticket's activity timeline and in the audit log. Changes also emit events that workflows can be triggered by: `ticket.created`, `ticket.updated`, `ticket.status_changed`, `ticket.assigned` and `ticket.note_added`.
 
+## Canned responses
+
+Canned responses are replies and internal notes that technicians use again and again: a password reset, a request for more detail, a hand-off. Set them up under **Settings → Canned responses** (`servicedesk:configure`), each with a name, an optional category, the kind of note it makes, and its text.
+
+On a ticket, **Insert a response** puts one in the note box, after anything already written, and switches to its kind. Edit it before sending if you need to. Its placeholders are filled in for the ticket and for you:
+
+| Placeholder | Becomes |
+|---|---|
+| `{{requester.first_name}}`, `{{requester.name}}` | The requester's first or full name |
+| `{{ticket.reference}}`, `{{ticket.title}}` | The ticket's reference (e.g. T-1042) and title |
+| `{{client.name}}` | The ticket's organization |
+| `{{me.name}}`, `{{me.first_name}}` | Your name |
+
+A placeholder that isn't on the list is left as written.
+
 ## Queues
 
 A service queue is where tickets wait to be picked up. It belongs to an organization, usually your MSP, and its members are people and teams.
@@ -272,6 +287,8 @@ Workflows can open, read, find, update and dispatch tickets and add notes, with 
 | `POST /api/v1/tickets/{id}/status` | Change the status, with a `resolution` where it's needed |
 | `GET`, `POST /api/v1/tickets/{id}/notes` | Read or add notes |
 | `GET /api/v1/tickets/{id}/activity` | Read the timeline |
+| `GET`, `POST /api/v1/canned-responses`, and `PUT`, `DELETE /api/v1/canned-responses/{id}` | Read and manage canned responses |
+| `GET /api/v1/tickets/{id}/responses` | Canned responses filled in for a ticket and you |
 | `GET /api/v1/my-work` | Your tickets (with why they need attention), your teams' unclaimed tickets, and what's unassigned in your queues |
 | `GET`, `POST /api/v1/queues`, and `GET`, `PUT`, `DELETE /api/v1/queues/{id}` | Read and manage queues, including `dispatch` (`manual`, `round_robin`, `load` or `skills`) |
 | `GET /api/v1/servicedesk/types` | Read ticket types, their statuses and allowed changes |

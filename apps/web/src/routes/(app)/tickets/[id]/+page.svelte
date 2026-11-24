@@ -38,6 +38,17 @@
 	let status = $state('');
 	let assignee = $state('');
 	let noteKind = $state('public');
+	let noteBox: HTMLTextAreaElement | undefined = $state();
+
+	/** Puts a canned response in the note (after what's written) and its kind. */
+	function insert(id: string) {
+		const response = data.responses.find((r) => r.id === id);
+		if (!response || !noteBox) return;
+		const written = noteBox.value.trimEnd();
+		noteBox.value = written ? `${written}\n\n${response.body}` : response.body;
+		noteKind = response.kind;
+		noteBox.focus();
+	}
 	let editing = $state(false);
 	$effect(() => {
 		status = data.ticket.statusKey;
@@ -212,10 +223,31 @@
 								</label>
 							{/each}
 						</fieldset>
+						{#if data.responses.length > 0}
+							<label class="flex items-center gap-2 text-sm text-fg-muted">
+								Insert a response
+								<select
+									class="h-8 rounded-control border border-border-strong bg-surface px-2 text-sm text-fg"
+									value=""
+									onchange={(e) => {
+										insert(e.currentTarget.value);
+										e.currentTarget.value = '';
+									}}
+								>
+									<option value="">Choose…</option>
+									{#each data.responses as r (r.id)}
+										<option value={r.id}>
+											{r.category ? `${r.category} · ${r.name}` : r.name}
+										</option>
+									{/each}
+								</select>
+							</label>
+						{/if}
 						<label for="note-body" class="sr-only">
 							{noteKind === 'internal' ? 'Internal note' : 'Reply'}
 						</label>
 						<textarea
+							bind:this={noteBox}
 							id="note-body"
 							name="body"
 							rows="4"

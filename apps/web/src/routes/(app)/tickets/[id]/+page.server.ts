@@ -19,11 +19,13 @@ export const load: PageServerLoad = async (event) => {
 	if (!ticket.data || !notes.data || !activity.data || !types.data) {
 		error(503, 'Could not load the ticket.');
 	}
-	const [people, contacts] = await Promise.all([
+	const [people, contacts, responses] = await Promise.all([
 		assignees(event),
 		client.GET('/api/v1/orgs/{id}/contacts', {
 			params: { path: { id: ticket.data.orgId }, query: { limit: 200 } }
-		})
+		}),
+		// Filled in for this ticket and you; none without ticket:write here.
+		client.GET('/api/v1/tickets/{id}/responses', path)
 	]);
 	return {
 		ticket: ticket.data,
@@ -32,7 +34,8 @@ export const load: PageServerLoad = async (event) => {
 		type: types.data.find((t) => t.key === ticket.data.typeKey) ?? null,
 		queues: queues.data ?? [],
 		...people,
-		contacts: contacts.data?.items ?? []
+		contacts: contacts.data?.items ?? [],
+		responses: responses.data ?? []
 	};
 };
 

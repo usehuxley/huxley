@@ -11,6 +11,7 @@ pub mod dispatch;
 pub mod mail;
 pub mod my_work;
 pub mod queues;
+pub mod responses;
 pub mod sla;
 pub mod tickets;
 
