@@ -186,9 +186,9 @@ fn valid_version(v: &str) -> bool {
 
 impl Manifest {
     fn check(&self) -> PackResult<()> {
-        if self.api_version != "usehuxley.com/v1" || self.kind != "Pack" {
+        if self.api_version != "usehuxley.io/v1" || self.kind != "Pack" {
             return Err(PackError::Format(
-                "apiVersion usehuxley.com/v1, kind Pack".into(),
+                "apiVersion usehuxley.io/v1, kind Pack".into(),
             ));
         }
         if !valid_key(&self.key) {
@@ -524,7 +524,7 @@ mod tests {
 
     fn manifest() -> Manifest {
         Manifest {
-            api_version: "usehuxley.com/v1".into(),
+            api_version: "usehuxley.io/v1".into(),
             kind: "Pack".into(),
             key: "contoso/onboarding".into(),
             name: "Onboarding".into(),
@@ -542,7 +542,7 @@ mod tests {
     fn files() -> BTreeMap<String, Vec<u8>> {
         [(
             "workflows/onboard.yaml".to_owned(),
-            b"apiVersion: usehuxley.com/v1\n".to_vec(),
+            b"apiVersion: usehuxley.io/v1\n".to_vec(),
         )]
         .into()
     }
@@ -574,6 +574,19 @@ mod tests {
     }
 
     #[test]
+    fn only_the_current_api_version_is_accepted() {
+        assert!(manifest().check().is_ok());
+        for old in ["usehuxley.com/v1", "usehuxley.io/v2", ""] {
+            let mut m = manifest();
+            m.api_version = old.into();
+            assert!(
+                matches!(m.check(), Err(PackError::Format(_))),
+                "{old:?} was accepted"
+            );
+        }
+    }
+
+    #[test]
     fn signed_packs_round_trip_and_trust_is_reported() {
         let key = SigningKey::generate().unwrap();
         let bytes = build(manifest(), &files(), Some((&key, "Contoso"))).unwrap();
@@ -581,7 +594,7 @@ mod tests {
         assert_eq!(pack.manifest.key, "contoso/onboarding");
         assert_eq!(
             pack.text("workflows/onboard.yaml"),
-            Some("apiVersion: usehuxley.com/v1\n")
+            Some("apiVersion: usehuxley.io/v1\n")
         );
         assert_eq!(
             pack.trust(&[key.public()]),

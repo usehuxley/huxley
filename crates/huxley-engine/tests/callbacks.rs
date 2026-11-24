@@ -88,7 +88,7 @@ impl Harness {
 
     async fn start_with(&self, expires: &str, flaky: bool) -> Uuid {
         let yaml = format!(
-            r#"apiVersion: usehuxley.com/v1
+            r#"apiVersion: usehuxley.io/v1
 kind: Workflow
 metadata: {{ key: cb, name: Callback }}
 spec:

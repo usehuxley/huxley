@@ -116,7 +116,7 @@ export function fromYaml(text: string): { document: unknown } | { error: string 
 /** A new workflow's starting document. */
 export function starter(key: string, name: string): Record<string, unknown> {
 	return {
-		apiVersion: 'usehuxley.com/v1',
+		apiVersion: 'usehuxley.io/v1',
 		kind: 'Workflow',
 		metadata: { key, name },
 		spec: {

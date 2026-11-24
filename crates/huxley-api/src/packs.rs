@@ -674,7 +674,7 @@ pub async fn export(
         contents.workflows.push(key);
     }
     let manifest = huxley_packs::Manifest {
-        api_version: "usehuxley.com/v1".into(),
+        api_version: "usehuxley.io/v1".into(),
         kind: "Pack".into(),
         key: request.key.clone(),
         name: request.name.clone(),

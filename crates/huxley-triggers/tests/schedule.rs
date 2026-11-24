@@ -35,7 +35,7 @@ fn document(key: &str, triggers: &Value, inputs: Option<Value>) -> Value {
         spec["inputs"] = inputs;
     }
     json!({
-        "apiVersion": "usehuxley.com/v1",
+        "apiVersion": "usehuxley.io/v1",
         "kind": "Workflow",
         "metadata": { "key": key, "name": "Scheduled" },
         "spec": spec,

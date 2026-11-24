@@ -2534,7 +2534,7 @@
   "description": "A workflow document.",
   "properties": {
     "apiVersion": {
-      "description": "Always `usehuxley.com/v1`.",
+      "description": "Always `usehuxley.io/v1`.",
       "type": "string"
     },
     "kind": {

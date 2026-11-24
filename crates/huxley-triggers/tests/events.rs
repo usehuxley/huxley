@@ -15,7 +15,7 @@ async fn publish(pools: &TestPools, org: Uuid, key: &str, trigger: Value) -> Uui
     let ctx = RequestContext::system(Via::System);
     let expr = huxley_expr::Engine::new();
     let document = json!({
-        "apiVersion": "usehuxley.com/v1",
+        "apiVersion": "usehuxley.io/v1",
         "kind": "Workflow",
         "metadata": { "key": key, "name": key },
         "spec": {

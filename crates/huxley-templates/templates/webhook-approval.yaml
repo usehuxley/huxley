@@ -7,7 +7,7 @@ template:
     - { key: approvers, label: Who approves, kind: recipients, default: "role:admin" }
     - { key: url, label: API to call once approved, kind: url, default: "https://api.example.com/requests" }
 workflow:
-  apiVersion: usehuxley.com/v1
+  apiVersion: usehuxley.io/v1
   kind: Workflow
   metadata: { key: webhook-approval, name: "Approve, then call an API" }
   spec:

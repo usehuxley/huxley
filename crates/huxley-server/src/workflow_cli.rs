@@ -852,7 +852,7 @@ mod tests {
             "spec": { "steps": [{ "with": { "b": 1, "a": 2 }, "type": "transform", "id": "x" }] },
             "metadata": { "name": "N", "key": "k" },
             "kind": "Workflow",
-            "apiVersion": "usehuxley.com/v1"
+            "apiVersion": "usehuxley.io/v1"
         });
         let yaml = to_yaml(&doc).unwrap();
         let api = yaml.find("apiVersion").unwrap();

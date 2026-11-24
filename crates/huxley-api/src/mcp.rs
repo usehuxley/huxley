@@ -728,7 +728,7 @@ mod tests {
 
     #[test]
     fn documents_may_be_yaml_or_objects() {
-        let yaml = json!({ "document": "apiVersion: usehuxley.com/v1\nkind: Workflow\n" });
+        let yaml = json!({ "document": "apiVersion: usehuxley.io/v1\nkind: Workflow\n" });
         assert_eq!(document(&yaml).unwrap()["kind"], "Workflow");
         assert_eq!(
             document(&json!({ "document": { "kind": "Workflow" } })).unwrap()["kind"],

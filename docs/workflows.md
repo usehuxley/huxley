@@ -3,7 +3,7 @@
 A workflow is a document in the Huxley Workflow Format (HWF, ADR-004): what starts it, the steps it runs, and what it returns. Build it in the visual editor or as YAML (both edit the same draft), publish it, and Huxley runs it durably: every step's result is recorded before the next starts, so runs survive crashes and restarts (ADR-003, ADR-021). The JSON Schema is in [`schemas/hwf/v1.json`](../schemas/hwf/v1.json); expressions are described in [expressions.md](expressions.md).
 
 ```yaml
-apiVersion: usehuxley.com/v1
+apiVersion: usehuxley.io/v1
 kind: Workflow
 metadata:
   key: onboard-user            # unique in the organization

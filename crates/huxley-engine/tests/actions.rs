@@ -272,7 +272,7 @@ impl Harness {
 
     async fn start(&self, org: Uuid, steps: &str) -> Uuid {
         let yaml = format!(
-            "apiVersion: usehuxley.com/v1\nkind: Workflow\nmetadata: {{ key: t, name: T }}\nspec:\n  steps:\n{steps}"
+            "apiVersion: usehuxley.io/v1\nkind: Workflow\nmetadata: {{ key: t, name: T }}\nspec:\n  steps:\n{steps}"
         );
         let document = serde_json::to_value(huxley_hwf::parse_yaml(&yaml).unwrap()).unwrap();
         let mut tx = begin_scoped(&self.pools.app, &OrgScope::System)

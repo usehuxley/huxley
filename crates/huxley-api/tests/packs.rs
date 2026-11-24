@@ -205,7 +205,7 @@ impl Setup {
 
     fn pack(&self, version: &str, greeting: &str, signed: bool) -> Vec<u8> {
         let manifest = Manifest {
-            api_version: "usehuxley.com/v1".into(),
+            api_version: "usehuxley.io/v1".into(),
             kind: "Pack".into(),
             key: "contoso/widgets".into(),
             name: "Widgets".into(),
@@ -222,7 +222,7 @@ impl Setup {
             files: BTreeMap::new(),
         };
         let workflow = json!({
-            "apiVersion": "usehuxley.com/v1",
+            "apiVersion": "usehuxley.io/v1",
             "kind": "Workflow",
             "metadata": { "key": "greet", "name": "Greet" },
             "spec": { "steps": [

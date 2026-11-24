@@ -9,7 +9,7 @@ Open **Workflows**. Give it a name, for example *Greeter*, with the key `greeter
 A new workflow starts as a draft with one step. Open the **YAML** tab to see the whole document:
 
 ```yaml
-apiVersion: usehuxley.com/v1
+apiVersion: usehuxley.io/v1
 kind: Workflow
 metadata:
   key: greeter

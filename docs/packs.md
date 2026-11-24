@@ -91,7 +91,7 @@ A broken signature fails. Installing any pack shows what it adds and needs an ad
 Make a folder with `pack.yaml`, which is the manifest without `files`, and the content folders:
 
 ```yaml
-apiVersion: usehuxley.com/v1
+apiVersion: usehuxley.io/v1
 kind: Pack
 key: contoso/hello
 name: Hello pack

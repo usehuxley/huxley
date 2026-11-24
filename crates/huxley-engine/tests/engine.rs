@@ -48,7 +48,7 @@ async fn harness() -> Option<Harness> {
 
 fn document(spec: &str) -> Json {
     let yaml = format!(
-        "apiVersion: usehuxley.com/v1\nkind: Workflow\nmetadata: {{ key: test, name: Test }}\nspec:\n{spec}"
+        "apiVersion: usehuxley.io/v1\nkind: Workflow\nmetadata: {{ key: test, name: Test }}\nspec:\n{spec}"
     );
     serde_json::to_value(huxley_hwf::parse_yaml(&yaml).unwrap()).unwrap()
 }
@@ -385,7 +385,7 @@ async fn publish(h: &Harness, key: &str, spec: &str) {
 /// Publishes a workflow in `org`.
 async fn publish_in(h: &Harness, org: Uuid, key: &str, spec: &str) {
     let yaml = format!(
-        "apiVersion: usehuxley.com/v1\nkind: Workflow\nmetadata: {{ key: {key}, name: {key} }}\nspec:\n{spec}"
+        "apiVersion: usehuxley.io/v1\nkind: Workflow\nmetadata: {{ key: {key}, name: {key} }}\nspec:\n{spec}"
     );
     let document = serde_json::to_value(huxley_hwf::parse_yaml(&yaml).unwrap()).unwrap();
     let ctx = huxley_core::RequestContext::system(huxley_core::Via::System);

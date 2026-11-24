@@ -11,7 +11,7 @@ use crate::duration;
 use crate::model::{Join, RetryPolicy, Step, Trigger, Workflow};
 
 /// The `apiVersion` this crate reads.
-pub const API_VERSION: &str = "usehuxley.com/v1";
+pub const API_VERSION: &str = "usehuxley.io/v1";
 
 const MAX_FOREACH_CONCURRENCY: u32 = 50;
 const MAX_ATTEMPTS: u32 = 20;

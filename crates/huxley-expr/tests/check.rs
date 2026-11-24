@@ -4,7 +4,7 @@ use huxley_expr::{Engine, check_workflow};
 
 fn problems(steps: &str) -> Vec<String> {
     let yaml = format!(
-        "apiVersion: usehuxley.com/v1\nkind: Workflow\nmetadata: {{ key: w, name: W }}\nspec:\n{steps}"
+        "apiVersion: usehuxley.io/v1\nkind: Workflow\nmetadata: {{ key: w, name: W }}\nspec:\n{steps}"
     );
     let workflow = huxley_hwf::parse_yaml(&yaml).unwrap();
     check_workflow(&Engine::new(), &workflow)

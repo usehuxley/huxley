@@ -5,7 +5,7 @@ use std::fmt::Write as _;
 use huxley_hwf::{HwfError, Step, Trigger, json_schema, parse_json, parse_yaml, to_yaml};
 
 const EXAMPLE: &str = r#"
-apiVersion: usehuxley.com/v1
+apiVersion: usehuxley.io/v1
 kind: Workflow
 metadata:
   key: onboard-user
@@ -80,7 +80,7 @@ fn diagnostics(yaml: &str) -> Vec<String> {
 /// A minimal valid document with `steps` replaced.
 fn with_steps(steps: &str) -> String {
     format!(
-        "apiVersion: usehuxley.com/v1\nkind: Workflow\nmetadata: {{ key: w, name: W }}\nspec:\n  steps:\n{steps}"
+        "apiVersion: usehuxley.io/v1\nkind: Workflow\nmetadata: {{ key: w, name: W }}\nspec:\n  steps:\n{steps}"
     )
 }
 
@@ -174,9 +174,22 @@ fn structural_problems_are_reported_with_paths() {
 }
 
 #[test]
+fn the_old_com_api_version_is_rejected() {
+    let found = diagnostics(
+        "apiVersion: usehuxley.com/v1\nkind: Workflow\nmetadata: { key: w, name: W }\nspec:\n  steps: []\n",
+    );
+    assert!(
+        found.iter().any(
+            |d| d.contains("apiVersion: must be \"usehuxley.io/v1\", not \"usehuxley.com/v1\"")
+        ),
+        "{found:#?}"
+    );
+}
+
+#[test]
 fn document_level_checks() {
     let found = diagnostics(
-        r"apiVersion: usehuxley.com/v2
+        r"apiVersion: usehuxley.io/v2
 kind: Workflow
 metadata: { key: Not A Key, name: ' ' }
 spec:
@@ -189,7 +202,7 @@ spec:
 ",
     );
     let expected = [
-        "apiVersion: must be \"usehuxley.com/v1\"",
+        "apiVersion: must be \"usehuxley.io/v1\"",
         "metadata.key:",
         "metadata.name: is required",
         "spec.inputs: must be a JSON Schema",

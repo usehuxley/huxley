@@ -190,7 +190,7 @@ This is a long-term project. The plan follows four rules:
 - **Widget renderer** (`packages/widgets`) shared by web and portal. Prebuilt dashboards (service desk overview, SLA performance, technician utilization, client overview).
 - **HWF v1 stabilization + TypeScript SDK** (design §6.7, ADR-016):
   - **Why here:** by this point the engine has been used for real by the system packs behind service desk, email, SLA, CMDB, and contracts (Phases 5–6), so HWF has settled. Building the SDK earlier would mean chasing format changes. Building it later would delay the code-first audience and community pack authors.
-  - Freeze HWF `usehuxley.com/v1`, with a compatibility policy for later additions.
+  - Freeze HWF `usehuxley.io/v1`, with a compatibility policy for later additions.
   - `@usehuxley/sdk` (`packages/sdk`): typed builders for steps, control flow, triggers, inputs, and forms. Typed Jinja reference helpers.
   - `huxley-cli codegen`: generates TS types for an instance's installed integrations and actions.
   - `huxley-cli build`: deterministic TS → HWF compilation, integrated with `test`, `push`, and Git sync.

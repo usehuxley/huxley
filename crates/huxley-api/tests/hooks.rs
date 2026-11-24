@@ -48,7 +48,7 @@ async fn webhook(pools: &TestPools, trigger: Value) -> (Uuid, String) {
     .unwrap();
     let key = format!("hook-{}", &Uuid::now_v7().simple().to_string()[20..]);
     let document = json!({
-        "apiVersion": "usehuxley.com/v1",
+        "apiVersion": "usehuxley.io/v1",
         "kind": "Workflow",
         "metadata": { "key": key, "name": "Hook" },
         "spec": {

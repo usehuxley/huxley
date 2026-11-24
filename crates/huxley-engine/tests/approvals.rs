@@ -53,7 +53,7 @@ impl Harness {
 
     async fn start(&self, approvers: &str, expires: &str) -> Uuid {
         let yaml = format!(
-            r#"apiVersion: usehuxley.com/v1
+            r#"apiVersion: usehuxley.io/v1
 kind: Workflow
 metadata: {{ key: ok, name: Approve }}
 spec:

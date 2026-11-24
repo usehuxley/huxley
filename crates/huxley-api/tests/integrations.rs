@@ -341,7 +341,7 @@ async fn updates_are_previewed_applied_and_rolled_back() {
 
 fn caller(key: &str, action: &str) -> Value {
     json!({
-        "apiVersion": "usehuxley.com/v1",
+        "apiVersion": "usehuxley.io/v1",
         "kind": "Workflow",
         "metadata": { "key": key, "name": format!("Caller {key}") },
         "spec": { "steps": [

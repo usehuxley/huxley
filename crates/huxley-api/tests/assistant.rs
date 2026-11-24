@@ -134,7 +134,7 @@ impl Setup {
     }
 }
 
-const WORKFLOW: &str = "apiVersion: usehuxley.com/v1\nkind: Workflow\nmetadata: { key: from-assistant, name: From the assistant }\nspec:\n  steps:\n    - { id: hi, type: transform, output: hi }\n";
+const WORKFLOW: &str = "apiVersion: usehuxley.io/v1\nkind: Workflow\nmetadata: { key: from-assistant, name: From the assistant }\nspec:\n  steps:\n    - { id: hi, type: transform, output: hi }\n";
 
 /// Acts like a model with tools: "list" → `list_workflows`; "create" →
 /// `create_workflow_draft` (for `org`); after a tool result, sums it up.

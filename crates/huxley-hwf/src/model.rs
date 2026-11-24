@@ -16,7 +16,7 @@ use serde_json::Value;
 #[serde(deny_unknown_fields)]
 #[schemars(title = "Huxley Workflow Format v1")]
 pub struct Workflow {
-    /// Always `usehuxley.com/v1`.
+    /// Always `usehuxley.io/v1`.
     #[serde(rename = "apiVersion")]
     pub api_version: String,
     pub kind: DocumentKind,

@@ -223,7 +223,7 @@ To resolve `X` at org `O`, look up the candidate definitions at `O.path` and eve
 Every workflow serializes to a **Huxley Workflow Format (HWF)** document, stored as JSON and authored as YAML. The canvas, the code/CLI path, and MCP all produce and consume HWF. Canvas layout lives in a separate `ui` block, so code edits don't fight with node positions.
 
 ```yaml
-apiVersion: usehuxley.com/v1
+apiVersion: usehuxley.io/v1
 kind: Workflow
 metadata:
   key: m365-create-user            # stable identifier, unique per owning org
@@ -929,7 +929,7 @@ The TypeScript SDK lives in the monorepo (`packages/sdk`), so it changes in lock
 | Documentation | `docs.usehuxley.io` |
 | Pack registry | `packs.usehuxley.io` (index backed by the `huxley-packs` repo) |
 | Published schemas | `https://usehuxley.io/schemas/hwf/v1.json` (plus forms and packs) |
-| HWF `apiVersion` | `usehuxley.com/v1` |
+| HWF `apiVersion` | `usehuxley.io/v1` |
 | npm scope | `@usehuxley` (`@usehuxley/sdk`, `@usehuxley/api-client`) |
 | Container images | `ghcr.io/usehuxley/huxley`, `…/web`, `…/portal`, `…/runner-pwsh`, `…/runner-python`, `…/runner-js`. Published from CI in the `usehuxley` GitHub org. |
 | GitHub org | `github.com/usehuxley` (created) |

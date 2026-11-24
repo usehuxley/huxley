@@ -91,7 +91,7 @@ impl Harness {
     async fn publish(&self, key: &str, on: &str, items: &str) -> Uuid {
         let document = serde_json::to_value(
             huxley_hwf::parse_yaml(&format!(
-                r#"apiVersion: usehuxley.com/v1
+                r#"apiVersion: usehuxley.io/v1
 kind: Workflow
 metadata: {{ key: {key}, name: {key} }}
 spec:
