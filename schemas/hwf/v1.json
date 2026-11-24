@@ -90,6 +90,67 @@
       },
       "type": "object"
     },
+    "DatasetQuery": {
+      "additionalProperties": false,
+      "description": "Rows to read (`dataset.query`). Output: `{ rows, total }`.",
+      "properties": {
+        "dataset": {
+          "description": "The dataset's key: the run's organization's, or the nearest above.",
+          "type": "string"
+        },
+        "filters": {
+          "description": "Column values rows must equal."
+        },
+        "limit": {
+          "description": "At most this many rows (default 100, at most 1000)."
+        },
+        "order_by": {
+          "description": "A column to sort by; `-name` sorts descending.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "org_id": {
+          "description": "Only this organization's rows (it must be the run's or below it).",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "dataset"
+      ],
+      "type": "object"
+    },
+    "DatasetUpsert": {
+      "additionalProperties": false,
+      "description": "Rows to write (`dataset.upsert`). Output: `{ written }`.",
+      "properties": {
+        "dataset": {
+          "type": "string"
+        },
+        "org_id": {
+          "description": "The organization the rows belong to (default: the run's).",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "replace": {
+          "description": "Replace all of that organization's rows (a full refresh)."
+        },
+        "rows": {
+          "description": "A list of rows (objects of column values), usually an expression."
+        }
+      },
+      "required": [
+        "dataset",
+        "rows"
+      ],
+      "type": "object"
+    },
     "DocumentKind": {
       "enum": [
         "Workflow"
@@ -1677,6 +1738,132 @@
             },
             "with": {
               "$ref": "#/$defs/EmailMessage"
+            }
+          },
+          "required": [
+            "type",
+            "id",
+            "with"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Read rows of a dataset (the run's organization's and those below).",
+          "properties": {
+            "continue_on_error": {
+              "description": "Record the error as the step's output and carry on.",
+              "type": "boolean"
+            },
+            "description": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "id": {
+              "description": "Unique in the workflow: lowercase letters, digits, underscores.\nOther steps read this step's output as `steps.<id>.output`.",
+              "type": "string"
+            },
+            "if": {
+              "description": "Skip the step unless this expression is true.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "name": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "retry": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/RetryPolicy"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "timeout": {
+              "description": "Fail the attempt after this long, e.g. `30s`.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "type": {
+              "const": "dataset.query",
+              "type": "string"
+            },
+            "with": {
+              "$ref": "#/$defs/DatasetQuery"
+            }
+          },
+          "required": [
+            "type",
+            "id",
+            "with"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Write rows to a dataset.",
+          "properties": {
+            "continue_on_error": {
+              "description": "Record the error as the step's output and carry on.",
+              "type": "boolean"
+            },
+            "description": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "id": {
+              "description": "Unique in the workflow: lowercase letters, digits, underscores.\nOther steps read this step's output as `steps.<id>.output`.",
+              "type": "string"
+            },
+            "if": {
+              "description": "Skip the step unless this expression is true.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "name": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "retry": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/RetryPolicy"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "timeout": {
+              "description": "Fail the attempt after this long, e.g. `30s`.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "type": {
+              "const": "dataset.upsert",
+              "type": "string"
+            },
+            "with": {
+              "$ref": "#/$defs/DatasetUpsert"
             }
           },
           "required": [

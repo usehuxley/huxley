@@ -12,6 +12,7 @@
 mod action;
 pub mod approval;
 mod callback;
+mod dataset;
 mod egress;
 mod email;
 mod http;

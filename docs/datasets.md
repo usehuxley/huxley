@@ -1,6 +1,6 @@
 # Datasets
 
-A **dataset** is a typed table of data kept in Huxley, such as "Microsoft 365 users for every client", so workflows, forms and reports can use it without calling an API each time (design doc §9, ADR-029). This page covers definitions, rows and the API. Workflow steps, syncing from integrations, the browser and the SQL console come in later releases.
+A **dataset** is a typed table of data kept in Huxley, such as "Microsoft 365 users for every client", so workflows, forms and reports can use it without calling an API each time (design doc §9, ADR-029). This page covers definitions, rows, workflow steps and the API. Syncing from integrations, the browser and the SQL console come in later releases.
 
 ## Definitions
 
@@ -18,6 +18,24 @@ Changing a definition **migrates its table**:
 ## Rows and organizations
 
 Every row belongs to an organization: the dataset's own, or one below it. A dataset defined at your MSP can hold every client's rows. People see the rows of organizations in their scope, so a client's users see only that client's rows. This is enforced by the database's row-level security, as well as by the API.
+
+## In workflows
+
+```yaml
+- id: users
+  type: dataset.query
+  with: { dataset: m365-users, filters: { licensed: true }, order_by: upn }
+- id: save
+  type: dataset.upsert
+  with: { dataset: m365-users, rows: "{{ steps.fetch.output.body.value }}" }
+```
+
+A run reads and writes the rows of its own organization and those below it:
+
+- A workflow at your MSP can read every client's rows, and write rows for any client with `org_id`.
+- A client's workflow sees only that client's rows.
+
+`dataset.upsert` refuses rows containing secrets. See [the step reference](workflows.md).
 
 ## The API
 

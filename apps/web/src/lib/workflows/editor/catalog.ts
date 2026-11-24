@@ -102,6 +102,58 @@ export const STEPS: StepSpec[] = [
 		]
 	},
 	{
+		type: 'dataset.query',
+		label: 'Query a dataset',
+		description: 'Read rows of a dataset: this organization’s and those below it.',
+		group: 'Data',
+		template: { with: { dataset: '' } },
+		fields: [
+			{ path: 'with.dataset', label: 'Dataset key', kind: 'text' },
+			{
+				path: 'with.filters',
+				label: 'Filters',
+				kind: 'json',
+				hint: 'Column values rows must equal, e.g. { "licensed": true }'
+			},
+			{ path: 'with.org_id', label: 'Only this organization', kind: 'expression' },
+			{
+				path: 'with.order_by',
+				label: 'Order by',
+				kind: 'text',
+				hint: 'A column; -column sorts descending'
+			},
+			{ path: 'with.limit', label: 'Limit', kind: 'expression', hint: 'Default 100, at most 1000' }
+		]
+	},
+	{
+		type: 'dataset.upsert',
+		label: 'Write to a dataset',
+		description: 'Add or update rows (by the dataset’s key), or replace an organization’s rows.',
+		group: 'Data',
+		template: { with: { dataset: '', rows: '' } },
+		fields: [
+			{ path: 'with.dataset', label: 'Dataset key', kind: 'text' },
+			{
+				path: 'with.rows',
+				label: 'Rows',
+				kind: 'expression',
+				hint: 'A list of objects of column values'
+			},
+			{
+				path: 'with.org_id',
+				label: 'Organization',
+				kind: 'expression',
+				hint: 'Default: this run’s organization'
+			},
+			{
+				path: 'with.replace',
+				label: 'Replace that organization’s rows',
+				kind: 'expression',
+				hint: 'true or false'
+			}
+		]
+	},
+	{
 		type: 'core.notify',
 		label: 'Notify',
 		description: 'Tell people in the app and by email.',
@@ -430,6 +482,9 @@ export function summary(step: Step): string {
 			return text(step.script);
 		case 'core.email':
 			return text(isStep(step.with) ? step.with.subject : '');
+		case 'dataset.query':
+		case 'dataset.upsert':
+			return text(isStep(step.with) ? step.with.dataset : '');
 		case 'wait_for_callback':
 			return `expires after ${text(step.expires ?? '24h')}`;
 		case 'transform':

@@ -216,6 +216,16 @@ impl Engine {
                 Ok(output) => Executed::Done(output),
                 Err(failure) => Executed::Failed(failure),
             },
+            Step::DatasetQuery(_) => match self.query_dataset(org_id, input).await {
+                Ok(output) => Executed::Done(output),
+                Err(failure) => Executed::Failed(failure),
+            },
+            Step::DatasetUpsert(_) => {
+                match self.upsert_dataset(org_id, input, record.tainted).await {
+                    Ok(output) => Executed::Done(output),
+                    Err(failure) => Executed::Failed(failure),
+                }
+            }
             Step::Subworkflow(_) => Executed::Subworkflow(input.clone()),
             Step::Wait(_) => {
                 let until = input["until"]

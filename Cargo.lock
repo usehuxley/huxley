@@ -1984,6 +1984,7 @@ dependencies = [
  "getrandom 0.4.3",
  "huxley-core",
  "huxley-crypto",
+ "huxley-datasets",
  "huxley-db",
  "huxley-email",
  "huxley-expr",
