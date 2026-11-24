@@ -218,6 +218,13 @@ test.describe('workflows', () => {
 		await page.getByRole('button', { name: 'Save draft' }).click();
 		await expect(page.getByText('Draft saved. It is ready to publish.')).toBeVisible();
 
+		// The canvas can flow left to right instead; the same steps show.
+		const ltr = page.getByRole('radio', { name: 'Left to right' });
+		await ltr.click();
+		await expect(ltr).toHaveAttribute('aria-checked', 'true');
+		await expect(page.getByRole('button', { name: 'Step cheer, Transform' })).toBeAttached();
+		await page.getByRole('radio', { name: 'Top to bottom' }).click();
+
 		// The YAML view shows the same document.
 		await page.getByRole('tab', { name: 'YAML' }).click();
 		const yaml = page.getByRole('textbox', { name: 'Workflow YAML' });

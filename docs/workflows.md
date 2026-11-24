@@ -33,6 +33,18 @@ spec:
     id: "{{ steps.create.output.body.id }}"
 ```
 
+## The visual editor
+
+The **Visual** tab shows the workflow as a flow chart, from **Start** at the top:
+
+- **Branches:** `if`, `switch`, `parallel`, `foreach` and `try` steps fan out into labelled branches that meet again below.
+- **If the run fails:** these steps sit in their own column.
+- **Adding steps:** select **+** on any connection, choose a step type, and it's inserted there.
+- **Editing steps:** select a step to edit it in the panel beside the canvas.
+- **Problems:** shown as a badge on the step they belong to.
+
+Connections follow from the order and nesting of the steps, so the canvas can't build a workflow the format doesn't allow. Scroll or drag to move around, zoom with the controls, and use the minimap for large workflows. The arrows in the corner switch the flow between **top to bottom** and **left to right**; your browser remembers the choice. The **YAML** tab edits the same draft.
+
 ## Lifecycle
 
 - **Draft:** saved at any time, even with problems; the editor lists what would stop it publishing, with where each problem is.

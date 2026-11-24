@@ -1,6 +1,6 @@
 # ADR-022: The visual workflow editor shows nested blocks, not a free-form graph
 
-- **Status:** Accepted
+- **Status:** Superseded by ADR-034
 - **Date:** 2026-11-23
 
 ## Context
