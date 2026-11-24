@@ -181,3 +181,15 @@ How tests run:
 - **The API:** `POST /api/v1/workflows/test-runs` with `{ orgId, document, inputs, mocks }`. It needs `workflow:write`.
 
 Folders passed to `validate`, `diff` and `push` skip `*.test.yaml` files.
+
+### Publishing from Git
+
+Keep workflows in a repository and let CI publish them. Pull requests validate, test and show the diff, and merges to the main branch publish. Ready-made pipelines are in [`examples/git-sync`](../examples/git-sync):
+
+- [GitHub Actions](../examples/git-sync/github-actions.yml)
+- [GitLab CI](../examples/git-sync/gitlab-ci.yml)
+- [Azure Pipelines](../examples/git-sync/azure-pipelines.yml)
+
+Each needs `HUXLEY_SERVER`, `HUXLEY_ORG` and a secret `HUXLEY_TOKEN`. The token should belong to a service account and be scoped to `workflow:read`, `workflow:write` and `workflow:publish`. The pipelines run the CLI from the `ghcr.io/usehuxley/huxley` image, so pin the version that matches your server. Each published version's notes record the commit.
+
+To start a repository from what's already in Huxley, run `huxley workflows pull --dir workflows/` and commit the result.
