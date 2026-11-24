@@ -25,6 +25,8 @@ pub fn routes() -> Router<AppState> {
         .route("/{id}/rows", post(write_rows))
         .route("/{id}/rows/query", post(query_rows))
         .route("/{id}/rows/delete", post(delete_rows))
+        .route("/{id}/sync", get(get_sync).put(set_sync))
+        .route("/{id}/sync/run", post(run_sync))
         .layer(axum::extract::DefaultBodyLimit::max(16 * 1024 * 1024))
 }
 
@@ -264,4 +266,143 @@ pub async fn delete_rows(
         .map_err(map_err)?;
     tx.commit().await.map_err(db_err)?;
     Ok(Json(WrittenRows { written }))
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct SyncState {
+    pub sync: Option<huxley_datasets::sync::SyncConfig>,
+    #[serde(with = "time::serde::rfc3339::option")]
+    pub next_at: Option<time::OffsetDateTime>,
+    #[serde(with = "time::serde::rfc3339::option")]
+    pub last_at: Option<time::OffsetDateTime>,
+}
+
+async fn sync_state(state: &AppState, id: Uuid) -> ApiResult<SyncState> {
+    let mut tx = begin_scoped(&state.db, &OrgScope::System)
+        .await
+        .map_err(db_err)?;
+    let (sync, next_at, last_at): (
+        Option<JsonValue>,
+        Option<time::OffsetDateTime>,
+        Option<time::OffsetDateTime>,
+    ) = sqlx::query_as("SELECT sync, sync_next_at, sync_last_at FROM datasets WHERE id = $1")
+        .bind(id)
+        .fetch_one(&mut *tx)
+        .await
+        .map_err(db_err)?;
+    tx.commit().await.map_err(db_err)?;
+    Ok(SyncState {
+        sync: sync.and_then(|v| serde_json::from_value(v).ok()),
+        next_at,
+        last_at,
+    })
+}
+
+/// A dataset's sync settings, and when it next and last synced.
+#[utoipa::path(get, path = "/api/v1/datasets/{id}/sync", operation_id = "get_dataset_sync", tag = "datasets",
+    params(("id" = Uuid, Path)), responses((status = 200, body = SyncState)))]
+pub async fn get_sync(
+    State(state): State<AppState>,
+    authed: Authed,
+    Path(id): Path<Uuid>,
+) -> ApiResult<Json<SyncState>> {
+    authorize(&state, &authed, permissions::DATASET_READ, id).await?;
+    Ok(Json(sync_state(&state, id).await?))
+}
+
+#[derive(Debug, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct SetSyncRequest {
+    /// The sync settings; `null` stops syncing.
+    pub sync: Option<huxley_datasets::sync::SyncConfig>,
+}
+
+/// Sets (or stops) a dataset's sync from an integration.
+#[utoipa::path(put, path = "/api/v1/datasets/{id}/sync", operation_id = "set_dataset_sync", tag = "datasets",
+    params(("id" = Uuid, Path)), request_body = SetSyncRequest,
+    responses((status = 200, body = SyncState), (status = 422, body = ApiError, content_type = "application/problem+json")))]
+pub async fn set_sync(
+    State(state): State<AppState>,
+    authed: Authed,
+    Path(id): Path<Uuid>,
+    Json(body): Json<SetSyncRequest>,
+) -> ApiResult<Json<SyncState>> {
+    let dataset = authorize(&state, &authed, permissions::DATASET_MANAGE, id).await?;
+    // Syncs call integrations with the organizations' connections.
+    authed
+        .require_at(&state, permissions::CONNECTION_READ, dataset.org_id)
+        .await?;
+    let mut tx = begin_scoped(&state.db, &OrgScope::System)
+        .await
+        .map_err(db_err)?;
+    let next_at = match &body.sync {
+        Some(config) => {
+            huxley_datasets::sync::check(&dataset, config).map_err(map_err)?;
+            let next = huxley_triggers::datasets::next_sync(
+                &mut tx,
+                dataset.org_id,
+                config,
+                time::OffsetDateTime::now_utc(),
+            )
+            .await
+            .map_err(db_err)?;
+            if config.schedule.is_some() && next.is_none() {
+                return Err(ApiError::validation()
+                    .with_field_error("sync.schedule", "that schedule never runs"));
+            }
+            next
+        }
+        None => None,
+    };
+    huxley_datasets::sync::set(
+        &mut tx,
+        &authed.user.ctx,
+        &dataset,
+        body.sync.as_ref(),
+        next_at,
+    )
+    .await
+    .map_err(map_err)?;
+    tx.commit().await.map_err(db_err)?;
+    Ok(Json(sync_state(&state, id).await?))
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct SyncStarted {
+    /// One run per target organization.
+    pub runs: Vec<Uuid>,
+}
+
+/// Syncs a dataset now.
+#[utoipa::path(post, path = "/api/v1/datasets/{id}/sync/run", operation_id = "run_dataset_sync", tag = "datasets",
+    params(("id" = Uuid, Path)),
+    responses((status = 201, body = SyncStarted), (status = 409, body = ApiError, content_type = "application/problem+json")))]
+pub async fn run_sync(
+    State(state): State<AppState>,
+    authed: Authed,
+    Path(id): Path<Uuid>,
+) -> ApiResult<(StatusCode, Json<SyncStarted>)> {
+    authorize(&state, &authed, permissions::DATASET_MANAGE, id).await?;
+    let mut tx = begin_scoped(&state.db, &OrgScope::System)
+        .await
+        .map_err(db_err)?;
+    let runs = huxley_triggers::datasets::start_sync(&state.engine, &mut tx, id)
+        .await
+        .map_err(db_err)?;
+    if runs.is_empty() {
+        return Err(ApiError::conflict("this dataset has no sync set up"));
+    }
+    huxley_db::audit::record(
+        &mut tx,
+        &authed.user.ctx,
+        huxley_db::audit::AuditRecord::new("dataset.sync_started")
+            .target("dataset", id)
+            .details(serde_json::json!({ "runs": runs.len() })),
+    )
+    .await
+    .map_err(db_err)?;
+    tx.commit().await.map_err(db_err)?;
+    Ok((StatusCode::CREATED, Json(SyncStarted { runs })))
 }

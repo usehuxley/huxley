@@ -730,3 +730,95 @@ async fn calls_over_the_rate_limit_wait_for_the_next_window() {
             .is_err()
     );
 }
+
+/// Runs a dataset sync's generated workflow in `org`, as the scheduler does.
+async fn run_sync(
+    h: &Harness,
+    org: Uuid,
+    dataset: &huxley_datasets::Dataset,
+    config: &huxley_datasets::sync::SyncConfig,
+) -> RunRow {
+    let document = huxley_datasets::sync::document(dataset, config);
+    // It's a valid workflow.
+    let parsed = huxley_hwf::from_value(document.clone()).map(|_| ());
+    assert!(parsed.is_ok(), "{parsed:?}");
+    let mut tx = begin_scoped(&h.pools.app, &OrgScope::System).await.unwrap();
+    let id = h
+        .engine
+        .start_run(
+            &mut tx,
+            StartRun {
+                org_id: org,
+                workflow_id: None,
+                version: None,
+                document: Some(document),
+                trigger_type: "dataset_sync".into(),
+                trigger: json!({ "dataset": dataset.id }),
+                inputs: json!({}),
+                actor_id: None,
+            },
+        )
+        .await
+        .unwrap();
+    tx.commit().await.unwrap();
+    h.finish(id).await
+}
+
+#[tokio::test]
+async fn dataset_syncs_fetch_every_page_into_the_organizations_rows() {
+    let Some(h) = harness().await else { return };
+    h.connect(h.msp, "main", "key", "k-123", true).await;
+    let ctx = RequestContext::system(Via::System);
+    let mut tx = begin_scoped(&h.pools.app, &OrgScope::System).await.unwrap();
+    let overlay: huxley_integrations::overlay::Overlay = serde_json::from_value(json!({
+        "actions": { "listPaged": { "pagination": {
+            "style": "next_url", "next": "@odata.nextLink", "items": "value" } } }
+    }))
+    .unwrap();
+    store::set_overlay(&mut tx, &ctx, h.integration, overlay)
+        .await
+        .unwrap();
+    let input: huxley_datasets::DatasetInput = serde_json::from_value(json!({
+        "key": "numbers", "name": "Numbers",
+        "columns": [{ "name": "n", "type": "integer" }], "primaryKey": ["n"]
+    }))
+    .unwrap();
+    let dataset = huxley_datasets::create(&mut tx, &ctx, h.msp, &input)
+        .await
+        .unwrap();
+    // A client's own dataset with the same key must not catch the writes.
+    huxley_datasets::create(&mut tx, &ctx, h.client, &input)
+        .await
+        .unwrap();
+    tx.commit().await.unwrap();
+    let mut config: huxley_datasets::sync::SyncConfig = serde_json::from_value(json!({
+        "action": "tickets/listPaged", "map": { "n": "n" }, "orgs": "clients"
+    }))
+    .unwrap();
+    huxley_datasets::sync::check(&dataset, &config).unwrap();
+
+    let run = run_sync(&h, h.client, &dataset, &config).await;
+    assert_eq!(run.status, RunStatus::Succeeded, "{:?}", run.error);
+    assert_eq!(run.outputs.unwrap(), json!({ "fetched": 3, "written": 3 }));
+    let count = |org: Uuid| {
+        let table = format!("datasets.ds_{}", dataset.id.simple());
+        let pools = h.pools.clone();
+        async move {
+            sqlx::query_scalar::<_, i64>(sqlx::AssertSqlSafe(format!(
+                "SELECT count(*) FROM {table} WHERE _org_id = $1"
+            )))
+            .bind(org)
+            .fetch_one(&pools.owner)
+            .await
+            .unwrap()
+        }
+    };
+    assert_eq!(count(h.client).await, 3);
+
+    // A sync that can't fetch everything doesn't replace (and so delete).
+    config.max_pages = Some(1);
+    let run = run_sync(&h, h.client, &dataset, &config).await;
+    assert_eq!(run.status, RunStatus::Failed);
+    assert!(run.error.unwrap().to_string().contains("page limit"));
+    assert_eq!(count(h.client).await, 3);
+}

@@ -6,6 +6,7 @@
 //! - [`webhook`]: verifying webhook requests (HMAC, bearer, basic).
 //! - [`find_webhook`] and [`start`]: what the webhook endpoint calls.
 
+pub mod datasets;
 pub mod events;
 pub mod poll;
 pub mod webhook;
@@ -24,7 +25,7 @@ use uuid::Uuid;
 /// Scheduler leadership: `pg_try_advisory_lock` key.
 const LEADER_LOCK: i64 = 0x6875_786c_6579_0001; // "huxley" + 1
 const TICK: Duration = Duration::from_secs(5);
-const BATCH: i64 = 100;
+pub(crate) const BATCH: i64 = 100;
 
 #[derive(Debug, thiserror::Error)]
 pub enum TriggerError {
@@ -189,6 +190,11 @@ async fn lead(engine: &Engine, shutdown: &CancellationToken) -> TriggerResult<()
             Ok(0) => {}
             Ok(started) => tracing::info!(started, "started scheduled runs"),
             Err(e) => tracing::error!(error = %e, "scheduler tick failed"),
+        }
+        match datasets::tick(engine).await {
+            Ok(0) => {}
+            Ok(started) => tracing::info!(started, "started dataset syncs"),
+            Err(e) => tracing::error!(error = %e, "dataset syncs failed to start"),
         }
         match poll::poll_due(engine).await {
             Ok(0) => {}

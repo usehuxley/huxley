@@ -876,6 +876,41 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
+	'/api/v1/datasets/{id}/sync': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** A dataset's sync settings, and when it next and last synced. */
+		get: operations['get_dataset_sync'];
+		/** Sets (or stops) a dataset's sync from an integration. */
+		put: operations['set_dataset_sync'];
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/datasets/{id}/sync/run': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/** Syncs a dataset now. */
+		post: operations['run_dataset_sync'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
 	'/api/v1/entities/{entity_type}/{id}/attachments': {
 		parameters: {
 			query?: never;
@@ -4649,6 +4684,9 @@ export interface components {
 			locked?: boolean;
 			value: string;
 		};
+		SetSyncRequest: {
+			sync?: components['schemas']['SyncConfig'] | null;
+		};
 		SetValuesRequest: {
 			/** @description Field key → value. `null` clears a value. Other fields are unchanged. */
 			values: {
@@ -4771,6 +4809,62 @@ export interface components {
 			skipped: string[];
 			/** Format: uuid */
 			submissionId: string;
+		};
+		/** @description A dataset's sync settings. */
+		SyncConfig: {
+			/**
+			 * @description The list action, `<integration>/<action>` (with pagination set in
+			 *     the integration's overlay, all pages are fetched).
+			 */
+			action: string;
+			/** @description A connection key (default: the nearest the organization can use). */
+			connection?: string | null;
+			/** @description Column → dot path into each fetched item. */
+			map: {
+				[key: string]: string;
+			};
+			/**
+			 * Format: int32
+			 * @description The most pages fetched (default 20, at most 100).
+			 */
+			maxPages?: number | null;
+			mode?: components['schemas']['SyncMode'];
+			orgs?: components['schemas']['SyncOrgs'];
+			schedule?: components['schemas']['SyncSchedule'] | null;
+			/** @description The action's inputs. */
+			with?: {
+				[key: string]: unknown;
+			} | null;
+		};
+		/**
+		 * @description How a sync writes.
+		 * @enum {string}
+		 */
+		SyncMode: 'replace' | 'upsert';
+		/**
+		 * @description Which organizations a sync runs for.
+		 * @enum {string}
+		 */
+		SyncOrgs: 'own' | 'clients' | 'all';
+		/** @description When a sync runs on its own. */
+		SyncSchedule: {
+			/** @description Five-field cron expression. Set this or `interval`. */
+			cron?: string | null;
+			/** @description e.g. `6h`. Set this or `cron`. */
+			interval?: string | null;
+			/** @description IANA time zone for `cron` (default: the organization's). */
+			timezone?: string | null;
+		};
+		SyncStarted: {
+			/** @description One run per target organization. */
+			runs: string[];
+		};
+		SyncState: {
+			/** Format: date-time */
+			lastAt?: string | null;
+			/** Format: date-time */
+			nextAt?: string | null;
+			sync?: components['schemas']['SyncConfig'] | null;
 		};
 		Tag: {
 			/** @description One of neutral, accent, success, warning, danger, info. */
@@ -6915,6 +7009,89 @@ export interface operations {
 				};
 			};
 			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	get_dataset_sync: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['SyncState'];
+				};
+			};
+		};
+	};
+	set_dataset_sync: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['SetSyncRequest'];
+			};
+		};
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['SyncState'];
+				};
+			};
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	run_dataset_sync: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			201: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['SyncStarted'];
+				};
+			};
+			409: {
 				headers: {
 					[name: string]: unknown;
 				};

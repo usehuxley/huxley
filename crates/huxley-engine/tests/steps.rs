@@ -742,11 +742,16 @@ async fn dataset_steps_read_and_write_their_subtree() {
         json!({ "written": 2, "total": 3, "top": "tech@msp.test", "match": "ada@client.test" })
     );
 
-    // A run of the client sees only its own rows, and can't write above itself.
+    // A run of the client writes its own rows to its MSP's dataset (row
+    // security hides the MSP itself from it), sees only its own rows, and
+    // can't write above itself.
     let (_, status, outputs, error) = h
         .run_in(
             client,
             r#"  steps:
+    - id: add
+      type: dataset.upsert
+      with: { dataset: users, rows: [{ upn: cat@client.test }] }
     - id: mine
       type: dataset.query
       with: { dataset: users }
@@ -756,7 +761,7 @@ async fn dataset_steps_read_and_write_their_subtree() {
         )
         .await;
     assert_eq!(status, RunStatus::Succeeded, "{error:?}");
-    assert_eq!(outputs.unwrap(), json!({ "total": 2 }));
+    assert_eq!(outputs.unwrap(), json!({ "total": 3 }));
     let (_, status, _, error) = h
         .run_in(
             client,

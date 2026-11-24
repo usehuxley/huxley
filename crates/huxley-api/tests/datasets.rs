@@ -230,3 +230,75 @@ async fn datasets_over_http() {
         .await;
     assert_eq!(status, StatusCode::NOT_FOUND);
 }
+
+#[tokio::test]
+async fn syncs_are_checked_scheduled_and_started() {
+    let Some(s) = setup().await else { return };
+    let definition = json!({
+        "key": "users", "name": "Users",
+        "columns": [{ "name": "upn", "type": "text" }], "primaryKey": ["upn"]
+    });
+    let (_, dataset) = s
+        .call(
+            &s.owner,
+            "POST",
+            "/api/v1/datasets",
+            Some(json!({ "orgId": s.org, "dataset": definition })),
+        )
+        .await;
+    let id = dataset["id"].as_str().unwrap().to_owned();
+    let uri = format!("/api/v1/datasets/{id}/sync");
+
+    // Nothing to run yet.
+    let (status, _) = s.call(&s.owner, "POST", &format!("{uri}/run"), None).await;
+    assert_eq!(status, StatusCode::CONFLICT);
+
+    // Settings are checked against the dataset.
+    for (sync, field) in [
+        (
+            json!({ "action": "nope", "map": { "upn": "userPrincipalName" } }),
+            "sync.action",
+        ),
+        (
+            json!({ "action": "msgraph/listUsers", "map": { "other": "x" } }),
+            "sync.map.other",
+        ),
+        (
+            json!({ "action": "msgraph/listUsers", "map": { "upn": "userPrincipalName" },
+                 "schedule": { "cron": "not cron" } }),
+            "sync.schedule",
+        ),
+    ] {
+        let (status, problem) = s
+            .call(&s.owner, "PUT", &uri, Some(json!({ "sync": sync })))
+            .await;
+        assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{problem}");
+        assert!(problem.to_string().contains(field), "{field}: {problem}");
+    }
+
+    let sync = json!({ "action": "msgraph/listUsers", "map": { "upn": "userPrincipalName" },
+                       "schedule": { "interval": "6h" } });
+    let (status, state) = s
+        .call(&s.owner, "PUT", &uri, Some(json!({ "sync": sync })))
+        .await;
+    assert_eq!(status, StatusCode::OK, "{state}");
+    assert_eq!(state["sync"]["mode"], "replace");
+    assert!(state["nextAt"].is_string(), "{state}");
+
+    // Syncing now starts a run in its organization.
+    let (status, started) = s.call(&s.owner, "POST", &format!("{uri}/run"), None).await;
+    assert_eq!(status, StatusCode::CREATED, "{started}");
+    let run = started["runs"][0].as_str().unwrap();
+    let (_, detail) = s
+        .call(&s.owner, "GET", &format!("/api/v1/runs/{run}"), None)
+        .await;
+    assert_eq!(detail["triggerType"], "dataset_sync");
+    assert_eq!(detail["orgId"], json!(s.org));
+
+    // Stopping it clears the schedule.
+    let (_, state) = s
+        .call(&s.owner, "PUT", &uri, Some(json!({ "sync": null })))
+        .await;
+    assert_eq!(state["sync"], json!(null));
+    assert_eq!(state["nextAt"], json!(null));
+}
