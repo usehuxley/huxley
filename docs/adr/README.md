@@ -35,3 +35,4 @@ Decisions that shape Huxley. Add a new ADR by copying `0000-template.md` with th
 | [029](0029-datasets-as-managed-tables.md) | Datasets are managed tables whose DDL the database generates | Accepted |
 | [030](0030-mcp-tools-call-the-api.md) | MCP tool calls go through the API, as the user | Accepted |
 | [031](0031-ai-providers-bring-your-own-key.md) | AI providers are per organization, bring your own key | Accepted |
+| [032](0032-oauth-for-mcp-clients.md) | Huxley is the OAuth authorization server for its own MCP endpoint | Accepted |

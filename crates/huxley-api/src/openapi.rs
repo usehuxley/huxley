@@ -20,6 +20,9 @@ use crate::mfa_routes::{
 };
 use crate::module_routes::{self, SetModuleRequest, SetModuleResponse};
 use crate::notification_routes::{self, NotificationPage, UnreadCount};
+use crate::oauth_routes::{
+    self, AuthorizationParams, AuthorizationRequest, AuthorizationView, ConnectedAppView, ScopeView,
+};
 use crate::org_routes::{
     self, ArchiveOrgRequest, CreateOrgRequest, MoveOrgRequest, OrgKindInput, UpdateOrgRequest,
 };
@@ -147,6 +150,9 @@ use crate::workflow_routes::{
         team_routes::add_member,
         team_routes::remove_member,
         team_routes::of_user,
+        oauth_routes::authorization,
+        oauth_routes::list_connected,
+        oauth_routes::disconnect,
         token_routes::list_own,
         token_routes::create_own,
         token_routes::revoke_own,
@@ -356,6 +362,11 @@ use crate::workflow_routes::{
         huxley_authz::teams::Team,
         huxley_authz::teams::TeamMember,
         ApiTokenView,
+        AuthorizationParams,
+        AuthorizationRequest,
+        AuthorizationView,
+        ScopeView,
+        ConnectedAppView,
         CreateTokenRequest,
         CreatedTokenView,
         ServiceAccountView,

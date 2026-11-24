@@ -703,6 +703,58 @@
 				}
 			}
 		},
+		"/api/v1/auth/connected-apps": {
+			"get": {
+				"tags": ["auth"],
+				"summary": "Apps (such as AI clients) connected to your account. Needs a session.",
+				"operationId": "list_connected",
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "array",
+									"items": {
+										"$ref": "#/components/schemas/ConnectedAppView"
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/auth/connected-apps/{id}": {
+			"delete": {
+				"tags": ["auth"],
+				"summary": "Disconnects an app: its tokens stop working at once.",
+				"operationId": "disconnect",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"description": "Connected app id",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"responses": {
+					"204": {},
+					"404": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
 		"/api/v1/auth/email/verification": {
 			"post": {
 				"tags": ["auth"],
@@ -4271,6 +4323,43 @@
 				"responses": {
 					"204": {},
 					"404": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/oauth/authorization": {
+			"post": {
+				"tags": ["auth"],
+				"summary": "Checks an authorization request for the consent page and, once the\nperson decides, approves or denies it. Needs a signed-in session: an API\ntoken can't approve anything.",
+				"operationId": "authorization",
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/AuthorizationRequest"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/AuthorizationView"
+								}
+							}
+						}
+					},
+					"400": {
 						"content": {
 							"application/problem+json": {
 								"schema": {
@@ -9310,6 +9399,79 @@
 				],
 				"description": "How a connection authenticates."
 			},
+			"AuthorizationParams": {
+				"type": "object",
+				"description": "The authorization request's parameters, as the consent page received them.",
+				"properties": {
+					"clientId": {
+						"type": ["string", "null"]
+					},
+					"codeChallenge": {
+						"type": ["string", "null"]
+					},
+					"codeChallengeMethod": {
+						"type": ["string", "null"]
+					},
+					"redirectUri": {
+						"type": ["string", "null"]
+					},
+					"resource": {
+						"type": ["string", "null"]
+					},
+					"responseType": {
+						"type": ["string", "null"]
+					},
+					"scope": {
+						"type": ["string", "null"]
+					},
+					"state": {
+						"type": ["string", "null"]
+					}
+				}
+			},
+			"AuthorizationRequest": {
+				"type": "object",
+				"description": "`POST /api/v1/oauth/authorization`.",
+				"required": ["params"],
+				"properties": {
+					"approve": {
+						"type": ["boolean", "null"],
+						"description": "Omit to only check the request (to show the consent page); `true` to\napprove it, `false` to deny it."
+					},
+					"params": {
+						"$ref": "#/components/schemas/AuthorizationParams"
+					}
+				}
+			},
+			"AuthorizationView": {
+				"type": "object",
+				"description": "What the consent page shows, or where it sends the person.",
+				"required": ["clientName", "redirectHost", "fullAccess", "scopes"],
+				"properties": {
+					"clientName": {
+						"type": "string",
+						"description": "The name the client registered with (it chose it itself)."
+					},
+					"fullAccess": {
+						"type": "boolean",
+						"description": "`true` when the client gets everything the person's roles allow."
+					},
+					"redirectHost": {
+						"type": "string",
+						"description": "Where the browser goes afterwards, e.g. `localhost` or `claude.ai`."
+					},
+					"redirectTo": {
+						"type": ["string", "null"],
+						"description": "Set when the page should send the browser on (back to the client,\nwith a code or an error). Otherwise, ask the person."
+					},
+					"scopes": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/ScopeView"
+						}
+					}
+				}
+			},
 			"Binding": {
 				"type": "object",
 				"required": ["key", "label", "kind"],
@@ -9514,6 +9676,39 @@
 					"code": {
 						"type": "string",
 						"description": "A current six-digit code from the app."
+					}
+				}
+			},
+			"ConnectedAppView": {
+				"type": "object",
+				"description": "An app connected to your account through OAuth.",
+				"required": ["id", "name", "scopes", "connectedAt"],
+				"properties": {
+					"connectedAt": {
+						"type": "string",
+						"format": "date-time"
+					},
+					"id": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"lastUsedAt": {
+						"type": ["string", "null"],
+						"format": "date-time"
+					},
+					"lastUsedIp": {
+						"type": ["string", "null"]
+					},
+					"name": {
+						"type": "string",
+						"description": "The name the app registered with."
+					},
+					"scopes": {
+						"type": "array",
+						"items": {
+							"type": "string"
+						},
+						"description": "Permission keys, or `[\"*\"]` for everything your roles allow."
 					}
 				}
 			},
@@ -12619,6 +12814,19 @@
 					}
 				},
 				"additionalProperties": false
+			},
+			"ScopeView": {
+				"type": "object",
+				"description": "A permission the client would get.",
+				"required": ["key", "description"],
+				"properties": {
+					"description": {
+						"type": "string"
+					},
+					"key": {
+						"type": "string"
+					}
+				}
 			},
 			"Script": {
 				"allOf": [

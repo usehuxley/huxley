@@ -67,6 +67,9 @@ impl CurrentUser {
         let ClientInfo(ctx) = ClientInfo::from_request_parts(parts, state)
             .await
             .unwrap_or_else(|never| match never {});
+        if secret.starts_with(huxley_auth::oauth::ACCESS_PREFIX) {
+            return Self::from_oauth_token(parts, state, secret, ctx).await;
+        }
         let auth = state
             .auth
             .authenticate_token(secret, ctx.ip)
@@ -82,6 +85,44 @@ impl CurrentUser {
             })?;
         let ctx = ctx.with_actor(Actor::User(auth.user.id));
         Ok(Self { auth, ctx })
+    }
+
+    /// An OAuth access token: issued for the MCP endpoint, so accepted only
+    /// there (on `/mcp`, and on the API calls its tools make in-process),
+    /// never on the API directly.
+    async fn from_oauth_token(
+        parts: &Parts,
+        state: &AppState,
+        secret: &str,
+        ctx: RequestContext,
+    ) -> Result<Self, ApiError> {
+        let invalid = |detail: &str| {
+            ApiError::new(
+                http::StatusCode::UNAUTHORIZED,
+                "invalid-token",
+                "Invalid access token",
+            )
+            .with_detail(detail)
+        };
+        let for_mcp =
+            parts.uri.path() == "/mcp" || parts.extensions.get::<crate::mcp::McpCall>().is_some();
+        if !for_mcp {
+            return Err(invalid(
+                "OAuth access tokens work only with the MCP server (/mcp). Use an API token.",
+            ));
+        }
+        let access = state
+            .auth
+            .authenticate_oauth(secret, ctx.ip)
+            .await
+            .map_err(|e| ApiError::internal(&e))?
+            .filter(|a| crate::oauth_routes::resource(state).as_deref() == Some(&a.resource))
+            .ok_or_else(|| invalid("The token is unknown, expired, or revoked."))?;
+        let ctx = ctx.with_actor(Actor::User(access.auth.user.id));
+        Ok(Self {
+            auth: access.auth,
+            ctx,
+        })
     }
 
     async fn resolve(parts: &mut Parts, state: &AppState) -> Result<Option<Self>, ApiError> {

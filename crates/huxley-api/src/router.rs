@@ -17,10 +17,10 @@ use tower_http::trace::TraceLayer;
 use crate::{
     ApiError, AppState, ai_routes, approval_routes, assistant_routes, audit_routes, auth_routes,
     connection_routes, csrf, dataset_routes, entity_routes, form_routes, health, hook_routes,
-    integration_routes, mcp, mfa_routes, module_routes, notification_routes, openapi, org_routes,
-    pack_routes, passkey_routes, public_form_routes, runner_routes, script_routes, security_routes,
-    sso_routes, team_routes, template_routes, token_routes, user_routes, variable_routes,
-    workflow_routes,
+    integration_routes, mcp, mfa_routes, module_routes, notification_routes, oauth_routes, openapi,
+    org_routes, pack_routes, passkey_routes, public_form_routes, runner_routes, script_routes,
+    security_routes, sso_routes, team_routes, template_routes, token_routes, user_routes,
+    variable_routes, workflow_routes,
 };
 
 const REQUEST_ID: HeaderName = HeaderName::from_static("x-request-id");
@@ -45,6 +45,8 @@ pub fn router(state: AppState) -> Router {
         .nest("/auth/passkeys", passkey_routes::routes())
         .nest("/auth/oidc", sso_routes::sign_in_routes())
         .nest("/auth/tokens", token_routes::own_routes())
+        .nest("/auth/connected-apps", oauth_routes::connected_app_routes())
+        .nest("/oauth", oauth_routes::consent_routes())
         .nest("/service-accounts", token_routes::service_account_routes())
         .nest("/security/sso/providers", sso_routes::admin_routes())
         .nest("/orgs", org_routes::routes())
@@ -110,6 +112,7 @@ pub fn router(state: AppState) -> Router {
 
     Router::new()
         .merge(hooks)
+        .merge(oauth_public_routes())
         .merge(mcp_routes)
         .merge(main)
         .layer(axum::Extension(internal))
@@ -150,6 +153,26 @@ fn hook_routes() -> Router<AppState> {
                 ))
                 .layer(RequestBodyLimitLayer::new(hook_routes::MAX_BODY)),
         )
+}
+
+/// OAuth discovery, registration, token and revocation endpoints (no
+/// sessions or CSRF: clients call them directly), with a small body limit.
+fn oauth_public_routes() -> Router<AppState> {
+    oauth_routes::public_routes().layer(
+        ServiceBuilder::new()
+            .layer(SetSensitiveRequestHeadersLayer::new([
+                header::AUTHORIZATION,
+            ]))
+            .layer(SetRequestIdLayer::new(REQUEST_ID, MakeRequestUuid))
+            .layer(TraceLayer::new_for_http().make_span_with(make_span))
+            .layer(PropagateRequestIdLayer::new(REQUEST_ID))
+            .layer(CatchPanicLayer::custom(handle_panic))
+            .layer(TimeoutLayer::with_status_code(
+                StatusCode::REQUEST_TIMEOUT,
+                REQUEST_TIMEOUT,
+            ))
+            .layer(RequestBodyLimitLayer::new(64 * 1024)),
+    )
 }
 
 /// `/mcp`: the MCP server (its tool calls go through the API router).

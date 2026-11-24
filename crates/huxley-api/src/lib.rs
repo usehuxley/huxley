@@ -25,6 +25,7 @@ pub mod mcp;
 pub mod mfa_routes;
 pub mod module_routes;
 pub mod notification_routes;
+pub mod oauth_routes;
 pub mod openapi;
 pub mod org_routes;
 mod pack_routes;
@@ -112,10 +113,15 @@ pub struct AppState {
     pub login_limiter: Arc<RateLimiter>,
     /// Public form links, per client address.
     pub public_limiter: Arc<RateLimiter>,
+    /// OAuth registration, token and revocation requests, per client address.
+    pub oauth_limiter: Arc<RateLimiter>,
 }
 
 /// Requests to public form links one client address may make a minute.
 pub const PUBLIC_FORMS_PER_MINUTE: u32 = 30;
+/// OAuth registration, token and revocation requests one client address may
+/// make a minute. Clients refresh hourly; registering is once per client.
+pub const OAUTH_REQUESTS_PER_MINUTE: u32 = 30;
 
 impl AppState {
     pub fn new(db: PgPool, auth: AuthService, crypto: Crypto, config: ApiConfig) -> Self {
@@ -143,6 +149,10 @@ impl AppState {
             login_limiter,
             public_limiter: Arc::new(RateLimiter::new(
                 PUBLIC_FORMS_PER_MINUTE,
+                Duration::from_secs(60),
+            )),
+            oauth_limiter: Arc::new(RateLimiter::new(
+                OAUTH_REQUESTS_PER_MINUTE,
                 Duration::from_secs(60),
             )),
         }
