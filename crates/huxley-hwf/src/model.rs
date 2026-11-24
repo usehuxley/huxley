@@ -350,6 +350,15 @@ pub enum Step {
     /// Write rows to a dataset.
     #[serde(rename = "dataset.upsert")]
     DatasetUpsert(DatasetUpsertStep),
+    /// Ask the organization's AI provider; the answer is text.
+    #[serde(rename = "ai.prompt")]
+    AiPrompt(AiPromptStep),
+    /// Have the AI pick one of a list of labels for some text.
+    #[serde(rename = "ai.classify")]
+    AiClassify(AiClassifyStep),
+    /// Have the AI pull structured data (a JSON Schema) out of some text.
+    #[serde(rename = "ai.extract")]
+    AiExtract(AiExtractStep),
 }
 
 /// Declares a step struct with the common fields first.
@@ -575,6 +584,21 @@ step!(DatasetUpsertStep {
     pub upsert: DatasetUpsert,
 });
 
+step!(AiPromptStep {
+    #[serde(rename = "with")]
+    pub ai: AiPrompt,
+});
+
+step!(AiClassifyStep {
+    #[serde(rename = "with")]
+    pub ai: AiClassify,
+});
+
+step!(AiExtractStep {
+    #[serde(rename = "with")]
+    pub ai: AiExtract,
+});
+
 const fn yes() -> bool {
     true
 }
@@ -620,7 +644,10 @@ impl Step {
             Notify,
             Email,
             DatasetQuery,
-            DatasetUpsert
+            DatasetUpsert,
+            AiPrompt,
+            AiClassify,
+            AiExtract
         )
     }
 
@@ -651,6 +678,9 @@ impl Step {
             Self::Email(_) => "core.email",
             Self::DatasetQuery(_) => "dataset.query",
             Self::DatasetUpsert(_) => "dataset.upsert",
+            Self::AiPrompt(_) => "ai.prompt",
+            Self::AiClassify(_) => "ai.classify",
+            Self::AiExtract(_) => "ai.extract",
         }
     }
 
@@ -844,6 +874,50 @@ pub struct DatasetUpsert {
     /// the item (e.g. `upn: userPrincipalName`, `city: address.city`).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub map: Option<Value>,
+}
+
+/// A prompt (`ai.prompt`). Output: `{ text, model }`.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct AiPrompt {
+    pub prompt: String,
+    /// Instructions for the model.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub system: Option<String>,
+    /// Another model than the provider's (e.g. a faster one).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub model: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max_tokens: Option<Value>,
+}
+
+/// Picking a label (`ai.classify`). Output: `{ label, model }`.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct AiClassify {
+    /// What to classify.
+    pub text: String,
+    /// The labels to choose from (a list, or an expression giving one).
+    pub labels: Value,
+    /// What the labels mean, or how to choose.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub instructions: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub model: Option<String>,
+}
+
+/// Pulling out data (`ai.extract`). Output: the data, as the schema says.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct AiExtract {
+    /// What to extract from.
+    pub text: String,
+    /// A JSON Schema (an object) of what to extract.
+    pub schema: Value,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub instructions: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub model: Option<String>,
 }
 
 /// An email to send (`core.email`).

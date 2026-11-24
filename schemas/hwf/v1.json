@@ -1,5 +1,94 @@
 {
   "$defs": {
+    "AiClassify": {
+      "additionalProperties": false,
+      "description": "Picking a label (`ai.classify`). Output: `{ label, model }`.",
+      "properties": {
+        "instructions": {
+          "description": "What the labels mean, or how to choose.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "labels": {
+          "description": "The labels to choose from (a list, or an expression giving one)."
+        },
+        "model": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "text": {
+          "description": "What to classify.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "text",
+        "labels"
+      ],
+      "type": "object"
+    },
+    "AiExtract": {
+      "additionalProperties": false,
+      "description": "Pulling out data (`ai.extract`). Output: the data, as the schema says.",
+      "properties": {
+        "instructions": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "model": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "schema": {
+          "description": "A JSON Schema (an object) of what to extract."
+        },
+        "text": {
+          "description": "What to extract from.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "text",
+        "schema"
+      ],
+      "type": "object"
+    },
+    "AiPrompt": {
+      "additionalProperties": false,
+      "description": "A prompt (`ai.prompt`). Output: `{ text, model }`.",
+      "properties": {
+        "max_tokens": true,
+        "model": {
+          "description": "Another model than the provider's (e.g. a faster one).",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "prompt": {
+          "type": "string"
+        },
+        "system": {
+          "description": "Instructions for the model.",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "prompt"
+      ],
+      "type": "object"
+    },
     "Backoff": {
       "oneOf": [
         {
@@ -1867,6 +1956,195 @@
             },
             "with": {
               "$ref": "#/$defs/DatasetUpsert"
+            }
+          },
+          "required": [
+            "type",
+            "id",
+            "with"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Ask the organization's AI provider; the answer is text.",
+          "properties": {
+            "continue_on_error": {
+              "description": "Record the error as the step's output and carry on.",
+              "type": "boolean"
+            },
+            "description": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "id": {
+              "description": "Unique in the workflow: lowercase letters, digits, underscores.\nOther steps read this step's output as `steps.<id>.output`.",
+              "type": "string"
+            },
+            "if": {
+              "description": "Skip the step unless this expression is true.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "name": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "retry": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/RetryPolicy"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "timeout": {
+              "description": "Fail the attempt after this long, e.g. `30s`.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "type": {
+              "const": "ai.prompt",
+              "type": "string"
+            },
+            "with": {
+              "$ref": "#/$defs/AiPrompt"
+            }
+          },
+          "required": [
+            "type",
+            "id",
+            "with"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Have the AI pick one of a list of labels for some text.",
+          "properties": {
+            "continue_on_error": {
+              "description": "Record the error as the step's output and carry on.",
+              "type": "boolean"
+            },
+            "description": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "id": {
+              "description": "Unique in the workflow: lowercase letters, digits, underscores.\nOther steps read this step's output as `steps.<id>.output`.",
+              "type": "string"
+            },
+            "if": {
+              "description": "Skip the step unless this expression is true.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "name": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "retry": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/RetryPolicy"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "timeout": {
+              "description": "Fail the attempt after this long, e.g. `30s`.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "type": {
+              "const": "ai.classify",
+              "type": "string"
+            },
+            "with": {
+              "$ref": "#/$defs/AiClassify"
+            }
+          },
+          "required": [
+            "type",
+            "id",
+            "with"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Have the AI pull structured data (a JSON Schema) out of some text.",
+          "properties": {
+            "continue_on_error": {
+              "description": "Record the error as the step's output and carry on.",
+              "type": "boolean"
+            },
+            "description": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "id": {
+              "description": "Unique in the workflow: lowercase letters, digits, underscores.\nOther steps read this step's output as `steps.<id>.output`.",
+              "type": "string"
+            },
+            "if": {
+              "description": "Skip the step unless this expression is true.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "name": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "retry": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/RetryPolicy"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "timeout": {
+              "description": "Fail the attempt after this long, e.g. `30s`.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "type": {
+              "const": "ai.extract",
+              "type": "string"
+            },
+            "with": {
+              "$ref": "#/$defs/AiExtract"
             }
           },
           "required": [

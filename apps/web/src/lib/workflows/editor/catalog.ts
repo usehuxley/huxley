@@ -154,6 +154,59 @@ export const STEPS: StepSpec[] = [
 		]
 	},
 	{
+		type: 'ai.prompt',
+		label: 'Ask AI',
+		description: 'Send a prompt to your AI provider; the answer is text.',
+		group: 'Actions',
+		template: { with: { prompt: '' } },
+		fields: [
+			{ path: 'with.prompt', label: 'Prompt', kind: 'expression' },
+			{ path: 'with.system', label: 'Instructions (optional)', kind: 'expression' },
+			{
+				path: 'with.model',
+				label: 'Model (optional)',
+				kind: 'text',
+				hint: 'Default: the provider’s'
+			}
+		]
+	},
+	{
+		type: 'ai.classify',
+		label: 'Classify with AI',
+		description: 'Have AI pick one of your labels for some text.',
+		group: 'Actions',
+		template: { with: { text: '', labels: [] } },
+		fields: [
+			{ path: 'with.text', label: 'Text', kind: 'expression' },
+			{
+				path: 'with.labels',
+				label: 'Labels',
+				kind: 'json',
+				hint: 'e.g. ["billing", "outage", "other"]'
+			},
+			{ path: 'with.instructions', label: 'How to choose (optional)', kind: 'expression' },
+			{ path: 'with.model', label: 'Model (optional)', kind: 'text' }
+		]
+	},
+	{
+		type: 'ai.extract',
+		label: 'Extract with AI',
+		description: 'Have AI pull structured data out of some text.',
+		group: 'Actions',
+		template: { with: { text: '', schema: { type: 'object', properties: {} } } },
+		fields: [
+			{ path: 'with.text', label: 'Text', kind: 'expression' },
+			{
+				path: 'with.schema',
+				label: 'What to extract (JSON Schema)',
+				kind: 'json',
+				hint: '{ "type": "object", "properties": { "name": { "type": "string" } } }'
+			},
+			{ path: 'with.instructions', label: 'Instructions (optional)', kind: 'expression' },
+			{ path: 'with.model', label: 'Model (optional)', kind: 'text' }
+		]
+	},
+	{
 		type: 'core.notify',
 		label: 'Notify',
 		description: 'Tell people in the app and by email.',
@@ -482,6 +535,11 @@ export function summary(step: Step): string {
 			return text(step.script);
 		case 'core.email':
 			return text(isStep(step.with) ? step.with.subject : '');
+		case 'ai.prompt':
+			return text(isStep(step.with) ? step.with.prompt : '');
+		case 'ai.classify':
+		case 'ai.extract':
+			return text(isStep(step.with) ? step.with.text : '');
 		case 'dataset.query':
 		case 'dataset.upsert':
 			return text(isStep(step.with) ? step.with.dataset : '');

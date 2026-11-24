@@ -226,6 +226,15 @@ impl Engine {
                     Err(failure) => Executed::Failed(failure),
                 }
             }
+            Step::AiPrompt(_) | Step::AiClassify(_) | Step::AiExtract(_) => {
+                match self
+                    .ai_step(step.type_name(), org_id, run_id, input, record.tainted)
+                    .await
+                {
+                    Ok(output) => Executed::Done(output),
+                    Err(failure) => Executed::Failed(failure),
+                }
+            }
             Step::Subworkflow(_) => Executed::Subworkflow(input.clone()),
             Step::Wait(_) => {
                 let until = input["until"]

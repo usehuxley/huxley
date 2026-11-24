@@ -815,3 +815,140 @@ async fn secrets_never_go_into_datasets() {
     .unwrap();
     assert_eq!(leaked, 0);
 }
+
+/// Answers like Anthropic's Messages API: a label from a classification's
+/// enum, an extraction's fields, or an echo; counts the calls.
+async fn mock_anthropic(calls: Arc<AtomicUsize>) -> u16 {
+    let app = axum::Router::new().route(
+        "/v1/messages",
+        post(move |AxumJson(body): AxumJson<Json>| {
+            let calls = calls.clone();
+            async move {
+                calls.fetch_add(1, Ordering::SeqCst);
+                let schema = &body["output_config"]["format"]["schema"];
+                let text = if let Some(labels) = schema["properties"]["label"]["enum"].as_array() {
+                    json!({ "label": labels[1] }).to_string()
+                } else if schema.is_object() {
+                    assert_eq!(
+                        schema["additionalProperties"], false,
+                        "extraction schemas are made strict"
+                    );
+                    json!({ "name": "Ada Lovelace", "start": "2026-12-01" }).to_string()
+                } else {
+                    format!(
+                        "summary of: {}",
+                        body["messages"][0]["content"].as_str().unwrap_or_default()
+                    )
+                };
+                AxumJson(json!({ "model": body["model"], "stop_reason": "end_turn",
+                                     "content": [{ "type": "text", "text": text }],
+                                     "usage": { "input_tokens": 20, "output_tokens": 5 } }))
+            }
+        }),
+    );
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let port = listener.local_addr().unwrap().port();
+    tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+    port
+}
+
+#[tokio::test]
+async fn ai_steps_call_the_organizations_provider() {
+    let Some(h) = harness(1 << 20).await else {
+        return;
+    };
+    let calls = Arc::new(AtomicUsize::new(0));
+    let port = mock_anthropic(calls.clone()).await;
+    let crypto =
+        huxley_crypto::Crypto::new(h.pools.app.clone(), huxley_crypto::testing::key_ring());
+    crypto
+        .encrypt(
+            h.org,
+            huxley_crypto::Binding {
+                purpose: "test",
+                record: h.org,
+            },
+            b"x",
+        )
+        .await
+        .unwrap();
+    let ctx = huxley_core::RequestContext::system(huxley_core::Via::System);
+    let input: huxley_ai::store::ProviderInput = serde_json::from_value(json!({
+        "kind": "anthropic", "baseUrl": format!("http://localhost:{port}"), "apiKey": "sk-ant-test"
+    }))
+    .unwrap();
+    let mut tx = begin_scoped(&h.pools.app, &OrgScope::System).await.unwrap();
+    huxley_ai::store::set(&mut tx, &ctx, &crypto, h.org, &input)
+        .await
+        .unwrap();
+    tx.commit().await.unwrap();
+
+    let (id, status, outputs, error) = h
+        .run_with(
+            r#"  inputs: { type: object, properties: { email: { type: string } } }
+  steps:
+    - id: gist
+      type: ai.prompt
+      with: { prompt: "{{ inputs.email }}", system: "Summarize in one line." }
+    - id: kind
+      type: ai.classify
+      with: { text: "{{ inputs.email }}", labels: [billing, onboarding, outage] }
+    - id: who
+      type: ai.extract
+      with:
+        text: "{{ inputs.email }}"
+        schema: { type: object, properties: { name: { type: string }, start: { type: string, format: date } } }
+  outputs:
+    gist: "{{ steps.gist.output.text }}"
+    kind: "{{ steps.kind.output.label }}"
+    name: "{{ steps.who.output.name }}"
+"#,
+            json!({ "email": "Please set up Ada Lovelace, starting December 1." }),
+        )
+        .await;
+    assert_eq!(status, RunStatus::Succeeded, "{error:?}");
+    assert_eq!(
+        outputs.unwrap(),
+        json!({ "gist": "summary of: Please set up Ada Lovelace, starting December 1.",
+                "kind": "onboarding", "name": "Ada Lovelace" })
+    );
+    let logged: i64 =
+        sqlx::query_scalar("SELECT count(*) FROM ai_calls WHERE run_id = $1 AND outcome = 'ok'")
+            .bind(id)
+            .fetch_one(&h.pools.owner)
+            .await
+            .unwrap();
+    assert_eq!(logged, 3);
+
+    // Secrets aren't sent to the provider.
+    let before = calls.load(Ordering::SeqCst);
+    let (_, status, _, error) = h
+        .run_with(
+            r#"  inputs: { type: object, properties: { password: { type: string, writeOnly: true } } }
+  steps:
+    - { id: leak, type: ai.prompt, with: { prompt: "Is {{ inputs.password }} strong?" } }
+"#,
+            json!({ "password": "hunter2-SECRET" }),
+        )
+        .await;
+    assert_eq!(status, RunStatus::Failed);
+    assert!(error.unwrap().to_string().contains("secrets"));
+    assert_eq!(calls.load(Ordering::SeqCst), before);
+}
+
+#[tokio::test]
+async fn ai_steps_fail_clearly_without_a_provider() {
+    let Some(h) = harness(1 << 20).await else {
+        return;
+    };
+    let (_, status, _, error) = h
+        .run(
+            r#"  steps:
+    - { id: ask, type: ai.prompt, with: { prompt: "hello" } }
+"#,
+        )
+        .await;
+    assert_eq!(status, RunStatus::Failed);
+    let error = error.unwrap().to_string();
+    assert!(error.contains("no AI provider"), "{error}");
+}

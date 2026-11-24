@@ -19,6 +19,7 @@
 		jobs: resolve('/(app)/settings/jobs'),
 		runners: resolve('/(app)/settings/runners'),
 		packs: resolve('/(app)/settings/packs'),
+		ai: resolve('/(app)/settings/ai'),
 		security: resolve('/(app)/settings/security'),
 		sso: resolve('/(app)/settings/sso')
 	};
