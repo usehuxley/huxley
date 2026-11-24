@@ -124,3 +124,29 @@ The `script` step runs them on [runners](runners.md), each script in a fresh roo
 | `variable:manage` | Setting variables and secrets |
 
 All are granted per organization and inherited by the organizations below. Technicians have read and run; read-only users have read.
+
+## Workflows as code
+
+`huxley workflows` keeps workflows in files (HWF YAML or JSON), for example in a Git repository, and syncs them with a Huxley server (design doc §6.7).
+
+```sh
+export HUXLEY_SERVER=https://huxley.example.com
+export HUXLEY_TOKEN=hxp_…          # an API token: Profile → API tokens
+export HUXLEY_ORG="Contoso MSP"    # the organization's name or id
+
+huxley workflows pull --dir workflows/           # write every workflow's draft as YAML
+huxley workflows validate workflows/             # check files locally (no server needed)
+huxley workflows diff workflows/                 # how the files differ from the server's drafts
+huxley workflows push workflows/                 # save them as drafts (creating new workflows)
+huxley workflows push workflows/ --publish --notes "Release 12"
+huxley workflows run greet -i name=Ada           # run the published version, print its outputs
+huxley workflows run greet --draft -i name=Ada   # test-run the draft
+```
+
+Things to know:
+
+- **Exit codes:** `validate` and `diff` exit 1 when there are problems or differences, so they work as CI checks. `run` exits 1 if the run fails.
+- **Pulled files** are written in a stable key order, so they diff cleanly. They start with a `yaml-language-server` comment pointing at the HWF schema, so editors autocomplete them.
+- **Matching:** files are matched to workflows by `metadata.key`.
+- **Permissions:** `push` needs `workflow:write`, and `--publish` also needs `workflow:publish`. Use a token scoped to what CI needs.
+- **Inputs:** `-i name=value` parses the value as JSON when it can (`-i count=3`, `-i 'tags=["a"]'`), and `--inputs-file` takes a JSON object.

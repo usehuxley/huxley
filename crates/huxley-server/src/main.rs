@@ -9,6 +9,7 @@ mod pack_cli;
 mod roles;
 mod runner;
 mod shutdown;
+mod workflow_cli;
 
 use std::path::PathBuf;
 
@@ -64,6 +65,11 @@ enum Command {
         #[command(subcommand)]
         command: pack_cli::PackCommand,
     },
+    /// Workflows as code: validate, pull, diff, push and run HWF files.
+    Workflows {
+        #[command(subcommand)]
+        command: workflow_cli::WorkflowCommand,
+    },
     /// Run a script runner (enrol it first).
     Runner {
         #[command(subcommand)]
@@ -84,6 +90,7 @@ async fn main() -> anyhow::Result<()> {
     match cli.command {
         Command::Healthcheck { addr } => healthcheck(addr),
         Command::Pack { command } => pack_cli::run(command),
+        Command::Workflows { command } => workflow_cli::run(command).await,
         Command::Runner { command } => {
             let telemetry =
                 huxley_telemetry::init(&huxley_telemetry::TelemetryConfig::default(), "runner")?;
