@@ -79,6 +79,8 @@ Forms are questions people answer to start workflows; see [docs/forms.md](docs/f
 
 Script runners execute library scripts in sandboxes, and connect with client certificates; see [docs/runners.md](docs/runners.md).
 
+Packs bundle integrations, workflows, forms, scripts and templates to share; see [docs/packs.md](docs/packs.md).
+
 Then open https://localhost (staff app) and https://portal.localhost (client portal). Set `HUXLEY_DOMAIN` and `HUXLEY_PORTAL_DOMAIN` in `.env` for real hostnames; Caddy obtains certificates automatically.
 
 ### Rotating the key-encryption key

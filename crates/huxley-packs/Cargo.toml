@@ -1,0 +1,20 @@
+[package]
+name = "huxley-packs"
+description = "The .hxpack format: reading, building, signing and verifying packs"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+publish = false
+
+[dependencies]
+base64.workspace = true
+ring.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+utoipa.workspace = true
+zip.workspace = true
+
+[lints]
+workspace = true
