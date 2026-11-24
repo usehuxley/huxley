@@ -49,3 +49,7 @@ Reading `secrets.<name>` or calling `secrets.generate()` marks the evaluation as
 ## Limits
 
 Each evaluation is bounded by fuel (instructions), recursion depth, and a 1 MiB result. There is no template loading, filesystem or network access.
+
+## Previewing
+
+In the visual editor, fields holding an expression have **Preview with the last run**. It evaluates the field against the workflow's latest run, a test run being enough, as a top-level step of it would see it: its inputs, trigger, the steps' recorded outputs, variables and run details. Nothing is decrypted, so secret values stay `«redacted»` and `secrets.*` isn't available. Mistakes are shown rather than raised. The API is `POST /api/v1/workflows/{id}/preview`, with `expression` and optionally `runId`. It needs `workflow:write`.

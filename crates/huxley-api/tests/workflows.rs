@@ -1829,3 +1829,73 @@ async fn workflows_saved_as_templates_are_offered_down_the_tree() {
             .any(|t| t["key"] == template_id.as_str())
     );
 }
+
+#[tokio::test]
+async fn expressions_preview_against_the_latest_run() {
+    let Some(s) = setup().await else { return };
+    let (_, created) = s.create(greeter(&key("preview"))).await;
+    let id = created["id"].as_str().unwrap().to_owned();
+    let preview = format!("/api/v1/workflows/{id}/preview");
+
+    // No run yet: nothing to preview with.
+    let (status, problem) = s
+        .post(
+            &s.owner,
+            &preview,
+            json!({ "expression": "{{ inputs.name }}" }),
+        )
+        .await;
+    assert_eq!(status, StatusCode::NOT_FOUND, "{problem}");
+    assert_eq!(
+        problem["type"].as_str().unwrap().rsplit('/').next(),
+        Some("no-run")
+    );
+
+    let (_, run) = s
+        .post(
+            &s.owner,
+            &format!("/api/v1/workflows/{id}/runs"),
+            json!({ "inputs": { "name": "Ada" }, "test": true }),
+        )
+        .await;
+    finish(&s.pools, &s.app, &s.owner, run["id"].as_str().unwrap()).await;
+
+    let ask = |expression: Value| json!({ "expression": expression });
+    let (status, shown) = s
+        .post(
+            &s.owner,
+            &preview,
+            ask(json!(
+                "{{ steps.greet.output | upper }} from {{ run.workflow.name }}"
+            )),
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK, "{shown}");
+    assert_eq!(shown["value"], "HI ADA from Greeter");
+    assert_eq!(shown["runId"], run["id"]);
+    // Objects keep their shape.
+    let (_, shown) = s
+        .post(
+            &s.owner,
+            &preview,
+            ask(json!({ "who": "{{ inputs.name }}" })),
+        )
+        .await;
+    assert_eq!(shown["value"], json!({ "who": "Ada" }));
+    // Mistakes are reported, not raised; secrets aren't available.
+    let (_, shown) = s.post(&s.owner, &preview, ask(json!("{{ 1 + }}"))).await;
+    assert!(shown["error"].is_string(), "{shown}");
+    let (_, shown) = s
+        .post(&s.owner, &preview, ask(json!("{{ secrets.anything }}")))
+        .await;
+    assert_ne!(shown["value"], json!("«redacted»"));
+    assert!(
+        shown["value"].is_null() || shown["value"] == json!(""),
+        "{shown}"
+    );
+
+    // Technicians can't edit workflows, so can't preview.
+    let (_, tech) = technician(&s).await;
+    let (status, _) = s.post(&tech, &preview, ask(json!("{{ 1 }}"))).await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+}

@@ -338,4 +338,29 @@ spec:
 		await expect(page.getByText('Template deleted.')).toBeVisible();
 		await expect(page.getByRole('link', { name: new RegExp(`Reusable ${suffix}`) })).toHaveCount(0);
 	});
+
+	test('expressions preview with the last run', async ({ browser }) => {
+		const page = await signIn(browser);
+		const key = `preview-${Date.now().toString(36)}`;
+		await page.goto('/workflows');
+		await page.getByLabel('Name').fill(`Preview ${key}`);
+		await page.getByLabel('Key').fill(key);
+		await page.getByRole('button', { name: 'Create' }).click();
+		await expect(page.getByRole('heading', { level: 1 })).toHaveText(`Preview ${key}`);
+
+		// Before any run, there's nothing to preview with.
+		await page.getByRole('button', { name: 'Step greet, Transform' }).click();
+		const settings = page.getByLabel('Step settings');
+		await settings.getByRole('button', { name: 'Preview with the last run' }).click();
+		await expect(settings.getByRole('status')).toContainText('Run it once (a test run is enough)');
+
+		// A test run, then the preview uses its data.
+		await page.getByRole('textbox', { name: 'Inputs' }).fill('{"name": "Ada"}');
+		await page.getByRole('button', { name: 'Test run the draft' }).click();
+		await expect(page.getByText('Succeeded').first()).toBeVisible({ timeout: 20_000 });
+		await page.goBack();
+		await page.getByRole('button', { name: 'Step greet, Transform' }).click();
+		await settings.getByRole('button', { name: 'Preview with the last run' }).click();
+		await expect(settings.getByLabel('Preview')).toHaveText('Hello Ada');
+	});
 });

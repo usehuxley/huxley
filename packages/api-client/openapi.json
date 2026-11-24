@@ -6695,6 +6695,55 @@
 				}
 			}
 		},
+		"/api/v1/workflows/{id}/preview": {
+			"post": {
+				"tags": ["workflows"],
+				"summary": "Evaluates an expression against a run of the workflow (the latest by\ndefault), as a top-level step of it would see it. Secret values stay\nredacted, and `secrets.*` isn't available.",
+				"operationId": "preview_workflow_expression",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/ExpressionPreviewRequest"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Preview"
+								}
+							}
+						}
+					},
+					"404": {
+						"description": "No run to preview with",
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
 		"/api/v1/workflows/{id}/publish": {
 			"post": {
 				"tags": ["workflows"],
@@ -8627,6 +8676,22 @@
 					}
 				}
 			},
+			"ExpressionPreviewRequest": {
+				"type": "object",
+				"required": ["expression"],
+				"properties": {
+					"expression": {
+						"type": "object",
+						"description": "The expression, as written in the workflow, e.g. `\"{{ steps.a.output.id }}\"`."
+					},
+					"runId": {
+						"type": ["string", "null"],
+						"format": "uuid",
+						"description": "A run of this workflow to evaluate against. Default: the latest."
+					}
+				},
+				"additionalProperties": false
+			},
 			"FieldChanges": {
 				"type": "object",
 				"description": "Changes to a field. The key and type never change (stored values depend\non them).",
@@ -9872,6 +9937,25 @@
 				"type": "string",
 				"description": "Provider templates with sensible defaults.",
 				"enum": ["generic", "entra", "google", "okta", "authentik", "keycloak"]
+			},
+			"Preview": {
+				"type": "object",
+				"description": "What an expression gives against a run (the editor's preview).",
+				"required": ["runId"],
+				"properties": {
+					"error": {
+						"type": ["string", "null"],
+						"description": "Why it couldn't be evaluated, e.g. a name that isn't there."
+					},
+					"runId": {
+						"type": "string",
+						"format": "uuid",
+						"description": "The run it was evaluated against."
+					},
+					"value": {
+						"type": ["object", "null"]
+					}
+				}
 			},
 			"PreviewRequest": {
 				"type": "object",

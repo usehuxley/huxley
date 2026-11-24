@@ -12,6 +12,14 @@
 	let granted = $derived(data.user.grantedPermissions);
 	let canWrite = $derived(granted.includes('workflow:write'));
 	let canPublish = $derived(granted.includes('workflow:publish'));
+	async function previewExpression(expression: unknown) {
+		const response = await fetch(resolve('/(app)/workflows/[id]/preview', { id: workflow.id }), {
+			method: 'POST',
+			headers: { 'content-type': 'application/json' },
+			body: JSON.stringify({ expression })
+		});
+		return (await response.json()) as { value?: unknown; error?: string | null };
+	}
 	let canRun = $derived(granted.includes('workflow:run'));
 	let archived = $derived(workflow.status === 'archived');
 	let canAssignRunAs = $derived(canPublish && granted.includes('service_account:manage'));
@@ -113,6 +121,7 @@
 						<input type="hidden" name="revision" value={workflow.revision} />
 						<input type="hidden" name="document" value={JSON.stringify(visualDocument ?? {})} />
 						<VisualEditor
+							preview={canWrite ? previewExpression : undefined}
 							draft={workflow.draft}
 							diagnostics={workflow.diagnostics}
 							readonly={!canWrite || archived}

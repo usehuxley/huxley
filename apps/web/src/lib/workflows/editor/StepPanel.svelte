@@ -13,6 +13,7 @@
 	} from './catalog.ts';
 	import type { EditorContext } from './context.ts';
 	import ExpressionInput from './ExpressionInput.svelte';
+	import PreviewButton from './PreviewButton.svelte';
 	import { namesFor } from './suggest.ts';
 
 	let { editor }: { editor: EditorContext } = $props();
@@ -232,6 +233,8 @@
 							onchange={(e) => setJson(field.path, e.currentTarget.value)}></textarea>
 						{#if jsonErrors[field.path]}
 							<p class="text-xs text-danger" role="alert">{jsonErrors[field.path]}</p>
+						{:else if editor.preview && json(value).includes('{{')}
+							<PreviewButton preview={editor.preview} value={() => value} />
 						{/if}
 					{:else if field.kind === 'number'}
 						<input
@@ -289,6 +292,7 @@
 							{names}
 							readonly={editor.readonly}
 							onchange={(v) => set(field.path, v)}
+							preview={editor.preview}
 						/>
 					{:else}
 						<input
