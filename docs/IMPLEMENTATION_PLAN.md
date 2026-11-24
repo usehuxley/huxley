@@ -150,12 +150,18 @@ This is a long-term project. The plan follows four rules:
 
 **Goal:** a usable ITIL-aligned service desk built on the engine.
 
-- Every module in this phase (`crm`, `servicedesk`) registers through the module registry and ships with a CI job that runs the suite with the module off, so *Automation only* installs stay healthy.
+- Every module in this phase (`crm`, `servicedesk`, `workforce`) registers through the module registry and ships with a CI job that runs the suite with the module off, so *Automation only* installs stay healthy.
 - **CRM base** (§8.1): companies (client orgs), sites, contacts, contact ↔ company links, client 360 view shell.
 - **Ticketing** (§8.2): ticket types (Incident, Service Request; Problem/Change stubbed), configurable status workflows, service queues + membership, priority matrix, notes (public/internal), time entries, attachments, parent/child/related, merge, templates, canned responses, bulk edit, saved queue views, My Work, collision/presence indicators.
 - **SLA engine**: policies, business-hours calendars and holidays, pause statuses, clocks driven by the scheduler, warning and breach events, SLA display everywhere.
 - **Mailbox ingestion** (§8.4): M365 (Graph delta + subscriptions) and IMAP (IDLE/poll) mailboxes, "Poll mailbox" + "Email to ticket" system workflows, threading, contact matching, loop/auto-reply protection, outbound replies via Graph/SMTP.
-- **Assignment/dispatch** system workflows: round-robin, load-balanced, skill-based. Dispatch calendar v1.
+- **Workforce base** (§8.15, `workforce` module):
+  - The skills catalog (levels) and people's skills (self-assessed or verified).
+  - The certification catalog and people's certifications (expiry, credential, evidence). `certification.expiring` and `certification.expired` events, with a reminder workflow.
+  - Skill and certification requirements on queues and ticket types, and a skills matrix view.
+  - Working schedules and time off (approved through the approval step).
+  - Work types for non-ticket time entries.
+- **Assignment/dispatch** system workflows: round-robin, load-balanced, skill-based (skill requirements weighed, required certifications as hard constraints, people away or off-hours skipped). Dispatch calendar v1.
 - **Client 360 Actions panel**: forms flagged `action` with automatic context injection (org/contact/asset/ticket). Ticket macros run workflows.
 - **`core.*` actions** for tickets, contacts, companies. Domain events for all of them.
 - **Command palette + global search** (Postgres FTS + trigram).
@@ -174,10 +180,15 @@ This is a long-term project. The plan follows four rules:
 - **Knowledge base**: articles, versions, review/approval workflow, visibility levels, ticket linking, FTS + semantic search.
 - **Client documentation** area + optional credential vault (audited reveals).
 - **Agreements/contracts** (§8.7): types, coverage rules, rate cards, SLA binding, time-entry coverage evaluation, renewal events.
+- **Timesheets** (§8.15):
+  - Periods, weekly by default.
+  - Submit → review by lead or approver (the approval step) → approve or reject with comments. Approved timesheets lock their entries; reopening is audited.
+  - Reminder workflows for missing or late timesheets and under-logged days.
+  - An option to bill only approved time, and a payroll export.
 - **Warranties**: per asset, vendor lookup workflow (Dell/Lenovo/HP packs), expiry events.
 - **Product catalog** (basic; needed by agreements and later by inventory/CPQ).
 
-**Exit criteria:** assets sync from an RMM, map into CIs with relationships, and render in the dependency map. Time entries on tickets correctly evaluate as covered or billable under an agreement.
+**Exit criteria:** assets sync from an RMM, map into CIs with relationships, and render in the dependency map. Time entries on tickets correctly evaluate as covered or billable under an agreement. A technician's weekly timesheet is submitted, rejected with a comment, corrected, approved and locked, and only its approved time reaches a billing preview.
 
 **→ Release M4: Service Desk Alpha**
 
@@ -188,7 +199,7 @@ This is a long-term project. The plan follows four rules:
 - **Portal app** (§8.13): white-labeling (logo, colors, custom domain), portal auth realm (magic link/password + MFA, client OIDC by domain), portal RBAC roles, company-admin contact management.
 - Portal features: tickets (view/create/comment), service catalog (portal-audience forms), KB, assets, approvals.
 - **Semantic data layer** (§8.12): data source catalog for core entities + datasets, structured query spec → SQL compiler with authz filters, cost limits, caching, read-replica routing.
-- **Widget renderer** (`packages/widgets`) shared by web and portal. Prebuilt dashboards (service desk overview, SLA performance, technician utilization, client overview).
+- **Widget renderer** (`packages/widgets`) shared by web and portal. Prebuilt dashboards (service desk overview, SLA performance, technician utilization, client overview, and **time and utilization**: billable %, hours by client/agreement/work type, overtime and under-logging, estimate vs actual).
 - **HWF v1 stabilization + TypeScript SDK** (design §6.7, ADR-016):
   - **Why here:** by this point the engine has been used for real by the system packs behind service desk, email, SLA, CMDB, and contracts (Phases 5–6), so HWF has settled. Building the SDK earlier would mean chasing format changes. Building it later would delay the code-first audience and community pack authors.
   - Freeze HWF `usehuxley.io/v1`, with a compatibility policy for later additions.
@@ -203,7 +214,7 @@ This is a long-term project. The plan follows four rules:
 
 ### Phase 8: AI ticket intelligence, customer experience, report builder
 
-- **AI features as system workflows** (§8.8): sentiment analysis, triage (suggest/auto modes), dispatch recommendations, ticket insights (summary, entities, similar tickets, KB and Action suggestions), auto-documentation (resolution notes, KB drafts into review).
+- **AI features as system workflows** (§8.8): sentiment analysis, triage (suggest/auto modes, including the skills a ticket needs), dispatch recommendations (skills, certifications, availability, load, history and client familiarity, with reasons), skill-gap insights (unqualified work, expiring certifications), ticket insights (summary, entities, similar tickets, KB and Action suggestions), auto-documentation (resolution notes, KB drafts into review, draft time entries for timesheets).
 - Assistant v2: context-aware on tickets and client views, service desk + clients/assets MCP tool groups.
 - **CSAT** (§8.9): surveys on resolve, email one-click + portal, sampling rules.
 - **NPS** campaigns.
@@ -225,7 +236,7 @@ This is a long-term project. The plan follows four rules:
   - Phases, tasks, milestones, and dependencies. Project tasks are tickets (*Project Task* type) that appear in My Work.
   - Project templates with attached workflows.
   - List, board, timeline/Gantt, and calendar views.
-  - Resource capacity planning shared with the dispatch calendar.
+  - Resource capacity planning shared with the dispatch calendar, matching task skill requirements to people (§8.15).
   - Hour/cost budgets vs actuals from time entries, plus budget threshold events.
   - Billing method settings (fixed fee, milestone, T&M, not-to-exceed) for use in Phase 11.
   - Scope change requests with client approval.
