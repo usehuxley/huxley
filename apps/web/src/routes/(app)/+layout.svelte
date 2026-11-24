@@ -16,6 +16,7 @@
 		House,
 		Plug,
 		Settings,
+		Sparkles,
 		Ticket,
 		Workflow
 	} from '@lucide/svelte';
@@ -41,6 +42,9 @@
 			: []),
 		...(data.user.grantedPermissions.includes('dataset:read')
 			? [{ href: '/datasets', label: 'Datasets', icon: Database }]
+			: []),
+		...(data.user.grantedPermissions.includes('ai:use')
+			? [{ href: '/assistant', label: 'Assistant', icon: Sparkles }]
 			: []),
 		{ href: '/approvals', label: 'Approvals', icon: CircleCheck },
 		...(data.user.grantedPermissions.some((p) => p === 'form:submit' || p === 'form:manage')

@@ -117,6 +117,85 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
+	'/api/v1/assistant/conversations': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** Your conversations, newest first. */
+		get: operations['list_assistant_conversations'];
+		put?: never;
+		/**
+		 * Starts a conversation with a first message, and returns it answered
+		 *     (or waiting for your approval of an action).
+		 */
+		post: operations['start_assistant_conversation'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/assistant/conversations/{id}': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** One of your conversations. */
+		get: operations['get_assistant_conversation'];
+		put?: never;
+		post?: never;
+		/** Deletes one of your conversations. */
+		delete: operations['delete_assistant_conversation'];
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/assistant/conversations/{id}/decisions': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/**
+		 * Approves or denies the actions waiting for you, and lets the assistant
+		 *     carry on.
+		 */
+		post: operations['decide_assistant_actions'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/assistant/conversations/{id}/messages': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/**
+		 * Sends a message, and returns the conversation answered (or waiting for
+		 *     your approval of an action).
+		 */
+		post: operations['send_assistant_message'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
 	'/api/v1/attachments/{id}': {
 		parameters: {
 			query?: never;
@@ -3570,6 +3649,25 @@ export interface components {
 			templates?: string[];
 			workflows?: string[];
 		};
+		Conversation: {
+			/** Format: uuid */
+			id: string;
+			messages: components['schemas']['ShownMessage'][];
+			/** Format: uuid */
+			orgId: string;
+			/** @description Calls waiting for the user's approval (approve or deny each). */
+			pending: components['schemas']['ShownCall'][];
+			title: string;
+		};
+		ConversationSummary: {
+			/** Format: uuid */
+			id: string;
+			/** Format: uuid */
+			orgId: string;
+			title: string;
+			/** Format: date-time */
+			updatedAt: string;
+		};
 		CreateAssignmentRequest: {
 			/** @description Also apply to every sub-organization (default true). */
 			inherit?: boolean;
@@ -3737,6 +3835,12 @@ export interface components {
 			/** @description Shown on the run, at most 2000 characters. */
 			comment?: string | null;
 			decision: components['schemas']['Decision'];
+		};
+		Decisions: {
+			/** @description Tool call id → approve (true) or deny (false). */
+			decisions: {
+				[key: string]: boolean;
+			};
 		};
 		/** @description An API, as Huxley uses it. */
 		Definition: {
@@ -4733,6 +4837,9 @@ export interface components {
 			description?: string;
 			name: string;
 		};
+		SayRequest: {
+			text: string;
+		};
 		/** @description A script with its current version. */
 		Script: components['schemas']['ScriptSummary'] & {
 			parameters: {
@@ -4855,6 +4962,26 @@ export interface components {
 		 * @enum {string}
 		 */
 		SettingKind: 'text' | 'timezone' | 'color' | 'email' | 'prefix';
+		/** @description A tool call as the user sees it. */
+		ShownCall: {
+			id: string;
+			input: {
+				[key: string]: unknown;
+			};
+			name: string;
+			/** @description Waits for the user's approval. */
+			needsApproval: boolean;
+		};
+		/** @description A message as the user sees it. */
+		ShownMessage: {
+			/** @description For `tool`: the call it answers, and whether it failed. */
+			callId?: string | null;
+			isError?: boolean;
+			/** @description `user`, `assistant` or `tool`. */
+			role: string;
+			text: string;
+			toolCalls?: components['schemas']['ShownCall'][];
+		};
 		SignInComplete: {
 			/** @description The `code` the provider sent back. */
 			code: string;
@@ -4881,6 +5008,14 @@ export interface components {
 		SsoCallbackRequest: {
 			code: string;
 			state: string;
+		};
+		StartConversation: {
+			/**
+			 * Format: uuid
+			 * @description The organization it works in (whose AI provider it uses).
+			 */
+			orgId: string;
+			text: string;
 		};
 		StartRunRequest: {
 			from?: components['schemas']['RunFrom'] | null;
@@ -5596,6 +5731,186 @@ export interface operations {
 				};
 			};
 			409: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	list_assistant_conversations: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ConversationSummary'][];
+				};
+			};
+		};
+	};
+	start_assistant_conversation: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['StartConversation'];
+			};
+		};
+		responses: {
+			201: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['Conversation'];
+				};
+			};
+			502: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	get_assistant_conversation: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['Conversation'];
+				};
+			};
+			404: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	delete_assistant_conversation: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			204: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content?: never;
+			};
+			404: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	decide_assistant_actions: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['Decisions'];
+			};
+		};
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['Conversation'];
+				};
+			};
+			409: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	send_assistant_message: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['SayRequest'];
+			};
+		};
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['Conversation'];
+				};
+			};
+			409: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+			502: {
 				headers: {
 					[name: string]: unknown;
 				};

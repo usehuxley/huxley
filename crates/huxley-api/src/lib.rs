@@ -6,6 +6,8 @@
 
 mod ai_routes;
 mod approval_routes;
+mod assistant;
+mod assistant_routes;
 pub mod audit_routes;
 pub mod auth_routes;
 pub mod authz;

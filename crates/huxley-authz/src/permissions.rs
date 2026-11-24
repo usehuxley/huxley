@@ -73,6 +73,7 @@ permissions! {
     DATASET_READ = "dataset:read", Org, "View datasets and their rows";
     DATASET_MANAGE = "dataset:manage", Org, "Create and change datasets, and write their rows";
     AI_MANAGE = "ai:manage", Org, "Set up the AI provider (with its key and budget) and see AI usage";
+    AI_USE = "ai:use", Org, "Use the AI assistant (it acts with your own permissions)";
     VARIABLE_MANAGE = "variable:manage", Org, "Set organization variables and secrets for workflows, and lock them for sub-organizations";
 }
 

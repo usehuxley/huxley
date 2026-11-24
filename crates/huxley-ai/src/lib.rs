@@ -1,5 +1,6 @@
 //! AI providers, bring your own key (design doc §10.1, ADR-031).
 
+pub mod chat;
 pub mod provider;
 pub mod store;
 

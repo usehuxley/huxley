@@ -170,6 +170,39 @@ fn schema(properties: &str, required: &[&str]) -> Value {
     json!({ "type": "object", "properties": properties, "required": required, "additionalProperties": false })
 }
 
+/// Every tool, for a model: name, description and input schema.
+pub(crate) fn tool_defs() -> Vec<huxley_ai::chat::ToolDef> {
+    TOOLS
+        .iter()
+        .map(
+            |(name, description, properties, required)| huxley_ai::chat::ToolDef {
+                name: (*name).to_owned(),
+                description: (*description).to_owned(),
+                input_schema: schema(properties, required),
+            },
+        )
+        .collect()
+}
+
+/// Tools that change something (a person approves each call in the
+/// assistant); the rest only read.
+pub(crate) const CHANGING: &[&str] = &[
+    "create_workflow_draft",
+    "update_workflow_draft",
+    "test_workflow_document",
+    "test_run_workflow",
+];
+
+/// A tool's answer as text for a model, and whether it failed.
+pub(crate) fn result_text(outcome: Result<(StatusCode, Value), String>) -> (String, bool) {
+    let result = tool_result(outcome);
+    let text = result["content"][0]["text"]
+        .as_str()
+        .unwrap_or_default()
+        .to_owned();
+    (text, result["isError"] == true)
+}
+
 fn is_tool(name: &str) -> bool {
     TOOLS.iter().any(|(n, ..)| *n == name)
 }
@@ -269,19 +302,42 @@ fn plan(name: &str, args: &Value) -> Result<Option<Call>, String> {
 }
 
 /// Makes API calls as the MCP client's user.
-struct Caller<'a> {
+pub(crate) struct Caller<'a> {
     internal: &'a axum::Router,
-    authorization: HeaderValue,
+    /// The caller's own credentials: a bearer token, or a session cookie.
+    credentials: Vec<(header::HeaderName, HeaderValue)>,
     peer: Option<ConnectInfo<SocketAddr>>,
     user_agent: Option<HeaderValue>,
 }
 
-impl Caller<'_> {
+impl<'a> Caller<'a> {
+    /// Calls as whoever sent `headers` (their token or session cookie).
+    pub(crate) fn new(
+        internal: &'a axum::Router,
+        headers: &HeaderMap,
+        peer: Option<ConnectInfo<SocketAddr>>,
+    ) -> Self {
+        let credentials = [header::AUTHORIZATION, header::COOKIE]
+            .into_iter()
+            .filter_map(|name| headers.get(&name).cloned().map(|value| (name, value)))
+            .collect();
+        Self {
+            internal,
+            credentials,
+            peer,
+            user_agent: headers.get(header::USER_AGENT).cloned(),
+        }
+    }
+
     async fn send(&self, call: Call) -> (StatusCode, Value) {
         let mut request = Request::builder()
             .method(call.method)
             .uri(&call.path)
-            .header(header::AUTHORIZATION, self.authorization.clone());
+            // Session-cookie calls need the anti-forgery header, like any.
+            .header(crate::csrf::HEADER, crate::csrf::VALUE);
+        for (name, value) in &self.credentials {
+            request = request.header(name, value.clone());
+        }
         if let Some(agent) = &self.user_agent {
             request = request.header(header::USER_AGENT, agent.clone());
         }
@@ -310,7 +366,11 @@ impl Caller<'_> {
         )
     }
 
-    async fn call_tool(&self, name: &str, args: &Value) -> Result<(StatusCode, Value), String> {
+    pub(crate) async fn call_tool(
+        &self,
+        name: &str,
+        args: &Value,
+    ) -> Result<(StatusCode, Value), String> {
         match name {
             "get_workflow_schema" => Ok((StatusCode::OK, huxley_hwf::json_schema())),
             "update_workflow_draft" => {
@@ -485,15 +545,7 @@ pub async fn post(
         );
         return response;
     }
-    let caller = Caller {
-        internal: &internal,
-        authorization: headers
-            .get(header::AUTHORIZATION)
-            .cloned()
-            .expect("checked above"),
-        peer: peer.map(|Extension(p)| p),
-        user_agent: headers.get(header::USER_AGENT).cloned(),
-    };
+    let caller = Caller::new(&internal, &headers, peer.map(|Extension(p)| p));
     match &body {
         Value::Array(messages) => {
             let mut out = Vec::new();

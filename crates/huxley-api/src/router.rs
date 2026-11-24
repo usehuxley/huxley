@@ -15,11 +15,12 @@ use tower_http::timeout::TimeoutLayer;
 use tower_http::trace::TraceLayer;
 
 use crate::{
-    ApiError, AppState, ai_routes, approval_routes, audit_routes, auth_routes, connection_routes,
-    csrf, dataset_routes, entity_routes, form_routes, health, hook_routes, integration_routes, mcp,
-    mfa_routes, module_routes, notification_routes, openapi, org_routes, pack_routes,
-    passkey_routes, public_form_routes, runner_routes, script_routes, security_routes, sso_routes,
-    team_routes, template_routes, token_routes, user_routes, variable_routes, workflow_routes,
+    ApiError, AppState, ai_routes, approval_routes, assistant_routes, audit_routes, auth_routes,
+    connection_routes, csrf, dataset_routes, entity_routes, form_routes, health, hook_routes,
+    integration_routes, mcp, mfa_routes, module_routes, notification_routes, openapi, org_routes,
+    pack_routes, passkey_routes, public_form_routes, runner_routes, script_routes, security_routes,
+    sso_routes, team_routes, template_routes, token_routes, user_routes, variable_routes,
+    workflow_routes,
 };
 
 const REQUEST_ID: HeaderName = HeaderName::from_static("x-request-id");
@@ -64,6 +65,7 @@ pub fn router(state: AppState) -> Router {
         .nest("/packs", pack_routes::routes())
         .nest("/datasets", dataset_routes::routes())
         .nest("/ai", ai_routes::routes())
+        .nest("/assistant", assistant_routes::routes())
         .nest("/security", security_routes::routes())
         .merge(user_routes::routes())
         .merge(entity_routes::routes())
@@ -100,9 +102,26 @@ pub fn router(state: AppState) -> Router {
         .fallback(not_found)
         .layer(stack);
 
+    let hooks = hook_routes();
+
+    // Tool calls (MCP, the assistant) go through the API router itself.
+    let internal = mcp::Internal(main.clone().with_state(state.clone()));
+    let mcp_routes = mcp_routes();
+
+    Router::new()
+        .merge(hooks)
+        .merge(mcp_routes)
+        .merge(main)
+        .layer(axum::Extension(internal))
+        .with_state(state)
+}
+
+/// Webhooks, public forms and callbacks: outside /api/v1 (no sessions or
+/// CSRF), with a longer timeout for sync responses and a smaller body limit.
+fn hook_routes() -> Router<AppState> {
     // Webhooks: outside /api/v1 (no sessions or CSRF), with a longer timeout
     // for sync responses and a smaller body limit.
-    let hooks = Router::new()
+    Router::new()
         .route(
             "/hooks/{public_id}",
             axum::routing::post(hook_routes::receive),
@@ -130,23 +149,13 @@ pub fn router(state: AppState) -> Router {
                     HOOK_TIMEOUT,
                 ))
                 .layer(RequestBodyLimitLayer::new(hook_routes::MAX_BODY)),
-        );
-
-    let mcp_routes = mcp_routes(&main, &state);
-
-    Router::new()
-        .merge(hooks)
-        .merge(mcp_routes)
-        .merge(main)
-        .with_state(state)
+        )
 }
 
-/// `/mcp`: the MCP server, which makes its tool calls through `main`.
-fn mcp_routes(main: &Router<AppState>, state: &AppState) -> Router<AppState> {
-    let internal = mcp::Internal(main.clone().with_state(state.clone()));
+/// `/mcp`: the MCP server (its tool calls go through the API router).
+fn mcp_routes() -> Router<AppState> {
     Router::new()
         .route("/mcp", axum::routing::post(mcp::post).get(mcp::get))
-        .layer(axum::Extension(internal))
         .layer(
             ServiceBuilder::new()
                 .layer(SetRequestIdLayer::new(REQUEST_ID, MakeRequestUuid))
