@@ -151,6 +151,7 @@ impl Cluster {
             namespace: self.namespace.clone(),
             pwsh_image: "mcr.microsoft.com/powershell:7.5-alpine-3.20".into(),
             python_image: "docker.io/library/python:3.13-alpine".into(),
+            deno_image: "docker.io/denoland/deno:alpine-2.9.8".into(),
             memory: "256Mi".into(),
             cpus: "1".into(),
             runtime_class: None,
@@ -288,4 +289,37 @@ async fn the_runner_wont_start_without_the_policy() {
     let sandbox = cluster.sandbox().await;
     let refused = sandbox.check_policy("huxley-scripts").await.unwrap_err();
     assert!(refused.contains("isn't in namespace"), "{refused}");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn javascript_runs_too() {
+    let Some(cluster) = cluster(true).await else {
+        return;
+    };
+    let sandbox = cluster.sandbox().await;
+    // Deno, confined: the network policy blocks direct connections, and
+    // fetch goes through the egress proxy.
+    let source = r#"
+let direct = "blocked";
+try {
+  const c = await Promise.race([
+    Deno.connect({ hostname: "10.96.0.1", port: 443 }),
+    new Promise((_, reject) => setTimeout(() => reject(new Error("timeout")), 3000)),
+  ]);
+  c.close();
+  direct = "open";
+} catch {}
+const r = await fetch("http://example.invalid/hello");
+export default { direct, proxied: await r.text(), name: inputs.name };
+"#;
+    let outcome = sandbox
+        .run_with_logs(&job("javascript", source, json!({ "name": "ada" })), None)
+        .await;
+    assert!(outcome.succeeded, "{outcome:?}");
+    assert_eq!(
+        outcome.output,
+        Some(
+            json!({ "direct": "blocked", "proxied": "via proxy http://example.invalid/hello", "name": "ada" })
+        )
+    );
 }

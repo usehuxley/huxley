@@ -188,10 +188,7 @@ fn script_meta(pack: &Pack, key: &str) -> Result<(ScriptMeta, String), InstallEr
             .unwrap_or_default(),
     )
     .map_err(|e| bad(&e.to_string()))?;
-    let ext = match meta.language {
-        huxley_scripts::Language::Pwsh => "ps1",
-        huxley_scripts::Language::Python => "py",
-    };
+    let ext = meta.language.extension();
     let source = pack
         .text(&format!("scripts/{key}.{ext}"))
         .ok_or_else(|| bad(&format!("no scripts/{key}.{ext}")))?
@@ -655,10 +652,7 @@ pub async fn export(
         if summary.org_id != request.org_id {
             return Err(elsewhere("script"));
         }
-        let ext = match summary.language {
-            huxley_scripts::Language::Pwsh => "ps1",
-            huxley_scripts::Language::Python => "py",
-        };
+        let ext = summary.language.extension();
         let meta = json!({ "name": summary.name, "description": summary.description,
                            "language": summary.language, "parameters": script.parameters });
         files.insert(format!("scripts/{}.json", summary.key), json_bytes(&meta));

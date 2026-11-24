@@ -120,6 +120,125 @@ if os.environ.get("HUXLEY_RESULT_MARKER"):
 
 /// The PowerShell side of the egress relay: 127.0.0.1:3128 to the proxy's
 /// socket (Python's is in its wrapper).
+pub(crate) const JS_WRAPPER: &str = r#"// Huxley's wrapper for JavaScript scripts (Deno).
+const SOCKET = "/huxley/net/proxy.sock";
+
+async function pump(from, to) {
+  try { await from.readable.pipeTo(to.writable); } catch { /* the other side closed */ }
+}
+
+// Scripts' HTTP(S) goes to a proxy on 127.0.0.1:3128, relayed to the
+// runner's egress proxy over a unix socket (the container has no network).
+try {
+  Deno.statSync(SOCKET);
+  const listener = Deno.listen({ hostname: "127.0.0.1", port: 3128 });
+  (async () => {
+    for await (const client of listener) {
+      Deno.connect({ transport: "unix", path: SOCKET }).then(
+        (upstream) => { pump(client, upstream); pump(upstream, client); },
+        () => client.close(),
+      );
+    }
+  })();
+} catch { /* no egress */ }
+
+// Kubernetes: the pod's network policy may take a moment to apply. Hold
+// the script until a connection the policy forbids no longer gets through.
+const probe = Deno.env.get("HUXLEY_EGRESS_PROBE");
+if (probe) {
+  const at = probe.lastIndexOf(":");
+  const hostname = probe.slice(0, at);
+  const port = Number(probe.slice(at + 1));
+  const deadline = Date.now() + 60_000;
+  while (true) {
+    const open = await Promise.race([
+      Deno.connect({ hostname, port }).then((c) => { c.close(); return true; }, () => false),
+      new Promise((resolve) => setTimeout(() => resolve(false), 1000)),
+    ]);
+    if (!open) break;
+    if (Date.now() > deadline) {
+      console.error("huxley: the network policy isn't in force; not running the script");
+      Deno.exit(97);
+    }
+    await new Promise((resolve) => setTimeout(resolve, 500));
+  }
+}
+
+const inputs = JSON.parse(Deno.readTextFileSync("/huxley/in/inputs.json"));
+globalThis.inputs = inputs;
+const script = await import("file:///huxley/in/script.js");
+// export default <value> or <async function(inputs)>; or globalThis.result.
+let value = script.default;
+if (typeof value === "function") value = await value(inputs);
+if (value === undefined) value = globalThis.result;
+const result = JSON.stringify(value === undefined ? null : value);
+Deno.writeTextFileSync("/huxley/out/result.json", result);
+const marker = Deno.env.get("HUXLEY_RESULT_MARKER");
+if (marker) console.log(marker + result);
+Deno.exit(0);
+"#;
+
+/// A language's files and the command that runs them: the script's file
+/// name, the wrapper's name and contents, and the command line.
+pub(crate) fn language(
+    name: &str,
+) -> Option<(
+    &'static str,
+    &'static str,
+    &'static str,
+    &'static [&'static str],
+)> {
+    match name {
+        "pwsh" => Some((
+            "script.ps1",
+            "wrapper.ps1",
+            PWSH_WRAPPER,
+            &[
+                "pwsh",
+                "-NoLogo",
+                "-NoProfile",
+                "-NonInteractive",
+                "-File",
+                "/huxley/in/wrapper.ps1",
+            ],
+        )),
+        "python" => Some((
+            "script.py",
+            "wrapper.py",
+            PYTHON_WRAPPER,
+            &["python3", "-I", "-u", "/huxley/in/wrapper.py"],
+        )),
+        "javascript" => Some((
+            "script.js",
+            "wrapper.js",
+            JS_WRAPPER,
+            &[
+                "deno",
+                "run",
+                "--quiet",
+                "--no-prompt",
+                "--no-config",
+                "--allow-read=/huxley",
+                "--allow-write=/huxley/out,/huxley/net",
+                "--allow-env",
+                "--allow-net",
+                "/huxley/in/wrapper.js",
+            ],
+        )),
+        _ => None,
+    }
+}
+
+/// Every script file a job directory may hold.
+pub(crate) const SCRIPT_FILES: &[&str] = &[
+    "script.ps1",
+    "script.py",
+    "script.js",
+    "wrapper.ps1",
+    "wrapper.py",
+    "wrapper.js",
+];
+
 pub(crate) const PWSH_RELAY: &str = r"using System.Net;
 using System.Net.Sockets;
 using System.Threading.Tasks;
@@ -222,6 +341,7 @@ pub struct Podman {
     pub binary: String,
     pub pwsh_image: String,
     pub python_image: String,
+    pub deno_image: String,
     pub memory: String,
     pub cpus: String,
     pub pids: u32,
@@ -236,6 +356,7 @@ impl Default for Podman {
             binary: "podman".into(),
             pwsh_image: "mcr.microsoft.com/powershell:7.5-alpine-3.20".into(),
             python_image: "docker.io/library/python:3.13-alpine".into(),
+            deno_image: "docker.io/denoland/deno:alpine-2.9.8".into(),
             memory: "512m".into(),
             cpus: "1".into(),
             pids: 256,
@@ -260,7 +381,7 @@ impl Podman {
     /// never trigger a pull). Returns the ones that failed.
     pub async fn pull(&self) -> Vec<String> {
         let mut failed = Vec::new();
-        for image in [&self.pwsh_image, &self.python_image] {
+        for image in [&self.pwsh_image, &self.python_image, &self.deno_image] {
             let ok = Command::new(&self.binary)
                 .args(["pull", "--quiet", image])
                 .stdout(Stdio::null())
@@ -277,7 +398,11 @@ impl Podman {
     /// The languages whose images are present locally.
     pub async fn languages(&self) -> Vec<String> {
         let mut found = Vec::new();
-        for (language, image) in [("pwsh", &self.pwsh_image), ("python", &self.python_image)] {
+        for (language, image) in [
+            ("pwsh", &self.pwsh_image),
+            ("python", &self.python_image),
+            ("javascript", &self.deno_image),
+        ] {
             let present = Command::new(&self.binary)
                 .args(["image", "exists", image])
                 .status()
@@ -292,24 +417,13 @@ impl Podman {
 
     /// The arguments to `podman` for running `job` with its files in `dir`.
     fn args(&self, name: &str, job: &Job, dir: &Path) -> Option<Vec<String>> {
-        let (image, command): (&str, &[&str]) = match job.language.as_str() {
-            "pwsh" => (
-                &self.pwsh_image,
-                &[
-                    "pwsh",
-                    "-NoLogo",
-                    "-NoProfile",
-                    "-NonInteractive",
-                    "-File",
-                    "/huxley/in/wrapper.ps1",
-                ],
-            ),
-            "python" => (
-                &self.python_image,
-                &["python3", "-I", "-u", "/huxley/in/wrapper.py"],
-            ),
+        let image = match job.language.as_str() {
+            "pwsh" => &self.pwsh_image,
+            "python" => &self.python_image,
+            "javascript" => &self.deno_image,
             _ => return None,
         };
+        let (_, _, _, command) = language(&job.language)?;
         let mut args: Vec<String> = [
             "run",
             "--rm",
@@ -323,6 +437,8 @@ impl Podman {
             "--pull=never",
             "--tmpfs=/tmp:rw,nosuid,nodev,size=64m",
             "--env=HOME=/tmp",
+            // Plain logs (Deno colours its output otherwise).
+            "--env=NO_COLOR=1",
             "--workdir=/tmp",
         ]
         .iter()
@@ -471,10 +587,11 @@ impl Podman {
 
 /// Writes the script, its wrapper and its inputs for the container.
 fn prepare(job: &Job, dir: &Path) -> std::io::Result<()> {
-    let (script, wrapper, wrapper_name) = if job.language == "pwsh" {
-        ("script.ps1", PWSH_WRAPPER, "wrapper.ps1")
-    } else {
-        ("script.py", PYTHON_WRAPPER, "wrapper.py")
+    let Some((script, wrapper_name, wrapper, _)) = language(&job.language) else {
+        return Err(std::io::Error::other(format!(
+            "unknown language {}",
+            job.language
+        )));
     };
     let input = dir.join("in");
     let output = dir.join("out");

@@ -14,9 +14,11 @@
 	let orgOptions = $derived(data.orgs.map((o) => ({ value: o.id, label: o.name })));
 	const languages = [
 		{ value: 'pwsh', label: 'PowerShell 7' },
-		{ value: 'python', label: 'Python 3' }
+		{ value: 'python', label: 'Python 3' },
+		{ value: 'javascript', label: 'JavaScript (Deno)' }
 	];
-	const languageLabel = (l: string) => (l === 'pwsh' ? 'PowerShell' : 'Python');
+	const languageLabel = (l: string) =>
+		l === 'pwsh' ? 'PowerShell' : l === 'javascript' ? 'JavaScript' : 'Python';
 </script>
 
 <svelte:head>
@@ -27,8 +29,8 @@
 	<header>
 		<h1 class="text-2xl font-semibold text-fg">Scripts</h1>
 		<p class="mt-1 text-sm text-fg-muted">
-			PowerShell and Python scripts workflows run in sandboxed runners. Every change is kept as a
-			version; organizations below share this library.
+			PowerShell, Python and JavaScript scripts workflows run in sandboxed runners. Every change is
+			kept as a version; organizations below share this library.
 		</p>
 	</header>
 	<Card title="Library">

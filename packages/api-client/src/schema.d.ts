@@ -4117,7 +4117,7 @@ export interface components {
 			warnings: number;
 		};
 		/** @enum {string} */
-		Language: 'pwsh' | 'python';
+		Language: 'pwsh' | 'python' | 'javascript';
 		/** @description A public link as its managers see it (never the token). */
 		LinkView: {
 			/** Format: date-time */

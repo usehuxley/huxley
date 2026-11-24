@@ -114,7 +114,7 @@ A run started by hand acts as whoever started it. Runs started by a schedule, we
 
 **Scripts** is a library of PowerShell 7 and Python 3 scripts. Each save is a new, numbered version, and earlier versions stay readable. Every script has a JSON Schema of its parameters, which a step running it will ask for. A library at an organization is shared with the organizations below it.
 
-The `script` step runs them on [runners](runners.md), each script in a fresh rootless Podman container (design doc §6.9). A PowerShell script gets its parameters as `param(...)` arguments. A Python script gets them as the `inputs` dict and sets `result`. Viewing scripts needs `script:read`, and changing them needs `script:manage`.
+The `script` step runs them on [runners](runners.md), each script in a fresh rootless Podman container (design doc §6.9). A PowerShell script gets its parameters as `param(...)` arguments. A Python script gets them as the `inputs` dict and sets `result`. A JavaScript script (run with Deno) can `export default` its result, or an `async` function of the inputs (`export default async ({ name }) => ({ greeting: `Hi ${name}` })`), or set `globalThis.result`. `fetch` works through the egress policy. Viewing scripts needs `script:read`, and changing them needs `script:manage`.
 
 ## Permissions
 

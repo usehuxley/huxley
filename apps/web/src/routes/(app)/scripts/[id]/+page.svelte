@@ -43,7 +43,9 @@
 		<p class="mt-1 text-sm text-fg-muted">
 			<span class="font-mono">{script.key}</span> · {script.language === 'pwsh'
 				? 'PowerShell 7'
-				: 'Python 3'}
+				: script.language === 'javascript'
+					? 'JavaScript (Deno)'
+					: 'Python 3'}
 			· version {script.currentVersion}
 		</p>
 	</header>
