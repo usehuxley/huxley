@@ -9190,6 +9190,165 @@
 				}
 			}
 		},
+		"/api/v1/tickets/{id}/links": {
+			"get": {
+				"tags": ["servicedesk"],
+				"summary": "Tickets linked to this one: its parent, children and related tickets.",
+				"operationId": "list_links",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "array",
+									"items": {
+										"$ref": "#/components/schemas/LinkedTicket"
+									}
+								}
+							}
+						}
+					}
+				}
+			},
+			"post": {
+				"tags": ["servicedesk"],
+				"summary": "Links another ticket (by id or reference) as related, this one's parent,\nor its child. Needs `ticket:write` on both.",
+				"operationId": "add_link",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/NewLink"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "array",
+									"items": {
+										"$ref": "#/components/schemas/LinkedTicket"
+									}
+								}
+							}
+						}
+					},
+					"422": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/tickets/{id}/links/{other_id}": {
+			"delete": {
+				"tags": ["servicedesk"],
+				"summary": "Removes a link (from both tickets).",
+				"operationId": "remove_link",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					},
+					{
+						"name": "other_id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"responses": {
+					"204": {}
+				}
+			}
+		},
+		"/api/v1/tickets/{id}/merge": {
+			"post": {
+				"tags": ["servicedesk"],
+				"summary": "Merges this ticket into another of the same organization: its notes,\nattachments and emails move there, and this one is closed. Needs\n`ticket:write` on both. Returns the ticket it was merged into.",
+				"operationId": "merge_ticket",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/MergeInto"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Ticket"
+								}
+							}
+						}
+					},
+					"422": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
 		"/api/v1/tickets/{id}/notes": {
 			"get": {
 				"tags": ["servicedesk"],
@@ -14623,6 +14782,36 @@
 					}
 				}
 			},
+			"LinkedTicket": {
+				"type": "object",
+				"description": "Another ticket linked to this one.",
+				"required": ["kind", "id", "reference", "title", "statusName", "statusCategory", "orgName"],
+				"properties": {
+					"id": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"kind": {
+						"type": "string",
+						"description": "What it is to this ticket: `related`, `parent` or `child`."
+					},
+					"orgName": {
+						"type": "string"
+					},
+					"reference": {
+						"type": "string"
+					},
+					"statusCategory": {
+						"type": "string"
+					},
+					"statusName": {
+						"type": "string"
+					},
+					"title": {
+						"type": "string"
+					}
+				}
+			},
 			"LocalSetting": {
 				"type": "object",
 				"description": "A value set at the org itself.",
@@ -14929,6 +15118,21 @@
 				],
 				"description": "The signed-in user plus permission hints for the UI."
 			},
+			"MergeInto": {
+				"type": "object",
+				"properties": {
+					"into": {
+						"type": ["string", "null"],
+						"description": "…or by reference (e.g. `T-1042`)."
+					},
+					"intoId": {
+						"type": ["string", "null"],
+						"format": "uuid",
+						"description": "The ticket to merge this one into, by id…"
+					}
+				},
+				"additionalProperties": false
+			},
 			"MessageReceived": {
 				"type": "object",
 				"description": "What happened to a posted message.",
@@ -15168,6 +15372,25 @@
 						"format": "uuid"
 					}
 				}
+			},
+			"NewLink": {
+				"type": "object",
+				"properties": {
+					"kind": {
+						"type": ["string", "null"],
+						"description": "What the other ticket is to this one: `related` (the default),\n`parent` or `child`."
+					},
+					"otherId": {
+						"type": ["string", "null"],
+						"format": "uuid",
+						"description": "The other ticket, by id…"
+					},
+					"reference": {
+						"type": ["string", "null"],
+						"description": "…or by reference (e.g. `T-1042`, or just its number)."
+					}
+				},
+				"additionalProperties": false
 			},
 			"NewNote": {
 				"type": "object",
@@ -18605,6 +18828,14 @@
 						"type": "integer",
 						"format": "int32",
 						"description": "1 (high) to 3 (low)."
+					},
+					"mergedIntoId": {
+						"type": ["string", "null"],
+						"format": "uuid",
+						"description": "The ticket this one was merged into (it's closed)."
+					},
+					"mergedIntoReference": {
+						"type": ["string", "null"]
 					},
 					"number": {
 						"type": "integer",

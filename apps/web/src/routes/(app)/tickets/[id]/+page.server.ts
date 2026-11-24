@@ -1,4 +1,4 @@
-import { error, fail } from '@sveltejs/kit';
+import { error, fail, redirect } from '@sveltejs/kit';
 import { formString } from '#lib/forms.ts';
 import { api } from '#lib/server/api.ts';
 import { problemMessage } from '#lib/server/problems.ts';
@@ -19,13 +19,14 @@ export const load: PageServerLoad = async (event) => {
 	if (!ticket.data || !notes.data || !activity.data || !types.data) {
 		error(503, 'Could not load the ticket.');
 	}
-	const [people, contacts, responses] = await Promise.all([
+	const [people, contacts, responses, links] = await Promise.all([
 		assignees(event),
 		client.GET('/api/v1/orgs/{id}/contacts', {
 			params: { path: { id: ticket.data.orgId }, query: { limit: 200 } }
 		}),
 		// Filled in for this ticket and you; none without ticket:write here.
-		client.GET('/api/v1/tickets/{id}/responses', path)
+		client.GET('/api/v1/tickets/{id}/responses', path),
+		client.GET('/api/v1/tickets/{id}/links', path)
 	]);
 	return {
 		ticket: ticket.data,
@@ -35,7 +36,8 @@ export const load: PageServerLoad = async (event) => {
 		queues: queues.data ?? [],
 		...people,
 		contacts: contacts.data?.items ?? [],
-		responses: responses.data ?? []
+		responses: responses.data ?? [],
+		links: links.data ?? []
 	};
 };
 
@@ -62,6 +64,58 @@ async function patch(
 }
 
 export const actions: Actions = {
+	link: async (event) => {
+		const form = await event.request.formData();
+		const { error: problem, response } = await api(event).POST('/api/v1/tickets/{id}/links', {
+			params: { path: { id: event.params.id } },
+			body: {
+				reference: formString(form, 'reference'),
+				kind: formString(form, 'kind') || 'related'
+			}
+		});
+		if (response.status !== 200) {
+			return fail(response.status, {
+				link: {
+					errors: fieldErrors(problem),
+					message: problemMessage(problem, 'Could not link the ticket.')
+				}
+			});
+		}
+		return { link: { saved: true } };
+	},
+	unlink: async (event) => {
+		const form = await event.request.formData();
+		const { error: problem, response } = await api(event).DELETE(
+			'/api/v1/tickets/{id}/links/{other_id}',
+			{ params: { path: { id: event.params.id, other_id: formString(form, 'otherId') } } }
+		);
+		if (response.status !== 204) {
+			return fail(response.status, {
+				link: { errors: {}, message: problemMessage(problem, 'Could not unlink it.') }
+			});
+		}
+		return { link: { saved: true } };
+	},
+	merge: async (event) => {
+		const form = await event.request.formData();
+		const {
+			data,
+			error: problem,
+			response
+		} = await api(event).POST('/api/v1/tickets/{id}/merge', {
+			params: { path: { id: event.params.id } },
+			body: { into: formString(form, 'into') }
+		});
+		if (!data) {
+			return fail(response.status, {
+				merge: {
+					errors: fieldErrors(problem),
+					message: problemMessage(problem, 'Could not merge the ticket.')
+				}
+			});
+		}
+		redirect(303, `/tickets/${data.id}`);
+	},
 	properties: async (event) => {
 		const form = await event.request.formData();
 		const assignee = formString(form, 'assignee');

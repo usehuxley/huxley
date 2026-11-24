@@ -675,3 +675,76 @@ async fn imap_mailboxes_keep_their_password_sealed() {
         (json!(true), json!(143))
     );
 }
+
+#[tokio::test]
+async fn replies_to_a_merged_ticket_go_to_the_one_it_was_merged_into() {
+    let Some(s) = setup().await else { return };
+    let tag = Uuid::now_v7().simple().to_string();
+    let ada = format!("ada.{tag}@acme.example");
+    s.ok(
+        &s.owner,
+        "POST",
+        &format!("/api/v1/orgs/{}/contacts", s.acme),
+        Some(json!({ "firstName": "Ada", "email": ada })),
+    )
+    .await;
+    let mb = mailbox(&s, json!({})).await;
+    let mut ids = Vec::new();
+    for (n, subject) in [("one", "VPN down"), ("two", "VPN still down")] {
+        let (_, posted) = post(
+            &s,
+            &mb,
+            &message(
+                &ada,
+                subject,
+                &format!("{n}.{tag}@acme.example"),
+                "",
+                "Help",
+            ),
+        )
+        .await;
+        ids.push(process(&s, &posted).await.ticket_id.unwrap());
+    }
+    let (keep, dup) = (ticket(&s, ids[0]).await, ticket(&s, ids[1]).await);
+    s.ok(
+        &s.owner,
+        "POST",
+        &format!("/api/v1/tickets/{}/merge", ids[1]),
+        Some(json!({ "intoId": ids[0] })),
+    )
+    .await;
+    // By subject token and by In-Reply-To: both land on the kept ticket.
+    let number = dup["number"].as_i64().unwrap();
+    for (n, subject, extra) in [
+        (
+            "three",
+            format!("Re: VPN still down [HX#{number}]"),
+            String::new(),
+        ),
+        (
+            "four",
+            "Re: VPN still down".to_owned(),
+            format!("In-Reply-To: <two.{tag}@acme.example>\n"),
+        ),
+    ] {
+        let (_, posted) = post(
+            &s,
+            &mb,
+            &message(
+                &ada,
+                &subject,
+                &format!("{n}.{tag}@acme.example"),
+                &extra,
+                "Any news?",
+            ),
+        )
+        .await;
+        let out = process(&s, &posted).await;
+        assert_eq!(
+            (out.outcome.as_str(), out.ticket_id),
+            ("note_added", Some(ids[0])),
+            "{subject}"
+        );
+    }
+    assert_eq!(keep["statusCategory"], "new");
+}

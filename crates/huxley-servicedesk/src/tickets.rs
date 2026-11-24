@@ -83,6 +83,9 @@ pub struct Ticket {
     pub resolution_breached_at: Option<OffsetDateTime>,
     /// The resolution clock is paused (by a waiting status).
     pub sla_paused: bool,
+    /// The ticket this one was merged into (it's closed).
+    pub merged_into_id: Option<Uuid>,
+    pub merged_into_reference: Option<String>,
 }
 
 pub(crate) const SELECT: &str = "SELECT t.id, t.number_prefix || '-' || t.number AS reference, t.number, t.org_id, \
@@ -95,7 +98,8 @@ pub(crate) const SELECT: &str = "SELECT t.id, t.number_prefix || '-' || t.number
     t.closed_at, sla.policy_name AS sla_policy, sla.response_due_at, sla.response_met, \
     sla.response_breached_at, sla.resolution_due_at, sla.resolution_met, sla.resolution_breached_at, \
     coalesce(sla.resolution_clock_at IS NULL AND sla.resolution_met IS NULL \
-             AND sla.targets -> t.priority ->> 'resolution' IS NOT NULL, false) AS sla_paused \
+             AND sla.targets -> t.priority ->> 'resolution' IS NOT NULL, false) AS sla_paused, \
+    t.merged_into_id, mi.number_prefix || '-' || mi.number AS merged_into_reference \
     FROM sd_tickets t \
     JOIN organizations o ON o.id = t.org_id \
     JOIN sd_ticket_types ty ON ty.id = t.type_id \
@@ -104,7 +108,8 @@ pub(crate) const SELECT: &str = "SELECT t.id, t.number_prefix || '-' || t.number
     LEFT JOIN crm_contacts c ON c.id = t.requester_id \
     LEFT JOIN users u ON u.id = t.assignee_user_id \
     LEFT JOIN teams tm ON tm.id = t.assignee_team_id \
-    LEFT JOIN sd_ticket_sla sla ON sla.ticket_id = t.id";
+    LEFT JOIN sd_ticket_sla sla ON sla.ticket_id = t.id \
+    LEFT JOIN sd_tickets mi ON mi.id = t.merged_into_id";
 
 /// Present-or-null fields of an update: missing leaves the field alone,
 /// `null` clears it.
@@ -365,7 +370,7 @@ async fn check_refs(
 }
 
 /// Records a change: the ticket's activity, the audit log, and an event.
-async fn record(
+pub(crate) async fn record(
     conn: &mut PgConnection,
     ctx: &RequestContext,
     ticket: &Ticket,

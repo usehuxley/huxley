@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { enhance, type SubmitFunction } from '$app/forms';
 	import { resolve } from '$app/paths';
-	import { Lock, Mail, MessageSquare, Pencil } from '@lucide/svelte';
+	import { Link2, Lock, Mail, Merge, MessageSquare, Pencil, X } from '@lucide/svelte';
 	import { Badge, Button, Card, Dialog, Field, Input, Select, toast } from '@usehuxley/ui';
 	import { describe } from '#lib/tickets/activity.ts';
 	import { clockLines } from '#lib/tickets/sla.ts';
@@ -50,6 +50,12 @@
 		noteBox.focus();
 	}
 	let editing = $state(false);
+	let merging = $state(false);
+	const LINK_KINDS = [
+		{ value: 'related', label: 'Related' },
+		{ value: 'parent', label: 'Parent' },
+		{ value: 'child', label: 'Child' }
+	] as const;
 	$effect(() => {
 		status = data.ticket.statusKey;
 		assignee = data.ticket.assigneeUserId
@@ -81,7 +87,9 @@
 		].sort((a, b) => a.at.localeCompare(b.at))
 	);
 
-	function errorsOf(key: 'properties' | 'status' | 'note' | 'edit'): Record<string, string> {
+	function errorsOf(
+		key: 'properties' | 'status' | 'note' | 'edit' | 'link' | 'merge'
+	): Record<string, string> {
 		const part = form?.[key] as { errors?: Record<string, string> } | undefined;
 		return part?.errors ?? {};
 	}
@@ -141,10 +149,28 @@
 						</form>
 					{/if}
 					<Button onclick={() => (editing = true)}><Pencil size={16} /> Edit</Button>
+					{#if !ticket.mergedIntoId && ticket.statusCategory !== 'closed'}
+						<Button onclick={() => (merging = true)}><Merge size={16} /> Merge</Button>
+					{/if}
 				</div>
 			{/if}
 		</div>
 	</div>
+
+	{#if ticket.mergedIntoId}
+		<div
+			role="status"
+			class="rounded-card border border-border bg-surface-sunken p-4 text-sm text-fg"
+		>
+			Merged into
+			<a
+				href={resolve('/(app)/tickets/[id]', { id: ticket.mergedIntoId })}
+				class="font-medium text-accent hover:underline"
+			>
+				{ticket.mergedIntoReference}
+			</a>. Its conversation continues there.
+		</div>
+	{/if}
 
 	<div class="grid gap-6 lg:grid-cols-[minmax(0,1fr)_20rem]">
 		<div class="flex min-w-0 flex-col gap-6">
@@ -406,6 +432,74 @@
 				</Card>
 			{/if}
 
+			<Card title="Linked tickets">
+				{#if data.links.length === 0}
+					<p class="text-sm text-fg-muted">None.</p>
+				{:else}
+					<ul class="flex flex-col gap-2" aria-label="Linked tickets">
+						{#each data.links as link (link.id)}
+							<li class="flex items-start justify-between gap-2 text-sm">
+								<div class="min-w-0">
+									<p class="text-xs text-fg-muted">
+										{LINK_KINDS.find((k) => k.value === link.kind)?.label ?? link.kind} ·
+										{link.statusName}
+									</p>
+									<a
+										href={resolve('/(app)/tickets/[id]', { id: link.id })}
+										class="block truncate text-fg hover:text-accent"
+									>
+										{link.reference} · {link.title}
+									</a>
+								</div>
+								{#if canWrite}
+									<form method="POST" action="?/unlink" use:enhance={saved('Unlinked.')}>
+										<input type="hidden" name="otherId" value={link.id} />
+										<button
+											type="submit"
+											class="rounded-control p-1 text-fg-muted hover:bg-surface-sunken hover:text-fg"
+											aria-label={`Unlink ${link.reference}`}
+										>
+											<X size={14} />
+										</button>
+									</form>
+								{/if}
+							</li>
+						{/each}
+					</ul>
+				{/if}
+				{#if canWrite}
+					<form
+						method="POST"
+						action="?/link"
+						class="mt-3 flex flex-col gap-2 border-t border-border pt-3"
+						data-reset
+						use:enhance={saved('Linked.')}
+					>
+						<div class="flex gap-2">
+							<Input
+								name="reference"
+								aria-label="Ticket to link"
+								placeholder="e.g. T-1042"
+								required
+								class="min-w-0 flex-1"
+							/>
+							<Select
+								name="kind"
+								aria-label="Link as"
+								value="related"
+								options={LINK_KINDS.map(({ value, label }) => ({ value, label }))}
+							/>
+						</div>
+						{#if errorsOf('link').reference || errorsOf('link').kind}
+							<p class="text-sm text-danger">
+								{errorsOf('link').reference ?? errorsOf('link').kind}
+							</p>
+						{/if}
+						<Button type="submit" size="sm"><Link2 size={14} /> Link</Button>
+					</form>
+				{/if}
+			</Card>
+
 			<Card title="Details">
 				<dl class="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-sm">
 					<dt class="text-fg-muted">Requester</dt>
@@ -467,6 +561,22 @@
 		<div class="flex justify-end gap-2">
 			<Button onclick={() => (editing = false)}>Cancel</Button>
 			<Button type="submit" variant="primary">Save</Button>
+		</div>
+	</form>
+</Dialog>
+
+<Dialog bind:open={merging} title={`Merge ${ticket.reference} into another ticket`}>
+	<form method="POST" action="?/merge" class="flex flex-col gap-4" use:enhance={saved('Merged.')}>
+		<p class="text-sm text-fg-muted">
+			Its notes, attachments and emails move to the other ticket of {ticket.orgName}, and this one
+			is closed. Replies to it will go there too.
+		</p>
+		<Field label="Merge into" for="merge-into" error={errorsOf('merge').into}>
+			<Input id="merge-into" name="into" required placeholder="e.g. T-1042" />
+		</Field>
+		<div class="flex justify-end gap-2">
+			<Button onclick={() => (merging = false)}>Cancel</Button>
+			<Button type="submit" variant="primary">Merge</Button>
 		</div>
 	</form>
 </Dialog>

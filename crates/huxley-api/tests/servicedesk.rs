@@ -1178,3 +1178,184 @@ async fn canned_responses_are_checked() {
         );
     }
 }
+
+#[tokio::test]
+async fn tickets_link_both_ways_without_loops() {
+    let Some(s) = setup().await else { return };
+    let t = |title: &str| json!({ "orgId": s.acme, "title": title });
+    let (outage, a, b) = (
+        s.ticket(&s.owner, t("Email outage")).await,
+        s.ticket(&s.owner, t("Can't send")).await,
+        s.ticket(&s.owner, t("Can't receive")).await,
+    );
+    let links = |x: &Value| format!("{}/links", url(x));
+    // a and b are children of the outage (one by id, one by reference).
+    s.ok(
+        &s.owner,
+        "POST",
+        &links(&a),
+        Some(json!({ "otherId": outage["id"], "kind": "parent" })),
+    )
+    .await;
+    let listed = s
+        .ok(
+            &s.owner,
+            "POST",
+            &links(&outage),
+            Some(json!({ "reference": b["reference"], "kind": "child" })),
+        )
+        .await;
+    let kinds: Vec<(&str, &str)> = listed
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|l| (l["kind"].as_str().unwrap(), l["title"].as_str().unwrap()))
+        .collect();
+    assert_eq!(kinds, [("child", "Can't send"), ("child", "Can't receive")]);
+    let up = s.ok(&s.owner, "GET", &links(&b), None).await;
+    assert_eq!(
+        (up[0]["kind"].as_str(), up[0]["id"].clone()),
+        (Some("parent"), outage["id"].clone())
+    );
+    // No loops, one parent, not itself, real references.
+    for (from, body, pointer) in [
+        (
+            &outage,
+            json!({ "otherId": a["id"], "kind": "parent" }),
+            "/kind",
+        ),
+        (&a, json!({ "otherId": b["id"], "kind": "parent" }), "/kind"),
+        (&a, json!({ "otherId": a["id"] }), "/reference"),
+        (&a, json!({ "reference": "T-999999999" }), "/reference"),
+    ] {
+        let (status, problem) = s
+            .call(&s.owner, "POST", &links(from), Some(body.clone()))
+            .await;
+        assert_eq!(
+            (status, field(&problem)),
+            (StatusCode::UNPROCESSABLE_ENTITY, pointer.into()),
+            "{body}"
+        );
+    }
+    // Related works across organizations; unlinking removes both sides.
+    let elsewhere = s
+        .ticket(
+            &s.owner,
+            json!({ "orgId": s.globex, "title": "Same outage" }),
+        )
+        .await;
+    s.ok(
+        &s.owner,
+        "POST",
+        &links(&a),
+        Some(json!({ "otherId": elsewhere["id"] })),
+    )
+    .await;
+    assert_eq!(
+        s.ok(&s.owner, "GET", &links(&elsewhere), None).await[0]["kind"],
+        "related"
+    );
+    let gone = format!("{}/{}", links(&a), elsewhere["id"].as_str().unwrap());
+    assert_eq!(
+        s.call(&s.owner, "DELETE", &gone, None).await.0,
+        StatusCode::NO_CONTENT
+    );
+    assert_eq!(
+        s.ok(&s.owner, "GET", &links(&elsewhere), None).await,
+        json!([])
+    );
+    assert_eq!(
+        s.call(&s.owner, "DELETE", &gone, None).await.0,
+        StatusCode::NOT_FOUND
+    );
+}
+
+#[tokio::test]
+async fn merging_moves_the_conversation_and_closes_the_duplicate() {
+    let Some(s) = setup().await else { return };
+    let (keep, dup) = (
+        s.ticket(
+            &s.owner,
+            json!({ "orgId": s.acme, "title": "Printer offline" }),
+        )
+        .await,
+        s.ticket(
+            &s.owner,
+            json!({ "orgId": s.acme, "title": "Printer offline again" }),
+        )
+        .await,
+    );
+    s.ok(
+        &s.owner,
+        "POST",
+        &format!("{}/notes", url(&dup)),
+        Some(json!({ "kind": "internal", "body": "Toner low" })),
+    )
+    .await;
+    let merge = |t: &Value| format!("{}/merge", url(t));
+    let merged = s
+        .ok(
+            &s.owner,
+            "POST",
+            &merge(&dup),
+            Some(json!({ "into": keep["reference"] })),
+        )
+        .await;
+    assert_eq!(merged["id"], keep["id"]);
+    let notes = s
+        .ok(&s.owner, "GET", &format!("{}/notes", url(&keep)), None)
+        .await;
+    assert!(
+        notes
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|n| n["body"] == "Toner low"),
+        "{notes}"
+    );
+    let dup = s.ok(&s.owner, "GET", &url(&dup), None).await;
+    assert_eq!(
+        (
+            dup["statusCategory"].as_str(),
+            dup["mergedIntoReference"].clone()
+        ),
+        (Some("closed"), keep["reference"].clone())
+    );
+    // Not again, not into itself, not across organizations.
+    let other = s
+        .ticket(&s.owner, json!({ "orgId": s.globex, "title": "Theirs" }))
+        .await;
+    let fresh = s
+        .ticket(&s.owner, json!({ "orgId": s.acme, "title": "Fresh" }))
+        .await;
+    for (from, body) in [
+        (&dup, json!({ "intoId": keep["id"] })),
+        (&fresh, json!({ "intoId": fresh["id"] })),
+        (&fresh, json!({ "intoId": other["id"] })),
+        (&fresh, json!({ "intoId": dup["id"] })),
+    ] {
+        let (status, problem) = s
+            .call(&s.owner, "POST", &merge(from), Some(body.clone()))
+            .await;
+        assert_eq!(
+            (status, field(&problem)),
+            (StatusCode::UNPROCESSABLE_ENTITY, "/into".into()),
+            "{body}"
+        );
+    }
+    // Technicians elsewhere can't merge into tickets they can't change.
+    let (_, email) = user(&s.pools, Some(("technician", s.globex))).await;
+    let theirs = login(&s.app, &email).await;
+    let (status, _) = s
+        .call(
+            &theirs,
+            "POST",
+            &merge(&other),
+            Some(json!({ "intoId": fresh["id"] })),
+        )
+        .await;
+    assert!(
+        status == StatusCode::FORBIDDEN || status == StatusCode::NOT_FOUND,
+        "{status}"
+    );
+}
