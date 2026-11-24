@@ -28,7 +28,9 @@
 	let { children, data }: LayoutProps = $props();
 
 	// Modules arrive phase by phase (see docs/IMPLEMENTATION_PLAN.md).
-	let canSeeSettings = $derived(visibleSections(data.user.grantedPermissions).length > 0);
+	let canSeeSettings = $derived(
+		visibleSections(data.user.grantedPermissions, data.user.activeModules).length > 0
+	);
 	let nav: NavItem[] = $derived([
 		{ href: '/', label: 'Home', icon: House },
 		...(data.user.grantedPermissions.includes('workflow:read')
@@ -50,7 +52,10 @@
 		...(data.user.grantedPermissions.some((p) => p === 'form:submit' || p === 'form:manage')
 			? [{ href: '/forms', label: 'Forms', icon: ClipboardList }]
 			: []),
-		{ href: '/tickets', label: 'Tickets', icon: Ticket, soon: true },
+		...(data.user.activeModules.includes('servicedesk') &&
+		data.user.grantedPermissions.includes('ticket:read')
+			? [{ href: '/tickets', label: 'Tickets', icon: Ticket }]
+			: [{ href: '/tickets', label: 'Tickets', icon: Ticket, soon: true }]),
 		...(data.user.activeModules.includes('crm') && data.user.grantedPermissions.includes('crm:read')
 			? [{ href: '/clients', label: 'Clients', icon: Building2 }]
 			: [{ href: '/clients', label: 'Clients', icon: Building2, soon: true }]),

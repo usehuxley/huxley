@@ -6,6 +6,8 @@ Turn it on under **Settings → Modules**. A provider organization can turn it o
 
 ## Tickets
 
+**Tickets** in the sidebar lists them by view (assigned to you, unassigned, all open, resolved, closed), with search and a queue filter. A ticket's page shows its conversation: replies, internal notes and every change, oldest first. Its status and properties are alongside.
+
 A ticket belongs to the organization it's for, usually a client, and is visible to the people who can see that organization. Each has:
 
 - **A type and a status.** Incident, Service request, Problem or Change, each with its own statuses.
@@ -70,7 +72,7 @@ The first public note from a person sets the ticket's **first response** time.
 
 A service queue is where tickets wait to be picked up. It belongs to an organization, usually your MSP, and its members are people and teams.
 
-Setting up queues needs `servicedesk:configure`. Archiving a queue removes it from lists and from new tickets. Tickets already in it stay there until they're moved.
+Set them up under **Settings → Service queues**, which needs `servicedesk:configure`. Archiving a queue removes it from lists and from new tickets. Tickets already in it stay there until they're moved.
 
 ## Permissions
 
@@ -97,4 +99,4 @@ Setting up queues needs `servicedesk:configure`. Archiving a queue removes it fr
 
 ## Coming next
 
-The ticket screens in the web app, SLAs, email intake, time entries, merging and linking tickets, templates, saved views, and workflow steps for tickets.
+SLAs, email intake, time entries, merging and linking tickets, templates, saved views, and workflow steps for tickets.

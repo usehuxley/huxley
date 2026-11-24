@@ -7,6 +7,12 @@ export const SETTINGS_SECTIONS = [
 	{ key: 'service-accounts', label: 'Service accounts', permission: 'service_account:manage' },
 	{ key: 'audit', label: 'Audit log', permission: 'audit:read' },
 	{ key: 'fields', label: 'Fields & tags', permission: 'custom_field:manage' },
+	{
+		key: 'queues',
+		label: 'Service queues',
+		permission: 'servicedesk:configure',
+		module: 'servicedesk'
+	},
 	{ key: 'modules', label: 'Modules', permission: 'platform:modules:manage' },
 	{ key: 'jobs', label: 'Workflow jobs', permission: 'platform:jobs:manage' },
 	{ key: 'runners', label: 'Script runners', permission: 'platform:runners:manage' },
@@ -18,6 +24,12 @@ export const SETTINGS_SECTIONS = [
 
 export type SettingsSection = (typeof SETTINGS_SECTIONS)[number];
 
-export function visibleSections(granted: readonly string[]): SettingsSection[] {
-	return SETTINGS_SECTIONS.filter((s) => granted.includes(s.permission));
+/** Sections the user may see; a module's sections only while it's on. */
+export function visibleSections(
+	granted: readonly string[],
+	modules: readonly string[] = []
+): SettingsSection[] {
+	return SETTINGS_SECTIONS.filter(
+		(s) => granted.includes(s.permission) && (!('module' in s) || modules.includes(s.module))
+	);
 }
