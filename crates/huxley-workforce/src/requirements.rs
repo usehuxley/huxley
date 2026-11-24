@@ -144,16 +144,24 @@ pub struct Fit {
     pub skill_match: f64,
     /// Requirements they don't meet, by name.
     pub missing: Vec<String>,
+    /// Available at the moment asked about: not away, and within their
+    /// working hours (if they have a schedule).
+    pub available: bool,
+    /// Why not: `away` or `off_hours`.
+    pub unavailable: Option<String>,
 }
 
 /// How each of `people` (by default every active person) fits work in
-/// `queue` of `ticket_type`: certifications are hard requirements, skill
-/// levels are weighed (partly met counts in part). Best fits first.
+/// `queue` of `ticket_type` at `at` (Unix seconds; none: availability isn't
+/// considered): certifications are hard requirements, then availability,
+/// then how well skill levels are met (partly met counts in part). Best
+/// fits first.
 pub async fn fit(
     conn: &mut PgConnection,
     queue: Option<Uuid>,
     ticket_type: Option<Uuid>,
     people: Option<&[Uuid]>,
+    at: Option<i64>,
 ) -> WorkforceResult<Vec<Fit>> {
     let mut needs = Vec::new();
     if let Some(q) = queue {
@@ -188,6 +196,10 @@ pub async fn fit(
         level.insert((u, s), l);
     }
     let held: std::collections::BTreeSet<(Uuid, Uuid)> = certs.into_iter().collect();
+    let unavailable = match at {
+        Some(at) => crate::availability::unavailable(conn, &ids, at).await?,
+        None => BTreeMap::new(),
+    };
     let skill_needs: Vec<&Requirement> = needs.iter().filter(|r| r.skill_id.is_some()).collect();
     let mut fits: Vec<Fit> = candidates
         .into_iter()
@@ -219,18 +231,22 @@ pub async fn fit(
             } else {
                 total / skill_needs.len() as f64
             };
+            let why = unavailable.get(&user_id).map(|w| (*w).to_owned());
             Fit {
                 user_id,
                 name,
                 qualified,
                 skill_match,
                 missing,
+                available: why.is_none(),
+                unavailable: why,
             }
         })
         .collect();
     fits.sort_by(|a, b| {
         b.qualified
             .cmp(&a.qualified)
+            .then(b.available.cmp(&a.available))
             .then(b.skill_match.total_cmp(&a.skill_match))
             .then(a.name.to_lowercase().cmp(&b.name.to_lowercase()))
     });

@@ -105,6 +105,42 @@ test.describe('workforce', () => {
 		const row = page.getByRole('row', { name: new RegExp(name) });
 		await expect(row.getByRole('cell', { name: /2/ })).toBeVisible();
 
+		// Booked off today by me (a manager): approved at once, and away.
+		await page.goto('/people');
+		await page.getByRole('table', { name: 'People' }).getByRole('link', { name }).click();
+		await page.getByRole('button', { name: 'Book' }).click();
+		dialog = page.getByRole('dialog');
+		const today = new Date().toISOString().slice(0, 10);
+		await dialog.getByLabel('From').fill(today);
+		await dialog.getByLabel('To (inclusive)').fill(today);
+		await dialog.getByLabel('Kind').selectOption('training');
+		await dialog.getByRole('button', { name: 'Book' }).click();
+		await expect(page.getByText('Booked.')).toBeVisible();
+		await expect(page.getByText('Approved', { exact: true })).toBeVisible();
+		await page.goto('/people');
+		await expect(
+			page.getByRole('row', { name: new RegExp(name) }).getByText('Away today')
+		).toBeVisible();
+
+		// My own hours, and time off that waits for someone else's approval.
+		await page
+			.getByRole('table', { name: 'People' })
+			.getByRole('link', { name: 'E2E User' })
+			.click();
+		await page.getByLabel('Time zone').fill('Europe/London');
+		await page.getByRole('button', { name: 'Save hours' }).click();
+		await expect(page.getByText('Working hours saved.')).toBeVisible();
+		await expect(page.getByText('In Europe/London.')).toBeVisible();
+		await page.getByRole('button', { name: 'Request' }).click();
+		dialog = page.getByRole('dialog');
+		await dialog.getByLabel('From').fill('2099-07-01');
+		await dialog.getByLabel('To (inclusive)').fill('2099-07-05');
+		await dialog.getByRole('button', { name: 'Request' }).click();
+		await expect(page.getByText('Waiting for approval')).toBeVisible();
+		await expect(page.getByRole('button', { name: 'Approve' })).toBeHidden();
+		await page.goto('/people');
+		await expect(page.getByText('Time off waiting for approval')).toBeVisible();
+
 		// A queue that requires them.
 		await page.goto('/settings/queues');
 		await page.getByLabel('Name', { exact: true }).fill(`Endpoints ${stamp}`);

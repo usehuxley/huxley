@@ -3,6 +3,8 @@
 	import { resolve } from '$app/paths';
 	import { BadgeCheck, ExternalLink, Plus } from '@lucide/svelte';
 	import { Badge, Button, Card, Dialog, Field, Input, Select, toast } from '@usehuxley/ui';
+	import HoursFields from '#lib/crm/HoursFields.svelte';
+	import { hoursSummary } from '#lib/crm/labels.ts';
 	import { LEVELS, certState, certTone } from '#lib/workforce/labels.ts';
 	import type { PageProps } from './$types';
 
@@ -14,6 +16,22 @@
 	let canEdit = $derived(self || manager);
 	let canVerify = $derived(manager && !self);
 	let errors: Record<string, string> = $derived(form?.errors ?? {});
+
+	let timeOffOpen = $state(false);
+	const TIME_OFF_KINDS = [
+		{ value: 'vacation', label: 'Vacation' },
+		{ value: 'sick', label: 'Sick' },
+		{ value: 'training', label: 'Training' },
+		{ value: 'other', label: 'Other' }
+	] as const;
+	const zones = (() => {
+		try {
+			return Intl.supportedValuesOf('timeZone');
+		} catch {
+			return [];
+		}
+	})();
+	const browserZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
 	let adding = $state('');
 	let addLevel = $state('2');
@@ -210,7 +228,150 @@
 			</ul>
 		{/if}
 	</Card>
+
+	<Card
+		title="Working hours"
+		description={data.schedule
+			? `In ${data.schedule.timezone}. Work is sent to people within their hours.`
+			: 'No working hours set: counted as available at any time.'}
+	>
+		{#if canEdit}
+			<form
+				method="POST"
+				action="?/schedule"
+				class="flex flex-col gap-4"
+				use:enhance={done('Working hours saved.')}
+			>
+				<Field label="Time zone" for="tz" error={errors.timezone}>
+					<Input
+						id="tz"
+						name="timezone"
+						required
+						class="max-w-xs"
+						list="tz-zones"
+						value={data.schedule?.timezone ?? browserZone}
+					/>
+					<datalist id="tz-zones">
+						{#each zones as zone (zone)}<option value={zone}></option>{/each}
+					</datalist>
+				</Field>
+				<HoursFields hours={data.schedule?.hours ?? null} label="Hours" error={errors.hours} />
+				<div class="flex gap-2">
+					<Button type="submit" variant="primary">Save hours</Button>
+					{#if data.schedule}
+						<Button type="submit" name="clear" value="true" variant="ghost">Remove hours</Button>
+					{/if}
+				</div>
+			</form>
+		{:else if data.schedule}
+			<p class="text-sm text-fg">{hoursSummary(data.schedule.hours)}</p>
+		{/if}
+	</Card>
+
+	<Card title="Time off">
+		{#snippet actions()}
+			{#if canEdit}
+				<Button size="sm" onclick={() => (timeOffOpen = true)}>
+					<Plus size={16} />
+					{self ? 'Request' : 'Book'}
+				</Button>
+			{/if}
+		{/snippet}
+		{#if data.timeOff.length === 0}
+			<p class="text-sm text-fg-muted">Nothing booked.</p>
+		{:else}
+			<ul class="flex flex-col divide-y divide-border">
+				{#each data.timeOff as t (t.id)}
+					<li class="flex flex-wrap items-center justify-between gap-3 py-2.5 first:pt-0">
+						<div class="min-w-0">
+							<p class="text-sm text-fg">
+								{t.startsOn === t.endsOn ? t.startsOn : `${t.startsOn} to ${t.endsOn}`} ·
+								{TIME_OFF_KINDS.find((k) => k.value === t.kind)?.label ?? t.kind}
+							</p>
+							<p class="text-xs text-fg-muted">
+								{t.note}{t.decidedBy
+									? `${t.note ? ' · ' : ''}${t.status === 'approved' ? 'Approved' : 'Declined'} by ${t.decidedBy}`
+									: ''}
+							</p>
+						</div>
+						<div class="flex items-center gap-2">
+							<Badge
+								tone={t.status === 'approved'
+									? 'success'
+									: t.status === 'declined'
+										? 'danger'
+										: 'warning'}
+							>
+								{t.status === 'requested'
+									? 'Waiting for approval'
+									: t.status === 'approved'
+										? 'Approved'
+										: 'Declined'}
+							</Badge>
+							{#if canVerify && t.status === 'requested'}
+								{#each [true, false] as approve (approve)}
+									<form
+										method="POST"
+										action="?/decide"
+										use:enhance={done(approve ? 'Approved.' : 'Declined.')}
+									>
+										<input type="hidden" name="id" value={t.id} />
+										<input type="hidden" name="approve" value={String(approve)} />
+										<Button size="sm" type="submit" variant={approve ? 'primary' : 'secondary'}>
+											{approve ? 'Approve' : 'Decline'}
+										</Button>
+									</form>
+								{/each}
+							{/if}
+							{#if canEdit && t.status !== 'declined'}
+								<form
+									method="POST"
+									action="?/cancelTimeOff"
+									use:enhance={done('Time off cancelled.')}
+								>
+									<input type="hidden" name="id" value={t.id} />
+									<Button size="sm" type="submit" variant="ghost">Cancel</Button>
+								</form>
+							{/if}
+						</div>
+					</li>
+				{/each}
+			</ul>
+		{/if}
+	</Card>
 </div>
+
+<Dialog
+	bind:open={timeOffOpen}
+	title={self ? 'Request time off' : `Book time off for ${person.name}`}
+>
+	<form
+		method="POST"
+		action="?/timeOff"
+		class="flex flex-col gap-4"
+		use:enhance={done(self ? 'Requested.' : 'Booked.', () => (timeOffOpen = false))}
+	>
+		<div class="grid gap-4 sm:grid-cols-2">
+			<Field label="From" for="to-starts" error={errors.startsOn}>
+				<Input id="to-starts" name="startsOn" type="date" required />
+			</Field>
+			<Field label="To (inclusive)" for="to-ends" error={errors.endsOn}>
+				<Input id="to-ends" name="endsOn" type="date" required />
+			</Field>
+		</div>
+		<Field label="Kind" for="to-kind">
+			<Select id="to-kind" name="kind" value="vacation" options={[...TIME_OFF_KINDS]} />
+		</Field>
+		<Field label="Note" for="to-note">
+			<Input id="to-note" name="note" maxlength={2000} />
+		</Field>
+		{#if self}<p class="text-sm text-fg-muted">A manager approves it.</p>{/if}
+		<div class="flex justify-end gap-2">
+			<Button onclick={() => (timeOffOpen = false)}>Cancel</Button>
+			<Button type="submit" variant="primary">{self ? 'Request' : 'Book'}</Button>
+		</div>
+	</form>
+</Dialog>
 
 <Dialog
 	bind:open={certOpen}

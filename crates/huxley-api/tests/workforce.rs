@@ -590,3 +590,291 @@ async fn expiring_and_expired_certifications_are_announced_once() {
     );
     assert_eq!(events(&s.pools).await.len(), 2);
 }
+
+#[tokio::test]
+async fn schedules_are_checked_and_kept_by_their_owner() {
+    let Some(s) = setup().await else { return };
+    let tech = login(
+        &s.app,
+        &user(&s.pools, Some(("technician", s.provider))).await.1,
+    )
+    .await;
+    let me_id = me(&s, &tech).await;
+    let url = format!("/api/v1/workforce/people/{me_id}/schedule");
+    assert_eq!(s.ok(&tech, "GET", &url, None).await, Value::Null);
+    let set = s
+        .ok(
+            &tech,
+            "PUT",
+            &url,
+            Some(json!({ "timezone": "Europe/London", "hours": { "mon": [["08:00", "16:00"]] } })),
+        )
+        .await;
+    assert_eq!(set["hours"], json!({ "mon": [["08:00", "16:00"]] }));
+    for (body, pointer) in [
+        (
+            json!({ "timezone": "Mars/Olympus", "hours": { "mon": [["08:00", "16:00"]] } }),
+            "/timezone",
+        ),
+        (json!({ "timezone": "UTC", "hours": {} }), "/hours"),
+    ] {
+        let (status, problem) = s.call(&tech, "PUT", &url, Some(body.clone())).await;
+        assert_eq!(
+            (status, field(&problem)),
+            (StatusCode::UNPROCESSABLE_ENTITY, pointer.into()),
+            "{body}"
+        );
+    }
+    // Someone else's: a manager's to set.
+    let other = user(&s.pools, Some(("technician", s.provider))).await.0;
+    let theirs = format!("/api/v1/workforce/people/{other}/schedule");
+    let (status, _) = s
+        .call(
+            &tech,
+            "PUT",
+            &theirs,
+            Some(json!({ "timezone": "UTC", "hours": { "tue": [["09:00", "17:00"]] } })),
+        )
+        .await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+    s.ok(
+        &s.owner,
+        "PUT",
+        &theirs,
+        Some(json!({ "timezone": "UTC", "hours": { "tue": [["09:00", "17:00"]] } })),
+    )
+    .await;
+    assert_eq!(
+        s.ok(&tech, "PUT", &url, Some(Value::Null)).await,
+        Value::Null
+    );
+}
+
+#[tokio::test]
+async fn time_off_requests_are_checked() {
+    let Some(s) = setup().await else { return };
+    let tech = login(
+        &s.app,
+        &user(&s.pools, Some(("technician", s.provider))).await.1,
+    )
+    .await;
+    let me_id = me(&s, &tech).await;
+    let ask = format!("/api/v1/workforce/people/{me_id}/time-off");
+    for (body, pointer) in [
+        (
+            json!({ "startsOn": "2026-12-24", "endsOn": "2026-12-20", "kind": "vacation" }),
+            "/endsOn",
+        ),
+        (
+            json!({ "startsOn": "2026-12-24", "endsOn": "2026-12-31", "kind": "nap" }),
+            "/kind",
+        ),
+        (
+            json!({ "startsOn": "24/12/2026", "endsOn": "2026-12-31", "kind": "vacation" }),
+            "/startsOn",
+        ),
+    ] {
+        let (status, problem) = s.call(&tech, "POST", &ask, Some(body.clone())).await;
+        assert_eq!(
+            (status, field(&problem)),
+            (StatusCode::UNPROCESSABLE_ENTITY, pointer.into()),
+            "{body}"
+        );
+    }
+}
+
+#[tokio::test]
+async fn time_off_is_requested_decided_and_cancelled() {
+    let Some(s) = setup().await else { return };
+    let tech = login(
+        &s.app,
+        &user(&s.pools, Some(("technician", s.provider))).await.1,
+    )
+    .await;
+    let me_id = me(&s, &tech).await;
+    let ask = format!("/api/v1/workforce/people/{me_id}/time-off");
+    let t = s
+        .ok(&tech, "POST", &ask, Some(json!({ "startsOn": "2099-12-24", "endsOn": "2099-12-31", "kind": "vacation", "note": "Family" })))
+        .await;
+    assert_eq!(t["status"], "requested");
+    let id = t["id"].as_str().unwrap();
+    // I can't decide my own; a manager can, once.
+    let (status, _) = s
+        .call(
+            &tech,
+            "POST",
+            &format!("/api/v1/workforce/time-off/{id}/decision"),
+            Some(json!({ "approve": true })),
+        )
+        .await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+    let t = s
+        .ok(
+            &s.owner,
+            "POST",
+            &format!("/api/v1/workforce/time-off/{id}/decision"),
+            Some(json!({ "approve": true, "note": "Enjoy" })),
+        )
+        .await;
+    assert_eq!(
+        (t["status"].as_str(), t["decidedBy"].as_str()),
+        (Some("approved"), Some("Desk User"))
+    );
+    let (status, _) = s
+        .call(
+            &s.owner,
+            "POST",
+            &format!("/api/v1/workforce/time-off/{id}/decision"),
+            Some(json!({ "approve": false })),
+        )
+        .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+    // Mine to cancel; then it's gone from the approved list.
+    let t = s
+        .ok(
+            &tech,
+            "POST",
+            &format!("/api/v1/workforce/time-off/{id}/cancel"),
+            None,
+        )
+        .await;
+    assert_eq!(t["status"], "cancelled");
+    let listed = s
+        .ok(
+            &tech,
+            "GET",
+            &format!("/api/v1/workforce/time-off?userId={me_id}&status=approved"),
+            None,
+        )
+        .await;
+    assert_eq!(listed, json!([]));
+
+    // A manager booking someone's time off approves it at once; events follow.
+    let booked = s
+        .ok(
+            &s.owner,
+            "POST",
+            &ask,
+            Some(json!({ "startsOn": "2099-08-01", "endsOn": "2099-08-01", "kind": "training" })),
+        )
+        .await;
+    assert_eq!(booked["status"], "approved");
+    let mut tx = begin_scoped(&s.pools.app, &OrgScope::System).await.unwrap();
+    let events: Vec<String> = sqlx::query_scalar(
+        "SELECT event_type FROM events_outbox WHERE payload->>'time_off_id' = ANY($1) ORDER BY occurred_at, id",
+    )
+    .bind(vec![id.to_owned(), booked["id"].as_str().unwrap().to_owned()])
+    .fetch_all(&mut *tx)
+    .await
+    .unwrap();
+    tx.commit().await.unwrap();
+    assert_eq!(
+        events,
+        [
+            "time_off.requested",
+            "time_off.approved",
+            "time_off.cancelled",
+            "time_off.approved"
+        ]
+    );
+}
+
+#[tokio::test]
+async fn fit_puts_available_people_first() {
+    let Some(s) = setup().await else { return };
+    let skill = s
+        .ok(
+            &s.owner,
+            "POST",
+            "/api/v1/workforce/skills",
+            Some(json!({ "name": unique("Backups") })),
+        )
+        .await;
+    let queue = s
+        .ok(
+            &s.owner,
+            "POST",
+            "/api/v1/queues",
+            Some(json!({ "orgId": s.provider, "name": unique("Backups") })),
+        )
+        .await;
+    let qid = queue["id"].as_str().unwrap();
+    s.ok(
+        &s.owner,
+        "PUT",
+        &format!("/api/v1/workforce/requirements/queue/{qid}"),
+        Some(json!([{ "skillId": skill["id"], "minLevel": 2 }])),
+    )
+    .await;
+    // All three know backups; the expert is away, the proficient one is off shift.
+    let (away, off, here) = (
+        user(&s.pools, Some(("technician", s.provider))).await.0,
+        user(&s.pools, Some(("technician", s.provider))).await.0,
+        user(&s.pools, Some(("technician", s.provider))).await.0,
+    );
+    for (who, level) in [(away, 4), (off, 3), (here, 2)] {
+        s.ok(
+            &s.owner,
+            "PUT",
+            &format!(
+                "/api/v1/workforce/people/{who}/skills/{}",
+                skill["id"].as_str().unwrap()
+            ),
+            Some(json!({ "level": level })),
+        )
+        .await;
+    }
+    // Monday 2026-11-30, 10:00 UTC.
+    let at = "2026-11-30T10:00:00Z";
+    s.ok(
+        &s.owner,
+        "POST",
+        &format!("/api/v1/workforce/people/{away}/time-off"),
+        Some(json!({ "startsOn": "2026-11-30", "endsOn": "2026-12-01", "kind": "sick" })),
+    )
+    .await;
+    s.ok(
+        &s.owner,
+        "PUT",
+        &format!("/api/v1/workforce/people/{off}/schedule"),
+        Some(json!({ "timezone": "UTC", "hours": { "mon": [["13:00", "21:00"]] } })),
+    )
+    .await;
+    let fits = s
+        .ok(
+            &s.owner,
+            "GET",
+            &format!("/api/v1/workforce/fit?queueId={qid}&at={at}"),
+            None,
+        )
+        .await;
+    let ours: Vec<&Value> = fits
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|f| [away, off, here].iter().any(|u| f["userId"] == json!(u)))
+        .collect();
+    assert_eq!(ours[0]["userId"], json!(here));
+    assert_eq!(ours[0]["available"], true);
+    let reasons: Vec<(Value, Value)> = ours[1..]
+        .iter()
+        .map(|f| (f["userId"].clone(), f["unavailable"].clone()))
+        .collect();
+    assert!(
+        reasons.contains(&(json!(away), json!("away"))),
+        "{reasons:?}"
+    );
+    assert!(
+        reasons.contains(&(json!(off), json!("off_hours"))),
+        "{reasons:?}"
+    );
+    let (status, _) = s
+        .call(
+            &s.owner,
+            "GET",
+            &format!("/api/v1/workforce/fit?queueId={qid}&at=noon"),
+            None,
+        )
+        .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+}

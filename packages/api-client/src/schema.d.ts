@@ -3766,6 +3766,30 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
+	'/api/v1/workforce/people/{user_id}/schedule': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/**
+		 * Someone's working schedule (none: no hours limit). Yours, or with
+		 *     `workforce:read`.
+		 */
+		get: operations['get_schedule'];
+		/**
+		 * Sets someone's working schedule (`null` removes it). Yours, or with
+		 *     `workforce:manage`.
+		 */
+		put: operations['set_schedule'];
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
 	'/api/v1/workforce/people/{user_id}/skills/{skill_id}': {
 		parameters: {
 			query?: never;
@@ -3780,6 +3804,26 @@ export interface paths {
 		 */
 		put: operations['set_skill'];
 		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/workforce/people/{user_id}/time-off': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/**
+		 * Requests time off. Yours (it waits for a manager's approval), or someone
+		 *     else's with `workforce:manage` (approved at once).
+		 */
+		post: operations['request_time_off'];
 		delete?: never;
 		options?: never;
 		head?: never;
@@ -3837,6 +3881,60 @@ export interface paths {
 		post?: never;
 		/** Archives a skill; people's levels in it and requirements on it go too. */
 		delete: operations['archive_skill'];
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/workforce/time-off': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** Time off that hasn't long ended, soonest first. */
+		get: operations['list_time_off'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/workforce/time-off/{id}/cancel': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/** Cancels time off that hasn't ended. Yours, or with `workforce:manage`. */
+		post: operations['cancel_time_off'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/workforce/time-off/{id}/decision': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/**
+		 * Approves or declines requested time off. Needs `workforce:manage`, and
+		 *     not for your own.
+		 */
+		post: operations['decide_time_off'];
+		delete?: never;
 		options?: never;
 		head?: never;
 		patch?: never;
@@ -5001,6 +5099,11 @@ export interface components {
 		};
 		/** @description How well someone fits a piece of work. */
 		Fit: {
+			/**
+			 * @description Available at the moment asked about: not away, and within their
+			 *     working hours (if they have a schedule).
+			 */
+			available: boolean;
 			/** @description Requirements they don't meet, by name. */
 			missing: string[];
 			name: string;
@@ -5012,6 +5115,8 @@ export interface components {
 			 *     skill requirements).
 			 */
 			skillMatch: number;
+			/** @description Why not: `away` or `off_hours`. */
+			unavailable?: string | null;
 			/** Format: uuid */
 			userId: string;
 		};
@@ -5687,6 +5792,8 @@ export interface components {
 			verifiedOn?: string | null;
 		};
 		PersonSummary: {
+			/** @description On approved time off today. */
+			awayToday: boolean;
 			/**
 			 * Format: int64
 			 * @description Certifications held, unexpired.
@@ -6174,6 +6281,14 @@ export interface components {
 		};
 		SayRequest: {
 			text: string;
+		};
+		Schedule: {
+			/** @description `{"mon": [["09:00", "17:00"]], …}`; days left out aren't worked. */
+			hours: {
+				[key: string]: string[][];
+			};
+			/** @description An IANA time zone, e.g. `Europe/London`. */
+			timezone: string;
 		};
 		/** @description A permission the client would get. */
 		ScopeView: {
@@ -6876,6 +6991,37 @@ export interface components {
 			transitions: {
 				[key: string]: string[];
 			};
+		};
+		TimeOff: {
+			decidedBy?: string | null;
+			decisionNote: string;
+			/** @description `YYYY-MM-DD`, inclusive. */
+			endsOn: string;
+			/** Format: uuid */
+			id: string;
+			/** @description `vacation`, `sick`, `training` or `other`. */
+			kind: string;
+			note: string;
+			person: string;
+			/** @description `YYYY-MM-DD`. */
+			startsOn: string;
+			/** @description `requested`, `approved`, `declined` or `cancelled`. */
+			status: string;
+			/** Format: uuid */
+			userId: string;
+		};
+		TimeOffDecision: {
+			approve: boolean;
+			note?: string | null;
+		};
+		TimeOffRequest: {
+			/** @description `YYYY-MM-DD`, inclusive. */
+			endsOn: string;
+			/** @description `vacation`, `sick`, `training` or `other`. */
+			kind: string;
+			note?: string | null;
+			/** @description `YYYY-MM-DD`. */
+			startsOn: string;
 		};
 		TotpEnrollmentView: {
 			/** @description `otpauth://` URI to show as a QR code. */
@@ -14979,6 +15125,8 @@ export interface operations {
 			query?: {
 				queueId?: string | null;
 				ticketTypeId?: string | null;
+				/** @description When to check availability (RFC 3339; default now). */
+				at?: string | null;
 			};
 			header?: never;
 			path?: never;
@@ -15160,6 +15308,60 @@ export interface operations {
 			};
 		};
 	};
+	get_schedule: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				user_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['Schedule'] | null;
+				};
+			};
+		};
+	};
+	set_schedule: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				user_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: {
+			content: {
+				'application/json': components['schemas']['Schedule'] | null;
+			};
+		};
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['Schedule'] | null;
+				};
+			};
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
 	set_skill: {
 		parameters: {
 			query?: never;
@@ -15182,6 +15384,39 @@ export interface operations {
 				};
 				content: {
 					'application/json': components['schemas']['Person'];
+				};
+			};
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	request_time_off: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				user_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['TimeOffRequest'];
+			};
+		};
+		responses: {
+			201: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['TimeOff'];
 				};
 			};
 			422: {
@@ -15352,6 +15587,92 @@ export interface operations {
 				content?: never;
 			};
 			404: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	list_time_off: {
+		parameters: {
+			query?: {
+				/** @description Someone's (default: everyone's, which needs `workforce:read`). */
+				userId?: string | null;
+				/** @description `requested`, `approved`, `declined` or `cancelled`. */
+				status?: string | null;
+			};
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['TimeOff'][];
+				};
+			};
+		};
+	};
+	cancel_time_off: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['TimeOff'];
+				};
+			};
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	decide_time_off: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['TimeOffDecision'];
+			};
+		};
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['TimeOff'];
+				};
+			};
+			422: {
 				headers: {
 					[name: string]: unknown;
 				};

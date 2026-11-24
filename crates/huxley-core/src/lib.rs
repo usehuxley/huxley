@@ -3,6 +3,7 @@
 //! This crate has no I/O. It holds identifiers, pagination primitives, and
 //! other types every other crate depends on.
 
+pub mod calendar;
 pub mod context;
 pub mod id;
 pub mod pagination;
