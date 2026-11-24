@@ -18,6 +18,7 @@
 		queues: resolve('/(app)/settings/queues'),
 		sla: resolve('/(app)/settings/sla'),
 		mailboxes: resolve('/(app)/settings/mailboxes'),
+		skills: resolve('/(app)/settings/skills'),
 		modules: resolve('/(app)/settings/modules'),
 		jobs: resolve('/(app)/settings/jobs'),
 		runners: resolve('/(app)/settings/runners'),

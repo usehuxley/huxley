@@ -375,3 +375,25 @@ pub async fn remove_certification(
     .await?;
     person(conn, user_id).await
 }
+
+/// One cell of the skills matrix: someone's level in a skill.
+#[derive(Debug, Clone, Serialize, ToSchema, sqlx::FromRow)]
+#[serde(rename_all = "camelCase")]
+#[schema(as = SkillMatrixCell)]
+pub struct MatrixCell {
+    pub user_id: Uuid,
+    pub skill_id: Uuid,
+    pub level: i16,
+    pub verified: bool,
+}
+
+/// Every active person's level in every active skill they have.
+pub async fn matrix(conn: &mut PgConnection) -> WorkforceResult<Vec<MatrixCell>> {
+    Ok(sqlx::query_as(
+        "SELECT s.user_id, s.skill_id, s.level, s.verified_by IS NOT NULL AS verified \
+           FROM wf_user_skills s JOIN wf_skills k ON k.id = s.skill_id AND k.archived_at IS NULL \
+           JOIN users u ON u.id = s.user_id AND u.status = 'active' AND u.kind = 'human'",
+    )
+    .fetch_all(conn)
+    .await?)
+}

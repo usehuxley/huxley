@@ -18,6 +18,7 @@
 		Settings,
 		Sparkles,
 		Ticket,
+		UsersRound,
 		Workflow
 	} from '@lucide/svelte';
 	import { AppShell, Button, CommandPalette, type Command, type NavItem } from '@usehuxley/ui';
@@ -59,6 +60,10 @@
 		...(data.user.activeModules.includes('crm') && data.user.grantedPermissions.includes('crm:read')
 			? [{ href: '/clients', label: 'Clients', icon: Building2 }]
 			: [{ href: '/clients', label: 'Clients', icon: Building2, soon: true }]),
+		...(data.user.activeModules.includes('workforce') &&
+		data.user.grantedPermissions.includes('workforce:read')
+			? [{ href: '/people', label: 'People', icon: UsersRound }]
+			: []),
 		{ href: '/assets', label: 'Assets', icon: Boxes, soon: true },
 		{ href: '/knowledge', label: 'Knowledge', icon: BookOpen, soon: true },
 		{ href: '/reports', label: 'Reports', icon: ChartColumn, soon: true },

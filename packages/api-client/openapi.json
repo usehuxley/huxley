@@ -10294,6 +10294,27 @@
 				}
 			}
 		},
+		"/api/v1/workforce/matrix": {
+			"get": {
+				"tags": ["workforce"],
+				"summary": "Everyone's level in every skill (the skills matrix).",
+				"operationId": "matrix",
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "array",
+									"items": {
+										"$ref": "#/components/schemas/SkillMatrixCell"
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		},
 		"/api/v1/workforce/people": {
 			"get": {
 				"tags": ["workforce"],
@@ -17152,6 +17173,28 @@
 					}
 				},
 				"additionalProperties": false
+			},
+			"SkillMatrixCell": {
+				"type": "object",
+				"description": "One cell of the skills matrix: someone's level in a skill.",
+				"required": ["userId", "skillId", "level", "verified"],
+				"properties": {
+					"level": {
+						"type": "integer",
+						"format": "int32"
+					},
+					"skillId": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"userId": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"verified": {
+						"type": "boolean"
+					}
+				}
 			},
 			"SlaAssignment": {
 				"type": "object",

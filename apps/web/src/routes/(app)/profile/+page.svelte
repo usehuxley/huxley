@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { resolve } from '$app/paths';
 	import { enhance } from '$app/forms';
 	import { invalidateAll } from '$app/navigation';
 	import { onMount } from 'svelte';
@@ -138,6 +139,20 @@
 				below to continue using Huxley.
 			</p>
 		</div>
+	{/if}
+
+	{#if data.user.activeModules.includes('workforce')}
+		<Card
+			title="Skills and certifications"
+			description="Rate your skills and keep your certifications current: they help send you the right work."
+		>
+			<a
+				href={resolve('/(app)/people/[id]', { id: data.user.id })}
+				class="text-sm font-medium text-accent hover:underline"
+			>
+				Your skills and certifications →
+			</a>
+		</Card>
 	{/if}
 
 	<Card title="Email" description={data.user.email}>
