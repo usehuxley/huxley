@@ -1739,6 +1739,27 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
+	'/api/v1/my-work': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/**
+		 * Your work: your open tickets (most in need of attention first, with
+		 *     why), your teams' tickets nobody has, and what's unassigned in your
+		 *     queues.
+		 */
+		get: operations['my_work'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
 	'/api/v1/notifications': {
 		parameters: {
 			query?: never;
@@ -5470,6 +5491,25 @@ export interface components {
 			/** Format: int32 */
 			version: number;
 		};
+		MyWork: {
+			/**
+			 * @description Why a ticket of yours needs attention, by id: `breached` (an SLA
+			 *     target was missed), `replied` (the requester wrote last), `due_soon`
+			 *     (an SLA target is due within 4 hours) or `new` (not yet started).
+			 */
+			attention: {
+				[key: string]: string;
+			};
+			/** @description Open tickets assigned to you, most in need of attention first. */
+			mine: components['schemas']['Ticket'][];
+			/**
+			 * @description The queues you're a member of (or through a team), with their
+			 *     unassigned open tickets.
+			 */
+			queues: components['schemas']['QueueWork'][];
+			/** @description Open tickets assigned to one of your teams but to nobody in it. */
+			team: components['schemas']['Ticket'][];
+		};
 		NarrowedBy: {
 			/** Format: uuid */
 			orgId: string;
@@ -6038,6 +6078,18 @@ export interface components {
 			 * @description The version you read (updates only).
 			 */
 			version?: number | null;
+		};
+		QueueWork: {
+			name: string;
+			/** Format: uuid */
+			queueId: string;
+			/** @description The most urgent of them, oldest first within a priority. */
+			tickets: components['schemas']['Ticket'][];
+			/**
+			 * Format: int64
+			 * @description How many open tickets in it nobody (person or team) has.
+			 */
+			unassigned: number;
 		};
 		/** @description A fixed-window rate limit. */
 		RateLimit: {
@@ -10908,6 +10960,25 @@ export interface operations {
 				};
 				content: {
 					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	my_work: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['MyWork'];
 				};
 			};
 		};
