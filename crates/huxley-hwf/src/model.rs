@@ -350,6 +350,19 @@ pub enum Step {
     /// Write rows to a dataset.
     #[serde(rename = "dataset.upsert")]
     DatasetUpsert(DatasetUpsertStep),
+    /// Find contacts by email or external id (the `crm` module).
+    #[serde(rename = "core.contact.find")]
+    ContactFind(ContactFindStep),
+    /// Create a contact, or update the one with the same email or external
+    /// id (the `crm` module).
+    #[serde(rename = "core.contact.upsert")]
+    ContactUpsert(ContactUpsertStep),
+    /// Read an organization's company details and sites (the `crm` module).
+    #[serde(rename = "core.company.get")]
+    CompanyGet(CompanyGetStep),
+    /// Change an organization's company details (the `crm` module).
+    #[serde(rename = "core.company.update")]
+    CompanyUpdate(CompanyUpdateStep),
     /// Ask the organization's AI provider; the answer is text.
     #[serde(rename = "ai.prompt")]
     AiPrompt(AiPromptStep),
@@ -584,6 +597,26 @@ step!(DatasetUpsertStep {
     pub upsert: DatasetUpsert,
 });
 
+step!(ContactFindStep {
+    #[serde(rename = "with")]
+    pub find: ContactFind,
+});
+
+step!(ContactUpsertStep {
+    #[serde(rename = "with")]
+    pub contact: Box<ContactUpsert>,
+});
+
+step!(CompanyGetStep {
+    #[serde(default, rename = "with")]
+    pub company: CompanyRef,
+});
+
+step!(CompanyUpdateStep {
+    #[serde(rename = "with")]
+    pub company: Box<CompanyUpdate>,
+});
+
 step!(AiPromptStep {
     #[serde(rename = "with")]
     pub ai: AiPrompt,
@@ -645,6 +678,10 @@ impl Step {
             Email,
             DatasetQuery,
             DatasetUpsert,
+            ContactFind,
+            ContactUpsert,
+            CompanyGet,
+            CompanyUpdate,
             AiPrompt,
             AiClassify,
             AiExtract
@@ -678,6 +715,10 @@ impl Step {
             Self::Email(_) => "core.email",
             Self::DatasetQuery(_) => "dataset.query",
             Self::DatasetUpsert(_) => "dataset.upsert",
+            Self::ContactFind(_) => "core.contact.find",
+            Self::ContactUpsert(_) => "core.contact.upsert",
+            Self::CompanyGet(_) => "core.company.get",
+            Self::CompanyUpdate(_) => "core.company.update",
             Self::AiPrompt(_) => "ai.prompt",
             Self::AiClassify(_) => "ai.classify",
             Self::AiExtract(_) => "ai.extract",
@@ -874,6 +915,83 @@ pub struct DatasetUpsert {
     /// the item (e.g. `upn: userPrincipalName`, `city: address.city`).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub map: Option<Value>,
+}
+
+/// Contacts to find (`core.contact.find`): by `email`, by `external_id`
+/// (e.g. `{ entra: "<object id>" }`), or both. Among the run's organization
+/// and those below it, or `org_id` and those below it. Output:
+/// `{ contacts, total }`.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct ContactFind {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub email: Option<Value>,
+    /// One external id: `{ <system>: <id> }`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub external_id: Option<Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub org_id: Option<String>,
+}
+
+/// A contact to create or update (`core.contact.upsert`). It's matched by
+/// `match` (`email`, the default, or an external id's system, e.g.
+/// `entra`) among the contacts of `org_id` (default: the run's
+/// organization); a match is updated with the fields given, otherwise a
+/// contact is created there. Output: `{ contact, created }`.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct ContactUpsert {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub org_id: Option<String>,
+    /// What identifies the contact: `email` or an external id's system.
+    #[serde(default, rename = "match", skip_serializing_if = "Option::is_none")]
+    pub match_on: Option<Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub first_name: Option<Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub last_name: Option<Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub email: Option<Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub phone: Option<Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub mobile: Option<Value>,
+    /// At the contact's primary company.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub job_title: Option<Value>,
+    /// Identities elsewhere, merged into the contact's: `{ entra: "…" }`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub external_ids: Option<Value>,
+}
+
+/// Which organization (`core.company.get`): `org_id`, default the run's.
+/// Output: `{ company, sites }`.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct CompanyRef {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub org_id: Option<String>,
+}
+
+/// Company details to change (`core.company.update`); fields left out stay
+/// as they are. Output: `{ company }`.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct CompanyUpdate {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub org_id: Option<String>,
+    /// `client`, `vendor`, `partner` or `prospect`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub relationship: Option<Value>,
+    /// `active`, `inactive`, `onboarding` or `offboarding`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub status: Option<Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub website: Option<Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub phone: Option<Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub notes: Option<Value>,
 }
 
 /// A prompt (`ai.prompt`). Output: `{ text, model }`.

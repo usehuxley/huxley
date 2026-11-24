@@ -86,6 +86,10 @@ You fill in a few **bindings**, such as who to tell or which script, and get a *
 | `core.notify` | Notifies `user:<id>`, `team:<id>`, `role:<key>` (holders at the run's organization), in the app and by email. Sent exactly once. |
 | `integration.action` | Calls an action of an imported integration: `action: <integration>/<action>`, inputs under `with` (parameters by name, the request body as `body`), and optionally `connection: <key>`. Output: the response body. See [integrations.md](integrations.md#calling-actions). |
 | `subworkflow` | Runs another published workflow (found by key here or in an organization above) and, by default, waits for its outputs. |
+| `core.contact.find` | Finds contacts by `email` and/or `external_id` (`{ entra: "<object id>" }`) among the run's organization and those below it. Output: `{ contacts, total }`. Needs the [Clients and contacts](crm.md) module. |
+| `core.contact.upsert` | Updates the contact matched by `match` (`email`, the default, or an external id's system such as `entra`) at `org_id` (default: the run's organization), or adds one: `first_name`, `last_name`, `email`, `phone`, `mobile`, `job_title`, `external_ids` (merged). Fields left out keep their values. Output: `{ contact, created }`. |
+| `core.company.get` | An organization's company details and sites (`org_id`, default the run's). Output: `{ company, sites }`. |
+| `core.company.update` | Changes company details (`status`, `relationship`, `website`, `phone`, `notes`); the rest stays. Output: `{ company }`. |
 | `transform` | Computes a value. |
 | `set_var` | Sets run variables, read as `run.vars.<name>`. |
 | `approval` | Pauses until one of the `approvers` (`user:<id>`, `team:<id>`, `role:<key>` at the run's organization) approves or rejects under **Approvals**. They're notified with a link. The first decision counts. Output: `{decision: approved \| rejected, by: {id, name}, comment, decided_at}`. `expires` (default `7d`) fails it with `kind: timeout`. |

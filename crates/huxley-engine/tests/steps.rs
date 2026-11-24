@@ -947,6 +947,123 @@ async fn a_failed_lookup_fails_the_step_and_is_asked_again_on_resume() {
     assert_eq!(outputs.unwrap(), json!({ "lead": "Grace" }));
 }
 
+/// Turns the crm module on for the instance (it's shared: other tests may
+/// have already).
+async fn crm_on(h: &Harness) {
+    let ctx = huxley_core::RequestContext::system(huxley_core::Via::System);
+    let mut tx = begin_scoped(&h.pools.app, &OrgScope::System).await.unwrap();
+    huxley_modules::set_enabled(&mut tx, &ctx, "crm", true, false)
+        .await
+        .unwrap();
+    tx.commit().await.unwrap();
+}
+
+#[tokio::test]
+async fn contact_steps_create_update_and_find() {
+    let Some(h) = harness(1 << 20).await else {
+        return;
+    };
+    crm_on(&h).await;
+    let client = users_dataset(&h).await;
+    let (_, status, outputs, error) = h
+        .run_with(
+            r#"  steps:
+    - id: first
+      type: core.contact.upsert
+      with: { email: Ada@Acme.example, first_name: Ada, last_name: Lovelace, job_title: CTO,
+              external_ids: { entra: obj-1 } }
+    - id: again
+      type: core.contact.upsert
+      with: { email: ada@acme.example, phone: "+44 20 7946 0000", external_ids: { slack: U1 } }
+    - id: at_client
+      type: core.contact.upsert
+      with: { org_id: "{{ inputs.client }}", match: entra, first_name: Bob,
+              external_ids: { entra: obj-2 } }
+    - id: by_email
+      type: core.contact.find
+      with: { email: ADA@acme.example }
+    - id: by_entra
+      type: core.contact.find
+      with: { external_id: { entra: obj-2 } }
+    - id: details
+      type: core.company.update
+      with: { status: onboarding, website: "https://msp.example" }
+    - id: read
+      type: core.company.get
+  outputs:
+    created: "{{ [steps.first.output.created, steps.again.output.created, steps.at_client.output.created] }}"
+    same: "{{ steps.first.output.contact.id == steps.again.output.contact.id }}"
+    kept: "{{ steps.again.output.contact.lastName }}"
+    phone: "{{ steps.again.output.contact.phone }}"
+    ids: "{{ steps.again.output.contact.externalIds }}"
+    title: "{{ steps.again.output.contact.companies[0].jobTitle }}"
+    found: "{{ steps.by_email.output.total }}"
+    bob_org: "{{ steps.by_entra.output.contacts[0].orgId == inputs.client }}"
+    status: "{{ steps.read.output.company.status }}"
+    relationship: "{{ steps.read.output.company.relationship }}"
+"#,
+            json!({ "client": client }),
+        )
+        .await;
+    assert_eq!(status, RunStatus::Succeeded, "{error:?}");
+    assert_eq!(
+        outputs.unwrap(),
+        json!({
+            "created": [true, false, true],
+            "same": true,
+            "kept": "Lovelace",
+            "phone": "+44 20 7946 0000",
+            "ids": { "entra": "obj-1", "slack": "U1" },
+            "title": "CTO",
+            "found": 1,
+            "bob_org": true,
+            "status": "onboarding",
+            "relationship": "client",
+        })
+    );
+}
+
+#[tokio::test]
+async fn contact_steps_refuse_secrets_and_need_the_module() {
+    let Some(h) = harness(1 << 20).await else {
+        return;
+    };
+    crm_on(&h).await;
+    let (_, status, _, error) = h
+        .run_with(
+            r#"  inputs:
+    type: object
+    properties: { pin: { type: string, writeOnly: true } }
+  steps:
+    - id: leak
+      type: core.contact.upsert
+      with: { email: x@example.com, first_name: "{{ inputs.pin }}" }
+"#,
+            json!({ "pin": "1234-SECRET" }),
+        )
+        .await;
+    assert_eq!(status, RunStatus::Failed);
+    assert!(error.unwrap().to_string().contains("secrets"));
+
+    // Off for this provider: the steps fail plainly.
+    let ctx = huxley_core::RequestContext::system(huxley_core::Via::System);
+    let mut tx = begin_scoped(&h.pools.app, &OrgScope::System).await.unwrap();
+    huxley_modules::set_for_org(&mut tx, &ctx, h.org, "crm", false)
+        .await
+        .unwrap();
+    tx.commit().await.unwrap();
+    let (_, status, _, error) = h
+        .run_with(
+            r"  steps:
+    - { id: read, type: core.company.get }
+",
+            json!({}),
+        )
+        .await;
+    assert_eq!(status, RunStatus::Failed);
+    assert_eq!(error.unwrap()["kind"], "module_disabled");
+}
+
 /// Answers like Anthropic's Messages API: a label from a classification's
 /// enum, an extraction's fields, or an echo; counts the calls.
 async fn mock_anthropic(calls: Arc<AtomicUsize>) -> u16 {

@@ -15,10 +15,13 @@
 		dirty = $bindable(false),
 		document = $bindable(),
 		actions = [],
+		modules = [],
 		preview
 	}: {
 		draft: Record<string, unknown>;
 		actions?: ActionChoice[];
+		/** Active feature modules (their steps are offered). */
+		modules?: string[];
 		preview?: (expression: unknown) => Promise<PreviewResult>;
 		diagnostics: { path: string; message: string }[];
 		readonly?: boolean;
@@ -99,6 +102,7 @@
 			{@const insert = picking}
 			<StepPicker
 				where={insert.label}
+				{modules}
 				oncancel={() => (picking = null)}
 				onpick={(type: string) => {
 					const path = insertStep(doc, insert, type);

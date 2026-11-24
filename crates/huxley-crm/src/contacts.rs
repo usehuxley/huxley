@@ -245,6 +245,57 @@ pub async fn list(
     Ok(ContactPage { items, total })
 }
 
+/// The contact linked to `org_id` with this email, or with this external
+/// id (`(system, id)`), if there is one. Archived contacts don't count.
+pub async fn find_one(
+    conn: &mut PgConnection,
+    org_id: Uuid,
+    email: Option<&str>,
+    external: Option<(&str, &str)>,
+) -> CrmResult<Option<Uuid>> {
+    Ok(sqlx::query_scalar(
+        "SELECT c.id FROM crm_contacts c \
+           JOIN crm_contact_companies l ON l.contact_id = c.id AND l.org_id = $1 \
+          WHERE c.archived_at IS NULL \
+            AND (($2::text IS NOT NULL AND lower(c.email) = lower($2)) \
+              OR ($3::text IS NOT NULL AND c.external_ids ->> $3 = $4)) \
+          ORDER BY c.created_at LIMIT 1",
+    )
+    .bind(org_id)
+    .bind(email)
+    .bind(external.map(|(system, _)| system))
+    .bind(external.map(|(_, id)| id))
+    .fetch_optional(conn)
+    .await?)
+}
+
+/// Contacts visible in the transaction's scope with this email and/or
+/// external id (`(system, id)`), oldest first, at most `limit`.
+pub async fn search(
+    conn: &mut PgConnection,
+    email: Option<&str>,
+    external: Option<(&str, &str)>,
+    limit: i64,
+) -> CrmResult<Vec<Contact>> {
+    let ids: Vec<Uuid> = sqlx::query_scalar(
+        "SELECT id FROM crm_contacts WHERE archived_at IS NULL \
+            AND ($1::text IS NULL OR lower(email) = lower($1)) \
+            AND ($2::text IS NULL OR external_ids ->> $2 = $3) \
+          ORDER BY created_at LIMIT $4",
+    )
+    .bind(email)
+    .bind(external.map(|(system, _)| system))
+    .bind(external.map(|(_, id)| id))
+    .bind(limit.clamp(1, 100))
+    .fetch_all(&mut *conn)
+    .await?;
+    let mut found = Vec::with_capacity(ids.len());
+    for id in ids {
+        found.push(get(conn, id).await?);
+    }
+    Ok(found)
+}
+
 /// Contacts with this email address (for matching mail to people).
 pub async fn find_by_email(conn: &mut PgConnection, email: &str) -> CrmResult<Vec<Contact>> {
     let ids: Vec<Uuid> = sqlx::query_scalar(

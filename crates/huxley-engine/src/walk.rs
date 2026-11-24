@@ -357,6 +357,10 @@ impl<'a> Walker<'a> {
             | Step::Notify(_)
             | Step::DatasetQuery(_)
             | Step::DatasetUpsert(_)
+            | Step::ContactFind(_)
+            | Step::ContactUpsert(_)
+            | Step::CompanyGet(_)
+            | Step::CompanyUpdate(_)
             | Step::AiPrompt(_)
             | Step::AiClassify(_)
             | Step::AiExtract(_) => self.external(step, &with_block(step), frame),
@@ -811,6 +815,10 @@ fn with_block(step: &Step) -> Json {
         Step::Notify(s) => serde_json::to_value(&s.notification),
         Step::DatasetQuery(s) => serde_json::to_value(&s.query),
         Step::DatasetUpsert(s) => serde_json::to_value(&s.upsert),
+        Step::ContactFind(s) => serde_json::to_value(&s.find),
+        Step::ContactUpsert(s) => serde_json::to_value(&s.contact),
+        Step::CompanyGet(s) => serde_json::to_value(&s.company),
+        Step::CompanyUpdate(s) => serde_json::to_value(&s.company),
         Step::AiPrompt(s) => serde_json::to_value(&s.ai),
         Step::AiClassify(s) => serde_json::to_value(&s.ai),
         Step::AiExtract(s) => serde_json::to_value(&s.ai),
