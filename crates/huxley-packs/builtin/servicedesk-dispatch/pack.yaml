@@ -1,0 +1,9 @@
+apiVersion: usehuxley.io/v1
+kind: Pack
+key: huxley/servicedesk-dispatch
+name: Service desk dispatch
+version: 1.0.0
+publisher: Huxley
+description: Assigns new tickets by their queue's dispatch setting (round-robin, by load or by skills), skipping people who are away or missing a required certification.
+contents:
+  workflows: [dispatch-tickets]

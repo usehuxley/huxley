@@ -1,0 +1,32 @@
+apiVersion: usehuxley.io/v1
+kind: Workflow
+metadata:
+  key: dispatch-tickets
+  name: Dispatch tickets
+  description: >-
+    Assigns each new ticket in a queue, and each ticket moved to another
+    queue, by that queue's dispatch setting: round-robin, by load or by
+    skills. Queues set to manual are left alone, as are tickets someone
+    already has.
+spec:
+  triggers:
+    - id: created
+      type: event
+      event: ticket.created
+      filter: "{{ event.payload.queueId is not none and event.payload.assigneeUserId is none }}"
+    - id: moved
+      type: event
+      event: ticket.updated
+      filter: >-
+        {{ event.payload.change.queue is defined and event.payload.queueId is not none
+           and event.payload.assigneeUserId is none }}
+  steps:
+    - id: dispatch
+      type: core.ticket.dispatch
+      with:
+        ticket_id: "{{ trigger.subject_id }}"
+      retry: { max_attempts: 3 }
+  outputs:
+    assigned: "{{ steps.dispatch.output.assigned }}"
+    assignee: "{{ steps.dispatch.output.assignee }}"
+    reason: "{{ steps.dispatch.output.reason }}"

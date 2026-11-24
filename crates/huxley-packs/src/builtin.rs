@@ -31,6 +31,13 @@ const SOURCES: &[Source] = &[
         ],
     },
     Source {
+        manifest: include_str!("../builtin/servicedesk-dispatch/pack.yaml"),
+        files: &[(
+            "workflows/dispatch-tickets.yaml",
+            include_str!("../builtin/servicedesk-dispatch/workflows/dispatch-tickets.yaml"),
+        )],
+    },
+    Source {
         manifest: include_str!("../builtin/msgraph/pack.yaml"),
         files: &[
             (

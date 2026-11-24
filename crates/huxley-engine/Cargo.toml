@@ -31,6 +31,7 @@ huxley-ai.workspace = true
 huxley-storage.workspace = true
 huxley-variables.workspace = true
 huxley-workflows.workspace = true
+huxley-workforce.workspace = true
 jsonschema.workspace = true
 reqwest.workspace = true
 serde.workspace = true

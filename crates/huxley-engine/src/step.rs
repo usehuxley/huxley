@@ -232,7 +232,8 @@ impl Engine {
             | Step::TicketGet(_)
             | Step::TicketFind(_)
             | Step::TicketUpdate(_)
-            | Step::TicketNote(_) => self
+            | Step::TicketNote(_)
+            | Step::TicketDispatch(_) => self
                 .ticket_step(step.type_name(), org_id, input, record.tainted)
                 .await
                 .into(),

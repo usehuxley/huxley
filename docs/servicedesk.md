@@ -112,6 +112,23 @@ A service queue is where tickets wait to be picked up. It belongs to an organiza
 
 Set them up under **Settings → Service queues**, which needs `servicedesk:configure`. Archiving a queue removes it from lists and from new tickets. Tickets already in it stay there until they're moved.
 
+## Dispatch
+
+A queue's **dispatch** setting says how its new tickets are assigned:
+
+| Setting | Who gets the ticket |
+|---|---|
+| **Manual** (the default) | Nobody automatically; someone picks it up. |
+| **Round-robin** | Members take turns: whoever dispatch hasn't given one of the queue's tickets for longest. |
+| **By load** | Whoever has the fewest open tickets (assigned to them and not resolved), then by turn. |
+| **By skills** | Whoever's skills best meet the queue's and ticket type's requirements, then by load and turn. Needs the [Workforce](workforce.md) module; without it, this works like *By load*. |
+
+The candidates are the queue's members: its people, and the people in its teams. With the Workforce module on, dispatch skips anyone missing a certification the work requires, on approved time off that day, or outside their working hours, whatever the setting. When nobody can take a ticket, it stays unassigned.
+
+Dispatch runs as a workflow, so it can be followed, changed or replaced like any other. The built-in **Service desk dispatch** pack (`huxley/servicedesk-dispatch`) adds *Dispatch tickets*. It runs when a ticket is created in a queue, or moved to another queue, without an assignee. Install it under **Settings → Packs → Built-in packs** and publish its workflow. Its step, `core.ticket.dispatch`, can also be used in your own workflows, for example to dispatch by another strategy or to reassign.
+
+Each dispatch run's output says who was chosen, or why nobody was, and what was considered about each member: their open tickets, skill match, and why anyone was skipped.
+
 ## Email
 
 Mail sent to a service desk mailbox becomes tickets and replies.
@@ -203,7 +220,7 @@ The email goes out through the instance's mail server (`email.smtp_url`), with t
 
 ## In workflows
 
-Workflows can open, read, find and update tickets and add notes, with the `core.ticket.*` steps (see [workflows.md](workflows.md)). Like the other record steps, they work with the run's organization and those below it. They refuse to write values derived from secrets.
+Workflows can open, read, find, update and dispatch tickets and add notes, with the `core.ticket.*` steps (see [workflows.md](workflows.md)). Like the other record steps, they work with the run's organization and those below it. They refuse to write values derived from secrets.
 
 ## Permissions
 
@@ -225,10 +242,10 @@ Workflows can open, read, find and update tickets and add notes, with the `core.
 | `POST /api/v1/tickets/{id}/status` | Change the status, with a `resolution` where it's needed |
 | `GET`, `POST /api/v1/tickets/{id}/notes` | Read or add notes |
 | `GET /api/v1/tickets/{id}/activity` | Read the timeline |
-| `GET`, `POST /api/v1/queues`, and `GET`, `PUT`, `DELETE /api/v1/queues/{id}` | Read and manage queues |
+| `GET`, `POST /api/v1/queues`, and `GET`, `PUT`, `DELETE /api/v1/queues/{id}` | Read and manage queues, including `dispatch` (`manual`, `round_robin`, `load` or `skills`) |
 | `GET /api/v1/servicedesk/types` | Read ticket types, their statuses and allowed changes |
 | `GET /api/v1/servicedesk/priority-matrix` | Read the priority table |
 
 ## Coming next
 
-Microsoft 365 mailboxes, sending through a mailbox's own server, holidays in business hours, time entries, merging and linking tickets, templates, saved views, and dispatch (assigning tickets automatically).
+Microsoft 365 mailboxes, sending through a mailbox's own server, holidays in business hours, time entries, merging and linking tickets, templates, saved views, and a dispatch board.

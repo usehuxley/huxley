@@ -318,6 +318,24 @@ export const STEPS: StepSpec[] = [
 		]
 	},
 	{
+		type: 'core.ticket.dispatch',
+		label: 'Dispatch a ticket',
+		description: "Assign it by its queue's dispatch: round-robin, by load or by skills.",
+		group: 'Data',
+		module: 'servicedesk',
+		template: { with: { ticket_id: '' } },
+		fields: [
+			{ path: 'with.ticket_id', label: 'Ticket', kind: 'expression' },
+			{
+				path: 'with.strategy',
+				label: 'Strategy',
+				kind: 'text',
+				hint: "round_robin, load or skills (default: the queue's)"
+			},
+			{ path: 'with.reassign', label: 'Reassign if assigned', kind: 'expression' }
+		]
+	},
+	{
 		type: 'core.mail.fetch',
 		label: 'Fetch mail',
 		description: 'Fetch new mail from IMAP mailboxes; each new message raises email.received.',
@@ -797,6 +815,8 @@ export function summary(step: Step): string {
 			return text(isStep(step.with) ? step.with.status : '');
 		case 'core.ticket.note':
 			return text(isStep(step.with) ? step.with.body : '');
+		case 'core.ticket.dispatch':
+			return text(isStep(step.with) ? (step.with.strategy ?? "by the queue's dispatch") : '');
 		case 'core.ticket.from_email':
 			return text(isStep(step.with) ? step.with.email_id : '');
 		case 'wait_for_callback':

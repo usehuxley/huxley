@@ -2685,6 +2685,69 @@
         },
         {
           "additionalProperties": false,
+          "description": "Assign a ticket by its queue's dispatch strategy (the `servicedesk`\nmodule).",
+          "properties": {
+            "continue_on_error": {
+              "description": "Record the error as the step's output and carry on.",
+              "type": "boolean"
+            },
+            "description": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "id": {
+              "description": "Unique in the workflow: lowercase letters, digits, underscores.\nOther steps read this step's output as `steps.<id>.output`.",
+              "type": "string"
+            },
+            "if": {
+              "description": "Skip the step unless this expression is true.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "name": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "retry": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/RetryPolicy"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "timeout": {
+              "description": "Fail the attempt after this long, e.g. `30s`.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "type": {
+              "const": "core.ticket.dispatch",
+              "type": "string"
+            },
+            "with": {
+              "$ref": "#/$defs/TicketDispatch"
+            }
+          },
+          "required": [
+            "type",
+            "id",
+            "with"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
           "description": "Fetch new mail from IMAP mailboxes (the `servicedesk` module).",
           "properties": {
             "continue_on_error": {
@@ -3043,6 +3106,19 @@
       },
       "required": [
         "title"
+      ],
+      "type": "object"
+    },
+    "TicketDispatch": {
+      "additionalProperties": false,
+      "description": "A ticket to assign (`core.ticket.dispatch`) by its queue's strategy\n(`round_robin`, `load` or `skills`), or `strategy` to use another. With\nthe `workforce` module on, people missing a required certification, away\nor outside their hours are skipped. A ticket that's already assigned is\nleft alone unless `reassign` is true. Output: `{ assigned, assignee,\nstrategy, reason, considered }`; `reason` says why nobody was chosen\n(`assigned`, `no_queue`, `manual`, `nobody_available`).",
+      "properties": {
+        "reassign": true,
+        "strategy": true,
+        "ticket_id": true
+      },
+      "required": [
+        "ticket_id"
       ],
       "type": "object"
     },

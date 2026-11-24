@@ -124,6 +124,9 @@ impl Engine {
                 let found = tickets::get(&mut tx, ticket).await.map_err(desk_error)?;
                 tx.commit().await.map_err(internal)?;
                 self.require_desk(found.org_id).await?;
+                if other == "core.ticket.dispatch" {
+                    return self.dispatch(&found, input).await;
+                }
                 let mut tx = begin_scoped(self.db(), &OrgScope::Orgs(subtree))
                     .await
                     .map_err(internal)?;

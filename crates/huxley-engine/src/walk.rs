@@ -395,6 +395,7 @@ impl<'a> Walker<'a> {
             | Step::TicketFind(_)
             | Step::TicketUpdate(_)
             | Step::TicketNote(_)
+            | Step::TicketDispatch(_)
             | Step::AiPrompt(_)
             | Step::AiClassify(_)
             | Step::AiExtract(_) => self.external(step, &with_block(step), frame),
@@ -843,6 +844,7 @@ fn with_block(step: &Step) -> Json {
         Step::TicketFind(s) => serde_json::to_value(&s.ticket),
         Step::TicketUpdate(s) => serde_json::to_value(&s.ticket),
         Step::TicketNote(s) => serde_json::to_value(&s.ticket),
+        Step::TicketDispatch(s) => serde_json::to_value(&s.ticket),
         Step::AiPrompt(s) => serde_json::to_value(&s.ai),
         Step::AiClassify(s) => serde_json::to_value(&s.ai),
         Step::AiExtract(s) => serde_json::to_value(&s.ai),

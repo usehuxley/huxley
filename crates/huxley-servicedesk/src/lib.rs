@@ -7,6 +7,7 @@
 /// Business time, now shared from `huxley-core`.
 pub use huxley_core::calendar;
 pub mod config;
+pub mod dispatch;
 pub mod mail;
 pub mod queues;
 pub mod sla;
