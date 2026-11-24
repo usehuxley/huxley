@@ -302,3 +302,67 @@ async fn syncs_are_checked_scheduled_and_started() {
     assert_eq!(state["sync"], json!(null));
     assert_eq!(state["nextAt"], json!(null));
 }
+
+#[tokio::test]
+async fn form_choices_can_come_from_a_dataset() {
+    let Some(s) = setup().await else { return };
+    let definition = json!({
+        "key": "staff", "name": "Staff",
+        "columns": [{ "name": "upn", "type": "text" }, { "name": "name", "type": "text" },
+                    { "name": "active", "type": "boolean" }],
+        "primaryKey": ["upn"]
+    });
+    let (_, dataset) = s
+        .call(
+            &s.owner,
+            "POST",
+            "/api/v1/datasets",
+            Some(json!({ "orgId": s.org, "dataset": definition })),
+        )
+        .await;
+    let id = dataset["id"].as_str().unwrap();
+    let rows = json!({ "orgId": s.org, "rows": [
+        { "upn": "ada@x.test", "name": "Ada", "active": true },
+        { "upn": "bob@x.test", "name": "Bob", "active": false }
+    ] });
+    s.call(
+        &s.owner,
+        "POST",
+        &format!("/api/v1/datasets/{id}/rows"),
+        Some(rows),
+    )
+    .await;
+
+    // A dataset choice needs a value column.
+    let form = |options: Value| {
+        json!({ "orgId": s.org, "form": {
+        "key": format!("offboard-{}", &Uuid::now_v7().simple().to_string()[24..]), "name": "Offboard",
+        "schema": { "type": "object", "required": ["who"], "properties": { "who": { "type": "string" } } },
+        "ui": { "who": { "options_from": options } } } })
+    };
+    let (status, problem) = s
+        .call(
+            &s.owner,
+            "POST",
+            "/api/v1/forms",
+            Some(form(json!({ "dataset": "staff" }))),
+        )
+        .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{problem}");
+    let (status, created) = s
+        .call(&s.owner, "POST", "/api/v1/forms",
+              Some(form(json!({ "dataset": "staff", "filters": { "active": true }, "value": "upn", "label": "name" }))))
+        .await;
+    assert_eq!(status, StatusCode::CREATED, "{created}");
+    let form_id = created["id"].as_str().unwrap();
+    let (status, choices) = s
+        .call(
+            &s.owner,
+            "GET",
+            &format!("/api/v1/forms/{form_id}/fields/who/options"),
+            None,
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK, "{choices}");
+    assert_eq!(choices, json!([{ "value": "ada@x.test", "label": "Ada" }]));
+}

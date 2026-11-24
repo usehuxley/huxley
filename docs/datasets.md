@@ -1,6 +1,6 @@
 # Datasets
 
-A **dataset** is a typed table of data kept in Huxley, such as "Microsoft 365 users for every client", so workflows, forms and reports can use it without calling an API each time (design doc §9, ADR-029). This page covers definitions, rows, workflow steps, syncing from integrations, and the API. The browser and the SQL console come in later releases.
+A **dataset** is a typed table of data kept in Huxley, such as "Microsoft 365 users for every client", so workflows, forms and reports can use it without calling an API each time (design doc §9, ADR-029). This page covers definitions, rows, the Datasets page, workflow steps, form choices, syncing from integrations, and the API. A read-only SQL console comes later.
 
 ## Definitions
 
@@ -18,6 +18,25 @@ Changing a definition **migrates its table**:
 ## Rows and organizations
 
 Every row belongs to an organization: the dataset's own, or one below it. A dataset defined at your MSP can hold every client's rows. People see the rows of organizations in their scope, so a client's users see only that client's rows. This is enforced by the database's row-level security, as well as by the API.
+
+## In the app
+
+**Datasets** in the sidebar (with `dataset:read`) lists them. With `dataset:manage` you can also create one with its columns and key. A dataset's page has:
+
+- its rows, filtered by a column's value or an organization, a page at a time
+- its sync settings, with when it next and last synced, and **Sync now**
+- a box for adding rows by hand
+
+## In forms
+
+A form field's choices can come from a dataset's rows: those of the organization the form is filled in for, and those below it.
+
+```json
+"ui": { "who": { "options_from": {
+    "dataset": "m365-users", "filters": { "licensed": true }, "value": "upn", "label": "name" } } }
+```
+
+`value` (required) and `label` are columns. Submitted answers are checked against the choices, as with action lookups.
 
 ## In workflows
 

@@ -46,11 +46,20 @@ impl ShowIf {
 /// Choices from an integration action:
 /// `{ "action": "<integration>/<action>", "connection"?: key,
 ///    "with"?: {…}, "items"?: "path.to.list", "value": "id",
-///    "label"?: "displayName" }`.
+///    "label"?: "displayName" }`,
+/// or from a dataset's rows (the organization's, and those below it):
+/// `{ "dataset": "<key>", "filters"?: { column: value }, "value": "upn",
+///    "label"?: "name" }`.
 #[derive(Debug, Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct OptionsFrom {
-    pub action: String,
+    #[serde(default)]
+    pub action: Option<String>,
+    #[serde(default)]
+    pub dataset: Option<String>,
+    /// Column values the dataset's rows must equal.
+    #[serde(default)]
+    pub filters: Option<Json>,
     #[serde(default)]
     pub connection: Option<String>,
     #[serde(default, rename = "with")]
@@ -110,12 +119,24 @@ pub(crate) fn check(schema: &Json, ui: &Json) -> FormResult<()> {
             let at = format!("ui.{name}.options_from");
             let lookup: OptionsFrom = serde_json::from_value(raw.clone())
                 .map_err(|e| invalid(&at, format!("{{ action, value, label, … }}: {e}")))?;
-            if lookup
-                .action
-                .split_once('/')
-                .is_none_or(|(i, a)| i.is_empty() || a.is_empty())
-            {
-                return Err(invalid(at, "action is <integration>/<action>"));
+            match (&lookup.action, &lookup.dataset) {
+                (Some(action), None) => {
+                    if action
+                        .split_once('/')
+                        .is_none_or(|(i, a)| i.is_empty() || a.is_empty())
+                    {
+                        return Err(invalid(at, "action is <integration>/<action>"));
+                    }
+                }
+                (None, Some(dataset)) => {
+                    if dataset.trim().is_empty() || lookup.value.is_none() {
+                        return Err(invalid(
+                            at,
+                            "a dataset's choices need its key and a value column",
+                        ));
+                    }
+                }
+                _ => return Err(invalid(at, "set action or dataset")),
             }
             let field = &fields[name];
             let string = field["type"] == "string"
@@ -243,6 +264,23 @@ pub async fn options(
     let Some(lookup) = options_from(&form.ui, name) else {
         return Err(FormError::NotFound);
     };
+    if let Some(dataset) = &lookup.dataset {
+        let input = json!({ "dataset": dataset, "filters": lookup.filters, "limit": MAX_CHOICES });
+        let rows = match engine.lookup_dataset(org_id, &input).await {
+            Ok(found) => found,
+            Err(failure) => {
+                let message = failure["message"]
+                    .as_str()
+                    .unwrap_or("the dataset couldn't be read");
+                return Err(FormError::Lookup(message.to_owned()));
+            }
+        };
+        let lookup = OptionsFrom {
+            items: Some("rows".into()),
+            ..lookup
+        };
+        return choices_of(&lookup, &rows).map_err(FormError::Lookup);
+    }
     let input = json!({
         "action": lookup.action,
         "connection": lookup.connection,

@@ -116,6 +116,12 @@ impl Engine {
         }
     }
 
+    /// Rows of a dataset for `org_id` (as `dataset.query` reads them), e.g.
+    /// for a form's choices: `{ rows, total }`, or a failure.
+    pub async fn lookup_dataset(&self, org_id: Uuid, input: &Json) -> Result<Json, Json> {
+        self.query_dataset(org_id, input).await
+    }
+
     pub(crate) async fn query_dataset(&self, org_id: Uuid, input: &Json) -> Result<Json, Json> {
         let key = input["dataset"].as_str().unwrap_or_default();
         let dataset = self.dataset_for(org_id, key).await?;

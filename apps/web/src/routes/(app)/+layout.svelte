@@ -11,6 +11,7 @@
 		ChartColumn,
 		CircleCheck,
 		ClipboardList,
+		Database,
 		FileCode,
 		House,
 		Plug,
@@ -37,6 +38,9 @@
 			: []),
 		...(data.user.grantedPermissions.includes('integration:read')
 			? [{ href: '/integrations', label: 'Integrations', icon: Plug }]
+			: []),
+		...(data.user.grantedPermissions.includes('dataset:read')
+			? [{ href: '/datasets', label: 'Datasets', icon: Database }]
 			: []),
 		{ href: '/approvals', label: 'Approvals', icon: CircleCheck },
 		...(data.user.grantedPermissions.some((p) => p === 'form:submit' || p === 'form:manage')
