@@ -1,0 +1,27 @@
+[package]
+name = "huxley-datasets"
+description = "Datasets: definitions, their managed tables, and reading and writing rows"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+publish = false
+
+[dependencies]
+huxley-core.workspace = true
+huxley-db.workspace = true
+sqlx.workspace = true
+time.workspace = true
+uuid.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+utoipa.workspace = true
+
+[dev-dependencies]
+huxley-db = { workspace = true, features = ["testing"] }
+huxley-orgs.workspace = true
+tokio.workspace = true
+
+[lints]
+workspace = true

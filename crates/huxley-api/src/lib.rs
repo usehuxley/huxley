@@ -11,6 +11,7 @@ pub mod authz;
 mod connection_routes;
 pub mod context;
 pub mod csrf;
+mod dataset_routes;
 pub mod entity_routes;
 mod form_routes;
 pub mod health;
