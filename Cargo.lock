@@ -1807,6 +1807,7 @@ dependencies = [
  "huxley-modules",
  "huxley-notify",
  "huxley-orgs",
+ "huxley-packs",
  "huxley-runners",
  "huxley-scripts",
  "huxley-sso",
@@ -1819,8 +1820,10 @@ dependencies = [
  "ring",
  "secrecy",
  "serde",
+ "serde-saphyr",
  "serde_json",
  "sqlx",
+ "thiserror 2.0.21",
  "time",
  "tokio",
  "tokio-util",
@@ -1829,6 +1832,7 @@ dependencies = [
  "tracing",
  "utoipa",
  "uuid",
+ "zip",
 ]
 
 [[package]]

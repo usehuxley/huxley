@@ -47,10 +47,21 @@ pub struct Config {
     pub engine: EngineConfig,
     #[serde(default)]
     pub runners: RunnersConfig,
+    /// Packs (ADR-028).
+    #[serde(default)]
+    pub packs: PacksConfig,
     /// Apply migrations at startup. Convenient for single-node installs; larger
     /// deployments run `huxley migrate` as a separate step before rollout.
     #[serde(default)]
     pub migrate_on_start: bool,
+}
+
+/// Packs (ADR-028).
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(default)]
+pub struct PacksConfig {
+    /// Public keys (`hxpk_…`) whose signed packs are shown as trusted.
+    pub trusted_keys: Vec<String>,
 }
 
 /// The runner gateway (ADR-025): where script runners connect with mTLS.

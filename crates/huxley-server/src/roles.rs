@@ -1,6 +1,7 @@
 //! Server roles and their lifecycle.
 
 use std::collections::BTreeSet;
+use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::Context as _;
@@ -79,6 +80,7 @@ async fn spawn_api(
             .with_storage(storage);
     let state = huxley_api::AppState {
         runner_gateway_url: config.runners.public_url.clone(),
+        trusted_pack_keys: Arc::new(config.packs.trusted_keys.clone()),
         ..state
     };
     spawn_runner_gateway(tasks, config, db, crypto, shutdown).await?;

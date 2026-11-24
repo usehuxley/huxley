@@ -22,6 +22,8 @@ pub mod module_routes;
 pub mod notification_routes;
 pub mod openapi;
 pub mod org_routes;
+mod pack_routes;
+pub mod packs;
 pub mod passkey_routes;
 pub mod problem;
 mod public_form_routes;
@@ -97,6 +99,8 @@ pub struct AppState {
     pub engine: huxley_engine::Engine,
     /// Where runners connect (`runners.public_url`), told to them at enrolment.
     pub runner_gateway_url: Option<String>,
+    /// Public keys (`packs.trusted_keys`) whose signed packs are trusted.
+    pub trusted_pack_keys: Arc<Vec<String>>,
     pub config: Arc<ApiConfig>,
     pub login_limiter: Arc<RateLimiter>,
     /// Public form links, per client address.
@@ -124,6 +128,7 @@ impl AppState {
             storage: Storage::memory(),
             engine,
             runner_gateway_url: None,
+            trusted_pack_keys: Arc::new(Vec::new()),
             auth,
             crypto,
             config: Arc::new(config),
