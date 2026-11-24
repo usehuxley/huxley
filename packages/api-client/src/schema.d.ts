@@ -2525,6 +2525,27 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
+	'/api/v1/workflows/{id}/preview': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/**
+		 * Evaluates an expression against a run of the workflow (the latest by
+		 *     default), as a top-level step of it would see it. Secret values stay
+		 *     redacted, and `secrets.*` isn't available.
+		 */
+		post: operations['preview_workflow_expression'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
 	'/api/v1/workflows/{id}/publish': {
 		parameters: {
 			query?: never;
@@ -3295,6 +3316,15 @@ export interface components {
 			key: string;
 			label: string;
 		};
+		ExpressionPreviewRequest: {
+			/** @description The expression, as written in the workflow, e.g. `"{{ steps.a.output.id }}"`. */
+			expression: Record<string, never>;
+			/**
+			 * Format: uuid
+			 * @description A run of this workflow to evaluate against. Default: the latest.
+			 */
+			runId?: string | null;
+		};
 		/**
 		 * @description Changes to a field. The key and type never change (stored values depend
 		 *     on them).
@@ -3825,6 +3855,17 @@ export interface components {
 		 * @enum {string}
 		 */
 		Preset: 'generic' | 'entra' | 'google' | 'okta' | 'authentik' | 'keycloak';
+		/** @description What an expression gives against a run (the editor's preview). */
+		Preview: {
+			/** @description Why it couldn't be evaluated, e.g. a name that isn't there. */
+			error?: string | null;
+			/**
+			 * Format: uuid
+			 * @description The run it was evaluated against.
+			 */
+			runId: string;
+			value?: Record<string, never> | null;
+		};
 		PreviewRequest: {
 			spec: string;
 		};
@@ -9791,6 +9832,40 @@ export interface operations {
 				};
 			};
 			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	preview_workflow_expression: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['ExpressionPreviewRequest'];
+			};
+		};
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['Preview'];
+				};
+			};
+			/** @description No run to preview with */
+			404: {
 				headers: {
 					[name: string]: unknown;
 				};

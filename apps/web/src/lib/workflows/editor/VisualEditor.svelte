@@ -3,7 +3,7 @@
 	import StepPanel from './StepPanel.svelte';
 	import { isStep, type Path } from './catalog.ts';
 	import { ownerOf } from './problems.ts';
-	import type { ActionChoice, EditorContext } from './context.ts';
+	import type { ActionChoice, EditorContext, PreviewResult } from './context.ts';
 
 	let {
 		draft,
@@ -11,10 +11,12 @@
 		readonly = false,
 		dirty = $bindable(false),
 		document = $bindable(),
-		actions = []
+		actions = [],
+		preview
 	}: {
 		draft: Record<string, unknown>;
 		actions?: ActionChoice[];
+		preview?: (expression: unknown) => Promise<PreviewResult>;
 		diagnostics: { path: string; message: string }[];
 		readonly?: boolean;
 		dirty?: boolean;
@@ -76,6 +78,9 @@
 		},
 		problems(key) {
 			return byStep[key] ?? [];
+		},
+		get preview() {
+			return preview;
 		},
 		get actions() {
 			return actions;

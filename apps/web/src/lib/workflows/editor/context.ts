@@ -26,4 +26,12 @@ export interface EditorContext {
 	problems(key: string): string[];
 	/** Integration actions the workflow can call. */
 	actions: ActionChoice[];
+	/** Evaluates an expression against the workflow's latest run, if offered. */
+	preview?: (expression: unknown) => Promise<PreviewResult>;
+}
+
+/** What an expression gave against a run. */
+export interface PreviewResult {
+	value?: unknown;
+	error?: string | null;
 }

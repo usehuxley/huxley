@@ -6,19 +6,24 @@
 <script lang="ts">
 	import { tick } from 'svelte';
 	import { complete, type Completion, type Suggestion } from './suggest.ts';
+	import type { PreviewResult } from './context.ts';
+	import PreviewButton from './PreviewButton.svelte';
 
 	let {
 		id,
 		value,
 		names,
 		readonly = false,
-		onchange
+		onchange,
+		preview
 	}: {
 		id: string;
 		value: string;
 		names: Suggestion[];
 		readonly?: boolean;
 		onchange: (value: string) => void;
+		/** Evaluates the expression against the latest run. */
+		preview?: (expression: unknown) => Promise<PreviewResult>;
 	} = $props();
 
 	let input = $state<HTMLInputElement>();
@@ -107,5 +112,8 @@
 				</li>
 			{/each}
 		</ul>
+	{/if}
+	{#if preview && value.includes('{{')}
+		<PreviewButton {preview} value={() => input?.value ?? value} />
 	{/if}
 </div>

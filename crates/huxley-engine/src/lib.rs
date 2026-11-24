@@ -39,7 +39,7 @@ pub use callback::CallbackRequest;
 pub use egress::{Blocked, EgressConfig, allowed_addrs};
 pub use journal::{StepStatus, step_key};
 pub use payload::{PayloadConfig, SPILLED};
-pub use run::{RunStatus, StartRun, secret_input_names};
+pub use run::{Preview, RunStatus, StartRun, secret_input_names};
 pub use walk::MAX_FOREACH_ITEMS;
 pub use worker::{EngineConfig, WorkerConfig, run_workers};
 

@@ -765,3 +765,71 @@ pub(crate) async fn start_child(
         .await?;
     Ok(Ok(child))
 }
+
+/// What an expression gives against a run (the editor's preview).
+#[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct Preview {
+    /// The run it was evaluated against.
+    pub run_id: Uuid,
+    #[schema(value_type = Option<Object>)]
+    pub value: Option<Json>,
+    /// Why it couldn't be evaluated, e.g. a name that isn't there.
+    pub error: Option<String>,
+}
+
+impl Engine {
+    /// Evaluates `expression` against run `run_id` as a top-level step of
+    /// it would see it: its inputs, trigger, the steps' recorded outputs,
+    /// variables and run details. Nothing is decrypted: secret values stay
+    /// `«redacted»`, and `secrets.*` isn't available.
+    pub async fn preview_expression(
+        &self,
+        conn: &mut PgConnection,
+        run_id: Uuid,
+        expression: &Json,
+    ) -> EngineResult<Option<Preview>> {
+        let run: Option<RunRow> = sqlx::query_as(
+            "SELECT org_id, workflow_id, workflow_version, document, status, trigger, inputs, \
+                    vars, actor_id, cancel_requested, started_at \
+               FROM runs WHERE id = $1",
+        )
+        .bind(run_id)
+        .fetch_optional(&mut *conn)
+        .await?;
+        let Some(run) = run else {
+            return Ok(None);
+        };
+        let document = load_document(&mut *conn, &run).await?;
+        let workflow: Workflow =
+            serde_json::from_value(document).map_err(|e| EngineError::Document(e.to_string()))?;
+        let journal = Journal::load(&mut *conn, run_id).await?;
+        let variables = huxley_variables::for_run(&mut *conn, &self.crypto, run.org_id).await?;
+        let mut meta = meta(
+            &workflow,
+            run.workflow_version,
+            run.started_at.unwrap_or_else(OffsetDateTime::now_utc),
+        );
+        meta.insert("id".into(), json!(run_id));
+        meta.insert("vars".into(), run.vars.clone());
+        let scope = huxley_expr::Scope::new()
+            .with("inputs", &run.inputs)
+            .with("trigger", &run.trigger)
+            .with("steps", &journal.visible(&[]))
+            .with("vars", &Json::Object(variables.vars))
+            .with("run", &Json::Object(meta))
+            .with("org", &json!({ "id": run.org_id }))
+            .with("actor", &json!({ "id": run.actor_id }))
+            .with("env", &json!({}))
+            .with("connections", &json!({}));
+        let (value, error) = match self.expr.eval(expression, &scope) {
+            Ok(evaluated) => (Some(evaluated.value), None),
+            Err(e) => (None, Some(e.to_string())),
+        };
+        Ok(Some(Preview {
+            run_id,
+            value,
+            error,
+        }))
+    }
+}

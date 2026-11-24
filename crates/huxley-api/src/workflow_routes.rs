@@ -35,6 +35,7 @@ pub fn workflow_routes() -> Router<AppState> {
         .route("/{id}/draft", put(save_draft))
         .route("/{id}/publish", post(publish))
         .route("/{id}/template", post(save_as_template))
+        .route("/{id}/preview", post(preview_expression))
         .route("/{id}/archive", post(archive))
         .route("/{id}/restore", post(restore))
         .route("/{id}/run-as", put(set_run_as))
@@ -329,6 +330,62 @@ pub async fn save_draft(
 #[derive(Debug, Default, Deserialize, ToSchema)]
 pub struct PublishRequest {
     pub notes: Option<String>,
+}
+
+#[derive(Debug, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ExpressionPreviewRequest {
+    /// The expression, as written in the workflow, e.g. `"{{ steps.a.output.id }}"`.
+    #[schema(value_type = Object)]
+    pub expression: JsonValue,
+    /// A run of this workflow to evaluate against. Default: the latest.
+    #[serde(default)]
+    pub run_id: Option<Uuid>,
+}
+
+/// Evaluates an expression against a run of the workflow (the latest by
+/// default), as a top-level step of it would see it. Secret values stay
+/// redacted, and `secrets.*` isn't available.
+#[utoipa::path(post, path = "/api/v1/workflows/{id}/preview", operation_id = "preview_workflow_expression", tag = "workflows",
+    params(("id" = Uuid, Path)), request_body = ExpressionPreviewRequest,
+    responses((status = 200, body = huxley_engine::Preview),
+              (status = 404, description = "No run to preview with", body = ApiError, content_type = "application/problem+json")))]
+pub async fn preview_expression(
+    State(state): State<AppState>,
+    authed: Authed,
+    Path(id): Path<Uuid>,
+    Json(body): Json<ExpressionPreviewRequest>,
+) -> ApiResult<Json<huxley_engine::Preview>> {
+    authorize(&state, &authed, permissions::WORKFLOW_WRITE, id).await?;
+    let mut tx = begin_scoped(&state.db, &OrgScope::System)
+        .await
+        .map_err(db_err)?;
+    let run_id: Option<Uuid> = sqlx::query_scalar(
+        "SELECT id FROM runs WHERE workflow_id = $1 AND ($2::uuid IS NULL OR id = $2) \
+          ORDER BY created_at DESC LIMIT 1",
+    )
+    .bind(id)
+    .bind(body.run_id)
+    .fetch_optional(&mut *tx)
+    .await
+    .map_err(db_err)?;
+    let no_run = || {
+        ApiError::new(
+            StatusCode::NOT_FOUND,
+            "no-run",
+            "There's no run to preview with",
+        )
+        .with_detail("Run it once (a test run is enough) to preview expressions with its data.")
+    };
+    let run_id = run_id.ok_or_else(no_run)?;
+    let preview = state
+        .engine
+        .preview_expression(&mut tx, run_id, &body.expression)
+        .await
+        .map_err(db_err)?
+        .ok_or_else(no_run)?;
+    tx.commit().await.map_err(db_err)?;
+    Ok(Json(preview))
 }
 
 #[derive(Debug, Deserialize, ToSchema)]
