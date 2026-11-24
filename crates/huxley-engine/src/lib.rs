@@ -33,6 +33,7 @@ pub mod runs;
 pub mod script;
 mod script_credentials;
 mod step;
+mod tickets;
 mod walk;
 mod worker;
 

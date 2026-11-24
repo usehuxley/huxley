@@ -212,6 +212,112 @@ export const STEPS: StepSpec[] = [
 		]
 	},
 	{
+		type: 'core.ticket.create',
+		label: 'Open a ticket',
+		description: 'Open a ticket for an organization; the SLA applies as usual.',
+		group: 'Data',
+		module: 'servicedesk',
+		template: { with: { title: '' } },
+		fields: [
+			{ path: 'with.title', label: 'Title', kind: 'expression' },
+			{ path: 'with.description', label: 'Description', kind: 'expression' },
+			{
+				path: 'with.org_id',
+				label: 'Organization',
+				kind: 'expression',
+				hint: 'Default: the run’s'
+			},
+			{
+				path: 'with.type',
+				label: 'Type',
+				kind: 'text',
+				hint: 'incident (default), service_request…'
+			},
+			{ path: 'with.impact', label: 'Impact', kind: 'expression', hint: '1 (high) to 3 (low)' },
+			{ path: 'with.urgency', label: 'Urgency', kind: 'expression', hint: '1 (high) to 3 (low)' },
+			{ path: 'with.queue_id', label: 'Queue', kind: 'expression' },
+			{ path: 'with.requester_id', label: 'Requester', kind: 'expression', hint: 'A contact’s id' },
+			{
+				path: 'with.assignee_user_id',
+				label: 'Assignee',
+				kind: 'expression',
+				hint: 'A person’s id'
+			}
+		]
+	},
+	{
+		type: 'core.ticket.get',
+		label: 'Get a ticket',
+		description: 'Read a ticket, and its notes if asked.',
+		group: 'Data',
+		module: 'servicedesk',
+		template: { with: { ticket_id: '' } },
+		fields: [
+			{ path: 'with.ticket_id', label: 'Ticket', kind: 'expression' },
+			{ path: 'with.notes', label: 'With notes', kind: 'expression', hint: 'true to include them' }
+		]
+	},
+	{
+		type: 'core.ticket.find',
+		label: 'Find tickets',
+		description: 'Tickets here and below, by queue, assignee, state or search.',
+		group: 'Data',
+		module: 'servicedesk',
+		template: { with: {} },
+		fields: [
+			{
+				path: 'with.state',
+				label: 'State',
+				kind: 'text',
+				hint: 'open (default), resolved, closed or all'
+			},
+			{ path: 'with.queue_id', label: 'Queue', kind: 'expression' },
+			{
+				path: 'with.assignee',
+				label: 'Assignee',
+				kind: 'expression',
+				hint: 'A person’s id, or none'
+			},
+			{ path: 'with.search', label: 'Search', kind: 'expression', hint: 'Title or number' },
+			{ path: 'with.org_id', label: 'Only this organization', kind: 'expression' },
+			{ path: 'with.limit', label: 'Limit', kind: 'expression', hint: 'Default 50' }
+		]
+	},
+	{
+		type: 'core.ticket.update',
+		label: 'Update a ticket',
+		description: 'Change fields, assignment or status; what’s left out stays.',
+		group: 'Data',
+		module: 'servicedesk',
+		template: { with: { ticket_id: '' } },
+		fields: [
+			{ path: 'with.ticket_id', label: 'Ticket', kind: 'expression' },
+			{
+				path: 'with.status',
+				label: 'Status',
+				kind: 'text',
+				hint: 'A status key, e.g. in_progress'
+			},
+			{ path: 'with.resolution', label: 'Resolution', kind: 'expression' },
+			{ path: 'with.assignee_user_id', label: 'Assignee', kind: 'expression' },
+			{ path: 'with.queue_id', label: 'Queue', kind: 'expression' },
+			{ path: 'with.priority', label: 'Priority', kind: 'text', hint: 'p1…p4, or auto' }
+		]
+	},
+	{
+		type: 'core.ticket.note',
+		label: 'Add a ticket note',
+		description: 'An internal (default), public or resolution note.',
+		group: 'Data',
+		module: 'servicedesk',
+		template: { with: { ticket_id: '', body: '' } },
+		fields: [
+			{ path: 'with.ticket_id', label: 'Ticket', kind: 'expression' },
+			{ path: 'with.body', label: 'Note', kind: 'expression' },
+			{ path: 'with.kind', label: 'Kind', kind: 'text', hint: 'internal, public or resolution' }
+		]
+	},
+	{
 		type: 'core.mail.fetch',
 		label: 'Fetch mail',
 		description: 'Fetch new mail from IMAP mailboxes; each new message raises email.received.',
@@ -685,6 +791,12 @@ export function summary(step: Step): string {
 			return text(isStep(step.with) ? step.with.email : '');
 		case 'core.company.update':
 			return text(isStep(step.with) ? step.with.status : '');
+		case 'core.ticket.create':
+			return text(isStep(step.with) ? step.with.title : '');
+		case 'core.ticket.update':
+			return text(isStep(step.with) ? step.with.status : '');
+		case 'core.ticket.note':
+			return text(isStep(step.with) ? step.with.body : '');
 		case 'core.ticket.from_email':
 			return text(isStep(step.with) ? step.with.email_id : '');
 		case 'wait_for_callback':

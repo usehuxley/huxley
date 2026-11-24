@@ -580,3 +580,107 @@ async fn email_replies_only_starts_for_public_notes_written_in_huxley() {
         json!({ "kind": "public", "note": "n1", "email": "e1", "from": "ada@acme.example" })
     ));
 }
+
+/// A workflow document around `spec` (the `spec:` body).
+fn workflow(spec: &str) -> String {
+    format!(
+        "apiVersion: usehuxley.io/v1\nkind: Workflow\nmetadata: {{ key: t, name: T }}\nspec:\n{spec}"
+    )
+}
+
+#[tokio::test]
+async fn ticket_steps_create_find_update_and_note() {
+    let Some(h) = harness().await else { return };
+    let (status, outputs, error) = h
+        .run(
+            &workflow(
+                r#"  inputs: { type: object, properties: { client: { type: string } } }
+  steps:
+    - id: open
+      type: core.ticket.create
+      with: { org_id: "{{ inputs.client }}", title: "Disk full on FS01", impact: 1, urgency: 1 }
+    - id: note
+      type: core.ticket.note
+      with: { ticket_id: "{{ steps.open.output.ticket.id }}", body: "Cleared temp files." }
+    - id: found
+      type: core.ticket.find
+      with: { search: "Disk full on FS01" }
+    - id: progress
+      type: core.ticket.update
+      with: { ticket_id: "{{ steps.open.output.ticket.id }}", status: in_progress, urgency: 3 }
+    - id: resolve
+      type: core.ticket.update
+      with: { ticket_id: "{{ steps.open.output.ticket.id }}", status: resolved, resolution: "Expanded the volume." }
+    - id: read
+      type: core.ticket.get
+      with: { ticket_id: "{{ steps.open.output.ticket.id }}", notes: true }
+  outputs:
+    source: "{{ steps.open.output.ticket.source }}"
+    priority: "{{ steps.open.output.ticket.priority }}"
+    found: "{{ steps.found.output.total }}"
+    retargeted: "{{ steps.progress.output.ticket.priority }}"
+    status: "{{ steps.read.output.ticket.statusKey }}"
+    notes: "{{ steps.read.output.notes | map(attribute='kind') | list }}"
+"#,
+            ),
+            json!({ "client": h.client }),
+        )
+        .await;
+    assert_eq!(status, RunStatus::Succeeded, "{error:?}");
+    assert_eq!(
+        outputs.unwrap(),
+        json!({
+            "source": "workflow",
+            "priority": "p1",
+            "found": 1,
+            "retargeted": "p3",
+            "status": "resolved",
+            "notes": ["internal", "resolution"],
+        })
+    );
+}
+
+#[tokio::test]
+async fn ticket_steps_stay_in_their_organization_and_refuse_secrets() {
+    let Some(h) = harness().await else { return };
+    // A ticket at another provider, out of this run's reach.
+    let other = org(&h.pools, ensure_root(&h.pools).await, "provider").await;
+    let ctx = RequestContext::system(Via::System);
+    let mut tx = begin_scoped(&h.pools.app, &OrgScope::System).await.unwrap();
+    let elsewhere = huxley_servicedesk::tickets::create(
+        &mut tx,
+        &ctx,
+        &huxley_servicedesk::tickets::NewTicket {
+            org_id: other,
+            title: "Theirs".into(),
+            ..Default::default()
+        },
+        "T",
+        None,
+    )
+    .await
+    .unwrap();
+    tx.commit().await.unwrap();
+    let (status, _, error) = h
+        .run(
+            &workflow(&format!(
+                "  steps:\n    - id: peek\n      type: core.ticket.get\n      with: {{ ticket_id: \"{}\" }}\n",
+                elsewhere.id
+            )),
+            json!({}),
+        )
+        .await;
+    assert_eq!(status, RunStatus::Failed);
+    assert_eq!(error.unwrap()["kind"], "not_found");
+
+    let (status, _, error) = h
+        .run(
+            &workflow(
+                "  steps:\n    - id: leak\n      type: core.ticket.create\n      with: { title: \"{{ secrets.generate() }}\" }\n",
+            ),
+            json!({}),
+        )
+        .await;
+    assert_eq!(status, RunStatus::Failed);
+    assert!(error.unwrap().to_string().contains("secrets"));
+}

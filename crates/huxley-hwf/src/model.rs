@@ -367,6 +367,21 @@ pub enum Step {
     /// the ticket it belongs to (the `servicedesk` module).
     #[serde(rename = "core.ticket.from_email")]
     TicketFromEmail(TicketFromEmailStep),
+    /// Open a ticket (the `servicedesk` module).
+    #[serde(rename = "core.ticket.create")]
+    TicketCreate(TicketCreateStep),
+    /// Read a ticket, and optionally its notes (the `servicedesk` module).
+    #[serde(rename = "core.ticket.get")]
+    TicketGet(TicketGetStep),
+    /// Find tickets (the `servicedesk` module).
+    #[serde(rename = "core.ticket.find")]
+    TicketFind(TicketFindStep),
+    /// Change a ticket's fields or status (the `servicedesk` module).
+    #[serde(rename = "core.ticket.update")]
+    TicketUpdate(TicketUpdateStep),
+    /// Add a note to a ticket (the `servicedesk` module).
+    #[serde(rename = "core.ticket.note")]
+    TicketNote(TicketNoteStep),
     /// Fetch new mail from IMAP mailboxes (the `servicedesk` module).
     #[serde(rename = "core.mail.fetch")]
     MailFetch(MailFetchStep),
@@ -638,6 +653,31 @@ step!(TicketEmailReplyStep {
     pub reply: TicketEmailReply,
 });
 
+step!(TicketCreateStep {
+    #[serde(rename = "with")]
+    pub ticket: TicketCreate,
+});
+
+step!(TicketGetStep {
+    #[serde(rename = "with")]
+    pub ticket: TicketGet,
+});
+
+step!(TicketFindStep {
+    #[serde(rename = "with")]
+    pub ticket: TicketFind,
+});
+
+step!(TicketUpdateStep {
+    #[serde(rename = "with")]
+    pub ticket: TicketUpdate,
+});
+
+step!(TicketNoteStep {
+    #[serde(rename = "with")]
+    pub ticket: TicketNote,
+});
+
 step!(MailFetchStep {
     #[serde(default, rename = "with")]
     pub fetch: MailFetch,
@@ -711,6 +751,11 @@ impl Step {
             TicketFromEmail,
             MailFetch,
             TicketEmailReply,
+            TicketCreate,
+            TicketGet,
+            TicketFind,
+            TicketUpdate,
+            TicketNote,
             AiPrompt,
             AiClassify,
             AiExtract
@@ -750,6 +795,11 @@ impl Step {
             Self::CompanyUpdate(_) => "core.company.update",
             Self::TicketFromEmail(_) => "core.ticket.from_email",
             Self::MailFetch(_) => "core.mail.fetch",
+            Self::TicketCreate(_) => "core.ticket.create",
+            Self::TicketGet(_) => "core.ticket.get",
+            Self::TicketFind(_) => "core.ticket.find",
+            Self::TicketUpdate(_) => "core.ticket.update",
+            Self::TicketNote(_) => "core.ticket.note",
             Self::TicketEmailReply(_) => "core.ticket.email_reply",
             Self::AiPrompt(_) => "ai.prompt",
             Self::AiClassify(_) => "ai.classify",
@@ -977,6 +1027,118 @@ pub struct TicketFromEmail {
 pub struct TicketEmailReply {
     /// The note's id (from `ticket.note_added`).
     pub note_id: Value,
+}
+
+/// A ticket to open (`core.ticket.create`): at `org_id` (default: the run's
+/// organization), with `title` and optionally `description`, `type` (a
+/// ticket type's key, default `incident`), `impact` and `urgency` (1 high …
+/// 3 low), `priority` (`p1`…`p4`, instead of the matrix), `queue_id`,
+/// `requester_id` (a contact there), `assignee_user_id`,
+/// `assignee_team_id` and `source` (default `workflow`). The SLA applies as
+/// usual. Output: `{ ticket }`.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct TicketCreate {
+    pub title: Value,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub org_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub description: Option<Value>,
+    #[serde(default, rename = "type", skip_serializing_if = "Option::is_none")]
+    pub ticket_type: Option<Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub impact: Option<Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub urgency: Option<Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub priority: Option<Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub queue_id: Option<Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub requester_id: Option<Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub assignee_user_id: Option<Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub assignee_team_id: Option<Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source: Option<Value>,
+}
+
+/// A ticket to read (`core.ticket.get`), with its notes if `notes` is
+/// true. Output: `{ ticket, notes }`.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct TicketGet {
+    pub ticket_id: Value,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub notes: Option<Value>,
+}
+
+/// Tickets to find (`core.ticket.find`) among the run's organization and
+/// those below it (or `org_id`'s): by `queue_id`, `assignee` (a person's
+/// id, or `none`), `state` (`open`, the default, `resolved`, `closed` or
+/// `all`) and `search` (title or number), most urgent first, at most
+/// `limit` (default 50). Output: `{ tickets, total }`.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct TicketFind {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub org_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub queue_id: Option<Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub assignee: Option<Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub state: Option<Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub search: Option<Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub limit: Option<Value>,
+}
+
+/// Changes to a ticket (`core.ticket.update`): any of `title`,
+/// `description`, `impact`, `urgency`, `priority` (or `auto`), and
+/// `queue_id`, `requester_id`, `assignee_user_id`, `assignee_team_id`
+/// (`null` clears); then `status` (a status's key), with `resolution` where
+/// the status needs one. Applied to the ticket as it is now. Output:
+/// `{ ticket }`.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct TicketUpdate {
+    pub ticket_id: Value,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub title: Option<Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub description: Option<Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub impact: Option<Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub urgency: Option<Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub priority: Option<Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub queue_id: Option<Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub requester_id: Option<Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub assignee_user_id: Option<Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub assignee_team_id: Option<Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub status: Option<Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub resolution: Option<Value>,
+}
+
+/// A note to add (`core.ticket.note`): `body`, and `kind`: `internal` (the
+/// default), `public` or `resolution`. Output: `{ note }`.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct TicketNote {
+    pub ticket_id: Value,
+    pub body: Value,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub kind: Option<Value>,
 }
 
 /// Mail to fetch (`core.mail.fetch`): new messages from the enabled IMAP
