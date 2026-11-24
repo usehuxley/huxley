@@ -2200,6 +2200,42 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
+	'/api/v1/queues': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** Service queues you can see. */
+		get: operations['list_queues'];
+		put?: never;
+		/** Creates a service queue. Needs `servicedesk:configure`. */
+		post: operations['create_queue'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/queues/{id}': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get: operations['get_queue'];
+		/** Changes a queue (and, if given, its members). Needs `servicedesk:configure`. */
+		put: operations['update_queue'];
+		post?: never;
+		/** Archives a queue. Needs `servicedesk:configure`. */
+		delete: operations['archive_queue'];
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
 	'/api/v1/role-assignments': {
 		parameters: {
 			query?: never;
@@ -2787,6 +2823,40 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
+	'/api/v1/servicedesk/priority-matrix': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** How impact and urgency (1 high … 3 low) make a priority. */
+		get: operations['priority_matrix'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/servicedesk/types': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** Ticket types with their statuses and allowed changes. */
+		get: operations['list_types'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
 	'/api/v1/sites/{id}': {
 		parameters: {
 			query?: never;
@@ -2956,6 +3026,98 @@ export interface paths {
 		put?: never;
 		/** Creates the template's form (if any) and a draft workflow from it. */
 		post: operations['use_template'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/tickets': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** Tickets you can see, most urgent first. `assignee=me` means you. */
+		get: operations['list_tickets'];
+		put?: never;
+		/** Creates a ticket for an organization. */
+		post: operations['create_ticket'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/tickets/{id}': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get: operations['get_ticket'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		/**
+		 * Changes a ticket's fields; send back the `version` you read. `null`
+		 *     clears queue, requester or assignee; leaving a field out keeps it.
+		 */
+		patch: operations['update_ticket'];
+		trace?: never;
+	};
+	'/api/v1/tickets/{id}/activity': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** A ticket's timeline: what changed, when and by whom. */
+		get: operations['list_activity'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/tickets/{id}/notes': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get: operations['list_notes'];
+		put?: never;
+		/** Adds a public, internal or resolution note. */
+		post: operations['add_note'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/tickets/{id}/status': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/**
+		 * Moves a ticket to another status (allowed changes only, with what the
+		 *     status needs: a resolution for Resolved).
+		 */
+		post: operations['change_status'];
 		delete?: never;
 		options?: never;
 		head?: never;
@@ -3440,6 +3602,18 @@ export interface components {
 			hidden?: boolean;
 			name?: string | null;
 			pagination?: components['schemas']['Pagination'] | null;
+		};
+		Activity: {
+			/** Format: uuid */
+			actorId?: string | null;
+			actorName?: string | null;
+			/** Format: date-time */
+			at: string;
+			details: Record<string, never>;
+			/** Format: uuid */
+			id: string;
+			/** @description `created`, `updated`, `status`, `assigned` or `note`. */
+			kind: string;
 		};
 		AddBuiltInRequest: {
 			/** Format: uuid */
@@ -4097,6 +4271,13 @@ export interface components {
 			/** Format: uuid */
 			parentId: string;
 		};
+		CreateQueue: components['schemas']['QueueInput'] & {
+			/**
+			 * Format: uuid
+			 * @description The organization it belongs to (usually your MSP).
+			 */
+			orgId: string;
+		};
 		CreateScriptRequest: {
 			/** Format: uuid */
 			orgId: string;
@@ -4549,6 +4730,14 @@ export interface components {
 					/** @enum {string} */
 					status: 'mfaRequired';
 			  };
+		/** @description One cell of the priority matrix. */
+		MatrixCell: {
+			/** Format: int32 */
+			impact: number;
+			priority: string;
+			/** Format: int32 */
+			urgency: number;
+		};
 		/** @description The signed-in user plus permission hints for the UI. */
 		MeView: components['schemas']['UserView'] & {
 			/** @description Feature modules that are enabled and released. */
@@ -4651,6 +4840,11 @@ export interface components {
 			/** Format: uuid */
 			scopeOrgId?: string | null;
 		};
+		NewNote: {
+			body: string;
+			/** @description `public` (the requester can see it), `internal` or `resolution`. */
+			kind: string;
+		};
 		/** @description A new script. */
 		NewScript: {
 			description?: string | null;
@@ -4662,6 +4856,42 @@ export interface components {
 				[key: string]: unknown;
 			} | null;
 			source: string;
+		};
+		NewTicket: {
+			/** Format: uuid */
+			assigneeTeamId?: string | null;
+			/** Format: uuid */
+			assigneeUserId?: string | null;
+			description?: string | null;
+			/**
+			 * Format: int32
+			 * @description 1 (high) to 3 (low); default 2.
+			 */
+			impact?: number | null;
+			/**
+			 * Format: uuid
+			 * @description The organization it's for.
+			 */
+			orgId: string;
+			/** @description `p1` to `p4`, instead of the priority matrix. */
+			priority?: string | null;
+			/** Format: uuid */
+			queueId?: string | null;
+			/**
+			 * Format: uuid
+			 * @description A contact at the organization.
+			 */
+			requesterId?: string | null;
+			/** @description Where it came from (default `web`). */
+			source?: string | null;
+			title: string;
+			/** @description A ticket type's key (default `incident`). */
+			type?: string | null;
+			/**
+			 * Format: int32
+			 * @description 1 (high) to 3 (low); default 2.
+			 */
+			urgency?: number | null;
 		};
 		/** @description The next version of a script. */
 		NewVersion: {
@@ -4676,6 +4906,20 @@ export interface components {
 				[key: string]: unknown;
 			} | null;
 			source: string;
+		};
+		Note: {
+			/** Format: uuid */
+			authorContactId?: string | null;
+			authorName?: string | null;
+			/** Format: uuid */
+			authorUserId?: string | null;
+			body: string;
+			/** Format: date-time */
+			createdAt: string;
+			/** Format: uuid */
+			id: string;
+			/** @description `public`, `internal` or `resolution`. */
+			kind: string;
 		};
 		Notification: {
 			body: string;
@@ -4978,6 +5222,42 @@ export interface components {
 			orderBy?: string | null;
 			/** Format: uuid */
 			orgId?: string | null;
+		};
+		Queue: {
+			/** Format: date-time */
+			archivedAt?: string | null;
+			/** Format: date-time */
+			createdAt: string;
+			description: string;
+			/** Format: uuid */
+			id: string;
+			name: string;
+			/**
+			 * Format: int64
+			 * @description Tickets in it that aren't closed.
+			 */
+			openTickets: number;
+			/** Format: uuid */
+			orgId: string;
+			/** @description Member teams' ids. */
+			teamIds: string[];
+			/** @description Member people's ids. */
+			userIds: string[];
+			/** Format: int32 */
+			version: number;
+		};
+		QueueInput: {
+			description?: string | null;
+			name: string;
+			/** @description Member teams (replaces the list when given). */
+			teamIds?: string[] | null;
+			/** @description Member people (replaces the list when given). */
+			userIds?: string[] | null;
+			/**
+			 * Format: int32
+			 * @description The version you read (updates only).
+			 */
+			version?: number | null;
 		};
 		/** @description A fixed-window rate limit. */
 		RateLimit: {
@@ -5485,6 +5765,30 @@ export interface components {
 			 */
 			state: string;
 		};
+		Status: {
+			/** @description `new`, `open`, `pending`, `resolved` or `closed`. */
+			category: string;
+			/** Format: uuid */
+			id: string;
+			key: string;
+			name: string;
+			/** @description The SLA clock stops while a ticket is here. */
+			pausesSla: boolean;
+			/** @description Needed to enter it: `resolution` (a resolution note), `assignee`. */
+			requires: string[];
+		};
+		/** @description A status change. */
+		StatusChange: {
+			/** @description A resolution note, for statuses that need one. */
+			resolution?: string | null;
+			/** @description The new status's key. */
+			status: string;
+			/**
+			 * Format: int32
+			 * @description The version you read.
+			 */
+			version: number;
+		};
 		/** @description The latest attempt of a step. */
 		StepRunView: {
 			/** Format: int32 */
@@ -5702,6 +6006,108 @@ export interface components {
 			};
 			/** Format: uuid */
 			orgId: string;
+		};
+		Ticket: {
+			/** Format: uuid */
+			assigneeTeamId?: string | null;
+			assigneeTeamName?: string | null;
+			/** Format: uuid */
+			assigneeUserId?: string | null;
+			assigneeUserName?: string | null;
+			/** Format: date-time */
+			closedAt?: string | null;
+			/** Format: date-time */
+			createdAt: string;
+			customFields: {
+				[key: string]: unknown;
+			};
+			description: string;
+			/** Format: date-time */
+			firstResponseAt?: string | null;
+			/** Format: uuid */
+			id: string;
+			/**
+			 * Format: int32
+			 * @description 1 (high) to 3 (low).
+			 */
+			impact: number;
+			/** Format: int64 */
+			number: number;
+			/** Format: uuid */
+			orgId: string;
+			orgName: string;
+			/** @description `p1` to `p4`. */
+			priority: string;
+			/** @description Chosen by someone rather than following the matrix. */
+			priorityOverridden: boolean;
+			/** Format: uuid */
+			queueId?: string | null;
+			queueName?: string | null;
+			/** @description The ticket's number with its prefix, e.g. `T-1042`. */
+			reference: string;
+			requesterEmail?: string | null;
+			/** Format: uuid */
+			requesterId?: string | null;
+			requesterName?: string | null;
+			/** Format: date-time */
+			resolvedAt?: string | null;
+			source: string;
+			/** @description `new`, `open`, `pending`, `resolved` or `closed`. */
+			statusCategory: string;
+			statusKey: string;
+			statusName: string;
+			title: string;
+			typeKey: string;
+			typeName: string;
+			/** Format: date-time */
+			updatedAt: string;
+			/**
+			 * Format: int32
+			 * @description 1 (high) to 3 (low).
+			 */
+			urgency: number;
+			/** Format: int32 */
+			version: number;
+		};
+		TicketChanges: {
+			/** Format: uuid */
+			assigneeTeamId?: string | null;
+			/** Format: uuid */
+			assigneeUserId?: string | null;
+			description?: string | null;
+			/** Format: int32 */
+			impact?: number | null;
+			/** @description `p1` to `p4`, or `auto` to follow the priority matrix again. */
+			priority?: string | null;
+			/** Format: uuid */
+			queueId?: string | null;
+			/** Format: uuid */
+			requesterId?: string | null;
+			title?: string | null;
+			/** Format: int32 */
+			urgency?: number | null;
+			/**
+			 * Format: int32
+			 * @description The version you read.
+			 */
+			version: number;
+		};
+		TicketPage: {
+			items: components['schemas']['Ticket'][];
+			/** Format: int64 */
+			total: number;
+		};
+		TicketType: {
+			description: string;
+			/** Format: uuid */
+			id: string;
+			key: string;
+			name: string;
+			statuses: components['schemas']['Status'][];
+			/** @description Allowed status changes (from key → to keys). Empty: any change. */
+			transitions: {
+				[key: string]: string[];
+			};
 		};
 		TotpEnrollmentView: {
 			/** @description `otpauth://` URI to show as a QR code. */
@@ -10444,6 +10850,148 @@ export interface operations {
 			};
 		};
 	};
+	list_queues: {
+		parameters: {
+			query?: {
+				orgId?: string | null;
+				includeArchived?: boolean;
+			};
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['Queue'][];
+				};
+			};
+		};
+	};
+	create_queue: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['CreateQueue'];
+			};
+		};
+		responses: {
+			201: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['Queue'];
+				};
+			};
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	get_queue: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['Queue'];
+				};
+			};
+			404: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	update_queue: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['QueueInput'];
+			};
+		};
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['Queue'];
+				};
+			};
+			409: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	archive_queue: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			204: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content?: never;
+			};
+			404: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
 	create_assignment: {
 		parameters: {
 			query?: never;
@@ -11669,6 +12217,44 @@ export interface operations {
 			};
 		};
 	};
+	priority_matrix: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['MatrixCell'][];
+				};
+			};
+		};
+	};
+	list_types: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['TicketType'][];
+				};
+			};
+		};
+	};
 	get_site: {
 		parameters: {
 			query?: never;
@@ -12172,6 +12758,254 @@ export interface operations {
 				};
 				content: {
 					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+			409: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	list_tickets: {
+		parameters: {
+			query?: {
+				orgId?: string | null;
+				queueId?: string | null;
+				/** @description A person's id, or `none` for unassigned. */
+				assignee?: string | null;
+				/** @description `open` (not resolved or closed, the default), `resolved`, `closed` or `all`. */
+				state?: string | null;
+				/** @description Matches titles and the ticket number. */
+				search?: string | null;
+				/** @description 1 to 200 (default 50). */
+				limit?: number | null;
+				offset?: number | null;
+			};
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['TicketPage'];
+				};
+			};
+		};
+	};
+	create_ticket: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['NewTicket'];
+			};
+		};
+		responses: {
+			201: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['Ticket'];
+				};
+			};
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	get_ticket: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['Ticket'];
+				};
+			};
+			404: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	update_ticket: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['TicketChanges'];
+			};
+		};
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['Ticket'];
+				};
+			};
+			409: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	list_activity: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['Activity'][];
+				};
+			};
+		};
+	};
+	list_notes: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['Note'][];
+				};
+			};
+		};
+	};
+	add_note: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['NewNote'];
+			};
+		};
+		responses: {
+			201: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['Note'];
+				};
+			};
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	change_status: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['StatusChange'];
+			};
+		};
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['Ticket'];
 				};
 			};
 			409: {

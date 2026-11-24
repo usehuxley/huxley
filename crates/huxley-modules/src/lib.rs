@@ -51,7 +51,7 @@ pub const REGISTRY: &[Module] = &[
         description: "Tickets, service queues, SLAs, mailbox ingestion, and dispatch.",
         requires: &["crm"],
         phase: 5,
-        released: false,
+        released: true,
     },
     Module {
         key: "cmdb",

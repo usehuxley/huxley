@@ -50,9 +50,12 @@ async fn setup() -> Option<Setup> {
     // The module is instance-wide: switch it on (other tests may have too).
     let ctx = RequestContext::system(Via::System);
     let mut tx = begin_scoped(&pools.app, &OrgScope::System).await.unwrap();
-    huxley_modules::set_enabled(&mut tx, &ctx, "crm", true, false)
-        .await
-        .unwrap();
+    // Service desk needs crm, so it's on too: narrowing crm off turns it off first.
+    for module in ["crm", "servicedesk"] {
+        huxley_modules::set_enabled(&mut tx, &ctx, module, true, false)
+            .await
+            .unwrap();
+    }
     tx.commit().await.unwrap();
     let provider = org(&pools, root, huxley_orgs::OrgKind::Provider, "Crm MSP").await;
     let acme = org(&pools, provider, huxley_orgs::OrgKind::Client, "Acme").await;
@@ -110,6 +113,24 @@ async fn login(app: &axum::Router, email: &str) -> String {
     assert_eq!(res.status(), StatusCode::OK);
     let cookie = res.headers()["set-cookie"].to_str().unwrap();
     cookie.split(';').next().unwrap().to_owned()
+}
+
+/// Turns a module off for a provider, first turning off for it the
+/// enabled modules that need it (other tests turn modules on instance-wide).
+async fn narrow_off(tx: &mut sqlx::PgConnection, provider: Uuid, module: &'static str) {
+    let ctx = RequestContext::system(Via::System);
+    let mut pending = vec![module];
+    while let Some(&key) = pending.last() {
+        match huxley_modules::set_for_org(tx, &ctx, provider, key, false).await {
+            Ok(_) => {
+                pending.pop();
+            }
+            Err(huxley_modules::SetError::Module(huxley_modules::ModuleError::HasDependents(
+                needing,
+            ))) => pending.extend(needing),
+            Err(e) => panic!("turning {key} off: {e}"),
+        }
+    }
 }
 
 impl Setup {
@@ -478,11 +499,8 @@ async fn custom_fields_and_the_module_gate() {
     assert_eq!(status, StatusCode::FORBIDDEN);
 
     // Off for this provider and its clients: the routes don't exist there.
-    let ctx = RequestContext::system(Via::System);
     let mut tx = begin_scoped(&s.pools.app, &OrgScope::System).await.unwrap();
-    huxley_modules::set_for_org(&mut tx, &ctx, s.provider, "crm", false)
-        .await
-        .unwrap();
+    narrow_off(&mut tx, s.provider, "crm").await;
     tx.commit().await.unwrap();
     let (status, problem) = s.call(&s.owner, "GET", &acme_contacts, None).await;
     assert_eq!(status, StatusCode::NOT_FOUND);
@@ -549,11 +567,8 @@ async fn the_company_list_follows_permissions_and_the_module() {
     assert_eq!(listed[0]["kind"], "provider", "{listed}");
 
     // Off for the provider: its clients leave the list.
-    let ctx = RequestContext::system(Via::System);
     let mut tx = begin_scoped(&s.pools.app, &OrgScope::System).await.unwrap();
-    huxley_modules::set_for_org(&mut tx, &ctx, s.provider, "crm", false)
-        .await
-        .unwrap();
+    narrow_off(&mut tx, s.provider, "crm").await;
     tx.commit().await.unwrap();
     let (_, gone) = s.call(&s.owner, "GET", &search(""), None).await;
     assert_eq!(gone, json!([]));

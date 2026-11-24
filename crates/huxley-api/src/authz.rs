@@ -119,6 +119,49 @@ impl Authed {
         }
     }
 
+    /// The organizations where the caller holds `permission` and `module`
+    /// is active (not turned off by a provider above them): the scope for
+    /// listing a module's records across organizations.
+    pub async fn module_scope(
+        &self,
+        state: &AppState,
+        permission: &str,
+        module: &str,
+    ) -> ApiResult<OrgScope> {
+        let mut tx = begin_scoped(&state.db, &OrgScope::System)
+            .await
+            .map_err(|e| ApiError::internal(&e))?;
+        let visible = huxley_authz::visible_orgs(&mut tx, &self.principal)
+            .await
+            .map_err(|e| ApiError::internal(&e))?;
+        let paths: Vec<(Uuid, String)> =
+            sqlx::query_as("SELECT id, path::text FROM organizations WHERE id = ANY($1)")
+                .bind(&visible)
+                .fetch_all(&mut *tx)
+                .await
+                .map_err(|e| ApiError::internal(&e))?;
+        // Narrowings are only readable in system scope.
+        let off: Vec<String> = sqlx::query_scalar(
+            "SELECT o.path::text FROM module_settings s \
+               JOIN organizations o ON o.id = s.org_id AND o.parent_id IS NOT NULL \
+              WHERE s.module_key = $1 AND NOT s.enabled",
+        )
+        .bind(module)
+        .fetch_all(&mut *tx)
+        .await
+        .map_err(|e| ApiError::internal(&e))?;
+        tx.commit().await.map_err(|e| ApiError::internal(&e))?;
+        let under = |path: &str, top: &str| path == top || path.starts_with(&format!("{top}."));
+        Ok(OrgScope::Orgs(
+            paths
+                .into_iter()
+                .filter(|(_, path)| self.principal.can_at_path(permission, path))
+                .filter(|(_, path)| !off.iter().any(|top| under(path, top)))
+                .map(|(id, _)| id)
+                .collect(),
+        ))
+    }
+
     /// The RLS scope for this user: every org where they hold a grant.
     pub async fn scope(&self, state: &AppState) -> ApiResult<OrgScope> {
         let mut tx = begin_scoped(&state.db, &OrgScope::System)

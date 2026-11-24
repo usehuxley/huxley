@@ -81,7 +81,10 @@ export default defineConfig({
 			},
 			{
 				text: 'Modules',
-				items: [{ text: 'Clients and contacts', link: '/crm' }]
+				items: [
+					{ text: 'Clients and contacts', link: '/crm' },
+					{ text: 'Service desk', link: '/servicedesk' }
+				]
 			},
 			{
 				text: 'Sharing',
