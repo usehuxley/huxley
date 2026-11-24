@@ -101,3 +101,5 @@ When someone submits the form:
 | `form:manage` | Creating, editing, archiving and restoring forms |
 
 Not yet: the drag-and-drop builder, options loaded from integrations, conditional fields, password fields, and public or client-portal links.
+
+Choices can also come from a [dataset](datasets.md): `options_from: { dataset, filters, value, label }`.
