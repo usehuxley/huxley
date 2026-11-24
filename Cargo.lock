@@ -1937,6 +1937,7 @@ version = "0.1.0"
 dependencies = [
  "huxley-core",
  "huxley-db",
+ "huxley-hwf",
  "huxley-orgs",
  "serde",
  "serde_json",
@@ -1984,6 +1985,7 @@ dependencies = [
  "getrandom 0.4.3",
  "huxley-core",
  "huxley-crypto",
+ "huxley-datasets",
  "huxley-db",
  "huxley-email",
  "huxley-expr",
@@ -2364,6 +2366,7 @@ dependencies = [
  "base64 0.23.1",
  "huxley-core",
  "huxley-crypto",
+ "huxley-datasets",
  "huxley-db",
  "huxley-engine",
  "huxley-expr",

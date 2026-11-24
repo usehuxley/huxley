@@ -315,18 +315,11 @@ impl<'a> Walker<'a> {
             }
             Step::SetVar(_) | Step::Return(_) | Step::Fail(_) => self.instant(step, frame),
             Step::Wait(s) => self.wait(step, s, frame),
-            Step::HttpRequest(s) => {
-                let value = serde_json::to_value(&s.request).unwrap_or(Json::Null);
-                self.external(step, &value, frame)
-            }
-            Step::Email(s) => {
-                let value = serde_json::to_value(&s.email).unwrap_or(Json::Null);
-                self.external(step, &value, frame)
-            }
-            Step::Notify(s) => {
-                let value = serde_json::to_value(&s.notification).unwrap_or(Json::Null);
-                self.external(step, &value, frame)
-            }
+            Step::HttpRequest(_)
+            | Step::Email(_)
+            | Step::Notify(_)
+            | Step::DatasetQuery(_)
+            | Step::DatasetUpsert(_) => self.external(step, &with_block(step), frame),
             Step::Subworkflow(s) => {
                 let value = json!({ "workflow": s.workflow, "inputs": s.inputs, "wait": s.wait });
                 self.external(step, &value, frame)
@@ -768,4 +761,17 @@ fn collect_strings<'v>(value: &'v Json, out: &mut Vec<&'v str>) {
         Json::Object(map) => map.values().for_each(|v| collect_strings(v, out)),
         _ => {}
     }
+}
+
+/// A step's `with:` block, for steps that hand it straight to their executor.
+fn with_block(step: &Step) -> Json {
+    let value = match step {
+        Step::HttpRequest(s) => serde_json::to_value(&s.request),
+        Step::Email(s) => serde_json::to_value(&s.email),
+        Step::Notify(s) => serde_json::to_value(&s.notification),
+        Step::DatasetQuery(s) => serde_json::to_value(&s.query),
+        Step::DatasetUpsert(s) => serde_json::to_value(&s.upsert),
+        _ => Ok(Json::Null),
+    };
+    value.unwrap_or(Json::Null)
 }

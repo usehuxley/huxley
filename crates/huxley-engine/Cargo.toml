@@ -20,6 +20,7 @@ huxley-integrations.workspace = true
 huxley-notify.workspace = true
 huxley-email.workspace = true
 huxley-scripts.workspace = true
+huxley-datasets.workspace = true
 huxley-storage.workspace = true
 huxley-variables.workspace = true
 huxley-workflows.workspace = true

@@ -2167,6 +2167,119 @@
 				}
 			}
 		},
+		"/api/v1/datasets/{id}/sync": {
+			"get": {
+				"tags": ["datasets"],
+				"summary": "A dataset's sync settings, and when it next and last synced.",
+				"operationId": "get_dataset_sync",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/SyncState"
+								}
+							}
+						}
+					}
+				}
+			},
+			"put": {
+				"tags": ["datasets"],
+				"summary": "Sets (or stops) a dataset's sync from an integration.",
+				"operationId": "set_dataset_sync",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/SetSyncRequest"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/SyncState"
+								}
+							}
+						}
+					},
+					"422": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/datasets/{id}/sync/run": {
+			"post": {
+				"tags": ["datasets"],
+				"summary": "Syncs a dataset now.",
+				"operationId": "run_dataset_sync",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"responses": {
+					"201": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/SyncStarted"
+								}
+							}
+						}
+					},
+					"409": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
 		"/api/v1/entities/{entity_type}/{id}/attachments": {
 			"get": {
 				"tags": ["fields"],
@@ -12101,6 +12214,23 @@
 					}
 				}
 			},
+			"SetSyncRequest": {
+				"type": "object",
+				"properties": {
+					"sync": {
+						"oneOf": [
+							{
+								"$ref": "#/components/schemas/SyncConfig",
+								"description": "The sync settings; `null` stops syncing."
+							},
+							{
+								"type": "null"
+							}
+						]
+					}
+				},
+				"additionalProperties": false
+			},
 			"SetValuesRequest": {
 				"type": "object",
 				"required": ["values"],
@@ -12366,6 +12496,129 @@
 					"submissionId": {
 						"type": "string",
 						"format": "uuid"
+					}
+				}
+			},
+			"SyncConfig": {
+				"type": "object",
+				"description": "A dataset's sync settings.",
+				"required": ["action", "map"],
+				"properties": {
+					"action": {
+						"type": "string",
+						"description": "The list action, `<integration>/<action>` (with pagination set in\nthe integration's overlay, all pages are fetched)."
+					},
+					"connection": {
+						"type": ["string", "null"],
+						"description": "A connection key (default: the nearest the organization can use)."
+					},
+					"map": {
+						"type": "object",
+						"description": "Column → dot path into each fetched item.",
+						"additionalProperties": {
+							"type": "string"
+						},
+						"propertyNames": {
+							"type": "string"
+						}
+					},
+					"maxPages": {
+						"type": ["integer", "null"],
+						"format": "int32",
+						"description": "The most pages fetched (default 20, at most 100).",
+						"minimum": 0
+					},
+					"mode": {
+						"$ref": "#/components/schemas/SyncMode"
+					},
+					"orgs": {
+						"$ref": "#/components/schemas/SyncOrgs"
+					},
+					"schedule": {
+						"oneOf": [
+							{
+								"$ref": "#/components/schemas/SyncSchedule",
+								"description": "None: only when started by hand."
+							},
+							{
+								"type": "null"
+							}
+						]
+					},
+					"with": {
+						"type": ["object", "null"],
+						"description": "The action's inputs.",
+						"additionalProperties": {},
+						"propertyNames": {
+							"type": "string"
+						}
+					}
+				},
+				"additionalProperties": false
+			},
+			"SyncMode": {
+				"type": "string",
+				"description": "How a sync writes.",
+				"enum": ["replace", "upsert"]
+			},
+			"SyncOrgs": {
+				"type": "string",
+				"description": "Which organizations a sync runs for.",
+				"enum": ["own", "clients", "all"]
+			},
+			"SyncSchedule": {
+				"type": "object",
+				"description": "When a sync runs on its own.",
+				"properties": {
+					"cron": {
+						"type": ["string", "null"],
+						"description": "Five-field cron expression. Set this or `interval`."
+					},
+					"interval": {
+						"type": ["string", "null"],
+						"description": "e.g. `6h`. Set this or `cron`."
+					},
+					"timezone": {
+						"type": ["string", "null"],
+						"description": "IANA time zone for `cron` (default: the organization's)."
+					}
+				},
+				"additionalProperties": false
+			},
+			"SyncStarted": {
+				"type": "object",
+				"required": ["runs"],
+				"properties": {
+					"runs": {
+						"type": "array",
+						"items": {
+							"type": "string",
+							"format": "uuid"
+						},
+						"description": "One run per target organization."
+					}
+				}
+			},
+			"SyncState": {
+				"type": "object",
+				"properties": {
+					"lastAt": {
+						"type": ["string", "null"],
+						"format": "date-time"
+					},
+					"nextAt": {
+						"type": ["string", "null"],
+						"format": "date-time"
+					},
+					"sync": {
+						"oneOf": [
+							{
+								"$ref": "#/components/schemas/SyncConfig"
+							},
+							{
+								"type": "null"
+							}
+						]
 					}
 				}
 			},

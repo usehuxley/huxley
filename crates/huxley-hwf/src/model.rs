@@ -344,6 +344,12 @@ pub enum Step {
     /// Send an email to any address, through the instance's mail server.
     #[serde(rename = "core.email")]
     Email(EmailStep),
+    /// Read rows of a dataset (the run's organization's and those below).
+    #[serde(rename = "dataset.query")]
+    DatasetQuery(DatasetQueryStep),
+    /// Write rows to a dataset.
+    #[serde(rename = "dataset.upsert")]
+    DatasetUpsert(DatasetUpsertStep),
 }
 
 /// Declares a step struct with the common fields first.
@@ -559,6 +565,16 @@ step!(EmailStep {
     pub email: EmailMessage,
 });
 
+step!(DatasetQueryStep {
+    #[serde(rename = "with")]
+    pub query: DatasetQuery,
+});
+
+step!(DatasetUpsertStep {
+    #[serde(rename = "with")]
+    pub upsert: DatasetUpsert,
+});
+
 const fn yes() -> bool {
     true
 }
@@ -602,7 +618,9 @@ impl Step {
             Return,
             Fail,
             Notify,
-            Email
+            Email,
+            DatasetQuery,
+            DatasetUpsert
         )
     }
 
@@ -631,6 +649,8 @@ impl Step {
             Self::Fail(_) => "fail",
             Self::Notify(_) => "core.notify",
             Self::Email(_) => "core.email",
+            Self::DatasetQuery(_) => "dataset.query",
+            Self::DatasetUpsert(_) => "dataset.upsert",
         }
     }
 
@@ -785,6 +805,45 @@ pub enum BodyType {
     Form,
     /// A string, sent as is.
     Text,
+}
+
+/// Rows to read (`dataset.query`). Output: `{ rows, total }`.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct DatasetQuery {
+    /// The dataset's key: the run's organization's, or the nearest above.
+    pub dataset: String,
+    /// Column values rows must equal.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub filters: Option<Value>,
+    /// Only this organization's rows (it must be the run's or below it).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub org_id: Option<String>,
+    /// A column to sort by; `-name` sorts descending.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub order_by: Option<String>,
+    /// At most this many rows (default 100, at most 1000).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub limit: Option<Value>,
+}
+
+/// Rows to write (`dataset.upsert`). Output: `{ written }`.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct DatasetUpsert {
+    pub dataset: String,
+    /// A list of rows (objects of column values), usually an expression.
+    pub rows: Value,
+    /// The organization the rows belong to (default: the run's).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub org_id: Option<String>,
+    /// Replace all of that organization's rows (a full refresh).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub replace: Option<Value>,
+    /// Build each row from an item of `rows`: column name → dot path into
+    /// the item (e.g. `upn: userPrincipalName`, `city: address.city`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub map: Option<Value>,
 }
 
 /// An email to send (`core.email`).

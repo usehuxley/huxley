@@ -138,6 +138,16 @@ impl Harness {
         spec: &str,
         inputs: Json,
     ) -> (Uuid, RunStatus, Option<Json>, Option<Json>) {
+        self.run_in(self.org, spec, inputs).await
+    }
+
+    /// Runs `spec` as a workflow of organization `org`.
+    async fn run_in(
+        &self,
+        org: Uuid,
+        spec: &str,
+        inputs: Json,
+    ) -> (Uuid, RunStatus, Option<Json>, Option<Json>) {
         let yaml = format!(
             "apiVersion: usehuxley.com/v1\nkind: Workflow\nmetadata: {{ key: t, name: T }}\nspec:\n{spec}"
         );
@@ -150,7 +160,7 @@ impl Harness {
             .start_run(
                 &mut tx,
                 StartRun {
-                    org_id: self.org,
+                    org_id: org,
                     workflow_id: None,
                     version: None,
                     document: Some(document),
@@ -662,4 +672,146 @@ async fn pinned_secret_results_are_resealed_for_the_new_run() {
         assert!(Instant::now() < deadline, "the pinned run didn't finish");
         tokio::time::sleep(Duration::from_millis(20)).await;
     }
+}
+
+/// A client below the harness's provider, and a users dataset at the
+/// provider. Returns the client.
+async fn users_dataset(h: &Harness) -> Uuid {
+    // A client below the harness's provider, and a users dataset at the provider.
+    let client = Uuid::now_v7();
+    let mut tx = begin_scoped(&h.pools.app, &OrgScope::System).await.unwrap();
+    sqlx::query("INSERT INTO organizations (id, parent_id, kind, name, path) VALUES ($1, $2, 'client', $3, '')")
+        .bind(client)
+        .bind(h.org)
+        .bind(unique("ds client"))
+        .execute(&mut *tx)
+        .await
+        .unwrap();
+    let input: huxley_datasets::DatasetInput = serde_json::from_value(json!({
+        "key": "users", "name": "Users",
+        "columns": [{ "name": "upn", "type": "text" }, { "name": "seats", "type": "integer" }],
+        "primaryKey": ["upn"]
+    }))
+    .unwrap();
+    let ctx = huxley_core::RequestContext::system(huxley_core::Via::System);
+    huxley_datasets::create(&mut tx, &ctx, h.org, &input)
+        .await
+        .unwrap();
+    tx.commit().await.unwrap();
+
+    client
+}
+
+#[tokio::test]
+async fn dataset_steps_read_and_write_their_subtree() {
+    let Some(h) = harness(1 << 20).await else {
+        return;
+    };
+    let client = users_dataset(&h).await;
+    // The provider writes rows for itself and its client, then reads them.
+    let (_, status, outputs, error) = h
+        .run_with(
+            r#"  steps:
+    - id: theirs
+      type: dataset.upsert
+      with:
+        dataset: users
+        org_id: "{{ inputs.client }}"
+        rows: [{ upn: ada@client.test, seats: 2 }, { upn: bob@client.test, seats: 1 }]
+    - id: ours
+      type: dataset.upsert
+      with: { dataset: users, rows: "{{ [{'upn': 'tech@msp.test', 'seats': 5}] }}" }
+    - id: all
+      type: dataset.query
+      with: { dataset: users, order_by: "-seats" }
+    - id: client_only
+      type: dataset.query
+      with: { dataset: users, org_id: "{{ inputs.client }}", filters: { seats: 2 } }
+  outputs:
+    written: "{{ steps.theirs.output.written }}"
+    total: "{{ steps.all.output.total }}"
+    top: "{{ steps.all.output.rows[0].upn }}"
+    match: "{{ steps.client_only.output.rows[0].upn }}"
+"#,
+            json!({ "client": client }),
+        )
+        .await;
+    assert_eq!(status, RunStatus::Succeeded, "{error:?}");
+    assert_eq!(
+        outputs.unwrap(),
+        json!({ "written": 2, "total": 3, "top": "tech@msp.test", "match": "ada@client.test" })
+    );
+
+    // A run of the client writes its own rows to its MSP's dataset (row
+    // security hides the MSP itself from it), sees only its own rows, and
+    // can't write above itself.
+    let (_, status, outputs, error) = h
+        .run_in(
+            client,
+            r#"  steps:
+    - id: add
+      type: dataset.upsert
+      with: { dataset: users, rows: [{ upn: cat@client.test }] }
+    - id: mine
+      type: dataset.query
+      with: { dataset: users }
+  outputs: { total: "{{ steps.mine.output.total }}" }
+"#,
+            json!({}),
+        )
+        .await;
+    assert_eq!(status, RunStatus::Succeeded, "{error:?}");
+    assert_eq!(outputs.unwrap(), json!({ "total": 3 }));
+    let (_, status, _, error) = h
+        .run_in(
+            client,
+            r#"  steps:
+    - id: up
+      type: dataset.upsert
+      with: { dataset: users, org_id: "{{ inputs.provider }}", rows: [{ upn: evil@x }] }
+"#,
+            json!({ "provider": h.org }),
+        )
+        .await;
+    assert_eq!(status, RunStatus::Failed);
+    assert!(error.unwrap().to_string().contains("one below it"));
+}
+
+#[tokio::test]
+async fn secrets_never_go_into_datasets() {
+    let Some(h) = harness(1 << 20).await else {
+        return;
+    };
+    users_dataset(&h).await;
+    // Secrets never go into a dataset.
+    let (_, status, _, error) = h
+        .run_with(
+            r#"  inputs:
+    type: object
+    properties: { pin: { type: string, writeOnly: true } }
+  steps:
+    - id: leak
+      type: dataset.upsert
+      with: { dataset: users, rows: "{{ [{'upn': inputs.pin}] }}" }
+"#,
+            json!({ "pin": "1234-SECRET" }),
+        )
+        .await;
+    assert_eq!(status, RunStatus::Failed);
+    assert!(error.unwrap().to_string().contains("secrets"));
+    let leaked: i64 = sqlx::query_scalar(sqlx::AssertSqlSafe(format!(
+        "SELECT count(*) FROM datasets.ds_{} WHERE upn LIKE '%SECRET%'",
+        {
+            let mut tx = begin_scoped(&h.pools.app, &OrgScope::System).await.unwrap();
+            huxley_datasets::find(&mut tx, h.org, "users")
+                .await
+                .unwrap()
+                .id
+                .simple()
+        }
+    )))
+    .fetch_one(&h.pools.owner)
+    .await
+    .unwrap();
+    assert_eq!(leaked, 0);
 }

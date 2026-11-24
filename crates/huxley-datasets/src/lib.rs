@@ -15,6 +15,8 @@ use time::OffsetDateTime;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
+pub mod sync;
+
 /// Most columns a dataset may have.
 pub const MAX_COLUMNS: usize = 200;
 /// Most rows one write may carry.
@@ -36,7 +38,7 @@ pub enum DatasetError {
 
 pub type DatasetResult<T> = Result<T, DatasetError>;
 
-fn invalid(at: impl Into<String>, message: impl Into<String>) -> DatasetError {
+pub(crate) fn invalid(at: impl Into<String>, message: impl Into<String>) -> DatasetError {
     DatasetError::Invalid(at.into(), message.into())
 }
 
@@ -352,16 +354,22 @@ pub async fn list(conn: &mut PgConnection) -> DatasetResult<Vec<Dataset>> {
 }
 
 /// The dataset `key` for `org_id`: its own, or the nearest above it.
+/// `key` may also be a dataset's id (which must be at `org_id` or above).
 pub async fn find(conn: &mut PgConnection, org_id: Uuid, key: &str) -> DatasetResult<Dataset> {
+    let columns = COLUMNS
+        .split(", ")
+        .map(|c| format!("d.{c}"))
+        .collect::<Vec<_>>()
+        .join(", ");
+    let by = if key.parse::<Uuid>().is_ok() {
+        "d.id::text"
+    } else {
+        "d.key"
+    };
     let row: Row = sqlx::query_as(sqlx::AssertSqlSafe(format!(
-        "SELECT {} FROM datasets d JOIN organizations o ON o.id = d.org_id \
-          WHERE d.key = $2 AND o.path @> (SELECT path FROM organizations WHERE id = $1) \
-          ORDER BY nlevel(o.path) DESC LIMIT 1",
-        COLUMNS
-            .split(", ")
-            .map(|c| format!("d.{c}"))
-            .collect::<Vec<_>>()
-            .join(", ")
+        "SELECT {columns} FROM datasets d JOIN organizations o ON o.id = d.org_id \
+          WHERE {by} = $2 AND o.path @> (SELECT path FROM organizations WHERE id = $1) \
+          ORDER BY nlevel(o.path) DESC LIMIT 1"
     )))
     .bind(org_id)
     .bind(key)
@@ -379,7 +387,7 @@ impl Dataset {
         format!("datasets.\"ds_{}\"", self.id.simple())
     }
 
-    fn column(&self, name: &str) -> Option<&Column> {
+    pub(crate) fn column(&self, name: &str) -> Option<&Column> {
         self.columns.iter().find(|c| c.name == name)
     }
 
@@ -394,13 +402,11 @@ impl Dataset {
 /// Checks that rows may belong to `org_id`: the dataset's organization or
 /// one below it.
 async fn check_org(conn: &mut PgConnection, dataset: &Dataset, org_id: Uuid) -> DatasetResult<()> {
-    let below: Option<bool> = sqlx::query_scalar(
-        "SELECT o.path <@ d.path FROM organizations o, organizations d WHERE o.id = $1 AND d.id = $2",
-    )
-    .bind(org_id)
-    .bind(dataset.org_id)
-    .fetch_optional(conn)
-    .await?;
+    let below: Option<bool> = sqlx::query_scalar("SELECT huxley_org_within($1, $2)")
+        .bind(org_id)
+        .bind(dataset.org_id)
+        .fetch_optional(conn)
+        .await?;
     if below == Some(true) {
         Ok(())
     } else {
