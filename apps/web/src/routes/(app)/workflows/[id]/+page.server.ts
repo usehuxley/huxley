@@ -176,6 +176,27 @@ export const actions: Actions = {
 		}
 		return { message: account ? 'Triggered runs now act as that account.' : 'Run-as cleared.' };
 	},
+	saveTemplate: async (event) => {
+		const form = await event.request.formData();
+		const {
+			data,
+			error: problem,
+			response
+		} = await api(event).POST('/api/v1/workflows/{id}/template', {
+			params: { path: { id: event.params.id } },
+			body: {
+				name: formString(form, 'name'),
+				category: formString(form, 'category'),
+				description: formString(form, 'description')
+			}
+		});
+		if (!data) {
+			return fail(response.status, { message: problemMessage(problem, 'Could not save it.') });
+		}
+		return {
+			message: `Saved as the template “${data.name}”${data.hasForm ? ', with its form' : ''}.`
+		};
+	},
 	restore: async (event) => {
 		const { response, error: problem } = await api(event).POST('/api/v1/workflows/{id}/restore', {
 			params: { path: { id: event.params.id } }

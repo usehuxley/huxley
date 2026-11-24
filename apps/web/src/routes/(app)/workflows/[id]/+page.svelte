@@ -305,6 +305,31 @@
 			{/if}
 		</Card>
 
+		{#if canPublish}
+			<Card
+				title="Save as template"
+				description="Offers this draft (and the form that starts it) as a template here and in every organization below."
+			>
+				<form
+					method="POST"
+					action="?/saveTemplate"
+					use:enhance={notify}
+					class="flex flex-col gap-2"
+				>
+					<Field label="Template name" for="template-name">
+						<Input id="template-name" name="name" required maxlength={200} value={workflow.name} />
+					</Field>
+					<Field label="Category" for="template-category" hint="Default: Your templates">
+						<Input id="template-category" name="category" maxlength={100} />
+					</Field>
+					<Field label="Description" for="template-description">
+						<Input id="template-description" name="description" maxlength={2000} />
+					</Field>
+					<div><Button type="submit" variant="secondary">Save as template</Button></div>
+				</form>
+			</Card>
+		{/if}
+
 		<Card title="Versions">
 			{#if data.versions.length > 0}
 				<a

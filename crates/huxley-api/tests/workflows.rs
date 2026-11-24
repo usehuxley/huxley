@@ -1691,3 +1691,141 @@ async fn templates_become_drafts_with_their_bindings_resolved() {
         .await;
     assert_eq!(status, StatusCode::FORBIDDEN);
 }
+
+/// A "Leaver" form and the workflow it starts: the workflow's id.
+async fn leaver_workflow(s: &Setup) -> String {
+    // A form and the workflow it starts.
+    let form_key = key("leaver");
+    let (status, _) = s
+        .post(
+            &s.owner,
+            "/api/v1/forms",
+            json!({ "orgId": s.org, "form": {
+            "key": form_key, "name": "Leaver",
+            "schema": { "type": "object", "properties": { "who": { "type": "string" } } } } }),
+        )
+        .await;
+    assert_eq!(status, StatusCode::CREATED);
+    let doc = json!({
+        "apiVersion": "usehuxley.com/v1", "kind": "Workflow",
+        "metadata": { "key": key("offboard"), "name": "Offboard" },
+        "spec": {
+            "triggers": [{ "type": "form", "form": form_key }],
+            "steps": [{ "id": "note", "type": "transform", "output": "{{ inputs.who }}" }]
+        }
+    });
+    let (_, workflow) = s.create(doc).await;
+    workflow["id"].as_str().unwrap().to_owned()
+}
+
+#[tokio::test]
+async fn workflows_saved_as_templates_are_offered_down_the_tree() {
+    let Some(s) = setup().await else { return };
+    let ctx = RequestContext::system(Via::System);
+    let mut tx = begin_scoped(&s.pools.app, &OrgScope::System).await.unwrap();
+    let client = huxley_orgs::create(
+        &mut tx,
+        &ctx,
+        s.org,
+        huxley_orgs::OrgKind::Client,
+        &unique("Client"),
+    )
+    .await
+    .unwrap()
+    .id;
+    tx.commit().await.unwrap();
+
+    let workflow_id = leaver_workflow(&s).await;
+    let save = format!("/api/v1/workflows/{workflow_id}/template");
+    let (_, tech) = technician(&s).await;
+    assert_eq!(
+        s.post(&tech, &save, json!({ "name": "X" })).await.0,
+        StatusCode::FORBIDDEN
+    );
+    let (status, saved) = s
+        .post(
+            &s.owner,
+            &save,
+            json!({ "name": "Offboarding", "category": "People" }),
+        )
+        .await;
+    assert_eq!(status, StatusCode::CREATED, "{saved}");
+    assert_eq!(saved["hasForm"], true);
+    let template_id = saved["key"].as_str().unwrap().to_owned();
+
+    // Offered at the client below, next to the built-ins.
+    let (_, listed) = s
+        .get(&s.owner, &format!("/api/v1/templates?orgId={client}"))
+        .await;
+    let mine = listed
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|t| t["key"] == template_id.as_str())
+        .unwrap();
+    assert_eq!(mine["category"], "People");
+    assert!(
+        listed
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|t| t["key"] == "request-and-notify")
+    );
+
+    // Used at the client: its own form, and the trigger points at it.
+    let new_key = key("off-client");
+    let (status, used) = s
+        .post(
+            &s.owner,
+            &format!("/api/v1/templates/{template_id}/use"),
+            json!({ "orgId": client, "key": new_key, "name": "Client offboarding" }),
+        )
+        .await;
+    assert_eq!(status, StatusCode::CREATED, "{used}");
+    let new_workflow = used["workflowId"].as_str().unwrap();
+    let (_, created) = s
+        .get(&s.owner, &format!("/api/v1/workflows/{new_workflow}"))
+        .await;
+    assert_eq!(created["orgId"], client.to_string());
+    assert_eq!(created["draft"]["spec"]["triggers"][0]["form"], new_key);
+    let (_, form) = s
+        .get(
+            &s.owner,
+            &format!("/api/v1/forms/{}", used["formId"].as_str().unwrap()),
+        )
+        .await;
+    assert_eq!(form["name"], "Leaver");
+    assert_eq!(form["orgId"], client.to_string());
+
+    // Not offered to an organization outside the tree.
+    let elsewhere = provider_org(&s.pools).await;
+    let (status, _) = s
+        .post(
+            &s.owner,
+            &format!("/api/v1/templates/{template_id}/use"),
+            json!({ "orgId": elsewhere, "key": key("x"), "name": "X" }),
+        )
+        .await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+
+    // Deleting: technicians can't; owners can, and it's gone.
+    let delete = format!("/api/v1/templates/{template_id}");
+    assert_eq!(
+        call(&s.app, "DELETE", &delete, &tech, None).await.0,
+        StatusCode::NOT_FOUND
+    );
+    assert_eq!(
+        call(&s.app, "DELETE", &delete, &s.owner, None).await.0,
+        StatusCode::NO_CONTENT
+    );
+    let (_, listed) = s
+        .get(&s.owner, &format!("/api/v1/templates?orgId={client}"))
+        .await;
+    assert!(
+        !listed
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|t| t["key"] == template_id.as_str())
+    );
+}

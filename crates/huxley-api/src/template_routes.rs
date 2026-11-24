@@ -3,12 +3,12 @@
 
 use std::collections::BTreeMap;
 
-use axum::extract::{Path, State};
+use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
 use axum::routing::{get, post};
 use axum::{Json, Router};
 use huxley_authz::permissions;
-use huxley_db::begin_scoped;
+use huxley_db::{OrgScope, begin_scoped};
 use huxley_templates::{TemplateError, TemplateInfo};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
@@ -21,17 +21,99 @@ pub fn routes() -> Router<AppState> {
     Router::new()
         .route("/", get(list))
         .route("/{key}/use", post(use_template))
+        .route("/{id}", axum::routing::delete(delete_template))
 }
 
 fn db_err(e: impl std::fmt::Display) -> ApiError {
     ApiError::internal(&e)
 }
 
-/// The templates there are.
+#[derive(Debug, Deserialize, utoipa::IntoParams)]
+#[serde(rename_all = "camelCase")]
+pub struct ListQuery {
+    /// Also list the templates saved at this organization and above it.
+    pub org_id: Option<Uuid>,
+}
+
+fn store_err(e: huxley_templates::store::StoreError) -> ApiError {
+    match e {
+        huxley_templates::store::StoreError::NotFound => ApiError::not_found(),
+        huxley_templates::store::StoreError::Invalid(at, message) => {
+            ApiError::validation().with_field_error(at, message)
+        }
+        huxley_templates::store::StoreError::Db(e) => ApiError::internal(&e),
+    }
+}
+
+/// Your organization's templates offered to `org_id` (as the system: the
+/// caller checked access to `org_id`).
+async fn offered(state: &AppState, org_id: Uuid) -> ApiResult<Vec<huxley_templates::Template>> {
+    let mut tx = begin_scoped(&state.db, &OrgScope::System)
+        .await
+        .map_err(db_err)?;
+    let offered = huxley_templates::store::offered(&mut tx, org_id)
+        .await
+        .map_err(store_err)?;
+    tx.commit().await.map_err(db_err)?;
+    Ok(offered)
+}
+
+/// The built-in templates, and (with `orgId`) those saved at that
+/// organization and above it.
 #[utoipa::path(get, path = "/api/v1/templates", operation_id = "list_templates", tag = "templates",
-    responses((status = 200, body = Vec<TemplateInfo>)))]
-pub async fn list(_authed: Authed) -> Json<Vec<TemplateInfo>> {
-    Json(huxley_templates::list())
+    params(ListQuery), responses((status = 200, body = Vec<TemplateInfo>)))]
+pub async fn list(
+    State(state): State<AppState>,
+    authed: Authed,
+    Query(query): Query<ListQuery>,
+) -> ApiResult<Json<Vec<TemplateInfo>>> {
+    let mut all = huxley_templates::list();
+    if let Some(org_id) = query.org_id {
+        authed
+            .require_at(&state, permissions::WORKFLOW_WRITE, org_id)
+            .await?;
+        all.extend(
+            offered(&state, org_id)
+                .await?
+                .into_iter()
+                .map(|t| t.template),
+        );
+    }
+    Ok(Json(all))
+}
+
+/// Deletes one of your organization's templates.
+#[utoipa::path(delete, path = "/api/v1/templates/{id}", operation_id = "delete_template", tag = "templates",
+    params(("id" = Uuid, Path)), responses((status = 204), (status = 404, body = ApiError, content_type = "application/problem+json")))]
+pub async fn delete_template(
+    State(state): State<AppState>,
+    authed: Authed,
+    Path(id): Path<Uuid>,
+) -> ApiResult<StatusCode> {
+    let mut tx = begin_scoped(&state.db, &OrgScope::System)
+        .await
+        .map_err(db_err)?;
+    let template = huxley_templates::store::get(&mut tx, id)
+        .await
+        .map_err(store_err)?;
+    tx.commit().await.map_err(db_err)?;
+    let org_id = template.template.org_id.ok_or_else(ApiError::not_found)?;
+    if authed
+        .require_at(&state, permissions::WORKFLOW_PUBLISH, org_id)
+        .await
+        .is_err()
+    {
+        // Don't reveal templates the caller can't manage.
+        return Err(ApiError::not_found());
+    }
+    let mut tx = begin_scoped(&state.db, &OrgScope::System)
+        .await
+        .map_err(db_err)?;
+    huxley_templates::store::delete(&mut tx, &authed.user.ctx, id)
+        .await
+        .map_err(store_err)?;
+    tx.commit().await.map_err(db_err)?;
+    Ok(StatusCode::NO_CONTENT)
 }
 
 #[derive(Debug, Deserialize, ToSchema)]
@@ -73,10 +155,20 @@ pub async fn use_template(
     Path(key): Path<String>,
     Json(body): Json<UseTemplateRequest>,
 ) -> ApiResult<(StatusCode, Json<UsedTemplate>)> {
-    let info = huxley_templates::get(&key).ok_or_else(ApiError::not_found)?;
     authed
         .require_at(&state, permissions::WORKFLOW_WRITE, body.org_id)
         .await?;
+    // A built-in by key, or one of your organization's by id (offered
+    // to this organization: saved here or above).
+    let source = match key.parse::<Uuid>() {
+        Ok(id) => offered(&state, body.org_id)
+            .await?
+            .into_iter()
+            .find(|t| t.template.key == id.to_string())
+            .ok_or_else(ApiError::not_found)?,
+        Err(_) => huxley_templates::builtin(&key).ok_or_else(ApiError::not_found)?,
+    };
+    let info = source.template.clone();
     if info.has_form {
         authed
             .require_at(&state, permissions::FORM_MANAGE, body.org_id)
@@ -85,8 +177,8 @@ pub async fn use_template(
     let form_key = info
         .has_form
         .then(|| body.form_key.clone().unwrap_or_else(|| body.key.clone()));
-    let resolved = huxley_templates::resolve(
-        &key,
+    let resolved = huxley_templates::resolve_template(
+        &source,
         &body.bindings,
         &body.key,
         &body.name,

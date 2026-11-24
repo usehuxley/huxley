@@ -52,6 +52,8 @@ spec:
 
 You fill in a few **bindings**, such as who to tell or which script, and get a **draft**, plus the template's form if it has one, to review and publish. Binding values are checked (recipients, URLs, script keys) and inserted as values, so they can't change the workflow's structure or become expressions. Using a template needs `workflow:write`, and `form:manage` when it includes a form. The API is `GET /api/v1/templates` and `POST /api/v1/templates/{key}/use`.
 
+**Your own templates.** **Save as template** on a workflow's page saves its draft as a template of its organization. That needs `workflow:publish`. The template is offered there and in every organization below, next to the built-ins. If a form starts the workflow, the form is saved too, and each use of the template gets its own copy, with the workflow's trigger pointing at it. Delete one from the gallery. The API is `POST /api/v1/workflows/{id}/template`, `GET /api/v1/templates?orgId=…` and `DELETE /api/v1/templates/{id}`.
+
 ## Triggers
 
 | Type | Starts a run when… |
