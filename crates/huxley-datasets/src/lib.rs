@@ -226,7 +226,9 @@ fn apply_error(e: sqlx::Error) -> DatasetError {
 /// Takes the lock a dataset table's DDL needs on `organizations` (its rows
 /// reference it) before anything else in the transaction. Taken later,
 /// after row locks, it could deadlock with a transaction creating an
-/// organization (which locks rows, then waits for us). DDL is quick, so
+/// organization (which locks rows, then waits for us). That includes the
+/// audit chain's head: don't create, update or delete a dataset in a
+/// transaction that has already written an audit record. DDL is quick, so
 /// organization writes wait only briefly.
 async fn lock_for_ddl(conn: &mut PgConnection) -> DatasetResult<()> {
     sqlx::query("LOCK TABLE organizations IN SHARE ROW EXCLUSIVE MODE")
