@@ -6,7 +6,7 @@
 
 	let { children, data }: LayoutProps = $props();
 
-	let sections = $derived(visibleSections(data.user.grantedPermissions));
+	let sections = $derived(visibleSections(data.user.grantedPermissions, data.user.activeModules));
 	const hrefs = {
 		organizations: resolve('/(app)/settings/organizations'),
 		users: resolve('/(app)/settings/users'),
@@ -15,6 +15,7 @@
 		'service-accounts': resolve('/(app)/settings/service-accounts'),
 		audit: resolve('/(app)/settings/audit'),
 		fields: resolve('/(app)/settings/fields'),
+		queues: resolve('/(app)/settings/queues'),
 		modules: resolve('/(app)/settings/modules'),
 		jobs: resolve('/(app)/settings/jobs'),
 		runners: resolve('/(app)/settings/runners'),
@@ -31,14 +32,14 @@
 		<p class="mt-1 text-fg-muted">Organizations, people, and access.</p>
 	</div>
 
-	<nav aria-label="Settings sections" class="flex gap-1 border-b border-border">
+	<nav aria-label="Settings sections" class="flex gap-1 overflow-x-auto border-b border-border">
 		{#each sections as section (section.key)}
 			{@const href = hrefs[section.key]}
 			{@const active = page.url.pathname.startsWith(href)}
 			<a
 				{href}
 				aria-current={active ? 'page' : undefined}
-				class="-mb-px border-b-2 px-3 py-2 text-sm font-medium {active
+				class="-mb-px shrink-0 border-b-2 px-3 py-2 text-sm font-medium whitespace-nowrap {active
 					? 'border-accent text-fg'
 					: 'border-transparent text-fg-muted hover:text-fg'}"
 			>

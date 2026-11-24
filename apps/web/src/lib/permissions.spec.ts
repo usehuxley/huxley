@@ -9,4 +9,11 @@ describe('visibleSections', () => {
 		expect(visibleSections(['role:read']).map((s) => s.key)).toEqual(['roles']);
 		expect(visibleSections([])).toEqual([]);
 	});
+
+	it('shows module sections only while the module is on', () => {
+		expect(visibleSections(['servicedesk:configure']).map((s) => s.key)).toEqual([]);
+		expect(
+			visibleSections(['servicedesk:configure'], ['crm', 'servicedesk']).map((s) => s.key)
+		).toEqual(['queues']);
+	});
 });
