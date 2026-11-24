@@ -203,6 +203,133 @@ pub(crate) fn result_text(outcome: Result<(StatusCode, Value), String>) -> (Stri
     (text, result["isError"] == true)
 }
 
+/// A published workflow offered as a tool (it has an `mcp_tool` trigger).
+#[derive(Debug, Clone)]
+pub(crate) struct WorkflowTool {
+    pub name: String,
+    pub description: String,
+    pub input_schema: Value,
+    pub workflow_id: uuid::Uuid,
+}
+
+/// How long a workflow tool waits for its run before answering with the
+/// run's id instead.
+const WORKFLOW_WAIT: std::time::Duration = std::time::Duration::from_secs(25);
+
+/// The published workflows with an `mcp_tool` trigger that `authed` may
+/// run, as tools (named `run_<key>`; a suffix tells same-key ones apart).
+pub(crate) async fn workflow_tools(state: &AppState, authed: &Authed) -> Vec<WorkflowTool> {
+    type Row = (
+        uuid::Uuid,
+        String,
+        String,
+        Option<String>,
+        String,
+        Value,
+        Option<Value>,
+    );
+    let rows: Vec<Row> = async {
+        let mut tx = huxley_db::begin_scoped(&state.db, &huxley_db::OrgScope::System).await.ok()?;
+        let rows = sqlx::query_as(
+            "SELECT w.id, w.key, w.name, w.description, o.path::text, t.config, v.document -> 'spec' -> 'inputs' \
+               FROM workflow_triggers t \
+               JOIN workflows w ON w.id = t.workflow_id \
+               JOIN organizations o ON o.id = w.org_id \
+               JOIN workflow_versions v ON v.workflow_id = w.id AND v.version = w.current_version \
+              WHERE t.type = 'mcp_tool' AND w.status = 'active' \
+              ORDER BY w.key, w.id",
+        )
+        .fetch_all(&mut *tx)
+        .await
+        .ok()?;
+        tx.commit().await.ok()?;
+        Some(rows)
+    }
+    .await
+    .unwrap_or_default();
+    let mut tools: Vec<WorkflowTool> = Vec::new();
+    for (id, key, name, description, path, config, inputs) in rows {
+        if !authed
+            .principal
+            .can_at_path(huxley_authz::permissions::WORKFLOW_RUN, &path)
+        {
+            continue;
+        }
+        let base: String = format!("run_{}", key.replace('-', "_"))
+            .chars()
+            .take(56)
+            .collect();
+        let tool_name = if tools.iter().any(|t| t.name == base) {
+            format!("{base}_{}", &id.simple().to_string()[24..])
+        } else {
+            base
+        };
+        let description = config["description"]
+            .as_str()
+            .map(str::to_owned)
+            .or(description.filter(|d| !d.trim().is_empty()))
+            .unwrap_or_else(|| format!("Runs the workflow {name}."));
+        let input_schema = match inputs {
+            Some(schema) if schema.is_object() => schema,
+            _ => json!({ "type": "object", "properties": {} }),
+        };
+        tools.push(WorkflowTool {
+            name: tool_name,
+            description: format!("{description} (Runs the published workflow \"{name}\".)"),
+            input_schema,
+            workflow_id: id,
+        });
+    }
+    tools
+}
+
+impl Caller<'_> {
+    /// Runs a workflow tool: starts the published workflow with `args` as
+    /// its inputs, and waits a while for it to finish.
+    pub(crate) async fn run_workflow(
+        &self,
+        tool: &WorkflowTool,
+        args: &Value,
+    ) -> (StatusCode, Value) {
+        let inputs = if args.is_object() {
+            args.clone()
+        } else {
+            json!({})
+        };
+        let (status, started) = self
+            .send(Call::post(
+                format!("/api/v1/workflows/{}/runs", tool.workflow_id),
+                json!({ "inputs": inputs }),
+            ))
+            .await;
+        if !status.is_success() {
+            return (status, started);
+        }
+        let run_id = started["id"].as_str().unwrap_or_default().to_owned();
+        let deadline = std::time::Instant::now() + WORKFLOW_WAIT;
+        loop {
+            let (status, run) = self.send(Call::get(format!("/api/v1/runs/{run_id}"))).await;
+            if !status.is_success() {
+                return (status, run);
+            }
+            let state = run["status"].as_str().unwrap_or_default();
+            if matches!(state, "succeeded" | "failed" | "cancelled") {
+                return (
+                    StatusCode::OK,
+                    json!({ "runId": run_id, "status": state, "outputs": run["outputs"], "error": run["error"] }),
+                );
+            }
+            if std::time::Instant::now() > deadline {
+                return (
+                    StatusCode::OK,
+                    json!({ "runId": run_id, "status": state, "note": "Still running: follow it with get_run." }),
+                );
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(400)).await;
+        }
+    }
+}
+
 fn is_tool(name: &str) -> bool {
     TOOLS.iter().any(|(n, ..)| *n == name)
 }
@@ -448,7 +575,7 @@ fn tool_result(outcome: Result<(StatusCode, Value), String>) -> Value {
 
 const SCHEMA_URI: &str = "huxley://schemas/hwf/v1.json";
 
-async fn handle(caller: &Caller<'_>, message: &Value) -> Option<Value> {
+async fn handle(caller: &Caller<'_>, workflows: &[WorkflowTool], message: &Value) -> Option<Value> {
     let id = message.get("id")?.clone();
     let method = message["method"].as_str().unwrap_or_default();
     let params = &message["params"];
@@ -471,18 +598,33 @@ async fn handle(caller: &Caller<'_>, message: &Value) -> Option<Value> {
         }
         "ping" => rpc_result(&id, &json!({})),
         "tools/list" => {
-            let tools: Vec<Value> = TOOLS
+            let mut tools: Vec<Value> = TOOLS
                 .iter()
                 .map(|(name, description, properties, required)| {
                     json!({ "name": name, "description": description, "inputSchema": schema(properties, required) })
                 })
                 .collect();
+            tools.extend(
+                workflows
+                    .iter()
+                    .map(|t| json!({ "name": t.name, "description": t.description, "inputSchema": t.input_schema })),
+            );
             rpc_result(&id, &json!({ "tools": tools }))
         }
         "tools/call" => {
             let Some(name) = params["name"].as_str() else {
                 return Some(rpc_error(&id, -32602, "params.name is required"));
             };
+            let args = params
+                .get("arguments")
+                .cloned()
+                .unwrap_or_else(|| json!({}));
+            if let Some(tool) = workflows.iter().find(|t| t.name == name) {
+                return Some(rpc_result(
+                    &id,
+                    &tool_result(Ok(caller.run_workflow(tool, &args).await)),
+                ));
+            }
             if !is_tool(name) {
                 return Some(rpc_error(&id, -32602, &format!("no tool called {name:?}")));
             }
@@ -527,7 +669,7 @@ fn json_response(status: StatusCode, body: &Value) -> Response {
 /// `POST /mcp`: one JSON-RPC message (or a batch). Notifications and
 /// responses get `202 Accepted`; requests get their response.
 pub async fn post(
-    State(_state): State<AppState>,
+    State(state): State<AppState>,
     Extension(Internal(internal)): Extension<Internal>,
     authed: Result<Authed, ApiError>,
     peer: Option<Extension<ConnectInfo<SocketAddr>>>,
@@ -545,12 +687,16 @@ pub async fn post(
         );
         return response;
     }
+    let Ok(authed) = authed else {
+        return StatusCode::UNAUTHORIZED.into_response();
+    };
     let caller = Caller::new(&internal, &headers, peer.map(|Extension(p)| p));
+    let workflows = workflow_tools(&state, &authed).await;
     match &body {
         Value::Array(messages) => {
             let mut out = Vec::new();
             for message in messages {
-                if let Some(reply) = handle(&caller, message).await {
+                if let Some(reply) = handle(&caller, &workflows, message).await {
                     out.push(reply);
                 }
             }
@@ -560,7 +706,7 @@ pub async fn post(
                 json_response(StatusCode::OK, &Value::Array(out))
             }
         }
-        Value::Object(_) => match handle(&caller, &body).await {
+        Value::Object(_) => match handle(&caller, &workflows, &body).await {
             Some(reply) => json_response(StatusCode::OK, &reply),
             None => StatusCode::ACCEPTED.into_response(),
         },

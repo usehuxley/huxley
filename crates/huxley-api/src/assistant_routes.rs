@@ -109,7 +109,8 @@ pub async fn start(
     let title: String = text.chars().take(80).collect();
     let id = assistant::create(&state, user(&authed), body.org_id, &title).await?;
     let caller = Caller::new(&internal, &headers, peer.map(|Extension(p)| p));
-    assistant::say(&state, &caller, user(&authed), id, text).await?;
+    let workflows = crate::mcp::workflow_tools(&state, &authed).await;
+    assistant::say(&state, &caller, &workflows, user(&authed), id, text).await?;
     Ok((
         StatusCode::CREATED,
         Json(assistant::view(&state, user(&authed), id).await?),
@@ -146,7 +147,8 @@ pub async fn message(
     allowed(&state, &authed, id).await?;
     let text = check_text(&body.text)?;
     let caller = Caller::new(&internal, &headers, peer.map(|Extension(p)| p));
-    assistant::say(&state, &caller, user(&authed), id, text).await?;
+    let workflows = crate::mcp::workflow_tools(&state, &authed).await;
+    assistant::say(&state, &caller, &workflows, user(&authed), id, text).await?;
     Ok(Json(assistant::view(&state, user(&authed), id).await?))
 }
 
@@ -166,7 +168,8 @@ pub async fn decide(
 ) -> ApiResult<Json<Conversation>> {
     allowed(&state, &authed, id).await?;
     let caller = Caller::new(&internal, &headers, peer.map(|Extension(p)| p));
-    assistant::decide(&state, &caller, user(&authed), id, &body).await?;
+    let workflows = crate::mcp::workflow_tools(&state, &authed).await;
+    assistant::decide(&state, &caller, &workflows, user(&authed), id, &body).await?;
     Ok(Json(assistant::view(&state, user(&authed), id).await?))
 }
 
