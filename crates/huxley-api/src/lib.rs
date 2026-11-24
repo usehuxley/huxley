@@ -13,6 +13,7 @@ pub mod auth_routes;
 pub mod authz;
 mod connection_routes;
 pub mod context;
+pub mod crm_routes;
 pub mod csrf;
 mod dataset_routes;
 pub mod entity_routes;

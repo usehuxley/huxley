@@ -75,6 +75,8 @@ permissions! {
     AI_MANAGE = "ai:manage", Org, "Set up the AI provider (with its key and budget) and see AI usage";
     AI_USE = "ai:use", Org, "Use the AI assistant (it acts with your own permissions)";
     VARIABLE_MANAGE = "variable:manage", Org, "Set organization variables and secrets for workflows, and lock them for sub-organizations";
+    CRM_READ = "crm:read", Org, "View company details, contacts and sites";
+    CRM_MANAGE = "crm:manage", Org, "Create and change contacts and sites, and edit company details";
 }
 
 /// Wildcard granting every permission.

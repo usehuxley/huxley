@@ -80,6 +80,10 @@ export default defineConfig({
 				]
 			},
 			{
+				text: 'Modules',
+				items: [{ text: 'Clients and contacts', link: '/crm' }]
+			},
+			{
 				text: 'Sharing',
 				items: [{ text: 'Packs', link: '/packs' }]
 			}

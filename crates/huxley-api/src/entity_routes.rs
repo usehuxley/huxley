@@ -61,6 +61,9 @@ fn db_err(e: impl std::fmt::Display) -> ApiError {
 fn guard(entity_type: &str) -> ApiResult<(&'static str, &'static str)> {
     match entity_type {
         huxley_entity::ORGANIZATION => Ok((permissions::ORG_READ, permissions::ORG_UPDATE)),
+        huxley_entity::CONTACT | huxley_entity::SITE => {
+            Ok((permissions::CRM_READ, permissions::CRM_MANAGE))
+        }
         _ => Err(ApiError::not_found()),
     }
 }
@@ -81,6 +84,9 @@ async fn require_on(
         .await
         .map_err(map_entity)?;
     tx.commit().await.map_err(db_err)?;
+    if let Some(module) = huxley_entity::module_of(entity_type) {
+        crate::module_routes::require_module_at(state, module, org_id).await?;
+    }
     authed
         .require_at(state, if write { update } else { read }, org_id)
         .await

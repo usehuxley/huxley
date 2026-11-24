@@ -905,6 +905,45 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
+	'/api/v1/contacts/{id}': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get: operations['get_contact'];
+		/** Changes a contact's details. Send back the `version` you read. */
+		put: operations['update_contact'];
+		post?: never;
+		/** Archives a contact. */
+		delete: operations['archive_contact'];
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/contacts/{id}/companies': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		/**
+		 * Sets a contact's companies; the primary one becomes the company it
+		 *     belongs to. Needs `crm:manage` at every company involved, before and
+		 *     after.
+		 */
+		put: operations['set_contact_companies'];
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
 	'/api/v1/custom-fields': {
 		parameters: {
 			query?: never;
@@ -1795,6 +1834,48 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
+	'/api/v1/orgs/{id}/company': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** An organization's company details. */
+		get: operations['get_company'];
+		/**
+		 * Saves an organization's company details. Send back the `version` you
+		 *     read (0 the first time).
+		 */
+		put: operations['update_company'];
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/orgs/{id}/contacts': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/**
+		 * Contacts of an organization (whether it's their primary company or
+		 *     not), by name.
+		 */
+		get: operations['list_contacts'];
+		put?: never;
+		/** Adds a contact whose primary company is this organization. */
+		post: operations['create_contact'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
 	'/api/v1/orgs/{id}/modules': {
 		parameters: {
 			query?: never;
@@ -1888,6 +1969,24 @@ export interface paths {
 		post?: never;
 		/** Removes this organization's value, so it inherits again. */
 		delete: operations['clear_org_setting'];
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/orgs/{id}/sites': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** An organization's sites, the primary one first. */
+		get: operations['list_sites'];
+		put?: never;
+		/** Adds a site. An organization's first site is its primary one. */
+		post: operations['create_site'];
+		delete?: never;
 		options?: never;
 		head?: never;
 		patch?: never;
@@ -2662,6 +2761,24 @@ export interface paths {
 		put?: never;
 		post?: never;
 		delete: operations['revoke_account_token'];
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/sites/{id}': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get: operations['get_site'];
+		/** Changes a site. Send back the `version` you read. */
+		put: operations['update_site'];
+		post?: never;
+		/** Archives a site. */
+		delete: operations['archive_site'];
 		options?: never;
 		head?: never;
 		patch?: never;
@@ -3674,6 +3791,36 @@ export interface components {
 		 * @enum {string}
 		 */
 		ColumnType: 'text' | 'integer' | 'number' | 'boolean' | 'timestamp' | 'date' | 'json' | 'uuid';
+		Company: {
+			notes?: string | null;
+			/** Format: uuid */
+			orgId: string;
+			phone?: string | null;
+			/** @description `client`, `vendor`, `partner` or `prospect`. */
+			relationship: string;
+			/** @description `active`, `inactive`, `onboarding` or `offboarding`. */
+			status: string;
+			/** Format: date-time */
+			updatedAt?: string | null;
+			/**
+			 * Format: int32
+			 * @description 0 until the details are first saved. Send it back when updating.
+			 */
+			version: number;
+			website?: string | null;
+		};
+		CompanyInput: {
+			notes?: string | null;
+			phone?: string | null;
+			relationship: string;
+			status: string;
+			/**
+			 * Format: int32
+			 * @description The version you read (0 if never saved).
+			 */
+			version: number;
+			website?: string | null;
+		};
 		ConfirmPasswordResetRequest: {
 			/** Format: password */
 			newPassword: string;
@@ -3748,6 +3895,88 @@ export interface components {
 			statusMessage?: string | null;
 			/** Format: date-time */
 			updatedAt: string;
+		};
+		Contact: {
+			/** Format: date-time */
+			archivedAt?: string | null;
+			/** @description Every company, the primary one first. */
+			companies: components['schemas']['ContactCompany'][];
+			/** Format: date-time */
+			createdAt: string;
+			customFields: {
+				[key: string]: unknown;
+			};
+			email?: string | null;
+			/** @description Identities elsewhere, e.g. `{"entra": "<object id>"}`. */
+			externalIds: {
+				[key: string]: string;
+			};
+			firstName: string;
+			/** Format: uuid */
+			id: string;
+			lastName: string;
+			mobile?: string | null;
+			/** @description First and last name together. */
+			name: string;
+			/**
+			 * Format: uuid
+			 * @description The primary company.
+			 */
+			orgId: string;
+			phone?: string | null;
+			/** Format: uuid */
+			siteId?: string | null;
+			/** Format: date-time */
+			updatedAt: string;
+			/** Format: int32 */
+			version: number;
+		};
+		/** @description A contact's companies. */
+		ContactCompaniesInput: {
+			/** @description Every company, exactly one of them primary. */
+			companies: components['schemas']['ContactCompany'][];
+			/**
+			 * Format: int32
+			 * @description The contact's version you read.
+			 */
+			version: number;
+		};
+		/** @description One of a contact's companies. */
+		ContactCompany: {
+			isPrimary?: boolean;
+			jobTitle?: string | null;
+			/** Format: uuid */
+			orgId: string;
+			/** @description The company's name (ignored when setting links). */
+			orgName?: string;
+		};
+		ContactInput: {
+			email?: string | null;
+			externalIds?: {
+				[key: string]: string;
+			} | null;
+			firstName?: string;
+			/** @description The job title at the primary company. */
+			jobTitle?: string | null;
+			lastName?: string;
+			mobile?: string | null;
+			phone?: string | null;
+			/**
+			 * Format: uuid
+			 * @description A site of the primary company.
+			 */
+			siteId?: string | null;
+			/**
+			 * Format: int32
+			 * @description The version you read (updates only).
+			 */
+			version?: number | null;
+		};
+		/** @description A page of contacts. */
+		ContactPage: {
+			items: components['schemas']['Contact'][];
+			/** Format: int64 */
+			total: number;
 		};
 		/** @description What a pack adds, by key. */
 		Contents: {
@@ -5104,6 +5333,63 @@ export interface components {
 		SignInStart: {
 			/** @description Send the browser here; the provider returns it to the callback. */
 			authorizeUrl: string;
+		};
+		Site: {
+			addressLine1?: string | null;
+			addressLine2?: string | null;
+			/** Format: date-time */
+			archivedAt?: string | null;
+			city?: string | null;
+			/** @description ISO 3166-1 alpha-2, e.g. `GB`. */
+			country?: string | null;
+			/** Format: date-time */
+			createdAt: string;
+			customFields: {
+				[key: string]: unknown;
+			};
+			/**
+			 * @description Opening hours per weekday: `{"mon": [["09:00", "17:00"]], …}`. A
+			 *     missing day is closed.
+			 */
+			hours: {
+				[key: string]: string[][];
+			};
+			/** Format: uuid */
+			id: string;
+			isPrimary: boolean;
+			name: string;
+			/** Format: uuid */
+			orgId: string;
+			phone?: string | null;
+			postalCode?: string | null;
+			region?: string | null;
+			/** @description IANA timezone, e.g. `Europe/London`. */
+			timezone: string;
+			/** Format: date-time */
+			updatedAt: string;
+			/** Format: int32 */
+			version: number;
+		};
+		SiteInput: {
+			addressLine1?: string | null;
+			addressLine2?: string | null;
+			city?: string | null;
+			country?: string | null;
+			hours?: {
+				[key: string]: string[][];
+			} | null;
+			isPrimary?: boolean;
+			name: string;
+			phone?: string | null;
+			postalCode?: string | null;
+			region?: string | null;
+			/** @description IANA timezone; defaults to UTC. */
+			timezone?: string | null;
+			/**
+			 * Format: int32
+			 * @description The version you read (updates only).
+			 */
+			version?: number | null;
 		};
 		SqlRequest: {
 			/** @description One `SELECT` (or `WITH … SELECT`) over the `datasets` schema. */
@@ -7408,6 +7694,144 @@ export interface operations {
 			};
 		};
 	};
+	get_contact: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['Contact'];
+				};
+			};
+			404: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	update_contact: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['ContactInput'];
+			};
+		};
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['Contact'];
+				};
+			};
+			409: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	archive_contact: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			204: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content?: never;
+			};
+			404: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	set_contact_companies: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['ContactCompaniesInput'];
+			};
+		};
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['Contact'];
+				};
+			};
+			409: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
 	list_fields: {
 		parameters: {
 			query: {
@@ -9242,6 +9666,137 @@ export interface operations {
 			};
 		};
 	};
+	get_company: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['Company'];
+				};
+			};
+			404: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	update_company: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['CompanyInput'];
+			};
+		};
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['Company'];
+				};
+			};
+			409: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	list_contacts: {
+		parameters: {
+			query?: {
+				/** @description Matches names and email addresses. */
+				search?: string | null;
+				includeArchived?: boolean;
+				/** @description 1 to 200 (default 50). */
+				limit?: number | null;
+				offset?: number | null;
+			};
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ContactPage'];
+				};
+			};
+		};
+	};
+	create_contact: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['ContactInput'];
+			};
+		};
+		responses: {
+			201: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['Contact'];
+				};
+			};
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
 	list_org_modules: {
 		parameters: {
 			query?: never;
@@ -9426,6 +9981,62 @@ export interface operations {
 					[name: string]: unknown;
 				};
 				content?: never;
+			};
+		};
+	};
+	list_sites: {
+		parameters: {
+			query?: {
+				includeArchived?: boolean;
+			};
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['Site'][];
+				};
+			};
+		};
+	};
+	create_site: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['SiteInput'];
+			};
+		};
+		responses: {
+			201: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['Site'];
+				};
+			};
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
 			};
 		};
 	};
@@ -10966,6 +11577,103 @@ export interface operations {
 				id: string;
 				/** @description Token id */
 				token_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			204: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content?: never;
+			};
+			404: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	get_site: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['Site'];
+				};
+			};
+			404: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	update_site: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['SiteInput'];
+			};
+		};
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['Site'];
+				};
+			};
+			409: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	archive_site: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
 			};
 			cookie?: never;
 		};
