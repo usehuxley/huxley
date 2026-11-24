@@ -42,7 +42,7 @@ pub fn step_key(id: &str, indices: &[usize]) -> String {
     key
 }
 
-fn parse_indices(key: &str) -> Vec<usize> {
+pub(crate) fn parse_indices(key: &str) -> Vec<usize> {
     key.split_once('[').map_or_else(Vec::new, |(_, rest)| {
         rest.trim_end_matches(']')
             .split("][")

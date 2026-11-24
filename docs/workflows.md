@@ -141,6 +141,7 @@ huxley workflows push workflows/                 # save them as drafts (creating
 huxley workflows push workflows/ --publish --notes "Release 12"
 huxley workflows run greet -i name=Ada           # run the published version, print its outputs
 huxley workflows run greet --draft -i name=Ada   # test-run the draft
+huxley workflows test workflows/                 # run the *.test.yaml fixture tests
 ```
 
 Things to know:
@@ -150,3 +151,33 @@ Things to know:
 - **Matching:** files are matched to workflows by `metadata.key`.
 - **Permissions:** `push` needs `workflow:write`, and `--publish` also needs `workflow:publish`. Use a token scoped to what CI needs.
 - **Inputs:** `-i name=value` parses the value as JSON when it can (`-i count=3`, `-i 'tags=["a"]'`), and `--inputs-file` takes a JSON object.
+
+### Fixture tests
+
+A `*.test.yaml` file next to a workflow file describes test cases:
+
+```yaml
+workflow: lookup.yaml          # relative to this file
+cases:
+  - name: uses the API's count
+    inputs: { name: Ada }
+    mocks:                     # these steps don't run: they return this
+      fetch: { status: 200, body: { count: 3 } }
+    expect:
+      outputs: { line: Ada has 3 friends }
+  - name: fails when the API can't be reached
+    inputs: { name: Ada }
+    expect: { status: failed, error: { kind: network } }
+```
+
+How tests run:
+
+- **On the server, without saving anything.** `huxley workflows test` test-runs each case's copy of the workflow file there, so integrations, connections and variables behave as they do for real.
+- **Mocks:** a mocked step doesn't run. It returns the given output, which later steps read as usual. Mock a step inside a loop with its iteration indices, e.g. `inner[2][0]`.
+- **Expectations:**
+  - `expect.status` defaults to `succeeded`.
+  - `outputs` and `error` match as subsets: every key you give must be there, equal, and extra keys are fine.
+- **Exit code:** the command exits 1 if any case fails.
+- **The API:** `POST /api/v1/workflows/test-runs` with `{ orgId, document, inputs, mocks }`. It needs `workflow:write`.
+
+Folders passed to `validate`, `diff` and `push` skip `*.test.yaml` files.

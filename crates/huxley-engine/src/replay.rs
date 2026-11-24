@@ -54,6 +54,54 @@ pub fn steps_before(document: &Json, from: &str) -> Result<BTreeSet<String>, Str
     Ok(ids)
 }
 
+/// The type of each step in `document`, by id (nested ones included).
+fn step_types(document: &Json) -> std::collections::BTreeMap<String, String> {
+    fn walk(value: &Json, out: &mut std::collections::BTreeMap<String, String>) {
+        match value {
+            Json::Object(map) => {
+                if let (Some(Json::String(id)), Some(Json::String(kind))) =
+                    (map.get("id"), map.get("type"))
+                {
+                    out.insert(id.clone(), kind.clone());
+                }
+                map.values().for_each(|v| walk(v, out));
+            }
+            Json::Array(items) => items.iter().for_each(|v| walk(v, out)),
+            _ => {}
+        }
+    }
+    let mut out = std::collections::BTreeMap::new();
+    walk(&document["spec"]["steps"], &mut out);
+    out
+}
+
+/// The most mocked output, in bytes, a test may give.
+pub const MAX_MOCK_BYTES: usize = 256 * 1024;
+
+/// Checks test mocks against `document`: each key is a step id, or a step
+/// id inside loops with its iteration indices (`inner[2][0]`).
+pub fn check_mocks(
+    document: &Json,
+    mocks: &std::collections::BTreeMap<String, Json>,
+) -> Result<(), String> {
+    let types = step_types(document);
+    for (key, output) in mocks {
+        let id = key.split('[').next().unwrap_or_default();
+        if !types.contains_key(id) {
+            return Err(format!("mocks.{key}: there is no step {id:?}"));
+        }
+        if crate::journal::step_key(id, &crate::journal::parse_indices(key)) != *key {
+            return Err(format!(
+                "mocks.{key}: a step id, or one with loop indices like {id}[0]"
+            ));
+        }
+        if serde_json::to_vec(output).map_or(0, |b| b.len()) > MAX_MOCK_BYTES {
+            return Err(format!("mocks.{key}: at most {MAX_MOCK_BYTES} bytes"));
+        }
+    }
+    Ok(())
+}
+
 #[derive(sqlx::FromRow)]
 struct Pinned {
     step_key: String,
@@ -72,6 +120,37 @@ struct Pinned {
 }
 
 impl Engine {
+    /// Records `mocks` (checked with [`check_mocks`]) as succeeded steps of
+    /// test run `run_id`, so it uses them instead of running those steps.
+    pub async fn mock_steps(
+        &self,
+        conn: &mut PgConnection,
+        org_id: Uuid,
+        run_id: Uuid,
+        document: &Json,
+        mocks: &std::collections::BTreeMap<String, Json>,
+    ) -> EngineResult<usize> {
+        check_mocks(document, mocks).map_err(crate::EngineError::Document)?;
+        let types = step_types(document);
+        for (key, output) in mocks {
+            let id = key.split('[').next().unwrap_or_default();
+            sqlx::query(
+                "INSERT INTO step_runs (run_id, step_key, attempt, org_id, step_id, step_type, status, \
+                        output, finished_at) \
+                 VALUES ($1, $2, 1, $3, $4, $5, 'succeeded', $6, now())",
+            )
+            .bind(run_id)
+            .bind(key)
+            .bind(org_id)
+            .bind(id)
+            .bind(&types[id])
+            .bind(output)
+            .execute(&mut *conn)
+            .await?;
+        }
+        Ok(mocks.len())
+    }
+
     /// Copies `source`'s results for `steps` into run `run_id` (same
     /// organization), so the run treats them as done. Sealed values are
     /// re-encrypted for the new run. Returns how many records were pinned.
