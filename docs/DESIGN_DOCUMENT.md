@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Draft v0.3 (all open questions resolved) |
-| **Website** | usehuxley.com |
+| **Website** | usehuxley.io |
 | **Date** | 2026-11-21 |
 | **License** | MIT |
 | **Source** | `PROJECT_OVERVIEW.md` |
@@ -917,7 +917,7 @@ huxley/                              # main monorepo (MIT)
 **Satellite repositories:**
 
 - `huxley-packs`: community integration/workflow packs and the registry index.
-- `huxley-docs`: the documentation website at docs.usehuxley.com (could live in `docs/` initially).
+- `huxley-docs`: the documentation website at docs.usehuxley.io (could live in `docs/` initially).
 
 The TypeScript SDK lives in the monorepo (`packages/sdk`), so it changes in lockstep with the HWF schema.
 
@@ -925,15 +925,15 @@ The TypeScript SDK lives in the monorepo (`packages/sdk`), so it changes in lock
 
 | Thing | Name |
 |---|---|
-| Product site | `usehuxley.com` |
-| Documentation | `docs.usehuxley.com` |
-| Pack registry | `packs.usehuxley.com` (index backed by the `huxley-packs` repo) |
-| Published schemas | `https://usehuxley.com/schemas/hwf/v1.json` (plus forms and packs) |
+| Product site | `usehuxley.io` |
+| Documentation | `docs.usehuxley.io` |
+| Pack registry | `packs.usehuxley.io` (index backed by the `huxley-packs` repo) |
+| Published schemas | `https://usehuxley.io/schemas/hwf/v1.json` (plus forms and packs) |
 | HWF `apiVersion` | `usehuxley.com/v1` |
 | npm scope | `@usehuxley` (`@usehuxley/sdk`, `@usehuxley/api-client`) |
 | Container images | `ghcr.io/usehuxley/huxley`, `…/web`, `…/portal`, `…/runner-pwsh`, `…/runner-python`, `…/runner-js`. Published from CI in the `usehuxley` GitHub org. |
 | GitHub org | `github.com/usehuxley` (created) |
-| Security contact | `security@usehuxley.com` (in `SECURITY.md`) |
+| Security contact | `security@usehuxley.io` (in `SECURITY.md`) |
 
 ---
 
@@ -987,7 +987,7 @@ The TypeScript SDK lives in the monorepo (`packages/sdk`), so it changes in lock
 | Workflows-as-code | YAML HWF from Phase 4; TypeScript SDK (compiles to HWF) in Phase 7, once system packs have exercised HWF. | §6.7, ADR-016 |
 | Chat / phone intake | Not needed early. Post-1.0 candidate. Workflows and webhooks can bridge in the meantime. | Plan "Beyond 1.0" |
 | PSA importers | Eventually, not soon. Post-1.0 candidate, delivered as packs. | Plan "Beyond 1.0" |
-| Domain | `usehuxley.com` | Header, §15 |
+| Domain | `usehuxley.io` | Header, §15 |
 | Automation-only deployments | Every non-core feature is a module that can be turned off, instance-wide or per provider org. | §8.0, ADR-017 |
 | Observability | OpenTelemetry throughout | §13.3, ADR-015 |
 | Script sandboxes (2026-11-23) | Runners start each script in a rootless Podman container inside the runner container by default; Kubernetes Jobs (with a gVisor runtime class where available) are an option for installs on Kubernetes. Runners never get the Docker socket. | §6.9 |

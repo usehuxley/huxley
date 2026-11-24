@@ -11,7 +11,7 @@ use serde::Serialize;
 use utoipa::ToSchema;
 
 /// Base URI for problem types. Each kind is documented under this path.
-pub const PROBLEM_BASE: &str = "https://usehuxley.com/problems/";
+pub const PROBLEM_BASE: &str = "https://usehuxley.io/problems/";
 
 pub type ApiResult<T> = Result<T, ApiError>;
 

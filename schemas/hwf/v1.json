@@ -2528,7 +2528,7 @@
       ]
     }
   },
-  "$id": "https://usehuxley.com/schemas/hwf/v1.json",
+  "$id": "https://usehuxley.io/schemas/hwf/v1.json",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "description": "A workflow document.",

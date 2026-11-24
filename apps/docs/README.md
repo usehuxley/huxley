@@ -1,6 +1,6 @@
 # Huxley docs site
 
-The documentation at **docs.usehuxley.com**, built with [VitePress](https://vitepress.dev) from the pages in the repository's [`docs/`](../../docs) folder. There's one copy of each page: it's readable on GitHub and published here. Internal documents (the design doc, the plan, ADRs) aren't published; links to them, and to files outside `docs/`, point to GitHub.
+The documentation at **docs.usehuxley.io**, built with [VitePress](https://vitepress.dev) from the pages in the repository's [`docs/`](../../docs) folder. There's one copy of each page: it's readable on GitHub and published here. Internal documents (the design doc, the plan, ADRs) aren't published; links to them, and to files outside `docs/`, point to GitHub.
 
 ```sh
 pnpm --filter @usehuxley/docs dev      # http://localhost:5173
@@ -21,7 +21,7 @@ One-time setup:
 
 1. **In Cloudflare:**
    - Create a Pages project with **Direct Upload**, named `huxley-docs` (or any name; see step 3).
-   - Under **Custom domains**, add `docs.usehuxley.com`.
+   - Under **Custom domains**, add `docs.usehuxley.io`.
 2. **Create an API token** with the **Account → Cloudflare Pages → Edit** permission.
 3. **In GitHub** (repository settings):
    - **Secrets:** `CLOUDFLARE_API_TOKEN` (the token) and `CLOUDFLARE_ACCOUNT_ID`.
@@ -30,7 +30,7 @@ One-time setup:
 
 Until the secrets exist, the workflow only builds.
 
-**The schema's `$id` is `https://usehuxley.com/schemas/hwf/v1.json`.** If usehuxley.com is a different site, make that URL serve the docs copy. Either:
+**The schema's `$id` is `https://usehuxley.io/schemas/hwf/v1.json`.** If usehuxley.io is a different site, make that URL serve the docs copy. Either:
 
-- add a Cloudflare **redirect rule** from `usehuxley.com/schemas/*` to `https://docs.usehuxley.com/schemas/${1}`, or
+- add a Cloudflare **redirect rule** from `usehuxley.io/schemas/*` to `https://docs.usehuxley.io/schemas/${1}`, or
 - publish `schemas/` with the main site too.

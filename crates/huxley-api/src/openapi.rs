@@ -50,7 +50,7 @@ use crate::workflow_routes::{
 #[openapi(
     info(
         title = "Huxley API",
-        description = "Huxley platform API. See https://docs.usehuxley.com for conventions.",
+        description = "Huxley platform API. See https://docs.usehuxley.io for conventions.",
         license(name = "MIT", identifier = "MIT"),
     ),
     paths(

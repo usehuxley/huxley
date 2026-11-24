@@ -252,7 +252,7 @@ fn published_schema_is_up_to_date() {
         "schemas/hwf/v1.json is stale: run UPDATE_SCHEMA=1 cargo test -p huxley-hwf"
     );
     let schema = json_schema();
-    assert_eq!(schema["$id"], "https://usehuxley.com/schemas/hwf/v1.json");
+    assert_eq!(schema["$id"], "https://usehuxley.io/schemas/hwf/v1.json");
     // Step types are listed by their HWF names.
     let text = generated;
     for name in ["\"http.request\"", "\"core.notify\"", "\"foreach\""] {

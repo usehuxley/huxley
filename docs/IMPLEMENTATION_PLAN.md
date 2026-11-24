@@ -138,7 +138,7 @@ This is a long-term project. The plan follows four rules:
 - **Workflows-as-code** (§6.7): `huxley-cli` (validate/test/push/pull/diff/run), fixtures-based tests, YAML code view in-app with canvas round-trip, per-org Git sync (GitHub/GitLab/Azure DevOps).
 - **Packs** (§6.6): `.hxpack` format, signing, import/export/upgrade, install review UI (shows egress domains, scripts, permissions), and moving built-in integrations into packs.
 - **Runner `js`** (Node.js; Deno was the first choice, but its team announced the end of its development in October 2026).
-- **Docs site** v1 at docs.usehuxley.com: concepts, tutorials, integration and pack authoring guide, HWF reference. HWF JSON Schema published at `usehuxley.com/schemas/hwf/v1.json`.
+- **Docs site** v1 at docs.usehuxley.io: concepts, tutorials, integration and pack authoring guide, HWF reference. HWF JSON Schema published at `usehuxley.io/schemas/hwf/v1.json`.
 
 **Exit criteria:** an external MCP client (e.g., Claude Code with the user's own key) can build, test, and submit a working workflow draft. A Git-synced repo can publish workflows through CI. A dataset of M365 users for every client org syncs on schedule and appears in a form dropdown.
 
@@ -334,7 +334,7 @@ This is a long-term project. The plan follows four rules:
 
 ## 6. Immediate Next Steps
 
-1. All design questions are resolved (design §18.1). The `usehuxley` GitHub org exists. Still to reserve: the `@usehuxley` npm scope, and DNS for `docs.` and `packs.usehuxley.com`.
+1. All design questions are resolved (design §18.1). The `usehuxley` GitHub org exists. Still to reserve: the `@usehuxley` npm scope, and DNS for `docs.` and `packs.usehuxley.io`.
 2. Create the repositories in `github.com/usehuxley`: `huxley` (monorepo) and `huxley-packs`. Add the MIT license, README, and this design doc + plan under `docs/`.
 3. Record ADR-001 → ADR-016 from the design doc.
 4. Begin **Phase 0**: toolchain, CI, dev compose stack, server skeleton, design system v0.

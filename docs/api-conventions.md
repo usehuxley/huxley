@@ -18,7 +18,7 @@ All errors use `Content-Type: application/problem+json`:
 
 ```json
 {
-  "type": "https://usehuxley.com/problems/validation",
+  "type": "https://usehuxley.io/problems/validation",
   "title": "Validation failed",
   "status": 422,
   "detail": "Two fields are invalid.",

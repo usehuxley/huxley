@@ -199,7 +199,7 @@ fn key_of(document: &Json, path: &Path) -> anyhow::Result<String> {
 
 /// Tells editors (via the YAML language server) where HWF's schema is.
 const SCHEMA_COMMENT: &str =
-    "# yaml-language-server: $schema=https://usehuxley.com/schemas/hwf/v1.json";
+    "# yaml-language-server: $schema=https://usehuxley.io/schemas/hwf/v1.json";
 
 // HWF's keys in the order people write them: the same rules as the web
 // editor's YAML view (apps/web/src/lib/workflows/yaml.ts), so a draft
