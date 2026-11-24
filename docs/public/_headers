@@ -1,0 +1,5 @@
+# Cloudflare Pages headers. Editors fetch the schema from anywhere.
+/schemas/*
+  Access-Control-Allow-Origin: *
+  Content-Type: application/schema+json; charset=utf-8
+  Cache-Control: public, max-age=3600

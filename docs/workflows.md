@@ -64,7 +64,7 @@ You fill in a few **bindings**, such as who to tell or which script, and get a *
 | `event` | A domain event matches `event` (e.g. `org.created`, or `org.*`) in the workflow's organization or below, and the `filter` expression is true. The run happens in the event's organization. |
 | `poll` | At each `interval` (at least `1m`), calls an integration's list action (`action`, optional `connection`, `with` passed as-is) and starts a run for each item it hasn't seen: `on: new` (default) or `new_or_changed`. `items` is where the list is in the response (e.g. `value`), `item_id` what identifies an item (default `id`). The first check only records what's there. The item is `trigger.item`, and `trigger.change` is `new` or `changed`. A failing check shows on the workflow's Triggers card. |
 | `form` | Someone submits the form with this `form` key. The answers are the inputs, and the run happens in the organization it was submitted for, acting as the submitter. See [forms.md](forms.md). |
-| `mcp_tool` | Reserved for MCP (Phase 4). |
+| `mcp_tool` | Offers the published workflow as a tool in the [MCP server](mcp.md#your-workflows-as-tools) and the assistant, named `run_<key>`, with its inputs as the tool's input schema. Optional `description` (default: the workflow's). |
 
 ## Steps
 
