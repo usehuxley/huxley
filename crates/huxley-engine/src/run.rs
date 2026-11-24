@@ -81,6 +81,9 @@ struct RunRow {
     started_at: Option<OffsetDateTime>,
 }
 
+/// Walks per advance that may stop to answer `lookup()`s.
+const MAX_LOOKUP_ROUNDS: usize = 8;
+
 impl Engine {
     /// Creates a run and queues its first advance, in the caller's
     /// transaction (which must be able to see `org_id`).
@@ -353,6 +356,9 @@ impl Engine {
     }
 
     /// Walks the run against its journal and persists what changed.
+    ///
+    /// Each round answers the lookups the previous walk asked for (at most
+    /// [`huxley_expr::MAX_MISSING`] each).
     async fn walk(
         &self,
         tx: &mut PgConnection,
@@ -396,10 +402,30 @@ impl Engine {
             org_vars: Json::Object(variables.vars),
             secrets,
             public_url: self.public_url.clone(),
+            lookups: std::sync::Arc::default(),
         };
-        let mut walker = Walker::new(&self.expr, &mut ctx, &mut journal, now);
-        let outcome = walker.run(workflow);
-        let schedules = std::mem::take(&mut walker.schedules);
+        // Walk; if expressions asked for lookups the run hasn't recorded,
+        // answer them and walk again (the journal so far stays in memory).
+        let mut known = crate::lookup::recorded(tx, run_id).await?;
+        let mut schedules = Vec::new();
+        let mut rounds = 0;
+        let outcome = loop {
+            ctx.lookups = std::sync::Arc::new(huxley_expr::Lookups::new(known.clone()));
+            let mut walker = Walker::new(&self.expr, &mut ctx, &mut journal, now);
+            let outcome = walker.run(workflow);
+            schedules.append(&mut walker.schedules);
+            let missing = ctx.lookups.take_missing();
+            if missing.is_empty() {
+                break outcome;
+            }
+            rounds += 1;
+            if rounds > MAX_LOOKUP_ROUNDS {
+                // Plenty for now: carry on in the next advance.
+                queue::enqueue_advance(tx, org_id, run_id).await?;
+                break outcome;
+            }
+            known.extend(self.answer_lookups(tx, run_id, org_id, missing).await?);
+        };
         journal
             .persist(tx, run_id, org_id, &self.crypto, &self.payloads)
             .await?;
@@ -475,6 +501,8 @@ impl Engine {
         .bind(run_id)
         .execute(&mut *conn)
         .await?;
+        // A lookup that failed (an unknown dataset, say) is asked again.
+        crate::lookup::forget_failures(conn, run_id).await?;
         queue::enqueue_advance(conn, run.org_id, run_id).await?;
         Ok(true)
     }
@@ -822,8 +850,20 @@ impl Engine {
             .with("actor", &json!({ "id": run.actor_id }))
             .with("env", &json!({}))
             .with("connections", &json!({}));
+        // The answers the run recorded; a preview never looks anything up.
+        let lookups = std::sync::Arc::new(huxley_expr::Lookups::new(
+            crate::lookup::recorded(&mut *conn, run_id).await?,
+        ));
+        let scope = scope.with_lookups(lookups.clone());
         let (value, error) = match self.expr.eval(expression, &scope) {
             Ok(evaluated) => (Some(evaluated.value), None),
+            Err(_) if lookups.missing_count() > 0 => (
+                None,
+                Some(
+                    "this run didn't look that up: lookup() answers are recorded as a run runs"
+                        .into(),
+                ),
+            ),
             Err(e) => (None, Some(e.to_string())),
         };
         Ok(Some(Preview {

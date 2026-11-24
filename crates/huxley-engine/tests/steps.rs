@@ -816,6 +816,137 @@ async fn secrets_never_go_into_datasets() {
     assert_eq!(leaked, 0);
 }
 
+#[tokio::test]
+async fn lookup_reads_one_row_and_a_run_keeps_its_answer() {
+    let Some(h) = harness(1 << 20).await else {
+        return;
+    };
+    let client = users_dataset(&h).await;
+    let (_, status, outputs, error) = h
+        .run_with(
+            r#"  steps:
+    - id: seed
+      type: dataset.upsert
+      with:
+        dataset: users
+        rows: [{ upn: ada@msp.test, seats: 2 }]
+    - id: theirs
+      type: dataset.upsert
+      with: { dataset: users, org_id: "{{ inputs.client }}", rows: [{ upn: bob@client.test, seats: 7 }] }
+    - id: first
+      type: transform
+      output: "{{ lookup('users', upn='ada@msp.test').seats }}"
+    - id: change
+      type: dataset.upsert
+      with: { dataset: users, rows: [{ upn: ada@msp.test, seats: 9 }] }
+    - id: again
+      type: transform
+      output: "{{ lookup('users', upn='ada@msp.test').seats }}"
+    - id: now
+      type: dataset.query
+      with: { dataset: users, filters: { upn: ada@msp.test } }
+    - id: missing
+      type: if
+      condition: "{{ lookup('users', upn='nobody@msp.test') is none }}"
+      then: [ { id: none_found, type: transform, output: "no such user" } ]
+  outputs:
+    first: "{{ steps.first.output }}"
+    again: "{{ steps.again.output }}"
+    now: "{{ steps.now.output.rows[0].seats }}"
+    missing: "{{ steps.none_found.output }}"
+    bob: "{{ lookup('users', upn='bob@client.test', seats=7).upn }}"
+"#,
+            json!({ "client": client }),
+        )
+        .await;
+    assert_eq!(status, RunStatus::Succeeded, "{error:?}");
+    // The run keeps the answer it first got, even after the row changed;
+    // a dataset.query step reads the row as it is now.
+    assert_eq!(
+        outputs.unwrap(),
+        json!({ "first": 2, "again": 2, "now": 9, "missing": "no such user", "bob": "bob@client.test" })
+    );
+
+    // A client's run sees only its own rows.
+    let (_, status, outputs, error) = h
+        .run_in(
+            client,
+            r#"  steps:
+    - { id: noop, type: transform, output: 1 }
+  outputs:
+    theirs: "{{ lookup('users', upn='bob@client.test').seats }}"
+    msp: "{{ lookup('users', upn='ada@msp.test') is none }}"
+"#,
+            json!({}),
+        )
+        .await;
+    assert_eq!(status, RunStatus::Succeeded, "{error:?}");
+    assert_eq!(outputs.unwrap(), json!({ "theirs": 7, "msp": true }));
+}
+
+#[tokio::test]
+async fn a_failed_lookup_fails_the_step_and_is_asked_again_on_resume() {
+    let Some(h) = harness(1 << 20).await else {
+        return;
+    };
+    let (id, status, _, error) = h
+        .run_with(
+            r#"  steps:
+    - id: team
+      type: transform
+      output: "{{ lookup('teams', name='ops').lead }}"
+  outputs: { lead: "{{ steps.team.output }}" }
+"#,
+            json!({}),
+        )
+        .await;
+    assert_eq!(status, RunStatus::Failed);
+    let error = error.unwrap().to_string();
+    assert!(error.contains("lookup(\\\"teams\\\")"), "{error}");
+
+    // Create the dataset with a row, then resume: the lookup is asked again.
+    let mut tx = begin_scoped(&h.pools.app, &OrgScope::System).await.unwrap();
+    let input: huxley_datasets::DatasetInput = serde_json::from_value(json!({
+        "key": "teams", "name": "Teams",
+        "columns": [{ "name": "name", "type": "text" }, { "name": "lead", "type": "text" }],
+        "primaryKey": ["name"]
+    }))
+    .unwrap();
+    let ctx = huxley_core::RequestContext::system(huxley_core::Via::System);
+    let dataset = huxley_datasets::create(&mut tx, &ctx, h.org, &input)
+        .await
+        .unwrap();
+    huxley_datasets::upsert(
+        &mut tx,
+        &dataset,
+        h.org,
+        &[json!({ "name": "ops", "lead": "Grace" })],
+    )
+    .await
+    .unwrap();
+    tx.commit().await.unwrap();
+    let mut tx = begin_scoped(&h.pools.app, &OrgScope::System).await.unwrap();
+    assert!(h.engine.resume_run(&mut tx, id).await.unwrap());
+    tx.commit().await.unwrap();
+    let deadline = Instant::now() + Duration::from_secs(20);
+    let (status, outputs) = loop {
+        h.engine.drain("steps-test", 50).await.unwrap();
+        let (status, outputs): (RunStatus, Option<Json>) =
+            sqlx::query_as("SELECT status, outputs FROM runs WHERE id = $1")
+                .bind(id)
+                .fetch_one(&h.pools.owner)
+                .await
+                .unwrap();
+        if status.is_finished() {
+            break (status, outputs);
+        }
+        assert!(Instant::now() < deadline, "the resumed run didn't finish");
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    };
+    assert_eq!(status, RunStatus::Succeeded);
+    assert_eq!(outputs.unwrap(), json!({ "lead": "Grace" }));
+}
+
 /// Answers like Anthropic's Messages API: a label from a classification's
 /// enum, an extraction's fields, or an echo; counts the calls.
 async fn mock_anthropic(calls: Arc<AtomicUsize>) -> u16 {

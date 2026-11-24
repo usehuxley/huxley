@@ -38,6 +38,7 @@ Everything in Jinja's builtins (`lower`, `join`, `map`, `selectattr`, `tojson`, 
 | `regex_match`, `regex_search`, `regex_replace`, `regex_findall` | `"{{ subject \| regex_search('#[0-9]+') }}"` |
 | `default_if_none(value)` | Replaces `null` as well as undefined |
 | `uuid()` | A new UUIDv7 |
+| `lookup(dataset, column=value, …)` | One row of a [dataset](datasets.md#looking-up-one-row), or `none`: `"{{ lookup('m365-users', upn=inputs.email).display_name }}"` |
 | `secrets.generate(length=24)` | A random password (8–256 characters) |
 
 Regular expressions use Rust's `regex` syntax (linear time; no backreferences).

@@ -39,6 +39,8 @@ pub struct RunContext {
     pub secrets: BTreeMap<String, String>,
     /// Where callback URLs point (`auth.public_url`), if set.
     pub public_url: Option<String>,
+    /// The run's recorded `lookup()` answers, and the ones it still needs.
+    pub lookups: std::sync::Arc<huxley_expr::Lookups>,
 }
 
 /// How a block or step stands after this pass.
@@ -88,6 +90,15 @@ pub fn error(kind: &str, message: impl Into<String>) -> Json {
 
 fn expr_error(e: &ExprError) -> Json {
     error("expression", e.to_string())
+}
+
+/// The kind of the error meaning "waiting for a `lookup()` answer": not a
+/// failure. The step stays unrecorded; the engine fetches the answer and
+/// walks again.
+const LOOKUP_PENDING: &str = "lookup_pending";
+
+fn is_lookup_pending(e: &Json) -> bool {
+    e["kind"] == LOOKUP_PENDING
 }
 
 /// An `integration.action` step's input, before expressions.
@@ -147,6 +158,7 @@ impl<'a> Walker<'a> {
                             "outputs",
                             "the workflow's outputs include a secret",
                         )),
+                        Err(e) if is_lookup_pending(&e) => Outcome::Pending,
                         Err(e) => Outcome::Failed(e),
                     }
                 }
@@ -176,7 +188,8 @@ impl<'a> Walker<'a> {
             .with("actor", &self.ctx.actor)
             .with("env", &json!({}))
             .with("connections", &json!({}))
-            .with_secrets(self.ctx.secrets.clone());
+            .with_secrets(self.ctx.secrets.clone())
+            .with_lookups(self.ctx.lookups.clone());
         for (name, value) in &frame.locals {
             scope.insert(name, value);
         }
@@ -186,12 +199,31 @@ impl<'a> Walker<'a> {
     /// Evaluates a value. Tainted if it read a secret or the output of a step
     /// whose output is secret.
     fn eval(&self, value: &Json, frame: &Frame) -> Result<(Json, bool), Json> {
+        let waiting = self.ctx.lookups.missing_count();
         let evaluated = self
             .expr
             .eval(value, &self.scope(frame))
-            .map_err(|e| expr_error(&e))?;
+            .map_err(|e| self.expr_failure(&e, waiting))?;
         let tainted = evaluated.tainted || self.reads_secret_output(value, frame);
         Ok((evaluated.value, tainted))
+    }
+
+    /// A condition, with Jinja truthiness.
+    fn condition(&self, text: &str, frame: &Frame) -> Result<bool, Json> {
+        let waiting = self.ctx.lookups.missing_count();
+        self.expr
+            .eval_condition(text, &self.scope(frame))
+            .map_err(|e| self.expr_failure(&e, waiting))
+    }
+
+    /// An evaluation's error, or [`LOOKUP_PENDING`] if it stopped because it
+    /// asked for a lookup the run hasn't recorded yet.
+    fn expr_failure(&self, e: &ExprError, waiting_before: usize) -> Json {
+        if self.ctx.lookups.missing_count() > waiting_before {
+            error(LOOKUP_PENDING, "waiting for a lookup")
+        } else {
+            expr_error(e)
+        }
     }
 
     fn reads_secret_output(&self, value: &Json, frame: &Frame) -> bool {
@@ -235,6 +267,11 @@ impl<'a> Walker<'a> {
         frame: &Frame,
         result: Result<(Json, bool), Json>,
     ) -> Flow {
+        if let Err(e) = &result
+            && is_lookup_pending(e)
+        {
+            return Flow::Pending;
+        }
         let common = step.common();
         let mut record = Record::new(
             common.id,
@@ -291,7 +328,7 @@ impl<'a> Walker<'a> {
                 StepStatus::Running | StepStatus::Waiting => {}
             }
         } else if let Some(condition) = common.when {
-            match self.expr.eval_condition(condition, &self.scope(frame)) {
+            match self.condition(condition, frame) {
                 Ok(true) => {}
                 Ok(false) => {
                     let mut record = Record::new(
@@ -304,7 +341,7 @@ impl<'a> Walker<'a> {
                     self.journal.put(record);
                     return Flow::Done(Json::Null, false);
                 }
-                Err(e) => return self.settle_new(step, frame, Err(expr_error(&e))),
+                Err(e) => return self.settle_new(step, frame, Err(e)),
             }
         }
 
@@ -585,13 +622,13 @@ impl<'a> Walker<'a> {
     fn if_step(&mut self, step: &Step, s: &IfStep, frame: &Frame) -> Flow {
         let branch = match self.decision(step, frame) {
             Some(d) => d["branch"].as_str().unwrap_or("else").to_owned(),
-            None => match self.expr.eval_condition(&s.condition, &self.scope(frame)) {
+            None => match self.condition(&s.condition, frame) {
                 Ok(yes) => {
                     let branch = if yes { "then" } else { "else" };
                     self.begin(step, frame, json!({ "branch": branch }));
                     branch.to_owned()
                 }
-                Err(e) => return self.settle_new(step, frame, Err(expr_error(&e))),
+                Err(e) => return self.settle_new(step, frame, Err(e)),
             },
         };
         let block = if branch == "then" {

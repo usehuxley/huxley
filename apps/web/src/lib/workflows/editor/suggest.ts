@@ -41,6 +41,7 @@ export const FILTERS: Suggestion[] = [
 const FUNCTIONS: Suggestion[] = [
 	{ label: 'now()', detail: 'The current time' },
 	{ label: 'uuid()', detail: 'A new UUIDv7' },
+	{ label: 'lookup(', detail: "A dataset row: lookup('users', upn=…)" },
 	{ label: 'range(', detail: 'Numbers 0 to n-1' },
 	{ label: 'secrets.generate()', detail: 'A random password' }
 ];

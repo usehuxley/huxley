@@ -28,6 +28,7 @@ pub(crate) fn register(env: &mut Environment<'static>) {
     env.add_filter("regex_findall", regex_findall);
     env.add_filter("default_if_none", default_if_none);
     env.add_function("uuid", uuid);
+    env.add_function("lookup", crate::lookup::unavailable);
 }
 
 fn invalid(message: impl Into<std::borrow::Cow<'static, str>>) -> Error {
