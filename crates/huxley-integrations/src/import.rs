@@ -480,6 +480,7 @@ fn action(
         output_schema: output(r, at, op),
         auth,
         deprecated: op["deprecated"].as_bool() == Some(true),
+        hidden: false,
     }
 }
 

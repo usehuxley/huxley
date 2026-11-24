@@ -33,6 +33,7 @@ pub fn routes() -> Router<AppState> {
         .route("/{id}/spec", put(update))
         .route("/{id}/preview", post(preview))
         .route("/{id}/current", put(set_current))
+        .route("/{id}/overlay", put(set_overlay))
         .route("/{id}/versions", get(versions))
         .layer(DefaultBodyLimit::max(MAX_IMPORT_BYTES))
 }
@@ -52,6 +53,7 @@ fn map_store(e: StoreError) -> ApiError {
         .with_detail(e.to_string()),
         StoreError::KeyTaken(_) => ApiError::conflict(e.to_string()),
         StoreError::InvalidKey => ApiError::validation().with_field_error("key", e.to_string()),
+        StoreError::Invalid(at, message) => ApiError::validation().with_field_error(at, message),
         StoreError::Import(ImportError::TooLarge) => ApiError::new(
             StatusCode::PAYLOAD_TOO_LARGE,
             "spec-too-large",
@@ -275,6 +277,29 @@ pub async fn set_current(
         .await
         .map_err(db_err)?;
     let detail = store::set_current(&mut tx, &authed.user.ctx, id, body.version)
+        .await
+        .map_err(map_store)?;
+    tx.commit().await.map_err(db_err)?;
+    Ok(Json(detail))
+}
+
+/// Replaces the integration's overlay: your names, descriptions and groups
+/// for its actions, and which are hidden. Kept across new versions.
+#[utoipa::path(put, path = "/api/v1/integrations/{id}/overlay", operation_id = "set_integration_overlay", tag = "integrations",
+    params(("id" = Uuid, Path)), request_body = huxley_integrations::overlay::Overlay,
+    responses((status = 200, body = IntegrationDetail),
+              (status = 422, body = ApiError, content_type = "application/problem+json")))]
+pub async fn set_overlay(
+    State(state): State<AppState>,
+    authed: Authed,
+    Path(id): Path<Uuid>,
+    Json(body): Json<huxley_integrations::overlay::Overlay>,
+) -> ApiResult<Json<IntegrationDetail>> {
+    authorize(&state, &authed, permissions::INTEGRATION_MANAGE, id).await?;
+    let mut tx = begin_scoped(&state.db, &authed.scope(&state).await?)
+        .await
+        .map_err(db_err)?;
+    let detail = store::set_overlay(&mut tx, &authed.user.ctx, id, body)
         .await
         .map_err(map_store)?;
     tx.commit().await.map_err(db_err)?;

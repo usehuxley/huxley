@@ -23,6 +23,10 @@ Published specs often have small mistakes. When the importer can work around one
 
 Only a file that isn't JSON or YAML, isn't OpenAPI or Swagger, or is over the limits is refused.
 
+## Your edits (overlays)
+
+On an integration's page, **Edit** on an action changes how it's shown: its name, group and description. You can also **hide** it from the action picker. These edits form the integration's **overlay**. It's stored apart from the vendor's spec, so updating to a newer spec keeps it, and an edit follows its action when the vendor renames it. Workflows still call actions by key, so nothing you change here breaks them, and hidden actions keep working where they're already used. The API is `PUT /api/v1/integrations/{id}/overlay`, which needs `integration:manage`. Pagination and rate-limit settings will come later.
+
 ## Built-in integrations
 
 **Built-in integrations** on the Integrations page are curated specs shipped with Huxley. **Add** puts one in the chosen organization under its own key. From then on it's an ordinary integration: you can update it, pin it, and give it connections.

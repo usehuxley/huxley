@@ -1127,6 +1127,26 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
+	'/api/v1/integrations/{id}/overlay': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		/**
+		 * Replaces the integration's overlay: your names, descriptions and groups
+		 *     for its actions, and which are hidden. Kept across new versions.
+		 */
+		put: operations['set_integration_overlay'];
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
 	'/api/v1/integrations/{id}/preview': {
 		parameters: {
 			query?: never;
@@ -2677,6 +2697,8 @@ export interface components {
 			description?: string | null;
 			/** @description The first tag, for grouping. */
 			group?: string | null;
+			/** @description Hidden by the integration's overlay: not offered, still callable. */
+			hidden?: boolean;
 			/** @description One object schema: each parameter by name, plus `body`. */
 			inputSchema: Record<string, never>;
 			/**
@@ -2710,6 +2732,14 @@ export interface components {
 			name: string;
 			path: string;
 			required: string[];
+		};
+		/** @description Edits to one action. */
+		ActionOverlay: {
+			description?: string | null;
+			group?: string | null;
+			/** @description Not offered when picking actions (still callable). */
+			hidden?: boolean;
+			name?: string | null;
 		};
 		AddBuiltInRequest: {
 			/** Format: uuid */
@@ -3347,7 +3377,10 @@ export interface components {
 		};
 		/** @description An integration with its current definition. */
 		IntegrationDetail: components['schemas']['IntegrationSummary'] & {
+			/** @description The current version, with the overlay applied. */
 			definition: components['schemas']['Definition'];
+			/** @description Your edits to its actions, kept across versions. */
+			overlay: components['schemas']['Overlay'];
 			/** @description What the importer skipped or guessed in the current version. */
 			warnings: components['schemas']['Warning'][];
 		};
@@ -3631,6 +3664,12 @@ export interface components {
 			 * @description Optimistic concurrency token. Send it back when updating.
 			 */
 			version: number;
+		};
+		/** @description An integration's overlay: edits by action key. */
+		Overlay: {
+			actions?: {
+				[key: string]: components['schemas']['ActionOverlay'];
+			};
 		};
 		/** @enum {string} */
 		ParamLocation: 'path' | 'query' | 'header' | 'cookie';
@@ -6773,6 +6812,39 @@ export interface operations {
 				};
 			};
 			404: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	set_integration_overlay: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['Overlay'];
+			};
+		};
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['IntegrationDetail'];
+				};
+			};
+			422: {
 				headers: {
 					[name: string]: unknown;
 				};

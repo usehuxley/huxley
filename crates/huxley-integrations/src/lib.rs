@@ -16,6 +16,7 @@ pub mod connections;
 pub mod diff;
 mod import;
 pub mod oauth;
+pub mod overlay;
 mod refs;
 pub mod store;
 mod swagger;
@@ -154,6 +155,9 @@ pub struct Action {
     /// (or the spec doesn't say).
     pub auth: Vec<String>,
     pub deprecated: bool,
+    /// Hidden by the integration's overlay: not offered, still callable.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub hidden: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema)]

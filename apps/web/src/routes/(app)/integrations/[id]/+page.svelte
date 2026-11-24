@@ -123,21 +123,72 @@
 		</Card>
 	{/if}
 
-	<Card title="Actions" description="{definition.actions.length} operations workflows can call.">
+	<Card
+		title="Actions"
+		description="{definition.actions
+			.length} operations workflows can call. Your edits to names, groups and visibility are kept when the spec is updated."
+	>
 		{#each groups as [group, actions] (group)}
 			<section class="mb-4 last:mb-0">
 				<h2 class="mb-2 text-sm font-semibold text-fg">{group}</h2>
 				<ul class="flex flex-col divide-y divide-border" aria-label="{group} actions">
 					{#each actions as action (action.key)}
 						<li class="flex items-start justify-between gap-4 py-2">
-							<div class="min-w-0">
+							<div class="min-w-0 flex-1">
 								<p class="text-sm text-fg">
 									{action.name}
 									{#if action.deprecated}<Badge tone="warning">Deprecated</Badge>{/if}
+									{#if action.hidden}<Badge tone="neutral">Hidden</Badge>{/if}
 								</p>
 								<p class="mt-0.5 font-mono text-xs break-all text-fg-muted">
 									{action.key} · {action.path}
 								</p>
+								{#if canManage}
+									{@const edit = integration.overlay.actions?.[action.key]}
+									<details class="mt-1">
+										<summary class="cursor-pointer text-xs text-accent">Edit</summary>
+										<form
+											method="POST"
+											action="?/editAction"
+											use:enhance={() =>
+												({ update }) =>
+													update({ reset: false })}
+											class="mt-2 flex flex-col gap-2"
+										>
+											<input type="hidden" name="key" value={action.key} />
+											<Field label="Name" for="name-{action.key}">
+												<Input
+													id="name-{action.key}"
+													name="name"
+													value={edit?.name ?? ''}
+													placeholder={action.name}
+													maxlength={200}
+												/>
+											</Field>
+											<Field label="Group" for="group-{action.key}">
+												<Input
+													id="group-{action.key}"
+													name="group"
+													value={edit?.group ?? ''}
+													placeholder={action.group ?? ''}
+													maxlength={100}
+												/>
+											</Field>
+											<Field label="Description" for="description-{action.key}">
+												<Input
+													id="description-{action.key}"
+													name="description"
+													value={edit?.description ?? ''}
+												/>
+											</Field>
+											<label class="flex items-center gap-2 text-sm text-fg">
+												<input type="checkbox" name="hidden" checked={edit?.hidden ?? false} />
+												Hide it from the action picker (workflows using it keep working)
+											</label>
+											<div><Button type="submit" size="sm">Save</Button></div>
+										</form>
+									</details>
+								{/if}
 							</div>
 							<Badge tone={methodTone(action.method)}>{action.method}</Badge>
 						</li>

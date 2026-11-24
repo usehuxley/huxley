@@ -228,8 +228,9 @@ pub async fn available_actions(
     conn: &mut PgConnection,
     org_id: Uuid,
 ) -> sqlx::Result<Vec<ActionOption>> {
-    let rows: Vec<(String, String, Json)> = sqlx::query_as(
-        "SELECT DISTINCT ON (i.key) i.key, i.name, v.definition FROM integrations i \
+    let rows: Vec<(String, String, Json, Json, Json)> = sqlx::query_as(
+        "SELECT DISTINCT ON (i.key) i.key, i.name, v.definition, v.aliases, i.overlay \
+           FROM integrations i \
            JOIN organizations o ON o.id = i.org_id \
            JOIN integration_versions v ON v.integration_id = i.id AND v.version = i.current_version \
           WHERE o.path @> (SELECT path FROM organizations WHERE id = $1) \
@@ -239,11 +240,12 @@ pub async fn available_actions(
     .fetch_all(conn)
     .await?;
     let mut options = Vec::new();
-    for (key, integration_name, definition) in rows {
-        let Ok(definition) = serde_json::from_value::<Definition>(definition) else {
+    for (key, integration_name, definition, aliases, overlay) in rows {
+        let Ok(mut definition) = serde_json::from_value::<Definition>(definition) else {
             continue;
         };
-        for action in definition.actions {
+        crate::overlay::Overlay::from_json(&overlay).apply(&mut definition, &aliases);
+        for action in definition.actions.into_iter().filter(|a| !a.hidden) {
             let required: Vec<String> = action.input_schema["required"]
                 .as_array()
                 .into_iter()

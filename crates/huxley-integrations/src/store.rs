@@ -26,6 +26,9 @@ pub enum StoreError {
     /// The integration changed since the update was previewed.
     #[error("the integration is now at version {0}; preview the update again")]
     Stale(i32),
+    /// An overlay edit is wrong: `(where, what)`.
+    #[error("{1}")]
+    Invalid(String, String),
     #[error(transparent)]
     Import(#[from] ImportError),
     #[error(transparent)]
@@ -62,7 +65,10 @@ pub struct IntegrationSummary {
 pub struct IntegrationDetail {
     #[serde(flatten)]
     pub summary: IntegrationSummary,
+    /// The current version, with the overlay applied.
     pub definition: Definition,
+    /// Your edits to its actions, kept across versions.
+    pub overlay: crate::overlay::Overlay,
     /// What the importer skipped or guessed in the current version.
     pub warnings: Vec<Warning>,
 }
@@ -412,20 +418,54 @@ pub async fn summary(conn: &mut PgConnection, id: Uuid) -> StoreResult<Integrati
 /// An integration with its current version's definition and warnings.
 pub async fn get(conn: &mut PgConnection, id: Uuid) -> StoreResult<IntegrationDetail> {
     let summary = summary(&mut *conn, id).await?;
-    let (definition, warnings): (Json, Json) = sqlx::query_as(
-        "SELECT definition, warnings FROM integration_versions \
-          WHERE integration_id = $1 AND version = $2",
+    let (definition, warnings, aliases, overlay): (Json, Json, Json, Json) = sqlx::query_as(
+        "SELECT v.definition, v.warnings, v.aliases, i.overlay FROM integration_versions v \
+           JOIN integrations i ON i.id = v.integration_id \
+          WHERE v.integration_id = $1 AND v.version = $2",
     )
     .bind(id)
     .bind(summary.current_version)
     .fetch_one(conn)
     .await?;
     let corrupt = |e: serde_json::Error| StoreError::Db(sqlx::Error::Decode(Box::new(e)));
+    let overlay = crate::overlay::Overlay::from_json(&overlay);
+    let mut definition: Definition = serde_json::from_value(definition).map_err(corrupt)?;
+    overlay.apply(&mut definition, &aliases);
     Ok(IntegrationDetail {
         summary,
-        definition: serde_json::from_value(definition).map_err(corrupt)?,
+        definition,
+        overlay,
         warnings: serde_json::from_value(warnings).map_err(corrupt)?,
     })
+}
+
+/// Replaces an integration's overlay.
+pub async fn set_overlay(
+    conn: &mut PgConnection,
+    ctx: &RequestContext,
+    id: Uuid,
+    overlay: crate::overlay::Overlay,
+) -> StoreResult<IntegrationDetail> {
+    let overlay = overlay
+        .checked()
+        .map_err(|(at, message)| StoreError::Invalid(at, message.to_owned()))?;
+    let current = summary(&mut *conn, id).await?;
+    sqlx::query("UPDATE integrations SET overlay = $2, updated_at = now() WHERE id = $1")
+        .bind(id)
+        .bind(serde_json::to_value(&overlay).unwrap_or_default())
+        .execute(&mut *conn)
+        .await?;
+    audit::record(
+        &mut *conn,
+        ctx,
+        AuditRecord::new("integration.overlay_updated")
+            .org(current.org_id)
+            .target("integration", id)
+            .details(json!({ "actions": overlay.actions.len() })),
+    )
+    .await
+    .map_err(db)?;
+    get(conn, id).await
 }
 
 /// Every imported version, newest first.
