@@ -200,13 +200,31 @@ fn check(
     // Placeholders in auth URLs need safe values now, not at the first call.
     match kind {
         AuthKind::OAuth2ClientCredentials { token_url, .. } => {
-            fill_auth_url_with(token_url, definition, &input.server_variables)?;
+            // Organization variables are checked when they're used.
+            let mut known = input.server_variables.clone();
+            known.retain(|_, v| variable_ref(v).is_none());
+            for (name, v) in &input.server_variables {
+                if variable_ref(v).is_some() {
+                    known.insert(name.clone(), json!("placeholder"));
+                }
+            }
+            fill_auth_url_with(token_url, definition, &known)?;
         }
         AuthKind::OAuth2AuthorizationCode {
             authorization_url,
             token_url,
             ..
         } => {
+            if let Some(name) = input
+                .server_variables
+                .iter()
+                .find_map(|(n, v)| variable_ref(v).map(|_| n))
+            {
+                return Err(invalid(
+                    &format!("serverVariables.{name}"),
+                    "connections that sign in can't take values from organization variables",
+                ));
+            }
             fill_auth_url_with(authorization_url, definition, &input.server_variables)?;
             fill_auth_url_with(token_url, definition, &input.server_variables)?;
         }
@@ -636,7 +654,92 @@ pub async fn resolve(
     crypto: &Crypto,
     id: Uuid,
 ) -> ConnectionResult<Resolved> {
+    resolve_for(conn, crypto, id, None).await
+}
+
+/// The organization variable a server variable refers to: its value is
+/// exactly `{{ vars.<key> }}`.
+pub fn variable_ref(value: &Json) -> Option<&str> {
+    let inner = value
+        .as_str()?
+        .trim()
+        .strip_prefix("{{")?
+        .strip_suffix("}}")?
+        .trim();
+    let key = inner.strip_prefix("vars.")?;
+    (!key.is_empty() && key.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')).then_some(key)
+}
+
+/// Whether a connection takes values from the calling organization's
+/// variables (one partner connection, a tenant per client).
+pub fn per_organization(view: &ConnectionView) -> bool {
+    view.server_variables
+        .as_object()
+        .is_some_and(|m| m.values().any(|v| variable_ref(v).is_some()))
+}
+
+/// Fills `{{ vars.<key> }}` server variables from `org_id`'s variables.
+async fn with_org_variables(
+    conn: &mut PgConnection,
+    crypto: &Crypto,
+    mut view: ConnectionView,
+    org_id: Option<Uuid>,
+) -> ConnectionResult<ConnectionView> {
+    if !per_organization(&view) {
+        return Ok(view);
+    }
+    let Some(org_id) = org_id else {
+        return Err(invalid(
+            "serverVariables",
+            "this connection takes values from the calling organization's variables, so it can only be used by a run",
+        ));
+    };
+    let vars = huxley_variables::for_run(&mut *conn, crypto, org_id)
+        .await
+        .map_err(|e| ConnectionError::Db(sqlx::Error::Protocol(e.to_string())))?
+        .vars;
+    if let Some(map) = view.server_variables.as_object_mut() {
+        for (name, value) in map.iter_mut() {
+            let Some(key) = variable_ref(value) else {
+                continue;
+            };
+            let found = vars
+                .get(key)
+                .and_then(Json::as_str)
+                .filter(|v| !v.is_empty())
+                .ok_or_else(|| {
+                    invalid(
+                        &format!("serverVariables.{name}"),
+                        format!("this organization has no variable {key} (it's needed by this connection)"),
+                    )
+                })?;
+            if !found
+                .chars()
+                .all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '-' | '_'))
+            {
+                return Err(invalid(
+                    &format!("serverVariables.{name}"),
+                    format!(
+                        "variable {key} may only hold letters, digits, dots, hyphens and underscores"
+                    ),
+                ));
+            }
+            *value = Json::String(found.to_owned());
+        }
+    }
+    Ok(view)
+}
+
+/// [`resolve`] for a call made for `org_id`: server variables that refer
+/// to organization variables take that organization's values.
+pub async fn resolve_for(
+    conn: &mut PgConnection,
+    crypto: &Crypto,
+    id: Uuid,
+    org_id: Option<Uuid>,
+) -> ConnectionResult<Resolved> {
     let view = get(&mut *conn, id).await?;
+    let view = with_org_variables(&mut *conn, crypto, view, org_id).await?;
     let integration = store::get(&mut *conn, view.integration_id).await?;
     let definition = &integration.definition;
     let base_url = base_url(definition, &view)
@@ -724,6 +827,25 @@ mod auth_url_tests {
 
     fn vars(tenant: &str) -> Map<String, Json> {
         [("tenant".to_owned(), json!(tenant))].into_iter().collect()
+    }
+
+    #[test]
+    fn variable_references_are_exact() {
+        assert_eq!(
+            variable_ref(&json!("{{ vars.m365_tenant }}")),
+            Some("m365_tenant")
+        );
+        assert_eq!(variable_ref(&json!("{{vars.t}}")), Some("t"));
+        for not in [
+            json!("contoso.com"),
+            json!("{{ vars.t }}.example"),
+            json!("{{ secrets.t }}"),
+            json!("{{ vars.a.b }}"),
+            json!("{{ vars. }}"),
+            json!(3),
+        ] {
+            assert_eq!(variable_ref(&not), None, "{not}");
+        }
     }
 
     #[test]

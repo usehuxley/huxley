@@ -508,3 +508,66 @@ async fn token_urls_take_the_connections_tenant() {
     assert_eq!(h.finish(id).await.status, RunStatus::Succeeded);
     assert_eq!(h.seen()[0]["auth"], "Bearer token-for-contoso.example");
 }
+
+#[tokio::test]
+async fn one_partner_connection_serves_each_clients_tenant() {
+    let Some(h) = harness().await else { return };
+    // A partner app at the MSP, shared down; the tenant comes from each
+    // client organization's variable.
+    let input = ConnectionInput {
+        name: "Partner app".into(),
+        key: Some("partner".into()),
+        auth_scheme: Some("tenanted".into()),
+        server_variables: [("tenant".to_owned(), json!("{{ vars.m365_tenant }}"))]
+            .into_iter()
+            .collect(),
+        settings: [("client_id".to_owned(), json!("huxley"))]
+            .into_iter()
+            .collect(),
+        secrets: [("client_secret".to_owned(), "s3cret".to_owned())].into(),
+        shared: true,
+        ..ConnectionInput::default()
+    };
+    let ctx = RequestContext::system(Via::System);
+    let mut tx = begin_scoped(&h.pools.app, &OrgScope::System).await.unwrap();
+    connections::create(&mut tx, &h.crypto, &ctx, h.msp, h.integration, &input)
+        .await
+        .unwrap();
+    tx.commit().await.unwrap();
+    let other = org(&h.pools, h.msp, "client").await;
+    let unset = org(&h.pools, h.msp, "client").await;
+    for (org_id, tenant) in [(h.client, "client-a.example"), (other, "client-b.example")] {
+        let mut tx = begin_scoped(&h.pools.app, &OrgScope::System).await.unwrap();
+        let value = huxley_variables::VariableInput {
+            kind: huxley_variables::VariableType::String,
+            value: json!(tenant),
+            description: None,
+            locked: false,
+        };
+        huxley_variables::set(&mut tx, &ctx, &h.crypto, org_id, "m365_tenant", &value)
+            .await
+            .unwrap();
+        tx.commit().await.unwrap();
+    }
+    let step = "    - { id: open, type: integration.action, action: tickets/listTickets, connection: partner }\n";
+    for (org_id, expected) in [
+        (h.client, "Bearer token-for-client-a.example"),
+        (other, "Bearer token-for-client-b.example"),
+        (h.client, "Bearer token-for-client-a.example"),
+    ] {
+        let id = h.start(org_id, step).await;
+        assert_eq!(h.finish(id).await.status, RunStatus::Succeeded);
+        assert_eq!(h.seen().last().unwrap()["auth"], expected);
+    }
+    // A token per tenant, cached.
+    let cached: i64 = sqlx::query_scalar("SELECT count(*) FROM connection_tenant_tokens")
+        .fetch_one(&h.pools.owner)
+        .await
+        .unwrap();
+    assert_eq!(cached, 2);
+    // A client without the variable gets a clear failure.
+    let id = h.start(unset, step).await;
+    assert_eq!(h.finish(id).await.status, RunStatus::Failed);
+    let error = h.step_error(id, "open").await.to_string();
+    assert!(error.contains("m365_tenant"), "{error}");
+}

@@ -25,12 +25,14 @@ impl Engine {
         &self,
         name: &str,
         id: Uuid,
+        org_id: Uuid,
     ) -> EngineResult<Result<Credentials, Json>> {
         let mut tx = begin_scoped(self.db(), &OrgScope::System).await?;
         let view = connections::get(&mut tx, id)
             .await
             .map_err(|e| crate::EngineError::Document(e.to_string()))?;
-        let resolved = match connections::resolve(&mut tx, &self.crypto, id).await {
+        let resolved = match connections::resolve_for(&mut tx, &self.crypto, id, Some(org_id)).await
+        {
             Ok(resolved) => resolved,
             Err(e) => {
                 tx.commit().await?;
@@ -61,7 +63,7 @@ impl Engine {
             }
             ResolvedAuth::OAuth2ClientCredentials { .. }
             | ResolvedAuth::OAuth2AuthorizationCode { .. } => {
-                match self.connection_token(id).await {
+                match self.connection_token_for(id, Some(org_id)).await {
                     Ok(Some(token)) => secret("_TOKEN", token),
                     Ok(None) => {}
                     Err(e) => return Ok(Err(crate::oauth::token_error(&e))),

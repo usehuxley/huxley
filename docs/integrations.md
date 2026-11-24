@@ -39,7 +39,7 @@ Only a file that isn't JSON or YAML, isn't OpenAPI or Swagger, or is over the li
   3. Grant application permissions such as `User.ReadWrite.All`, `Group.ReadWrite.All`, `Organization.Read.All` and `Mail.Send`, with admin consent.
   4. Make a connection with the scheme **app**: the client ID, the secret, and the **tenant** server variable (the tenant ID or `contoso.onmicrosoft.com`).
 
-  For many client tenants, make a connection per client organization.
+  **For many client tenants (GDAP):** make **one shared connection at the MSP** with the partner's multi-tenant app, and set its tenant to `{{ vars.m365_tenant }}`. Then give each client organization an `m365_tenant` variable. A run in a client organization gets a token for that client's tenant, and each tenant's token is cached separately (ADR-027). This works for client-credentials connections only.
 - **Slack** (`slack`): post a message and list channels, with a bot token (`xoxb-…`) that has `chat:write`. Slack answers 200 even when a call fails, so check `ok` in the output.
 
 ## Updating

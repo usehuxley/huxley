@@ -69,6 +69,27 @@ impl Engine {
         &self,
         connection_id: Uuid,
     ) -> Result<Option<String>, TokenError> {
+        self.connection_token_for(connection_id, None).await
+    }
+
+    /// [`Self::connection_token`] for a call made for `org_id`: a
+    /// per-organization connection (ADR-027) gets a token for that
+    /// organization's tenant, cached per resolved token URL.
+    pub async fn connection_token_for(
+        &self,
+        connection_id: Uuid,
+        org_id: Option<Uuid>,
+    ) -> Result<Option<String>, TokenError> {
+        {
+            let mut tx = begin_scoped(self.db(), &OrgScope::System)
+                .await
+                .map_err(EngineError::from)?;
+            let view = connections::get(&mut tx, connection_id).await?;
+            tx.commit().await?;
+            if connections::per_organization(&view) {
+                return self.tenant_token(connection_id, org_id).await;
+            }
+        }
         // Fast path: a stored token that's still good.
         let mut tx = begin_scoped(self.db(), &OrgScope::System)
             .await
@@ -89,6 +110,101 @@ impl Engine {
         // Failures that mark the connection (sign in again) must stick.
         tx.commit().await?;
         token
+    }
+
+    /// A client-credentials token for the tenant `org_id`'s variables give.
+    async fn tenant_token(
+        &self,
+        connection_id: Uuid,
+        org_id: Option<Uuid>,
+    ) -> Result<Option<String>, TokenError> {
+        let mut tx = begin_scoped(self.db(), &OrgScope::System)
+            .await
+            .map_err(EngineError::from)?;
+        let resolved =
+            connections::resolve_for(&mut tx, &self.crypto, connection_id, org_id).await?;
+        let ResolvedAuth::OAuth2ClientCredentials {
+            token_url,
+            client_id,
+            client_secret,
+            scopes,
+        } = &resolved.auth
+        else {
+            tx.commit().await?;
+            return Ok(None);
+        };
+        // One request at a time per connection.
+        sqlx::query("SELECT 1 FROM connections WHERE id = $1 FOR UPDATE")
+            .bind(connection_id)
+            .execute(&mut *tx)
+            .await?;
+        let binding = |record| huxley_crypto::Binding {
+            purpose: "connection_tenant_tokens",
+            record,
+        };
+        // The record binds the sealed tokens to their connection and URL.
+        let record = {
+            let mut input = connection_id.as_bytes().to_vec();
+            input.extend_from_slice(token_url.as_bytes());
+            let hash = <sha2::Sha256 as sha2::Digest>::digest(&input);
+            let mut bytes = [0u8; 16];
+            bytes.copy_from_slice(&hash[..16]);
+            Uuid::from_bytes(bytes)
+        };
+        let stored: Option<(Vec<u8>, Option<OffsetDateTime>)> = sqlx::query_as(
+            "SELECT tokens_sealed, expires_at FROM connection_tenant_tokens \
+              WHERE connection_id = $1 AND token_url = $2",
+        )
+        .bind(connection_id)
+        .bind(token_url)
+        .fetch_optional(&mut *tx)
+        .await?;
+        if let Some((sealed, expires_at)) = stored
+            && usable(expires_at)
+        {
+            let plain = self
+                .crypto
+                .decrypt(binding(record), &sealed)
+                .await
+                .map_err(EngineError::from)?;
+            let tokens: huxley_integrations::oauth::Tokens =
+                serde_json::from_slice(&plain).map_err(|e| EngineError::Document(e.to_string()))?;
+            tx.commit().await?;
+            return Ok(Some(tokens.access_token));
+        }
+        let mut form = vec![("grant_type", "client_credentials".to_owned())];
+        if !scopes.is_empty() {
+            form.push(("scope", scopes.join(" ")));
+        }
+        let issued = self
+            .token_request(token_url, client_id, client_secret, form)
+            .await
+            .map_err(|r| TokenError::Failed(r.message))?;
+        let view = connections::get(&mut tx, connection_id).await?;
+        let plain = serde_json::to_vec(&issued.tokens).unwrap_or_default();
+        let sealed = self
+            .crypto
+            .encrypt(view.org_id, binding(record), &plain)
+            .await
+            .map_err(EngineError::from)?;
+        let expires_at = issued
+            .expires_in
+            .map(|s| OffsetDateTime::now_utc() + time::Duration::seconds(s));
+        sqlx::query(
+            "INSERT INTO connection_tenant_tokens (connection_id, org_id, token_url, tokens_sealed, expires_at) \
+             VALUES ($1, $2, $3, $4, $5) \
+             ON CONFLICT (connection_id, token_url) \
+             DO UPDATE SET tokens_sealed = EXCLUDED.tokens_sealed, expires_at = EXCLUDED.expires_at",
+        )
+        .bind(connection_id)
+        .bind(view.org_id)
+        .bind(token_url)
+        .bind(&sealed)
+        .bind(expires_at)
+        .execute(&mut *tx)
+        .await?;
+        tx.commit().await?;
+        Ok(Some(issued.tokens.access_token))
     }
 
     async fn fetch_token(

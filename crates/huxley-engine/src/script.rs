@@ -369,7 +369,7 @@ impl Engine {
         let mut env = payload.env;
         let mut redact = payload.redact;
         for (name, connection) in &payload.connections {
-            match self.script_credentials(name, *connection).await? {
+            match self.script_credentials(name, *connection, org_id).await? {
                 Ok(credentials) => {
                     env.extend(credentials.env);
                     redact.extend(credentials.secrets);

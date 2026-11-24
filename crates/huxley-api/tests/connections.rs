@@ -498,6 +498,11 @@ async fn built_in_integrations_are_added_from_the_catalog() {
     )
     .await;
     assert_eq!(status, StatusCode::CREATED, "{created}");
+    // A partner connection: the tenant comes from each organization's variable.
+    let mut partner = connection("{{ vars.m365_tenant }}");
+    partner["connection"]["name"] = json!("Partner");
+    let (status, created) = call(&app, "POST", "/api/v1/connections", &owner, Some(partner)).await;
+    assert_eq!(status, StatusCode::CREATED, "{created}");
 
     // Technicians can't add integrations.
     let tech = login(&app, &user(&pools, false).await.1).await;

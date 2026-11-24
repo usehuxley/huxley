@@ -2040,6 +2040,7 @@ dependencies = [
  "huxley-crypto",
  "huxley-db",
  "huxley-hwf",
+ "huxley-variables",
  "serde",
  "serde-saphyr",
  "serde_json",
