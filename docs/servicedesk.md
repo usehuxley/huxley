@@ -112,13 +112,63 @@ A service queue is where tickets wait to be picked up. It belongs to an organiza
 
 Set them up under **Settings → Service queues**, which needs `servicedesk:configure`. Archiving a queue removes it from lists and from new tickets. Tickets already in it stay there until they're moved.
 
+## Email
+
+Mail sent to a service desk mailbox becomes tickets and replies.
+
+### Mailboxes
+
+A mailbox belongs to an organization, usually your MSP, and has an address. Its rules say what happens to its mail:
+
+- **New tickets:** their type and queue.
+- **Unknown senders:** what happens when the sender isn't a contact:
+  - **Create a contact** (the default). The contact goes at the company whose contacts share the sender's email domain, or else at the mailbox's organization for unknown senders. Personal-mail domains such as gmail.com don't count.
+  - **Open the ticket without a requester**, in that organization.
+  - **Ignore the message.**
+- **Strip quoted replies and signatures** (on by default).
+
+**How mail arrives.** Fetching from Microsoft 365 and IMAP is coming. Until then, mail reaches a mailbox by being posted to it, the way a mail server's forwarding rule or a mail service's inbound webhook would:
+
+```sh
+curl -X POST https://huxley.example.com/api/v1/mailboxes/<id>/messages \
+  -H "Authorization: Bearer $HUXLEY_TOKEN" -H "Content-Type: message/rfc822" \
+  --data-binary @message.eml
+```
+
+Posting needs `mailbox:ingest`, so give that to a service account used only for this.
+
+**What Huxley keeps.** Each message is kept once, by its `Message-ID`: the raw message in object storage, and what Huxley needs from it in the database. Huxley then emits `email.received` in the mailbox's organization.
+
+### Email to ticket
+
+The built-in pack **Service desk email** (`huxley/servicedesk-email`) adds the *Email to ticket* workflow. Install it at your MSP under **Settings → Packs → Built-in packs**. It runs the `core.ticket.from_email` step for each email, which does this:
+
+1. **Skips automatic mail:** out-of-office and other auto-replies, bounces, and list or bulk mail.
+2. **Skips loops:** mail from one of Huxley's own mailboxes, or more than 20 messages from one sender to a mailbox in an hour.
+3. **Threads replies.** It looks for the `[HX#1042]` token in the subject first, then the messages the email answers (`In-Reply-To` and `References`).
+   - **An open ticket:** the reply becomes a public note from the sender.
+   - **A resolved ticket:** it reopens, with the reply as a note.
+   - **A closed ticket:** the reply opens a new ticket instead.
+4. **Opens a ticket** for the sender's company if the email isn't a reply. The subject, without `Re:` or `Fwd:`, becomes the title, and the text becomes the description. Its source is *email*, and the SLA applies as usual.
+5. **Attaches files.** The email's attachments go on the ticket. Images shown in the text don't.
+
+What became of each email is recorded on it: `GET /api/v1/mailboxes/{id}/emails` lists a mailbox's latest emails. The workflow is an ordinary one: copy it to add steps, for example to triage new tickets with AI.
+
+Mailboxes are managed with `servicedesk:configure`:
+
+- `GET`, `POST /api/v1/mailboxes`
+- `GET`, `PUT`, `DELETE /api/v1/mailboxes/{id}`
+
+**Tickets as records.** Tickets now also take attachments, custom fields and tags, like organizations and contacts do.
+
 ## Permissions
 
 | Permission | Allows | Built-in roles |
 |---|---|---|
 | `ticket:read` | Seeing tickets, their notes and their activity | Technician, Read-only |
 | `ticket:write` | Creating and working tickets: editing, notes, status, assignment | Technician |
-| `servicedesk:configure` | Setting up queues (instance-wide) | Owner, Admin |
+| `servicedesk:configure` | Setting up queues, SLA policies and mailboxes (instance-wide) | Owner, Admin |
+| `mailbox:ingest` | Posting email to mailboxes (instance-wide) | Owner, Admin |
 
 ## API
 
@@ -137,4 +187,4 @@ Set them up under **Settings → Service queues**, which needs `servicedesk:conf
 
 ## Coming next
 
-Screens for setting up SLA policies, holidays in business hours, email intake, time entries, merging and linking tickets, templates, saved views, and workflow steps for tickets.
+Fetching mail from Microsoft 365 and IMAP, emailing replies to requesters, mailbox screens, holidays in business hours, time entries, merging and linking tickets, templates, saved views, and workflow steps for tickets.

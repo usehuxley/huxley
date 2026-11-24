@@ -64,6 +64,7 @@ fn guard(entity_type: &str) -> ApiResult<(&'static str, &'static str)> {
         huxley_entity::CONTACT | huxley_entity::SITE => {
             Ok((permissions::CRM_READ, permissions::CRM_MANAGE))
         }
+        huxley_entity::TICKET => Ok((permissions::TICKET_READ, permissions::TICKET_WRITE)),
         _ => Err(ApiError::not_found()),
     }
 }

@@ -738,6 +738,12 @@ pub struct Note {
     pub author_user_id: Option<Uuid>,
     pub author_name: Option<String>,
     pub author_contact_id: Option<Uuid>,
+    /// The contact who wrote it (by email).
+    pub author_contact_name: Option<String>,
+    /// The address it came from, when it came by email.
+    pub author_email: Option<String>,
+    /// The email it came in, if it did.
+    pub email_id: Option<Uuid>,
     #[serde(with = "time::serde::rfc3339")]
     pub created_at: OffsetDateTime,
 }
@@ -769,6 +775,61 @@ async fn insert_note(
     .bind(body)
     .bind(ctx.actor.id())
     .execute(&mut *conn)
+    .await?;
+    Ok(id)
+}
+
+/// The ticket prefix for an organization (`numbering.ticket_prefix`;
+/// system scope, since it's inherited from above).
+pub async fn prefix_for(conn: &mut PgConnection, org_id: Uuid) -> DeskResult<String> {
+    let settings = huxley_orgs::settings::resolve(conn, org_id)
+        .await
+        .map_err(|e| DeskError::invalid("orgId", e.to_string()))?;
+    Ok(settings
+        .into_iter()
+        .find(|s| s.def.key == huxley_orgs::settings::TICKET_PREFIX)
+        .and_then(|s| s.value)
+        .unwrap_or_else(|| "T".into()))
+}
+
+/// Adds a public note that came by email from `from` (a contact, if
+/// they're one). It doesn't count as a first response.
+pub async fn add_email_note(
+    conn: &mut PgConnection,
+    ctx: &RequestContext,
+    ticket: &Ticket,
+    from: &str,
+    contact: Option<Uuid>,
+    body: &str,
+    email_id: Uuid,
+) -> DeskResult<Uuid> {
+    let body = text("body", Some(body), 100_000)?.unwrap_or_else(|| "(no text)".into());
+    let id = huxley_core::new_id();
+    sqlx::query(
+        "INSERT INTO sd_ticket_notes (id, ticket_id, org_id, kind, body, author_contact_id, author_email, email_id) \
+         VALUES ($1, $2, $3, 'public', $4, $5, $6, $7)",
+    )
+    .bind(id)
+    .bind(ticket.id)
+    .bind(ticket.org_id)
+    .bind(&body)
+    .bind(contact)
+    .bind(from)
+    .bind(email_id)
+    .execute(&mut *conn)
+    .await?;
+    sqlx::query("UPDATE sd_tickets SET updated_at = now() WHERE id = $1")
+        .bind(ticket.id)
+        .execute(&mut *conn)
+        .await?;
+    crate::sla::sync(conn, ticket.id).await?;
+    record(
+        conn,
+        ctx,
+        ticket,
+        "note",
+        json!({ "kind": "public", "note": id, "email": email_id, "from": from }),
+    )
     .await?;
     Ok(id)
 }
@@ -821,8 +882,10 @@ pub async fn add_note(
 pub async fn notes(conn: &mut PgConnection, id: Uuid) -> DeskResult<Vec<Note>> {
     Ok(sqlx::query_as(
         "SELECT n.id, n.kind, n.body, n.author_user_id, u.display_name AS author_name, n.author_contact_id, \
-                n.created_at \
+                nullif(btrim(c.first_name || ' ' || c.last_name), '') AS author_contact_name, \
+                n.author_email, n.email_id, n.created_at \
            FROM sd_ticket_notes n LEFT JOIN users u ON u.id = n.author_user_id \
+           LEFT JOIN crm_contacts c ON c.id = n.author_contact_id \
           WHERE n.ticket_id = $1 ORDER BY n.created_at, n.id",
     )
     .bind(id)

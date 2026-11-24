@@ -32,6 +32,8 @@ pub const ORGANIZATION: &str = "organization";
 pub const CONTACT: &str = "contact";
 /// A site (the `crm` module).
 pub const SITE: &str = "site";
+/// A ticket (the `servicedesk` module).
+pub const TICKET: &str = "ticket";
 
 pub const TYPES: &[EntityType] = &[
     EntityType {
@@ -49,12 +51,18 @@ pub const TYPES: &[EntityType] = &[
         label: "Site",
         table: "crm_sites",
     },
+    EntityType {
+        key: TICKET,
+        label: "Ticket",
+        table: "sd_tickets",
+    },
 ];
 
 /// The feature module an entity type belongs to (`None`: the core).
 pub fn module_of(entity_type: &str) -> Option<&'static str> {
     match entity_type {
         CONTACT | SITE => Some("crm"),
+        TICKET => Some("servicedesk"),
         _ => None,
     }
 }
@@ -112,7 +120,7 @@ pub async fn owning_org(
                 .fetch_optional(conn)
                 .await?
         }
-        CONTACT | SITE => {
+        CONTACT | SITE | TICKET => {
             let table = ty.table;
             sqlx::query_as(sqlx::AssertSqlSafe(format!(
                 "SELECT o.id, o.path::text FROM {table} r JOIN organizations o ON o.id = r.org_id \

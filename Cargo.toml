@@ -44,6 +44,7 @@ huxley-forms = { path = "crates/huxley-forms" }
 huxley-integrations = { path = "crates/huxley-integrations" }
 huxley-crm = { path = "crates/huxley-crm" }
 huxley-servicedesk = { path = "crates/huxley-servicedesk" }
+huxley-mail = { path = "crates/huxley-mail" }
 huxley-orgs = { path = "crates/huxley-orgs" }
 huxley-runners = { path = "crates/huxley-runners" }
 huxley-templates = { path = "crates/huxley-templates" }
@@ -99,6 +100,7 @@ webauthn-rs = { version = "0.6", features = ["danger-allow-state-serialisation",
 url = "2"
 object_store = { version = "0.14", default-features = false, features = ["fs", "aws", "azure"] }
 bytes = "1"
+mail-parser = { version = "1.0", default-features = false }
 lettre = { version = "0.11", default-features = false, features = ["builder", "smtp-transport", "pool", "hostname", "tokio1-rustls-tls"] }
 openidconnect = { version = "4.1", default-features = false, features = ["reqwest", "rustls-tls", "accept-string-booleans"] }
 

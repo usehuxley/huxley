@@ -47,6 +47,11 @@ pub(crate) struct Spilled {
 }
 
 impl Payloads {
+    /// Object storage, if it's set up.
+    pub(crate) const fn storage(&self) -> Option<&Storage> {
+        self.storage.as_ref()
+    }
+
     pub(crate) fn new(storage: Option<Storage>, config: &PayloadConfig) -> Self {
         Self {
             storage,

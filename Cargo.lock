@@ -1236,6 +1236,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "encodify"
+version = "1.0.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ab7f638cb35e10aa08efd439d11ddcbeef7d52dd987c4956a6ff2cc1061020f3"
+dependencies = [
+ "memchr",
+ "simdutf8",
+]
+
+[[package]]
 name = "encoding_rs"
 version = "0.8.44"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1682,6 +1692,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "hashify"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "04a037b1848eada162d6534c206770180e6bfc0eaa97292250c3e7179d8b1f73"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 3.0.10",
+]
+
+[[package]]
 name = "hashlink"
 version = "0.11.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1837,6 +1858,7 @@ dependencies = [
  "huxley-forms",
  "huxley-hwf",
  "huxley-integrations",
+ "huxley-mail",
  "huxley-modules",
  "huxley-notify",
  "huxley-orgs",
@@ -2026,6 +2048,7 @@ version = "0.1.0"
 dependencies = [
  "axum",
  "base64 0.23.1",
+ "bytes",
  "getrandom 0.4.3",
  "huxley-ai",
  "huxley-core",
@@ -2034,12 +2057,15 @@ dependencies = [
  "huxley-datasets",
  "huxley-db",
  "huxley-email",
+ "huxley-entity",
  "huxley-expr",
  "huxley-hwf",
  "huxley-integrations",
+ "huxley-mail",
  "huxley-modules",
  "huxley-notify",
  "huxley-scripts",
+ "huxley-servicedesk",
  "huxley-storage",
  "huxley-variables",
  "huxley-workflows",
@@ -2161,6 +2187,15 @@ dependencies = [
  "utoipa",
  "uuid",
  "zeroize",
+]
+
+[[package]]
+name = "huxley-mail"
+version = "0.1.0"
+dependencies = [
+ "mail-parser",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
@@ -2341,6 +2376,7 @@ dependencies = [
  "huxley-core",
  "huxley-crm",
  "huxley-db",
+ "huxley-mail",
  "huxley-modules",
  "huxley-orgs",
  "jiff 0.2.46",
@@ -3266,6 +3302,18 @@ name = "lru-slab"
 version = "0.1.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4050469837a6ff301cd14c1f8f24f88549e6d548f24f64e2148eb0f72cebc51f"
+
+[[package]]
+name = "mail-parser"
+version = "1.0.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2e57f7caaeb0071026b4be388c81e9c253853d9ed072a3061d425ef1c1b1b569"
+dependencies = [
+ "encodify",
+ "hashify",
+ "memchr",
+ "simdutf8",
+]
 
 [[package]]
 name = "matchers"

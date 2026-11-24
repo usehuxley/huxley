@@ -4300,6 +4300,268 @@
 				}
 			}
 		},
+		"/api/v1/mailboxes": {
+			"get": {
+				"tags": ["servicedesk"],
+				"summary": "Service desk mailboxes. Needs `servicedesk:configure`.",
+				"operationId": "list_mailboxes",
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "array",
+									"items": {
+										"$ref": "#/components/schemas/Mailbox"
+									}
+								}
+							}
+						}
+					}
+				}
+			},
+			"post": {
+				"tags": ["servicedesk"],
+				"summary": "Adds a mailbox. Needs `servicedesk:configure`.",
+				"operationId": "create_mailbox",
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/CreateMailbox"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"201": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Mailbox"
+								}
+							}
+						}
+					},
+					"422": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/mailboxes/{id}": {
+			"get": {
+				"tags": ["servicedesk"],
+				"operationId": "get_mailbox",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Mailbox"
+								}
+							}
+						}
+					},
+					"404": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			},
+			"put": {
+				"tags": ["servicedesk"],
+				"summary": "Changes a mailbox. Needs `servicedesk:configure`.",
+				"operationId": "update_mailbox",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/MailboxInput"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Mailbox"
+								}
+							}
+						}
+					},
+					"409": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			},
+			"delete": {
+				"tags": ["servicedesk"],
+				"summary": "Archives a mailbox: it takes no more mail. Needs `servicedesk:configure`.",
+				"operationId": "archive_mailbox",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"responses": {
+					"204": {},
+					"404": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/mailboxes/{id}/emails": {
+			"get": {
+				"tags": ["servicedesk"],
+				"summary": "A mailbox's latest emails and what became of them. Needs\n`servicedesk:configure`.",
+				"operationId": "list_emails",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					},
+					{
+						"name": "limit",
+						"in": "query",
+						"description": "1 to 200 (default 50).",
+						"required": false,
+						"schema": {
+							"type": ["integer", "null"],
+							"format": "int64"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "array",
+									"items": {
+										"$ref": "#/components/schemas/Email"
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/mailboxes/{id}/messages": {
+			"post": {
+				"tags": ["servicedesk"],
+				"summary": "Delivers a raw message (`message/rfc822`) to a mailbox, as a mail\nserver's forwarding rule would. It's stored and `email.received` is\nemitted for workflows such as *Email to ticket*. Needs `mailbox:ingest`.",
+				"operationId": "post_message",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"requestBody": {
+					"content": {
+						"message/rfc822": {
+							"schema": {
+								"type": "array",
+								"items": {
+									"type": "integer",
+									"format": "int32",
+									"minimum": 0
+								}
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"202": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/MessageReceived"
+								}
+							}
+						}
+					},
+					"422": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
 		"/api/v1/modules": {
 			"get": {
 				"tags": ["modules"],
@@ -11837,6 +12099,24 @@
 				},
 				"additionalProperties": false
 			},
+			"CreateMailbox": {
+				"allOf": [
+					{
+						"$ref": "#/components/schemas/MailboxInput"
+					},
+					{
+						"type": "object",
+						"required": ["orgId"],
+						"properties": {
+							"orgId": {
+								"type": "string",
+								"format": "uuid",
+								"description": "The organization it belongs to (usually your MSP)."
+							}
+						}
+					}
+				]
+			},
 			"CreateOrgRequest": {
 				"type": "object",
 				"required": ["parentId", "kind", "name"],
@@ -12251,6 +12531,84 @@
 					"path": {
 						"type": "string",
 						"description": "e.g. `spec.steps[2].then[0].id`"
+					}
+				}
+			},
+			"Email": {
+				"type": "object",
+				"description": "A received message, as kept.",
+				"required": [
+					"id",
+					"orgId",
+					"mailboxId",
+					"messageId",
+					"subject",
+					"bodyText",
+					"sizeBytes",
+					"attachments",
+					"receivedAt"
+				],
+				"properties": {
+					"attachments": {
+						"type": "array",
+						"items": {
+							"type": "object"
+						},
+						"description": "`[{filename, contentType, size, inline}]`"
+					},
+					"automatic": {
+						"type": ["string", "null"],
+						"description": "Why it looks automatic, if it does."
+					},
+					"bodyText": {
+						"type": "string"
+					},
+					"fromAddress": {
+						"type": ["string", "null"]
+					},
+					"fromName": {
+						"type": ["string", "null"]
+					},
+					"id": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"mailboxId": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"messageId": {
+						"type": "string"
+					},
+					"orgId": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"outcome": {
+						"type": ["string", "null"],
+						"description": "What became of it: `ticket_created`, `note_added`, `ticket_reopened`,\n`ignored_automatic`, `ignored_loop` or `ignored_unknown_sender`."
+					},
+					"outcomeDetail": {
+						"type": ["string", "null"]
+					},
+					"processedAt": {
+						"type": ["string", "null"],
+						"format": "date-time"
+					},
+					"receivedAt": {
+						"type": "string",
+						"format": "date-time"
+					},
+					"sizeBytes": {
+						"type": "integer",
+						"format": "int64"
+					},
+					"subject": {
+						"type": "string"
+					},
+					"ticketId": {
+						"type": ["string", "null"],
+						"format": "uuid"
 					}
 				}
 			},
@@ -13005,6 +13363,122 @@
 				],
 				"description": "The result of a sign-in step."
 			},
+			"Mailbox": {
+				"type": "object",
+				"required": [
+					"id",
+					"orgId",
+					"name",
+					"address",
+					"kind",
+					"ticketType",
+					"unknownSender",
+					"stripReplies",
+					"enabled",
+					"version",
+					"createdAt"
+				],
+				"properties": {
+					"address": {
+						"type": "string"
+					},
+					"createdAt": {
+						"type": "string",
+						"format": "date-time"
+					},
+					"enabled": {
+						"type": "boolean"
+					},
+					"id": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"kind": {
+						"type": "string",
+						"description": "`forward` (posted to Huxley), `imap` or `graph` (fetched)."
+					},
+					"lastCheckedAt": {
+						"type": ["string", "null"],
+						"format": "date-time"
+					},
+					"lastError": {
+						"type": ["string", "null"]
+					},
+					"name": {
+						"type": "string"
+					},
+					"orgId": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"queueId": {
+						"type": ["string", "null"],
+						"format": "uuid"
+					},
+					"stripReplies": {
+						"type": "boolean"
+					},
+					"ticketType": {
+						"type": "string",
+						"description": "The type of new tickets (a ticket type's key)."
+					},
+					"unknownOrgId": {
+						"type": ["string", "null"],
+						"format": "uuid",
+						"description": "Where unknown senders' tickets go; none: the mailbox's organization."
+					},
+					"unknownSender": {
+						"type": "string",
+						"description": "`create_contact`, `no_requester` or `ignore`."
+					},
+					"version": {
+						"type": "integer",
+						"format": "int32"
+					}
+				}
+			},
+			"MailboxInput": {
+				"type": "object",
+				"required": ["name", "address"],
+				"properties": {
+					"address": {
+						"type": "string"
+					},
+					"enabled": {
+						"type": ["boolean", "null"]
+					},
+					"kind": {
+						"type": ["string", "null"],
+						"description": "`forward` (default), `imap` or `graph`."
+					},
+					"name": {
+						"type": "string"
+					},
+					"queueId": {
+						"type": ["string", "null"],
+						"format": "uuid"
+					},
+					"stripReplies": {
+						"type": ["boolean", "null"]
+					},
+					"ticketType": {
+						"type": ["string", "null"]
+					},
+					"unknownOrgId": {
+						"type": ["string", "null"],
+						"format": "uuid"
+					},
+					"unknownSender": {
+						"type": ["string", "null"]
+					},
+					"version": {
+						"type": ["integer", "null"],
+						"format": "int32",
+						"description": "The version you read (updates only)."
+					}
+				},
+				"additionalProperties": false
+			},
 			"MatrixCell": {
 				"type": "object",
 				"description": "One cell of the priority matrix.",
@@ -13058,6 +13532,21 @@
 					}
 				],
 				"description": "The signed-in user plus permission hints for the UI."
+			},
+			"MessageReceived": {
+				"type": "object",
+				"description": "What happened to a posted message.",
+				"required": ["emailId", "duplicate"],
+				"properties": {
+					"duplicate": {
+						"type": "boolean",
+						"description": "The mailbox already had this message (by its `Message-ID`)."
+					},
+					"emailId": {
+						"type": "string",
+						"format": "uuid"
+					}
+				}
 			},
 			"MfaChallengeRequest": {
 				"type": "object",
@@ -13382,6 +13871,14 @@
 						"type": ["string", "null"],
 						"format": "uuid"
 					},
+					"authorContactName": {
+						"type": ["string", "null"],
+						"description": "The contact who wrote it (by email)."
+					},
+					"authorEmail": {
+						"type": ["string", "null"],
+						"description": "The address it came from, when it came by email."
+					},
 					"authorName": {
 						"type": ["string", "null"]
 					},
@@ -13395,6 +13892,11 @@
 					"createdAt": {
 						"type": "string",
 						"format": "date-time"
+					},
+					"emailId": {
+						"type": ["string", "null"],
+						"format": "uuid",
+						"description": "The email it came in, if it did."
 					},
 					"id": {
 						"type": "string",
