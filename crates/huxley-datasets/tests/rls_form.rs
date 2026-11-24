@@ -24,6 +24,11 @@ async fn no_policy_checks_the_scope_row_by_row() {
     .await
     .unwrap()
     .id;
+    // Commit the organizations first: creating them takes the audit chain's
+    // head, and a dataset's DDL lock taken after it can deadlock with another
+    // transaction creating an organization (see `lock_for_ddl`).
+    tx.commit().await.unwrap();
+    let mut tx = begin_scoped(&pools.app, &OrgScope::System).await.unwrap();
     let input: huxley_datasets::DatasetInput = serde_json::from_value(
         json!({ "key": "rls", "name": "RLS", "columns": [{ "name": "x", "type": "text" }] }),
     )
