@@ -17,6 +17,7 @@
 		fields: resolve('/(app)/settings/fields'),
 		queues: resolve('/(app)/settings/queues'),
 		sla: resolve('/(app)/settings/sla'),
+		mailboxes: resolve('/(app)/settings/mailboxes'),
 		modules: resolve('/(app)/settings/modules'),
 		jobs: resolve('/(app)/settings/jobs'),
 		runners: resolve('/(app)/settings/runners'),
