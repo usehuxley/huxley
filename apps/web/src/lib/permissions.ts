@@ -20,6 +20,12 @@ export const SETTINGS_SECTIONS = [
 		module: 'servicedesk'
 	},
 	{
+		key: 'skills',
+		label: 'Skills & certifications',
+		permission: 'workforce:manage',
+		module: 'workforce'
+	},
+	{
 		key: 'mailboxes',
 		label: 'Mailboxes',
 		permission: 'servicedesk:configure',

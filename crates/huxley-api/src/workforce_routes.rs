@@ -12,7 +12,9 @@ use axum::{Json, Router};
 use huxley_authz::permissions;
 use huxley_db::{OrgScope, begin_scoped};
 use huxley_workforce::catalog::{self, Certification, CertificationInput, Skill, SkillInput};
-use huxley_workforce::people::{self, CertificationHeld, Person, PersonSummary, SkillLevel};
+use huxley_workforce::people::{
+    self, CertificationHeld, MatrixCell, Person, PersonSummary, SkillLevel,
+};
 use huxley_workforce::requirements::{self, Fit, Requirement};
 use huxley_workforce::{MODULE, WorkforceError};
 use serde::Deserialize;
@@ -36,6 +38,7 @@ pub fn routes() -> Router<AppState> {
             put(update_certification).delete(archive_certification),
         )
         .route("/people", get(list_people))
+        .route("/matrix", get(matrix))
         .route("/people/{user_id}", get(get_person))
         .route("/people/{user_id}/skills/{skill_id}", put(set_skill))
         .route(
@@ -255,6 +258,19 @@ pub async fn list_people(
     reader(&state, &authed).await?;
     Ok(Json(
         system(&state, async |tx| people::people(tx).await).await?,
+    ))
+}
+
+/// Everyone's level in every skill (the skills matrix).
+#[utoipa::path(get, path = "/api/v1/workforce/matrix", tag = "workforce",
+    responses((status = 200, body = Vec<MatrixCell>)))]
+pub async fn matrix(
+    State(state): State<AppState>,
+    authed: Authed,
+) -> ApiResult<Json<Vec<MatrixCell>>> {
+    reader(&state, &authed).await?;
+    Ok(Json(
+        system(&state, async |tx| people::matrix(tx).await).await?,
     ))
 }
 

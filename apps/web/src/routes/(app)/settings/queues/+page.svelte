@@ -17,6 +17,13 @@
 	const personName = (id: string) => data.people.find((p) => p.value === id)?.label ?? 'Someone';
 	const teamName = (id: string) => data.teams.find((t) => t.value === id)?.label ?? 'A team';
 
+	let requiring = $state(false);
+	let requiringQueue: Queue | null = $state(null);
+	function require(queue: Queue) {
+		requiringQueue = queue;
+		requiring = true;
+	}
+
 	function edit(queue: Queue) {
 		editing = queue;
 		open = true;
@@ -103,9 +110,19 @@
 							{#if queue.description}
 								<p class="mt-0.5 text-sm text-fg-muted">{queue.description}</p>
 							{/if}
+							{#if data.workforce && (data.requirements[queue.id] ?? []).length > 0}
+								<p class="mt-0.5 text-xs text-fg-muted">
+									Requires {(data.requirements[queue.id] ?? [])
+										.map((r) => (r.certificationId ? r.name : `${r.name} (level ${r.minLevel})`))
+										.join(', ')}
+								</p>
+							{/if}
 						</div>
 						<div class="flex gap-2">
 							<Button size="sm" onclick={() => edit(queue)}>Edit</Button>
+							{#if data.workforce}
+								<Button size="sm" onclick={() => require(queue)}>Requirements</Button>
+							{/if}
 							<form method="POST" action="?/archive" use:enhance={done('Queue archived.')}>
 								<input type="hidden" name="id" value={queue.id} />
 								<Button size="sm" type="submit" variant="ghost">Archive</Button>
@@ -150,6 +167,75 @@
 		</form>
 	</Card>
 </div>
+
+<Dialog bind:open={requiring} title={requiringQueue ? `What ${requiringQueue.name} requires` : ''}>
+	{#if requiringQueue}
+		{@const current = data.requirements[requiringQueue.id] ?? []}
+		{@const skillRows = [
+			...current.filter((r) => r.skillId),
+			{ skillId: '', minLevel: 2 },
+			{ skillId: '', minLevel: 2 }
+		]}
+		<form
+			method="POST"
+			action="?/requirements"
+			class="flex flex-col gap-4"
+			use:enhance={done('Requirements saved.', () => (requiring = false))}
+		>
+			<input type="hidden" name="id" value={requiringQueue.id} />
+			<fieldset class="flex flex-col gap-2">
+				<legend class="text-sm font-medium text-fg">Skills, at least at a level</legend>
+				<p class="text-sm text-fg-muted">Weighed when assigning: partly met counts in part.</p>
+				{#each skillRows as row, i (i)}
+					<div class="grid grid-cols-[1fr_10rem] gap-2">
+						<Select
+							name="skillId"
+							aria-label="Skill {i + 1}"
+							value={row.skillId ?? ''}
+							options={[
+								{ value: '', label: 'No skill' },
+								...data.skills.map((k) => ({ value: k.id, label: k.name }))
+							]}
+						/>
+						<Select
+							name="minLevel"
+							aria-label="Skill {i + 1} level"
+							value={String(row.minLevel ?? 2)}
+							options={[
+								{ value: '1', label: '1 · Learning' },
+								{ value: '2', label: '2 · Working' },
+								{ value: '3', label: '3 · Proficient' },
+								{ value: '4', label: '4 · Expert' }
+							]}
+						/>
+					</div>
+				{/each}
+			</fieldset>
+			{#if data.certifications.length > 0}
+				<fieldset class="flex flex-col gap-1.5">
+					<legend class="text-sm font-medium text-fg">Certifications</legend>
+					<p class="text-sm text-fg-muted">Required: only people holding them get this work.</p>
+					{#each data.certifications as c (c.id)}
+						<label class="flex items-center gap-2 text-sm text-fg">
+							<input
+								type="checkbox"
+								name="certificationId"
+								value={c.id}
+								checked={current.some((r) => r.certificationId === c.id)}
+							/>
+							{c.vendor}
+							{c.name}
+						</label>
+					{/each}
+				</fieldset>
+			{/if}
+			<div class="flex justify-end gap-2">
+				<Button onclick={() => (requiring = false)}>Cancel</Button>
+				<Button type="submit" variant="primary">Save</Button>
+			</div>
+		</form>
+	{/if}
+</Dialog>
 
 <Dialog bind:open title="Edit queue">
 	{#if editing}

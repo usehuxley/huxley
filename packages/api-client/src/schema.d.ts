@@ -3681,6 +3681,23 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
+	'/api/v1/workforce/matrix': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** Everyone's level in every skill (the skills matrix). */
+		get: operations['matrix'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
 	'/api/v1/workforce/people': {
 		parameters: {
 			query?: never;
@@ -6405,6 +6422,16 @@ export interface components {
 			level?: number | null;
 			/** @description Mark the level verified (needs `workforce:manage`, and not your own). */
 			verified?: boolean;
+		};
+		/** @description One cell of the skills matrix: someone's level in a skill. */
+		SkillMatrixCell: {
+			/** Format: int32 */
+			level: number;
+			/** Format: uuid */
+			skillId: string;
+			/** Format: uuid */
+			userId: string;
+			verified: boolean;
 		};
 		/** @description The policy for an organization: where it's set, and which applies. */
 		SlaAssignment: {
@@ -14965,6 +14992,25 @@ export interface operations {
 				};
 				content: {
 					'application/json': components['schemas']['Fit'][];
+				};
+			};
+		};
+	};
+	matrix: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['SkillMatrixCell'][];
 				};
 			};
 		};
