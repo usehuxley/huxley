@@ -223,6 +223,18 @@ fn apply_error(e: sqlx::Error) -> DatasetError {
     }
 }
 
+/// Takes the lock a dataset table's DDL needs on `organizations` (its rows
+/// reference it) before anything else in the transaction. Taken later,
+/// after row locks, it could deadlock with a transaction creating an
+/// organization (which locks rows, then waits for us). DDL is quick, so
+/// organization writes wait only briefly.
+async fn lock_for_ddl(conn: &mut PgConnection) -> DatasetResult<()> {
+    sqlx::query("LOCK TABLE organizations IN SHARE ROW EXCLUSIVE MODE")
+        .execute(conn)
+        .await?;
+    Ok(())
+}
+
 async fn apply(conn: &mut PgConnection, id: Uuid) -> DatasetResult<()> {
     sqlx::query("SELECT huxley_dataset_apply($1)")
         .bind(id)
@@ -240,6 +252,7 @@ pub async fn create(
     input: &DatasetInput,
 ) -> DatasetResult<Dataset> {
     check(input)?;
+    lock_for_ddl(conn).await?;
     let id = huxley_core::new_id();
     let inserted = sqlx::query(
         "INSERT INTO datasets (id, org_id, key, name, description, columns, primary_key, created_by) \
@@ -280,6 +293,7 @@ pub async fn update(
     input: &DatasetInput,
 ) -> DatasetResult<Dataset> {
     check(input)?;
+    lock_for_ddl(conn).await?;
     let current = get(&mut *conn, id).await?;
     if input.key != current.key {
         return Err(invalid("key", "a dataset's key can't change"));
@@ -311,6 +325,7 @@ pub async fn update(
 
 /// Deletes a dataset and every row in it.
 pub async fn delete(conn: &mut PgConnection, ctx: &RequestContext, id: Uuid) -> DatasetResult<()> {
+    lock_for_ddl(conn).await?;
     let current = get(&mut *conn, id).await?;
     sqlx::query("SELECT huxley_dataset_drop($1)")
         .bind(id)
