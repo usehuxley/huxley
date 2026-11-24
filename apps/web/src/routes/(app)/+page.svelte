@@ -1,12 +1,41 @@
 <script lang="ts">
-	import { Workflow } from '@lucide/svelte';
-	import { Badge, Button, Card, EmptyState } from '@usehuxley/ui';
+	import { Badge, Button, Card } from '@usehuxley/ui';
 	import { statusBadge } from '#lib/status.ts';
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
 
 	let badge = $derived(statusBadge(data.status));
+
+	const DOCS = 'https://docs.usehuxley.io';
+	const START = [
+		{
+			title: 'Build a workflow',
+			description: 'Start from a template, or from scratch in the visual editor or as YAML.',
+			href: '/workflows',
+			action: 'New workflow'
+		},
+		{
+			title: 'Connect your tools',
+			description: 'Import an API, or add Microsoft 365, Slack and others from the catalog.',
+			href: '/integrations',
+			action: 'Add an integration'
+		},
+		{
+			title: 'Let AI help',
+			description:
+				'Describe what you need to the assistant, or connect an AI client like Claude Code.',
+			href: '/assistant',
+			action: 'Ask AI'
+		},
+		{
+			title: 'Learn the basics',
+			description:
+				'A ten-minute tutorial: your first workflow, from draft to a form that starts it.',
+			href: `${DOCS}/getting-started`,
+			action: 'Read the tutorial'
+		}
+	];
 </script>
 
 <svelte:head>
@@ -37,15 +66,17 @@
 		</p>
 	</Card>
 
-	<Card>
-		<EmptyState
-			title="Workflows are coming"
-			description="The automation engine and canvas arrive in Phase 2. Until then, this is the foundation: the app shell, design system, and API."
-		>
-			{#snippet icon()}<Workflow size={24} />{/snippet}
-			{#snippet actions()}
-				<Button href="https://docs.usehuxley.io" variant="primary">Read the docs</Button>
-			{/snippet}
-		</EmptyState>
+	<Card title="Get started" description="Where to go first.">
+		<ul class="flex flex-col divide-y divide-border text-sm" aria-label="Get started">
+			{#each START as item (item.href)}
+				<li class="flex items-center justify-between gap-4 py-3 first:pt-0 last:pb-0">
+					<div class="min-w-0">
+						<p class="font-medium text-fg">{item.title}</p>
+						<p class="mt-0.5 text-fg-muted">{item.description}</p>
+					</div>
+					<Button href={item.href} size="sm">{item.action}</Button>
+				</li>
+			{/each}
+		</ul>
 	</Card>
 </div>

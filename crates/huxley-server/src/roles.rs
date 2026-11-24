@@ -253,22 +253,73 @@ async fn spawn_runner_gateway(
         ),
         None => None,
     };
-    let tls = huxley_runners::gateway::tls(db, crypto, &config.runners.hosts, extra.as_deref())
-        .await
-        .context("runner gateway certificate")?;
+    // Bind now, so a bad address fails startup at once.
     let listener = tokio::net::TcpListener::bind(bind)
         .await
         .with_context(|| format!("failed to bind the runner gateway on {bind}"))?;
-    tracing::info!(addr = %bind, "runner gateway listening");
     let engine = huxley_engine::Engine::with_config(db.clone(), crypto.clone(), &config.engine);
     let gateway = huxley_runners::gateway::Gateway::new(db.clone(), crypto.clone(), engine);
-    let token = shutdown.clone();
+    let (db, crypto, hosts, token) = (
+        db.clone(),
+        crypto.clone(),
+        config.runners.hosts.clone(),
+        shutdown.clone(),
+    );
     tasks.spawn(async move {
+        let Some(tls) = gateway_tls(
+            &db,
+            &crypto,
+            &hosts,
+            extra.as_deref(),
+            &token,
+            GATEWAY_RETRY,
+        )
+        .await?
+        else {
+            return Ok(());
+        };
+        tracing::info!(addr = %bind, "runner gateway listening");
         huxley_runners::gateway::serve(gateway, listener, &tls, token)
             .await
             .context("runner gateway failed")
     });
     Ok(())
+}
+
+/// How often the runner gateway checks whether the instance is set up yet.
+const GATEWAY_RETRY: Duration = Duration::from_secs(5);
+
+/// The gateway's certificate. Its authority is kept under the root
+/// organization's key, so before `huxley admin bootstrap` there's none yet:
+/// wait for it (the rest of the server runs meanwhile, so the first start of
+/// a new instance doesn't fail). `None` if shut down while waiting.
+async fn gateway_tls(
+    db: &huxley_db::sqlx::PgPool,
+    crypto: &huxley_crypto::Crypto,
+    hosts: &[String],
+    extra_ca: Option<&str>,
+    shutdown: &CancellationToken,
+    retry: Duration,
+) -> anyhow::Result<Option<huxley_runners::gateway::GatewayTls>> {
+    let mut waiting = false;
+    loop {
+        match huxley_runners::gateway::tls(db, crypto, hosts, extra_ca).await {
+            Ok(tls) => return Ok(Some(tls)),
+            Err(huxley_runners::registry::RegistryError::NoRoot) => {
+                if !waiting {
+                    tracing::warn!(
+                        "runner gateway waiting: the instance isn't set up yet (run `huxley admin bootstrap`)"
+                    );
+                    waiting = true;
+                }
+            }
+            Err(e) => return Err(anyhow::Error::new(e).context("runner gateway certificate")),
+        }
+        tokio::select! {
+            () = shutdown.cancelled() => return Ok(None),
+            () = tokio::time::sleep(retry) => {}
+        }
+    }
 }
 
 /// The SQL console's pool, if `datasets.console_url` is set; refuses a
