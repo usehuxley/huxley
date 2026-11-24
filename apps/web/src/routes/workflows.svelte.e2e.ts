@@ -363,4 +363,37 @@ spec:
 		await settings.getByRole('button', { name: 'Preview with the last run' }).click();
 		await expect(settings.getByLabel('Preview')).toHaveText('Hello Ada');
 	});
+
+	test('a run can be run again from a step', async ({ browser }) => {
+		const page = await signIn(browser);
+		const key = `rerun-${Date.now().toString(36)}`;
+		await page.goto('/workflows');
+		await page.getByLabel('Name').fill(`Rerun ${key}`);
+		await page.getByLabel('Key').fill(key);
+		await page.getByRole('button', { name: 'Create' }).click();
+		await page.getByRole('tab', { name: 'YAML' }).click();
+		await page.getByRole('textbox', { name: 'Workflow YAML' }).fill(`apiVersion: usehuxley.com/v1
+kind: Workflow
+metadata: { key: ${key}, name: Rerun ${key} }
+spec:
+  inputs: { type: object, properties: { name: { type: string } } }
+  steps:
+    - { id: first, type: transform, output: "first {{ inputs.name }}" }
+    - { id: second, type: transform, output: "{{ steps.first.output }}!" }
+  outputs: { result: "{{ steps.second.output }}" }
+`);
+		await page.getByRole('button', { name: 'Save draft' }).click();
+		await expect(page.getByText('Draft saved. It is ready to publish.')).toBeVisible();
+		await page.getByRole('textbox', { name: 'Inputs' }).fill('{"name": "Ada"}');
+		await page.getByRole('button', { name: 'Test run the draft' }).click();
+		await expect(page.getByText('Succeeded').first()).toBeVisible({ timeout: 20_000 });
+		const firstRun = page.url();
+
+		const steps = page.getByRole('list', { name: 'Steps' });
+		await steps.getByText('second', { exact: true }).click();
+		await page.getByRole('button', { name: 'Run again from here' }).click();
+		await expect(page).not.toHaveURL(firstRun);
+		await expect(page.getByText('Succeeded').first()).toBeVisible({ timeout: 20_000 });
+		await expect(page.getByLabel('Run outputs')).toContainText('"result": "first Ada!"');
+	});
 });

@@ -1899,3 +1899,91 @@ async fn expressions_preview_against_the_latest_run() {
     let (status, _) = s.post(&tech, &preview, ask(json!("{{ 1 }}"))).await;
     assert_eq!(status, StatusCode::FORBIDDEN);
 }
+
+#[tokio::test]
+async fn test_runs_can_start_at_a_step_with_earlier_results_pinned() {
+    let Some(s) = setup().await else { return };
+    let doc = json!({
+        "apiVersion": "usehuxley.com/v1", "kind": "Workflow",
+        "metadata": { "key": key("pin"), "name": "Pinned" },
+        "spec": {
+            "inputs": { "type": "object", "properties": {
+                "name": { "type": "string" }, "extra": { "type": "string" } } },
+            "steps": [
+                { "id": "first", "type": "transform", "output": "first: {{ inputs.name }}" },
+                { "id": "loop", "type": "foreach", "items": "{{ [1, 2] }}", "steps": [
+                    { "id": "each", "type": "transform", "output": "{{ item }}" } ] },
+                { "id": "second", "type": "transform",
+                  "output": "{{ steps.first.output }} / {{ inputs.name }} {{ inputs.extra | default('') }}" }
+            ],
+            "outputs": { "result": "{{ steps.second.output }}" }
+        }
+    });
+    let (_, created) = s.create(doc).await;
+    let id = created["id"].as_str().unwrap().to_owned();
+    let runs = format!("/api/v1/workflows/{id}/runs");
+    let (_, source) = s
+        .post(
+            &s.owner,
+            &runs,
+            json!({ "inputs": { "name": "Ada" }, "test": true }),
+        )
+        .await;
+    let source_id = source["id"].as_str().unwrap().to_owned();
+    finish(&s.pools, &s.app, &s.owner, &source_id).await;
+
+    // From `second`, with new inputs: `first` (and the loop) keep the
+    // source's results; `second` runs again with the new inputs.
+    let (status, run) = s
+        .post(
+            &s.owner,
+            &runs,
+            json!({ "inputs": { "name": "Bob", "extra": "!" }, "test": true,
+                                        "from": { "runId": source_id, "stepId": "second" } }),
+        )
+        .await;
+    assert_eq!(status, StatusCode::CREATED, "{run}");
+    let done = finish(&s.pools, &s.app, &s.owner, run["id"].as_str().unwrap()).await;
+    assert_eq!(done["status"], "succeeded", "{done}");
+    assert_eq!(done["outputs"]["result"], "first: Ada / Bob !");
+    let keys: Vec<String> = done["steps"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|s| s["stepKey"].as_str().unwrap().to_owned())
+        .collect();
+    for pinned in ["first", "loop", "each[0]", "each[1]"] {
+        assert!(keys.iter().any(|k| k == pinned), "{pinned} in {keys:?}");
+    }
+
+    // Without inputs, the source's are used.
+    let (_, run) = s
+        .post(
+            &s.owner,
+            &runs,
+            json!({ "test": true, "from": { "runId": source_id, "stepId": "second" } }),
+        )
+        .await;
+    let done = finish(&s.pools, &s.app, &s.owner, run["id"].as_str().unwrap()).await;
+    assert_eq!(done["outputs"]["result"], "first: Ada / Ada ");
+
+    // Only top-level steps, only test runs, only this workflow's runs.
+    for (body, pointer) in [
+        (
+            json!({ "test": true, "from": { "runId": source_id, "stepId": "each" } }),
+            "from.stepId",
+        ),
+        (
+            json!({ "from": { "runId": source_id, "stepId": "second" } }),
+            "from",
+        ),
+        (
+            json!({ "test": true, "from": { "runId": Uuid::now_v7(), "stepId": "second" } }),
+            "from.runId",
+        ),
+    ] {
+        let (status, problem) = s.post(&s.owner, &runs, body).await;
+        assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{problem}");
+        assert_eq!(problem["errors"][0]["pointer"], pointer, "{problem}");
+    }
+}
