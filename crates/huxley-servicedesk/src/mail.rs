@@ -676,7 +676,21 @@ async fn thread(
         .fetch_optional(&mut *conn)
         .await?;
     }
-    let Some(id) = candidate else { return Ok(None) };
+    let Some(mut id) = candidate else {
+        return Ok(None);
+    };
+    // A merged ticket's replies go to the one it was merged into.
+    for _ in 0..10 {
+        let into: Option<Uuid> =
+            sqlx::query_scalar("SELECT merged_into_id FROM sd_tickets WHERE id = $1")
+                .bind(id)
+                .fetch_one(&mut *conn)
+                .await?;
+        match into {
+            Some(next) => id = next,
+            None => break,
+        }
+    }
     let ticket = tickets::get(conn, id).await?;
     Ok(under(conn, ticket.org_id, within).await?.then_some(ticket))
 }

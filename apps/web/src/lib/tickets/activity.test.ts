@@ -9,6 +9,13 @@ group('ticket activity', () => {
 			'changed the status from New to In progress'
 		);
 		expect(describe('note', { kind: 'internal' })).toBe('added an internal note');
+		expect(describe('link', { linked: 'T-2', as: 'parent' })).toBe('made T-2 its parent');
+		expect(describe('link', { linked: 'T-3', as: 'related' })).toBe('linked T-3');
+		expect(describe('link', { unlinked: 'T-3' })).toBe('unlinked T-3');
+		expect(describe('merge', { merged: 'T-4' })).toBe('merged T-4 into this ticket');
+		expect(describe('status', { from: 'new', to: 'closed', mergedInto: 'T-1' })).toBe(
+			'merged this ticket into T-1'
+		);
 		expect(describe('note', { kind: 'public' })).toBe('replied');
 		expect(describe('sla', { clock: 'response', alert: 'breached' })).toBe(
 			'noted that the first response missed its SLA target'

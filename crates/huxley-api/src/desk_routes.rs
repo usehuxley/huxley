@@ -10,6 +10,7 @@ use axum::{Json, Router};
 use huxley_authz::permissions;
 use huxley_db::{OrgScope, begin_scoped};
 use huxley_servicedesk::config::{self, MatrixCell, TicketType};
+use huxley_servicedesk::links::{self, LinkedTicket, NewLink};
 use huxley_servicedesk::mail::{self, Email, Mailbox, MailboxInput};
 use huxley_servicedesk::queues::{self, Queue, QueueInput};
 use huxley_servicedesk::responses::{self, CannedResponse, CannedResponseInput};
@@ -53,6 +54,12 @@ pub fn routes() -> Router<AppState> {
             axum::routing::put(update_response).delete(archive_response),
         )
         .route("/tickets/{id}/responses", get(ticket_responses))
+        .route("/tickets/{id}/links", get(list_links).post(add_link))
+        .route(
+            "/tickets/{id}/links/{other_id}",
+            axum::routing::delete(remove_link),
+        )
+        .route("/tickets/{id}/merge", post(merge_ticket))
         .route("/my-work", get(my_work))
         .route("/tickets", get(list_tickets).post(create_ticket))
         .route("/tickets/{id}", get(get_ticket).patch(update_ticket))
@@ -900,6 +907,136 @@ pub async fn ticket_responses(
     Ok(Json(
         scoped(&state, &OrgScope::System, async |tx| {
             responses::for_ticket(tx, &ticket, &me).await
+        })
+        .await?,
+    ))
+}
+
+/// The other ticket a link or merge names: by id, or by reference among
+/// the tickets you can work on.
+async fn other_ticket(
+    state: &AppState,
+    authed: &Authed,
+    id: Option<Uuid>,
+    reference: Option<&str>,
+    field: &str,
+) -> ApiResult<Uuid> {
+    let other = match (id, reference.map(str::trim).filter(|r| !r.is_empty())) {
+        (Some(id), _) => id,
+        (None, Some(reference)) => {
+            let scope = authed
+                .module_scope(state, permissions::TICKET_WRITE, MODULE)
+                .await?;
+            scoped(state, &scope, async |tx| {
+                links::by_reference(tx, field, reference).await
+            })
+            .await?
+        }
+        (None, None) => {
+            return Err(
+                ApiError::validation().with_field_error(format!("/{field}"), "which ticket")
+            );
+        }
+    };
+    ticket_access(state, authed, other, permissions::TICKET_WRITE).await?;
+    Ok(other)
+}
+
+/// Tickets linked to this one: its parent, children and related tickets.
+#[utoipa::path(get, path = "/api/v1/tickets/{id}/links", tag = "servicedesk",
+    params(("id" = Uuid, Path)), responses((status = 200, body = Vec<LinkedTicket>)))]
+pub async fn list_links(
+    State(state): State<AppState>,
+    authed: Authed,
+    Path(id): Path<Uuid>,
+) -> ApiResult<Json<Vec<LinkedTicket>>> {
+    let scope = ticket_access(&state, &authed, id, permissions::TICKET_READ).await?;
+    Ok(Json(
+        scoped(&state, &scope, async |tx| links::list(tx, id).await).await?,
+    ))
+}
+
+/// Links another ticket (by id or reference) as related, this one's parent,
+/// or its child. Needs `ticket:write` on both.
+#[utoipa::path(post, path = "/api/v1/tickets/{id}/links", tag = "servicedesk",
+    params(("id" = Uuid, Path)), request_body = NewLink,
+    responses((status = 200, body = Vec<LinkedTicket>), (status = 422, body = ApiError, content_type = "application/problem+json")))]
+pub async fn add_link(
+    State(state): State<AppState>,
+    authed: Authed,
+    Path(id): Path<Uuid>,
+    Json(body): Json<NewLink>,
+) -> ApiResult<Json<Vec<LinkedTicket>>> {
+    ticket_access(&state, &authed, id, permissions::TICKET_WRITE).await?;
+    let other = other_ticket(
+        &state,
+        &authed,
+        body.other_id,
+        body.reference.as_deref(),
+        "reference",
+    )
+    .await?;
+    let kind = body.kind.unwrap_or_else(|| "related".into());
+    let ctx = authed.user.ctx.clone();
+    // Both are yours to change; the links of either side may be in
+    // organizations the other's scope doesn't cover.
+    scoped(&state, &OrgScope::System, async |tx| {
+        links::link(tx, &ctx, id, other, &kind).await
+    })
+    .await?;
+    let scope = ticket_access(&state, &authed, id, permissions::TICKET_READ).await?;
+    Ok(Json(
+        scoped(&state, &scope, async |tx| links::list(tx, id).await).await?,
+    ))
+}
+
+/// Removes a link (from both tickets).
+#[utoipa::path(delete, path = "/api/v1/tickets/{id}/links/{other_id}", tag = "servicedesk",
+    params(("id" = Uuid, Path), ("other_id" = Uuid, Path)), responses((status = 204)))]
+pub async fn remove_link(
+    State(state): State<AppState>,
+    authed: Authed,
+    Path((id, other)): Path<(Uuid, Uuid)>,
+) -> ApiResult<StatusCode> {
+    ticket_access(&state, &authed, id, permissions::TICKET_WRITE).await?;
+    ticket_access(&state, &authed, other, permissions::TICKET_WRITE).await?;
+    let ctx = authed.user.ctx.clone();
+    scoped(&state, &OrgScope::System, async |tx| {
+        links::unlink(tx, &ctx, id, other).await
+    })
+    .await?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct MergeInto {
+    /// The ticket to merge this one into, by id…
+    #[serde(default)]
+    pub into_id: Option<Uuid>,
+    /// …or by reference (e.g. `T-1042`).
+    #[serde(default)]
+    pub into: Option<String>,
+}
+
+/// Merges this ticket into another of the same organization: its notes,
+/// attachments and emails move there, and this one is closed. Needs
+/// `ticket:write` on both. Returns the ticket it was merged into.
+#[utoipa::path(post, path = "/api/v1/tickets/{id}/merge", tag = "servicedesk",
+    params(("id" = Uuid, Path)), request_body = MergeInto,
+    responses((status = 200, body = Ticket), (status = 422, body = ApiError, content_type = "application/problem+json")))]
+pub async fn merge_ticket(
+    State(state): State<AppState>,
+    authed: Authed,
+    Path(id): Path<Uuid>,
+    Json(body): Json<MergeInto>,
+) -> ApiResult<Json<Ticket>> {
+    let scope = ticket_access(&state, &authed, id, permissions::TICKET_WRITE).await?;
+    let into = other_ticket(&state, &authed, body.into_id, body.into.as_deref(), "into").await?;
+    let ctx = authed.user.ctx.clone();
+    Ok(Json(
+        scoped(&state, &scope, async |tx| {
+            links::merge(tx, &ctx, id, into).await
         })
         .await?,
     ))

@@ -43,6 +43,7 @@ export function describe(
 		case 'created':
 			return 'created the ticket';
 		case 'status':
+			if (details.mergedInto) return `merged this ticket into ${text(details.mergedInto)}`;
 			return `changed the status from ${statusName(text(details.from))} to ${statusName(text(details.to))}`;
 		case 'sla': {
 			const clock = details.clock === 'response' ? 'the first response' : 'resolution';
@@ -50,6 +51,16 @@ export function describe(
 				? `warned that ${clock} is nearly due`
 				: `noted that ${clock} missed its SLA target`;
 		}
+		case 'link':
+			return details.unlinked
+				? `unlinked ${text(details.unlinked)}`
+				: details.as === 'parent'
+					? `made ${text(details.linked)} its parent`
+					: details.as === 'child'
+						? `added ${text(details.linked)} as a child`
+						: `linked ${text(details.linked)}`;
+		case 'merge':
+			return `merged ${text(details.merged)} into this ticket`;
 		case 'note':
 			return details.kind === 'internal'
 				? 'added an internal note'

@@ -122,6 +122,21 @@ The first public note from a person sets the ticket's **first response** time.
 
 **History.** Every change appears on the ticket's activity timeline and in the audit log. Changes also emit events that workflows can be triggered by: `ticket.created`, `ticket.updated`, `ticket.status_changed`, `ticket.assigned` and `ticket.note_added`.
 
+## Linked and merged tickets
+
+**Links.** On a ticket's page, **Linked tickets** connects it to another by reference (e.g. T-1042):
+
+- **Related:** related tickets, even at different clients.
+- **Parent and child:** for example, an outage and the tickets it caused.
+
+A ticket has at most one parent, and a ticket can't end up as its own parent. Each link shows on both tickets, and either side can remove it.
+
+**Merging.** **Merge** folds a duplicate into another ticket of the same organization:
+
+- The duplicate's notes, attachments and emails move to the other ticket.
+- The duplicate is closed, with a note that it was merged, and both tickets' histories say so.
+- Replies to the duplicate's emails, by its subject token or its message ids, go to the ticket it was merged into.
+
 ## Canned responses
 
 Canned responses are replies and internal notes that technicians use again and again: a password reset, a request for more detail, a hand-off. Set them up under **Settings → Canned responses** (`servicedesk:configure`), each with a name, an optional category, the kind of note it makes, and its text.
@@ -288,6 +303,8 @@ Workflows can open, read, find, update and dispatch tickets and add notes, with 
 | `GET`, `POST /api/v1/tickets/{id}/notes` | Read or add notes |
 | `GET /api/v1/tickets/{id}/activity` | Read the timeline |
 | `GET`, `POST /api/v1/canned-responses`, and `PUT`, `DELETE /api/v1/canned-responses/{id}` | Read and manage canned responses |
+| `GET`, `POST /api/v1/tickets/{id}/links`, `DELETE /api/v1/tickets/{id}/links/{otherId}` | Read, add (by `otherId` or `reference`, as `related`, `parent` or `child`) and remove links |
+| `POST /api/v1/tickets/{id}/merge` | Merge into another ticket (`intoId` or `into`, a reference) |
 | `GET /api/v1/tickets/{id}/responses` | Canned responses filled in for a ticket and you |
 | `GET /api/v1/my-work` | Your tickets (with why they need attention), your teams' unclaimed tickets, and what's unassigned in your queues |
 | `GET`, `POST /api/v1/queues`, and `GET`, `PUT`, `DELETE /api/v1/queues/{id}` | Read and manage queues, including `dispatch` (`manual`, `round_robin`, `load` or `skills`) |
@@ -296,4 +313,4 @@ Workflows can open, read, find, update and dispatch tickets and add notes, with 
 
 ## Coming next
 
-Microsoft 365 mailboxes, sending through a mailbox's own server, holidays in business hours, time entries, merging and linking tickets, templates, saved views, and a dispatch board.
+Microsoft 365 mailboxes, sending through a mailbox's own server, holidays in business hours, time entries, templates, saved views, and a dispatch board.

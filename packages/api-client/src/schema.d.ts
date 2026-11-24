@@ -3281,6 +3281,65 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
+	'/api/v1/tickets/{id}/links': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** Tickets linked to this one: its parent, children and related tickets. */
+		get: operations['list_links'];
+		put?: never;
+		/**
+		 * Links another ticket (by id or reference) as related, this one's parent,
+		 *     or its child. Needs `ticket:write` on both.
+		 */
+		post: operations['add_link'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/tickets/{id}/links/{other_id}': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		post?: never;
+		/** Removes a link (from both tickets). */
+		delete: operations['remove_link'];
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/tickets/{id}/merge': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/**
+		 * Merges this ticket into another of the same organization: its notes,
+		 *     attachments and emails move there, and this one is closed. Needs
+		 *     `ticket:write` on both. Returns the ticket it was merged into.
+		 */
+		post: operations['merge_ticket'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
 	'/api/v1/tickets/{id}/notes': {
 		parameters: {
 			query?: never;
@@ -5377,6 +5436,18 @@ export interface components {
 			/** Format: date-time */
 			revokedAt?: string | null;
 		};
+		/** @description Another ticket linked to this one. */
+		LinkedTicket: {
+			/** Format: uuid */
+			id: string;
+			/** @description What it is to this ticket: `related`, `parent` or `child`. */
+			kind: string;
+			orgName: string;
+			reference: string;
+			statusCategory: string;
+			statusName: string;
+			title: string;
+		};
 		/** @description A value set at the org itself. */
 		LocalSetting: {
 			locked: boolean;
@@ -5498,6 +5569,15 @@ export interface components {
 			 */
 			mfaSetupRequired: boolean;
 		};
+		MergeInto: {
+			/** @description …or by reference (e.g. `T-1042`). */
+			into?: string | null;
+			/**
+			 * Format: uuid
+			 * @description The ticket to merge this one into, by id…
+			 */
+			intoId?: string | null;
+		};
 		/** @description What happened to a posted message. */
 		MessageReceived: {
 			/** @description The mailbox already had this message (by its `Message-ID`). */
@@ -5607,6 +5687,20 @@ export interface components {
 			required?: boolean;
 			/** Format: uuid */
 			scopeOrgId?: string | null;
+		};
+		NewLink: {
+			/**
+			 * @description What the other ticket is to this one: `related` (the default),
+			 *     `parent` or `child`.
+			 */
+			kind?: string | null;
+			/**
+			 * Format: uuid
+			 * @description The other ticket, by id…
+			 */
+			otherId?: string | null;
+			/** @description …or by reference (e.g. `T-1042`, or just its number). */
+			reference?: string | null;
 		};
 		NewNote: {
 			body: string;
@@ -7033,6 +7127,12 @@ export interface components {
 			 * @description 1 (high) to 3 (low).
 			 */
 			impact: number;
+			/**
+			 * Format: uuid
+			 * @description The ticket this one was merged into (it's closed).
+			 */
+			mergedIntoId?: string | null;
+			mergedIntoReference?: string | null;
 			/** Format: int64 */
 			number: number;
 			/** Format: uuid */
@@ -14487,6 +14587,113 @@ export interface operations {
 				};
 				content: {
 					'application/json': components['schemas']['Activity'][];
+				};
+			};
+		};
+	};
+	list_links: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['LinkedTicket'][];
+				};
+			};
+		};
+	};
+	add_link: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['NewLink'];
+			};
+		};
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['LinkedTicket'][];
+				};
+			};
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	remove_link: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+				other_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			204: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content?: never;
+			};
+		};
+	};
+	merge_ticket: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['MergeInto'];
+			};
+		};
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['Ticket'];
+				};
+			};
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
 				};
 			};
 		};
