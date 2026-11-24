@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { Handle, Position } from '@xyflow/svelte';
 	import { Flag, Play, TriangleAlert } from '@lucide/svelte';
+	import type { Direction } from './layout.ts';
 
 	let {
 		data
@@ -10,6 +11,7 @@
 			title?: string;
 			detail?: string;
 			failure?: boolean;
+			direction?: Direction;
 		};
 	} = $props();
 </script>
@@ -30,9 +32,19 @@
 			<span class="block truncate text-xs text-fg-muted">{data.detail}</span>
 		</span>
 	</div>
-	<Handle type="source" position={Position.Bottom} isConnectable={false} class="!opacity-0" />
+	<Handle
+		type="source"
+		position={data.direction === 'right' ? Position.Right : Position.Bottom}
+		isConnectable={false}
+		class="!opacity-0"
+	/>
 {:else}
-	<Handle type="target" position={Position.Top} isConnectable={false} class="!opacity-0" />
+	<Handle
+		type="target"
+		position={data.direction === 'right' ? Position.Left : Position.Top}
+		isConnectable={false}
+		class="!opacity-0"
+	/>
 	{#if data.kind === 'end'}
 		<div
 			class="flex size-7 items-center justify-center rounded-full border border-border bg-surface-sunken text-fg-muted"
@@ -47,6 +59,11 @@
 				: ''}"
 			title={data.kind === 'empty' ? 'No steps yet' : 'The branches meet'}
 		></div>
-		<Handle type="source" position={Position.Bottom} isConnectable={false} class="!opacity-0" />
+		<Handle
+			type="source"
+			position={data.direction === 'right' ? Position.Right : Position.Bottom}
+			isConnectable={false}
+			class="!opacity-0"
+		/>
 	{/if}
 {/if}

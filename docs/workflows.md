@@ -43,7 +43,7 @@ The **Visual** tab shows the workflow as a flow chart, from **Start** at the top
 - **Editing steps:** select a step to edit it in the panel beside the canvas.
 - **Problems:** shown as a badge on the step they belong to.
 
-Connections follow from the order and nesting of the steps, so the canvas can't build a workflow the format doesn't allow. Scroll or drag to move around, zoom with the controls, and use the minimap for large workflows. The **YAML** tab edits the same draft.
+Connections follow from the order and nesting of the steps, so the canvas can't build a workflow the format doesn't allow. Scroll or drag to move around, zoom with the controls, and use the minimap for large workflows. The arrows in the corner switch the flow between **top to bottom** and **left to right**; your browser remembers the choice. The **YAML** tab edits the same draft.
 
 ## Lifecycle
 

@@ -194,4 +194,72 @@ describe('canvas layout', () => {
 		const ids = l.edges.map((e) => e.id);
 		expect(new Set(ids).size).toBe(ids.length);
 	});
+
+	it('lays out left to right: steps go right, lanes stack, failures go below', () => {
+		const l = layout(
+			doc(
+				[
+					{ id: 'first', type: 'transform' },
+					{
+						id: 'check',
+						type: 'if',
+						condition: '{{ x }}',
+						then: [{ id: 'yes', type: 'transform' }],
+						else: [{ id: 'no', type: 'transform' }]
+					},
+					{ id: 'last', type: 'transform' }
+				],
+				{ on_error: [{ id: 'alert', type: 'core.notify' }] }
+			),
+			null,
+			false,
+			'right'
+		);
+		const at = (id: string) => l.nodes.find((n) => n.id === id)!;
+		const [start, first, check, last] = [
+			'start',
+			'spec.steps[0]',
+			'spec.steps[1]',
+			'spec.steps[2]'
+		].map(at);
+		// One row, left to right.
+		expect(first.x).toBeGreaterThan(start.x);
+		expect(check.x).toBeGreaterThan(first.x);
+		expect(last.x).toBeGreaterThan(check.x);
+		expect(first.y).toBe(check.y);
+		// Then and Else stack vertically, right of the If, in the same column.
+		const yes = at('spec.steps[1].then[0]');
+		const no = at('spec.steps[1].else[0]');
+		expect(yes.x).toBe(no.x);
+		expect(yes.x).toBeGreaterThan(check.x);
+		expect(Math.abs(yes.y - no.y)).toBeGreaterThanOrEqual(NODE_HEIGHT);
+		// The failure flow sits below the main one.
+		const failure = at('on_error');
+		const lowest = Math.max(
+			...l.nodes
+				.filter((n) => n.kind === 'step' && !n.id.startsWith('spec.on_error'))
+				.map((n) => n.y)
+		);
+		expect(failure.y).toBeGreaterThan(lowest);
+		// Nothing overlaps (in this direction, a node is wide along the flow).
+		const steps = l.nodes.filter((n) => n.kind === 'step');
+		for (const [i, a] of steps.entries()) {
+			for (const b of steps.slice(i + 1)) {
+				const apart =
+					a.x + NODE_WIDTH <= b.x ||
+					b.x + NODE_WIDTH <= a.x ||
+					a.y + NODE_HEIGHT <= b.y ||
+					b.y + NODE_HEIGHT <= a.y;
+				expect(apart, `${a.id} / ${b.id}`).toBe(true);
+			}
+		}
+		// The same edges and "+" as top to bottom.
+		const down = layout(doc([{ id: 'first', type: 'transform' }]), null, false, 'down').edges.map(
+			(e) => [e.source, e.target, e.insert?.label]
+		);
+		const right = layout(doc([{ id: 'first', type: 'transform' }]), null, false, 'right').edges.map(
+			(e) => [e.source, e.target, e.insert?.label]
+		);
+		expect(right).toEqual(down);
+	});
 });

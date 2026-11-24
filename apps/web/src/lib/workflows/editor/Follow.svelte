@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
 	import { useSvelteFlow } from '@xyflow/svelte';
-	import { NODE_HEIGHT, NODE_WIDTH } from './layout.ts';
+	import { NODE_HEIGHT, NODE_WIDTH, type Direction } from './layout.ts';
 
 	/**
 	 * Keeps what you're working on in view: the selected step (with room
@@ -11,19 +11,21 @@
 		selected,
 		width,
 		height,
-		container
+		container,
+		direction
 	}: {
 		/** The selected step's position on the canvas. */
 		selected: { x: number; y: number } | null;
 		width: number;
 		height: number;
 		container: HTMLElement | undefined;
+		direction: Direction;
 	} = $props();
 
 	const flow = useSvelteFlow();
 	const MARGIN = 48;
-	/** Room kept visible below a selected step. */
-	const BELOW = 180;
+	/** Room kept visible after a selected step (below, or to its right). */
+	const AFTER = 180;
 
 	/** Pans the least that shows `at` (and the room below it). */
 	function reveal(at: { x: number; y: number }) {
@@ -31,12 +33,13 @@
 		const { x, y, zoom } = flow.getViewport();
 		const left = at.x * zoom + x;
 		const top = at.y * zoom + y;
-		const right = left + NODE_WIDTH * zoom;
-		const bottom = top + (NODE_HEIGHT + BELOW) * zoom;
+		const down = direction === 'down';
+		const right = left + (NODE_WIDTH + (down ? 0 : AFTER)) * zoom;
+		const bottom = top + (NODE_HEIGHT + (down ? AFTER : 0)) * zoom;
 		let dx = 0;
 		let dy = 0;
 		if (left < MARGIN) dx = MARGIN - left;
-		else if (right > width - MARGIN) dx = width - MARGIN - right;
+		else if (right > width - MARGIN) dx = Math.max(width - MARGIN - right, MARGIN - left);
 		if (top < MARGIN) dy = MARGIN - top;
 		else if (bottom > height - MARGIN) dy = Math.max(height - MARGIN - bottom, MARGIN - top);
 		if (dx !== 0 || dy !== 0) void flow.setViewport({ x: x + dx, y: y + dy, zoom });

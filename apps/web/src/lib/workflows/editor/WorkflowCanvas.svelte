@@ -1,12 +1,28 @@
 <script lang="ts">
-	import { Background, Controls, MiniMap, SvelteFlow, type Edge, type Node } from '@xyflow/svelte';
+	import {
+		Background,
+		Controls,
+		MiniMap,
+		Panel,
+		SvelteFlow,
+		type Edge,
+		type Node
+	} from '@xyflow/svelte';
+	import { ArrowDown, ArrowRight } from '@lucide/svelte';
 	import '@xyflow/svelte/dist/style.css';
 	import AddEdge from './AddEdge.svelte';
 	import MarkerNode from './MarkerNode.svelte';
 	import Follow from './Follow.svelte';
 	import Opening from './Opening.svelte';
 	import StepNode from './StepNode.svelte';
-	import { MARKER, NODE_HEIGHT, NODE_WIDTH, layout, type Insert } from './layout.ts';
+	import {
+		MARKER,
+		NODE_HEIGHT,
+		NODE_WIDTH,
+		layout,
+		type Direction,
+		type Insert
+	} from './layout.ts';
 	import { pathKey } from './catalog.ts';
 	import type { EditorContext } from './context.ts';
 
@@ -24,8 +40,32 @@
 	const nodeTypes = { step: StepNode, marker: MarkerNode };
 	const edgeTypes = { add: AddEdge };
 
+	// Top to bottom or left to right: this browser's choice, not part of
+	// the workflow.
+	const DIRECTION_KEY = 'huxley.canvas.direction';
+	function savedDirection(): Direction {
+		try {
+			return localStorage.getItem(DIRECTION_KEY) === 'right' ? 'right' : 'down';
+		} catch {
+			return 'down';
+		}
+	}
+	let direction = $state<Direction>(savedDirection());
+	function setDirection(next: Direction) {
+		direction = next;
+		try {
+			localStorage.setItem(DIRECTION_KEY, next);
+		} catch {
+			// Private browsing and the like: the choice lasts for this page.
+		}
+	}
+	const DIRECTIONS: { value: Direction; label: string; Icon: typeof ArrowDown }[] = [
+		{ value: 'down', label: 'Top to bottom', Icon: ArrowDown },
+		{ value: 'right', label: 'Left to right', Icon: ArrowRight }
+	];
+
 	let selectedKey = $derived(editor.selected ? pathKey(editor.selected) : null);
-	let placed = $derived(layout(editor.document, selectedKey, editor.readonly));
+	let placed = $derived(layout(editor.document, selectedKey, editor.readonly, direction));
 
 	let width = $state(0);
 	let height = $state(0);
@@ -34,15 +74,16 @@
 		const node = placed.nodes.find((n) => n.id === selectedKey);
 		return node ? { x: node.x, y: node.y } : null;
 	});
-	// The workflow's horizontal extent, for the opening view.
-	let left = $derived(Math.min(...placed.nodes.map((n) => n.x)));
-	let right = $derived(
-		Math.max(
-			...placed.nodes.map(
-				(n) => n.x + (n.kind === 'step' || n.kind === 'start' ? NODE_WIDTH : MARKER)
-			)
-		)
-	);
+	// The workflow's extent, for the opening view.
+	let bounds = $derived.by(() => {
+		const big = (n: (typeof placed.nodes)[number]) => n.kind === 'step' || n.kind === 'start';
+		return {
+			left: Math.min(...placed.nodes.map((n) => n.x)),
+			top: Math.min(...placed.nodes.map((n) => n.y)),
+			right: Math.max(...placed.nodes.map((n) => n.x + (big(n) ? NODE_WIDTH : MARKER))),
+			bottom: Math.max(...placed.nodes.map((n) => n.y + (big(n) ? NODE_HEIGHT : MARKER)))
+		};
+	});
 
 	const same = (a: Insert | undefined, b: Insert | null) =>
 		!!a && !!b && a.index === b.index && a.list.join('.') === b.list.join('.');
@@ -62,7 +103,7 @@
 					type: 'step',
 					width: NODE_WIDTH,
 					height: NODE_HEIGHT,
-					data: { step: n.step, path: n.path, editor }
+					data: { step: n.step, path: n.path, editor, direction }
 				};
 			}
 			const big = n.kind === 'start';
@@ -73,8 +114,14 @@
 				height: big ? NODE_HEIGHT : MARKER,
 				data:
 					n.kind === 'start'
-						? { kind: 'start', title: n.title, detail: n.detail, failure: n.id === 'on_error' }
-						: { kind: n.kind }
+						? {
+								kind: 'start',
+								title: n.title,
+								detail: n.detail,
+								failure: n.id === 'on_error',
+								direction
+							}
+						: { kind: n.kind, direction }
 			};
 		});
 	}
@@ -86,7 +133,13 @@
 			target: e.target,
 			type: 'add',
 			selectable: false,
-			data: { label: e.label, insert: e.insert, active: same(e.insert, picking), onpick }
+			data: {
+				label: e.label,
+				insert: e.insert,
+				active: same(e.insert, picking),
+				direction,
+				onpick
+			}
 		}));
 	}
 
@@ -126,8 +179,31 @@
 		<Background gap={20} />
 		<Controls showLock={false} />
 		<MiniMap pannable zoomable />
-		<Opening {width} {left} {right} />
-		<Follow selected={selectedAt} {width} {height} {container} />
+		<Opening {width} {height} {bounds} {direction} />
+		<Follow selected={selectedAt} {width} {height} {container} {direction} />
+		<Panel position="top-right">
+			<div
+				class="flex overflow-hidden rounded-control border border-border bg-surface shadow-sm"
+				role="radiogroup"
+				aria-label="Layout direction"
+			>
+				{#each DIRECTIONS as option (option.value)}
+					<button
+						type="button"
+						role="radio"
+						aria-checked={direction === option.value}
+						aria-label={option.label}
+						title={option.label}
+						class="flex size-8 items-center justify-center {direction === option.value
+							? 'bg-accent text-white'
+							: 'text-fg-muted hover:bg-surface-sunken hover:text-fg'}"
+						onclick={() => setDirection(option.value)}
+					>
+						<option.Icon size={16} />
+					</button>
+				{/each}
+			</div>
+		</Panel>
 	</SvelteFlow>
 </div>
 

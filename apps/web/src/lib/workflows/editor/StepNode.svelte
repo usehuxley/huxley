@@ -4,8 +4,13 @@
 	import { pathKey, stepSpec, summary, type Path, type Step } from './catalog.ts';
 	import { stepIcon } from './icons.ts';
 	import type { EditorContext } from './context.ts';
+	import type { Direction } from './layout.ts';
 
-	let { data }: { data: { step: Step; path: Path; editor: EditorContext } } = $props();
+	let {
+		data
+	}: {
+		data: { step: Step; path: Path; editor: EditorContext; direction?: Direction };
+	} = $props();
 
 	let spec = $derived(stepSpec(data.step.type));
 	let key = $derived(pathKey(data.path));
@@ -17,7 +22,12 @@
 	);
 </script>
 
-<Handle type="target" position={Position.Top} isConnectable={false} class="!opacity-0" />
+<Handle
+	type="target"
+	position={data.direction === 'right' ? Position.Left : Position.Top}
+	isConnectable={false}
+	class="!opacity-0"
+/>
 <button
 	type="button"
 	class="nodrag flex h-[76px] w-[248px] items-center gap-3 rounded-card border bg-surface px-3 text-left shadow-sm transition-colors hover:border-accent {selected
@@ -52,4 +62,9 @@
 		<Badge tone="warning">{problems.length}</Badge>
 	{/if}
 </button>
-<Handle type="source" position={Position.Bottom} isConnectable={false} class="!opacity-0" />
+<Handle
+	type="source"
+	position={data.direction === 'right' ? Position.Right : Position.Bottom}
+	isConnectable={false}
+	class="!opacity-0"
+/>

@@ -17,10 +17,11 @@ The visual editor is a SvelteFlow canvas (`@xyflow/svelte`, pinned to the 1.x li
   - An empty lane has a placeholder in its own column.
   - Nodes have no connectable handles, and nodes can't be dragged.
 - **Steps are added on the edges.** Every edge has a "+" (the way n8n, Zapier and Make work), and it opens the step picker in the side panel. So inserting can only produce valid structure, and the picker is never covered by the canvas.
-- **Layout is computed from the structure** (`layout.ts`, a pure function with unit tests): top to bottom, lanes side by side, with "If the run fails" in its own column. The same workflow always looks the same, and no positions are saved. HWF's `ui` block stays free for notes later.
+- **Layout is computed from the structure** (`layout.ts`, a pure function with unit tests): steps follow each other along the flow, lanes sit side by side across it, and "If the run fails" gets its own column (or row).
+- **Direction:** the flow runs top to bottom or left to right. A toggle on the canvas switches it, and the choice is remembered per browser, because it's a viewing preference and not part of the workflow. Both directions share one layout, written in terms of "along" and "across" the flow. The same workflow always looks the same, and no positions are saved. HWF's `ui` block stays free for notes later.
 - **The rest of the editor is unchanged.** Selecting a node opens the same settings panel, problems show as a badge on their node, and the YAML tab edits the same draft.
 - **Accessibility:** each step and each "+" is one button with the same accessible name as before ("Step greet, Transform", "Add a step after greet"). SvelteFlow's own node and edge focus is turned off, so there's one tab stop per control. The canvas pans to keep the selected step, and anything that gets keyboard focus, in view.
-- **Opening view:** the canvas opens on the top of the workflow, centred, at 60–100% zoom (so it's readable). Zoom controls and a minimap help with large workflows.
+- **Opening view:** the canvas opens on the start of the workflow (the top, or the left), showing as much as fits at 60–100% zoom so it stays readable. Zoom controls and a minimap help with large workflows.
 
 ## Consequences
 
