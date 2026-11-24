@@ -230,10 +230,22 @@ fn apply_error(e: sqlx::Error) -> DatasetError {
 /// audit chain's head: don't create, update or delete a dataset in a
 /// transaction that has already written an audit record. DDL is quick, so
 /// organization writes wait only briefly.
-async fn lock_for_ddl(conn: &mut PgConnection) -> DatasetResult<()> {
-    sqlx::query("LOCK TABLE organizations IN SHARE ROW EXCLUSIVE MODE")
-        .execute(conn)
-        .await?;
+///
+/// Dropping a table takes the strongest lock (`ACCESS EXCLUSIVE`) on
+/// `organizations`, so `delete` asks for that up front (`drop`): upgrading
+/// later deadlocks with anyone who read `organizations` meanwhile and
+/// then waits for us to insert one.
+async fn lock_for_ddl(conn: &mut PgConnection, drop: bool) -> DatasetResult<()> {
+    let mode = if drop {
+        "ACCESS EXCLUSIVE"
+    } else {
+        "SHARE ROW EXCLUSIVE"
+    };
+    sqlx::query(sqlx::AssertSqlSafe(format!(
+        "LOCK TABLE organizations IN {mode} MODE"
+    )))
+    .execute(conn)
+    .await?;
     Ok(())
 }
 
@@ -254,7 +266,7 @@ pub async fn create(
     input: &DatasetInput,
 ) -> DatasetResult<Dataset> {
     check(input)?;
-    lock_for_ddl(conn).await?;
+    lock_for_ddl(conn, false).await?;
     let id = huxley_core::new_id();
     let inserted = sqlx::query(
         "INSERT INTO datasets (id, org_id, key, name, description, columns, primary_key, created_by) \
@@ -295,7 +307,7 @@ pub async fn update(
     input: &DatasetInput,
 ) -> DatasetResult<Dataset> {
     check(input)?;
-    lock_for_ddl(conn).await?;
+    lock_for_ddl(conn, false).await?;
     let current = get(&mut *conn, id).await?;
     if input.key != current.key {
         return Err(invalid("key", "a dataset's key can't change"));
@@ -327,7 +339,7 @@ pub async fn update(
 
 /// Deletes a dataset and every row in it.
 pub async fn delete(conn: &mut PgConnection, ctx: &RequestContext, id: Uuid) -> DatasetResult<()> {
-    lock_for_ddl(conn).await?;
+    lock_for_ddl(conn, true).await?;
     let current = get(&mut *conn, id).await?;
     sqlx::query("SELECT huxley_dataset_drop($1)")
         .bind(id)
