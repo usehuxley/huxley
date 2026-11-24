@@ -25,7 +25,7 @@ Decisions that shape Huxley. Add a new ADR by copying `0000-template.md` with th
 | [019](0019-sso-account-linking-and-role-sync.md) | SSO account linking, role sync, and MFA trust | Accepted |
 | [020](0020-structured-control-flow-in-hwf.md) | Structured control flow in HWF | Accepted |
 | [021](0021-workflow-engine-execution-model.md) | Workflow engine execution model | Accepted |
-| [022](0022-visual-workflow-editor-as-nested-blocks.md) | The visual workflow editor shows nested blocks, not a free-form graph | Accepted |
+| [022](0022-visual-workflow-editor-as-nested-blocks.md) | The visual workflow editor shows nested blocks, not a free-form graph | Superseded by 034 |
 | [023](0023-integration-definitions-from-openapi.md) | Integration definitions come from OpenAPI through a tolerant importer | Accepted |
 | [024](0024-callbacks-hand-their-url-over-in-the-step.md) | A callback step hands its URL over itself | Accepted |
 | [025](0025-runner-identity.md) | Runners prove who they are with client certificates from Huxley or from you | Accepted |
@@ -37,3 +37,4 @@ Decisions that shape Huxley. Add a new ADR by copying `0000-template.md` with th
 | [031](0031-ai-providers-bring-your-own-key.md) | AI providers are per organization, bring your own key | Accepted |
 | [032](0032-oauth-for-mcp-clients.md) | Huxley is the OAuth authorization server for its own MCP endpoint | Accepted |
 | [033](0033-lookups-are-recorded-per-run.md) | A run records each `lookup()` answer the first time it asks | Accepted |
+| [034](0034-workflow-canvas-with-derived-edges.md) | The visual workflow editor is a SvelteFlow canvas whose edges come from the document | Accepted |

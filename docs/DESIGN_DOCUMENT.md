@@ -79,7 +79,7 @@ The core idea: **every module is built on the engine.** Mailbox polling, SLA esc
 | Email | Microsoft Graph (REST), `async-imap`, `lettre` (SMTP), `mail-parser` | |
 | Observability | **OpenTelemetry** (traces, metrics, logs via OTLP): `opentelemetry`, `opentelemetry-otlp`, `tracing-opentelemetry` | The single instrumentation standard. Optional Prometheus scrape endpoint. See §13.3. |
 | Frontend | **SvelteKit** (Svelte 5 runes), TypeScript | |
-| Canvas | **SvelteFlow** (`@xyflow/svelte`) | Workflow canvas and CMDB dependency maps |
+| Canvas | **SvelteFlow** (`@xyflow/svelte`) | Workflow canvas (edges derived from the document, ADR-034) and CMDB dependency maps |
 | UI kit | Tailwind CSS 4, `bits-ui` / `shadcn-svelte`, Lucide icons | |
 | Data fetching | TanStack Query (Svelte), generated typed API client | |
 | Code editing | CodeMirror 6 (Jinja, YAML, PowerShell, Python, JS modes) | |
