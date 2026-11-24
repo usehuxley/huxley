@@ -201,68 +201,179 @@ fn key_of(document: &Json, path: &Path) -> anyhow::Result<String> {
 const SCHEMA_COMMENT: &str =
     "# yaml-language-server: $schema=https://usehuxley.com/schemas/hwf/v1.json";
 
-/// Keys first in this order, then the rest alphabetically, so pulled files
-/// read naturally and diff cleanly.
-const KEY_ORDER: &[&str] = &[
-    "apiVersion",
-    "kind",
-    "metadata",
-    "spec",
-    "key",
-    "id",
-    "name",
-    "description",
-    "type",
-    "inputs",
-    "triggers",
-    "if",
-    "with",
-    "steps",
-    "outputs",
+// HWF's keys in the order people write them: the same rules as the web
+// editor's YAML view (apps/web/src/lib/workflows/yaml.ts), so a draft
+// reads the same in both. Other keys are sorted.
+const TOP: &[&str] = &["apiVersion", "kind", "metadata", "spec", "ui"];
+const METADATA: &[&str] = &["key", "name", "description", "tags"];
+const SPEC: &[&str] = &[
+    "inputs", "triggers", "steps", "outputs", "on_error", "settings",
 ];
+const STEP_FIRST: &[&str] = &["id", "type", "name", "description", "if"];
+const STEP_LAST: &[&str] = &[
+    "then",
+    "else",
+    "cases",
+    "default",
+    "items",
+    "as",
+    "concurrency",
+    "steps",
+    "branches",
+    "join",
+    "catch",
+    "finally",
+    "retry",
+    "timeout",
+    "continue_on_error",
+];
+const TRIGGER_FIRST: &[&str] = &["type", "id"];
 
-fn key_rank(key: &str) -> (usize, &str) {
-    (
-        KEY_ORDER
-            .iter()
-            .position(|o| *o == key)
-            .unwrap_or(KEY_ORDER.len()),
-        key,
-    )
+/// A JSON value with its object keys in a chosen order.
+enum Node {
+    Map(Vec<(String, Node)>),
+    Seq(Vec<Node>),
+    Leaf(Json),
 }
 
-/// Serializes a JSON value with object keys in a stable, readable order
-/// (whatever order the map itself keeps).
-struct Ordered<'a>(&'a Json);
-
-impl serde::Serialize for Ordered<'_> {
+impl serde::Serialize for Node {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         use serde::ser::{SerializeMap as _, SerializeSeq as _};
-        match self.0 {
-            Json::Object(map) => {
-                let mut keys: Vec<&String> = map.keys().collect();
-                keys.sort_by(|a, b| key_rank(a).cmp(&key_rank(b)));
-                let mut out = serializer.serialize_map(Some(keys.len()))?;
-                for key in keys {
-                    out.serialize_entry(key, &Ordered(&map[key]))?;
+        match self {
+            Self::Map(entries) => {
+                let mut out = serializer.serialize_map(Some(entries.len()))?;
+                for (key, value) in entries {
+                    out.serialize_entry(key, value)?;
                 }
                 out.end()
             }
-            Json::Array(items) => {
+            Self::Seq(items) => {
                 let mut out = serializer.serialize_seq(Some(items.len()))?;
                 for item in items {
-                    out.serialize_element(&Ordered(item))?;
+                    out.serialize_element(item)?;
                 }
                 out.end()
             }
-            other => other.serialize(serializer),
+            Self::Leaf(value) => value.serialize(serializer),
         }
     }
 }
 
-/// A workflow document as YAML, in canonical order.
+/// Any value, objects' keys sorted.
+fn plain(value: &Json) -> Node {
+    match value {
+        Json::Object(map) => {
+            let mut keys: Vec<&String> = map.keys().collect();
+            keys.sort();
+            Node::Map(
+                keys.into_iter()
+                    .map(|k| (k.clone(), plain(&map[k])))
+                    .collect(),
+            )
+        }
+        Json::Array(items) => Node::Seq(items.iter().map(plain).collect()),
+        other => Node::Leaf(other.clone()),
+    }
+}
+
+/// `object`'s keys: `first` (in order), the rest sorted, then `last`; each
+/// value converted by `child(key, value)`.
+fn ordered(
+    object: &serde_json::Map<String, Json>,
+    first: &[&str],
+    last: &[&str],
+    child: &dyn Fn(&str, &Json) -> Node,
+) -> Node {
+    let mut middle: Vec<&String> = object
+        .keys()
+        .filter(|k| !first.contains(&k.as_str()) && !last.contains(&k.as_str()))
+        .collect();
+    middle.sort();
+    let keys = first
+        .iter()
+        .filter(|k| object.contains_key(**k))
+        .map(|k| (*k).to_owned())
+        .chain(middle.into_iter().cloned())
+        .chain(
+            last.iter()
+                .filter(|k| object.contains_key(**k))
+                .map(|k| (*k).to_owned()),
+        );
+    Node::Map(
+        keys.map(|k| {
+            let node = child(&k, &object[&k]);
+            (k, node)
+        })
+        .collect(),
+    )
+}
+
+fn steps(value: &Json) -> Node {
+    match value {
+        Json::Array(items) => Node::Seq(items.iter().map(step).collect()),
+        other => plain(other),
+    }
+}
+
+fn keyed_blocks(value: &Json, first: &'static [&'static str]) -> Node {
+    match value {
+        Json::Array(items) => Node::Seq(
+            items
+                .iter()
+                .map(|item| match item {
+                    Json::Object(map) => ordered(map, first, &[], &|k, v| {
+                        if k == "steps" { steps(v) } else { plain(v) }
+                    }),
+                    other => plain(other),
+                })
+                .collect(),
+        ),
+        other => plain(other),
+    }
+}
+
+fn step(value: &Json) -> Node {
+    let Json::Object(map) = value else {
+        return plain(value);
+    };
+    ordered(map, STEP_FIRST, STEP_LAST, &|key, v| match key {
+        "then" | "else" | "default" | "steps" | "catch" | "finally" => steps(v),
+        "cases" => keyed_blocks(v, &["when", "steps"]),
+        "branches" => keyed_blocks(v, &["id", "steps"]),
+        _ => plain(v),
+    })
+}
+
+/// A workflow document with its keys in the conventional HWF order.
+fn order_document(document: &Json) -> Node {
+    let Json::Object(map) = document else {
+        return plain(document);
+    };
+    ordered(map, TOP, &[], &|key, v| match (key, v) {
+        ("metadata", Json::Object(m)) => ordered(m, METADATA, &[], &|_, v| plain(v)),
+        ("spec", Json::Object(spec)) => ordered(spec, SPEC, &[], &|key, v| match key {
+            "steps" | "on_error" => steps(v),
+            "triggers" => match v {
+                Json::Array(items) => Node::Seq(
+                    items
+                        .iter()
+                        .map(|t| match t {
+                            Json::Object(t) => ordered(t, TRIGGER_FIRST, &[], &|_, v| plain(v)),
+                            other => plain(other),
+                        })
+                        .collect(),
+                ),
+                other => plain(other),
+            },
+            _ => plain(v),
+        }),
+        _ => plain(v),
+    })
+}
+
+/// A workflow document as YAML, in the conventional order.
 pub fn to_yaml(document: &Json) -> anyhow::Result<String> {
-    serde_saphyr::to_string(&Ordered(document)).context("failed to write YAML")
+    serde_saphyr::to_string(&order_document(document)).context("failed to write YAML")
 }
 
 fn validate(paths: &[PathBuf]) -> anyhow::Result<()> {

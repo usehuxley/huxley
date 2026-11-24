@@ -147,7 +147,7 @@ huxley workflows test workflows/                 # run the *.test.yaml fixture t
 Things to know:
 
 - **Exit codes:** `validate` and `diff` exit 1 when there are problems or differences, so they work as CI checks. `run` exits 1 if the run fails.
-- **Pulled files** are written in a stable key order, so they diff cleanly. They start with a `yaml-language-server` comment pointing at the HWF schema, so editors autocomplete them.
+- **Pulled files** use the same key order as the YAML tab in the editor (other keys sorted), so they diff cleanly. They start with a `yaml-language-server` comment pointing at the HWF schema, so editors autocomplete them.
 - **Matching:** files are matched to workflows by `metadata.key`.
 - **Permissions:** `push` needs `workflow:write`, and `--publish` also needs `workflow:publish`. Use a token scoped to what CI needs.
 - **Inputs:** `-i name=value` parses the value as JSON when it can (`-i count=3`, `-i 'tags=["a"]'`), and `--inputs-file` takes a JSON object.
