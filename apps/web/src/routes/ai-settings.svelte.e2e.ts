@@ -1,3 +1,5 @@
+import { createServer, type Server } from 'node:http';
+import type { AddressInfo } from 'node:net';
 import { expect, test, type Browser, type Page } from '@playwright/test';
 
 const ownerEmail = process.env.E2E_EMAIL;
@@ -62,5 +64,76 @@ test.describe('AI settings and the assistant', () => {
 		await page.getByRole('button', { name: 'Remove' }).click();
 		await expect(page.getByText('AI provider removed.')).toBeVisible();
 		await expect(page.getByText('No AI provider')).toBeVisible();
+	});
+
+	test('answers stream in as the model writes them', async ({ browser }) => {
+		// An OpenAI-compatible model that writes slowly, word by word. The
+		// e2e server allows calls to 127.0.0.1 (engine.egress.private_hosts).
+		const words = ['Streaming ', 'answers ', 'arrive ', 'word ', 'by ', 'word.'];
+		let release!: () => void;
+		const held = new Promise<void>((resolve) => (release = resolve));
+		const model: Server = createServer((req, res) => {
+			let body = '';
+			req.on('data', (chunk: Buffer) => (body += chunk.toString()));
+			req.on('end', () => {
+				void (async () => {
+					const streamed = (JSON.parse(body) as { stream?: boolean }).stream === true;
+					if (!streamed) {
+						res.setHeader('content-type', 'application/json');
+						res.end(
+							JSON.stringify({
+								model: 'mock',
+								choices: [{ message: { content: words.join('') }, finish_reason: 'stop' }],
+								usage: { prompt_tokens: 1, completion_tokens: 1 }
+							})
+						);
+						return;
+					}
+					res.setHeader('content-type', 'text/event-stream');
+					const send = (data: unknown) => res.write(`data: ${JSON.stringify(data)}\n\n`);
+					for (const [i, word] of words.entries()) {
+						send({ model: 'mock', choices: [{ index: 0, delta: { content: word } }] });
+						// Hold the rest back until the test has seen the first part.
+						if (i === 1) await held;
+					}
+					send({ model: 'mock', choices: [{ index: 0, delta: {}, finish_reason: 'stop' }] });
+					res.end('data: [DONE]\n\n');
+				})();
+			});
+		});
+		await new Promise<void>((resolve) => model.listen(0, '127.0.0.1', resolve));
+		const { port } = model.address() as AddressInfo;
+		try {
+			const page = await signIn(browser);
+			await page.goto('/settings/ai');
+			await page.getByLabel('Provider', { exact: true }).selectOption('openai_compatible');
+			await page.getByLabel('Model').fill('mock');
+			await page.getByLabel('Base URL').fill(`http://127.0.0.1:${port}/v1`);
+			await page.getByLabel('API key').fill('sk-e2e-mock');
+			await page.getByRole('button', { name: 'Save' }).click();
+			await expect(page.getByText('AI provider saved.')).toBeVisible();
+
+			await page.goto('/assistant');
+			await page.getByLabel('Message').fill('Show me streaming');
+			await page.getByRole('button', { name: 'Ask' }).click();
+			// The first words are on the page while the model is still writing.
+			const answering = page.getByRole('list', { name: 'Answer in progress' });
+			await expect(answering).toContainText('Show me streaming');
+			await expect(answering).toContainText('Streaming answers');
+			await expect(answering).not.toContainText('word.');
+			release();
+			// Then the saved conversation replaces it.
+			const messages = page.getByRole('list', { name: 'Messages' });
+			await expect(messages).toContainText('Streaming answers arrive word by word.');
+			await expect(answering).toHaveCount(0);
+			await expect(page).toHaveURL(/\/assistant\?c=/);
+
+			await page.goto('/settings/ai');
+			await page.getByRole('button', { name: 'Remove' }).click();
+			await expect(page.getByText('AI provider removed.')).toBeVisible();
+		} finally {
+			release();
+			model.close();
+		}
 	});
 });

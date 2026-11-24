@@ -2,6 +2,7 @@
 //! Huxley's tools, approvals, and the conversation history.
 
 use axum::body::Body;
+use axum::response::IntoResponse as _;
 use http::{Request, StatusCode};
 use http_body_util::BodyExt as _;
 use huxley_api::{ApiConfig, AppState, router};
@@ -136,6 +137,152 @@ impl Setup {
 
 const WORKFLOW: &str = "apiVersion: usehuxley.io/v1\nkind: Workflow\nmetadata: { key: from-assistant, name: From the assistant }\nspec:\n  steps:\n    - { id: hi, type: transform, output: hi }\n";
 
+/// A Messages response as the stream of events Anthropic sends: text in
+/// pieces, thinking with a signature delta, tool input as partial JSON.
+fn sse(model: &Value, content: &Value, stop: &str) -> axum::response::Response {
+    let mut events = vec![json!({ "type": "message_start", "message": {
+        "model": model, "role": "assistant", "content": [], "usage": { "input_tokens": 50, "output_tokens": 1 } } })];
+    for (index, block) in content.as_array().unwrap().iter().enumerate() {
+        let mut start = block.clone();
+        let mut deltas = Vec::new();
+        match block["type"].as_str().unwrap() {
+            "text" => {
+                start["text"] = json!("");
+                let text = block["text"].as_str().unwrap();
+                let (a, b) = text.split_at(text.len() / 2);
+                for piece in [a, b] {
+                    deltas.push(json!({ "type": "text_delta", "text": piece }));
+                }
+            }
+            "thinking" => {
+                start.as_object_mut().unwrap().remove("signature");
+                deltas.push(json!({ "type": "signature_delta", "signature": block["signature"] }));
+            }
+            "tool_use" => {
+                start["input"] = json!({});
+                let input = block["input"].to_string();
+                let (a, b) = input.split_at(input.len() / 2);
+                for piece in [a, b] {
+                    deltas.push(json!({ "type": "input_json_delta", "partial_json": piece }));
+                }
+            }
+            _ => {}
+        }
+        events
+            .push(json!({ "type": "content_block_start", "index": index, "content_block": start }));
+        for delta in deltas {
+            events.push(json!({ "type": "content_block_delta", "index": index, "delta": delta }));
+        }
+        events.push(json!({ "type": "content_block_stop", "index": index }));
+    }
+    events.push(json!({ "type": "message_delta", "delta": { "stop_reason": stop }, "usage": { "output_tokens": 10 } }));
+    events.push(json!({ "type": "message_stop" }));
+    let mut body = String::new();
+    for e in &events {
+        use std::fmt::Write as _;
+        let _ = write!(
+            body,
+            "event: {}\ndata: {e}\n\n",
+            e["type"].as_str().unwrap()
+        );
+    }
+    ([(http::header::CONTENT_TYPE, "text/event-stream")], body).into_response()
+}
+
+/// Parses a `text/event-stream` body into (event, data) pairs.
+fn events(body: &str) -> Vec<(String, Value)> {
+    body.split("\n\n")
+        .filter_map(|raw| {
+            let mut event = None;
+            let mut data = None;
+            for line in raw.lines() {
+                if let Some(v) = line.strip_prefix("event:") {
+                    event = Some(v.trim().to_owned());
+                } else if let Some(v) = line.strip_prefix("data:") {
+                    data = serde_json::from_str(v.trim()).ok();
+                }
+            }
+            Some((event?, data?))
+        })
+        .collect()
+}
+
+#[tokio::test]
+async fn answers_stream_as_they_are_written() {
+    let Some(s) = setup().await else { return };
+    with_model(&s).await;
+    let req = Request::post("/api/v1/assistant/conversations")
+        .header("x-requested-with", "huxley")
+        .header("cookie", &s.owner)
+        .header("accept", "text/event-stream")
+        .header("content-type", "application/json")
+        .body(Body::from(
+            json!({ "orgId": s.org, "text": "list my workflows" }).to_string(),
+        ))
+        .unwrap();
+    let res = s.app.clone().oneshot(req).await.unwrap();
+    assert_eq!(res.status(), StatusCode::OK);
+    assert!(
+        res.headers()["content-type"]
+            .to_str()
+            .unwrap()
+            .starts_with("text/event-stream")
+    );
+    let body =
+        String::from_utf8(res.into_body().collect().await.unwrap().to_bytes().to_vec()).unwrap();
+    let events = events(&body);
+    let kinds: Vec<&str> = events.iter().map(|(k, _)| k.as_str()).collect();
+    // Text as it's written, the tool call, the second turn, then the result.
+    assert_eq!(kinds.first(), Some(&"text"), "{kinds:?}");
+    assert!(
+        kinds.contains(&"tool_started") && kinds.contains(&"tool_finished"),
+        "{kinds:?}"
+    );
+    assert_eq!(
+        kinds.iter().filter(|k| **k == "turn_ended").count(),
+        2,
+        "{kinds:?}"
+    );
+    assert_eq!(kinds.last(), Some(&"done"), "{kinds:?}");
+    let first_turn: String = events
+        .iter()
+        .take_while(|(k, _)| k != "turn_ended")
+        .filter(|(k, _)| k == "text")
+        .map(|(_, d)| d["text"].as_str().unwrap())
+        .collect();
+    assert_eq!(first_turn, "Let me do that.");
+    let (_, started) = events.iter().find(|(k, _)| k == "tool_started").unwrap();
+    assert_eq!(started["name"], "list_workflows");
+
+    // The saved conversation is what a plain request would have given; the
+    // model checked that the streamed turn (thinking included) came back.
+    let conversation = &events.last().unwrap().1["conversation"];
+    let roles: Vec<&str> = conversation["messages"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|m| m["role"].as_str().unwrap())
+        .collect();
+    assert_eq!(roles, ["user", "assistant", "tool", "assistant"]);
+    assert!(
+        conversation["messages"][3]["text"]
+            .as_str()
+            .unwrap()
+            .starts_with("Done.")
+    );
+    let id = conversation["id"].as_str().unwrap();
+    let (status, saved) = s
+        .call(
+            &s.owner,
+            "GET",
+            &format!("/api/v1/assistant/conversations/{id}"),
+            None,
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(&saved, conversation);
+}
+
 /// Acts like a model with tools: "list" → `list_workflows`; "create" →
 /// `create_workflow_draft` (for `org`); after a tool result, sums it up.
 async fn mock_model(org: Uuid) -> String {
@@ -144,9 +291,14 @@ async fn mock_model(org: Uuid) -> String {
         axum::routing::post(move |axum::Json(body): axum::Json<Value>| async move {
             let messages = body["messages"].as_array().unwrap();
             let last = messages.last().unwrap();
+            let streamed = body["stream"] == true;
             let reply = |content: Value, stop: &str| {
+                if streamed {
+                    return sse(&body["model"], &content, stop);
+                }
                 axum::Json(json!({ "model": body["model"], "stop_reason": stop, "content": content,
                                    "usage": { "input_tokens": 50, "output_tokens": 10 } }))
+                .into_response()
             };
             if let Some(blocks) = last["content"].as_array() {
                 // A tool result: the assistant's earlier turn (thinking

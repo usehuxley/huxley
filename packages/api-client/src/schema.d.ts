@@ -129,7 +129,8 @@ export interface paths {
 		put?: never;
 		/**
 		 * Starts a conversation with a first message, and returns it answered
-		 *     (or waiting for your approval of an action).
+		 *     (or waiting for your approval of an action). With
+		 *     `Accept: text/event-stream`, streams the answer as it's written.
 		 */
 		post: operations['start_assistant_conversation'];
 		delete?: never;
@@ -167,7 +168,8 @@ export interface paths {
 		put?: never;
 		/**
 		 * Approves or denies the actions waiting for you, and lets the assistant
-		 *     carry on.
+		 *     carry on. With `Accept: text/event-stream`, streams the rest of the
+		 *     answer.
 		 */
 		post: operations['decide_assistant_actions'];
 		delete?: never;
@@ -187,7 +189,9 @@ export interface paths {
 		put?: never;
 		/**
 		 * Sends a message, and returns the conversation answered (or waiting for
-		 *     your approval of an action).
+		 *     your approval of an action). With `Accept: text/event-stream`, streams
+		 *     the answer as it's written: `text`, `turn_ended`, `tool_started` and
+		 *     `tool_finished` events, then `done` (the conversation) or `failed`.
 		 */
 		post: operations['send_assistant_message'];
 		delete?: never;

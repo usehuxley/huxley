@@ -20,6 +20,38 @@ use crate::{ApiError, ApiResult, AppState};
 /// Most model turns one message may lead to.
 const MAX_TURNS: usize = 12;
 
+/// What a streamed answer reports as it goes (see `assistant_routes`).
+#[derive(Debug, Clone, Serialize, ToSchema)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum Progress {
+    /// Text the assistant wrote.
+    Text { text: String },
+    /// One assistant turn ended (text after this belongs to the next).
+    TurnEnded,
+    /// A tool call started.
+    ToolStarted { id: String, name: String },
+    /// A tool call finished.
+    ToolFinished {
+        id: String,
+        #[serde(rename = "isError")]
+        is_error: bool,
+    },
+    /// The conversation as it now stands. The last event.
+    Done { conversation: Box<Conversation> },
+    /// Answering failed. The last event.
+    Failed { problem: Box<ApiError> },
+}
+
+/// Where progress goes, when the answer is streamed.
+pub type Sink = Option<tokio::sync::mpsc::UnboundedSender<Progress>>;
+
+fn report(sink: &Sink, progress: Progress) {
+    if let Some(sink) = sink {
+        // The receiver is gone if the browser left; the work carries on.
+        let _ = sink.send(progress);
+    }
+}
+
 const SYSTEM: &str = "You are Huxley's assistant, inside Huxley, an automation platform for MSPs. You help \
 the signed-in person build and debug workflows and answer questions about their organizations, \
 integrations, workflows, runs, scripts, forms and datasets, using the tools you have. Everything you do \
@@ -248,7 +280,19 @@ async fn set_pending(state: &AppState, id: Uuid, pending: Option<&Pending>) -> A
 }
 
 /// Runs `call` as the user.
-async fn run_call(caller: &Caller<'_>, workflows: &[WorkflowTool], call: &ToolCall) -> ToolResult {
+async fn run_call(
+    caller: &Caller<'_>,
+    workflows: &[WorkflowTool],
+    call: &ToolCall,
+    sink: &Sink,
+) -> ToolResult {
+    report(
+        sink,
+        Progress::ToolStarted {
+            id: call.id.clone(),
+            name: call.name.clone(),
+        },
+    );
     let outcome = match workflows.iter().find(|t| t.name == call.name) {
         Some(tool) => Ok(caller.run_workflow(tool, &call.input).await),
         None => caller.call_tool(&call.name, &call.input).await,
@@ -263,6 +307,13 @@ async fn run_call(caller: &Caller<'_>, workflows: &[WorkflowTool], call: &ToolCa
     } else {
         content
     };
+    report(
+        sink,
+        Progress::ToolFinished {
+            id: call.id.clone(),
+            is_error,
+        },
+    );
     ToolResult {
         id: call.id.clone(),
         content,
@@ -278,7 +329,15 @@ async fn advance(
     id: Uuid,
     org_id: Uuid,
     mut messages: Vec<Message>,
+    sink: &Sink,
 ) -> ApiResult<()> {
+    let on_text = sink.clone().map(|sink| {
+        move |text: &str| {
+            let _ = sink.send(Progress::Text {
+                text: text.to_owned(),
+            });
+        }
+    });
     let mut tools = tool_defs();
     tools.extend(workflows.iter().map(|t| huxley_ai::chat::ToolDef {
         name: t.name.clone(),
@@ -298,6 +357,7 @@ async fn advance(
                 Some(SYSTEM),
                 &messages,
                 &tools,
+                on_text.as_ref().map(|f| f as &(dyn Fn(&str) + Send + Sync)),
             )
             .await
         {
@@ -313,6 +373,7 @@ async fn advance(
             }
         };
         append(state, id, org_id, &turn.message).await?;
+        report(sink, Progress::TurnEnded);
         let calls = turn.tool_calls().to_vec();
         messages.push(turn.message);
         if calls.is_empty() {
@@ -322,7 +383,7 @@ async fn advance(
         // wait for the user (results go back to the model together).
         let mut results = Vec::new();
         for call in calls.iter().filter(|c| !changes(&c.name)) {
-            results.push(run_call(caller, workflows, call).await);
+            results.push(run_call(caller, workflows, call, sink).await);
         }
         if calls.iter().any(|c| changes(&c.name)) {
             return set_pending(state, id, Some(&Pending { calls, results })).await;
@@ -347,6 +408,7 @@ pub async fn say(
     user_id: Uuid,
     id: Uuid,
     text: &str,
+    sink: &Sink,
 ) -> ApiResult<()> {
     let mut tx = begin_scoped(&state.db, &OrgScope::System)
         .await
@@ -363,7 +425,7 @@ pub async fn say(
     };
     append(state, id, org_id, &message).await?;
     messages.push(message);
-    advance(state, caller, workflows, id, org_id, messages).await
+    advance(state, caller, workflows, id, org_id, messages, sink).await
 }
 
 #[derive(Debug, Deserialize, ToSchema)]
@@ -382,6 +444,7 @@ pub async fn decide(
     user_id: Uuid,
     id: Uuid,
     decisions: &Decisions,
+    sink: &Sink,
 ) -> ApiResult<()> {
     let mut tx = begin_scoped(&state.db, &OrgScope::System)
         .await
@@ -394,7 +457,7 @@ pub async fn decide(
     let mut results = pending.results.clone();
     for call in pending.calls.iter().filter(|c| changes(&c.name)) {
         let result = match decisions.decisions.get(&call.id) {
-            Some(true) => run_call(caller, workflows, call).await,
+            Some(true) => run_call(caller, workflows, call, sink).await,
             Some(false) => ToolResult {
                 id: call.id.clone(),
                 content: "The person declined this action.".into(),
@@ -413,7 +476,7 @@ pub async fn decide(
     let message = Message::ToolResults { results };
     append(state, id, org_id, &message).await?;
     messages.push(message);
-    advance(state, caller, workflows, id, org_id, messages).await
+    advance(state, caller, workflows, id, org_id, messages, sink).await
 }
 
 /// `user_id`'s conversations, newest first.

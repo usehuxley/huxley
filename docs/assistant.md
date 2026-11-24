@@ -9,6 +9,7 @@
 - **Drafts only.** It saves workflows as drafts: a person publishes them.
 - **Your key, your budget.** It uses the organization's AI provider (Settings → AI) and counts toward its monthly budget. Each turn is in the AI call log as `assistant`.
 - **Your conversations.** They're kept per person, and only you can see yours. Delete them any time.
+- **Answers appear as they're written,** and each tool call shows while it runs. An answer finishes and is saved even if you leave the page.
 
 Using it needs `ai:use` at the organization (Technicians have it), plus an AI provider set up there or above.
 
@@ -22,3 +23,18 @@ Using it needs `ai:use` at the organization (Technicians have it), plus an AI pr
 | `POST /api/v1/assistant/conversations/{id}/messages` | `{ text }`: send a message |
 | `POST /api/v1/assistant/conversations/{id}/decisions` | `{ decisions: { "<call id>": true \| false } }`: approve or deny waiting actions |
 | `DELETE /api/v1/assistant/conversations/{id}` | delete a conversation |
+
+### Streaming
+
+Send `Accept: text/event-stream` to the start, message and decision endpoints to get the answer as it's written. The response is a stream of Server-Sent Events, each with a JSON `data`:
+
+| Event | Data |
+|---|---|
+| `text` | `{ text }`: the next piece of the assistant's text |
+| `turn_ended` | One model turn ended. Text after this starts a new message. |
+| `tool_started` | `{ id, name }`: a tool call started (only tools that run without approval) |
+| `tool_finished` | `{ id, isError }` |
+| `done` | `{ conversation }`: the conversation as saved, as `GET` returns it. The last event. |
+| `failed` | `{ problem }`: why it couldn't answer (a problem object). The last event. |
+
+Problems found before answering starts (validation, permissions, an action waiting for approval) are ordinary error responses, not events.
