@@ -37,7 +37,7 @@ docker run -d --name huxley-runner \
   ghcr.io/usehuxley/runner run --pull-images
 ```
 
-Enrol it once beforehand, with the same volumes, by running `ghcr.io/usehuxley/runner enroll --server https://huxley.example.com --token hxr_…`. `--pull-images` fetches the PowerShell and Python images when it starts. Scripts never cause a pull.
+Enrol it once beforehand, with the same volumes, by running `ghcr.io/usehuxley/runner enroll --server https://huxley.example.com --token hxr_…`. `--pull-images` fetches the PowerShell, Python and Node.js (JavaScript) images when it starts. Scripts never cause a pull.
 
 The reference Compose deployment has it as the `runner` profile. Enrol it with `docker compose run --rm runner enroll --server http://huxley:8080 --token hxr_…`, then start it with `docker compose --profile runner up -d`.
 
@@ -56,9 +56,16 @@ The runner needs Podman (rootless) and the images, which it never pulls by itsel
 ```sh
 podman pull mcr.microsoft.com/powershell:7.5-alpine-3.20
 podman pull docker.io/library/python:3.13-alpine
+podman pull docker.io/library/node:26.13.1-alpine
 ```
 
-It only offers the languages whose images are present. Choose other images with `--pwsh-image` and `--python-image`, for example ones with your modules preinstalled. `--concurrency` (default 2) sets how many scripts run at once. Logs (stdout and stderr up to 64 KB) are streamed while the script runs: the runner sends new lines about every second, and the run page shows them as they arrive. The whole log replaces them when the script finishes, and a failed step's error includes its last 4 KB. Each streamed line is scrubbed by the runner, and again by Huxley.
+It only offers the languages whose images are present. Choose other images with `--pwsh-image`, `--python-image` and `--node-image`, for example ones with your modules preinstalled. `--concurrency` (default 2) sets how many scripts run at once. Logs (stdout and stderr up to 64 KB) are streamed while the script runs: the runner sends new lines about every second, and the run page shows them as they arrive. The whole log replaces them when the script finishes, and a failed step's error includes its last 4 KB. Each streamed line is scrubbed by the runner, and again by Huxley.
+
+**JavaScript:**
+
+- **Runtime:** scripts run with Node.js 26 (LTS), as ES modules.
+- **Permissions inside the container:** on top of the container's confinement, Node's permission model lets a script read only the job's files, write only its result, and make network calls (which go through the egress proxy; `fetch` uses it).
+- **No subprocesses.**
 
 ## Network egress
 
@@ -98,7 +105,7 @@ kubectl create secret generic huxley-runner-enrolment -n huxley-scripts \
 kubectl apply -k deploy/kubernetes
 ```
 
-The script images come from the cluster's registry access: `--pwsh-image` and `--python-image` work as with Podman. A runner outside the cluster can also use it, with a kubeconfig and `--k8s-namespace`.
+The script images come from the cluster's registry access: `--pwsh-image`, `--python-image` and `--node-image` work as with Podman. A runner outside the cluster can also use it, with a kubeconfig and `--k8s-namespace`.
 
 ## Credentials
 

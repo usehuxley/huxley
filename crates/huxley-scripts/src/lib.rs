@@ -1,4 +1,4 @@
-//! The script library (design doc §6.9): PowerShell and Python scripts,
+//! The script library (design doc §6.9): PowerShell, Python and JavaScript scripts,
 //! each version immutable, with a JSON Schema of its parameters. Runners
 //! execute them in sandboxes; nothing here runs code. A library at an
 //! organization is shared with the organizations below it (`find`).
@@ -53,6 +53,19 @@ pub enum Language {
     Pwsh,
     /// Python 3.
     Python,
+    /// JavaScript, run with Node.js.
+    Javascript,
+}
+
+impl Language {
+    /// The file extension of its source.
+    pub const fn extension(self) -> &'static str {
+        match self {
+            Self::Pwsh => "ps1",
+            Self::Python => "py",
+            Self::Javascript => "js",
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, ToSchema, sqlx::FromRow)]

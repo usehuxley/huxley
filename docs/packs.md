@@ -62,7 +62,7 @@ signature.json             optional: an Ed25519 signature over manifest.json
 integrations/<key>.yaml    an OpenAPI spec (plus optional <key>.overlay.json)
 workflows/<key>.yaml       an HWF workflow
 forms/<key>.json           a form: { name, schema, ui }
-scripts/<key>.json         a script's name, language and parameters, with scripts/<key>.ps1 or .py
+scripts/<key>.json         a script's name, language and parameters, with scripts/<key>.ps1, .py or .js
 templates/<key>.yaml       a template, in the built-in templates' format
 docs/…                     anything you'd like to include for readers
 ```

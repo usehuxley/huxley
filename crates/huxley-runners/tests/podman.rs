@@ -302,3 +302,106 @@ async fn output_streams_while_the_script_runs() {
     assert_eq!(lines.recv().await.as_deref(), Some("done\n"));
     assert!(outcome.logs.contains("starting with «redacted»\ndone"));
 }
+
+fn javascript(source: &str, inputs: serde_json::Value) -> Job {
+    Job {
+        language: "javascript".into(),
+        ..python(source, inputs)
+    }
+}
+
+#[tokio::test]
+async fn javascript_scripts_run_with_node() {
+    let Some(podman) = podman("javascript").await else {
+        return;
+    };
+    // export default: a function of the inputs (async is fine).
+    let outcome = podman
+        .run(&javascript(
+            "console.log('hello', inputs.name);\nexport default async ({ name }) => ({ greeting: `hi ${name}`, typed: typeof name });",
+            json!({ "name": "ada" }),
+        ))
+        .await;
+    assert!(outcome.succeeded, "{outcome:?}");
+    assert_eq!(
+        outcome.output,
+        Some(json!({ "greeting": "hi ada", "typed": "string" }))
+    );
+    assert!(outcome.logs.contains("hello ada"));
+    assert!(
+        !outcome.logs.contains("ExperimentalWarning"),
+        "{}",
+        outcome.logs
+    );
+    // Or globalThis.result.
+    let outcome = podman
+        .run(&javascript("globalThis.result = [1, 2, 3];", json!({})))
+        .await;
+    assert_eq!(outcome.output, Some(json!([1, 2, 3])), "{outcome:?}");
+    // A throw fails the script, with its message in the logs.
+    let failed = podman
+        .run(&javascript("throw new Error('nope');", json!({})))
+        .await;
+    assert!(!failed.succeeded);
+    assert!(failed.logs.contains("Error: nope"), "{failed:?}");
+}
+
+#[tokio::test]
+async fn javascript_is_confined_like_the_rest() {
+    let Some(podman) = podman("javascript").await else {
+        return;
+    };
+    let source = r#"
+import fs from "node:fs";
+import net from "node:net";
+const direct = await new Promise((resolve) => {
+  const s = net.connect({ host: "1.1.1.1", port: 53 });
+  s.setTimeout(3000, () => { s.destroy(); resolve("blocked"); });
+  s.once("connect", () => { s.destroy(); resolve("open"); });
+  s.once("error", () => resolve("blocked"));
+});
+let host = "denied";
+try { fs.readFileSync("/etc/passwd"); host = "readable"; } catch {}
+let tmp = "denied";
+try { fs.writeFileSync("/tmp/x", "x"); tmp = "writable"; } catch {}
+let child = "denied";
+try { (await import("node:child_process")).execSync("id"); child = "allowed"; } catch {}
+export default { direct, host, tmp, child, uid: process.getuid() };
+"#;
+    let without = Podman {
+        egress: None,
+        ..podman.clone()
+    };
+    let outcome = without.run(&javascript(source, json!({}))).await;
+    assert!(outcome.succeeded, "{outcome:?}");
+    // Node's own permissions also keep the script to the job's files, and
+    // no subprocesses.
+    assert_eq!(
+        outcome.output,
+        Some(
+            json!({ "direct": "blocked", "host": "denied", "tmp": "denied", "child": "denied", "uid": 65534 })
+        )
+    );
+
+    // fetch() goes through the egress policy, like other languages.
+    let port = host_server().await;
+    let fetch = r"
+const r = await fetch(inputs.url);
+export default { status: r.status, body: await r.text() };
+";
+    let url = format!("http://127.0.0.1:{port}/");
+    let refused = podman.run(&javascript(fetch, json!({ "url": url }))).await;
+    assert_eq!(
+        refused.output.as_ref().map(|o| o["status"].clone()),
+        Some(json!(403)),
+        "{refused:?}"
+    );
+    let allowed = allowing_localhost(podman)
+        .run(&javascript(fetch, json!({ "url": url })))
+        .await;
+    assert_eq!(
+        allowed.output,
+        Some(json!({ "status": 200, "body": "hello from the host" })),
+        "{allowed:?}"
+    );
+}

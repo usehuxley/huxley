@@ -10846,7 +10846,7 @@
 			},
 			"Language": {
 				"type": "string",
-				"enum": ["pwsh", "python"]
+				"enum": ["pwsh", "python", "javascript"]
 			},
 			"LinkView": {
 				"type": "object",

@@ -84,7 +84,7 @@ The core idea: **every module is built on the engine.** Mailbox polling, SLA esc
 | Data fetching | TanStack Query (Svelte), generated typed API client | |
 | Code editing | CodeMirror 6 (Jinja, YAML, PowerShell, Python, JS modes) | |
 | Charts | Apache ECharts or LayerChart | For the widget/dashboard builder |
-| Script runners | Container images with PowerShell 7, Python 3, Node/Deno | Isolated from the core (§6.9) |
+| Script runners | Container images with PowerShell 7, Python 3, Node.js | Isolated from the core (§6.9) |
 | Packaging | Docker (multi-arch), Docker Compose, Helm chart | |
 | CI | GitHub Actions: `cargo clippy/test/deny/audit`, `pnpm lint/test`, Playwright, Grype container scan, Syft SBOM, cosign signing | Actions pinned to commit SHAs. Grype is used instead of Trivy, whose distribution was compromised in 2026. |
 
@@ -370,7 +370,7 @@ ui:
 - Scripts **never run inside the API or worker process**. Workers dispatch to a pool of **runners**:
   - `runner-pwsh`: PowerShell 7 with a curated module set (Microsoft.Graph, ExchangeOnlineManagement, PnP) plus per-org extra modules allowed by an admin.
   - `runner-python`: CPython with a curated base, plus an admin-approved requirements lock per script.
-  - `runner-js`: Deno (permission flags restrict network and filesystem).
+  - `runner-js`: Node.js LTS, whose permission model restricts the filesystem, subprocesses and the network. (Deno was the first choice. Its team announced the end of its development in October 2026.)
 - Each execution runs in an **ephemeral, non-root, read-only-rootfs container or microVM sandbox** (gVisor/Firecracker when available, plain hardened container otherwise). By default the runner starts it with **rootless Podman** inside its own container; installs on Kubernetes can have runners start **Jobs** instead (with a gVisor runtime class where available). Runners never get the Docker socket. It has CPU, memory, and time limits, a network egress policy (inherits the SSRF policy, §12.6), and no access to Huxley's database or secrets other than what's injected for that step. **Egress is enforced, not advisory:** the sandbox has no network of its own, and its only way out is the runner's HTTP(S) egress proxy, which applies the policy. HTTP(S) is the only protocol that gets out; on-prem protocols go through integrations (below).
 - Credentials are injected as short-lived environment variables or files. They are scrubbed from output streams.
 - **On-prem execution goes through integrations.** Runners execute scripts that act on cloud APIs. Work *inside* a customer network (AD, on-prem Exchange, file servers, endpoints) is done by calling an integration that already has a presence there. Examples:

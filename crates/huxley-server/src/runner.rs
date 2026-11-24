@@ -97,6 +97,12 @@ pub struct SandboxArgs {
         default_value = "docker.io/library/python:3.13-alpine"
     )]
     python_image: String,
+    #[arg(
+        long,
+        env = "HUXLEY_RUNNER_NODE_IMAGE",
+        default_value = "docker.io/library/node:26.13.1-alpine"
+    )]
+    node_image: String,
     /// Memory per script container.
     #[arg(long, env = "HUXLEY_RUNNER_MEMORY", default_value = "512m")]
     memory: String,
@@ -248,6 +254,7 @@ impl SandboxArgs {
             namespace,
             pwsh_image: self.pwsh_image.clone(),
             python_image: self.python_image.clone(),
+            node_image: self.node_image.clone(),
             memory: kube_memory(&self.memory),
             cpus: self.cpus.clone(),
             runtime_class: self.kubernetes.runtime_class.clone(),
@@ -265,6 +272,7 @@ impl SandboxArgs {
             binary: self.podman.clone(),
             pwsh_image: self.pwsh_image.clone(),
             python_image: self.python_image.clone(),
+            node_image: self.node_image.clone(),
             memory: self.memory.clone(),
             cpus: self.cpus.clone(),
             egress: (!self.no_network).then(|| self.egress.policy()),
@@ -320,7 +328,7 @@ async fn prepare(args: &SandboxArgs) -> anyhow::Result<(Sandbox, Vec<String>)> {
         tracing::info!(namespace = %kubernetes.namespace, "running scripts as Kubernetes Jobs");
         return Ok((
             Sandbox::Kubernetes(kubernetes),
-            vec!["pwsh".into(), "python".into()],
+            vec!["pwsh".into(), "python".into(), "javascript".into()],
         ));
     }
     let podman = args.podman();
@@ -335,9 +343,10 @@ async fn prepare(args: &SandboxArgs) -> anyhow::Result<(Sandbox, Vec<String>)> {
     let languages = podman.languages().await;
     if languages.is_empty() {
         tracing::warn!(
-            "no script images are present: pull {} and/or {} with podman",
+            "no script images are present: pull {}, {} and/or {} with podman",
             podman.pwsh_image,
-            podman.python_image
+            podman.python_image,
+            podman.node_image
         );
     }
     Ok((Sandbox::Podman(podman), languages))

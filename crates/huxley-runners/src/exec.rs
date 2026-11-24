@@ -120,6 +120,129 @@ if os.environ.get("HUXLEY_RESULT_MARKER"):
 
 /// The PowerShell side of the egress relay: 127.0.0.1:3128 to the proxy's
 /// socket (Python's is in its wrapper).
+pub(crate) const JS_WRAPPER: &str = r#"// Huxley's wrapper for JavaScript scripts (Node.js).
+import fs from "node:fs";
+import net from "node:net";
+
+const SOCKET = "/huxley/net/proxy.sock";
+
+// Scripts' HTTP(S) goes to a proxy on 127.0.0.1:3128 (fetch uses it:
+// NODE_USE_ENV_PROXY), relayed to the runner's egress proxy over a unix
+// socket: the container has no network.
+if (fs.existsSync(SOCKET)) {
+  const relay = net.createServer((client) => {
+    const upstream = net.connect({ path: SOCKET });
+    upstream.on("error", () => client.destroy());
+    client.on("error", () => upstream.destroy());
+    client.pipe(upstream);
+    upstream.pipe(client);
+  });
+  await new Promise((resolve, reject) => {
+    relay.once("error", reject);
+    relay.listen(3128, "127.0.0.1", resolve);
+  });
+  relay.unref();
+}
+
+// Kubernetes: the pod's network policy may take a moment to apply. Hold
+// the script until a connection the policy forbids no longer gets through.
+const probe = process.env.HUXLEY_EGRESS_PROBE;
+if (probe) {
+  const at = probe.lastIndexOf(":");
+  const host = probe.slice(0, at);
+  const port = Number(probe.slice(at + 1));
+  const reachable = () =>
+    new Promise((resolve) => {
+      const socket = net.connect({ host, port });
+      const done = (open) => { socket.destroy(); resolve(open); };
+      socket.setTimeout(1000, () => done(false));
+      socket.once("connect", () => done(true));
+      socket.once("error", () => done(false));
+    });
+  const deadline = Date.now() + 60_000;
+  while (await reachable()) {
+    if (Date.now() > deadline) {
+      console.error("huxley: the network policy isn't in force; not running the script");
+      process.exit(97);
+    }
+    await new Promise((resolve) => setTimeout(resolve, 500));
+  }
+}
+
+const inputs = JSON.parse(fs.readFileSync("/huxley/in/inputs.json", "utf8"));
+globalThis.inputs = inputs;
+const script = await import("/huxley/in/script.mjs");
+// export default <value> or <async function(inputs)>; or globalThis.result.
+let value = script.default;
+if (typeof value === "function") value = await value(inputs);
+if (value === undefined) value = globalThis.result;
+const result = JSON.stringify(value === undefined ? null : value);
+fs.writeFileSync("/huxley/out/result.json", result);
+const marker = process.env.HUXLEY_RESULT_MARKER;
+if (marker) console.log(marker + result);
+process.exit(0);
+"#;
+
+/// A language's files and the command that runs them: the script's file
+/// name, the wrapper's name and contents, and the command line.
+pub(crate) fn language(
+    name: &str,
+) -> Option<(
+    &'static str,
+    &'static str,
+    &'static str,
+    &'static [&'static str],
+)> {
+    match name {
+        "pwsh" => Some((
+            "script.ps1",
+            "wrapper.ps1",
+            PWSH_WRAPPER,
+            &[
+                "pwsh",
+                "-NoLogo",
+                "-NoProfile",
+                "-NonInteractive",
+                "-File",
+                "/huxley/in/wrapper.ps1",
+            ],
+        )),
+        "python" => Some((
+            "script.py",
+            "wrapper.py",
+            PYTHON_WRAPPER,
+            &["python3", "-I", "-u", "/huxley/in/wrapper.py"],
+        )),
+        "javascript" => Some((
+            "script.mjs",
+            "wrapper.mjs",
+            JS_WRAPPER,
+            &[
+                "node",
+                // Node's own permissions, inside the container's: the job's
+                // files, its result, the relay; no subprocesses.
+                "--permission",
+                "--allow-fs-read=/huxley/",
+                "--allow-fs-write=/huxley/out/",
+                "--allow-net",
+                "--disable-warning=ExperimentalWarning",
+                "/huxley/in/wrapper.mjs",
+            ],
+        )),
+        _ => None,
+    }
+}
+
+/// Every script file a job directory may hold.
+pub(crate) const SCRIPT_FILES: &[&str] = &[
+    "script.ps1",
+    "script.py",
+    "script.mjs",
+    "wrapper.ps1",
+    "wrapper.py",
+    "wrapper.mjs",
+];
+
 pub(crate) const PWSH_RELAY: &str = r"using System.Net;
 using System.Net.Sockets;
 using System.Threading.Tasks;
@@ -222,6 +345,7 @@ pub struct Podman {
     pub binary: String,
     pub pwsh_image: String,
     pub python_image: String,
+    pub node_image: String,
     pub memory: String,
     pub cpus: String,
     pub pids: u32,
@@ -236,6 +360,7 @@ impl Default for Podman {
             binary: "podman".into(),
             pwsh_image: "mcr.microsoft.com/powershell:7.5-alpine-3.20".into(),
             python_image: "docker.io/library/python:3.13-alpine".into(),
+            node_image: "docker.io/library/node:26.13.1-alpine".into(),
             memory: "512m".into(),
             cpus: "1".into(),
             pids: 256,
@@ -260,7 +385,7 @@ impl Podman {
     /// never trigger a pull). Returns the ones that failed.
     pub async fn pull(&self) -> Vec<String> {
         let mut failed = Vec::new();
-        for image in [&self.pwsh_image, &self.python_image] {
+        for image in [&self.pwsh_image, &self.python_image, &self.node_image] {
             let ok = Command::new(&self.binary)
                 .args(["pull", "--quiet", image])
                 .stdout(Stdio::null())
@@ -277,7 +402,11 @@ impl Podman {
     /// The languages whose images are present locally.
     pub async fn languages(&self) -> Vec<String> {
         let mut found = Vec::new();
-        for (language, image) in [("pwsh", &self.pwsh_image), ("python", &self.python_image)] {
+        for (language, image) in [
+            ("pwsh", &self.pwsh_image),
+            ("python", &self.python_image),
+            ("javascript", &self.node_image),
+        ] {
             let present = Command::new(&self.binary)
                 .args(["image", "exists", image])
                 .status()
@@ -292,24 +421,13 @@ impl Podman {
 
     /// The arguments to `podman` for running `job` with its files in `dir`.
     fn args(&self, name: &str, job: &Job, dir: &Path) -> Option<Vec<String>> {
-        let (image, command): (&str, &[&str]) = match job.language.as_str() {
-            "pwsh" => (
-                &self.pwsh_image,
-                &[
-                    "pwsh",
-                    "-NoLogo",
-                    "-NoProfile",
-                    "-NonInteractive",
-                    "-File",
-                    "/huxley/in/wrapper.ps1",
-                ],
-            ),
-            "python" => (
-                &self.python_image,
-                &["python3", "-I", "-u", "/huxley/in/wrapper.py"],
-            ),
+        let image = match job.language.as_str() {
+            "pwsh" => &self.pwsh_image,
+            "python" => &self.python_image,
+            "javascript" => &self.node_image,
             _ => return None,
         };
+        let (_, _, _, command) = language(&job.language)?;
         let mut args: Vec<String> = [
             "run",
             "--rm",
@@ -323,6 +441,9 @@ impl Podman {
             "--pull=never",
             "--tmpfs=/tmp:rw,nosuid,nodev,size=64m",
             "--env=HOME=/tmp",
+            "--env=NO_COLOR=1",
+            // fetch() uses HTTP(S)_PROXY (the egress relay).
+            "--env=NODE_USE_ENV_PROXY=1",
             "--workdir=/tmp",
         ]
         .iter()
@@ -471,10 +592,11 @@ impl Podman {
 
 /// Writes the script, its wrapper and its inputs for the container.
 fn prepare(job: &Job, dir: &Path) -> std::io::Result<()> {
-    let (script, wrapper, wrapper_name) = if job.language == "pwsh" {
-        ("script.ps1", PWSH_WRAPPER, "wrapper.ps1")
-    } else {
-        ("script.py", PYTHON_WRAPPER, "wrapper.py")
+    let Some((script, wrapper_name, wrapper, _)) = language(&job.language) else {
+        return Err(std::io::Error::other(format!(
+            "unknown language {}",
+            job.language
+        )));
     };
     let input = dir.join("in");
     let output = dir.join("out");
@@ -604,6 +726,19 @@ fn permissions(_: &Path, _: u32) -> std::io::Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn every_languages_files_are_listed() {
+        for name in ["pwsh", "python", "javascript"] {
+            let (script, wrapper, _, command) = language(name).unwrap();
+            assert!(SCRIPT_FILES.contains(&script), "{name}: {script}");
+            assert!(SCRIPT_FILES.contains(&wrapper), "{name}: {wrapper}");
+            assert!(
+                command.iter().any(|c| c.ends_with(wrapper)),
+                "{name} runs its wrapper"
+            );
+        }
+    }
 
     #[test]
     fn the_sandbox_is_locked_down() {

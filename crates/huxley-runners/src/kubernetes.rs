@@ -39,6 +39,7 @@ pub struct Kubernetes {
     pub namespace: String,
     pub pwsh_image: String,
     pub python_image: String,
+    pub node_image: String,
     pub memory: String,
     pub cpus: String,
     /// e.g. `gvisor`, when the cluster has it.
@@ -184,26 +185,20 @@ impl Kubernetes {
         match language {
             "pwsh" => Some(&self.pwsh_image),
             "python" => Some(&self.python_image),
+            "javascript" => Some(&self.node_image),
             _ => None,
         }
     }
 
     /// The Job: one locked-down pod, no retries, a deadline.
     fn job_spec(&self, name: &str, image: &str, marker: &str, job: &Job) -> Json {
-        let command: Vec<&str> = if job.language == "pwsh" {
-            vec![
-                "pwsh",
-                "-NoLogo",
-                "-NoProfile",
-                "-NonInteractive",
-                "-File",
-                "/huxley/in/wrapper.ps1",
-            ]
-        } else {
-            vec!["python3", "-I", "-u", "/huxley/in/wrapper.py"]
-        };
+        let command: Vec<&str> = exec::language(&job.language)
+            .map(|(_, _, _, c)| c.to_vec())
+            .unwrap_or_default();
         let mut env = vec![
             json!({ "name": "HOME", "value": "/tmp" }),
+            json!({ "name": "NO_COLOR", "value": "1" }),
+            json!({ "name": "NODE_USE_ENV_PROXY", "value": "1" }),
             json!({ "name": "HUXLEY_RESULT_MARKER", "value": marker }),
             // The API server: the policy forbids it, so reaching it means
             // the policy isn't in force for this pod yet.
@@ -223,13 +218,11 @@ impl Kubernetes {
                 env.push(json!({ "name": key, "value": proxy }));
             }
         }
-        let files = [
-            "script.ps1",
-            "script.py",
-            "wrapper.ps1",
-            "wrapper.py",
-            "inputs.json",
-        ];
+        let files: Vec<&str> = exec::SCRIPT_FILES
+            .iter()
+            .copied()
+            .chain(["inputs.json"])
+            .collect();
         let mut pod = json!({
             "restartPolicy": "Never",
             "automountServiceAccountToken": false,
@@ -332,17 +325,18 @@ impl Kubernetes {
 }
 
 fn secret(name: &str, job: &Job) -> Secret {
-    let (script, wrapper_name, wrapper) = if job.language == "pwsh" {
-        ("script.ps1", "wrapper.ps1", exec::PWSH_WRAPPER)
-    } else {
-        ("script.py", "wrapper.py", exec::PYTHON_WRAPPER)
-    };
+    let (script, wrapper_name, wrapper, _) = exec::language(&job.language).unwrap_or((
+        "script.py",
+        "wrapper.py",
+        exec::PYTHON_WRAPPER,
+        &[],
+    ));
     let mut data: BTreeMap<String, ByteString> = BTreeMap::new();
     let mut put = |k: &str, v: &str| {
         data.insert(k.to_owned(), ByteString(v.as_bytes().to_vec()));
     };
     // Every file key the volume lists exists, so the mount never fails.
-    for file in ["script.ps1", "script.py", "wrapper.ps1", "wrapper.py"] {
+    for file in exec::SCRIPT_FILES {
         put(file, "");
     }
     put(script, &job.source);
