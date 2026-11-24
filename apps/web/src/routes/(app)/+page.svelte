@@ -23,13 +23,15 @@
 		},
 		{
 			title: 'Let AI help',
-			description: 'Describe what you need to the assistant, or connect an AI client like Claude Code.',
+			description:
+				'Describe what you need to the assistant, or connect an AI client like Claude Code.',
 			href: '/assistant',
 			action: 'Ask AI'
 		},
 		{
 			title: 'Learn the basics',
-			description: 'A ten-minute tutorial: your first workflow, from draft to a form that starts it.',
+			description:
+				'A ten-minute tutorial: your first workflow, from draft to a form that starts it.',
 			href: `${DOCS}/getting-started`,
 			action: 'Read the tutorial'
 		}
