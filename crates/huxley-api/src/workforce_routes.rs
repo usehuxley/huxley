@@ -11,6 +11,7 @@ use axum::routing::{get, put};
 use axum::{Json, Router};
 use huxley_authz::permissions;
 use huxley_db::{OrgScope, begin_scoped};
+use huxley_workforce::availability::{self, Schedule, TimeOff, TimeOffRequest};
 use huxley_workforce::catalog::{self, Certification, CertificationInput, Skill, SkillInput};
 use huxley_workforce::people::{
     self, CertificationHeld, MatrixCell, Person, PersonSummary, SkillLevel,
@@ -54,6 +55,23 @@ pub fn routes() -> Router<AppState> {
             get(get_requirements).put(set_requirements),
         )
         .route("/fit", get(fit))
+        .route(
+            "/people/{user_id}/schedule",
+            get(get_schedule).put(set_schedule),
+        )
+        .route(
+            "/people/{user_id}/time-off",
+            axum::routing::post(request_time_off),
+        )
+        .route("/time-off", get(list_time_off))
+        .route(
+            "/time-off/{id}/decision",
+            axum::routing::post(decide_time_off),
+        )
+        .route(
+            "/time-off/{id}/cancel",
+            axum::routing::post(cancel_time_off),
+        )
 }
 
 fn map(e: WorkforceError) -> ApiError {
@@ -426,6 +444,8 @@ pub async fn set_requirements(
 pub struct FitParams {
     pub queue_id: Option<Uuid>,
     pub ticket_type_id: Option<Uuid>,
+    /// When to check availability (RFC 3339; default now).
+    pub at: Option<String>,
 }
 
 /// How everyone fits work in a queue and/or of a ticket type, best first:
@@ -438,10 +458,157 @@ pub async fn fit(
     Query(params): Query<FitParams>,
 ) -> ApiResult<Json<Vec<Fit>>> {
     reader(&state, &authed).await?;
+    let at = match &params.at {
+        Some(at) => time::OffsetDateTime::parse(at, &time::format_description::well_known::Rfc3339)
+            .map_err(|_| ApiError::validation().with_field_error("/at", "an RFC 3339 time"))?
+            .unix_timestamp(),
+        None => time::OffsetDateTime::now_utc().unix_timestamp(),
+    };
     Ok(Json(
         system(&state, async |tx| {
-            requirements::fit(tx, params.queue_id, params.ticket_type_id, None).await
+            requirements::fit(tx, params.queue_id, params.ticket_type_id, None, Some(at)).await
         })
         .await?,
+    ))
+}
+
+/// Someone's working schedule (none: no hours limit). Yours, or with
+/// `workforce:read`.
+#[utoipa::path(get, path = "/api/v1/workforce/people/{user_id}/schedule", tag = "workforce",
+    params(("user_id" = Uuid, Path)), responses((status = 200, body = Option<Schedule>)))]
+pub async fn get_schedule(
+    State(state): State<AppState>,
+    authed: Authed,
+    Path(user_id): Path<Uuid>,
+) -> ApiResult<Json<Option<Schedule>>> {
+    if authed.user.auth.user.id == user_id {
+        require_module(&state, MODULE).await?;
+    } else {
+        reader(&state, &authed).await?;
+    }
+    Ok(Json(
+        system(&state, async |tx| availability::schedule(tx, user_id).await).await?,
+    ))
+}
+
+/// Sets someone's working schedule (`null` removes it). Yours, or with
+/// `workforce:manage`.
+#[utoipa::path(put, path = "/api/v1/workforce/people/{user_id}/schedule", tag = "workforce",
+    params(("user_id" = Uuid, Path)), request_body = Option<Schedule>,
+    responses((status = 200, body = Option<Schedule>), (status = 422, body = ApiError, content_type = "application/problem+json")))]
+pub async fn set_schedule(
+    State(state): State<AppState>,
+    authed: Authed,
+    Path(user_id): Path<Uuid>,
+    Json(body): Json<Option<Schedule>>,
+) -> ApiResult<Json<Option<Schedule>>> {
+    self_or_manager(&state, &authed, user_id).await?;
+    let ctx = authed.user.ctx.clone();
+    Ok(Json(
+        system(&state, async |tx| {
+            availability::set_schedule(tx, &ctx, user_id, body.as_ref()).await
+        })
+        .await?,
+    ))
+}
+
+#[derive(Debug, Deserialize, IntoParams)]
+#[serde(rename_all = "camelCase")]
+pub struct TimeOffParams {
+    /// Someone's (default: everyone's, which needs `workforce:read`).
+    pub user_id: Option<Uuid>,
+    /// `requested`, `approved`, `declined` or `cancelled`.
+    pub status: Option<String>,
+}
+
+/// Time off that hasn't long ended, soonest first.
+#[utoipa::path(get, path = "/api/v1/workforce/time-off", tag = "workforce", params(TimeOffParams),
+    responses((status = 200, body = Vec<TimeOff>)))]
+pub async fn list_time_off(
+    State(state): State<AppState>,
+    authed: Authed,
+    Query(params): Query<TimeOffParams>,
+) -> ApiResult<Json<Vec<TimeOff>>> {
+    if params.user_id == Some(authed.user.auth.user.id) {
+        require_module(&state, MODULE).await?;
+    } else {
+        reader(&state, &authed).await?;
+    }
+    Ok(Json(
+        system(&state, async |tx| {
+            availability::time_off(tx, params.user_id, params.status.as_deref()).await
+        })
+        .await?,
+    ))
+}
+
+/// Requests time off. Yours (it waits for a manager's approval), or someone
+/// else's with `workforce:manage` (approved at once).
+#[utoipa::path(post, path = "/api/v1/workforce/people/{user_id}/time-off", tag = "workforce",
+    params(("user_id" = Uuid, Path)), request_body = TimeOffRequest,
+    responses((status = 201, body = TimeOff), (status = 422, body = ApiError, content_type = "application/problem+json")))]
+pub async fn request_time_off(
+    State(state): State<AppState>,
+    authed: Authed,
+    Path(user_id): Path<Uuid>,
+    Json(body): Json<TimeOffRequest>,
+) -> ApiResult<(StatusCode, Json<TimeOff>)> {
+    self_or_manager(&state, &authed, user_id).await?;
+    let me = authed.user.auth.user.id;
+    let approved_by = (me != user_id).then_some(me);
+    let ctx = authed.user.ctx.clone();
+    let t = system(&state, async |tx| {
+        availability::request(tx, &ctx, user_id, &body, approved_by).await
+    })
+    .await?;
+    Ok((StatusCode::CREATED, Json(t)))
+}
+
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct TimeOffDecision {
+    pub approve: bool,
+    #[serde(default)]
+    pub note: Option<String>,
+}
+
+/// Approves or declines requested time off. Needs `workforce:manage`, and
+/// not for your own.
+#[utoipa::path(post, path = "/api/v1/workforce/time-off/{id}/decision", tag = "workforce",
+    params(("id" = Uuid, Path)), request_body = TimeOffDecision,
+    responses((status = 200, body = TimeOff), (status = 422, body = ApiError, content_type = "application/problem+json")))]
+pub async fn decide_time_off(
+    State(state): State<AppState>,
+    authed: Authed,
+    Path(id): Path<Uuid>,
+    Json(body): Json<TimeOffDecision>,
+) -> ApiResult<Json<TimeOff>> {
+    manager(&state, &authed).await?;
+    let me = authed.user.auth.user.id;
+    let ctx = authed.user.ctx.clone();
+    Ok(Json(
+        system(&state, async |tx| {
+            availability::decide(tx, &ctx, id, body.approve, me, body.note.as_deref()).await
+        })
+        .await?,
+    ))
+}
+
+/// Cancels time off that hasn't ended. Yours, or with `workforce:manage`.
+#[utoipa::path(post, path = "/api/v1/workforce/time-off/{id}/cancel", tag = "workforce",
+    params(("id" = Uuid, Path)),
+    responses((status = 200, body = TimeOff), (status = 422, body = ApiError, content_type = "application/problem+json")))]
+pub async fn cancel_time_off(
+    State(state): State<AppState>,
+    authed: Authed,
+    Path(id): Path<Uuid>,
+) -> ApiResult<Json<TimeOff>> {
+    let owner = system(&state, async |tx| availability::time_off_one(tx, id).await)
+        .await?
+        .user_id;
+    self_or_manager(&state, &authed, owner).await?;
+    let ctx = authed.user.ctx.clone();
+    Ok(Json(
+        system(&state, async |tx| availability::cancel(tx, &ctx, id).await).await?,
     ))
 }

@@ -4,7 +4,8 @@
 //! which decides what's visible; the API checks permissions and that the
 //! module is active.
 
-pub mod calendar;
+/// Business time, now shared from `huxley-core`.
+pub use huxley_core::calendar;
 pub mod config;
 pub mod mail;
 pub mod queues;

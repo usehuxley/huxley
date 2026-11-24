@@ -3,6 +3,7 @@
 //! is qualified for it. Records are instance-wide (they describe the MSP's
 //! people); the API checks permissions and that the module is on.
 
+pub mod availability;
 pub mod catalog;
 pub mod people;
 pub mod requirements;

@@ -1,5 +1,5 @@
 //! Business time (ADR-037): weekly opening hours in a time zone, or around
-//! the clock. Times are Unix seconds.
+//! the clock. Times are Unix seconds. Used by SLAs and people's schedules.
 
 use jiff::civil::Date;
 use jiff::tz::TimeZone;
@@ -160,6 +160,19 @@ impl Calendar {
         total
     }
 
+    /// Whether it's open at `at` (the minute starting then).
+    pub fn is_open(&self, at: i64) -> bool {
+        self.open_between(at, at + 60) > 0
+    }
+
+    /// The hours as given to [`Calendar::weekly`] (normalized), if weekly.
+    pub fn hours(&self) -> Option<Json> {
+        match self {
+            Self::Always => None,
+            Self::Weekly { .. } => Some(self.to_json()["hours"].clone()),
+        }
+    }
+
     /// When `seconds` of open time have passed since `from`.
     pub fn add(&self, from: i64, seconds: i64) -> i64 {
         if seconds <= 0 {
@@ -265,6 +278,15 @@ mod tests {
         let back = Calendar::from_json(&c.to_json());
         assert_eq!(back.to_json(), c.to_json());
         assert_eq!(c.to_json()["hours"], hours);
+    }
+
+    #[test]
+    fn open_at_a_moment() {
+        let c = nine_to_five("Europe/London");
+        assert!(c.is_open(ts("2026-11-30T10:00:00Z")));
+        assert!(!c.is_open(ts("2026-11-30T17:00:00Z")));
+        assert!(!c.is_open(ts("2026-11-28T12:00:00Z")));
+        assert!(Calendar::Always.is_open(0));
     }
 
     #[test]

@@ -6,7 +6,7 @@ The **Workforce** module (`workforce`) describes your people:
 - the certifications they hold, and when they expire
 - what different kinds of work require of them
 
-Dispatch uses it to send work to people who can do it. Availability and timesheets come later.
+It also records when people are available: their working hours and time off. Dispatch uses all of this to send work to people who can do it and are there to do it. Timesheets come later.
 
 Turn it on under **Settings → Modules**.
 
@@ -45,6 +45,19 @@ People add their own certifications. Managers can add anyone's.
 
 The event names the person, the certification and its expiry date.
 
+## Availability
+
+**Working hours.** A person's hours per weekday, in their time zone. People set their own hours, and managers can set anyone's. Someone without hours set counts as available at any time.
+
+**Time off.** Each booking has dates (inclusive), a kind (vacation, sick, training or other) and a note.
+
+- **Your own:** you request it, and a manager approves or declines it. Nobody decides their own.
+- **Someone else's:** a manager booking it approves it at once.
+- **Cancelling:** you can cancel time off that hasn't ended.
+- **Events:** each step emits an event, so workflows can notify people or update calendars. The events are `time_off.requested`, `time_off.approved`, `time_off.declined` and `time_off.cancelled`.
+
+**Where it shows.** The **People** page marks who is away today. Managers also see the requests waiting for them there.
+
 ## What work requires
 
 A queue or a ticket type can require:
@@ -52,7 +65,13 @@ A queue or a ticket type can require:
 - **Skills at a minimum level.** These are weighed: someone at *working* level in a skill that needs *proficient* meets two-thirds of that requirement.
 - **Certifications.** These are hard requirements: the certification must be held and unexpired.
 
-**Fit.** `GET /api/v1/workforce/fit?queueId=…&ticketTypeId=…` ranks people for a kind of work. People holding every required certification come first, then those whose skills best meet the required levels. Each person's entry lists what they're missing.
+**Fit.** `GET /api/v1/workforce/fit?queueId=…&ticketTypeId=…&at=…` ranks people for a kind of work at a moment (`at`, default now):
+
+1. People holding every required certification.
+2. Then people who are available: not on approved time off that day, and within their working hours.
+3. Then by how well their skills meet the required levels.
+
+Each person's entry lists what they're missing, and why they're unavailable (`away` or `off_hours`).
 
 ## Permissions
 
@@ -74,3 +93,6 @@ Everyone can keep their own skills and certifications.
 | `POST …/people/{userId}/certifications`; `PUT`, `DELETE …/certifications/{id}` | Certifications someone holds |
 | `GET`, `PUT /api/v1/workforce/requirements/{queue or ticket_type}/{id}` | What work requires |
 | `GET /api/v1/workforce/fit` | Who fits a queue or ticket type, best first |
+| `GET`, `PUT …/people/{userId}/schedule` | Working hours. `null` removes them |
+| `POST …/people/{userId}/time-off`; `GET /api/v1/workforce/time-off` | Request or book time off, and list it (by `userId` and `status`) |
+| `POST /api/v1/workforce/time-off/{id}/decision`, `…/cancel` | Approve or decline it, with `{ approve, note }`; cancel it |

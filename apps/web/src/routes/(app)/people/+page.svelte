@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
 	import { BadgeCheck } from '@lucide/svelte';
-	import { Badge, EmptyState } from '@usehuxley/ui';
+	import { Badge, Card, EmptyState } from '@usehuxley/ui';
 	import { byCategory, levelLabel } from '#lib/workforce/labels.ts';
 	import type { PageProps } from './$types';
 
@@ -31,6 +31,32 @@
 		<h1 class="text-2xl font-semibold text-fg">People</h1>
 		<p class="mt-1 text-fg-muted">Your team's skills and certifications.</p>
 	</div>
+
+	{#if data.waiting.length > 0}
+		<Card title="Time off waiting for approval">
+			<ul class="flex flex-col divide-y divide-border">
+				{#each data.waiting as t (t.id)}
+					<li class="flex items-center justify-between gap-3 py-2 first:pt-0 last:pb-0">
+						<span class="text-sm text-fg">
+							<a
+								href={resolve('/(app)/people/[id]', { id: t.userId })}
+								class="font-medium hover:text-accent"
+							>
+								{t.person}
+							</a>
+							· {t.startsOn === t.endsOn ? t.startsOn : `${t.startsOn} to ${t.endsOn}`} · {t.kind}
+						</span>
+						<a
+							href={resolve('/(app)/people/[id]', { id: t.userId })}
+							class="text-sm text-accent hover:underline"
+						>
+							Review
+						</a>
+					</li>
+				{/each}
+			</ul>
+		</Card>
+	{/if}
 
 	<nav aria-label="People views" class="flex gap-1 border-b border-border">
 		{#each tabs as tab (tab.value)}
@@ -76,9 +102,12 @@
 							<td class="px-4 py-2.5 text-right tabular-nums">{person.skills}</td>
 							<td class="px-4 py-2.5 text-right tabular-nums">{person.certifications}</td>
 							<td class="px-4 py-2.5">
-								{#if person.expiring > 0}
-									<Badge tone="warning">{person.expiring} expiring soon</Badge>
-								{/if}
+								<span class="flex flex-wrap gap-1">
+									{#if person.awayToday}<Badge tone="info">Away today</Badge>{/if}
+									{#if person.expiring > 0}
+										<Badge tone="warning">{person.expiring} expiring soon</Badge>
+									{/if}
+								</span>
 							</td>
 						</tr>
 					{/each}

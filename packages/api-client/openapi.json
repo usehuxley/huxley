@@ -10276,6 +10276,15 @@
 							"type": ["string", "null"],
 							"format": "uuid"
 						}
+					},
+					{
+						"name": "at",
+						"in": "query",
+						"description": "When to check availability (RFC 3339; default now).",
+						"required": false,
+						"schema": {
+							"type": ["string", "null"]
+						}
 					}
 				],
 				"responses": {
@@ -10523,6 +10532,101 @@
 				}
 			}
 		},
+		"/api/v1/workforce/people/{user_id}/schedule": {
+			"get": {
+				"tags": ["workforce"],
+				"summary": "Someone's working schedule (none: no hours limit). Yours, or with\n`workforce:read`.",
+				"operationId": "get_schedule",
+				"parameters": [
+					{
+						"name": "user_id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"oneOf": [
+										{
+											"$ref": "#/components/schemas/Schedule"
+										},
+										{
+											"type": "null"
+										}
+									]
+								}
+							}
+						}
+					}
+				}
+			},
+			"put": {
+				"tags": ["workforce"],
+				"summary": "Sets someone's working schedule (`null` removes it). Yours, or with\n`workforce:manage`.",
+				"operationId": "set_schedule",
+				"parameters": [
+					{
+						"name": "user_id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"oneOf": [
+									{
+										"$ref": "#/components/schemas/Schedule"
+									},
+									{
+										"type": "null"
+									}
+								]
+							}
+						}
+					}
+				},
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"oneOf": [
+										{
+											"$ref": "#/components/schemas/Schedule"
+										},
+										{
+											"type": "null"
+										}
+									]
+								}
+							}
+						}
+					},
+					"422": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
 		"/api/v1/workforce/people/{user_id}/skills/{skill_id}": {
 			"put": {
 				"tags": ["workforce"],
@@ -10564,6 +10668,54 @@
 							"application/json": {
 								"schema": {
 									"$ref": "#/components/schemas/Person"
+								}
+							}
+						}
+					},
+					"422": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/workforce/people/{user_id}/time-off": {
+			"post": {
+				"tags": ["workforce"],
+				"summary": "Requests time off. Yours (it waits for a manager's approval), or someone\nelse's with `workforce:manage` (approved at once).",
+				"operationId": "request_time_off",
+				"parameters": [
+					{
+						"name": "user_id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/TimeOffRequest"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"201": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/TimeOff"
 								}
 							}
 						}
@@ -10801,6 +10953,134 @@
 				"responses": {
 					"204": {},
 					"404": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/workforce/time-off": {
+			"get": {
+				"tags": ["workforce"],
+				"summary": "Time off that hasn't long ended, soonest first.",
+				"operationId": "list_time_off",
+				"parameters": [
+					{
+						"name": "userId",
+						"in": "query",
+						"description": "Someone's (default: everyone's, which needs `workforce:read`).",
+						"required": false,
+						"schema": {
+							"type": ["string", "null"],
+							"format": "uuid"
+						}
+					},
+					{
+						"name": "status",
+						"in": "query",
+						"description": "`requested`, `approved`, `declined` or `cancelled`.",
+						"required": false,
+						"schema": {
+							"type": ["string", "null"]
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "array",
+									"items": {
+										"$ref": "#/components/schemas/TimeOff"
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/workforce/time-off/{id}/cancel": {
+			"post": {
+				"tags": ["workforce"],
+				"summary": "Cancels time off that hasn't ended. Yours, or with `workforce:manage`.",
+				"operationId": "cancel_time_off",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/TimeOff"
+								}
+							}
+						}
+					},
+					"422": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/workforce/time-off/{id}/decision": {
+			"post": {
+				"tags": ["workforce"],
+				"summary": "Approves or declines requested time off. Needs `workforce:manage`, and\nnot for your own.",
+				"operationId": "decide_time_off",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/TimeOffDecision"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/TimeOff"
+								}
+							}
+						}
+					},
+					"422": {
 						"content": {
 							"application/problem+json": {
 								"schema": {
@@ -13689,8 +13969,12 @@
 			"Fit": {
 				"type": "object",
 				"description": "How well someone fits a piece of work.",
-				"required": ["userId", "name", "qualified", "skillMatch", "missing"],
+				"required": ["userId", "name", "qualified", "skillMatch", "missing", "available"],
 				"properties": {
+					"available": {
+						"type": "boolean",
+						"description": "Available at the moment asked about: not away, and within their\nworking hours (if they have a schedule)."
+					},
 					"missing": {
 						"type": "array",
 						"items": {
@@ -13709,6 +13993,10 @@
 						"type": "number",
 						"format": "double",
 						"description": "How well their skills meet the required levels, 0 to 1 (1 with no\nskill requirements)."
+					},
+					"unavailable": {
+						"type": ["string", "null"],
+						"description": "Why not: `away` or `off_hours`."
 					},
 					"userId": {
 						"type": "string",
@@ -15292,8 +15580,20 @@
 			},
 			"PersonSummary": {
 				"type": "object",
-				"required": ["userId", "name", "email", "skills", "certifications", "expiring"],
+				"required": [
+					"userId",
+					"name",
+					"email",
+					"skills",
+					"certifications",
+					"expiring",
+					"awayToday"
+				],
 				"properties": {
+					"awayToday": {
+						"type": "boolean",
+						"description": "On approved time off today."
+					},
 					"certifications": {
 						"type": "integer",
 						"format": "int64",
@@ -16520,6 +16820,33 @@
 				"properties": {
 					"text": {
 						"type": "string"
+					}
+				},
+				"additionalProperties": false
+			},
+			"Schedule": {
+				"type": "object",
+				"required": ["timezone", "hours"],
+				"properties": {
+					"hours": {
+						"type": "object",
+						"description": "`{\"mon\": [[\"09:00\", \"17:00\"]], …}`; days left out aren't worked.",
+						"additionalProperties": {
+							"type": "array",
+							"items": {
+								"type": "array",
+								"items": {
+									"type": "string"
+								}
+							}
+						},
+						"propertyNames": {
+							"type": "string"
+						}
+					},
+					"timezone": {
+						"type": "string",
+						"description": "An IANA time zone, e.g. `Europe/London`."
 					}
 				},
 				"additionalProperties": false
@@ -18187,6 +18514,93 @@
 						}
 					}
 				}
+			},
+			"TimeOff": {
+				"type": "object",
+				"required": [
+					"id",
+					"userId",
+					"person",
+					"startsOn",
+					"endsOn",
+					"kind",
+					"note",
+					"status",
+					"decisionNote"
+				],
+				"properties": {
+					"decidedBy": {
+						"type": ["string", "null"]
+					},
+					"decisionNote": {
+						"type": "string"
+					},
+					"endsOn": {
+						"type": "string",
+						"description": "`YYYY-MM-DD`, inclusive."
+					},
+					"id": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"kind": {
+						"type": "string",
+						"description": "`vacation`, `sick`, `training` or `other`."
+					},
+					"note": {
+						"type": "string"
+					},
+					"person": {
+						"type": "string"
+					},
+					"startsOn": {
+						"type": "string",
+						"description": "`YYYY-MM-DD`."
+					},
+					"status": {
+						"type": "string",
+						"description": "`requested`, `approved`, `declined` or `cancelled`."
+					},
+					"userId": {
+						"type": "string",
+						"format": "uuid"
+					}
+				}
+			},
+			"TimeOffDecision": {
+				"type": "object",
+				"required": ["approve"],
+				"properties": {
+					"approve": {
+						"type": "boolean"
+					},
+					"note": {
+						"type": ["string", "null"]
+					}
+				},
+				"additionalProperties": false
+			},
+			"TimeOffRequest": {
+				"type": "object",
+				"required": ["startsOn", "endsOn", "kind"],
+				"properties": {
+					"endsOn": {
+						"type": "string",
+						"description": "`YYYY-MM-DD`, inclusive."
+					},
+					"kind": {
+						"type": "string",
+						"description": "`vacation`, `sick`, `training` or `other`."
+					},
+					"note": {
+						"type": ["string", "null"]
+					},
+					"startsOn": {
+						"type": "string",
+						"description": "`YYYY-MM-DD`."
+					}
+				},
+				"additionalProperties": false
 			},
 			"TotpEnrollmentView": {
 				"type": "object",

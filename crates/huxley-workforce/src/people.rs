@@ -24,6 +24,8 @@ pub struct PersonSummary {
     pub certifications: i64,
     /// Certifications expiring within 30 days.
     pub expiring: i64,
+    /// On approved time off today.
+    pub away_today: bool,
 }
 
 #[derive(Debug, Clone, Serialize, ToSchema, sqlx::FromRow)]
@@ -77,7 +79,9 @@ pub async fn people(conn: &mut PgConnection) -> WorkforceResult<Vec<PersonSummar
                 (SELECT count(*) FROM wf_user_certifications c WHERE c.user_id = u.id \
                   AND (c.expires_on IS NULL OR c.expires_on >= current_date)) AS certifications, \
                 (SELECT count(*) FROM wf_user_certifications c WHERE c.user_id = u.id \
-                  AND c.expires_on BETWEEN current_date AND current_date + $1) AS expiring \
+                  AND c.expires_on BETWEEN current_date AND current_date + $1) AS expiring, \
+                EXISTS (SELECT 1 FROM wf_time_off t WHERE t.user_id = u.id AND t.status = 'approved' \
+                  AND current_date BETWEEN t.starts_on AND t.ends_on) AS away_today \
            FROM users u WHERE u.status = 'active' AND u.kind = 'human' \
           ORDER BY lower(u.display_name)",
     )
