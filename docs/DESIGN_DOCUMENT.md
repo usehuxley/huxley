@@ -441,6 +441,7 @@ Everything outside the core platform is a **feature module** that an administrat
 | `cx` | CSAT, NPS, client health | `servicedesk` |
 | `billing` | Invoice generation, accounting sync | `contracts` |
 | `portal` | Client portal | `crm` |
+| `workforce` | Skills, certifications, availability, timesheets (§8.15) | none |
 
 **How a module plugs in.** Each module registers a manifest with the platform's module registry:
 - its permissions
@@ -481,7 +482,7 @@ The registry is the single place that decides whether any of these are active.
 - **Priority matrix**: impact × urgency → priority, configurable.
 - **SLA engine**: SLA policies with first-response, next-response, and resolution targets per priority. **Business-hours calendars** (holidays, timezone per site/company), pause-on-status (e.g., *Waiting on Client*), warnings and breach events (`sla.warning`, `sla.breached`) feeding escalation workflows. The scheduler drives SLA clocks.
 - **Ticket features**: notes (public/internal/resolution), email threading, time entries (billable, work type, linked to agreement), tasks/checklists, parent/child and related tickets, merge, split, bulk edit, watchers/CC, attachments, a **collision indicator** (who's viewing or typing), canned responses with Jinja, macros (run a workflow from a ticket), and ticket templates.
-- **Assignment and dispatch**: manual, round-robin, load-balanced, skill-based, or AI-assisted (§8.8), configured as a system workflow per queue. A dispatch board/calendar provides scheduling.
+- **Assignment and dispatch**: manual, round-robin, load-balanced, skill-based, or AI-assisted (§8.8), configured as a system workflow per queue. Skill-based and AI dispatch draw on people's skills, certifications and availability (§8.15). Without the `workforce` module, dispatch falls back to load and round-robin. A dispatch board/calendar provides scheduling.
 - **Intake channels**: email (§8.4), portal, forms, API, webhooks, phone integrations (via workflows), chat/Teams (later).
 
 ### 8.3 Notifications
@@ -533,9 +534,10 @@ All AI features go through a **provider abstraction** (BYOK). Supported provider
 |---|---|
 | **Sentiment analysis** | On each inbound message, store sentiment score, label, and confidence. Trend is aggregated per ticket, contact, and company. |
 | **Triage** | Suggest or apply ticket type, category, priority (impact/urgency), and queue. Modes: suggest-only, or auto-apply above a confidence threshold. |
-| **Dispatch** | Recommend the assignee using skills, current load, availability/schedule, past resolution history, and client familiarity. |
+| **Dispatch** | Recommend the assignee using skills and certifications (§8.15), current load, availability/schedule and time off, past resolution history, and client familiarity. Certifications a ticket requires are hard constraints; the rest are weighed. Each recommendation shows its reasons. |
+| **Skill gaps** | Flag work no available person is qualified for, and certifications expiring that queues or partner programs depend on. |
 | **Ticket insights** | Summary, extracted entities (users, devices, error codes), similar past tickets, suggested KB articles, suggested next actions or Actions (forms). |
-| **Auto-documentation** | On resolve, draft a resolution summary, time-entry notes, and an optional KB article draft (enters the review workflow). |
+| **Auto-documentation** | On resolve, draft a resolution summary, time-entry notes, and an optional KB article draft (enters the review workflow). Draft time entries from a technician's ticket activity for them to confirm on their timesheet. |
 | **Client health** | See §8.9. |
 | **AI assistant** | Chat in the app (side panel, context-aware of the current page: ticket, client, workflow). Uses Huxley's MCP tools under the **user's own permissions**. Can answer questions, run Actions (with confirmation), and build workflows. |
 
@@ -571,7 +573,7 @@ Guardrails:
 Huxley **generates** invoices from the work and sales it tracks, then **syncs** them to the MSP's accounting system through integrations. Huxley is the source of truth for *what to bill*. The accounting system is the system of record for posted invoices, payments, AR, and tax filing. Huxley does not process payments itself.
 
 - **Invoice sources**:
-  - Billable time entries. Agreement-aware: each entry is classified as covered or billable.
+  - Billable time entries. Agreement-aware: each entry is classified as covered or billable. Optionally only time on approved timesheets (§8.15).
   - Expenses.
   - Project billing (§8.14): fixed fee, milestone, T&M, not-to-exceed.
   - Product and sales order lines.
@@ -622,6 +624,54 @@ Huxley **generates** invoices from the work and sales it tracks, then **syncs** 
 - **Events**: `project.created`, `project.status_changed`, `project.milestone_reached`, `project.task_completed`, `project.budget_threshold`, `project.overdue`.
 
 ---
+
+### 8.15 Workforce: skills, certifications, availability and timesheets
+
+The `workforce` module describes the MSP's people: what they can do, when they're available, and the time they work. Dispatch, project resource planning and billing all use it.
+
+- **Skills:**
+  - A skills catalog, in categories such as *Microsoft 365*, *Networking* or *Security*. Each skill is rated on levels: *learning*, *working*, *proficient*, *expert*.
+  - Each person has skills at a level. A level is either self-assessed or verified by a lead, with who verified it and when.
+  - **Requirements:** queues, ticket types and ticket templates can require skills, with a minimum level. AI triage (§8.8) can also suggest the skills a ticket needs.
+  - A **skills matrix** view shows people against skills, with gaps highlighted per queue or team.
+- **Certifications:**
+  - A catalog of certifications, each with a vendor, name, code, and validity period, such as Microsoft *Azure Administrator* or Cisco *CCNA*.
+  - What a person holds: when earned, when it expires, the credential ID and verification link, and an evidence attachment.
+  - **Expiry events:** `certification.expiring` (at configurable lead times) and `certification.expired` feed a default reminder workflow, to the person and their lead.
+  - **Hard requirements:** a queue or ticket type can require a certification. Dispatch then only assigns its work to someone holding it, unexpired. This suits regulated clients, or vendors that require certified engineers.
+  - **Partner-program coverage:** for example, how many people hold each certification a vendor partner program counts, and when that will change.
+- **Availability:**
+  - **Working schedule:** each person has a working schedule (hours per weekday, timezone), which defaults from their team.
+  - **Time off:** requested and approved through the approval step.
+  - **Uses:**
+    - Dispatch skips people who are away or outside their hours.
+    - Capacity planning (§8.14) uses expected hours.
+    - Timesheets compare logged time against expected time.
+- **Time entries:**
+  - Logged on tickets and project tasks (§8.2, §8.14), or as non-ticket time with a work type: *admin*, *internal meeting*, *training*, *travel* or *time off*.
+  - Each entry is billable or not, has a work type and notes, and can be linked to an agreement.
+  - Technicians can use a timer, and AI can draft entries from their ticket activity for them to confirm.
+- **Timesheets:**
+  - A timesheet covers a period, weekly by default and configurable.
+  - **Flow:** the person submits it, their lead (team lead, manager, or a configured approver) approves it or rejects it with comments, and approved timesheets lock their entries.
+  - **Corrections:** reopening an approved timesheet is audited and goes back through review.
+  - **Reminders** are system workflows, so their rules can be changed. They go out for:
+    - unsubmitted or late timesheets
+    - days logged under expected hours
+    - entries missing notes
+  - **Uses:** billing runs can use only approved time (§8.11). A payroll export (CSV, or an integration pack) uses approved time and time off.
+- **Analysis** (dashboards in §8.12):
+  - utilization: billable over available hours
+  - billable percentage
+  - hours by client, agreement, work type and queue
+  - overtime and under-logging
+  - estimate against actual on tickets and project tasks
+  - trends per person and team
+- **Permissions:**
+  - `workforce:read`
+  - `workforce:manage`: catalogs, people's skills and certifications.
+  - `timesheet:submit`: one's own.
+  - `timesheet:approve`, scoped to the people one leads.
 
 ## 9. Custom Datasets
 
@@ -991,6 +1041,12 @@ The TypeScript SDK lives in the monorepo (`packages/sdk`), so it changes in lock
 | Automation-only deployments | Every non-core feature is a module that can be turned off, instance-wide or per provider org. | §8.0, ADR-017 |
 | Observability | OpenTelemetry throughout | §13.3, ADR-015 |
 | Script sandboxes (2026-11-23) | Runners start each script in a rootless Podman container inside the runner container by default; Kubernetes Jobs (with a gVisor runtime class where available) are an option for installs on Kubernetes. Runners never get the Docker socket. | §6.9 |
+
+### 18.1.1 Resolved later
+
+| Question | Decision | Where reflected |
+|---|---|---|
+| Skills, certifications and timesheets (2026-11-24) | Added as the `workforce` module. Skills, certifications and availability come in Phase 5, with dispatch. Timesheets come in Phase 6, with agreements. Dashboards are in Phase 7, and AI dispatch and skill gaps in Phase 8. | §8.15, plan Phases 5–8 |
 
 ### 18.2 Still open
 
