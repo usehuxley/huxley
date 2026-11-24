@@ -20,6 +20,48 @@ fn dataset_error(e: DatasetError) -> Json {
     }
 }
 
+/// The value at dot path `path` in `item` (a key containing dots is tried
+/// whole first; list items by index).
+fn at_path<'a>(item: &'a Json, path: &str) -> Option<&'a Json> {
+    if let Some(found) = item.get(path) {
+        return Some(found);
+    }
+    path.split('.').try_fold(item, |v, key| match v {
+        Json::Array(items) => items.get(key.parse::<usize>().ok()?),
+        _ => v.get(key),
+    })
+}
+
+/// Each item of `rows` turned into a row by `map` (column → path).
+fn map_rows(rows: &[Json], map: &serde_json::Map<String, Json>) -> Result<Vec<Json>, Json> {
+    let mut paths = Vec::with_capacity(map.len());
+    for (column, path) in map {
+        let Some(path) = path.as_str() else {
+            return Err(error(
+                "input",
+                format!("map.{column} is a path, e.g. address.city"),
+            ));
+        };
+        paths.push((column, path));
+    }
+    Ok(rows
+        .iter()
+        .map(|item| {
+            Json::Object(
+                paths
+                    .iter()
+                    .map(|(column, path)| {
+                        (
+                            (*column).clone(),
+                            at_path(item, path).cloned().unwrap_or(Json::Null),
+                        )
+                    })
+                    .collect(),
+            )
+        })
+        .collect())
+}
+
 impl Engine {
     /// The run's organization and every one below it.
     async fn subtree(&self, org_id: Uuid) -> Result<Vec<Uuid>, Json> {
@@ -132,6 +174,15 @@ impl Engine {
         let Some(rows) = input["rows"].as_array() else {
             return Err(error("input", "rows is a list of objects"));
         };
+        let mapped;
+        let rows = match &input["map"] {
+            Json::Null => rows,
+            Json::Object(map) => {
+                mapped = map_rows(rows, map)?;
+                &mapped
+            }
+            _ => return Err(error("input", "map is an object of column: path")),
+        };
         let replace = match &input["replace"] {
             Json::Null => false,
             Json::Bool(b) => *b,
@@ -151,5 +202,30 @@ impl Engine {
             .await
             .map_err(|e| error("internal", e.to_string()))?;
         Ok(json!({ "written": written }))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn rows_are_mapped_by_path() {
+        let items = vec![
+            json!({ "userPrincipalName": "ada@x", "address": { "city": "Leeds" }, "@odata.type": "user" }),
+            json!({ "userPrincipalName": "bob@x" }),
+        ];
+        let map =
+            json!({ "upn": "userPrincipalName", "city": "address.city", "kind": "@odata.type" });
+        let rows = map_rows(&items, map.as_object().unwrap()).unwrap();
+        assert_eq!(
+            rows[0],
+            json!({ "upn": "ada@x", "city": "Leeds", "kind": "user" })
+        );
+        assert_eq!(
+            rows[1],
+            json!({ "upn": "bob@x", "city": null, "kind": null })
+        );
+        assert!(map_rows(&items, json!({ "upn": 3 }).as_object().unwrap()).is_err());
     }
 }

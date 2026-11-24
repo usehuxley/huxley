@@ -840,6 +840,10 @@ pub struct DatasetUpsert {
     /// Replace all of that organization's rows (a full refresh).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub replace: Option<Value>,
+    /// Build each row from an item of `rows`: column name → dot path into
+    /// the item (e.g. `upn: userPrincipalName`, `city: address.city`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub map: Option<Value>,
 }
 
 /// An email to send (`core.email`).

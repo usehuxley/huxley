@@ -131,6 +131,9 @@
         "dataset": {
           "type": "string"
         },
+        "map": {
+          "description": "Build each row from an item of `rows`: column name → dot path into\nthe item (e.g. `upn: userPrincipalName`, `city: address.city`)."
+        },
         "org_id": {
           "description": "The organization the rows belong to (default: the run's).",
           "type": [
