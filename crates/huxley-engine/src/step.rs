@@ -61,6 +61,16 @@ pub(crate) enum Executed {
     Waiting(Json),
 }
 
+/// A step's output, or the failure it ended with.
+impl From<Result<Json, Json>> for Executed {
+    fn from(result: Result<Json, Json>) -> Self {
+        match result {
+            Ok(output) => Self::Done(output),
+            Err(failure) => Self::Failed(failure),
+        }
+    }
+}
+
 impl Engine {
     pub(crate) async fn execute_step(&self, job: &Job, worker: &str) -> EngineResult<()> {
         let (Some(run_id), Some(key)) = (job.run_id, job.step_key.as_deref()) else {
@@ -194,10 +204,7 @@ impl Engine {
                     Err(e) => Executed::Failed(error("internal", e.to_string())),
                 }
             }
-            Step::HttpRequest(_) => match crate::http::request(&self.egress, input).await {
-                Ok(output) => Executed::Done(output),
-                Err(failure) => Executed::Failed(failure),
-            },
+            Step::HttpRequest(_) => crate::http::request(&self.egress, input).await.into(),
             Step::IntegrationAction(_) => match self.call_action(run_id, org_id, input).await {
                 Ok(Ok(output)) => Executed::Done(output),
                 // Over the rate limit: wait for the next window (not a retry).
@@ -212,45 +219,26 @@ impl Engine {
                 Err(e) => Executed::Failed(error("internal", e.to_string())),
             },
             Step::Notify(_) => Executed::Notify(input.clone()),
-            Step::Email(_) => match self.send_email(input).await {
-                Ok(output) => Executed::Done(output),
-                Err(failure) => Executed::Failed(failure),
-            },
-            Step::DatasetQuery(_) => match self.query_dataset(org_id, input).await {
-                Ok(output) => Executed::Done(output),
-                Err(failure) => Executed::Failed(failure),
-            },
+            Step::Email(_) => self.send_email(input).await.into(),
+            Step::DatasetQuery(_) => self.query_dataset(org_id, input).await.into(),
             Step::ContactFind(_)
             | Step::ContactUpsert(_)
             | Step::CompanyGet(_)
-            | Step::CompanyUpdate(_) => {
-                match self
-                    .crm_step(step.type_name(), org_id, input, record.tainted)
-                    .await
-                {
-                    Ok(output) => Executed::Done(output),
-                    Err(failure) => Executed::Failed(failure),
-                }
+            | Step::CompanyUpdate(_) => self
+                .crm_step(step.type_name(), org_id, input, record.tainted)
+                .await
+                .into(),
+            Step::MailFetch(_) | Step::TicketFromEmail(_) => {
+                self.desk_step(step.type_name(), org_id, input).await.into()
             }
-            Step::TicketFromEmail(_) => match self.ticket_from_email(org_id, input).await {
-                Ok(output) => Executed::Done(output),
-                Err(failure) => Executed::Failed(failure),
-            },
-            Step::DatasetUpsert(_) => {
-                match self.upsert_dataset(org_id, input, record.tainted).await {
-                    Ok(output) => Executed::Done(output),
-                    Err(failure) => Executed::Failed(failure),
-                }
-            }
-            Step::AiPrompt(_) | Step::AiClassify(_) | Step::AiExtract(_) => {
-                match self
-                    .ai_step(step.type_name(), org_id, run_id, input, record.tainted)
-                    .await
-                {
-                    Ok(output) => Executed::Done(output),
-                    Err(failure) => Executed::Failed(failure),
-                }
-            }
+            Step::DatasetUpsert(_) => self
+                .upsert_dataset(org_id, input, record.tainted)
+                .await
+                .into(),
+            Step::AiPrompt(_) | Step::AiClassify(_) | Step::AiExtract(_) => self
+                .ai_step(step.type_name(), org_id, run_id, input, record.tainted)
+                .await
+                .into(),
             Step::Subworkflow(_) => Executed::Subworkflow(input.clone()),
             Step::Wait(_) => {
                 let until = input["until"]

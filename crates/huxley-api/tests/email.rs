@@ -494,7 +494,14 @@ async fn mailboxes_are_checked_and_guarded() {
     assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
     let url = format!("/api/v1/mailboxes/{}", mb["id"].as_str().unwrap());
     let mut body = mb.clone();
-    for key in ["id", "orgId", "lastCheckedAt", "lastError", "createdAt"] {
+    for key in [
+        "id",
+        "orgId",
+        "lastCheckedAt",
+        "hasPassword",
+        "lastError",
+        "createdAt",
+    ] {
         body.as_object_mut().unwrap().remove(key);
     }
     body["enabled"] = json!(false);
@@ -597,4 +604,74 @@ async fn replies_reopen_resolved_tickets_and_closed_ones_start_over() {
     let out = process(&s, &l).await;
     assert_eq!(out.outcome, "ticket_created");
     assert_ne!(out.ticket_id, outcome.ticket_id);
+}
+
+#[tokio::test]
+async fn imap_mailboxes_keep_their_password_sealed() {
+    let Some(s) = setup().await else { return };
+    let address = format!("imap@{}.example", Uuid::now_v7().simple());
+    let (status, problem) = s
+        .call(
+            &s.owner,
+            "POST",
+            "/api/v1/mailboxes",
+            Some(
+                json!({ "orgId": s.provider, "name": "Imap", "address": address, "kind": "imap" }),
+            ),
+        )
+        .await;
+    assert_eq!(
+        (status, problem["errors"][0]["pointer"].as_str()),
+        (StatusCode::UNPROCESSABLE_ENTITY, Some("/imap"))
+    );
+    let mb = s
+        .ok(
+            &s.owner,
+            "POST",
+            "/api/v1/mailboxes",
+            Some(json!({
+            "orgId": s.provider, "name": "Imap", "address": address, "kind": "imap",
+            "imap": { "host": " Mail.Example.COM ", "username": "help" }, "password": "hunter2" })),
+        )
+        .await;
+    // Defaults filled in; the password is never shown.
+    assert_eq!(
+        mb["imap"],
+        json!({ "host": "mail.example.com", "port": 993, "security": "tls", "username": "help", "folder": "INBOX" })
+    );
+    assert_eq!(mb["hasPassword"], true);
+    assert!(!mb.to_string().contains("hunter2"));
+    let mut tx = begin_scoped(&s.pools.app, &OrgScope::System).await.unwrap();
+    let id = Uuid::parse_str(mb["id"].as_str().unwrap()).unwrap();
+    let sealed: Vec<u8> = sqlx::query_scalar("SELECT secret FROM sd_mailboxes WHERE id = $1")
+        .bind(id)
+        .fetch_one(&mut *tx)
+        .await
+        .unwrap();
+    tx.commit().await.unwrap();
+    assert!(!sealed.windows(7).any(|w| w == b"hunter2"));
+    let crypto =
+        huxley_crypto::Crypto::new(s.pools.app.clone(), huxley_crypto::testing::key_ring());
+    let plain = crypto
+        .decrypt(huxley_servicedesk::mail::secret_binding(id), &sealed)
+        .await
+        .unwrap();
+    assert_eq!(&plain[..], b"hunter2");
+
+    // Saving without a password keeps it.
+    let url = format!("/api/v1/mailboxes/{id}");
+    let saved = s
+        .ok(
+            &s.owner,
+            "PUT",
+            &url,
+            Some(json!({
+            "name": "Renamed", "address": address, "kind": "imap", "version": mb["version"],
+            "imap": { "host": "mail.example.com", "username": "help", "security": "start_tls" } })),
+        )
+        .await;
+    assert_eq!(
+        (saved["hasPassword"].clone(), saved["imap"]["port"].clone()),
+        (json!(true), json!(143))
+    );
 }

@@ -367,6 +367,9 @@ pub enum Step {
     /// the ticket it belongs to (the `servicedesk` module).
     #[serde(rename = "core.ticket.from_email")]
     TicketFromEmail(TicketFromEmailStep),
+    /// Fetch new mail from IMAP mailboxes (the `servicedesk` module).
+    #[serde(rename = "core.mail.fetch")]
+    MailFetch(MailFetchStep),
     /// Ask the organization's AI provider; the answer is text.
     #[serde(rename = "ai.prompt")]
     AiPrompt(AiPromptStep),
@@ -626,6 +629,11 @@ step!(TicketFromEmailStep {
     pub email: TicketFromEmail,
 });
 
+step!(MailFetchStep {
+    #[serde(default, rename = "with")]
+    pub fetch: MailFetch,
+});
+
 step!(AiPromptStep {
     #[serde(rename = "with")]
     pub ai: AiPrompt,
@@ -692,6 +700,7 @@ impl Step {
             CompanyGet,
             CompanyUpdate,
             TicketFromEmail,
+            MailFetch,
             AiPrompt,
             AiClassify,
             AiExtract
@@ -730,6 +739,7 @@ impl Step {
             Self::CompanyGet(_) => "core.company.get",
             Self::CompanyUpdate(_) => "core.company.update",
             Self::TicketFromEmail(_) => "core.ticket.from_email",
+            Self::MailFetch(_) => "core.mail.fetch",
             Self::AiPrompt(_) => "ai.prompt",
             Self::AiClassify(_) => "ai.classify",
             Self::AiExtract(_) => "ai.extract",
@@ -942,6 +952,21 @@ pub struct DatasetUpsert {
 pub struct TicketFromEmail {
     /// The email's id (from `email.received`).
     pub email_id: Value,
+}
+
+/// Mail to fetch (`core.mail.fetch`): new messages from the enabled IMAP
+/// mailboxes at the run's organization and below, or just `mailbox_id`, up
+/// to `limit` each (default 50). Each new message is kept and announced with
+/// `email.received`. A mailbox that can't be reached is reported (and shown
+/// on it) without failing the step. Output: `{ mailboxes: [{ mailbox_id,
+/// address, fetched, new } | { mailbox_id, address, error }] }`.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct MailFetch {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub mailbox_id: Option<Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub limit: Option<Value>,
 }
 
 /// Contacts to find (`core.contact.find`): by `email`, by `external_id`

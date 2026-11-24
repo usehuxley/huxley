@@ -127,7 +127,20 @@ A mailbox belongs to an organization, usually your MSP, and has an address. Its 
   - **Ignore the message.**
 - **Strip quoted replies and signatures** (on by default).
 
-**How mail arrives.** Fetching from Microsoft 365 and IMAP is coming. Until then, mail reaches a mailbox by being posted to it, the way a mail server's forwarding rule or a mail service's inbound webhook would:
+**How mail arrives.** There are two ways.
+
+**Fetched over IMAP.** For an `imap` mailbox, give the server (`host`, `port`, `security`, `username`, `folder`) and a password. The password is encrypted with your organization's key and is never shown again; leave it out when saving to keep it.
+
+- **Security:** `tls` (the default, port 993), `start_tls` (port 143), or `none` for a server on your own network.
+- **Folder:** `INBOX` by default.
+- **Polling:** the *Poll mailboxes* workflow fetches every minute.
+- **What gets fetched:**
+  - The first time, it takes the folder's unread messages, not its whole history.
+  - After that, it takes whatever is new, up to 50 messages per mailbox per run.
+- **Read flags:** fetched messages are marked read.
+- **Errors:** if a mailbox can't be reached (a wrong password, say), its error is kept on the mailbox, and the other mailboxes are still fetched.
+
+**Posted to Huxley.** For a `forward` mailbox, mail arrives by being posted to it, the way a mail server's forwarding rule or a mail service's inbound webhook would:
 
 ```sh
 curl -X POST https://huxley.example.com/api/v1/mailboxes/<id>/messages \
@@ -141,7 +154,7 @@ Posting needs `mailbox:ingest`, so give that to a service account used only for 
 
 ### Email to ticket
 
-The built-in pack **Service desk email** (`huxley/servicedesk-email`) adds the *Email to ticket* workflow. Install it at your MSP under **Settings → Packs → Built-in packs**. It runs the `core.ticket.from_email` step for each email, which does this:
+The built-in pack **Service desk email** (`huxley/servicedesk-email`) adds two workflows: *Poll mailboxes*, which fetches IMAP mail every minute, and *Email to ticket*. Install it at your MSP under **Settings → Packs → Built-in packs**. It runs the `core.ticket.from_email` step for each email, which does this:
 
 1. **Skips automatic mail:** out-of-office and other auto-replies, bounces, and list or bulk mail.
 2. **Skips loops:** mail from one of Huxley's own mailboxes, or more than 20 messages from one sender to a mailbox in an hour.
@@ -187,4 +200,4 @@ Mailboxes are managed with `servicedesk:configure`:
 
 ## Coming next
 
-Fetching mail from Microsoft 365 and IMAP, emailing replies to requesters, mailbox screens, holidays in business hours, time entries, merging and linking tickets, templates, saved views, and workflow steps for tickets.
+Fetching mail from Microsoft 365, emailing replies to requesters, mailbox screens, holidays in business hours, time entries, merging and linking tickets, templates, saved views, and workflow steps for tickets.

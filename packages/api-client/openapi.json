@@ -13032,6 +13032,34 @@
 					}
 				}
 			},
+			"ImapSettings": {
+				"type": "object",
+				"description": "Where an IMAP mailbox fetches from.",
+				"required": ["host", "username"],
+				"properties": {
+					"folder": {
+						"type": ["string", "null"],
+						"description": "Default `INBOX`."
+					},
+					"host": {
+						"type": "string"
+					},
+					"port": {
+						"type": ["integer", "null"],
+						"format": "int32",
+						"description": "Default 993 (TLS) or 143.",
+						"minimum": 0
+					},
+					"security": {
+						"type": ["string", "null"],
+						"description": "`tls` (default), `start_tls` or `none` (a server on your own network)."
+					},
+					"username": {
+						"type": "string"
+					}
+				},
+				"additionalProperties": false
+			},
 			"ImportRequest": {
 				"type": "object",
 				"required": ["orgId", "spec"],
@@ -13375,6 +13403,7 @@
 					"unknownSender",
 					"stripReplies",
 					"enabled",
+					"hasPassword",
 					"version",
 					"createdAt"
 				],
@@ -13389,9 +13418,24 @@
 					"enabled": {
 						"type": "boolean"
 					},
+					"hasPassword": {
+						"type": "boolean",
+						"description": "A password is stored (it's never shown)."
+					},
 					"id": {
 						"type": "string",
 						"format": "uuid"
+					},
+					"imap": {
+						"oneOf": [
+							{
+								"$ref": "#/components/schemas/ImapSettings",
+								"description": "Where it fetches from (`imap` mailboxes)."
+							},
+							{
+								"type": "null"
+							}
+						]
 					},
 					"kind": {
 						"type": "string",
@@ -13447,12 +13491,29 @@
 					"enabled": {
 						"type": ["boolean", "null"]
 					},
+					"imap": {
+						"oneOf": [
+							{
+								"$ref": "#/components/schemas/ImapSettings",
+								"description": "Where to fetch from (`imap` mailboxes)."
+							},
+							{
+								"type": "null"
+							}
+						]
+					},
 					"kind": {
 						"type": ["string", "null"],
 						"description": "`forward` (default), `imap` or `graph`."
 					},
 					"name": {
 						"type": "string"
+					},
+					"password": {
+						"type": ["string", "null"],
+						"format": "password",
+						"description": "The IMAP password; left out, the stored one stays.",
+						"writeOnly": true
 					},
 					"queueId": {
 						"type": ["string", "null"],

@@ -212,6 +212,23 @@ export const STEPS: StepSpec[] = [
 		]
 	},
 	{
+		type: 'core.mail.fetch',
+		label: 'Fetch mail',
+		description: 'Fetch new mail from IMAP mailboxes; each new message raises email.received.',
+		group: 'Data',
+		module: 'servicedesk',
+		template: {},
+		fields: [
+			{
+				path: 'with.mailbox_id',
+				label: 'Only this mailbox',
+				kind: 'expression',
+				hint: 'Default: every IMAP mailbox here and below'
+			},
+			{ path: 'with.limit', label: 'Limit', kind: 'expression', hint: 'Per mailbox; default 50' }
+		]
+	},
+	{
 		type: 'core.ticket.from_email',
 		label: 'Email to ticket',
 		description:

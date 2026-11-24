@@ -547,6 +547,28 @@ pub async fn set_assignment(
 /// The largest message a mailbox takes (with its attachments).
 const MAX_MESSAGE_BYTES: usize = 40 * 1024 * 1024;
 
+/// A mailbox password, sealed for mailbox `id` (none: no new password).
+async fn seal(
+    state: &AppState,
+    org: Uuid,
+    id: Uuid,
+    password: Option<&str>,
+) -> ApiResult<Option<Vec<u8>>> {
+    match password.filter(|p| !p.is_empty()) {
+        Some(p) if p.len() > 1024 => {
+            Err(ApiError::validation().with_field_error("/password", "at most 1024 characters"))
+        }
+        Some(p) => Ok(Some(
+            state
+                .crypto
+                .encrypt(org, mail::secret_binding(id), p.as_bytes())
+                .await
+                .map_err(|e| ApiError::internal(&e))?,
+        )),
+        None => Ok(None),
+    }
+}
+
 /// Checks `servicedesk:configure` and the module at a mailbox's organization.
 async fn configure_mailbox(state: &AppState, authed: &Authed, id: Uuid) -> ApiResult<()> {
     authed.require_instance(permissions::SERVICEDESK_CONFIGURE)?;
@@ -591,8 +613,11 @@ pub async fn create_mailbox(
     authed.require_instance(permissions::SERVICEDESK_CONFIGURE)?;
     require_module_at(&state, MODULE, body.org_id).await?;
     let ctx = authed.user.ctx.clone();
+    let id = huxley_core::new_id();
+    // Sealed before the transaction (see `Crypto::encrypt`).
+    let secret = seal(&state, body.org_id, id, body.mailbox.password.as_deref()).await?;
     let mailbox = scoped(&state, &OrgScope::System, async |tx| {
-        mail::create(tx, &ctx, body.org_id, &body.mailbox).await
+        mail::create(tx, &ctx, body.org_id, id, &body.mailbox, secret.as_deref()).await
     })
     .await?;
     Ok((StatusCode::CREATED, Json(mailbox)))
@@ -626,9 +651,11 @@ pub async fn update_mailbox(
 ) -> ApiResult<Json<Mailbox>> {
     configure_mailbox(&state, &authed, id).await?;
     let ctx = authed.user.ctx.clone();
+    let org = owner(&state, "sd_mailboxes", id).await?;
+    let secret = seal(&state, org, id, body.password.as_deref()).await?;
     Ok(Json(
         scoped(&state, &OrgScope::System, async |tx| {
-            mail::update(tx, &ctx, id, &body).await
+            mail::update(tx, &ctx, id, &body, secret.as_deref()).await
         })
         .await?,
     ))

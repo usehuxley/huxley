@@ -1,6 +1,6 @@
 [package]
 name = "huxley-mail"
-description = "Inbound email for Huxley: parsing, automatic-mail and loop detection, reply stripping, ticket tokens"
+description = "Inbound email for Huxley: parsing, automatic-mail detection, reply stripping, ticket tokens, and fetching over IMAP"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -9,9 +9,19 @@ repository.workspace = true
 publish = false
 
 [dependencies]
+async-imap.workspace = true
+futures-util.workspace = true
 mail-parser.workspace = true
+rustls.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+thiserror.workspace = true
+tokio = { workspace = true, features = ["net", "time"] }
+tokio-rustls.workspace = true
+webpki-roots.workspace = true
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
 
 [lints]
 workspace = true

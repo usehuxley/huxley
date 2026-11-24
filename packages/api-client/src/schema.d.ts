@@ -4784,6 +4784,20 @@ export interface components {
 			status: string;
 			version: string;
 		};
+		/** @description Where an IMAP mailbox fetches from. */
+		ImapSettings: {
+			/** @description Default `INBOX`. */
+			folder?: string | null;
+			host: string;
+			/**
+			 * Format: int32
+			 * @description Default 993 (TLS) or 143.
+			 */
+			port?: number | null;
+			/** @description `tls` (default), `start_tls` or `none` (a server on your own network). */
+			security?: string | null;
+			username: string;
+		};
 		ImportRequest: {
 			/** @description Defaults to one made from the spec's title. */
 			key?: string | null;
@@ -4919,8 +4933,11 @@ export interface components {
 			/** Format: date-time */
 			createdAt: string;
 			enabled: boolean;
+			/** @description A password is stored (it's never shown). */
+			hasPassword: boolean;
 			/** Format: uuid */
 			id: string;
+			imap?: components['schemas']['ImapSettings'] | null;
 			/** @description `forward` (posted to Huxley), `imap` or `graph` (fetched). */
 			kind: string;
 			/** Format: date-time */
@@ -4947,9 +4964,15 @@ export interface components {
 		MailboxInput: {
 			address: string;
 			enabled?: boolean | null;
+			imap?: components['schemas']['ImapSettings'] | null;
 			/** @description `forward` (default), `imap` or `graph`. */
 			kind?: string | null;
 			name: string;
+			/**
+			 * Format: password
+			 * @description The IMAP password; left out, the stored one stays.
+			 */
+			password?: string | null;
 			/** Format: uuid */
 			queueId?: string | null;
 			stripReplies?: boolean | null;
