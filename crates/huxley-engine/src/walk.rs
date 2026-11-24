@@ -319,7 +319,10 @@ impl<'a> Walker<'a> {
             | Step::Email(_)
             | Step::Notify(_)
             | Step::DatasetQuery(_)
-            | Step::DatasetUpsert(_) => self.external(step, &with_block(step), frame),
+            | Step::DatasetUpsert(_)
+            | Step::AiPrompt(_)
+            | Step::AiClassify(_)
+            | Step::AiExtract(_) => self.external(step, &with_block(step), frame),
             Step::Subworkflow(s) => {
                 let value = json!({ "workflow": s.workflow, "inputs": s.inputs, "wait": s.wait });
                 self.external(step, &value, frame)
@@ -771,6 +774,9 @@ fn with_block(step: &Step) -> Json {
         Step::Notify(s) => serde_json::to_value(&s.notification),
         Step::DatasetQuery(s) => serde_json::to_value(&s.query),
         Step::DatasetUpsert(s) => serde_json::to_value(&s.upsert),
+        Step::AiPrompt(s) => serde_json::to_value(&s.ai),
+        Step::AiClassify(s) => serde_json::to_value(&s.ai),
+        Step::AiExtract(s) => serde_json::to_value(&s.ai),
         _ => Ok(Json::Null),
     };
     value.unwrap_or(Json::Null)

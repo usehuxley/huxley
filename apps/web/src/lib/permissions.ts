@@ -11,6 +11,7 @@ export const SETTINGS_SECTIONS = [
 	{ key: 'jobs', label: 'Workflow jobs', permission: 'platform:jobs:manage' },
 	{ key: 'runners', label: 'Script runners', permission: 'platform:runners:manage' },
 	{ key: 'packs', label: 'Packs', permission: 'pack:install' },
+	{ key: 'ai', label: 'AI', permission: 'ai:manage' },
 	{ key: 'security', label: 'Security', permission: 'security:policy:manage' },
 	{ key: 'sso', label: 'Single sign-on', permission: 'security:policy:manage' }
 ] as const;

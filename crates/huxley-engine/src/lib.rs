@@ -10,6 +10,7 @@
 //! them; they begin once it commits.
 
 mod action;
+mod ai;
 pub mod approval;
 mod callback;
 mod dataset;

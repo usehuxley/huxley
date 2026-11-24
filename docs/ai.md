@@ -4,7 +4,7 @@ Huxley's AI features use **your own AI provider key** (design doc §10.1, ADR-03
 
 ## Setting up a provider
 
-Set it per organization with `PUT /api/v1/ai/provider`, which needs `ai:manage`:
+Set it under **Settings → AI**, or with `PUT /api/v1/ai/provider`. Both need `ai:manage`.
 
 ```json
 { "orgId": "…", "provider": {
@@ -30,6 +30,35 @@ How settings apply:
 - **Inheritance:** a provider set at your MSP serves it and every client below that has no provider of its own. Set one on a client to give it its own key and bill.
 - **Test:** `POST /api/v1/ai/provider/test?orgId=…` sends a tiny request and shows the reply or the error.
 - **Removing:** `DELETE /api/v1/ai/provider?orgId=…` removes an org's own provider.
+
+## AI steps in workflows
+
+```yaml
+- id: gist
+  type: ai.prompt
+  with: { prompt: "{{ trigger.body.text }}", system: "Summarize in one line." }
+- id: kind
+  type: ai.classify
+  with: { text: "{{ trigger.body.text }}", labels: [billing, onboarding, outage, other] }
+- id: who
+  type: ai.extract
+  with:
+    text: "{{ trigger.body.text }}"
+    schema: { type: object, properties: { name: { type: string }, start: { type: string, format: date } } }
+```
+
+| Step | Output |
+|---|---|
+| `ai.prompt` | `{text, model}` |
+| `ai.classify` | `{label, model}`: always one of `labels`, using the provider's structured output |
+| `ai.extract` | the data, as `schema` describes it (made strict: every field present, with `null` for anything the text doesn't say) |
+
+How the steps behave:
+
+- **Provider:** they use the run's organization's provider, its own or the nearest above, and `model` picks another model for one step.
+- **Logging:** each call is logged against its run.
+- **Failures:** a refusal, an exhausted budget or a provider error fails the step with `kind: ai`. Provider errors also carry `retryable` and `status`, for retry policies.
+- **No secrets:** AI steps refuse input that contains secrets, or values derived from them, so secrets are never sent to a provider.
 
 ## Budgets and the log
 
