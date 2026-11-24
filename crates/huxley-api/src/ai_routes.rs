@@ -48,6 +48,7 @@ pub struct OrgQuery {
 
 #[derive(Debug, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
+#[schema(as = AiProviderState)]
 pub struct ProviderState {
     /// This organization's own provider.
     pub own: Option<ProviderView>,
@@ -94,6 +95,7 @@ pub async fn get_provider(
 
 #[derive(Debug, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[schema(as = SetAiProviderRequest)]
 pub struct SetProviderRequest {
     pub org_id: Uuid,
     pub provider: ProviderInput,
@@ -164,6 +166,7 @@ pub async fn remove_provider(
 
 #[derive(Debug, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
+#[schema(as = AiProviderTest)]
 pub struct TestResult {
     pub ok: bool,
     /// The model's reply, or what went wrong.

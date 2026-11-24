@@ -36,6 +36,7 @@ fn invalid(at: &str, message: impl Into<String>) -> StoreError {
 /// Settings for an organization's provider.
 #[derive(Debug, Clone, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[schema(as = AiProviderInput)]
 pub struct ProviderInput {
     pub kind: ProviderKind,
     /// Default: the provider's default model, where it has one.
@@ -55,6 +56,7 @@ pub struct ProviderInput {
 /// A provider as shown (never with its key).
 #[derive(Debug, Clone, Serialize, ToSchema, sqlx::FromRow)]
 #[serde(rename_all = "camelCase")]
+#[schema(as = AiProviderView)]
 pub struct ProviderView {
     pub id: Uuid,
     pub org_id: Uuid,
@@ -254,6 +256,7 @@ pub async fn used_this_month(
 /// A logged call.
 #[derive(Debug, Clone, Serialize, ToSchema, sqlx::FromRow)]
 #[serde(rename_all = "camelCase")]
+#[schema(as = AiCall)]
 pub struct CallView {
     pub id: Uuid,
     pub org_id: Uuid,

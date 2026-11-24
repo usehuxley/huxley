@@ -33,7 +33,7 @@
 								"schema": {
 									"type": "array",
 									"items": {
-										"$ref": "#/components/schemas/CallView"
+										"$ref": "#/components/schemas/AiCall"
 									}
 								}
 							}
@@ -63,7 +63,7 @@
 						"content": {
 							"application/json": {
 								"schema": {
-									"$ref": "#/components/schemas/ProviderState"
+									"$ref": "#/components/schemas/AiProviderState"
 								}
 							}
 						}
@@ -78,7 +78,7 @@
 					"content": {
 						"application/json": {
 							"schema": {
-								"$ref": "#/components/schemas/SetProviderRequest"
+								"$ref": "#/components/schemas/SetAiProviderRequest"
 							}
 						}
 					},
@@ -89,7 +89,7 @@
 						"content": {
 							"application/json": {
 								"schema": {
-									"$ref": "#/components/schemas/ProviderState"
+									"$ref": "#/components/schemas/AiProviderState"
 								}
 							}
 						}
@@ -155,7 +155,7 @@
 						"content": {
 							"application/json": {
 								"schema": {
-									"$ref": "#/components/schemas/TestResult"
+									"$ref": "#/components/schemas/AiProviderTest"
 								}
 							}
 						}
@@ -8461,6 +8461,171 @@
 					}
 				}
 			},
+			"AiCall": {
+				"type": "object",
+				"description": "A logged call.",
+				"required": [
+					"id",
+					"orgId",
+					"feature",
+					"model",
+					"inputTokens",
+					"outputTokens",
+					"outcome",
+					"createdAt"
+				],
+				"properties": {
+					"createdAt": {
+						"type": "string",
+						"format": "date-time"
+					},
+					"error": {
+						"type": ["string", "null"]
+					},
+					"feature": {
+						"type": "string"
+					},
+					"id": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"inputTokens": {
+						"type": "integer",
+						"format": "int64"
+					},
+					"model": {
+						"type": "string"
+					},
+					"orgId": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"outcome": {
+						"type": "string"
+					},
+					"outputTokens": {
+						"type": "integer",
+						"format": "int64"
+					},
+					"runId": {
+						"type": ["string", "null"],
+						"format": "uuid"
+					}
+				}
+			},
+			"AiProviderInput": {
+				"type": "object",
+				"description": "Settings for an organization's provider.",
+				"required": ["kind"],
+				"properties": {
+					"apiKey": {
+						"type": ["string", "null"],
+						"description": "The API key. Required when first set; omit to keep the current one."
+					},
+					"baseUrl": {
+						"type": ["string", "null"]
+					},
+					"deployment": {
+						"type": ["string", "null"]
+					},
+					"kind": {
+						"$ref": "#/components/schemas/ProviderKind"
+					},
+					"model": {
+						"type": ["string", "null"],
+						"description": "Default: the provider's default model, where it has one."
+					},
+					"monthlyTokenBudget": {
+						"type": ["integer", "null"],
+						"format": "int64"
+					}
+				},
+				"additionalProperties": false
+			},
+			"AiProviderState": {
+				"type": "object",
+				"required": ["usedThisMonth"],
+				"properties": {
+					"effective": {
+						"oneOf": [
+							{
+								"$ref": "#/components/schemas/AiProviderView",
+								"description": "The one it uses: its own, or the nearest above it."
+							},
+							{
+								"type": "null"
+							}
+						]
+					},
+					"own": {
+						"oneOf": [
+							{
+								"$ref": "#/components/schemas/AiProviderView",
+								"description": "This organization's own provider."
+							},
+							{
+								"type": "null"
+							}
+						]
+					},
+					"usedThisMonth": {
+						"type": "integer",
+						"format": "int64",
+						"description": "Tokens the effective provider has used this month, across every\norganization using it."
+					}
+				}
+			},
+			"AiProviderTest": {
+				"type": "object",
+				"required": ["ok", "message"],
+				"properties": {
+					"message": {
+						"type": "string",
+						"description": "The model's reply, or what went wrong."
+					},
+					"model": {
+						"type": ["string", "null"]
+					},
+					"ok": {
+						"type": "boolean"
+					}
+				}
+			},
+			"AiProviderView": {
+				"type": "object",
+				"description": "A provider as shown (never with its key).",
+				"required": ["id", "orgId", "kind", "model", "updatedAt"],
+				"properties": {
+					"baseUrl": {
+						"type": ["string", "null"]
+					},
+					"deployment": {
+						"type": ["string", "null"]
+					},
+					"id": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"kind": {
+						"$ref": "#/components/schemas/ProviderKind"
+					},
+					"model": {
+						"type": "string"
+					},
+					"monthlyTokenBudget": {
+						"type": ["integer", "null"],
+						"format": "int64"
+					},
+					"orgId": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"updatedAt": {
+						"type": "string",
+						"format": "date-time"
+					}
+				}
+			},
 			"ApiError": {
 				"type": "object",
 				"description": "An RFC 9457 problem details response.",
@@ -8976,58 +9141,6 @@
 					},
 					"version": {
 						"type": "string"
-					}
-				}
-			},
-			"CallView": {
-				"type": "object",
-				"description": "A logged call.",
-				"required": [
-					"id",
-					"orgId",
-					"feature",
-					"model",
-					"inputTokens",
-					"outputTokens",
-					"outcome",
-					"createdAt"
-				],
-				"properties": {
-					"createdAt": {
-						"type": "string",
-						"format": "date-time"
-					},
-					"error": {
-						"type": ["string", "null"]
-					},
-					"feature": {
-						"type": "string"
-					},
-					"id": {
-						"type": "string",
-						"format": "uuid"
-					},
-					"inputTokens": {
-						"type": "integer",
-						"format": "int64"
-					},
-					"model": {
-						"type": "string"
-					},
-					"orgId": {
-						"type": "string",
-						"format": "uuid"
-					},
-					"outcome": {
-						"type": "string"
-					},
-					"outputTokens": {
-						"type": "integer",
-						"format": "int64"
-					},
-					"runId": {
-						"type": ["string", "null"],
-						"format": "uuid"
 					}
 				}
 			},
@@ -11451,104 +11564,76 @@
 			},
 			"ProviderInput": {
 				"type": "object",
-				"description": "Settings for an organization's provider.",
-				"required": ["kind"],
+				"description": "Settings for creating or replacing a provider. Optional fields fall back\nto the preset's defaults.",
+				"required": ["key", "name", "preset", "clientId", "allowedDomains"],
 				"properties": {
-					"apiKey": {
-						"type": ["string", "null"],
-						"description": "The API key. Required when first set; omit to keep the current one."
+					"allowedDomains": {
+						"type": "array",
+						"items": {
+							"type": "string"
+						},
+						"description": "At least one. Only addresses in these domains may sign in."
 					},
-					"baseUrl": {
+					"clientId": {
+						"type": "string"
+					},
+					"clientSecret": {
+						"type": ["string", "null"],
+						"format": "password",
+						"description": "Write-only. Omit on update to keep the stored secret."
+					},
+					"enabled": {
+						"type": "boolean"
+					},
+					"issuerUrl": {
+						"type": ["string", "null"],
+						"description": "Required except for `entra` (derived from `tenantId`) and `google`."
+					},
+					"jitProvisioning": {
+						"type": "boolean"
+					},
+					"key": {
+						"type": "string",
+						"description": "Lowercase letters, digits, and dashes; appears in sign-in URLs."
+					},
+					"mfaTrust": {
+						"oneOf": [
+							{
+								"$ref": "#/components/schemas/MfaTrust"
+							},
+							{
+								"type": "null"
+							}
+						]
+					},
+					"name": {
+						"type": "string",
+						"description": "Shown on the sign-in button, e.g. \"Microsoft\"."
+					},
+					"preset": {
+						"$ref": "#/components/schemas/Preset"
+					},
+					"roleClaim": {
 						"type": ["string", "null"]
 					},
-					"deployment": {
-						"type": ["string", "null"]
+					"scopes": {
+						"type": ["array", "null"],
+						"items": {
+							"type": "string"
+						}
 					},
-					"kind": {
-						"$ref": "#/components/schemas/ProviderKind"
-					},
-					"model": {
+					"tenantId": {
 						"type": ["string", "null"],
-						"description": "Default: the provider's default model, where it has one."
+						"description": "Entra directory (tenant) id."
 					},
-					"monthlyTokenBudget": {
-						"type": ["integer", "null"],
-						"format": "int64"
+					"trustEmail": {
+						"type": ["boolean", "null"]
 					}
-				},
-				"additionalProperties": false
+				}
 			},
 			"ProviderKind": {
 				"type": "string",
 				"enum": ["anthropic", "openai", "azure_openai", "openai_compatible"]
-			},
-			"ProviderState": {
-				"type": "object",
-				"required": ["usedThisMonth"],
-				"properties": {
-					"effective": {
-						"oneOf": [
-							{
-								"$ref": "#/components/schemas/ProviderView",
-								"description": "The one it uses: its own, or the nearest above it."
-							},
-							{
-								"type": "null"
-							}
-						]
-					},
-					"own": {
-						"oneOf": [
-							{
-								"$ref": "#/components/schemas/ProviderView",
-								"description": "This organization's own provider."
-							},
-							{
-								"type": "null"
-							}
-						]
-					},
-					"usedThisMonth": {
-						"type": "integer",
-						"format": "int64",
-						"description": "Tokens the effective provider has used this month, across every\norganization using it."
-					}
-				}
-			},
-			"ProviderView": {
-				"type": "object",
-				"description": "A provider as shown (never with its key).",
-				"required": ["id", "orgId", "kind", "model", "updatedAt"],
-				"properties": {
-					"baseUrl": {
-						"type": ["string", "null"]
-					},
-					"deployment": {
-						"type": ["string", "null"]
-					},
-					"id": {
-						"type": "string",
-						"format": "uuid"
-					},
-					"kind": {
-						"$ref": "#/components/schemas/ProviderKind"
-					},
-					"model": {
-						"type": "string"
-					},
-					"monthlyTokenBudget": {
-						"type": ["integer", "null"],
-						"format": "int64"
-					},
-					"orgId": {
-						"type": "string",
-						"format": "uuid"
-					},
-					"updatedAt": {
-						"type": "string",
-						"format": "date-time"
-					}
-				}
 			},
 			"PublicForm": {
 				"type": "object",
@@ -12422,6 +12507,20 @@
 					}
 				}
 			},
+			"SetAiProviderRequest": {
+				"type": "object",
+				"required": ["orgId", "provider"],
+				"properties": {
+					"orgId": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"provider": {
+						"$ref": "#/components/schemas/AiProviderInput"
+					}
+				},
+				"additionalProperties": false
+			},
 			"SetCurrentRequest": {
 				"type": "object",
 				"required": ["version"],
@@ -12474,20 +12573,6 @@
 						"description": "`false` turns it off here and below; `true` removes that."
 					}
 				}
-			},
-			"SetProviderRequest": {
-				"type": "object",
-				"required": ["orgId", "provider"],
-				"properties": {
-					"orgId": {
-						"type": "string",
-						"format": "uuid"
-					},
-					"provider": {
-						"$ref": "#/components/schemas/ProviderInput"
-					}
-				},
-				"additionalProperties": false
 			},
 			"SetRequirementRequest": {
 				"type": "object",
@@ -13197,22 +13282,6 @@
 					}
 				},
 				"additionalProperties": false
-			},
-			"TestResult": {
-				"type": "object",
-				"required": ["ok", "message"],
-				"properties": {
-					"message": {
-						"type": "string",
-						"description": "The model's reply, or what went wrong."
-					},
-					"model": {
-						"type": ["string", "null"]
-					},
-					"ok": {
-						"type": "boolean"
-					}
-				}
 			},
 			"TotpEnrollmentView": {
 				"type": "object",

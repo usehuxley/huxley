@@ -3181,6 +3181,68 @@ export interface components {
 			/** Format: uuid */
 			workflowId: string;
 		};
+		/** @description A logged call. */
+		AiCall: {
+			/** Format: date-time */
+			createdAt: string;
+			error?: string | null;
+			feature: string;
+			/** Format: uuid */
+			id: string;
+			/** Format: int64 */
+			inputTokens: number;
+			model: string;
+			/** Format: uuid */
+			orgId: string;
+			outcome: string;
+			/** Format: int64 */
+			outputTokens: number;
+			/** Format: uuid */
+			runId?: string | null;
+		};
+		/** @description Settings for an organization's provider. */
+		AiProviderInput: {
+			/** @description The API key. Required when first set; omit to keep the current one. */
+			apiKey?: string | null;
+			baseUrl?: string | null;
+			deployment?: string | null;
+			kind: components['schemas']['ProviderKind'];
+			/** @description Default: the provider's default model, where it has one. */
+			model?: string | null;
+			/** Format: int64 */
+			monthlyTokenBudget?: number | null;
+		};
+		AiProviderState: {
+			effective?: components['schemas']['AiProviderView'] | null;
+			own?: components['schemas']['AiProviderView'] | null;
+			/**
+			 * Format: int64
+			 * @description Tokens the effective provider has used this month, across every
+			 *     organization using it.
+			 */
+			usedThisMonth: number;
+		};
+		AiProviderTest: {
+			/** @description The model's reply, or what went wrong. */
+			message: string;
+			model?: string | null;
+			ok: boolean;
+		};
+		/** @description A provider as shown (never with its key). */
+		AiProviderView: {
+			baseUrl?: string | null;
+			deployment?: string | null;
+			/** Format: uuid */
+			id: string;
+			kind: components['schemas']['ProviderKind'];
+			model: string;
+			/** Format: int64 */
+			monthlyTokenBudget?: number | null;
+			/** Format: uuid */
+			orgId: string;
+			/** Format: date-time */
+			updatedAt: string;
+		};
 		/** @description An RFC 9457 problem details response. */
 		ApiError: {
 			detail?: string | null;
@@ -3380,25 +3442,6 @@ export interface components {
 			key: string;
 			name: string;
 			version: string;
-		};
-		/** @description A logged call. */
-		CallView: {
-			/** Format: date-time */
-			createdAt: string;
-			error?: string | null;
-			feature: string;
-			/** Format: uuid */
-			id: string;
-			/** Format: int64 */
-			inputTokens: number;
-			model: string;
-			/** Format: uuid */
-			orgId: string;
-			outcome: string;
-			/** Format: int64 */
-			outputTokens: number;
-			/** Format: uuid */
-			runId?: string | null;
 		};
 		CancelRunResponse: {
 			/** @description False if the run had already finished. */
@@ -4388,45 +4431,37 @@ export interface components {
 			redirectUri?: string | null;
 			roleMappings: components['schemas']['RoleMapping'][];
 		};
-		/** @description Settings for an organization's provider. */
+		/**
+		 * @description Settings for creating or replacing a provider. Optional fields fall back
+		 *     to the preset's defaults.
+		 */
 		ProviderInput: {
-			/** @description The API key. Required when first set; omit to keep the current one. */
-			apiKey?: string | null;
-			baseUrl?: string | null;
-			deployment?: string | null;
-			kind: components['schemas']['ProviderKind'];
-			/** @description Default: the provider's default model, where it has one. */
-			model?: string | null;
-			/** Format: int64 */
-			monthlyTokenBudget?: number | null;
+			/** @description At least one. Only addresses in these domains may sign in. */
+			allowedDomains: string[];
+			clientId: string;
+			/**
+			 * Format: password
+			 * @description Write-only. Omit on update to keep the stored secret.
+			 */
+			clientSecret?: string | null;
+			enabled?: boolean;
+			/** @description Required except for `entra` (derived from `tenantId`) and `google`. */
+			issuerUrl?: string | null;
+			jitProvisioning?: boolean;
+			/** @description Lowercase letters, digits, and dashes; appears in sign-in URLs. */
+			key: string;
+			mfaTrust?: components['schemas']['MfaTrust'] | null;
+			/** @description Shown on the sign-in button, e.g. "Microsoft". */
+			name: string;
+			preset: components['schemas']['Preset'];
+			roleClaim?: string | null;
+			scopes?: string[] | null;
+			/** @description Entra directory (tenant) id. */
+			tenantId?: string | null;
+			trustEmail?: boolean | null;
 		};
 		/** @enum {string} */
 		ProviderKind: 'anthropic' | 'openai' | 'azure_openai' | 'openai_compatible';
-		ProviderState: {
-			effective?: components['schemas']['ProviderView'] | null;
-			own?: components['schemas']['ProviderView'] | null;
-			/**
-			 * Format: int64
-			 * @description Tokens the effective provider has used this month, across every
-			 *     organization using it.
-			 */
-			usedThisMonth: number;
-		};
-		/** @description A provider as shown (never with its key). */
-		ProviderView: {
-			baseUrl?: string | null;
-			deployment?: string | null;
-			/** Format: uuid */
-			id: string;
-			kind: components['schemas']['ProviderKind'];
-			model: string;
-			/** Format: int64 */
-			monthlyTokenBudget?: number | null;
-			/** Format: uuid */
-			orgId: string;
-			/** Format: date-time */
-			updatedAt: string;
-		};
 		/** @description What someone with the link sees. */
 		PublicForm: {
 			description?: string | null;
@@ -4763,6 +4798,11 @@ export interface components {
 			lastSeenAt?: string | null;
 			userAgent?: string | null;
 		};
+		SetAiProviderRequest: {
+			/** Format: uuid */
+			orgId: string;
+			provider: components['schemas']['AiProviderInput'];
+		};
 		SetCurrentRequest: {
 			/** Format: int32 */
 			version: number;
@@ -4783,11 +4823,6 @@ export interface components {
 		SetOrgModuleRequest: {
 			/** @description `false` turns it off here and below; `true` removes that. */
 			enabled: boolean;
-		};
-		SetProviderRequest: {
-			/** Format: uuid */
-			orgId: string;
-			provider: components['schemas']['ProviderInput'];
 		};
 		SetRequirementRequest: {
 			required: boolean;
@@ -5095,12 +5130,6 @@ export interface components {
 			/** Format: uuid */
 			orgId: string;
 		};
-		TestResult: {
-			/** @description The model's reply, or what went wrong. */
-			message: string;
-			model?: string | null;
-			ok: boolean;
-		};
 		TotpEnrollmentView: {
 			/** @description `otpauth://` URI to show as a QR code. */
 			otpauthUri: string;
@@ -5382,7 +5411,7 @@ export interface operations {
 					[name: string]: unknown;
 				};
 				content: {
-					'application/json': components['schemas']['CallView'][];
+					'application/json': components['schemas']['AiCall'][];
 				};
 			};
 		};
@@ -5403,7 +5432,7 @@ export interface operations {
 					[name: string]: unknown;
 				};
 				content: {
-					'application/json': components['schemas']['ProviderState'];
+					'application/json': components['schemas']['AiProviderState'];
 				};
 			};
 		};
@@ -5417,7 +5446,7 @@ export interface operations {
 		};
 		requestBody: {
 			content: {
-				'application/json': components['schemas']['SetProviderRequest'];
+				'application/json': components['schemas']['SetAiProviderRequest'];
 			};
 		};
 		responses: {
@@ -5426,7 +5455,7 @@ export interface operations {
 					[name: string]: unknown;
 				};
 				content: {
-					'application/json': components['schemas']['ProviderState'];
+					'application/json': components['schemas']['AiProviderState'];
 				};
 			};
 			422: {
@@ -5482,7 +5511,7 @@ export interface operations {
 					[name: string]: unknown;
 				};
 				content: {
-					'application/json': components['schemas']['TestResult'];
+					'application/json': components['schemas']['AiProviderTest'];
 				};
 			};
 		};
