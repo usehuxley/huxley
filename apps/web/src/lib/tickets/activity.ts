@@ -44,6 +44,12 @@ export function describe(
 			return 'created the ticket';
 		case 'status':
 			return `changed the status from ${statusName(text(details.from))} to ${statusName(text(details.to))}`;
+		case 'sla': {
+			const clock = details.clock === 'response' ? 'the first response' : 'resolution';
+			return details.alert === 'warning'
+				? `warned that ${clock} is nearly due`
+				: `noted that ${clock} missed its SLA target`;
+		}
 		case 'note':
 			return details.kind === 'internal'
 				? 'added an internal note'

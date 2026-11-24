@@ -4,6 +4,7 @@
 	import { Lock, MessageSquare, Pencil } from '@lucide/svelte';
 	import { Badge, Button, Card, Dialog, Field, Input, Select, toast } from '@usehuxley/ui';
 	import { describe } from '#lib/tickets/activity.ts';
+	import { clockLines } from '#lib/tickets/sla.ts';
 	import {
 		LEVELS,
 		NOTE_KINDS,
@@ -20,6 +21,7 @@
 	let ticket = $derived(data.ticket);
 	let canWrite = $derived(data.user.grantedPermissions.includes('ticket:write'));
 	let priority = $derived(priorityOf(ticket.priority));
+	let clocks = $derived(clockLines(ticket));
 	let statuses = $derived(data.type?.statuses ?? []);
 	let statusName = (key: string) => statuses.find((s) => s.key === key)?.name ?? key;
 	let hasResolution = $derived(data.notes.some((n) => n.kind === 'resolution'));
@@ -342,6 +344,23 @@
 					{#if canWrite}<Button type="submit">Save</Button>{/if}
 				</form>
 			</Card>
+
+			{#if ticket.slaPolicy}
+				<Card title="SLA" description={ticket.slaPolicy}>
+					{#if clocks.length === 0}
+						<p class="text-sm text-fg-muted">No targets for {priority.short}.</p>
+					{:else}
+						<dl class="flex flex-col gap-2 text-sm">
+							{#each clocks as clock (clock.label)}
+								<div class="flex items-center justify-between gap-3">
+									<dt class="text-fg-muted">{clock.label}</dt>
+									<dd><Badge tone={clock.tone}>{clock.text}</Badge></dd>
+								</div>
+							{/each}
+						</dl>
+					{/if}
+				</Card>
+			{/if}
 
 			<Card title="Details">
 				<dl class="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-sm">

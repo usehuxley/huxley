@@ -56,6 +56,44 @@ Impact and urgency each run from 1 (high) to 3 (low). Together they set the prio
 
 You can choose a priority yourself instead. Your choice sticks when impact or urgency change later. Setting the priority to `auto` makes it follow the table again.
 
+## SLAs
+
+An SLA policy sets targets for each priority: how long until the first response, and until the ticket is resolved. Both are measured in business time.
+
+**Business hours.** A policy counts one of these:
+
+- **The client's site hours** (the default): the hours and timezone of the client's primary site. If that site has no hours, the policy's own hours apply.
+- **The policy's own hours**, in its timezone. Without one, it uses the organization's time zone setting.
+- **Around the clock.**
+
+**Which policy applies.** A policy can be set on any organization and applies to the organizations below it too. The nearest one wins. Without one, the default policy applies: the seeded **Standard** policy.
+
+| Priority | First response | Resolution |
+|---|---|---|
+| P1 | 30 minutes | 4 hours |
+| P2 | 1 hour | 8 hours |
+| P3 | 4 hours | 24 business hours |
+| P4 | 8 hours | 40 business hours |
+
+**How the clocks run:**
+
+- **Fixed terms.** A ticket keeps the terms it was opened under. Changing a policy affects new tickets only.
+- **Priority changes.** Changing a ticket's priority switches it to that priority's targets.
+- **First response.** This clock runs from creation, and the first public reply meets it. It doesn't pause.
+- **Resolution.** This clock pauses in waiting statuses (*Waiting on client*, *Waiting on third party*), stops when the ticket is resolved, and resumes if it's reopened.
+
+**Warnings and breaches.** At 75% of a target, and again when the target is missed, Huxley adds a line to the ticket's timeline. It also emits an event that workflows can be triggered by:
+
+- `ticket.sla_warning` for a warning.
+- `ticket.sla_breached` for a missed target.
+
+The event's `clock` field is `response` or `resolution`.
+
+**Setting up.** Managing policies and choosing them for organizations needs `servicedesk:configure`:
+
+- `GET`, `POST /api/v1/servicedesk/sla-policies`, and `PUT`, `DELETE /api/v1/servicedesk/sla-policies/{id}` manage policies.
+- `GET`, `PUT /api/v1/orgs/{id}/sla` reads or sets an organization's policy. Setting `null` makes it follow the one above.
+
 ## Notes and history
 
 Notes are one of three kinds:
@@ -99,4 +137,4 @@ Set them up under **Settings → Service queues**, which needs `servicedesk:conf
 
 ## Coming next
 
-SLAs, email intake, time entries, merging and linking tickets, templates, saved views, and workflow steps for tickets.
+Screens for setting up SLA policies, holidays in business hours, email intake, time entries, merging and linking tickets, templates, saved views, and workflow steps for tickets.

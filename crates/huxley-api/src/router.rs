@@ -51,7 +51,9 @@ pub fn router(state: AppState) -> Router {
         .nest("/security/sso/providers", sso_routes::admin_routes())
         .nest(
             "/orgs",
-            org_routes::routes().merge(crm_routes::org_routes()),
+            org_routes::routes()
+                .merge(crm_routes::org_routes())
+                .merge(desk_routes::org_routes()),
         )
         .merge(crm_routes::record_routes())
         .merge(desk_routes::routes())

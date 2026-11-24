@@ -10,6 +10,12 @@ group('ticket activity', () => {
 		);
 		expect(describe('note', { kind: 'internal' })).toBe('added an internal note');
 		expect(describe('note', { kind: 'public' })).toBe('replied');
+		expect(describe('sla', { clock: 'response', alert: 'breached' })).toBe(
+			'noted that the first response missed its SLA target'
+		);
+		expect(describe('sla', { clock: 'resolution', alert: 'warning' })).toBe(
+			'warned that resolution is nearly due'
+		);
 	});
 
 	it('describes field changes', () => {

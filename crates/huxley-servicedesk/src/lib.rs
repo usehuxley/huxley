@@ -4,8 +4,10 @@
 //! which decides what's visible; the API checks permissions and that the
 //! module is active.
 
+pub mod calendar;
 pub mod config;
 pub mod queues;
+pub mod sla;
 pub mod tickets;
 
 /// The module's key in the registry.
