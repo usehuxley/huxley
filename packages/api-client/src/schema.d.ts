@@ -3226,6 +3226,45 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
+	'/api/v1/ticket-views': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** Your saved ticket views and the shared ones. */
+		get: operations['list_views'];
+		put?: never;
+		/**
+		 * Saves a view of the Tickets list: yours, or `shared` (needs
+		 *     `servicedesk:configure`).
+		 */
+		post: operations['create_view'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/ticket-views/{id}': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		/** Renames a view or changes its filters; send back the `version` you read. */
+		put: operations['update_view'];
+		post?: never;
+		/** Deletes a view. */
+		delete: operations['delete_view'];
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
 	'/api/v1/tickets': {
 		parameters: {
 			query?: never;
@@ -7232,6 +7271,39 @@ export interface components {
 			transitions: {
 				[key: string]: string[];
 			};
+		};
+		TicketView: {
+			/**
+			 * @description `view` (a built-in view: `mine`, `unassigned`, `open`, `resolved`
+			 *     or `closed`), `queueId`, `orgId`, `search` and `priority` (e.g.
+			 *     `p1,p2`); each optional.
+			 */
+			filters: {
+				[key: string]: string;
+			};
+			/** Format: uuid */
+			id: string;
+			name: string;
+			/** @description Shared with everyone (else it's yours). */
+			shared: boolean;
+			/** Format: int32 */
+			version: number;
+		};
+		TicketViewInput: {
+			filters: {
+				[key: string]: string;
+			};
+			name: string;
+			/**
+			 * @description Shared with everyone (needs `servicedesk:configure`). Fixed once
+			 *     made.
+			 */
+			shared?: boolean;
+			/**
+			 * Format: int32
+			 * @description The version you read (updates only).
+			 */
+			version?: number | null;
 		};
 		TimeOff: {
 			decidedBy?: string | null;
@@ -14438,6 +14510,116 @@ export interface operations {
 			};
 		};
 	};
+	list_views: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['TicketView'][];
+				};
+			};
+		};
+	};
+	create_view: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['TicketViewInput'];
+			};
+		};
+		responses: {
+			201: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['TicketView'];
+				};
+			};
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	update_view: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['TicketViewInput'];
+			};
+		};
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['TicketView'];
+				};
+			};
+			409: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	delete_view: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			204: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content?: never;
+			};
+		};
+	};
 	list_tickets: {
 		parameters: {
 			query?: {
@@ -14449,6 +14631,8 @@ export interface operations {
 				state?: string | null;
 				/** @description Matches titles and the ticket number. */
 				search?: string | null;
+				/** @description Only these priorities, comma-separated: e.g. `p1,p2`. */
+				priority?: string | null;
 				/** @description 1 to 200 (default 50). */
 				limit?: number | null;
 				offset?: number | null;

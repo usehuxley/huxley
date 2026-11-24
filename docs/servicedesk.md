@@ -6,7 +6,9 @@ Turn it on under **Settings → Modules**. A provider organization can turn it o
 
 ## Tickets
 
-**Tickets** in the sidebar lists them by view (assigned to you, unassigned, all open, resolved, closed), with search and a queue filter. A ticket's page shows its conversation: replies, internal notes and every change, oldest first. Its status and properties are alongside.
+**Tickets** in the sidebar lists them by view (assigned to you, unassigned, all open, resolved, closed), with search and filters for priority and queue.
+
+**Saved views.** **Save view** keeps the filters you have now under a name, as a tab after the built-in views. The filters are the view, priority, queue, client and search. A saved view is yours, unless you share it with everyone, which needs `servicedesk:configure` (shared views show a people icon). A view holds filters, not tickets, so each person sees the tickets they're allowed to. A ticket's page shows its conversation: replies, internal notes and every change, oldest first. Its status and properties are alongside.
 
 A ticket belongs to the organization it's for, usually a client, and is visible to the people who can see that organization. Each has:
 
@@ -295,7 +297,7 @@ Workflows can open, read, find, update and dispatch tickets and add notes, with 
 
 | Method and path | What it does |
 |---|---|
-| `GET /api/v1/tickets` | List tickets. Filter with `orgId`, `queueId`, `assignee` (a person's id, `me` or `none`), `state` (`open`, the default, or `resolved`, `closed` or `all`) and `search` (title or number) |
+| `GET /api/v1/tickets` | List tickets. Filter with `orgId`, `queueId`, `assignee` (a person's id, `me` or `none`), `state` (`open`, the default, or `resolved`, `closed` or `all`), `priority` (e.g. `p1,p2`) and `search` (title or number) |
 | `POST /api/v1/tickets` | Create a ticket |
 | `GET /api/v1/tickets/{id}` | Read a ticket |
 | `PATCH /api/v1/tickets/{id}` | Edit a ticket. A field you leave out is unchanged. `null` clears the queue, requester or assignee |
@@ -306,6 +308,7 @@ Workflows can open, read, find, update and dispatch tickets and add notes, with 
 | `GET`, `POST /api/v1/tickets/{id}/links`, `DELETE /api/v1/tickets/{id}/links/{otherId}` | Read, add (by `otherId` or `reference`, as `related`, `parent` or `child`) and remove links |
 | `POST /api/v1/tickets/{id}/merge` | Merge into another ticket (`intoId` or `into`, a reference) |
 | `GET /api/v1/tickets/{id}/responses` | Canned responses filled in for a ticket and you |
+| `GET`, `POST /api/v1/ticket-views`, and `PUT`, `DELETE /api/v1/ticket-views/{id}` | Your saved views and the shared ones |
 | `GET /api/v1/my-work` | Your tickets (with why they need attention), your teams' unclaimed tickets, and what's unassigned in your queues |
 | `GET`, `POST /api/v1/queues`, and `GET`, `PUT`, `DELETE /api/v1/queues/{id}` | Read and manage queues, including `dispatch` (`manual`, `round_robin`, `load` or `skills`) |
 | `GET /api/v1/servicedesk/types` | Read ticket types, their statuses and allowed changes |
@@ -313,4 +316,4 @@ Workflows can open, read, find, update and dispatch tickets and add notes, with 
 
 ## Coming next
 
-Microsoft 365 mailboxes, sending through a mailbox's own server, holidays in business hours, time entries, templates, saved views, and a dispatch board.
+Microsoft 365 mailboxes, sending through a mailbox's own server, holidays in business hours, time entries, templates, and a dispatch board.

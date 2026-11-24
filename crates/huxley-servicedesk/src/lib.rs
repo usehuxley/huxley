@@ -15,6 +15,7 @@ pub mod queues;
 pub mod responses;
 pub mod sla;
 pub mod tickets;
+pub mod views;
 
 /// The module's key in the registry.
 pub const MODULE: &str = "servicedesk";

@@ -192,6 +192,7 @@ async fn find(tx: &mut PgConnection, input: &Json, org: Option<Uuid>) -> Result<
         assignee: text(input, "assignee")?,
         state: text(input, "state")?,
         search: text(input, "search")?,
+        priority: text(input, "priority")?,
         limit: input["limit"].as_i64(),
         offset: None,
     };

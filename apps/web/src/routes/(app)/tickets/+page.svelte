@@ -2,13 +2,14 @@
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
-	import { Plus, Search } from '@lucide/svelte';
-	import { Badge, Button, EmptyState, Input, Select } from '@usehuxley/ui';
+	import { enhance } from '$app/forms';
+	import { Bookmark, Plus, Search, Users } from '@lucide/svelte';
+	import { Badge, Button, Dialog, EmptyState, Field, Input, Select, toast } from '@usehuxley/ui';
 	import { VIEWS, ago, categoryTone, priorityOf } from '#lib/tickets/labels.ts';
 	import { missed } from '#lib/tickets/sla.ts';
 	import type { PageProps } from './$types';
 
-	let { data }: PageProps = $props();
+	let { data, form }: PageProps = $props();
 
 	let canWrite = $derived(data.user.grantedPermissions.includes('ticket:write'));
 	let queueOptions = $derived([
@@ -16,10 +17,47 @@
 		...data.queues.map((q) => ({ value: q.id, label: q.name }))
 	]);
 
+	let canShare = $derived(data.user.grantedPermissions.includes('servicedesk:configure'));
+	let saving = $state(false);
+	let active = $derived(data.views.find((v) => v.id === data.saved));
+	const PRIORITY_FILTERS = [
+		{ value: '', label: 'All priorities' },
+		{ value: 'p1', label: 'P1' },
+		{ value: 'p1,p2', label: 'P1 and P2' },
+		{ value: 'p2', label: 'P2' },
+		{ value: 'p3', label: 'P3' },
+		{ value: 'p4', label: 'P4' },
+		{ value: 'p3,p4', label: 'P3 and P4' }
+	];
+	let priorityOptions = $derived(
+		PRIORITY_FILTERS.some((p) => p.value === data.priority)
+			? PRIORITY_FILTERS
+			: [...PRIORITY_FILTERS, { value: data.priority, label: data.priority.toUpperCase() }]
+	);
+
+	/** A saved view's link: its filters on this page. */
+	function savedHref(view: (typeof data.views)[number]): string {
+		const f = view.filters as Record<string, string | undefined>;
+		const query = Object.entries({
+			view: f.view === 'mine' ? undefined : f.view,
+			queue: f.queueId,
+			org: f.orgId,
+			q: f.search,
+			priority: f.priority,
+			saved: view.id
+		})
+			.filter(([, value]) => value)
+			.map(([key, value]) => `${key}=${encodeURIComponent(value!)}`)
+			.join('&');
+		return `${page.url.pathname}?${query}`;
+	}
+
 	/** This page's URL with some parameters changed (and paging reset unless given). */
 	function withParams(changes: Record<string, string | number | undefined>): string {
 		const url = new URL(page.url.href);
 		if (!('page' in changes)) url.searchParams.delete('page');
+		// Changing a filter leaves the saved view.
+		if (!('saved' in changes)) url.searchParams.delete('saved');
 		for (const [key, value] of Object.entries(changes)) {
 			if (value === undefined || value === '' || (key === 'page' && value === 1)) {
 				url.searchParams.delete(key);
@@ -28,6 +66,13 @@
 			}
 		}
 		return `${url.pathname}${url.search}`;
+	}
+
+	function filterPriority(event: Event) {
+		// eslint-disable-next-line svelte/no-navigation-without-resolve -- same page, new query
+		void goto(withParams({ priority: (event.currentTarget as HTMLSelectElement).value }), {
+			reset: false
+		});
 	}
 
 	function filterQueue(event: Event) {
@@ -57,7 +102,7 @@
 
 	<nav aria-label="Ticket views" class="flex gap-1 overflow-x-auto border-b border-border">
 		{#each VIEWS as view (view.value)}
-			{@const active = data.view === view.value}
+			{@const active = !data.saved && data.view === view.value}
 			<!-- eslint-disable svelte/no-navigation-without-resolve -- this page with a new query -->
 			<a
 				href={withParams({ view: view.value === 'mine' ? undefined : view.value })}
@@ -67,6 +112,25 @@
 					: 'border-transparent text-fg-muted hover:text-fg'}"
 			>
 				{view.label}
+			</a>
+			<!-- eslint-enable svelte/no-navigation-without-resolve -->
+		{/each}
+		{#if data.views.length > 0}
+			<span class="my-2 w-px shrink-0 bg-border" aria-hidden="true"></span>
+		{/if}
+		{#each data.views as view (view.id)}
+			{@const on = data.saved === view.id}
+			<!-- eslint-disable svelte/no-navigation-without-resolve -- this page with a new query -->
+			<a
+				href={savedHref(view)}
+				aria-current={on ? 'page' : undefined}
+				title={view.shared ? 'Shared with everyone' : 'Yours'}
+				class="-mb-px flex shrink-0 items-center gap-1.5 border-b-2 px-3 py-2 text-sm font-medium {on
+					? 'border-accent text-fg'
+					: 'border-transparent text-fg-muted hover:text-fg'}"
+			>
+				{#if view.shared}<Users size={14} aria-hidden="true" />{/if}
+				{view.name}
 			</a>
 			<!-- eslint-enable svelte/no-navigation-without-resolve -->
 		{/each}
@@ -81,6 +145,15 @@
 			<Input id="q" name="q" value={data.search} placeholder="Title or number" class="w-64" />
 			<Button type="submit"><Search size={16} /> Search</Button>
 		</form>
+		<div class="w-40">
+			<label for="priority" class="sr-only">Priority</label>
+			<Select
+				id="priority"
+				value={data.priority}
+				options={priorityOptions}
+				onchange={filterPriority}
+			/>
+		</div>
 		{#if data.queues.length > 0}
 			<div class="w-48">
 				<label for="queue" class="sr-only">Queue</label>
@@ -94,6 +167,27 @@
 			</a>
 			<!-- eslint-enable svelte/no-navigation-without-resolve -->
 		{/if}
+		<div class="ml-auto flex gap-2">
+			{#if active && (!active.shared || canShare)}
+				<form
+					method="POST"
+					action="?/deleteView"
+					use:enhance={() =>
+						async ({ result, update }) => {
+							if (result.type === 'failure') {
+								const failed = result.data as { message?: string } | undefined;
+								toast.push({ title: failed?.message ?? 'Could not delete it.', tone: 'danger' });
+							}
+							await update();
+						}}
+				>
+					<input type="hidden" name="id" value={active.id} />
+					<Button type="submit" variant="ghost">Delete view</Button>
+				</form>
+			{:else if !active}
+				<Button onclick={() => (saving = true)}><Bookmark size={16} /> Save view</Button>
+			{/if}
+		</div>
 	</div>
 
 	{#if data.tickets.length === 0}
@@ -178,3 +272,58 @@
 		{/if}
 	{/if}
 </div>
+
+<Dialog bind:open={saving} title="Save this view">
+	<form
+		method="POST"
+		action="?/saveView"
+		class="flex flex-col gap-4"
+		use:enhance={() =>
+			async ({ result, update }) => {
+				if (result.type === 'failure') {
+					const failed = result.data as { message?: string } | undefined;
+					toast.push({ title: failed?.message ?? 'Could not save it.', tone: 'danger' });
+				} else {
+					saving = false;
+				}
+				await update({ reset: false });
+			}}
+	>
+		<input type="hidden" name="view" value={data.view} />
+		<input type="hidden" name="queueId" value={data.queueId} />
+		<input type="hidden" name="orgId" value={data.orgId} />
+		<input type="hidden" name="search" value={data.search} />
+		<input type="hidden" name="priority" value={data.priority} />
+		<p class="text-sm text-fg-muted">
+			Saves the filters you have now: {VIEWS.find((v) => v.value === data.view)
+				?.label}{data.priority
+				? `, ${data.priority.toUpperCase().replace(',', ' and ')}`
+				: ''}{data.queueId
+				? `, ${data.queues.find((q) => q.id === data.queueId)?.name ?? 'a queue'}`
+				: ''}{data.orgId ? ', one client' : ''}{data.search ? `, “${data.search}”` : ''}.
+		</p>
+		<Field
+			label="Name"
+			for="view-name"
+			error={(form as { errors?: Record<string, string> } | null)?.errors?.name}
+		>
+			<Input
+				id="view-name"
+				name="name"
+				required
+				maxlength={60}
+				placeholder="e.g. Urgent, unassigned"
+			/>
+		</Field>
+		{#if canShare}
+			<label class="flex items-center gap-2 text-sm text-fg">
+				<input type="checkbox" name="shared" />
+				Share with everyone
+			</label>
+		{/if}
+		<div class="flex justify-end gap-2">
+			<Button onclick={() => (saving = false)}>Cancel</Button>
+			<Button type="submit" variant="primary">Save</Button>
+		</div>
+	</form>
+</Dialog>
