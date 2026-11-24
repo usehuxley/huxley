@@ -139,6 +139,15 @@ impl Engine {
     }
 
     /// The expression engine, for checking documents.
+    /// AI calls for organizations, through the egress policy.
+    pub fn ai(&self) -> huxley_ai::Ai {
+        huxley_ai::Ai::new(
+            self.db.clone(),
+            self.crypto.clone(),
+            self.egress.client.clone(),
+        )
+    }
+
     pub fn expr(&self) -> &huxley_expr::Engine {
         &self.expr
     }

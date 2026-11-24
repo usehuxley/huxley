@@ -4,6 +4,65 @@
  */
 
 export interface paths {
+	'/api/v1/ai/calls': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** Recent AI calls made for an organization. */
+		get: operations['list_ai_calls'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/ai/provider': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** An organization's AI provider (never its key), and the one it uses. */
+		get: operations['get_ai_provider'];
+		/**
+		 * Sets an organization's AI provider; organizations below without their
+		 *     own use it too. The key is stored encrypted and never shown again.
+		 */
+		put: operations['set_ai_provider'];
+		post?: never;
+		/** Removes an organization's own AI provider. */
+		delete: operations['remove_ai_provider'];
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/ai/provider/test': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/**
+		 * Sends a tiny request through the provider the organization uses (it's
+		 *     logged and counts toward the budget).
+		 */
+		post: operations['test_ai_provider'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
 	'/api/v1/approvals': {
 		parameters: {
 			query?: never;
@@ -3322,6 +3381,25 @@ export interface components {
 			name: string;
 			version: string;
 		};
+		/** @description A logged call. */
+		CallView: {
+			/** Format: date-time */
+			createdAt: string;
+			error?: string | null;
+			feature: string;
+			/** Format: uuid */
+			id: string;
+			/** Format: int64 */
+			inputTokens: number;
+			model: string;
+			/** Format: uuid */
+			orgId: string;
+			outcome: string;
+			/** Format: int64 */
+			outputTokens: number;
+			/** Format: uuid */
+			runId?: string | null;
+		};
 		CancelRunResponse: {
 			/** @description False if the run had already finished. */
 			cancelled: boolean;
@@ -4310,34 +4388,44 @@ export interface components {
 			redirectUri?: string | null;
 			roleMappings: components['schemas']['RoleMapping'][];
 		};
-		/**
-		 * @description Settings for creating or replacing a provider. Optional fields fall back
-		 *     to the preset's defaults.
-		 */
+		/** @description Settings for an organization's provider. */
 		ProviderInput: {
-			/** @description At least one. Only addresses in these domains may sign in. */
-			allowedDomains: string[];
-			clientId: string;
+			/** @description The API key. Required when first set; omit to keep the current one. */
+			apiKey?: string | null;
+			baseUrl?: string | null;
+			deployment?: string | null;
+			kind: components['schemas']['ProviderKind'];
+			/** @description Default: the provider's default model, where it has one. */
+			model?: string | null;
+			/** Format: int64 */
+			monthlyTokenBudget?: number | null;
+		};
+		/** @enum {string} */
+		ProviderKind: 'anthropic' | 'openai' | 'azure_openai' | 'openai_compatible';
+		ProviderState: {
+			effective?: components['schemas']['ProviderView'] | null;
+			own?: components['schemas']['ProviderView'] | null;
 			/**
-			 * Format: password
-			 * @description Write-only. Omit on update to keep the stored secret.
+			 * Format: int64
+			 * @description Tokens the effective provider has used this month, across every
+			 *     organization using it.
 			 */
-			clientSecret?: string | null;
-			enabled?: boolean;
-			/** @description Required except for `entra` (derived from `tenantId`) and `google`. */
-			issuerUrl?: string | null;
-			jitProvisioning?: boolean;
-			/** @description Lowercase letters, digits, and dashes; appears in sign-in URLs. */
-			key: string;
-			mfaTrust?: components['schemas']['MfaTrust'] | null;
-			/** @description Shown on the sign-in button, e.g. "Microsoft". */
-			name: string;
-			preset: components['schemas']['Preset'];
-			roleClaim?: string | null;
-			scopes?: string[] | null;
-			/** @description Entra directory (tenant) id. */
-			tenantId?: string | null;
-			trustEmail?: boolean | null;
+			usedThisMonth: number;
+		};
+		/** @description A provider as shown (never with its key). */
+		ProviderView: {
+			baseUrl?: string | null;
+			deployment?: string | null;
+			/** Format: uuid */
+			id: string;
+			kind: components['schemas']['ProviderKind'];
+			model: string;
+			/** Format: int64 */
+			monthlyTokenBudget?: number | null;
+			/** Format: uuid */
+			orgId: string;
+			/** Format: date-time */
+			updatedAt: string;
 		};
 		/** @description What someone with the link sees. */
 		PublicForm: {
@@ -4696,6 +4784,11 @@ export interface components {
 			/** @description `false` turns it off here and below; `true` removes that. */
 			enabled: boolean;
 		};
+		SetProviderRequest: {
+			/** Format: uuid */
+			orgId: string;
+			provider: components['schemas']['ProviderInput'];
+		};
 		SetRequirementRequest: {
 			required: boolean;
 		};
@@ -5002,6 +5095,12 @@ export interface components {
 			/** Format: uuid */
 			orgId: string;
 		};
+		TestResult: {
+			/** @description The model's reply, or what went wrong. */
+			message: string;
+			model?: string | null;
+			ok: boolean;
+		};
 		TotpEnrollmentView: {
 			/** @description `otpauth://` URI to show as a QR code. */
 			otpauthUri: string;
@@ -5267,6 +5366,127 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+	list_ai_calls: {
+		parameters: {
+			query: {
+				orgId: string;
+			};
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['CallView'][];
+				};
+			};
+		};
+	};
+	get_ai_provider: {
+		parameters: {
+			query: {
+				orgId: string;
+			};
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ProviderState'];
+				};
+			};
+		};
+	};
+	set_ai_provider: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['SetProviderRequest'];
+			};
+		};
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ProviderState'];
+				};
+			};
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	remove_ai_provider: {
+		parameters: {
+			query: {
+				orgId: string;
+			};
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			204: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content?: never;
+			};
+			404: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	test_ai_provider: {
+		parameters: {
+			query: {
+				orgId: string;
+			};
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['TestResult'];
+				};
+			};
+		};
+	};
 	list_my_approvals: {
 		parameters: {
 			query?: never;

@@ -72,6 +72,7 @@ permissions! {
     PACK_INSTALL = "pack:install", Org, "Install, upgrade and export packs";
     DATASET_READ = "dataset:read", Org, "View datasets and their rows";
     DATASET_MANAGE = "dataset:manage", Org, "Create and change datasets, and write their rows";
+    AI_MANAGE = "ai:manage", Org, "Set up the AI provider (with its key and budget) and see AI usage";
     VARIABLE_MANAGE = "variable:manage", Org, "Set organization variables and secrets for workflows, and lock them for sub-organizations";
 }
 
