@@ -482,7 +482,19 @@ export const STEPS: StepSpec[] = [
 			},
 			{ path: 'with.title', label: 'Title', kind: 'expression' },
 			{ path: 'with.message', label: 'Message', kind: 'expression' },
-			{ path: 'with.url', label: 'Link', kind: 'text', hint: 'A path in the app, e.g. /runs' }
+			{ path: 'with.url', label: 'Link', kind: 'text', hint: 'A path in the app, e.g. /runs' },
+			{
+				path: 'with.kind',
+				label: 'Kind',
+				kind: 'text',
+				hint: "For people's channel choices: workflow.notification (default), ticket.assigned, ticket.replied or ticket.sla"
+			},
+			{
+				path: 'with.exclude',
+				label: 'Except',
+				kind: 'expression',
+				hint: 'User ids not to notify, e.g. whoever made the change'
+			}
 		]
 	},
 	{

@@ -40,6 +40,9 @@ pub struct Kind {
     pub email: bool,
     /// Can't be turned off (security notices).
     pub mandatory: bool,
+    /// The module it belongs to: offered only while that module is on.
+    #[serde(skip)]
+    pub module: Option<&'static str>,
 }
 
 pub mod kinds {
@@ -52,6 +55,9 @@ pub mod kinds {
     pub const ROLE_GRANTED: &str = "access.role_granted";
     pub const TEAM_JOINED: &str = "access.team_joined";
     pub const WORKFLOW: &str = "workflow.notification";
+    pub const TICKET_ASSIGNED: &str = "ticket.assigned";
+    pub const TICKET_REPLIED: &str = "ticket.replied";
+    pub const TICKET_SLA: &str = "ticket.sla";
 
     pub const ALL: &[Kind] = &[
         Kind {
@@ -60,6 +66,7 @@ pub mod kinds {
             in_app: true,
             email: true,
             mandatory: true,
+            module: None,
         },
         Kind {
             key: MFA_CHANGED,
@@ -67,6 +74,7 @@ pub mod kinds {
             in_app: true,
             email: true,
             mandatory: true,
+            module: None,
         },
         Kind {
             key: API_TOKEN_CREATED,
@@ -74,6 +82,7 @@ pub mod kinds {
             in_app: true,
             email: true,
             mandatory: true,
+            module: None,
         },
         Kind {
             key: OAUTH_APP_CONNECTED,
@@ -81,6 +90,7 @@ pub mod kinds {
             in_app: true,
             email: true,
             mandatory: true,
+            module: None,
         },
         Kind {
             key: ROLE_GRANTED,
@@ -88,6 +98,7 @@ pub mod kinds {
             in_app: true,
             email: false,
             mandatory: false,
+            module: None,
         },
         Kind {
             key: TEAM_JOINED,
@@ -95,6 +106,7 @@ pub mod kinds {
             in_app: true,
             email: false,
             mandatory: false,
+            module: None,
         },
         Kind {
             key: WORKFLOW,
@@ -102,8 +114,39 @@ pub mod kinds {
             in_app: true,
             email: true,
             mandatory: false,
+            module: None,
+        },
+        Kind {
+            key: TICKET_ASSIGNED,
+            description: "A ticket was assigned to you or your team",
+            in_app: true,
+            email: true,
+            mandatory: false,
+            module: Some("servicedesk"),
+        },
+        Kind {
+            key: TICKET_REPLIED,
+            description: "A requester replied to a ticket of yours",
+            in_app: true,
+            email: true,
+            mandatory: false,
+            module: Some("servicedesk"),
+        },
+        Kind {
+            key: TICKET_SLA,
+            description: "A ticket of yours is close to, or past, an SLA target",
+            in_app: true,
+            email: true,
+            mandatory: false,
+            module: Some("servicedesk"),
         },
     ];
+
+    /// The kinds a workflow's `core.notify` may send as: not security or
+    /// access notices, which only Huxley sends.
+    pub fn sendable(key: &str) -> Option<&'static Kind> {
+        get(key).filter(|k| k.key == WORKFLOW || k.module.is_some())
+    }
 
     pub fn get(key: &str) -> Option<&'static Kind> {
         ALL.iter().find(|k| k.key == key)
@@ -311,6 +354,9 @@ pub async fn mark_all_read(conn: &mut PgConnection, user_id: Uuid) -> NotifyResu
 #[serde(rename_all = "camelCase")]
 pub struct Preference {
     pub kind: &'static str,
+    /// The module the kind belongs to, if any.
+    #[serde(skip)]
+    pub module: Option<&'static str>,
     pub description: &'static str,
     pub in_app: bool,
     pub email: bool,
@@ -323,6 +369,7 @@ pub async fn preferences(conn: &mut PgConnection, user_id: Uuid) -> NotifyResult
         let (in_app, email) = channels(conn, user_id, kind).await?;
         out.push(Preference {
             kind: kind.key,
+            module: kind.module,
             description: kind.description,
             in_app,
             email,

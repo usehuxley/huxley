@@ -695,15 +695,25 @@ pub async fn sweep(conn: &mut PgConnection) -> DeskResult<usize> {
     ];
     let mut marked = 0;
     for (clock, column, alert, condition) in checks {
-        let hits: Vec<(Uuid, Uuid, String, String, String)> =
+        let hits: Vec<AlertHit> =
             sqlx::query_as(sqlx::AssertSqlSafe(format!(
                 "UPDATE sd_ticket_sla l SET {column} = now() FROM sd_tickets t \
               WHERE t.id = l.ticket_id AND l.{column} IS NULL AND ({condition}) AND {LIVE} \
-              RETURNING t.id, t.org_id, t.number_prefix || '-' || t.number, t.title, t.priority"
+              RETURNING t.id, t.org_id, t.number_prefix || '-' || t.number AS reference, t.title, \
+                        t.priority, t.assignee_user_id AS assignee_user, t.assignee_team_id AS assignee_team"
             )))
             .fetch_all(&mut *conn)
             .await?;
-        for (id, org_id, reference, title, priority) in hits {
+        for AlertHit {
+            id,
+            org_id,
+            reference,
+            title,
+            priority,
+            assignee_user,
+            assignee_team,
+        } in hits
+        {
             let (event, kind) = match alert {
                 Alert::Warning => ("ticket.sla_warning", "warning"),
                 Alert::Breached => ("ticket.sla_breached", "breached"),
@@ -731,6 +741,8 @@ pub async fn sweep(conn: &mut PgConnection) -> DeskResult<usize> {
                         "title": title,
                         "priority": priority,
                         "clock": clock,
+                        "assigneeUserId": assignee_user,
+                        "assigneeTeamId": assignee_team,
                     }),
                 },
             )
@@ -739,6 +751,18 @@ pub async fn sweep(conn: &mut PgConnection) -> DeskResult<usize> {
         }
     }
     Ok(marked)
+}
+
+/// A ticket the sweeper just warned about or marked breached.
+#[derive(sqlx::FromRow)]
+struct AlertHit {
+    id: Uuid,
+    org_id: Uuid,
+    reference: String,
+    title: String,
+    priority: String,
+    assignee_user: Option<Uuid>,
+    assignee_team: Option<Uuid>,
 }
 
 /// How often the sweeper looks for warnings and breaches.

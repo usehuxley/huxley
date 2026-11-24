@@ -11,6 +11,7 @@ use axum::routing::{get, post, put};
 use axum::{Json, Router};
 use futures_util::Stream;
 use huxley_core::{Cursor, PageRequest};
+use huxley_db::{OrgScope, begin_scoped};
 use huxley_notify::{Channels, Notification, NotifyError, Preference};
 use serde::{Deserialize, Serialize};
 use tokio::sync::broadcast::error::RecvError;
@@ -155,10 +156,20 @@ pub async fn preferences(
     user: CurrentUser,
 ) -> ApiResult<Json<Vec<Preference>>> {
     let mut conn = state.db.acquire().await.map_err(db_err)?;
+    let all = huxley_notify::preferences(&mut conn, user.auth.user.id)
+        .await
+        .map_err(map_notify)?;
+    drop(conn);
+    // Kinds of modules that are off aren't offered.
+    let mut tx = begin_scoped(&state.db, &OrgScope::System)
+        .await
+        .map_err(db_err)?;
+    let enabled = huxley_modules::enabled_set(&mut tx).await.map_err(db_err)?;
+    tx.commit().await.map_err(db_err)?;
     Ok(Json(
-        huxley_notify::preferences(&mut conn, user.auth.user.id)
-            .await
-            .map_err(map_notify)?,
+        all.into_iter()
+            .filter(|p| p.module.is_none_or(|m| enabled.contains(m)))
+            .collect(),
     ))
 }
 

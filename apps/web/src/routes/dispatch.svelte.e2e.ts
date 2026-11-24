@@ -24,14 +24,14 @@ async function owner(): Promise<APIRequestContext> {
 	return api;
 }
 
-/** Installs and publishes the built-in Service desk dispatch pack at the root. */
-async function installPack(api: APIRequestContext): Promise<void> {
+/** Installs and publishes a built-in pack (e.g. `huxley/servicedesk-dispatch`) at the root. */
+async function installPack(api: APIRequestContext, key: string): Promise<void> {
 	const orgs = (await (await api.get('/api/v1/orgs')).json()) as {
 		id: string;
 		parentId: string | null;
 	}[];
 	const orgId = orgs.find((o) => o.parentId === null)!.id;
-	const review = await api.post(`/api/v1/packs/builtin/huxley/servicedesk-dispatch?orgId=${orgId}`);
+	const review = await api.post(`/api/v1/packs/builtin/${key}?orgId=${orgId}`);
 	expect(review.status()).toBe(201);
 	const { uploadId, version, installedVersion } = (await review.json()) as {
 		uploadId: string;
@@ -62,7 +62,8 @@ test.describe('dispatch', () => {
 		const queue = `Dispatch ${stamp}`;
 		const title = `Monitor flickers ${stamp}`;
 		const api = await owner();
-		await installPack(api);
+		await installPack(api, 'huxley/servicedesk-dispatch');
+		await installPack(api, 'huxley/servicedesk-notifications');
 		const orgs = (await (await api.get('/api/v1/orgs')).json()) as {
 			id: string;
 			parentId: string | null;
@@ -107,5 +108,18 @@ test.describe('dispatch', () => {
 		).toBeVisible();
 		await expect(page.getByText(queue, { exact: true })).toBeVisible();
 		await expect(page.getByRole('list', { name: `Unassigned in ${queue}` })).toBeHidden();
+
+		// And I was told: dispatch assigned it, not me.
+		const reference = await page
+			.getByRole('list', { name: 'Assigned to me' })
+			.getByRole('listitem')
+			.filter({ hasText: title })
+			.locator('span.tabular-nums')
+			.innerText();
+		const number = reference.split(' · ')[0];
+		await expect(async () => {
+			await page.goto('/notifications');
+			await expect(page.getByText(`${number} assigned to you`)).toBeVisible({ timeout: 500 });
+		}).toPass({ timeout: 20_000 });
 	});
 });

@@ -38,6 +38,25 @@ const SOURCES: &[Source] = &[
         )],
     },
     Source {
+        manifest: include_str!("../builtin/servicedesk-notifications/pack.yaml"),
+        files: &[
+            (
+                "workflows/notify-assignment.yaml",
+                include_str!(
+                    "../builtin/servicedesk-notifications/workflows/notify-assignment.yaml"
+                ),
+            ),
+            (
+                "workflows/notify-reply.yaml",
+                include_str!("../builtin/servicedesk-notifications/workflows/notify-reply.yaml"),
+            ),
+            (
+                "workflows/notify-sla.yaml",
+                include_str!("../builtin/servicedesk-notifications/workflows/notify-sla.yaml"),
+            ),
+        ],
+    },
+    Source {
         manifest: include_str!("../builtin/msgraph/pack.yaml"),
         files: &[
             (

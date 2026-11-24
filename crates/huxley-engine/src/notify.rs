@@ -108,6 +108,30 @@ pub(crate) async fn recipients(
     Ok(Ok(users))
 }
 
+/// The user ids in `exclude`: one, a list, or none. Empty values (an
+/// expression that came out empty) are ignored.
+fn excluded(exclude: &Json) -> Result<Vec<Uuid>, Json> {
+    let items: Vec<&Json> = match exclude {
+        Json::Null => Vec::new(),
+        Json::Array(items) => items.iter().collect(),
+        one => vec![one],
+    };
+    items
+        .into_iter()
+        .filter_map(|item| match item {
+            Json::Null => None,
+            Json::String(s) if s.trim().is_empty() || s == "None" => None,
+            Json::String(s) => Some(
+                s.trim()
+                    .trim_start_matches("user:")
+                    .parse::<Uuid>()
+                    .map_err(|_| error("definition", format!("exclude: {s:?} isn't a user id"))),
+            ),
+            _ => Some(Err(error("definition", "exclude lists user ids"))),
+        })
+        .collect()
+}
+
 /// Sends the notification. The outer result is infrastructure; the inner one
 /// is the step's outcome.
 pub(crate) async fn send(
@@ -119,8 +143,24 @@ pub(crate) async fn send(
     if title.is_empty() {
         return Ok(Err(error("definition", "a notification needs a title")));
     }
-    let users = match recipients(&mut *conn, org_id, &input["to"]).await? {
-        Ok(users) => users,
+    let kind = match input["kind"].as_str().filter(|k| !k.is_empty()) {
+        None => huxley_notify::kinds::WORKFLOW,
+        Some(key) => match huxley_notify::kinds::sendable(key) {
+            Some(kind) => kind.key,
+            None => {
+                return Ok(Err(error(
+                    "definition",
+                    format!("{key:?} isn't a kind workflows can send"),
+                )));
+            }
+        },
+    };
+    let exclude = match excluded(&input["exclude"]) {
+        Ok(ids) => ids,
+        Err(e) => return Ok(Err(e)),
+    };
+    let users: Vec<Uuid> = match recipients(&mut *conn, org_id, &input["to"]).await? {
+        Ok(users) => users.into_iter().filter(|u| !exclude.contains(u)).collect(),
         Err(e) => return Ok(Err(e)),
     };
     let message = input["message"].as_str().unwrap_or_default();
@@ -130,7 +170,7 @@ pub(crate) async fn send(
     for user_id in &users {
         let notice = huxley_notify::Notice {
             user_id: *user_id,
-            kind: huxley_notify::kinds::WORKFLOW,
+            kind,
             title,
             body: message,
             link,
