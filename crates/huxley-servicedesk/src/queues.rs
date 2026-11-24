@@ -19,6 +19,9 @@ pub struct Queue {
     pub org_id: Uuid,
     pub name: String,
     pub description: String,
+    /// How new tickets are assigned: `manual`, `round_robin`, `load` or
+    /// `skills`.
+    pub dispatch: String,
     /// Tickets in it that aren't closed.
     pub open_tickets: i64,
     /// Member people's ids.
@@ -38,6 +41,10 @@ pub struct QueueInput {
     pub name: String,
     #[serde(default)]
     pub description: Option<String>,
+    /// How new tickets are assigned: `manual` (the default), `round_robin`,
+    /// `load` or `skills`. Kept when not given on update.
+    #[serde(default)]
+    pub dispatch: Option<String>,
     /// Member people (replaces the list when given).
     #[serde(default)]
     pub user_ids: Option<Vec<Uuid>>,
@@ -49,7 +56,7 @@ pub struct QueueInput {
     pub version: Option<i32>,
 }
 
-const SELECT: &str = "SELECT q.id, q.org_id, q.name, q.description, q.version, q.created_at, q.archived_at, \
+const SELECT: &str = "SELECT q.id, q.org_id, q.name, q.description, q.dispatch, q.version, q.created_at, q.archived_at, \
     (SELECT count(*) FROM sd_tickets t WHERE t.queue_id = q.id AND t.closed_at IS NULL) AS open_tickets, \
     ARRAY(SELECT m.user_id FROM sd_queue_members m WHERE m.queue_id = q.id AND m.user_id IS NOT NULL) AS user_ids, \
     ARRAY(SELECT m.team_id FROM sd_queue_members m WHERE m.queue_id = q.id AND m.team_id IS NOT NULL) AS team_ids \
@@ -82,6 +89,17 @@ pub async fn get(conn: &mut PgConnection, id: Uuid) -> DeskResult<Queue> {
 fn name(input: &QueueInput) -> DeskResult<String> {
     text("name", Some(&input.name), 100)?
         .ok_or_else(|| DeskError::invalid("name", "a queue needs a name"))
+}
+
+fn dispatch(input: &QueueInput) -> DeskResult<Option<&str>> {
+    match input.dispatch.as_deref() {
+        None => Ok(None),
+        Some(d) if crate::dispatch::STRATEGIES.contains(&d) => Ok(Some(d)),
+        Some(_) => Err(DeskError::invalid(
+            "dispatch",
+            "manual, round_robin, load or skills",
+        )),
+    }
 }
 
 fn taken(e: sqlx::Error) -> DeskError {
@@ -149,12 +167,16 @@ pub async fn create(
 ) -> DeskResult<Queue> {
     let name = name(input)?;
     let description = text("description", input.description.as_deref(), 2000)?.unwrap_or_default();
+    let strategy = dispatch(input)?.unwrap_or("manual");
     let id = huxley_core::new_id();
-    sqlx::query("INSERT INTO sd_queues (id, org_id, name, description) VALUES ($1, $2, $3, $4)")
+    sqlx::query(
+        "INSERT INTO sd_queues (id, org_id, name, description, dispatch) VALUES ($1, $2, $3, $4, $5)",
+    )
         .bind(id)
         .bind(org_id)
         .bind(&name)
         .bind(&description)
+        .bind(strategy)
         .execute(&mut *conn)
         .await
         .map_err(taken)?;
@@ -165,7 +187,7 @@ pub async fn create(
         AuditRecord::new("queue.created")
             .org(org_id)
             .target("queue", id)
-            .details(json!({ "name": name })),
+            .details(json!({ "name": name, "dispatch": strategy })),
     )
     .await?;
     get(conn, id).await
@@ -179,15 +201,18 @@ pub async fn update(
 ) -> DeskResult<Queue> {
     let name = name(input)?;
     let description = text("description", input.description.as_deref(), 2000)?.unwrap_or_default();
+    let strategy = dispatch(input)?;
     let before = get(conn, id).await?;
     let changed = sqlx::query(
-        "UPDATE sd_queues SET name = $3, description = $4, version = version + 1 \
+        "UPDATE sd_queues SET name = $3, description = $4, dispatch = coalesce($5, dispatch), \
+                version = version + 1 \
           WHERE id = $1 AND version = $2",
     )
     .bind(id)
     .bind(input.version.unwrap_or(-1))
     .bind(&name)
     .bind(&description)
+    .bind(strategy)
     .execute(&mut *conn)
     .await
     .map_err(taken)?
@@ -202,7 +227,7 @@ pub async fn update(
         AuditRecord::new("queue.updated")
             .org(before.org_id)
             .target("queue", id)
-            .details(json!({ "before": before.name, "after": name })),
+            .details(json!({ "before": before.name, "after": name, "dispatch": strategy })),
     )
     .await?;
     get(conn, id).await

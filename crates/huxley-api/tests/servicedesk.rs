@@ -650,6 +650,52 @@ async fn queues() {
 }
 
 #[tokio::test]
+async fn queue_dispatch_setting() {
+    let Some(s) = setup().await else { return };
+    let name = unique("Dispatch");
+    let q = s
+        .ok(
+            &s.owner,
+            "POST",
+            "/api/v1/queues",
+            Some(json!({ "orgId": s.provider, "name": name })),
+        )
+        .await;
+    let qurl = format!("/api/v1/queues/{}", q["id"].as_str().unwrap());
+    // Dispatch: manual unless chosen, checked, and kept when not given.
+    assert_eq!(q["dispatch"], "manual");
+    let (status, problem) = s
+        .call(
+            &s.owner,
+            "PUT",
+            &qurl,
+            Some(json!({ "name": name, "version": q["version"], "dispatch": "lottery" })),
+        )
+        .await;
+    assert_eq!(
+        (status, field(&problem)),
+        (StatusCode::UNPROCESSABLE_ENTITY, "/dispatch".into())
+    );
+    let q = s
+        .ok(
+            &s.owner,
+            "PUT",
+            &qurl,
+            Some(json!({ "name": name, "version": q["version"], "dispatch": "load" })),
+        )
+        .await;
+    let q = s
+        .ok(
+            &s.owner,
+            "PUT",
+            &qurl,
+            Some(json!({ "name": name, "version": q["version"] })),
+        )
+        .await;
+    assert_eq!(q["dispatch"], "load");
+}
+
+#[tokio::test]
 async fn listing_filters() {
     let Some(s) = setup().await else { return };
     let q = s

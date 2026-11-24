@@ -6,7 +6,7 @@ The **Workforce** module (`workforce`) describes your people:
 - the certifications they hold, and when they expire
 - what different kinds of work require of them
 
-It also records when people are available: their working hours and time off. Dispatch uses all of this to send work to people who can do it and are there to do it. Timesheets come later.
+It also records when people are available: their working hours and time off. [Dispatch](servicedesk.md#dispatch) uses all of this to send work to people who can do it and are there to do it. Timesheets come later.
 
 Turn it on under **Settings → Modules**.
 

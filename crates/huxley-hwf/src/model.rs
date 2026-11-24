@@ -382,6 +382,10 @@ pub enum Step {
     /// Add a note to a ticket (the `servicedesk` module).
     #[serde(rename = "core.ticket.note")]
     TicketNote(TicketNoteStep),
+    /// Assign a ticket by its queue's dispatch strategy (the `servicedesk`
+    /// module).
+    #[serde(rename = "core.ticket.dispatch")]
+    TicketDispatch(TicketDispatchStep),
     /// Fetch new mail from IMAP mailboxes (the `servicedesk` module).
     #[serde(rename = "core.mail.fetch")]
     MailFetch(MailFetchStep),
@@ -678,6 +682,11 @@ step!(TicketNoteStep {
     pub ticket: TicketNote,
 });
 
+step!(TicketDispatchStep {
+    #[serde(rename = "with")]
+    pub ticket: TicketDispatch,
+});
+
 step!(MailFetchStep {
     #[serde(default, rename = "with")]
     pub fetch: MailFetch,
@@ -756,6 +765,7 @@ impl Step {
             TicketFind,
             TicketUpdate,
             TicketNote,
+            TicketDispatch,
             AiPrompt,
             AiClassify,
             AiExtract
@@ -800,6 +810,7 @@ impl Step {
             Self::TicketFind(_) => "core.ticket.find",
             Self::TicketUpdate(_) => "core.ticket.update",
             Self::TicketNote(_) => "core.ticket.note",
+            Self::TicketDispatch(_) => "core.ticket.dispatch",
             Self::TicketEmailReply(_) => "core.ticket.email_reply",
             Self::AiPrompt(_) => "ai.prompt",
             Self::AiClassify(_) => "ai.classify",
@@ -1139,6 +1150,23 @@ pub struct TicketNote {
     pub body: Value,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub kind: Option<Value>,
+}
+
+/// A ticket to assign (`core.ticket.dispatch`) by its queue's strategy
+/// (`round_robin`, `load` or `skills`), or `strategy` to use another. With
+/// the `workforce` module on, people missing a required certification, away
+/// or outside their hours are skipped. A ticket that's already assigned is
+/// left alone unless `reassign` is true. Output: `{ assigned, assignee,
+/// strategy, reason, considered }`; `reason` says why nobody was chosen
+/// (`assigned`, `no_queue`, `manual`, `nobody_available`).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct TicketDispatch {
+    pub ticket_id: Value,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub strategy: Option<Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reassign: Option<Value>,
 }
 
 /// Mail to fetch (`core.mail.fetch`): new messages from the enabled IMAP

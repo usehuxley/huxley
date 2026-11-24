@@ -19,6 +19,8 @@ const POLL_MAILBOXES: &str =
     include_str!("../../huxley-packs/builtin/servicedesk-email/workflows/poll-mailboxes.yaml");
 const EMAIL_TO_TICKET: &str =
     include_str!("../../huxley-packs/builtin/servicedesk-email/workflows/email-to-ticket.yaml");
+const DISPATCH_TICKETS: &str =
+    include_str!("../../huxley-packs/builtin/servicedesk-dispatch/workflows/dispatch-tickets.yaml");
 
 struct Harness {
     _db: IsolatedDb,
@@ -91,6 +93,16 @@ impl Harness {
 
     /// Runs a workflow document at the provider until it finishes.
     async fn run(&self, yaml: &str, inputs: Json) -> (RunStatus, Option<Json>, Option<Json>) {
+        self.run_triggered(yaml, inputs, json!({})).await
+    }
+
+    /// Like `run`, as if started by `trigger`.
+    async fn run_triggered(
+        &self,
+        yaml: &str,
+        inputs: Json,
+        trigger: Json,
+    ) -> (RunStatus, Option<Json>, Option<Json>) {
         let document = serde_json::to_value(huxley_hwf::parse_yaml(yaml).unwrap()).unwrap();
         let mut tx = begin_scoped(&self.pools.app, &OrgScope::System)
             .await
@@ -105,7 +117,7 @@ impl Harness {
                     version: None,
                     document: Some(document),
                     trigger_type: "event".into(),
-                    trigger: json!({}),
+                    trigger,
                     inputs,
                     actor_id: None,
                 },
@@ -683,4 +695,349 @@ async fn ticket_steps_stay_in_their_organization_and_refuse_secrets() {
         .await;
     assert_eq!(status, RunStatus::Failed);
     assert!(error.unwrap().to_string().contains("secrets"));
+}
+
+async fn enable(h: &Harness, module: &str) {
+    let ctx = RequestContext::system(Via::System);
+    let mut tx = begin_scoped(&h.pools.app, &OrgScope::System).await.unwrap();
+    huxley_modules::set_enabled(&mut tx, &ctx, module, true, false)
+        .await
+        .unwrap();
+    tx.commit().await.unwrap();
+}
+
+/// Runs SQL in system scope.
+async fn exec(h: &Harness, sql: &str, binds: &[Uuid]) {
+    let mut tx = begin_scoped(&h.pools.app, &OrgScope::System).await.unwrap();
+    let mut q = sqlx::query(sqlx::AssertSqlSafe(sql.to_owned()));
+    for b in binds {
+        q = q.bind(*b);
+    }
+    q.execute(&mut *tx).await.unwrap();
+    tx.commit().await.unwrap();
+}
+
+async fn person(h: &Harness, name: &str) -> Uuid {
+    let id = Uuid::now_v7();
+    let mut tx = begin_scoped(&h.pools.app, &OrgScope::System).await.unwrap();
+    sqlx::query("INSERT INTO users (id, email, display_name) VALUES ($1, $2, $3)")
+        .bind(id)
+        .bind(format!("{}@msp.example", id.simple()))
+        .bind(name)
+        .execute(&mut *tx)
+        .await
+        .unwrap();
+    tx.commit().await.unwrap();
+    id
+}
+
+/// A queue at the provider with `dispatch`, and these people (and a team
+/// of `team`) as members.
+async fn queue(h: &Harness, dispatch: &str, people: &[Uuid], team: &[Uuid]) -> Uuid {
+    let ctx = RequestContext::system(Via::System);
+    let mut tx = begin_scoped(&h.pools.app, &OrgScope::System).await.unwrap();
+    let team_id = Uuid::now_v7();
+    sqlx::query("INSERT INTO teams (id, name) VALUES ($1, $2)")
+        .bind(team_id)
+        .bind(unique("Team"))
+        .execute(&mut *tx)
+        .await
+        .unwrap();
+    for user in team {
+        sqlx::query("INSERT INTO team_members (team_id, user_id) VALUES ($1, $2)")
+            .bind(team_id)
+            .bind(user)
+            .execute(&mut *tx)
+            .await
+            .unwrap();
+    }
+    let input: huxley_servicedesk::queues::QueueInput = serde_json::from_value(json!({
+        "name": unique("Queue"),
+        "dispatch": dispatch,
+        "userIds": people,
+        "teamIds": if team.is_empty() { json!([]) } else { json!([team_id]) },
+    }))
+    .unwrap();
+    let q = huxley_servicedesk::queues::create(&mut tx, &ctx, h.provider, &input)
+        .await
+        .unwrap();
+    tx.commit().await.unwrap();
+    q.id
+}
+
+/// A new ticket at the client, in `queue`.
+async fn ticket_in(h: &Harness, queue: Option<Uuid>) -> Uuid {
+    let ctx = RequestContext::system(Via::System);
+    let mut tx = begin_scoped(&h.pools.app, &OrgScope::System).await.unwrap();
+    let t = huxley_servicedesk::tickets::create(
+        &mut tx,
+        &ctx,
+        &huxley_servicedesk::tickets::NewTicket {
+            org_id: h.client,
+            title: "Printer jammed".into(),
+            queue_id: queue,
+            ..Default::default()
+        },
+        "T",
+        None,
+    )
+    .await
+    .unwrap();
+    tx.commit().await.unwrap();
+    t.id
+}
+
+const DISPATCH_STEP: &str = r#"  inputs: { type: object, properties: { ticket: { type: string }, strategy: {} } }
+  steps:
+    - id: d
+      type: core.ticket.dispatch
+      with: { ticket_id: "{{ inputs.ticket }}", strategy: "{{ inputs.strategy }}" }
+  outputs:
+    result: "{{ steps.d.output }}"
+"#;
+
+impl Harness {
+    /// Dispatches a ticket; the outcome.
+    async fn dispatch(&self, ticket: Uuid, strategy: Option<&str>) -> Json {
+        let (status, outputs, error) = self
+            .run(
+                &workflow(DISPATCH_STEP),
+                json!({ "ticket": ticket, "strategy": strategy }),
+            )
+            .await;
+        assert_eq!(status, RunStatus::Succeeded, "{error:?}");
+        outputs.unwrap()["result"].clone()
+    }
+
+    /// Who got it, by name.
+    async fn assignee(&self, ticket: Uuid, strategy: Option<&str>) -> Json {
+        let out = self.dispatch(ticket, strategy).await;
+        assert_eq!(out["reason"], "dispatched", "{out}");
+        out["assignee"]["name"].clone()
+    }
+}
+
+#[tokio::test]
+async fn dispatch_takes_turns_or_follows_load() {
+    let Some(h) = harness().await else { return };
+    let (amy, ben, cy) = (
+        person(&h, "Amy").await,
+        person(&h, "Ben").await,
+        person(&h, "Cy").await,
+    );
+    // Cy is a member through a team.
+    let q = queue(&h, "round_robin", &[amy, ben], &[cy]).await;
+    let mut got = Vec::new();
+    for _ in 0..4 {
+        got.push(h.assignee(ticket_in(&h, Some(q)).await, None).await);
+    }
+    assert_eq!(got, [json!("Amy"), json!("Ben"), json!("Cy"), json!("Amy")]);
+
+    // Ben gets two more by hand (not his turn taken). By load: Ben has 3,
+    // Amy 2, Cy 1, though Ben is next in turn.
+    for _ in 0..2 {
+        let extra = ticket_in(&h, None).await;
+        exec(
+            &h,
+            "UPDATE sd_tickets SET assignee_user_id = $2 WHERE id = $1",
+            &[extra, ben],
+        )
+        .await;
+    }
+    let t = ticket_in(&h, Some(q)).await;
+    assert_eq!(h.assignee(t, Some("load")).await, "Cy");
+    // Without workforce, skills falls back to load: Amy and Cy have 2, and
+    // Amy has waited longer.
+    assert_eq!(
+        h.assignee(ticket_in(&h, Some(q)).await, Some("skills"))
+            .await,
+        "Amy"
+    );
+
+    // Already assigned, no queue, a manual queue: nobody is chosen.
+    assert_eq!(h.dispatch(t, None).await["reason"], "assigned");
+    assert_eq!(
+        h.dispatch(ticket_in(&h, None).await, None).await["reason"],
+        "no_queue"
+    );
+    let manual = queue(&h, "manual", &[amy], &[]).await;
+    let out = h.dispatch(ticket_in(&h, Some(manual)).await, None).await;
+    assert_eq!(
+        (out["reason"].as_str(), out["assigned"].as_bool()),
+        (Some("manual"), Some(false))
+    );
+    // An empty queue: nobody available.
+    let empty = queue(&h, "load", &[], &[]).await;
+    assert_eq!(
+        h.dispatch(ticket_in(&h, Some(empty)).await, None).await["reason"],
+        "nobody_available"
+    );
+}
+
+#[tokio::test]
+async fn dispatch_by_skills_skips_people_who_cant_take_it() {
+    let Some(h) = harness().await else { return };
+    enable(&h, "workforce").await;
+    let (amy, ben, cy, dee) = (
+        person(&h, "Amy").await,
+        person(&h, "Ben").await,
+        person(&h, "Cy").await,
+        person(&h, "Dee").await,
+    );
+    let q = queue(&h, "skills", &[amy, ben, cy, dee], &[]).await;
+    let (skill, cert) = (Uuid::now_v7(), Uuid::now_v7());
+    exec(
+        &h,
+        "INSERT INTO wf_skills (id, name) VALUES ($1, 'Printers')",
+        &[skill],
+    )
+    .await;
+    exec(
+        &h,
+        "INSERT INTO wf_certifications (id, vendor, name) VALUES ($1, 'HP', 'Printer tech')",
+        &[cert],
+    )
+    .await;
+    exec(
+        &h,
+        "INSERT INTO wf_requirements (id, target_type, target_id, skill_id, min_level) VALUES (gen_random_uuid(), 'queue', $1, $2, 3)",
+        &[q, skill],
+    )
+    .await;
+    exec(
+        &h,
+        "INSERT INTO wf_requirements (id, target_type, target_id, certification_id) VALUES (gen_random_uuid(), 'queue', $1, $2)",
+        &[q, cert],
+    )
+    .await;
+    // Amy: certified, a beginner. Ben: certified expert, off sick today.
+    // Cy: an expert without the certification. Dee: certified, proficient.
+    for (who, level, certified) in [
+        (amy, 1, true),
+        (ben, 4, true),
+        (cy, 4, false),
+        (dee, 3, true),
+    ] {
+        exec(
+            &h,
+            &format!(
+                "INSERT INTO wf_user_skills (user_id, skill_id, level) VALUES ($1, $2, {level})"
+            ),
+            &[who, skill],
+        )
+        .await;
+        if certified {
+            exec(
+                &h,
+                "INSERT INTO wf_user_certifications (id, user_id, certification_id, earned_on) VALUES (gen_random_uuid(), $1, $2, current_date - 10)",
+                &[who, cert],
+            )
+            .await;
+        }
+    }
+    exec(
+        &h,
+        "INSERT INTO wf_time_off (id, user_id, starts_on, ends_on, kind, status) \
+         VALUES (gen_random_uuid(), $1, current_date - 1, current_date + 1, 'sick', 'approved')",
+        &[ben],
+    )
+    .await;
+    let out = h.dispatch(ticket_in(&h, Some(q)).await, None).await;
+    assert_eq!(out["assignee"]["name"], "Dee", "{out}");
+    let skipped: Vec<(Json, Json)> = out["considered"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|c| (c["name"].clone(), c["skipped"]["reason"].clone()))
+        .collect();
+    assert!(
+        skipped.contains(&(json!("Ben"), json!("away"))),
+        "{skipped:?}"
+    );
+    assert!(
+        skipped.contains(&(json!("Cy"), json!("unqualified"))),
+        "{skipped:?}"
+    );
+    // Dee off shift now (no hours on any day but an impossible minute): Amy.
+    exec(
+        &h,
+        r#"INSERT INTO wf_schedules (user_id, timezone, hours) VALUES ($1, 'UTC', '{"mon": [["00:00", "00:01"]]}')"#,
+        &[dee],
+    )
+    .await;
+    assert_eq!(h.assignee(ticket_in(&h, Some(q)).await, None).await, "Amy");
+    // Dee is back (no hours: any time). Round-robin still skips Ben and Cy,
+    // and Dee has waited longer than Amy.
+    exec(&h, "DELETE FROM wf_schedules WHERE user_id = $1", &[dee]).await;
+    let mut got = Vec::new();
+    for _ in 0..2 {
+        got.push(
+            h.assignee(ticket_in(&h, Some(q)).await, Some("round_robin"))
+                .await,
+        );
+    }
+    assert_eq!(got, [json!("Dee"), json!("Amy")]);
+}
+
+#[tokio::test]
+async fn the_dispatch_workflow_assigns_new_and_moved_tickets() {
+    let Some(h) = harness().await else { return };
+    let document = huxley_hwf::parse_yaml(DISPATCH_TICKETS).unwrap();
+    let filters: Vec<(String, String)> = document
+        .spec
+        .triggers
+        .iter()
+        .map(|t| match t {
+            huxley_hwf::Trigger::Event(e) => (e.event.clone(), e.filter.clone().unwrap()),
+            _ => panic!("event triggers"),
+        })
+        .collect();
+    let passes = |event: &str, payload: Json| {
+        let (_, filter) = filters.iter().find(|(e, _)| e == event).unwrap();
+        let event = json!({ "payload": payload });
+        let scope = huxley_expr::Scope::new().with("event", &event);
+        h.engine.expr().eval_condition(filter, &scope).unwrap()
+    };
+    let q = json!(Uuid::now_v7());
+    assert!(passes(
+        "ticket.created",
+        json!({ "queueId": q, "assigneeUserId": null, "change": {} })
+    ));
+    assert!(!passes(
+        "ticket.created",
+        json!({ "queueId": null, "assigneeUserId": null, "change": {} })
+    ));
+    assert!(!passes(
+        "ticket.created",
+        json!({ "queueId": q, "assigneeUserId": q, "change": {} })
+    ));
+    let moved = json!({ "queue": { "from": "A", "to": "B" } });
+    assert!(passes(
+        "ticket.updated",
+        json!({ "queueId": q, "assigneeUserId": null, "change": moved })
+    ));
+    assert!(!passes(
+        "ticket.updated",
+        json!({ "queueId": q, "assigneeUserId": null, "change": { "title": {} } })
+    ));
+
+    let amy = person(&h, "Amy").await;
+    let queue = queue(&h, "round_robin", &[amy], &[]).await;
+    let ticket = ticket_in(&h, Some(queue)).await;
+    let (status, outputs, error) = h
+        .run_triggered(
+            DISPATCH_TICKETS,
+            json!({}),
+            json!({ "type": "ticket.created", "subject_type": "ticket", "subject_id": ticket }),
+        )
+        .await;
+    assert_eq!(status, RunStatus::Succeeded, "{error:?}");
+    let outputs = outputs.unwrap();
+    assert_eq!(
+        (
+            outputs["assigned"].clone(),
+            outputs["assignee"]["name"].clone()
+        ),
+        (json!(true), json!("Amy"))
+    );
 }

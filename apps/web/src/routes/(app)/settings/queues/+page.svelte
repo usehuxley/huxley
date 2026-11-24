@@ -1,4 +1,14 @@
 <script lang="ts">
+	const DISPATCH = [
+		{ value: 'manual', label: 'Manual: someone picks them up', short: 'Manual dispatch' },
+		{ value: 'round_robin', label: 'Round-robin: members take turns', short: 'Round-robin' },
+		{ value: 'load', label: 'By load: whoever has the fewest open', short: 'By load' },
+		{
+			value: 'skills',
+			label: 'By skills: whoever fits best (with workforce on)',
+			short: 'By skills'
+		}
+	] as const;
 	import { enhance, type SubmitFunction } from '$app/forms';
 	import { resolve } from '$app/paths';
 	import { Button, Card, Dialog, Field, Input, Select, toast } from '@usehuxley/ui';
@@ -48,6 +58,21 @@
 <svelte:head>
 	<title>Service queues · Settings · Huxley</title>
 </svelte:head>
+
+{#snippet dispatchField(id: string, value: string)}
+	<Field
+		label="Dispatch"
+		for={id}
+		hint="How new tickets are assigned, by the Service desk dispatch pack's workflow (install it under Packs)."
+	>
+		<Select
+			{id}
+			name="dispatch"
+			{value}
+			options={DISPATCH.map(({ value, label }) => ({ value, label }))}
+		/>
+	</Field>
+{/snippet}
 
 {#snippet members(queue: Queue | null)}
 	<fieldset class="flex flex-col gap-2">
@@ -105,7 +130,8 @@
 							<!-- eslint-enable svelte/no-navigation-without-resolve -->
 							<p class="mt-0.5 text-sm text-fg-muted">
 								{queue.openTickets} open ticket{queue.openTickets === 1 ? '' : 's'} ·
-								{names.length > 0 ? names.join(', ') : 'No members'}
+								{names.length > 0 ? names.join(', ') : 'No members'} ·
+								{DISPATCH.find((d) => d.value === queue.dispatch)?.short ?? queue.dispatch}
 							</p>
 							{#if queue.description}
 								<p class="mt-0.5 text-sm text-fg-muted">{queue.description}</p>
@@ -160,6 +186,7 @@
 					<Input id="queue-description" name="description" maxlength={2000} />
 				</Field>
 			</div>
+			{@render dispatchField('queue-dispatch', 'manual')}
 			{@render members(null)}
 			<div class="flex justify-end">
 				<Button type="submit" variant="primary">Create queue</Button>
@@ -258,6 +285,7 @@
 					value={editing.description}
 				/>
 			</Field>
+			{@render dispatchField('edit-dispatch', editing.dispatch)}
 			{@render members(editing)}
 			<div class="flex justify-end gap-2">
 				<Button onclick={() => (open = false)}>Cancel</Button>

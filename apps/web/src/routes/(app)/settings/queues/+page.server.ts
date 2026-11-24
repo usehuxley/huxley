@@ -49,6 +49,7 @@ function queueBody(form: FormData) {
 	return {
 		name: formString(form, 'name'),
 		description: formString(form, 'description'),
+		dispatch: formString(form, 'dispatch') || 'manual',
 		userIds: form.getAll('userIds').map(String),
 		teamIds: form.getAll('teamIds').map(String)
 	};

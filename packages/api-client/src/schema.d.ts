@@ -5999,6 +5999,11 @@ export interface components {
 			/** Format: date-time */
 			createdAt: string;
 			description: string;
+			/**
+			 * @description How new tickets are assigned: `manual`, `round_robin`, `load` or
+			 *     `skills`.
+			 */
+			dispatch: string;
 			/** Format: uuid */
 			id: string;
 			name: string;
@@ -6018,6 +6023,11 @@ export interface components {
 		};
 		QueueInput: {
 			description?: string | null;
+			/**
+			 * @description How new tickets are assigned: `manual` (the default), `round_robin`,
+			 *     `load` or `skills`. Kept when not given on update.
+			 */
+			dispatch?: string | null;
 			name: string;
 			/** @description Member teams (replaces the list when given). */
 			teamIds?: string[] | null;

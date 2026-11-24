@@ -34,7 +34,8 @@ import {
 	UserRoundSearch,
 	Variable,
 	Webhook,
-	Workflow
+	Workflow,
+	UserRoundCheck
 } from '@lucide/svelte';
 
 const ICONS: Record<string, typeof Globe> = {
@@ -59,6 +60,7 @@ const ICONS: Record<string, typeof Globe> = {
 	'core.ticket.find': TicketCheck,
 	'core.ticket.update': TicketSlash,
 	'core.ticket.note': MessageSquarePlus,
+	'core.ticket.dispatch': UserRoundCheck,
 	'core.ticket.email_reply': Reply,
 	transform: Shuffle,
 	set_var: Variable,

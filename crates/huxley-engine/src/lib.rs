@@ -16,6 +16,7 @@ mod callback;
 mod crm;
 mod dataset;
 mod desk;
+mod dispatch;
 mod egress;
 mod email;
 mod http;
