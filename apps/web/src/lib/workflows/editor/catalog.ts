@@ -229,6 +229,23 @@ export const STEPS: StepSpec[] = [
 		]
 	},
 	{
+		type: 'core.ticket.email_reply',
+		label: 'Email a reply',
+		description:
+			'Email a public note to the ticket’s requester, threaded so their answer comes back to the ticket.',
+		group: 'Data',
+		module: 'servicedesk',
+		template: { with: { note_id: '{{ inputs.change.note }}' } },
+		fields: [
+			{
+				path: 'with.note_id',
+				label: 'Note',
+				kind: 'expression',
+				hint: 'The note’s id, from ticket.note_added'
+			}
+		]
+	},
+	{
 		type: 'core.ticket.from_email',
 		label: 'Email to ticket',
 		description:

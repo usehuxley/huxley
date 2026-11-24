@@ -5183,11 +5183,20 @@ export interface components {
 			body: string;
 			/** Format: date-time */
 			createdAt: string;
+			/** @description Why emailing it failed, if it did. */
+			emailError?: string | null;
 			/**
 			 * Format: uuid
 			 * @description The email it came in, if it did.
 			 */
 			emailId?: string | null;
+			/** Format: date-time */
+			emailedAt?: string | null;
+			/**
+			 * @description Who it was emailed to (public notes, with the service desk's email
+			 *     workflows).
+			 */
+			emailedTo?: string | null;
 			/** Format: uuid */
 			id: string;
 			/** @description `public`, `internal` or `resolution`. */

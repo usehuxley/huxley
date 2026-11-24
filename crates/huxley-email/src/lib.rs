@@ -49,6 +49,21 @@ pub struct Email {
     pub subject: String,
     pub text: String,
     pub html: String,
+    /// Sent as a reply from a mailbox, rather than from the instance.
+    pub reply: Option<Reply>,
+}
+
+/// A message sent from a mailbox, threaded into a conversation.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Reply {
+    /// The display name, e.g. "Acme Support".
+    pub from_name: String,
+    /// The mailbox's address (also where replies go).
+    pub from_address: String,
+    /// Without angle brackets.
+    pub message_id: String,
+    pub in_reply_to: Vec<String>,
+    pub references: Vec<String>,
 }
 
 #[derive(Clone)]
@@ -139,10 +154,37 @@ impl Mailer {
             }
             Transport::Smtp(smtp) => {
                 let to: Mailbox = email.to.parse().map_err(|_| EmailError::InvalidRecipient)?;
-                let message = Message::builder()
-                    .from(self.from.clone())
-                    .to(to)
-                    .subject(&email.subject)
+                let mut builder = Message::builder().to(to).subject(&email.subject);
+                builder = match &email.reply {
+                    None => builder.from(self.from.clone()),
+                    Some(reply) => {
+                        let from = Mailbox::new(
+                            Some(reply.from_name.clone()),
+                            reply
+                                .from_address
+                                .parse()
+                                .map_err(|_| EmailError::InvalidFrom)?,
+                        );
+                        let ids = |list: &[String]| {
+                            list.iter()
+                                .map(|id| format!("<{id}>"))
+                                .collect::<Vec<_>>()
+                                .join(" ")
+                        };
+                        let mut b = builder
+                            .from(from.clone())
+                            .reply_to(from)
+                            .message_id(Some(format!("<{}>", reply.message_id)));
+                        if !reply.in_reply_to.is_empty() {
+                            b = b.in_reply_to(ids(&reply.in_reply_to));
+                        }
+                        if !reply.references.is_empty() {
+                            b = b.references(ids(&reply.references));
+                        }
+                        b
+                    }
+                };
+                let message = builder
                     .multipart(
                         MultiPart::alternative()
                             .singlepart(
@@ -222,6 +264,7 @@ pub fn action_email(
         subject: subject.to_owned(),
         text,
         html,
+        reply: None,
     }
 }
 

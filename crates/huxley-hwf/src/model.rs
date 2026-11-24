@@ -370,6 +370,10 @@ pub enum Step {
     /// Fetch new mail from IMAP mailboxes (the `servicedesk` module).
     #[serde(rename = "core.mail.fetch")]
     MailFetch(MailFetchStep),
+    /// Email a public note to the ticket's requester (the `servicedesk`
+    /// module).
+    #[serde(rename = "core.ticket.email_reply")]
+    TicketEmailReply(TicketEmailReplyStep),
     /// Ask the organization's AI provider; the answer is text.
     #[serde(rename = "ai.prompt")]
     AiPrompt(AiPromptStep),
@@ -629,6 +633,11 @@ step!(TicketFromEmailStep {
     pub email: TicketFromEmail,
 });
 
+step!(TicketEmailReplyStep {
+    #[serde(rename = "with")]
+    pub reply: TicketEmailReply,
+});
+
 step!(MailFetchStep {
     #[serde(default, rename = "with")]
     pub fetch: MailFetch,
@@ -701,6 +710,7 @@ impl Step {
             CompanyUpdate,
             TicketFromEmail,
             MailFetch,
+            TicketEmailReply,
             AiPrompt,
             AiClassify,
             AiExtract
@@ -740,6 +750,7 @@ impl Step {
             Self::CompanyUpdate(_) => "core.company.update",
             Self::TicketFromEmail(_) => "core.ticket.from_email",
             Self::MailFetch(_) => "core.mail.fetch",
+            Self::TicketEmailReply(_) => "core.ticket.email_reply",
             Self::AiPrompt(_) => "ai.prompt",
             Self::AiClassify(_) => "ai.classify",
             Self::AiExtract(_) => "ai.extract",
@@ -952,6 +963,20 @@ pub struct DatasetUpsert {
 pub struct TicketFromEmail {
     /// The email's id (from `email.received`).
     pub email_id: Value,
+}
+
+/// A public note to email to its ticket's requester
+/// (`core.ticket.email_reply`), from the mailbox the ticket's mail came to
+/// (else the nearest one at its organization or above). The subject carries
+/// the ticket's `[HX#…]` token and the message continues the email thread,
+/// so the requester's answer comes back to the ticket. Notes that aren't
+/// for the requester (internal, written by them, already sent) are skipped.
+/// Output: `{ sent: true, to, message_id }` or `{ sent: false, reason }`.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct TicketEmailReply {
+    /// The note's id (from `ticket.note_added`).
+    pub note_id: Value,
 }
 
 /// Mail to fetch (`core.mail.fetch`): new messages from the enabled IMAP

@@ -24,6 +24,10 @@ const SOURCES: &[Source] = &[
                 "workflows/poll-mailboxes.yaml",
                 include_str!("../builtin/servicedesk-email/workflows/poll-mailboxes.yaml"),
             ),
+            (
+                "workflows/email-replies.yaml",
+                include_str!("../builtin/servicedesk-email/workflows/email-replies.yaml"),
+            ),
         ],
     },
     Source {
