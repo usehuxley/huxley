@@ -31,6 +31,7 @@ huxley-templates.workspace = true
 huxley-packs.workspace = true
 huxley-crm.workspace = true
 huxley-servicedesk.workspace = true
+huxley-workforce.workspace = true
 huxley-mail.workspace = true
 huxley-datasets.workspace = true
 huxley-ai.workspace = true

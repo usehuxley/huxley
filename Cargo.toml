@@ -45,6 +45,7 @@ huxley-integrations = { path = "crates/huxley-integrations" }
 huxley-crm = { path = "crates/huxley-crm" }
 huxley-servicedesk = { path = "crates/huxley-servicedesk" }
 huxley-mail = { path = "crates/huxley-mail" }
+huxley-workforce = { path = "crates/huxley-workforce" }
 huxley-orgs = { path = "crates/huxley-orgs" }
 huxley-runners = { path = "crates/huxley-runners" }
 huxley-templates = { path = "crates/huxley-templates" }

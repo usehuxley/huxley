@@ -55,7 +55,7 @@ impl Role {
 type Tasks = JoinSet<anyhow::Result<()>>;
 
 /// Starts the schedule triggers (one leader across processes) and the SLA
-/// sweeper (safe in several processes).
+/// and certification sweepers (safe in several processes).
 fn spawn_scheduler(
     tasks: &mut Tasks,
     config: &Config,
@@ -75,6 +75,11 @@ fn spawn_scheduler(
     let (sla_db, sla_stop) = (db.clone(), shutdown.clone());
     tasks.spawn(async move {
         huxley_servicedesk::sla::run_sweeper(sla_db, sla_stop).await;
+        Ok(())
+    });
+    let (wf_db, wf_stop) = (db.clone(), shutdown.clone());
+    tasks.spawn(async move {
+        huxley_workforce::run_sweeper(wf_db, wf_stop).await;
         Ok(())
     });
 }
