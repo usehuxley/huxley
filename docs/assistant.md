@@ -5,7 +5,7 @@
 ## How it works
 
 - **It acts as you.** It uses the same tools as the [MCP server](mcp.md), called through Huxley's API with your own permissions. It can't see or do anything you couldn't, and what it does is audited with `via = mcp`.
-- **Reading is automatic, changing is your call.** Tools that only read run straight away. Tools that create or change something (creating or updating a workflow draft, test-running a workflow) wait, and you see exactly what it wants to do and approve or deny each one. A denied action is reported back to the model.
+- **Reading is automatic, changing is your call.** Tools that only read run straight away. Tools that create or change something (creating or updating a workflow draft, test-running a workflow, or running one of your [workflow tools](mcp.md#your-workflows-as-tools)) wait, and you see exactly what it wants to do and approve or deny each one. A denied action is reported back to the model.
 - **Drafts only.** It saves workflows as drafts: a person publishes them.
 - **Your key, your budget.** It uses the organization's AI provider (Settings → AI) and counts toward its monthly budget. Each turn is in the AI call log as `assistant`.
 - **Your conversations.** They're kept per person, and only you can see yours. Delete them any time.

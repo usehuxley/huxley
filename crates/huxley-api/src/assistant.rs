@@ -14,7 +14,7 @@ use sqlx::PgConnection;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
-use crate::mcp::{CHANGING, Caller, result_text, tool_defs};
+use crate::mcp::{CHANGING, Caller, WorkflowTool, result_text, tool_defs};
 use crate::{ApiError, ApiResult, AppState};
 
 /// Most model turns one message may lead to.
@@ -89,12 +89,18 @@ struct Pending {
     results: Vec<ToolResult>,
 }
 
+/// Whether a call changes something (and so waits for the person): the
+/// changing tools, and every workflow tool (it runs a workflow).
+fn changes(name: &str) -> bool {
+    CHANGING.contains(&name) || name.starts_with("run_")
+}
+
 fn shown_call(call: &ToolCall) -> ShownCall {
     ShownCall {
         id: call.id.clone(),
         name: call.name.clone(),
         input: call.input.clone(),
-        needs_approval: CHANGING.contains(&call.name.as_str()),
+        needs_approval: changes(&call.name),
     }
 }
 
@@ -242,8 +248,12 @@ async fn set_pending(state: &AppState, id: Uuid, pending: Option<&Pending>) -> A
 }
 
 /// Runs `call` as the user.
-async fn run_call(caller: &Caller<'_>, call: &ToolCall) -> ToolResult {
-    let (content, is_error) = result_text(caller.call_tool(&call.name, &call.input).await);
+async fn run_call(caller: &Caller<'_>, workflows: &[WorkflowTool], call: &ToolCall) -> ToolResult {
+    let outcome = match workflows.iter().find(|t| t.name == call.name) {
+        Some(tool) => Ok(caller.run_workflow(tool, &call.input).await),
+        None => caller.call_tool(&call.name, &call.input).await,
+    };
+    let (content, is_error) = result_text(outcome);
     // Keep what goes back to the model (and into the history) bounded.
     let content = if content.chars().count() > 30_000 {
         format!(
@@ -264,11 +274,17 @@ async fn run_call(caller: &Caller<'_>, call: &ToolCall) -> ToolResult {
 async fn advance(
     state: &AppState,
     caller: &Caller<'_>,
+    workflows: &[WorkflowTool],
     id: Uuid,
     org_id: Uuid,
     mut messages: Vec<Message>,
 ) -> ApiResult<()> {
-    let tools = tool_defs();
+    let mut tools = tool_defs();
+    tools.extend(workflows.iter().map(|t| huxley_ai::chat::ToolDef {
+        name: t.name.clone(),
+        description: t.description.clone(),
+        input_schema: t.input_schema.clone(),
+    }));
     for _ in 0..MAX_TURNS {
         let turn = match state
             .engine
@@ -305,13 +321,10 @@ async fn advance(
         // Read-only calls run now; if any call changes something, all
         // wait for the user (results go back to the model together).
         let mut results = Vec::new();
-        for call in calls
-            .iter()
-            .filter(|c| !CHANGING.contains(&c.name.as_str()))
-        {
-            results.push(run_call(caller, call).await);
+        for call in calls.iter().filter(|c| !changes(&c.name)) {
+            results.push(run_call(caller, workflows, call).await);
         }
-        if calls.iter().any(|c| CHANGING.contains(&c.name.as_str())) {
+        if calls.iter().any(|c| changes(&c.name)) {
             return set_pending(state, id, Some(&Pending { calls, results })).await;
         }
         let message = Message::ToolResults { results };
@@ -330,6 +343,7 @@ async fn advance(
 pub async fn say(
     state: &AppState,
     caller: &Caller<'_>,
+    workflows: &[WorkflowTool],
     user_id: Uuid,
     id: Uuid,
     text: &str,
@@ -349,7 +363,7 @@ pub async fn say(
     };
     append(state, id, org_id, &message).await?;
     messages.push(message);
-    advance(state, caller, id, org_id, messages).await
+    advance(state, caller, workflows, id, org_id, messages).await
 }
 
 #[derive(Debug, Deserialize, ToSchema)]
@@ -364,6 +378,7 @@ pub struct Decisions {
 pub async fn decide(
     state: &AppState,
     caller: &Caller<'_>,
+    workflows: &[WorkflowTool],
     user_id: Uuid,
     id: Uuid,
     decisions: &Decisions,
@@ -377,13 +392,9 @@ pub async fn decide(
         return Err(ApiError::conflict("nothing is waiting for approval"));
     }
     let mut results = pending.results.clone();
-    for call in pending
-        .calls
-        .iter()
-        .filter(|c| CHANGING.contains(&c.name.as_str()))
-    {
+    for call in pending.calls.iter().filter(|c| changes(&c.name)) {
         let result = match decisions.decisions.get(&call.id) {
-            Some(true) => run_call(caller, call).await,
+            Some(true) => run_call(caller, workflows, call).await,
             Some(false) => ToolResult {
                 id: call.id.clone(),
                 content: "The person declined this action.".into(),
@@ -402,7 +413,7 @@ pub async fn decide(
     let message = Message::ToolResults { results };
     append(state, id, org_id, &message).await?;
     messages.push(message);
-    advance(state, caller, id, org_id, messages).await
+    advance(state, caller, workflows, id, org_id, messages).await
 }
 
 /// `user_id`'s conversations, newest first.

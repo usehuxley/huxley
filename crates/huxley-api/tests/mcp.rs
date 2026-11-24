@@ -370,3 +370,107 @@ async fn mcp_calls_get_the_users_own_permissions() {
         .await;
     assert_eq!(nope["error"]["code"], -32601);
 }
+
+async fn publish(s: &Setup, key: &str, triggers: Value) -> String {
+    let document = json!({
+        "apiVersion": "usehuxley.com/v1", "kind": "Workflow",
+        "metadata": { "key": key, "name": format!("Greet {key}"), "description": "Greets someone." },
+        "spec": {
+            "triggers": triggers,
+            "inputs": { "type": "object", "required": ["name"], "properties": { "name": { "type": "string" } } },
+            "steps": [{ "id": "greet", "type": "transform", "output": "Hello {{ inputs.name }}" }],
+            "outputs": { "greeting": "{{ steps.greet.output }}" }
+        }
+    });
+    let (status, created) = s
+        .call(
+            &s.owner,
+            "POST",
+            "/api/v1/workflows",
+            Some(json!({ "orgId": s.org, "document": document })),
+        )
+        .await;
+    assert_eq!(status, StatusCode::CREATED, "{created}");
+    let id = created["id"].as_str().unwrap().to_owned();
+    let (status, published) = s
+        .call(
+            &s.owner,
+            "POST",
+            &format!("/api/v1/workflows/{id}/publish"),
+            Some(json!({})),
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK, "{published}");
+    id
+}
+
+#[tokio::test]
+async fn published_workflows_with_an_mcp_tool_trigger_are_tools() {
+    let Some(s) = setup().await else { return };
+    let key = format!("greeter-{}", &Uuid::now_v7().simple().to_string()[24..]);
+    publish(
+        &s,
+        &key,
+        json!([{ "type": "mcp_tool", "description": "Says hello to someone by name." }]),
+    )
+    .await;
+    let quiet = format!("quiet-{}", &Uuid::now_v7().simple().to_string()[24..]);
+    publish(&s, &quiet, json!([{ "type": "manual" }])).await;
+    let token = s.token(&["*"]).await;
+
+    let (_, _, listed) = s
+        .mcp(
+            Some(&token),
+            json!({ "jsonrpc": "2.0", "id": 1, "method": "tools/list" }),
+        )
+        .await;
+    let tools = listed["result"]["tools"].as_array().unwrap();
+    let name = format!("run_{}", key.replace('-', "_"));
+    let tool = tools
+        .iter()
+        .find(|t| t["name"] == name.as_str())
+        .unwrap_or_else(|| panic!("{listed}"));
+    assert!(
+        tool["description"]
+            .as_str()
+            .unwrap()
+            .starts_with("Says hello")
+    );
+    assert_eq!(tool["inputSchema"]["required"], json!(["name"]));
+    assert!(
+        !listed.to_string().contains(&quiet.replace('-', "_")),
+        "no mcp_tool trigger, no tool"
+    );
+
+    // Calling it runs the published workflow (a worker runs alongside).
+    let crypto =
+        huxley_crypto::Crypto::new(s.pools.app.clone(), huxley_crypto::testing::key_ring());
+    let engine = huxley_engine::Engine::new(s.pools.app.clone(), crypto);
+    let worker = tokio::spawn(async move {
+        loop {
+            let _ = engine.drain("mcp-worker", 50).await;
+            tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+        }
+    });
+    let result = s.tool(&token, &name, json!({ "name": "Ada" })).await;
+    worker.abort();
+    assert_eq!(result["isError"], false, "{result}");
+    assert_eq!(
+        result["structuredContent"]["status"], "succeeded",
+        "{result}"
+    );
+    assert_eq!(
+        result["structuredContent"]["outputs"]["greeting"],
+        "Hello Ada"
+    );
+
+    // Someone who may not run workflows doesn't get them as tools.
+    let reader = s.token(&["workflow:read", "org:read"]).await;
+    let (_, _, limited) = s
+        .mcp(
+            Some(&reader),
+            json!({ "jsonrpc": "2.0", "id": 2, "method": "tools/list" }),
+        )
+        .await;
+    assert!(!limited.to_string().contains(&name), "{limited}");
+}

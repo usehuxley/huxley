@@ -37,6 +37,25 @@ Over stdio, for clients that start servers as local commands:
 
 Documents can be YAML text or JSON objects.
 
+## Your workflows as tools
+
+A published workflow with an `mcp_tool` trigger becomes a tool of its own:
+
+```yaml
+spec:
+  triggers:
+    - { type: mcp_tool, description: "Resets a user's password and emails them a temporary one." }
+  inputs: { type: object, required: [email], properties: { email: { type: string } } }
+```
+
+How workflow tools work:
+
+- **Naming:** each is `run_<workflow key>` (hyphens become underscores; a suffix tells apart same-key workflows of different organizations).
+- **Inputs and description:** the workflow's input schema becomes the tool's, and the trigger's `description` tells the model what it does (default: the workflow's description).
+- **Calling one** starts a run of the **published** version as you, and waits up to 25 seconds. It returns the outputs, or the run's id if it's still going.
+- **Who sees them:** only people who may run the workflow (`workflow:run`) see it as a tool.
+- **In the [assistant](assistant.md):** these tools are offered there too, and every run waits for your approval.
+
 ## Safety
 
 - **Every tool call runs as you.** It's made through Huxley's own API with your token, so it gets your permissions, narrowed by the token's scopes, and the same validation. A refused call comes back as an error the model can read.
