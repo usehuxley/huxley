@@ -13,6 +13,7 @@
 
 mod check;
 mod functions;
+mod lookup;
 mod secrets;
 
 use std::collections::BTreeMap;
@@ -23,6 +24,7 @@ use minijinja::{Environment, UndefinedBehavior, Value};
 use serde_json::Value as Json;
 
 pub use check::check_workflow;
+pub use lookup::{LookupAnswer, LookupRequest, Lookups, MAX_MISSING};
 pub use secrets::{REDACTED, redact};
 
 /// Fuel per evaluation: roughly the number of instructions it may execute.
@@ -69,6 +71,8 @@ pub struct Evaluated {
 pub struct Scope {
     values: BTreeMap<String, Value>,
     secrets: Arc<BTreeMap<String, String>>,
+    /// A run's lookups (`lookup(…)`); without them `lookup` is unavailable.
+    lookups: Option<Arc<Lookups>>,
     /// Top-level objects with secret keys: (name → its fields, secret keys).
     partly_secret: BTreeMap<String, (BTreeMap<String, Value>, std::collections::BTreeSet<String>)>,
 }
@@ -120,6 +124,13 @@ impl Scope {
         self
     }
 
+    /// Makes `lookup(dataset, column=value)` answer from a run's lookups.
+    #[must_use]
+    pub fn with_lookups(mut self, lookups: Arc<Lookups>) -> Self {
+        self.lookups = Some(lookups);
+        self
+    }
+
     /// The secret values, for [`redact`].
     pub fn secret_values(&self) -> impl Iterator<Item = &str> {
         self.secrets.values().map(String::as_str)
@@ -135,6 +146,15 @@ impl Scope {
                     secret.clone(),
                     touched.clone(),
                 )),
+            );
+        }
+        if let Some(lookups) = &self.lookups {
+            let lookups = lookups.clone();
+            map.insert(
+                "lookup".into(),
+                Value::from_function(move |dataset: String, kwargs: minijinja::value::Kwargs| {
+                    lookups.call(&dataset, &kwargs)
+                }),
             );
         }
         map.insert(

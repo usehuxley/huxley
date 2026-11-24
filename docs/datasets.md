@@ -56,6 +56,25 @@ A run reads and writes the rows of its own organization and those below it:
 
 `dataset.upsert` refuses rows containing secrets. See [the step reference](workflows.md).
 
+### Looking up one row
+
+For a single row, `lookup()` reads a dataset inside any expression, with no extra step:
+
+```yaml
+- id: greet
+  type: transform
+  when: "{{ lookup('m365-users', upn=inputs.email) is not none }}"
+  output: "Hello {{ lookup('m365-users', upn=inputs.email).display_name }}"
+```
+
+How it behaves:
+
+- **What it returns:** the first row whose columns equal every value given, or `none` if there isn't one.
+- **Which rows:** the same rows `dataset.query` would read, those of the run's organization and the ones below it.
+- **The first answer is kept.** Within one run, each `lookup()` gives the same answer every time, even if the row changes while the run waits or after it resumes. Huxley records each answer the first time a run asks, so a run never takes a different path when it's replayed. To read a row as it is *now*, use a `dataset.query` step.
+- **Failures:** looking up a dataset that doesn't exist fails the step. Resuming the run asks again, so create the dataset, then resume.
+- **Where it works:** only while a workflow runs. **Preview with the last run** shows the answers that run recorded.
+
 ## Syncing from an integration
 
 A dataset can keep itself up to date from an integration's list action:
