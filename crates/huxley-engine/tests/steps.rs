@@ -149,7 +149,7 @@ impl Harness {
         inputs: Json,
     ) -> (Uuid, RunStatus, Option<Json>, Option<Json>) {
         let yaml = format!(
-            "apiVersion: usehuxley.com/v1\nkind: Workflow\nmetadata: {{ key: t, name: T }}\nspec:\n{spec}"
+            "apiVersion: usehuxley.io/v1\nkind: Workflow\nmetadata: {{ key: t, name: T }}\nspec:\n{spec}"
         );
         let document = serde_json::to_value(huxley_hwf::parse_yaml(&yaml).unwrap()).unwrap();
         let mut tx = begin_scoped(&self.pools.app, &OrgScope::System)
@@ -626,7 +626,7 @@ async fn pinned_secret_results_are_resealed_for_the_new_run() {
 
     // A second run of the same document, starting at `use`.
     let yaml = format!(
-        "apiVersion: usehuxley.com/v1\nkind: Workflow\nmetadata: {{ key: t, name: T }}\nspec:\n{spec}"
+        "apiVersion: usehuxley.io/v1\nkind: Workflow\nmetadata: {{ key: t, name: T }}\nspec:\n{spec}"
     );
     let document = serde_json::to_value(huxley_hwf::parse_yaml(&yaml).unwrap()).unwrap();
     let steps = huxley_engine::replay::steps_before(&document, "use").unwrap();

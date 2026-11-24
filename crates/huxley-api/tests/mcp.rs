@@ -179,7 +179,7 @@ impl Setup {
 }
 
 const WORKFLOW: &str = r#"
-apiVersion: usehuxley.com/v1
+apiVersion: usehuxley.io/v1
 kind: Workflow
 metadata: { key: mcp-greeter, name: MCP greeter }
 spec:
@@ -373,7 +373,7 @@ async fn mcp_calls_get_the_users_own_permissions() {
 
 async fn publish(s: &Setup, key: &str, triggers: Value) -> String {
     let document = json!({
-        "apiVersion": "usehuxley.com/v1", "kind": "Workflow",
+        "apiVersion": "usehuxley.io/v1", "kind": "Workflow",
         "metadata": { "key": key, "name": format!("Greet {key}"), "description": "Greets someone." },
         "spec": {
             "triggers": triggers,

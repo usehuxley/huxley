@@ -49,7 +49,7 @@ test.describe('forms', () => {
 		await page.getByLabel('Key').fill(`laptops-${suffix}`);
 		await page.getByRole('button', { name: 'Create' }).click();
 		await page.getByRole('tab', { name: 'YAML' }).click();
-		await page.getByRole('textbox', { name: 'Workflow YAML' }).fill(`apiVersion: usehuxley.com/v1
+		await page.getByRole('textbox', { name: 'Workflow YAML' }).fill(`apiVersion: usehuxley.io/v1
 kind: Workflow
 metadata: { key: laptops-${suffix}, name: Laptops ${suffix} }
 spec:

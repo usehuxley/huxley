@@ -324,7 +324,7 @@ async fn module_toggles_need_permission_and_gate_disabled_modules() {
     if status == StatusCode::CONFLICT {
         assert_eq!(
             body["type"],
-            "https://usehuxley.com/problems/module-dependencies"
+            "https://usehuxley.io/problems/module-dependencies"
         );
     }
     let (status, _) = call(
@@ -350,7 +350,7 @@ async fn module_toggles_need_permission_and_gate_disabled_modules() {
     );
     let gate = huxley_api::module_routes::require_module(&state, "servicedesk").await;
     let err = gate.expect_err("unreleased module must be gated");
-    assert_eq!(err.kind, "https://usehuxley.com/problems/module-disabled");
+    assert_eq!(err.kind, "https://usehuxley.io/problems/module-disabled");
 }
 
 fn base32_decode(s: &str) -> Vec<u8> {
@@ -497,7 +497,7 @@ async fn mfa_sign_in_over_http() {
     assert_eq!(status, StatusCode::UNAUTHORIZED);
     assert_eq!(
         err["type"],
-        "https://usehuxley.com/problems/invalid-mfa-code"
+        "https://usehuxley.io/problems/invalid-mfa-code"
     );
 
     let right = json!({ "challenge": challenge, "code": totp_now(&secret, 1) });
@@ -634,7 +634,7 @@ async fn mfa_policy_blocks_until_a_second_factor_is_set_up() {
     assert_eq!(status, StatusCode::FORBIDDEN);
     assert_eq!(
         err["type"],
-        "https://usehuxley.com/problems/mfa-setup-required"
+        "https://usehuxley.io/problems/mfa-setup-required"
     );
     let (status, me) = call(&app, "GET", "/api/v1/auth/me", Some(&member), None).await;
     assert_eq!(status, StatusCode::OK);
@@ -752,7 +752,7 @@ async fn personal_tokens_act_as_their_owner_narrowed_to_scopes() {
     let new_user = json!({ "email": "scoped@example.com", "displayName": "Scoped" });
     let (status, err) = call_bearer(&app, "POST", "/api/v1/users", &token, Some(new_user)).await;
     assert_eq!(status, StatusCode::FORBIDDEN);
-    assert_eq!(err["type"], "https://usehuxley.com/problems/forbidden");
+    assert_eq!(err["type"], "https://usehuxley.io/problems/forbidden");
 
     // Tokens can't use self-service routes, so a leaked token can't take
     // over the account (change the password, mint more tokens, add MFA).
@@ -779,7 +779,7 @@ async fn personal_tokens_act_as_their_owner_narrowed_to_scopes() {
     assert_eq!(status, StatusCode::NO_CONTENT);
     let (status, err) = call_bearer(&app, "GET", "/api/v1/orgs", &token, None).await;
     assert_eq!(status, StatusCode::UNAUTHORIZED);
-    assert_eq!(err["type"], "https://usehuxley.com/problems/invalid-token");
+    assert_eq!(err["type"], "https://usehuxley.io/problems/invalid-token");
 }
 
 #[tokio::test]
@@ -1095,7 +1095,7 @@ async fn password_reset_and_invitations_over_http() {
     let (status, _, err) =
         post_anonymous(&app, "/api/v1/auth/password-reset/confirm", confirm).await;
     assert_eq!(status, StatusCode::BAD_REQUEST);
-    assert_eq!(err["type"], "https://usehuxley.com/problems/invalid-link");
+    assert_eq!(err["type"], "https://usehuxley.io/problems/invalid-link");
     let creds = json!({ "email": email, "password": "a fresh new passphrase" });
     let (status, cookie, _) = post_anonymous(&app, "/api/v1/auth/login", creds).await;
     assert_eq!(status, StatusCode::OK);

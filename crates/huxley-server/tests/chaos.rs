@@ -24,7 +24,7 @@ const WORKERS: usize = 3;
 const RUNS: usize = 8;
 
 const DOCUMENT: &str = r#"
-apiVersion: usehuxley.com/v1
+apiVersion: usehuxley.io/v1
 kind: Workflow
 metadata: { key: chaos, name: Chaos }
 spec:

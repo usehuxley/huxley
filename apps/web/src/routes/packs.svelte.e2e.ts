@@ -68,7 +68,7 @@ function zip(entries: [string, string][]): Buffer {
 /** An unsigned pack with one workflow that calls hooks.example.net. */
 function pack(suffix: string, tamper = false): Buffer {
 	const workflow = JSON.stringify({
-		apiVersion: 'usehuxley.com/v1',
+		apiVersion: 'usehuxley.io/v1',
 		kind: 'Workflow',
 		metadata: { key: `ping-${suffix}`, name: `Ping ${suffix}` },
 		spec: {
@@ -83,7 +83,7 @@ function pack(suffix: string, tamper = false): Buffer {
 	});
 	const path = `workflows/ping-${suffix}.yaml`;
 	const manifest = JSON.stringify({
-		apiVersion: 'usehuxley.com/v1',
+		apiVersion: 'usehuxley.io/v1',
 		kind: 'Pack',
 		key: `e2e/ping-${suffix}`,
 		name: `Ping pack ${suffix}`,

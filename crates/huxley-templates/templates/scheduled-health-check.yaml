@@ -8,7 +8,7 @@ template:
     - { key: interval, label: How often, kind: text, default: "15m", help: "e.g. 5m, 1h" }
     - { key: recipients, label: Who to tell, kind: recipients, default: "role:admin" }
 workflow:
-  apiVersion: usehuxley.com/v1
+  apiVersion: usehuxley.io/v1
   kind: Workflow
   metadata: { key: scheduled-health-check, name: Scheduled health check }
   spec:

@@ -56,7 +56,7 @@ async fn readyz_reports_unavailable_database() {
     let (status, headers, body) = send("/readyz").await;
     assert_eq!(status, StatusCode::SERVICE_UNAVAILABLE);
     assert_eq!(headers["content-type"], "application/problem+json");
-    assert_eq!(body["type"], "https://usehuxley.com/problems/unavailable");
+    assert_eq!(body["type"], "https://usehuxley.io/problems/unavailable");
     assert_eq!(body["status"], 503);
 }
 
@@ -86,7 +86,7 @@ async fn state_changing_requests_need_the_csrf_header() {
     assert_eq!(response.status(), StatusCode::FORBIDDEN);
     let bytes = response.into_body().collect().await.unwrap().to_bytes();
     let body: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
-    assert_eq!(body["type"], "https://usehuxley.com/problems/csrf");
+    assert_eq!(body["type"], "https://usehuxley.io/problems/csrf");
 }
 
 #[tokio::test]
@@ -94,7 +94,7 @@ async fn me_without_a_session_is_unauthorized() {
     let (status, headers, body) = send("/api/v1/auth/me").await;
     assert_eq!(status, StatusCode::UNAUTHORIZED);
     assert_eq!(headers["content-type"], "application/problem+json");
-    assert_eq!(body["type"], "https://usehuxley.com/problems/unauthorized");
+    assert_eq!(body["type"], "https://usehuxley.io/problems/unauthorized");
 }
 
 #[tokio::test]

@@ -4,7 +4,7 @@ Security is a core requirement for Huxley. MSPs trust it with credentials for th
 
 ## Reporting a vulnerability
 
-**Do not open a public issue.** Report vulnerabilities privately through GitHub's [private vulnerability reporting](https://github.com/usehuxley/huxley/security/advisories/new) or by email to **security@usehuxley.com**.
+**Do not open a public issue.** Report vulnerabilities privately through GitHub's [private vulnerability reporting](https://github.com/usehuxley/huxley/security/advisories/new) or by email to **security@usehuxley.io**.
 
 Please include affected versions, steps to reproduce, and the impact you believe it has. We aim to acknowledge reports within 3 business days and to agree on a disclosure timeline with you. We credit reporters who want credit.
 

@@ -28,7 +28,7 @@ const CONCURRENCY: usize = 16;
 fn document() -> String {
     format!(
         r#"
-apiVersion: usehuxley.com/v1
+apiVersion: usehuxley.io/v1
 kind: Workflow
 metadata: {{ key: load, name: Load }}
 spec:

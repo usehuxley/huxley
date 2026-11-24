@@ -48,7 +48,7 @@ async fn webhook(pools: &TestPools, trigger: Value) -> (Uuid, String) {
     .unwrap();
     let key = format!("hook-{}", &Uuid::now_v7().simple().to_string()[20..]);
     let document = json!({
-        "apiVersion": "usehuxley.com/v1",
+        "apiVersion": "usehuxley.io/v1",
         "kind": "Workflow",
         "metadata": { "key": key, "name": "Hook" },
         "spec": {
@@ -287,7 +287,7 @@ async fn webhook_runs_act_as_the_run_as_account() {
     assert_eq!(status, StatusCode::CONFLICT, "{problem}");
     assert_eq!(
         problem["type"],
-        "https://usehuxley.com/problems/run-as-unavailable"
+        "https://usehuxley.io/problems/run-as-unavailable"
     );
     let runs: i64 = sqlx::query_scalar("SELECT count(*) FROM runs WHERE workflow_id = $1")
         .bind(workflow)

@@ -44,7 +44,7 @@
 		>
 			{#snippet icon()}<Workflow size={24} />{/snippet}
 			{#snippet actions()}
-				<Button href="https://docs.usehuxley.com" variant="primary">Read the docs</Button>
+				<Button href="https://docs.usehuxley.io" variant="primary">Read the docs</Button>
 			{/snippet}
 		</EmptyState>
 	</Card>

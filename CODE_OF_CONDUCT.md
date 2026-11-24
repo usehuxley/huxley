@@ -6,4 +6,4 @@ In short: be respectful, assume good intent, and focus on what is best for the p
 
 ## Reporting
 
-Report conduct issues to **conduct@usehuxley.com**. Reports are handled confidentially by the maintainers, who may take any action they consider appropriate, up to and including a permanent ban, following the Contributor Covenant's enforcement guidelines.
+Report conduct issues to **conduct@usehuxley.io**. Reports are handled confidentially by the maintainers, who may take any action they consider appropriate, up to and including a permanent ban, following the Contributor Covenant's enforcement guidelines.

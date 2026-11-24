@@ -7,8 +7,8 @@ Every module runs on the engine. Mailbox polling, SLA escalation, AI triage, and
 > **Status:** early development (Phase 0: foundations). Not ready for production use.
 > See the [implementation plan](docs/IMPLEMENTATION_PLAN.md) for the roadmap.
 
-- Website: [usehuxley.com](https://usehuxley.com)
-- Docs: [docs.usehuxley.com](https://docs.usehuxley.com)
+- Website: [usehuxley.io](https://usehuxley.io)
+- Docs: [docs.usehuxley.io](https://docs.usehuxley.io)
 - License: [MIT](LICENSE)
 
 ## Repository layout

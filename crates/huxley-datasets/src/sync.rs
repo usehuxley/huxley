@@ -183,7 +183,7 @@ pub fn document(dataset: &Dataset, config: &SyncConfig) -> Json {
         }
     }));
     json!({
-        "apiVersion": "usehuxley.com/v1",
+        "apiVersion": "usehuxley.io/v1",
         "kind": "Workflow",
         "metadata": { "key": format!("sync-{}", dataset.key), "name": format!("Sync {}", dataset.name) },
         "spec": {

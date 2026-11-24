@@ -112,7 +112,7 @@ async fn provider_org(pools: &TestPools) -> Uuid {
 
 fn document(key: &str, steps: &Value) -> Value {
     json!({
-        "apiVersion": "usehuxley.com/v1",
+        "apiVersion": "usehuxley.io/v1",
         "kind": "Workflow",
         "metadata": { "key": key, "name": "Greeter" },
         "spec": {
@@ -760,7 +760,7 @@ async fn approvals_are_for_their_approvers() {
     let s = setup_in(db.pools.clone()).await;
     let (approver_id, approver_email) = user(&s.pools, false).await;
     let doc = json!({
-        "apiVersion": "usehuxley.com/v1",
+        "apiVersion": "usehuxley.io/v1",
         "kind": "Workflow",
         "metadata": { "key": "ask", "name": "Ask" },
         "spec": { "steps": [
@@ -939,7 +939,7 @@ async fn listen(s: &Setup, form_key: &str) {
         ),
     ] {
         let doc = json!({
-            "apiVersion": "usehuxley.com/v1", "kind": "Workflow",
+            "apiVersion": "usehuxley.io/v1", "kind": "Workflow",
             "metadata": { "key": key(wf_key), "name": wf_key },
             "spec": {
                 "inputs": inputs,
@@ -1707,7 +1707,7 @@ async fn leaver_workflow(s: &Setup) -> String {
         .await;
     assert_eq!(status, StatusCode::CREATED);
     let doc = json!({
-        "apiVersion": "usehuxley.com/v1", "kind": "Workflow",
+        "apiVersion": "usehuxley.io/v1", "kind": "Workflow",
         "metadata": { "key": key("offboard"), "name": "Offboard" },
         "spec": {
             "triggers": [{ "type": "form", "form": form_key }],
@@ -1904,7 +1904,7 @@ async fn expressions_preview_against_the_latest_run() {
 async fn test_runs_can_start_at_a_step_with_earlier_results_pinned() {
     let Some(s) = setup().await else { return };
     let doc = json!({
-        "apiVersion": "usehuxley.com/v1", "kind": "Workflow",
+        "apiVersion": "usehuxley.io/v1", "kind": "Workflow",
         "metadata": { "key": key("pin"), "name": "Pinned" },
         "spec": {
             "inputs": { "type": "object", "properties": {

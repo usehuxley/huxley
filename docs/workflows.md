@@ -3,7 +3,7 @@
 A workflow is a document in the Huxley Workflow Format (HWF, ADR-004): what starts it, the steps it runs, and what it returns. Build it in the visual editor or as YAML (both edit the same draft), publish it, and Huxley runs it durably: every step's result is recorded before the next starts, so runs survive crashes and restarts (ADR-003, ADR-021). The JSON Schema is in [`schemas/hwf/v1.json`](../schemas/hwf/v1.json); expressions are described in [expressions.md](expressions.md).
 
 ```yaml
-apiVersion: usehuxley.com/v1
+apiVersion: usehuxley.io/v1
 kind: Workflow
 metadata:
   key: onboard-user            # unique in the organization
@@ -64,7 +64,7 @@ You fill in a few **bindings**, such as who to tell or which script, and get a *
 | `event` | A domain event matches `event` (e.g. `org.created`, or `org.*`) in the workflow's organization or below, and the `filter` expression is true. The run happens in the event's organization. |
 | `poll` | At each `interval` (at least `1m`), calls an integration's list action (`action`, optional `connection`, `with` passed as-is) and starts a run for each item it hasn't seen: `on: new` (default) or `new_or_changed`. `items` is where the list is in the response (e.g. `value`), `item_id` what identifies an item (default `id`). The first check only records what's there. The item is `trigger.item`, and `trigger.change` is `new` or `changed`. A failing check shows on the workflow's Triggers card. |
 | `form` | Someone submits the form with this `form` key. The answers are the inputs, and the run happens in the organization it was submitted for, acting as the submitter. See [forms.md](forms.md). |
-| `mcp_tool` | Reserved for MCP (Phase 4). |
+| `mcp_tool` | Offers the published workflow as a tool in the [MCP server](mcp.md#your-workflows-as-tools) and the assistant, named `run_<key>`, with its inputs as the tool's input schema. Optional `description` (default: the workflow's). |
 
 ## Steps
 

@@ -81,7 +81,7 @@ pub fn json_schema() -> serde_json::Value {
     if let Some(object) = schema.as_object_mut() {
         object.insert(
             "$id".into(),
-            "https://usehuxley.com/schemas/hwf/v1.json".into(),
+            "https://usehuxley.io/schemas/hwf/v1.json".into(),
         );
     }
     sorted(schema)

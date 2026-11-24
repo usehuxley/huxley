@@ -68,7 +68,7 @@ async fn harness() -> Option<Harness> {
 impl Harness {
     async fn start(&self, step: &str) -> Uuid {
         let yaml = format!(
-            r#"apiVersion: usehuxley.com/v1
+            r#"apiVersion: usehuxley.io/v1
 kind: Workflow
 metadata: {{ key: s, name: Script }}
 spec:
