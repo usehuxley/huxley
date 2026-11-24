@@ -16,6 +16,8 @@ struct Entry {
     summary: &'static str,
     category: &'static str,
     spec: &'static str,
+    /// The overlay it starts with (e.g. how its lists page), as JSON.
+    overlay: &'static str,
 }
 
 const ENTRIES: &[Entry] = &[
@@ -25,6 +27,12 @@ const ENTRIES: &[Entry] = &[
         summary: "Microsoft 365 and Entra ID: users, licenses, groups, mail.",
         category: "Microsoft",
         spec: include_str!("../catalog/microsoft-graph.yaml"),
+        overlay: r#"{ "actions": {
+            "listUsers": { "pagination": { "style": "next_url", "next": "@odata.nextLink", "items": "value" } },
+            "listGroups": { "pagination": { "style": "next_url", "next": "@odata.nextLink", "items": "value" } },
+            "listGroupMembers": { "pagination": { "style": "next_url", "next": "@odata.nextLink", "items": "value" } },
+            "listUserGroups": { "pagination": { "style": "next_url", "next": "@odata.nextLink", "items": "value" } }
+        } }"#,
     },
     Entry {
         key: "slack",
@@ -32,6 +40,10 @@ const ENTRIES: &[Entry] = &[
         summary: "Post messages to channels with a bot token.",
         category: "Messaging",
         spec: include_str!("../catalog/slack.yaml"),
+        overlay: r#"{ "actions": {
+            "listChannels": { "pagination": { "style": "cursor", "cursor": "response_metadata.next_cursor",
+                                               "param": "cursor", "items": "channels" } }
+        } }"#,
     },
 ];
 
@@ -77,10 +89,13 @@ pub async fn add(
     org_id: Uuid,
     key: &str,
 ) -> StoreResult<Option<IntegrationDetail>> {
-    let Some(spec) = spec(key) else {
+    let Some(entry) = ENTRIES.iter().find(|e| e.key == key) else {
         return Ok(None);
     };
-    store::create(conn, ctx, org_id, Some(key), spec)
+    let created = store::create(&mut *conn, ctx, org_id, Some(key), entry.spec).await?;
+    let overlay: crate::overlay::Overlay =
+        serde_json::from_str(entry.overlay).expect("built-in overlays parse");
+    store::set_overlay(conn, ctx, created.summary.id, overlay)
         .await
         .map(Some)
 }
@@ -102,6 +117,20 @@ mod tests {
                 imported.warnings
             );
             assert_ne!(imported.definition.actions.len(), 0, "{}", entry.key);
+        }
+        for entry in ENTRIES {
+            let overlay: crate::overlay::Overlay = serde_json::from_str(entry.overlay).unwrap();
+            let checked = overlay.clone().checked().unwrap();
+            assert_eq!(checked, overlay, "{}", entry.key);
+            let spec = crate::parse(entry.spec).unwrap();
+            let definition = crate::import_value(spec).unwrap().definition;
+            for key in overlay.actions.keys() {
+                assert!(
+                    definition.actions.iter().any(|a| a.key == *key),
+                    "{}: {key}",
+                    entry.key
+                );
+            }
         }
         let graph = list().into_iter().find(|e| e.key == "msgraph").unwrap();
         assert_eq!(graph.actions, 14);

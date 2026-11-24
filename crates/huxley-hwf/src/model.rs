@@ -453,6 +453,13 @@ step!(IntegrationActionStep {
     /// The action's inputs: its parameters by name, and `body`.
     #[serde(default, rename = "with", skip_serializing_if = "Option::is_none")]
     pub inputs: Option<Value>,
+    /// Follow every page (the action's pagination, set in the integration's
+    /// overlay): the output is `{items, pages, truncated}`.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub all_pages: bool,
+    /// The most pages followed with `all_pages` (default 20, at most 100).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max_pages: Option<u32>,
 });
 
 step!(WaitForCallbackStep {

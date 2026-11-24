@@ -90,6 +90,16 @@ fn expr_error(e: &ExprError) -> Json {
     error("expression", e.to_string())
 }
 
+/// An `integration.action` step's input, before expressions.
+fn action_input(s: &huxley_hwf::IntegrationActionStep) -> Json {
+    let mut value = json!({ "action": s.action, "connection": s.connection, "inputs": s.inputs });
+    if s.all_pages {
+        value["all_pages"] = json!(true);
+        value["max_pages"] = json!(s.max_pages);
+    }
+    value
+}
+
 const fn is_container(step: &Step) -> bool {
     matches!(
         step,
@@ -345,11 +355,7 @@ impl<'a> Walker<'a> {
                 });
                 self.external(step, &value, frame)
             }
-            Step::IntegrationAction(s) => {
-                let value =
-                    json!({ "action": s.action, "connection": s.connection, "inputs": s.inputs });
-                self.external(step, &value, frame)
-            }
+            Step::IntegrationAction(s) => self.external(step, &action_input(s), frame),
             Step::If(s) => self.if_step(step, s, frame),
             Step::Switch(s) => self.switch_step(step, s, frame),
             Step::Foreach(s) => self.foreach_step(step, s, frame),

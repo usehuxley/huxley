@@ -27,6 +27,9 @@ pub struct ActionOverlay {
     /// Not offered when picking actions (still callable).
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub hidden: bool,
+    /// How the action pages through results, for `all_pages`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pagination: Option<crate::Pagination>,
 }
 
 /// An integration's overlay: edits by action key.
@@ -100,6 +103,9 @@ impl Overlay {
                 action.group = Some(group.clone());
             }
             action.hidden = edit.hidden;
+            if let Some(pagination) = &edit.pagination {
+                action.pagination = Some(pagination.clone());
+            }
         }
     }
 }

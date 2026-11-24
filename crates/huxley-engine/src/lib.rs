@@ -18,6 +18,7 @@ mod http;
 mod journal;
 mod notify;
 pub mod oauth;
+mod pages;
 mod payload;
 pub mod queue;
 mod run;

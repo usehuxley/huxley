@@ -25,7 +25,16 @@ Only a file that isn't JSON or YAML, isn't OpenAPI or Swagger, or is over the li
 
 ## Your edits (overlays)
 
-On an integration's page, **Edit** on an action changes how it's shown: its name, group and description. You can also **hide** it from the action picker. These edits form the integration's **overlay**. It's stored apart from the vendor's spec, so updating to a newer spec keeps it, and an edit follows its action when the vendor renames it. Workflows still call actions by key, so nothing you change here breaks them, and hidden actions keep working where they're already used. The API is `PUT /api/v1/integrations/{id}/overlay`, which needs `integration:manage`. Pagination and rate-limit settings will come later.
+On an integration's page, **Edit** on an action changes how it's shown: its name, group and description. You can also **hide** it from the action picker. These edits form the integration's **overlay**. It's stored apart from the vendor's spec, so updating to a newer spec keeps it, and an edit follows its action when the vendor renames it. Workflows still call actions by key, so nothing you change here breaks them, and hidden actions keep working where they're already used. The API is `PUT /api/v1/integrations/{id}/overlay`, which needs `integration:manage`.
+
+**Pagination.** The overlay can also say how a list action pages, as `pagination`. Paths are dot-separated paths in the response body, and `items` is where each page's list is:
+
+- `{ "style": "next_url", "next": "@odata.nextLink", "items": "value" }`: the body gives the next page's URL.
+- `{ "style": "cursor", "cursor": "meta.next", "param": "cursor", "items": "data" }`: the body gives a cursor, which is sent back as a query parameter.
+- `{ "style": "link_header", "items": "data" }`: a `Link: <…>; rel="next"` header.
+- `{ "style": "offset", "param": "offset", "page_size": 100, "limit_param": "limit" }`: skip counts.
+
+An `integration.action` step with `all_pages: true` then follows the pages, up to `max_pages` (default 20, at most 100), and returns `{ items, pages, truncated }`. A next-page URL must be on the connection's own server, so its credentials never go anywhere else. The built-in integrations come with their list actions' pagination already set. Rate-limit settings will come later.
 
 ## Built-in integrations
 

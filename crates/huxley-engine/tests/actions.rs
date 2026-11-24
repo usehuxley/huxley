@@ -46,6 +46,29 @@ async fn list(
     AxumJson(json!([{ "id": 1, "subject": "Printer" }]))
 }
 
+/// Three items over two pages; `?to=elsewhere` points the next page at
+/// another host.
+async fn paged(Query(query): Query<HashMap<String, String>>, headers: HeaderMap) -> AxumJson<Json> {
+    let host = headers
+        .get("host")
+        .and_then(|h| h.to_str().ok())
+        .unwrap_or_default()
+        .to_owned();
+    let port = host.rsplit(':').next().unwrap_or_default().to_owned();
+    if query.get("page").map(String::as_str) == Some("2") {
+        return AxumJson(json!({ "value": [{ "n": 3 }] }));
+    }
+    let next_host = if query.get("to").map(String::as_str) == Some("elsewhere") {
+        "127.0.0.1"
+    } else {
+        "localhost"
+    };
+    AxumJson(json!({
+        "value": [{ "n": 1 }, { "n": 2 }],
+        "@odata.nextLink": format!("http://{next_host}:{port}/api/paged?page=2"),
+    }))
+}
+
 async fn create(
     State(api): State<Shared>,
     headers: HeaderMap,
@@ -99,6 +122,11 @@ components:
       flows:
         clientCredentials: {{ tokenUrl: "http://localhost:{port}/t/{{tenant}}/token", scopes: {{}} }}
 paths:
+  /paged:
+    get:
+      operationId: listPaged
+      parameters: [ {{ name: to, in: query, schema: {{ type: string }} }} ]
+      responses: {{ "200": {{ description: ok }} }}
   /tickets:
     get:
       operationId: {list_id}
@@ -159,6 +187,7 @@ async fn harness() -> Option<Harness> {
     let app = axum::Router::new()
         .route("/api/tickets", get(list).post(create))
         .route("/api/tickets/{id}", get(one))
+        .route("/api/paged", get(paged))
         .route("/token", post(token))
         .route("/t/{tenant}/token", post(tenant_token))
         .with_state(api.clone());
@@ -570,4 +599,76 @@ async fn one_partner_connection_serves_each_clients_tenant() {
     assert_eq!(h.finish(id).await.status, RunStatus::Failed);
     let error = h.step_error(id, "open").await.to_string();
     assert!(error.contains("m365_tenant"), "{error}");
+}
+
+#[tokio::test]
+async fn all_pages_follows_the_overlays_pagination() {
+    let Some(h) = harness().await else { return };
+    h.connect(h.msp, "main", "key", "k-123", false).await;
+    let step = |extra: &str| {
+        format!(
+            "    - {{ id: list, type: integration.action, action: tickets/listPaged, all_pages: true{extra} }}\n"
+        )
+    };
+    // Without pagination set, all_pages is refused clearly.
+    let id = h.start(h.msp, &step("")).await;
+    assert_eq!(h.finish(id).await.status, RunStatus::Failed);
+    assert!(
+        h.step_error(id, "list")
+            .await
+            .to_string()
+            .contains("no pagination set")
+    );
+
+    let ctx = RequestContext::system(Via::System);
+    let mut tx = begin_scoped(&h.pools.app, &OrgScope::System).await.unwrap();
+    let overlay: huxley_integrations::overlay::Overlay = serde_json::from_value(json!({
+        "actions": { "listPaged": { "pagination": {
+            "style": "next_url", "next": "@odata.nextLink", "items": "value" } } }
+    }))
+    .unwrap();
+    store::set_overlay(&mut tx, &ctx, h.integration, overlay)
+        .await
+        .unwrap();
+    tx.commit().await.unwrap();
+
+    let id = h.start(h.msp, &step("")).await;
+    let run = h.finish(id).await;
+    assert_eq!(run.status, RunStatus::Succeeded, "{:?}", run.error);
+    let output: Json =
+        sqlx::query_scalar("SELECT output FROM step_runs WHERE run_id = $1 AND step_key = 'list'")
+            .bind(id)
+            .fetch_one(&h.pools.owner)
+            .await
+            .unwrap();
+    assert_eq!(
+        output,
+        json!({ "items": [{ "n": 1 }, { "n": 2 }, { "n": 3 }], "pages": 2, "truncated": false })
+    );
+
+    // Stopping early says so.
+    let id = h.start(h.msp, &step(", max_pages: 1")).await;
+    assert_eq!(h.finish(id).await.status, RunStatus::Succeeded);
+    let output: Json =
+        sqlx::query_scalar("SELECT output FROM step_runs WHERE run_id = $1 AND step_key = 'list'")
+            .bind(id)
+            .fetch_one(&h.pools.owner)
+            .await
+            .unwrap();
+    assert_eq!(output["pages"], 1);
+    assert_eq!(output["truncated"], true);
+
+    // A next page on another host is refused: the key would go with it.
+    let id = h
+        .start(
+            h.msp,
+            "    - { id: list, type: integration.action, action: tickets/listPaged, all_pages: true, with: { to: elsewhere } }\n",
+        )
+        .await;
+    assert_eq!(h.finish(id).await.status, RunStatus::Failed);
+    let error = h.step_error(id, "list").await.to_string();
+    assert!(
+        error.contains("isn't on the connection's server"),
+        "{error}"
+    );
 }

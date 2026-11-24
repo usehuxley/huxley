@@ -2710,6 +2710,7 @@ export interface components {
 			name: string;
 			/** @description The JSON schema of the first successful response, if it has one. */
 			outputSchema?: Record<string, never> | null;
+			pagination?: components['schemas']['Pagination'] | null;
 			parameters: components['schemas']['Parameter'][];
 			/** @description The path template, e.g. `/users/{id}`. */
 			path: string;
@@ -2740,6 +2741,7 @@ export interface components {
 			/** @description Not offered when picking actions (still callable). */
 			hidden?: boolean;
 			name?: string | null;
+			pagination?: components['schemas']['Pagination'] | null;
 		};
 		AddBuiltInRequest: {
 			/** Format: uuid */
@@ -3671,6 +3673,39 @@ export interface components {
 				[key: string]: components['schemas']['ActionOverlay'];
 			};
 		};
+		/**
+		 * @description How a list action pages through its results. Paths are dot-separated
+		 *     paths in the response body; `items` is where each page's list is
+		 *     (default: the body itself).
+		 */
+		Pagination:
+			| {
+					items?: string | null;
+					next: string;
+					/** @enum {string} */
+					style: 'next_url';
+			  }
+			| {
+					cursor: string;
+					items?: string | null;
+					param: string;
+					/** @enum {string} */
+					style: 'cursor';
+			  }
+			| {
+					items?: string | null;
+					/** @enum {string} */
+					style: 'link_header';
+			  }
+			| {
+					items?: string | null;
+					limit_param?: string | null;
+					/** Format: int32 */
+					page_size: number;
+					param: string;
+					/** @enum {string} */
+					style: 'offset';
+			  };
 		/** @enum {string} */
 		ParamLocation: 'path' | 'query' | 'header' | 'cookie';
 		Parameter: {

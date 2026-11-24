@@ -165,6 +165,8 @@ const NOT_EXPRESSIONS: &[&str] = &[
     "action",
     "connection",
     "connections",
+    "all_pages",
+    "max_pages",
     "expires",
     "script",
 ];
