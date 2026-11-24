@@ -16,7 +16,7 @@ use tower_http::trace::TraceLayer;
 
 use crate::{
     ApiError, AppState, approval_routes, audit_routes, auth_routes, connection_routes, csrf,
-    dataset_routes, entity_routes, form_routes, health, hook_routes, integration_routes,
+    dataset_routes, entity_routes, form_routes, health, hook_routes, integration_routes, mcp,
     mfa_routes, module_routes, notification_routes, openapi, org_routes, pack_routes,
     passkey_routes, public_form_routes, runner_routes, script_routes, security_routes, sso_routes,
     team_routes, template_routes, token_routes, user_routes, variable_routes, workflow_routes,
@@ -131,7 +131,33 @@ pub fn router(state: AppState) -> Router {
                 .layer(RequestBodyLimitLayer::new(hook_routes::MAX_BODY)),
         );
 
-    Router::new().merge(hooks).merge(main).with_state(state)
+    let mcp_routes = mcp_routes(&main, &state);
+
+    Router::new()
+        .merge(hooks)
+        .merge(mcp_routes)
+        .merge(main)
+        .with_state(state)
+}
+
+/// `/mcp`: the MCP server, which makes its tool calls through `main`.
+fn mcp_routes(main: &Router<AppState>, state: &AppState) -> Router<AppState> {
+    let internal = mcp::Internal(main.clone().with_state(state.clone()));
+    Router::new()
+        .route("/mcp", axum::routing::post(mcp::post).get(mcp::get))
+        .layer(axum::Extension(internal))
+        .layer(
+            ServiceBuilder::new()
+                .layer(SetRequestIdLayer::new(REQUEST_ID, MakeRequestUuid))
+                .layer(TraceLayer::new_for_http().make_span_with(make_span))
+                .layer(PropagateRequestIdLayer::new(REQUEST_ID))
+                .layer(CatchPanicLayer::custom(handle_panic))
+                .layer(TimeoutLayer::with_status_code(
+                    StatusCode::REQUEST_TIMEOUT,
+                    REQUEST_TIMEOUT,
+                ))
+                .layer(RequestBodyLimitLayer::new(4 * 1024 * 1024)),
+        )
 }
 
 /// One span per request, continuing the caller's trace if it sent `traceparent`.

@@ -1,0 +1,557 @@
+//! The MCP server (design doc §10.2, ADR-030): Streamable HTTP at `/mcp`,
+//! JSON-RPC 2.0 over POST, answered with single JSON responses.
+//!
+//! Every tool call is made *through the API itself*, as the authenticated
+//! user, so it passes the same permission checks, validation and scoping
+//! as any other API call, and is audited `via = mcp`. Tools only create
+//! and change drafts: nothing publishes (a person does that).
+
+use std::net::SocketAddr;
+
+use axum::body::Body;
+use axum::extract::{ConnectInfo, State};
+use axum::response::{IntoResponse, Response};
+use axum::{Extension, Json};
+use http::{HeaderMap, HeaderValue, Method, Request, StatusCode, header};
+use serde_json::{Value, json};
+use tower::ServiceExt as _;
+
+use crate::authz::Authed;
+use crate::{ApiError, AppState};
+
+/// The API router, for making tool calls through it.
+#[derive(Clone)]
+pub struct Internal(pub axum::Router);
+
+impl std::fmt::Debug for Internal {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("Internal")
+    }
+}
+
+/// Marks a request as made by an MCP tool call (only the server can set a
+/// request extension; clients can't), so it's audited `via = mcp`.
+#[derive(Debug, Clone, Copy)]
+pub struct McpCall;
+
+/// Protocol versions this server speaks, newest first.
+const VERSIONS: &[&str] = &["2025-06-18", "2025-03-26", "2024-11-05"];
+
+const INSTRUCTIONS: &str = "Huxley is an automation platform for MSPs. Workflows are HWF documents \
+(YAML or JSON; read the huxley://schemas/hwf/v1.json resource or get_workflow_schema). Build one \
+with validate_workflow, try it with test_workflow_document (mock steps that would reach real \
+systems), save it with create_workflow_draft or update_workflow_draft, and follow runs with \
+get_run. You can only save drafts: a person publishes them.";
+
+fn rpc_result(id: &Value, result: &Value) -> Value {
+    json!({ "jsonrpc": "2.0", "id": id, "result": result })
+}
+
+fn rpc_error(id: &Value, code: i64, message: &str) -> Value {
+    json!({ "jsonrpc": "2.0", "id": id, "error": { "code": code, "message": message } })
+}
+
+const UUID: &str = r#"{ "type": "string", "format": "uuid" }"#;
+
+/// The tools: name, description, and input properties (JSON) with the
+/// required ones. Each becomes an object schema.
+const TOOLS: &[(&str, &str, &str, &[&str])] = &[
+    (
+        "list_organizations",
+        "Organizations you can see (ids are needed to create workflows).",
+        "{}",
+        &[],
+    ),
+    (
+        "list_integrations",
+        "Integrations (imported APIs) you can see.",
+        "{}",
+        &[],
+    ),
+    (
+        "list_actions",
+        "Integration actions an organization can use in integration.action steps, with their inputs.",
+        r#"{ "org_id": UUID }"#,
+        &["org_id"],
+    ),
+    (
+        "get_integration",
+        "An integration with its actions and their input schemas.",
+        r#"{ "id": UUID }"#,
+        &["id"],
+    ),
+    (
+        "get_workflow_schema",
+        "The HWF JSON Schema: every step type and field.",
+        "{}",
+        &[],
+    ),
+    ("list_workflows", "Workflows you can see.", "{}", &[]),
+    (
+        "get_workflow",
+        "A workflow with its current draft and any problems with it.",
+        r#"{ "id": UUID }"#,
+        &["id"],
+    ),
+    (
+        "validate_workflow",
+        "Checks a workflow document without saving it; returns its problems (none: it's ready).",
+        r#"{ "document": DOCUMENT }"#,
+        &["document"],
+    ),
+    (
+        "test_workflow_document",
+        "Test-runs a document without saving it. Mock steps that would reach real systems with their outputs (by step id). \
+      Returns the run's id: follow it with get_run.",
+        r#"{ "org_id": UUID, "document": DOCUMENT, "inputs": { "type": "object" },
+          "mocks": { "type": "object", "description": "Step id → the output it returns instead of running." } }"#,
+        &["org_id", "document"],
+    ),
+    (
+        "create_workflow_draft",
+        "Creates a workflow (as a draft) in an organization. A person reviews and publishes it.",
+        r#"{ "org_id": UUID, "document": DOCUMENT }"#,
+        &["org_id", "document"],
+    ),
+    (
+        "update_workflow_draft",
+        "Replaces a workflow's draft. A person reviews and publishes it.",
+        r#"{ "id": UUID, "document": DOCUMENT }"#,
+        &["id", "document"],
+    ),
+    (
+        "test_run_workflow",
+        "Test-runs a saved workflow's draft for real (its steps run). Returns the run's id.",
+        r#"{ "id": UUID, "inputs": { "type": "object" } }"#,
+        &["id"],
+    ),
+    (
+        "get_run",
+        "A run: its status, steps (inputs, outputs, errors) and outputs.",
+        r#"{ "id": UUID }"#,
+        &["id"],
+    ),
+    (
+        "list_runs",
+        "Recent runs, optionally of one workflow.",
+        r#"{ "workflow_id": UUID }"#,
+        &[],
+    ),
+    (
+        "list_scripts",
+        "Library scripts workflows can run with script steps.",
+        "{}",
+        &[],
+    ),
+    ("list_forms", "Forms that start workflows.", "{}", &[]),
+    (
+        "list_datasets",
+        "Datasets (typed tables kept in Huxley) and their columns.",
+        "{}",
+        &[],
+    ),
+    (
+        "query_dataset",
+        "Rows of a dataset matching equality filters.",
+        r#"{ "id": UUID, "filters": { "type": "object" }, "limit": { "type": "integer", "minimum": 1, "maximum": 1000 } }"#,
+        &["id"],
+    ),
+];
+
+const DOCUMENT: &str =
+    r#"{ "description": "An HWF workflow document: a JSON object, or YAML text." }"#;
+
+/// A tool's input schema.
+fn schema(properties: &str, required: &[&str]) -> Value {
+    let text = properties
+        .replace("UUID", UUID)
+        .replace("DOCUMENT", DOCUMENT);
+    let properties: Value = serde_json::from_str(&text).expect("tool schemas are JSON");
+    json!({ "type": "object", "properties": properties, "required": required, "additionalProperties": false })
+}
+
+fn is_tool(name: &str) -> bool {
+    TOOLS.iter().any(|(n, ..)| *n == name)
+}
+
+/// A tool's `document` argument: an object, or YAML/JSON text.
+fn document(args: &Value) -> Result<Value, String> {
+    match &args["document"] {
+        Value::String(text) => serde_saphyr::from_str::<Value>(text)
+            .map_err(|e| format!("document isn't valid YAML: {e}")),
+        Value::Object(_) => Ok(args["document"].clone()),
+        _ => Err("document is a workflow document (an object, or YAML text)".into()),
+    }
+}
+
+fn arg<'a>(args: &'a Value, name: &str) -> Result<&'a str, String> {
+    args[name]
+        .as_str()
+        .ok_or_else(|| format!("{name} is required"))
+}
+
+/// An API request a tool makes.
+#[derive(Debug)]
+struct Call {
+    method: Method,
+    path: String,
+    body: Option<Value>,
+}
+
+impl Call {
+    fn get(path: impl Into<String>) -> Self {
+        Self {
+            method: Method::GET,
+            path: path.into(),
+            body: None,
+        }
+    }
+    fn post(path: impl Into<String>, body: Value) -> Self {
+        Self {
+            method: Method::POST,
+            path: path.into(),
+            body: Some(body),
+        }
+    }
+}
+
+/// The API request for a simple tool, or `None` for one that's handled
+/// specially.
+fn plan(name: &str, args: &Value) -> Result<Option<Call>, String> {
+    Ok(Some(match name {
+        "list_organizations" => Call::get("/api/v1/orgs"),
+        "list_integrations" => Call::get("/api/v1/integrations"),
+        "list_actions" => Call::get(format!(
+            "/api/v1/integrations/actions?orgId={}",
+            arg(args, "org_id")?
+        )),
+        "get_integration" => Call::get(format!("/api/v1/integrations/{}", arg(args, "id")?)),
+        "list_workflows" => Call::get("/api/v1/workflows"),
+        "get_workflow" => Call::get(format!("/api/v1/workflows/{}", arg(args, "id")?)),
+        "validate_workflow" => Call::post(
+            "/api/v1/workflows/validate",
+            json!({ "document": document(args)? }),
+        ),
+        "test_workflow_document" => Call::post(
+            "/api/v1/workflows/test-runs",
+            json!({
+                "orgId": arg(args, "org_id")?, "document": document(args)?,
+                "inputs": args.get("inputs").cloned().unwrap_or_else(|| json!({})),
+                "mocks": args.get("mocks").cloned().unwrap_or_else(|| json!({}))
+            }),
+        ),
+        "create_workflow_draft" => Call::post(
+            "/api/v1/workflows",
+            json!({ "orgId": arg(args, "org_id")?, "document": document(args)? }),
+        ),
+        "test_run_workflow" => Call::post(
+            format!("/api/v1/workflows/{}/runs", arg(args, "id")?),
+            json!({ "inputs": args.get("inputs").cloned().unwrap_or_else(|| json!({})), "test": true }),
+        ),
+        "get_run" => Call::get(format!("/api/v1/runs/{}", arg(args, "id")?)),
+        "list_runs" => match args["workflow_id"].as_str() {
+            Some(id) => Call::get(format!("/api/v1/runs?workflowId={id}&limit=25")),
+            None => Call::get("/api/v1/runs?limit=25"),
+        },
+        "list_scripts" => Call::get("/api/v1/scripts"),
+        "list_forms" => Call::get("/api/v1/forms"),
+        "list_datasets" => Call::get("/api/v1/datasets"),
+        "query_dataset" => Call::post(
+            format!("/api/v1/datasets/{}/rows/query", arg(args, "id")?),
+            json!({
+                "filters": args.get("filters").cloned().unwrap_or_else(|| json!({})),
+                "limit": args.get("limit").cloned().unwrap_or(json!(100))
+            }),
+        ),
+        "get_workflow_schema" | "update_workflow_draft" => return Ok(None),
+        other => return Err(format!("no tool called {other:?}")),
+    }))
+}
+
+/// Makes API calls as the MCP client's user.
+struct Caller<'a> {
+    internal: &'a axum::Router,
+    authorization: HeaderValue,
+    peer: Option<ConnectInfo<SocketAddr>>,
+    user_agent: Option<HeaderValue>,
+}
+
+impl Caller<'_> {
+    async fn send(&self, call: Call) -> (StatusCode, Value) {
+        let mut request = Request::builder()
+            .method(call.method)
+            .uri(&call.path)
+            .header(header::AUTHORIZATION, self.authorization.clone());
+        if let Some(agent) = &self.user_agent {
+            request = request.header(header::USER_AGENT, agent.clone());
+        }
+        let mut request = match call.body {
+            Some(body) => request
+                .header(header::CONTENT_TYPE, "application/json")
+                .body(Body::from(body.to_string())),
+            None => request.body(Body::empty()),
+        }
+        .expect("valid request");
+        request.extensions_mut().insert(McpCall);
+        if let Some(peer) = self.peer {
+            request.extensions_mut().insert(peer);
+        }
+        let response = match self.internal.clone().oneshot(request).await {
+            Ok(response) => response,
+            Err(never) => match never {},
+        };
+        let status = response.status();
+        let bytes = axum::body::to_bytes(response.into_body(), 32 * 1024 * 1024)
+            .await
+            .unwrap_or_default();
+        (
+            status,
+            serde_json::from_slice(&bytes).unwrap_or(Value::Null),
+        )
+    }
+
+    async fn call_tool(&self, name: &str, args: &Value) -> Result<(StatusCode, Value), String> {
+        match name {
+            "get_workflow_schema" => Ok((StatusCode::OK, huxley_hwf::json_schema())),
+            "update_workflow_draft" => {
+                let id = arg(args, "id")?;
+                let document = document(args)?;
+                // The draft's current revision, so the save isn't refused as stale.
+                let (status, current) = self
+                    .send(Call::get(format!("/api/v1/workflows/{id}")))
+                    .await;
+                if !status.is_success() {
+                    return Ok((status, current));
+                }
+                Ok(self
+                    .send(Call {
+                        method: Method::PUT,
+                        path: format!("/api/v1/workflows/{id}/draft"),
+                        body: Some(
+                            json!({ "revision": current["revision"], "document": document }),
+                        ),
+                    })
+                    .await)
+            }
+            _ => match plan(name, args)? {
+                Some(call) => Ok(self.send(call).await),
+                None => Err(format!("no tool called {name:?}")),
+            },
+        }
+    }
+}
+
+/// A tool's result: the API's answer as structured content and text, or
+/// its problem as an error the model can read.
+fn tool_result(outcome: Result<(StatusCode, Value), String>) -> Value {
+    match outcome {
+        Ok((status, body)) if status.is_success() => {
+            // Structured content is an object.
+            let structured = if body.is_object() {
+                body
+            } else {
+                json!({ "items": body })
+            };
+            json!({
+                "content": [{ "type": "text", "text": serde_json::to_string(&structured).unwrap_or_default() }],
+                "structuredContent": structured,
+                "isError": false
+            })
+        }
+        Ok((status, problem)) => {
+            let detail = problem["errors"]
+                .as_array()
+                .filter(|e| !e.is_empty())
+                .map(|errors| {
+                    errors
+                        .iter()
+                        .map(|e| {
+                            format!(
+                                "{}: {}",
+                                e["field"].as_str().unwrap_or(""),
+                                e["message"].as_str().unwrap_or("")
+                            )
+                        })
+                        .collect::<Vec<_>>()
+                        .join("; ")
+                })
+                .or_else(|| problem["detail"].as_str().map(str::to_owned))
+                .or_else(|| problem["title"].as_str().map(str::to_owned))
+                .unwrap_or_else(|| status.to_string());
+            json!({ "content": [{ "type": "text", "text": format!("{status}: {detail}") }], "isError": true })
+        }
+        Err(message) => {
+            json!({ "content": [{ "type": "text", "text": message }], "isError": true })
+        }
+    }
+}
+
+const SCHEMA_URI: &str = "huxley://schemas/hwf/v1.json";
+
+async fn handle(caller: &Caller<'_>, message: &Value) -> Option<Value> {
+    let id = message.get("id")?.clone();
+    let method = message["method"].as_str().unwrap_or_default();
+    let params = &message["params"];
+    Some(match method {
+        "initialize" => {
+            let asked = params["protocolVersion"].as_str().unwrap_or_default();
+            let version = VERSIONS
+                .iter()
+                .find(|v| **v == asked)
+                .unwrap_or(&VERSIONS[0]);
+            rpc_result(
+                &id,
+                &json!({
+                    "protocolVersion": version,
+                    "capabilities": { "tools": { "listChanged": false }, "resources": { "listChanged": false } },
+                    "serverInfo": { "name": "huxley", "version": env!("CARGO_PKG_VERSION") },
+                    "instructions": INSTRUCTIONS
+                }),
+            )
+        }
+        "ping" => rpc_result(&id, &json!({})),
+        "tools/list" => {
+            let tools: Vec<Value> = TOOLS
+                .iter()
+                .map(|(name, description, properties, required)| {
+                    json!({ "name": name, "description": description, "inputSchema": schema(properties, required) })
+                })
+                .collect();
+            rpc_result(&id, &json!({ "tools": tools }))
+        }
+        "tools/call" => {
+            let Some(name) = params["name"].as_str() else {
+                return Some(rpc_error(&id, -32602, "params.name is required"));
+            };
+            if !is_tool(name) {
+                return Some(rpc_error(&id, -32602, &format!("no tool called {name:?}")));
+            }
+            let args = params
+                .get("arguments")
+                .cloned()
+                .unwrap_or_else(|| json!({}));
+            rpc_result(&id, &tool_result(caller.call_tool(name, &args).await))
+        }
+        "resources/list" => rpc_result(
+            &id,
+            &json!({ "resources": [{
+                "uri": SCHEMA_URI, "name": "HWF JSON Schema", "mimeType": "application/schema+json",
+                "description": "The schema of Huxley workflow documents: every step type and field."
+            }] }),
+        ),
+        "resources/read" => {
+            if params["uri"] != SCHEMA_URI {
+                return Some(rpc_error(&id, -32002, "no such resource"));
+            }
+            rpc_result(
+                &id,
+                &json!({ "contents": [{
+                    "uri": SCHEMA_URI, "mimeType": "application/schema+json",
+                    "text": huxley_hwf::json_schema().to_string()
+                }] }),
+            )
+        }
+        _ => rpc_error(&id, -32601, &format!("method {method:?} isn't supported")),
+    })
+}
+
+fn json_response(status: StatusCode, body: &Value) -> Response {
+    (
+        status,
+        [(header::CONTENT_TYPE, "application/json")],
+        body.to_string(),
+    )
+        .into_response()
+}
+
+/// `POST /mcp`: one JSON-RPC message (or a batch). Notifications and
+/// responses get `202 Accepted`; requests get their response.
+pub async fn post(
+    State(_state): State<AppState>,
+    Extension(Internal(internal)): Extension<Internal>,
+    authed: Result<Authed, ApiError>,
+    peer: Option<Extension<ConnectInfo<SocketAddr>>>,
+    headers: HeaderMap,
+    Json(body): Json<Value>,
+) -> Response {
+    if authed.is_err() || crate::authz::bearer_token(&headers).is_none() {
+        let mut response = json_response(
+            StatusCode::UNAUTHORIZED,
+            &json!({ "error": "invalid_token", "error_description": "Send an API token as Authorization: Bearer <token>." }),
+        );
+        response.headers_mut().insert(
+            header::WWW_AUTHENTICATE,
+            HeaderValue::from_static("Bearer realm=\"huxley\""),
+        );
+        return response;
+    }
+    let caller = Caller {
+        internal: &internal,
+        authorization: headers
+            .get(header::AUTHORIZATION)
+            .cloned()
+            .expect("checked above"),
+        peer: peer.map(|Extension(p)| p),
+        user_agent: headers.get(header::USER_AGENT).cloned(),
+    };
+    match &body {
+        Value::Array(messages) => {
+            let mut out = Vec::new();
+            for message in messages {
+                if let Some(reply) = handle(&caller, message).await {
+                    out.push(reply);
+                }
+            }
+            if out.is_empty() {
+                StatusCode::ACCEPTED.into_response()
+            } else {
+                json_response(StatusCode::OK, &Value::Array(out))
+            }
+        }
+        Value::Object(_) => match handle(&caller, &body).await {
+            Some(reply) => json_response(StatusCode::OK, &reply),
+            None => StatusCode::ACCEPTED.into_response(),
+        },
+        _ => json_response(
+            StatusCode::BAD_REQUEST,
+            &rpc_error(&Value::Null, -32600, "not a JSON-RPC message"),
+        ),
+    }
+}
+
+/// `GET /mcp`: this server doesn't open server-to-client streams.
+pub async fn get() -> Response {
+    (StatusCode::METHOD_NOT_ALLOWED, [(header::ALLOW, "POST")]).into_response()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn documents_may_be_yaml_or_objects() {
+        let yaml = json!({ "document": "apiVersion: usehuxley.com/v1\nkind: Workflow\n" });
+        assert_eq!(document(&yaml).unwrap()["kind"], "Workflow");
+        assert_eq!(
+            document(&json!({ "document": { "kind": "Workflow" } })).unwrap()["kind"],
+            "Workflow"
+        );
+        assert!(document(&json!({ "document": 3 })).is_err());
+    }
+
+    #[test]
+    fn every_tool_has_a_plan_or_a_handler() {
+        for (name, _, properties, required) in TOOLS {
+            let args = json!({ "id": "01a20000-0000-7000-8000-000000000000", "org_id": "01a20000-0000-7000-8000-000000000000",
+                               "document": { "kind": "Workflow" } });
+            let planned = plan(name, &args);
+            assert!(planned.is_ok(), "{name}: {planned:?}");
+            let schema = schema(properties, required);
+            for r in *required {
+                assert!(schema["properties"].get(r).is_some(), "{name}: {r}");
+            }
+        }
+        // Nothing publishes.
+        assert!(TOOLS.iter().all(|(name, ..)| !name.contains("publish")));
+    }
+}

@@ -83,6 +83,8 @@ Packs bundle integrations, workflows, forms, scripts and templates to share; see
 
 Datasets keep typed tables of data (such as every client's users) in Huxley; see [docs/datasets.md](docs/datasets.md).
 
+AI clients (Claude Code and others, with your own key) can build and test workflow drafts through Huxley's MCP server; see [docs/mcp.md](docs/mcp.md).
+
 Then open https://localhost (staff app) and https://portal.localhost (client portal). Set `HUXLEY_DOMAIN` and `HUXLEY_PORTAL_DOMAIN` in `.env` for real hostnames; Caddy obtains certificates automatically.
 
 ### Rotating the key-encryption key
