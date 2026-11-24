@@ -78,7 +78,7 @@ fn keys<'a>(pack: &'a Pack, kind: &str) -> &'a [String] {
 }
 
 /// The id of the item of `kind` with `key` in `org_id`, if there is one.
-async fn existing(
+pub(crate) async fn existing(
     conn: &mut PgConnection,
     org_id: Uuid,
     kind: &str,
@@ -534,6 +534,7 @@ pub async fn install(
 
     let m = &pack.manifest;
     let trust_label = match trust {
+        Trust::BuiltIn { .. } => "built_in",
         Trust::Trusted { .. } => "trusted",
         Trust::UnknownSigner { .. } => "unknown_signer",
         Trust::Unsigned => "unsigned",
@@ -566,6 +567,130 @@ pub async fn install(
     .await
     .map_err(|e| InstallError::Db(sqlx::Error::Protocol(e.to_string())))?;
     Ok(items)
+}
+
+/// What to put in an exported pack: the manifest's identity, and the ids
+/// of the organization's items to include.
+#[derive(Debug, Clone, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ExportRequest {
+    pub org_id: Uuid,
+    /// `<owner>/<name>`, lowercase.
+    pub key: String,
+    pub name: String,
+    /// Semver, e.g. `1.0.0`.
+    pub version: String,
+    #[serde(default)]
+    pub description: String,
+    #[serde(default)]
+    pub publisher: String,
+    #[serde(default)]
+    pub integrations: Vec<Uuid>,
+    #[serde(default)]
+    pub workflows: Vec<Uuid>,
+    #[serde(default)]
+    pub forms: Vec<Uuid>,
+    #[serde(default)]
+    pub scripts: Vec<Uuid>,
+}
+
+fn json_bytes(value: &impl Serialize) -> Vec<u8> {
+    serde_json::to_vec_pretty(value).expect("JSON values serialize")
+}
+
+/// Builds an unsigned pack of `request`'s items, which must all belong to
+/// its organization (as the system: the caller checks access). Workflows
+/// are exported as their current drafts; connections and secrets never
+/// are.
+pub async fn export(
+    conn: &mut PgConnection,
+    expr: &huxley_expr::Engine,
+    request: &ExportRequest,
+) -> Result<Vec<u8>, InstallError> {
+    let elsewhere =
+        |what: &str| InstallError::Content(format!("that {what} isn't in this organization"));
+    let mut files = BTreeMap::new();
+    let mut contents = huxley_packs::Contents::default();
+    for id in &request.integrations {
+        let detail = huxley_integrations::store::get(&mut *conn, *id)
+            .await
+            .map_err(|_| elsewhere("integration"))?;
+        if detail.summary.org_id != request.org_id {
+            return Err(elsewhere("integration"));
+        }
+        let key = &detail.summary.key;
+        let spec: Json = sqlx::query_scalar(
+            "SELECT spec FROM integration_versions WHERE integration_id = $1 AND version = $2",
+        )
+        .bind(id)
+        .bind(detail.summary.current_version)
+        .fetch_one(&mut *conn)
+        .await?;
+        // JSON is YAML too.
+        files.insert(format!("integrations/{key}.yaml"), json_bytes(&spec));
+        if detail.overlay != huxley_integrations::overlay::Overlay::default() {
+            files.insert(
+                format!("integrations/{key}.overlay.json"),
+                json_bytes(&detail.overlay),
+            );
+        }
+        contents.integrations.push(key.clone());
+    }
+    for id in &request.forms {
+        let form = huxley_forms::get(&mut *conn, *id)
+            .await
+            .map_err(|_| elsewhere("form"))?;
+        if form.org_id != request.org_id {
+            return Err(elsewhere("form"));
+        }
+        let file = json!({ "name": form.name, "description": form.description, "schema": form.schema, "ui": form.ui });
+        files.insert(format!("forms/{}.json", form.key), json_bytes(&file));
+        contents.forms.push(form.key);
+    }
+    for id in &request.scripts {
+        let script = huxley_scripts::get(&mut *conn, *id)
+            .await
+            .map_err(|_| elsewhere("script"))?;
+        let summary = &script.summary;
+        if summary.org_id != request.org_id {
+            return Err(elsewhere("script"));
+        }
+        let ext = match summary.language {
+            huxley_scripts::Language::Pwsh => "ps1",
+            huxley_scripts::Language::Python => "py",
+        };
+        let meta = json!({ "name": summary.name, "description": summary.description,
+                           "language": summary.language, "parameters": script.parameters });
+        files.insert(format!("scripts/{}.json", summary.key), json_bytes(&meta));
+        files.insert(
+            format!("scripts/{}.{ext}", summary.key),
+            script.source.clone().into_bytes(),
+        );
+        contents.scripts.push(summary.key.clone());
+    }
+    for id in &request.workflows {
+        let workflow = huxley_workflows::get(&mut *conn, expr, *id)
+            .await
+            .map_err(|_| elsewhere("workflow"))?;
+        if workflow.summary.org_id != request.org_id {
+            return Err(elsewhere("workflow"));
+        }
+        let key = workflow.summary.key.clone();
+        files.insert(format!("workflows/{key}.yaml"), json_bytes(&workflow.draft));
+        contents.workflows.push(key);
+    }
+    let manifest = huxley_packs::Manifest {
+        api_version: "usehuxley.com/v1".into(),
+        kind: "Pack".into(),
+        key: request.key.clone(),
+        name: request.name.clone(),
+        version: request.version.clone(),
+        description: request.description.clone(),
+        publisher: request.publisher.clone(),
+        contents,
+        files: BTreeMap::new(),
+    };
+    huxley_packs::build(manifest, &files, None).map_err(|e| InstallError::Content(e.to_string()))
 }
 
 #[cfg(test)]

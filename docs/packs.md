@@ -1,6 +1,6 @@
 # Packs
 
-A **pack** bundles integrations, workflows, forms, scripts and templates so they can be shared between instances, by Huxley, MSPs and the community (design doc §6.6, ADR-028). This page covers installing packs, the format, and the `huxley pack` command. Exporting packs and the built-in packs come next.
+A **pack** bundles integrations, workflows, forms, scripts and templates so they can be shared between instances, by Huxley, MSPs and the community (design doc §6.6, ADR-028). This page covers installing, exporting and signing packs, the built-in packs, and the format.
 
 ## Installing a pack
 
@@ -33,6 +33,24 @@ trusted_keys = ["hxpk_…"]
 Or set `HUXLEY_PACKS__TRUSTED_KEYS='["hxpk_…"]'` in the environment.
 
 The API is `POST /api/v1/packs/uploads?orgId=` (the raw file; it returns the review), `POST /api/v1/packs/uploads/{id}/install`, and `GET /api/v1/packs?orgId=`.
+
+## Built-in packs
+
+Huxley's built-in integrations (Microsoft Graph and Slack) are packs too: `huxley/msgraph` and `huxley/slack`. They ship inside the binary, so they're trusted by construction, and the review labels them **Built in**.
+
+You can add one from the Integrations catalog, or review it under **Settings → Packs → Built-in packs**. Either way it's recorded as an installed pack, so when a newer Huxley ships a newer version, it arrives as an upgrade you review.
+
+## Exporting a pack
+
+**Settings → Packs → Export a pack** bundles the organization's integrations (with their overlays), workflows (their drafts), forms and scripts into an unsigned `.hxpack`. Connections, credentials and secrets are never included. Exporting needs `pack:install`, plus read access to what you export.
+
+To sign it, use your key:
+
+```sh
+huxley pack sign onboarding-1.0.0.hxpack --key contoso-packs.key
+```
+
+The API is `POST /api/v1/packs/export`.
 
 ## The format
 
@@ -88,4 +106,5 @@ contents:
 ```sh
 huxley pack build ./hello --out hello.hxpack --key contoso-packs.key
 huxley pack inspect hello.hxpack --trust hxpk_…
+huxley pack sign hello.hxpack --key contoso-packs.key   # sign (or re-sign) an existing pack
 ```

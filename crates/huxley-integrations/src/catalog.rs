@@ -1,14 +1,10 @@
 //! Built-in integrations (design doc §7.3): curated OpenAPI specs shipped
-//! with Huxley, added to an organization in one click. Once added they're
-//! ordinary integrations: updated, pinned and overlaid like any other.
+//! with Huxley as built-in packs (ADR-028), added to an organization in one
+//! click. Once added they're ordinary integrations: updated, pinned and
+//! overlaid like any other.
 
-use huxley_core::RequestContext;
 use serde::Serialize;
-use sqlx::PgConnection;
 use utoipa::ToSchema;
-use uuid::Uuid;
-
-use crate::store::{self, IntegrationDetail, StoreResult};
 
 struct Entry {
     key: &'static str,
@@ -16,34 +12,34 @@ struct Entry {
     summary: &'static str,
     category: &'static str,
     spec: &'static str,
-    /// The overlay it starts with (e.g. how its lists page), as JSON.
+    /// The overlay it starts with (e.g. how its lists page), as JSON:
+    /// checked here, applied by the pack.
+    #[cfg(test)]
     overlay: &'static str,
 }
 
+// The specs and overlays live in the built-in packs (huxley-packs), which
+// is how they're installed; the catalog describes them.
 const ENTRIES: &[Entry] = &[
     Entry {
         key: "msgraph",
         name: "Microsoft Graph",
         summary: "Microsoft 365 and Entra ID: users, licenses, groups, mail.",
         category: "Microsoft",
-        spec: include_str!("../catalog/microsoft-graph.yaml"),
-        overlay: r#"{ "actions": {
-            "listUsers": { "pagination": { "style": "next_url", "next": "@odata.nextLink", "items": "value" } },
-            "listGroups": { "pagination": { "style": "next_url", "next": "@odata.nextLink", "items": "value" } },
-            "listGroupMembers": { "pagination": { "style": "next_url", "next": "@odata.nextLink", "items": "value" } },
-            "listUserGroups": { "pagination": { "style": "next_url", "next": "@odata.nextLink", "items": "value" } }
-        } }"#,
+        spec: include_str!("../../huxley-packs/builtin/msgraph/integrations/msgraph.yaml"),
+        #[cfg(test)]
+        overlay: include_str!(
+            "../../huxley-packs/builtin/msgraph/integrations/msgraph.overlay.json"
+        ),
     },
     Entry {
         key: "slack",
         name: "Slack",
         summary: "Post messages to channels with a bot token.",
         category: "Messaging",
-        spec: include_str!("../catalog/slack.yaml"),
-        overlay: r#"{ "actions": {
-            "listChannels": { "pagination": { "style": "cursor", "cursor": "response_metadata.next_cursor",
-                                               "param": "cursor", "items": "channels" } }
-        } }"#,
+        spec: include_str!("../../huxley-packs/builtin/slack/integrations/slack.yaml"),
+        #[cfg(test)]
+        overlay: include_str!("../../huxley-packs/builtin/slack/integrations/slack.overlay.json"),
     },
 ];
 
@@ -80,24 +76,6 @@ pub fn list() -> Vec<CatalogEntry> {
 /// The spec of built-in integration `key`.
 pub fn spec(key: &str) -> Option<&'static str> {
     ENTRIES.iter().find(|e| e.key == key).map(|e| e.spec)
-}
-
-/// Adds built-in integration `key` to `org_id`, under its own key.
-pub async fn add(
-    conn: &mut PgConnection,
-    ctx: &RequestContext,
-    org_id: Uuid,
-    key: &str,
-) -> StoreResult<Option<IntegrationDetail>> {
-    let Some(entry) = ENTRIES.iter().find(|e| e.key == key) else {
-        return Ok(None);
-    };
-    let created = store::create(&mut *conn, ctx, org_id, Some(key), entry.spec).await?;
-    let overlay: crate::overlay::Overlay =
-        serde_json::from_str(entry.overlay).expect("built-in overlays parse");
-    store::set_overlay(conn, ctx, created.summary.id, overlay)
-        .await
-        .map(Some)
 }
 
 #[cfg(test)]

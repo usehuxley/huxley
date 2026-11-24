@@ -112,7 +112,7 @@ test.describe('packs', () => {
 			mimeType: 'application/octet-stream',
 			buffer: pack(suffix)
 		});
-		await page.getByRole('button', { name: 'Review' }).click();
+		await page.getByRole('button', { name: 'Review', exact: true }).click();
 
 		const review = page.getByTestId('pack-review');
 		await expect(review).toBeVisible();
@@ -130,6 +130,46 @@ test.describe('packs', () => {
 		);
 	});
 
+	test('items are exported as a pack', async ({ browser }) => {
+		const page = await signIn(browser);
+		const suffix = Date.now().toString(36);
+		// Something to export: install a pack's workflow first.
+		await page.goto('/settings/packs');
+		await page.getByLabel('Pack file').setInputFiles({
+			name: 'ping.hxpack',
+			mimeType: 'application/octet-stream',
+			buffer: pack(suffix)
+		});
+		await page.getByRole('button', { name: 'Review', exact: true }).click();
+		await page.getByRole('button', { name: 'Install' }).click();
+		await expect(page.getByText(`Installed e2e/ping-${suffix} 1.0.0`)).toBeVisible();
+
+		await page.getByLabel('Pack key').fill(`e2e/export-${suffix}`);
+		await page.getByLabel('Pack name').fill('Exported');
+		await page.getByRole('checkbox', { name: `Ping ${suffix}` }).check();
+		const download = page.waitForEvent('download');
+		await page.getByRole('button', { name: 'Download pack' }).click();
+		const file = await download;
+		expect(file.suggestedFilename()).toBe(`e2e-export-${suffix}-1.0.0.hxpack`);
+		const stream = await file.createReadStream();
+		const chunks: Buffer[] = [];
+		for await (const chunk of stream) chunks.push(chunk as Buffer);
+		const bytes = Buffer.concat(chunks);
+		// A zip, whose manifest names the workflow.
+		expect(bytes.subarray(0, 2).toString()).toBe('PK');
+		expect(bytes.includes(`workflows/ping-${suffix}.yaml`)).toBe(true);
+	});
+
+	test('built-in packs are trusted by construction', async ({ browser }) => {
+		const page = await signIn(browser);
+		await page.goto('/settings/packs');
+		await page.getByRole('button', { name: 'Review Slack' }).click();
+		const review = page.getByTestId('pack-review');
+		await expect(review.getByText('Built in', { exact: true })).toBeVisible();
+		await expect(page.getByRole('list', { name: 'Egress domains' })).toHaveText('slack.com');
+		await expect(review.getByText('Nobody vouches')).toHaveCount(0);
+	});
+
 	test('a damaged pack is refused', async ({ browser }) => {
 		const page = await signIn(browser);
 		await page.goto('/settings/packs');
@@ -139,7 +179,7 @@ test.describe('packs', () => {
 			mimeType: 'application/octet-stream',
 			buffer: bytes
 		});
-		await page.getByRole('button', { name: 'Review' }).click();
+		await page.getByRole('button', { name: 'Review', exact: true }).click();
 		await expect(page.getByText("doesn't match the manifest")).toBeVisible();
 		await expect(page.getByTestId('pack-review')).toHaveCount(0);
 	});

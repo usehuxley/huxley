@@ -1603,6 +1603,64 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
+	'/api/v1/packs/builtin': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** The packs that ship with Huxley. */
+		get: operations['list_builtin_packs'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/packs/builtin/{owner}/{name}': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/**
+		 * Starts installing a built-in pack: like uploading it, returns the
+		 *     review for `orgId`.
+		 */
+		post: operations['review_builtin_pack'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/packs/export': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/**
+		 * Builds an unsigned pack of an organization's integrations, workflows
+		 *     (their drafts), forms and scripts. Sign it with `huxley pack sign`.
+		 *     Connections and secrets are never included.
+		 */
+		post: operations['export_pack'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
 	'/api/v1/packs/uploads': {
 		parameters: {
 			query?: never;
@@ -3088,6 +3146,13 @@ export interface components {
 			contentType: string;
 			required: boolean;
 		};
+		BuiltInPack: {
+			contents: components['schemas']['Contents'];
+			description: string;
+			key: string;
+			name: string;
+			version: string;
+		};
 		CancelRunResponse: {
 			/** @description False if the run had already finished. */
 			cancelled: boolean;
@@ -3196,6 +3261,14 @@ export interface components {
 			statusMessage?: string | null;
 			/** Format: date-time */
 			updatedAt: string;
+		};
+		/** @description What a pack adds, by key. */
+		Contents: {
+			forms?: string[];
+			integrations?: string[];
+			scripts?: string[];
+			templates?: string[];
+			workflows?: string[];
 		};
 		CreateAssignmentRequest: {
 			/** @description Also apply to every sub-organization (default true). */
@@ -3389,6 +3462,25 @@ export interface components {
 		EntityType: {
 			key: string;
 			label: string;
+		};
+		/**
+		 * @description What to put in an exported pack: the manifest's identity, and the ids
+		 *     of the organization's items to include.
+		 */
+		ExportRequest: {
+			description?: string;
+			forms?: string[];
+			integrations?: string[];
+			/** @description `<owner>/<name>`, lowercase. */
+			key: string;
+			name: string;
+			/** Format: uuid */
+			orgId: string;
+			publisher?: string;
+			scripts?: string[];
+			/** @description Semver, e.g. `1.0.0`. */
+			version: string;
+			workflows?: string[];
 		};
 		ExpressionPreviewRequest: {
 			/** @description The expression, as written in the workflow, e.g. `"{{ steps.a.output.id }}"`. */
@@ -4600,6 +4692,11 @@ export interface components {
 		};
 		/** @description Who vouches for a pack. */
 		Trust:
+			| {
+					publisher: string;
+					/** @enum {string} */
+					status: 'built_in';
+			  }
 			| {
 					key: string;
 					publisher: string;
@@ -7963,6 +8060,88 @@ export interface operations {
 				};
 				content: {
 					'application/json': components['schemas']['InstalledPack'][];
+				};
+			};
+		};
+	};
+	list_builtin_packs: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['BuiltInPack'][];
+				};
+			};
+		};
+	};
+	review_builtin_pack: {
+		parameters: {
+			query: {
+				orgId: string;
+			};
+			header?: never;
+			path: {
+				owner: string;
+				name: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			201: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['Review'];
+				};
+			};
+			404: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	export_pack: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['ExportRequest'];
+			};
+		};
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/octet-stream': number[];
+				};
+			};
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
 				};
 			};
 		};

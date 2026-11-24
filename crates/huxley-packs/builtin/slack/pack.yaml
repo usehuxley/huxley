@@ -1,0 +1,9 @@
+apiVersion: usehuxley.com/v1
+kind: Pack
+key: huxley/slack
+name: Slack
+version: 1.0.0
+publisher: Huxley
+description: Post messages to channels with a bot token.
+contents:
+  integrations: [slack]

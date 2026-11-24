@@ -36,5 +36,6 @@ Packs (design doc §6.6) bundle integrations, workflows, forms, scripts and temp
 ## Consequences
 
 - Publishers sign with a key they keep. Rotating it means re-signing, and instances trusting the new key.
-- Built-in packs ship inside the binary, so they're trusted by construction.
+- Built-in packs ship inside the binary, so they're trusted by construction. A pack that is byte-for-byte a built-in one, whether uploaded or not, is recognised as built in.
+- Built-in integrations are installed as their packs and recorded like any other install, so new versions arrive as reviewed upgrades.
 - A registry (design §6.6, "later") can serve these files unchanged.
