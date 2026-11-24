@@ -19,9 +19,9 @@
 	<Dialog.Portal>
 		<Dialog.Overlay class="fixed inset-0 z-40 bg-overlay" />
 		<Dialog.Content
-			class="fixed top-1/2 left-1/2 z-50 w-[calc(100%-2rem)] max-w-lg -translate-x-1/2 -translate-y-1/2 rounded-card border border-border bg-surface-raised shadow-overlay"
+			class="fixed top-1/2 left-1/2 z-50 flex max-h-[calc(100dvh-2rem)] w-[calc(100%-2rem)] max-w-lg -translate-x-1/2 -translate-y-1/2 flex-col rounded-card border border-border bg-surface-raised shadow-overlay"
 		>
-			<div class="flex items-start justify-between gap-4 px-5 pt-5">
+			<div class="flex shrink-0 items-start justify-between gap-4 px-5 pt-5">
 				<div>
 					<Dialog.Title class="text-base font-semibold text-fg">{title}</Dialog.Title>
 					{#if description}
@@ -37,9 +37,12 @@
 					<X size={18} />
 				</Dialog.Close>
 			</div>
-			{#if children}<div class="px-5 py-4">{@render children()}</div>{/if}
+			<!-- A tall body scrolls; the title and buttons stay in view. -->
+			{#if children}
+				<div class="min-h-0 flex-1 overflow-y-auto px-5 py-4">{@render children()}</div>
+			{/if}
 			{#if footer}
-				<div class="flex justify-end gap-2 border-t border-border px-5 py-3">
+				<div class="flex shrink-0 justify-end gap-2 border-t border-border px-5 py-3">
 					{@render footer()}
 				</div>
 			{/if}

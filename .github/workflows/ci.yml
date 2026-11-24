@@ -103,8 +103,18 @@ jobs:
       - run: pnpm test
 
   e2e:
-    name: End-to-end (web + API + Postgres)
+    name: End-to-end (${{ matrix.modules }})
     runs-on: ubuntu-24.04
+    # Every module's tests run with it on, and the whole suite runs with
+    # every module off (an automation-only install), as the plan requires.
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - modules: modules off
+            preset: automation
+          - modules: service desk modules on
+            preset: service-desk
     services:
       postgres:
         image: postgres:18
@@ -155,7 +165,8 @@ jobs:
       - name: Bootstrap the instance
         run: |
           echo "$E2E_PASSWORD" | ./target/debug/huxley admin bootstrap \
-            --org-name "E2E MSP" --email "$E2E_EMAIL" --name "E2E User" --password-stdin
+            --org-name "E2E MSP" --email "$E2E_EMAIL" --name "E2E User" --password-stdin \
+            --preset "${{ matrix.preset }}"
       # The datasets SQL console's login: a member of the reader role only.
       - name: Create the SQL console login
         env:
@@ -184,6 +195,9 @@ jobs:
           exit 1
       # Playwright builds each app and serves it with `vite preview`.
       - run: pnpm test:e2e
+        env:
+          # Tests that need modules on (or off) run only in that job.
+          E2E_PRESET: ${{ matrix.preset }}
       - name: Audit chain is intact after the run
         run: ./target/debug/huxley admin verify-audit
       - if: failure()
@@ -191,7 +205,7 @@ jobs:
       - if: failure()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: playwright-results
+          name: playwright-results-${{ matrix.preset }}
           path: apps/*/test-results/
           retention-days: 7
 

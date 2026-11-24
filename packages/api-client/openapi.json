@@ -1837,6 +1837,56 @@
 				}
 			}
 		},
+		"/api/v1/companies": {
+			"get": {
+				"tags": ["crm"],
+				"summary": "Companies you can see with `crm:read`, by name (at most 500), with\ntheir details and how many contacts and sites they have. Organizations\nwhere the module is turned off are left out.",
+				"operationId": "list_companies",
+				"parameters": [
+					{
+						"name": "search",
+						"in": "query",
+						"description": "Matches names.",
+						"required": false,
+						"schema": {
+							"type": ["string", "null"]
+						}
+					},
+					{
+						"name": "providers",
+						"in": "query",
+						"description": "Include provider organizations too (default: clients only).",
+						"required": false,
+						"schema": {
+							"type": "boolean"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "array",
+									"items": {
+										"$ref": "#/components/schemas/CompanySummary"
+									}
+								}
+							}
+						}
+					},
+					"404": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
 		"/api/v1/connections": {
 			"get": {
 				"tags": ["integrations"],
@@ -10304,6 +10354,48 @@
 					}
 				},
 				"additionalProperties": false
+			},
+			"CompanySummary": {
+				"type": "object",
+				"description": "A company in the list: the organization and its details.",
+				"required": ["orgId", "name", "kind", "relationship", "status", "contacts", "sites"],
+				"properties": {
+					"contacts": {
+						"type": "integer",
+						"format": "int64"
+					},
+					"kind": {
+						"type": "string",
+						"description": "The organization's kind (`client` or `provider`)."
+					},
+					"name": {
+						"type": "string"
+					},
+					"orgId": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"parentId": {
+						"type": ["string", "null"],
+						"format": "uuid"
+					},
+					"phone": {
+						"type": ["string", "null"]
+					},
+					"relationship": {
+						"type": "string"
+					},
+					"sites": {
+						"type": "integer",
+						"format": "int64"
+					},
+					"status": {
+						"type": "string"
+					},
+					"website": {
+						"type": ["string", "null"]
+					}
+				}
 			},
 			"ConfirmPasswordResetRequest": {
 				"type": "object",

@@ -153,3 +153,58 @@ pub async fn update(
     .await?;
     Ok(after)
 }
+
+/// A company in the list: the organization and its details.
+#[derive(Debug, Clone, Serialize, ToSchema, sqlx::FromRow)]
+#[serde(rename_all = "camelCase")]
+pub struct CompanySummary {
+    pub org_id: Uuid,
+    pub name: String,
+    /// The organization's kind (`client` or `provider`).
+    pub kind: String,
+    pub parent_id: Option<Uuid>,
+    pub relationship: String,
+    pub status: String,
+    pub website: Option<String>,
+    pub phone: Option<String>,
+    pub contacts: i64,
+    pub sites: i64,
+}
+
+/// Organizations visible in the caller's transaction (its scope), as
+/// companies, by name: clients only unless `providers`, matching `search`.
+/// Leaves out organizations under `hidden` paths (where the module is off).
+pub async fn list(
+    conn: &mut PgConnection,
+    search: Option<&str>,
+    providers: bool,
+    hidden: &[String],
+) -> CrmResult<Vec<CompanySummary>> {
+    let pattern = search.map(str::trim).filter(|s| !s.is_empty()).map(|s| {
+        format!(
+            "%{}%",
+            s.replace('\\', "\\\\")
+                .replace('%', "\\%")
+                .replace('_', "\\_")
+        )
+    });
+    Ok(sqlx::query_as(
+        "SELECT o.id AS org_id, o.name, o.kind::text AS kind, o.parent_id, \
+                coalesce(c.relationship, 'client') AS relationship, coalesce(c.status, 'active') AS status, \
+                c.website, c.phone, \
+                (SELECT count(*) FROM crm_contact_companies l JOIN crm_contacts k ON k.id = l.contact_id \
+                  WHERE l.org_id = o.id AND k.archived_at IS NULL) AS contacts, \
+                (SELECT count(*) FROM crm_sites s WHERE s.org_id = o.id AND s.archived_at IS NULL) AS sites \
+           FROM organizations o LEFT JOIN crm_companies c ON c.org_id = o.id \
+          WHERE o.status = 'active' AND o.parent_id IS NOT NULL \
+            AND ($1 OR o.kind = 'client') \
+            AND ($2::text IS NULL OR o.name ILIKE $2) \
+            AND NOT (o.path <@ ANY ($3::ltree[])) \
+          ORDER BY lower(o.name) LIMIT 500",
+    )
+    .bind(providers)
+    .bind(&pattern)
+    .bind(hidden)
+    .fetch_all(conn)
+    .await?)
+}

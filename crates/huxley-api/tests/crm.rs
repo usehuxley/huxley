@@ -504,3 +504,59 @@ async fn custom_fields_and_the_module_gate() {
         .await;
     assert_eq!(status, StatusCode::NOT_FOUND);
 }
+
+#[tokio::test]
+async fn the_company_list_follows_permissions_and_the_module() {
+    let Some(s) = setup().await else { return };
+    let (_, tech) = user(&s.pools, Some(("technician", s.acme))).await;
+    let tech = login(&s.app, &tech).await;
+    s.contact(&tech, s.acme, json!({ "firstName": "Listed" }))
+        .await;
+
+    // A technician at Acme sees Acme only, with its counts.
+    let (status, mine) = s.call(&tech, "GET", "/api/v1/companies", None).await;
+    assert_eq!(status, StatusCode::OK, "{mine}");
+    let mine = mine.as_array().unwrap();
+    assert_eq!(mine.len(), 1, "{mine:?}");
+    assert_eq!(mine[0]["orgId"], json!(s.acme));
+    assert_eq!(mine[0]["contacts"], 1);
+    assert_eq!(mine[0]["relationship"], "client");
+
+    // The owner finds it by name; providers only when asked.
+    let (name,): (String,) = sqlx::query_as("SELECT name FROM organizations WHERE id = $1")
+        .bind(s.acme)
+        .fetch_one(&s.pools.owner)
+        .await
+        .unwrap();
+    let search = |extra: &str| {
+        format!(
+            "/api/v1/companies?search={}{extra}",
+            name.replace(' ', "%20")
+        )
+    };
+    let (_, found) = s.call(&s.owner, "GET", &search(""), None).await;
+    assert_eq!(found.as_array().unwrap().len(), 1, "{found}");
+    let (provider,): (String,) = sqlx::query_as("SELECT name FROM organizations WHERE id = $1")
+        .bind(s.provider)
+        .fetch_one(&s.pools.owner)
+        .await
+        .unwrap();
+    let providers = format!(
+        "/api/v1/companies?providers=true&search={}",
+        provider.replace(' ', "%20")
+    );
+    let (_, listed) = s.call(&s.owner, "GET", &providers, None).await;
+    assert_eq!(listed[0]["kind"], "provider", "{listed}");
+
+    // Off for the provider: its clients leave the list.
+    let ctx = RequestContext::system(Via::System);
+    let mut tx = begin_scoped(&s.pools.app, &OrgScope::System).await.unwrap();
+    huxley_modules::set_for_org(&mut tx, &ctx, s.provider, "crm", false)
+        .await
+        .unwrap();
+    tx.commit().await.unwrap();
+    let (_, gone) = s.call(&s.owner, "GET", &search(""), None).await;
+    assert_eq!(gone, json!([]));
+    let (_, tech_list) = s.call(&tech, "GET", "/api/v1/companies", None).await;
+    assert_eq!(tech_list, json!([]));
+}

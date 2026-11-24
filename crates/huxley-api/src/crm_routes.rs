@@ -8,7 +8,7 @@ use axum::http::StatusCode;
 use axum::routing::{get, put};
 use axum::{Json, Router};
 use huxley_authz::permissions;
-use huxley_crm::companies::{self, Company, CompanyInput};
+use huxley_crm::companies::{self, Company, CompanyInput, CompanySummary};
 use huxley_crm::contacts::{self, Contact, ContactCompany, ContactInput, ContactPage};
 use huxley_crm::sites::{self, Site, SiteInput};
 use huxley_crm::{CrmError, MODULE};
@@ -29,9 +29,10 @@ pub fn org_routes() -> Router<AppState> {
         .route("/{id}/contacts", get(list_contacts).post(create_contact))
 }
 
-/// `/api/v1/sites` and `/api/v1/contacts`.
+/// `/api/v1/companies`, `/api/v1/sites` and `/api/v1/contacts`.
 pub fn record_routes() -> Router<AppState> {
     Router::new()
+        .route("/companies", get(list_companies))
         .route(
             "/sites/{id}",
             get(get_site).put(update_site).delete(archive_site),
@@ -95,6 +96,66 @@ async fn scoped<T>(
     let value = f(&mut tx).await.map_err(map)?;
     tx.commit().await.map_err(db_err)?;
     Ok(value)
+}
+
+#[derive(Debug, Deserialize, IntoParams)]
+#[serde(rename_all = "camelCase")]
+pub struct CompanyListParams {
+    /// Matches names.
+    pub search: Option<String>,
+    /// Include provider organizations too (default: clients only).
+    #[serde(default)]
+    pub providers: bool,
+}
+
+/// Companies you can see with `crm:read`, by name (at most 500), with
+/// their details and how many contacts and sites they have. Organizations
+/// where the module is turned off are left out.
+#[utoipa::path(get, path = "/api/v1/companies", tag = "crm", params(CompanyListParams),
+    responses((status = 200, body = Vec<CompanySummary>), (status = 404, body = ApiError, content_type = "application/problem+json")))]
+pub async fn list_companies(
+    State(state): State<AppState>,
+    authed: Authed,
+    Query(params): Query<CompanyListParams>,
+) -> ApiResult<Json<Vec<CompanySummary>>> {
+    crate::module_routes::require_module(&state, MODULE).await?;
+    // Where the caller may read CRM records, and where the module is off
+    // (narrowings are only readable in system scope).
+    let mut tx = begin_scoped(&state.db, &OrgScope::System)
+        .await
+        .map_err(db_err)?;
+    let visible = huxley_authz::visible_orgs(&mut tx, &authed.principal)
+        .await
+        .map_err(db_err)?;
+    let paths: Vec<(Uuid, String)> =
+        sqlx::query_as("SELECT id, path::text FROM organizations WHERE id = ANY($1)")
+            .bind(&visible)
+            .fetch_all(&mut *tx)
+            .await
+            .map_err(db_err)?;
+    let hidden: Vec<String> = sqlx::query_scalar(
+        "SELECT o.path::text FROM module_settings s \
+           JOIN organizations o ON o.id = s.org_id AND o.parent_id IS NOT NULL \
+          WHERE s.module_key = $1 AND NOT s.enabled",
+    )
+    .bind(MODULE)
+    .fetch_all(&mut *tx)
+    .await
+    .map_err(db_err)?;
+    tx.commit().await.map_err(db_err)?;
+    let readable: Vec<Uuid> = paths
+        .into_iter()
+        .filter(|(_, path)| authed.principal.can_at_path(permissions::CRM_READ, path))
+        .map(|(id, _)| id)
+        .collect();
+    let mut tx = begin_scoped(&state.db, &OrgScope::Orgs(readable))
+        .await
+        .map_err(db_err)?;
+    let companies = companies::list(&mut tx, params.search.as_deref(), params.providers, &hidden)
+        .await
+        .map_err(map)?;
+    tx.commit().await.map_err(db_err)?;
+    Ok(Json(companies))
 }
 
 /// An organization's company details.
