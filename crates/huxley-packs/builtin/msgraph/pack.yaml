@@ -1,0 +1,9 @@
+apiVersion: usehuxley.com/v1
+kind: Pack
+key: huxley/msgraph
+name: Microsoft Graph
+version: 1.0.0
+publisher: Huxley
+description: "Microsoft 365 and Entra ID: users, licenses, groups, mail."
+contents:
+  integrations: [msgraph]

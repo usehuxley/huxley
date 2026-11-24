@@ -141,8 +141,47 @@ impl Setup {
         )
     }
 
+    async fn export(&self, body: &Value) -> (StatusCode, Vec<u8>) {
+        let req = Request::post("/api/v1/packs/export")
+            .header("x-requested-with", "huxley")
+            .header("cookie", &self.owner)
+            .header("content-type", "application/json")
+            .body(Body::from(body.to_string()))
+            .unwrap();
+        let res = self.app.clone().oneshot(req).await.unwrap();
+        let status = res.status();
+        (
+            status,
+            res.into_body().collect().await.unwrap().to_bytes().to_vec(),
+        )
+    }
+
+    async fn new_org(&self) -> Uuid {
+        let root = ensure_root(&self.pools).await;
+        let ctx = RequestContext::system(Via::System);
+        let mut tx = begin_scoped(&self.pools.app, &OrgScope::System)
+            .await
+            .unwrap();
+        let org = huxley_orgs::create(
+            &mut tx,
+            &ctx,
+            root,
+            huxley_orgs::OrgKind::Provider,
+            &unique("Pk"),
+        )
+        .await
+        .unwrap()
+        .id;
+        tx.commit().await.unwrap();
+        org
+    }
+
     async fn upload(&self, cookie: &str, pack: Vec<u8>) -> (StatusCode, Value) {
-        let uri = format!("/api/v1/packs/uploads?orgId={}", self.org);
+        self.upload_to(cookie, self.org, pack).await
+    }
+
+    async fn upload_to(&self, cookie: &str, org: Uuid, pack: Vec<u8>) -> (StatusCode, Value) {
+        let uri = format!("/api/v1/packs/uploads?orgId={org}");
         self.send(cookie, "POST", &uri, "application/octet-stream", pack)
             .await
     }
@@ -453,4 +492,122 @@ async fn installing_needs_the_permissions_for_what_it_adds() {
     assert_eq!(status, StatusCode::FORBIDDEN);
     let (_, list) = s.get(&format!("/api/v1/packs?orgId={}", s.org)).await;
     assert_eq!(list, json!([]));
+}
+
+#[tokio::test]
+async fn exported_packs_install_elsewhere() {
+    let Some(s) = setup().await else { return };
+    let (_, review) = s.upload(&s.owner, s.pack("1.0.0", "hello", true)).await;
+    let (_, installed) = s.install(&s.owner, &review, "1.0.0").await;
+    let items = &installed["items"];
+    let ids = |kind: &str| json!([items[kind].as_object().unwrap().values().next().unwrap()]);
+    let request = json!({
+        "orgId": s.org, "key": "contoso/exported", "name": "Exported", "version": "2.0.0",
+        "publisher": "Contoso", "integrations": ids("integrations"), "workflows": ids("workflows"),
+        "forms": ids("forms"), "scripts": ids("scripts")
+    });
+    let (status, bytes) = s.export(&request).await;
+    assert_eq!(
+        status,
+        StatusCode::OK,
+        "{}",
+        String::from_utf8_lossy(&bytes)
+    );
+    let pack = huxley_packs::Pack::read(&bytes).unwrap();
+    assert_eq!(pack.manifest.key, "contoso/exported");
+    assert_eq!(pack.manifest.contents.scripts, ["hello"]);
+    assert!(pack.signature.is_none());
+    assert!(pack.text("scripts/hello.py").unwrap().contains("hello"));
+
+    // It installs in another organization, as new items.
+    let other = s.new_org().await;
+    let (status, review) = s.upload_to(&s.owner, other, bytes).await;
+    assert_eq!(status, StatusCode::CREATED, "{review}");
+    assert_eq!(review["trust"]["status"], "unsigned");
+    assert!(
+        review["items"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|i| i["action"] == "add"),
+        "{review}"
+    );
+    let uri = format!(
+        "/api/v1/packs/uploads/{}/install",
+        review["uploadId"].as_str().unwrap()
+    );
+    let body = json!({ "orgId": other, "version": "2.0.0" })
+        .to_string()
+        .into_bytes();
+    let (status, installed) = s
+        .send(&s.owner, "POST", &uri, "application/json", body)
+        .await;
+    assert_eq!(status, StatusCode::CREATED, "{installed}");
+
+    // Only this organization's items can be exported from it.
+    let foreign = json!({ "orgId": other, "key": "contoso/x", "name": "X", "version": "1.0.0",
+                          "scripts": ids("scripts") });
+    let (status, _) = s.export(&foreign).await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+}
+
+#[tokio::test]
+async fn built_in_integrations_are_packs() {
+    let Some(s) = setup().await else { return };
+    let (_, builtins) = s.get("/api/v1/packs/builtin").await;
+    let keys: Vec<&str> = builtins
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|p| p["key"].as_str().unwrap())
+        .collect();
+    assert!(
+        keys.contains(&"huxley/msgraph") && keys.contains(&"huxley/slack"),
+        "{builtins}"
+    );
+
+    // Reviewing one: built in, nobody's signature needed.
+    let uri = format!("/api/v1/packs/builtin/huxley/slack?orgId={}", s.org);
+    let (status, review) = s
+        .send(&s.owner, "POST", &uri, "application/json", Vec::new())
+        .await;
+    assert_eq!(status, StatusCode::CREATED, "{review}");
+    assert_eq!(
+        review["trust"],
+        json!({ "status": "built_in", "publisher": "Huxley" })
+    );
+    assert_eq!(review["egress"], json!(["slack.com"]));
+
+    // Adding from the integrations catalog installs the pack, with its
+    // default overlay.
+    let body = json!({ "orgId": s.org }).to_string().into_bytes();
+    let (status, added) = s
+        .send(
+            &s.owner,
+            "POST",
+            "/api/v1/integrations/catalog/msgraph",
+            "application/json",
+            body.clone(),
+        )
+        .await;
+    assert_eq!(status, StatusCode::CREATED, "{added}");
+    assert_eq!(added["key"], "msgraph");
+    assert!(
+        added["overlay"]["actions"]["listUsers"]["pagination"].is_object(),
+        "{added}"
+    );
+    let (_, list) = s.get(&format!("/api/v1/packs?orgId={}", s.org)).await;
+    assert_eq!(list[0]["key"], "huxley/msgraph");
+    assert_eq!(list[0]["trust"], "built_in");
+    // Adding it again is refused.
+    let (status, _) = s
+        .send(
+            &s.owner,
+            "POST",
+            "/api/v1/integrations/catalog/msgraph",
+            "application/json",
+            body,
+        )
+        .await;
+    assert_eq!(status, StatusCode::CONFLICT);
 }

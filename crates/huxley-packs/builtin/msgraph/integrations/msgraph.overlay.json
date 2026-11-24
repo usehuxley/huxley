@@ -1,0 +1,8 @@
+{
+  "actions": {
+    "listUsers": { "pagination": { "style": "next_url", "next": "@odata.nextLink", "items": "value" } },
+    "listGroups": { "pagination": { "style": "next_url", "next": "@odata.nextLink", "items": "value" } },
+    "listGroupMembers": { "pagination": { "style": "next_url", "next": "@odata.nextLink", "items": "value" } },
+    "listUserGroups": { "pagination": { "style": "next_url", "next": "@odata.nextLink", "items": "value" } }
+  }
+}

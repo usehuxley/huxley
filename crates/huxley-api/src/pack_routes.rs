@@ -18,13 +18,16 @@ use utoipa::ToSchema;
 use uuid::Uuid;
 
 use crate::authz::Authed;
-use crate::packs::{InstallError, Items, Review};
+use crate::packs::{ExportRequest, InstallError, Items, Review};
 use crate::{ApiError, ApiResult, AppState};
 
 pub fn routes() -> Router<AppState> {
     Router::new()
         .route("/", get(list_installed))
         .route("/uploads", post(upload))
+        .route("/export", post(export))
+        .route("/builtin", get(list_builtin))
+        .route("/builtin/{owner}/{name}", post(review_builtin))
         .route("/uploads/{id}", get(review))
         .route("/uploads/{id}/install", post(install))
         .layer(DefaultBodyLimit::max(huxley_packs::MAX_BYTES + 1024))
@@ -136,6 +139,13 @@ pub async fn upload(
         .require_at(&state, permissions::PACK_INSTALL, query.org_id)
         .await?;
     let pack = Pack::read(&body).map_err(pack_err)?;
+    let id = store_upload(&state, &authed, &body).await?;
+    let review = review_for(&state, id, &pack, query.org_id).await?;
+    Ok((StatusCode::CREATED, Json(review)))
+}
+
+/// Keeps an uploaded pack for its uploader to review and install.
+async fn store_upload(state: &AppState, authed: &Authed, body: &[u8]) -> ApiResult<Uuid> {
     let id = huxley_core::new_id();
     let mut tx = begin_scoped(&state.db, &OrgScope::System)
         .await
@@ -148,13 +158,12 @@ pub async fn upload(
     sqlx::query("INSERT INTO pack_uploads (id, uploaded_by, bytes) VALUES ($1, $2, $3)")
         .bind(id)
         .bind(authed.user.ctx.actor.id())
-        .bind(body.as_ref())
+        .bind(body)
         .execute(&mut *tx)
         .await
         .map_err(db_err)?;
     tx.commit().await.map_err(db_err)?;
-    let review = review_for(&state, id, &pack, query.org_id).await?;
-    Ok((StatusCode::CREATED, Json(review)))
+    Ok(id)
 }
 
 /// What installing an uploaded pack in `orgId` would do.
@@ -286,4 +295,107 @@ pub async fn list_installed(
     .map_err(db_err)?;
     tx.commit().await.map_err(db_err)?;
     Ok(Json(rows))
+}
+
+/// Builds an unsigned pack of an organization's integrations, workflows
+/// (their drafts), forms and scripts. Sign it with `huxley pack sign`.
+/// Connections and secrets are never included.
+#[utoipa::path(post, path = "/api/v1/packs/export", operation_id = "export_pack", tag = "packs",
+    request_body = ExportRequest,
+    responses((status = 200, content_type = "application/octet-stream", body = Vec<u8>),
+              (status = 422, body = ApiError, content_type = "application/problem+json")))]
+pub async fn export(
+    State(state): State<AppState>,
+    authed: Authed,
+    Json(body): Json<ExportRequest>,
+) -> ApiResult<axum::response::Response> {
+    use axum::response::IntoResponse as _;
+    let mut needed = vec![permissions::PACK_INSTALL];
+    if !body.integrations.is_empty() {
+        needed.push(permissions::INTEGRATION_READ);
+    }
+    if !body.workflows.is_empty() {
+        needed.push(permissions::WORKFLOW_READ);
+    }
+    if !body.forms.is_empty() {
+        needed.push(permissions::FORM_MANAGE);
+    }
+    if !body.scripts.is_empty() {
+        needed.push(permissions::SCRIPT_READ);
+    }
+    for permission in needed {
+        authed.require_at(&state, permission, body.org_id).await?;
+    }
+    let mut tx = begin_scoped(&state.db, &OrgScope::System)
+        .await
+        .map_err(db_err)?;
+    let bytes = crate::packs::export(&mut tx, state.engine.expr(), &body)
+        .await
+        .map_err(install_err)?;
+    tx.commit().await.map_err(db_err)?;
+    let file = format!("{}-{}.hxpack", body.key.replace('/', "-"), body.version);
+    Ok((
+        [
+            (
+                axum::http::header::CONTENT_TYPE,
+                "application/octet-stream".to_owned(),
+            ),
+            (
+                axum::http::header::CONTENT_DISPOSITION,
+                format!("attachment; filename=\"{file}\""),
+            ),
+        ],
+        bytes,
+    )
+        .into_response())
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct BuiltInPack {
+    pub key: String,
+    pub name: String,
+    pub version: String,
+    pub description: String,
+    pub contents: huxley_packs::Contents,
+}
+
+/// The packs that ship with Huxley.
+#[utoipa::path(get, path = "/api/v1/packs/builtin", operation_id = "list_builtin_packs", tag = "packs",
+    responses((status = 200, body = Vec<BuiltInPack>)))]
+pub async fn list_builtin(_authed: Authed) -> Json<Vec<BuiltInPack>> {
+    Json(
+        huxley_packs::builtin::list()
+            .into_iter()
+            .map(|p| BuiltInPack {
+                key: p.manifest.key,
+                name: p.manifest.name,
+                version: p.manifest.version,
+                description: p.manifest.description,
+                contents: p.manifest.contents,
+            })
+            .collect(),
+    )
+}
+
+/// Starts installing a built-in pack: like uploading it, returns the
+/// review for `orgId`.
+#[utoipa::path(post, path = "/api/v1/packs/builtin/{owner}/{name}", operation_id = "review_builtin_pack", tag = "packs",
+    params(("owner" = String, Path), ("name" = String, Path), OrgQuery),
+    responses((status = 201, body = Review), (status = 404, body = ApiError, content_type = "application/problem+json")))]
+pub async fn review_builtin(
+    State(state): State<AppState>,
+    authed: Authed,
+    Path((owner, name)): Path<(String, String)>,
+    Query(query): Query<OrgQuery>,
+) -> ApiResult<(StatusCode, Json<Review>)> {
+    authed
+        .require_at(&state, permissions::PACK_INSTALL, query.org_id)
+        .await?;
+    let bytes =
+        huxley_packs::builtin::bytes(&format!("{owner}/{name}")).ok_or_else(ApiError::not_found)?;
+    let pack = Pack::read(bytes).map_err(pack_err)?;
+    let id = store_upload(&state, &authed, bytes).await?;
+    let review = review_for(&state, id, &pack, query.org_id).await?;
+    Ok((StatusCode::CREATED, Json(review)))
 }

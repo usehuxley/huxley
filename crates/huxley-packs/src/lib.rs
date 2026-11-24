@@ -14,6 +14,8 @@ use ring::signature::{ED25519, Ed25519KeyPair, KeyPair as _, UnparsedPublicKey};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
+pub mod builtin;
+
 /// The largest pack, unpacked.
 pub const MAX_BYTES: usize = 20 * 1024 * 1024;
 /// The most files in a pack.
@@ -107,6 +109,10 @@ pub struct Signature {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, ToSchema)]
 #[serde(tag = "status", rename_all = "snake_case")]
 pub enum Trust {
+    /// Ships with Huxley.
+    BuiltIn {
+        publisher: String,
+    },
     /// Signed by a key this instance trusts.
     Trusted {
         publisher: String,
@@ -127,6 +133,7 @@ pub struct Pack {
     pub signature: Option<Signature>,
     manifest_bytes: Vec<u8>,
     files: BTreeMap<String, Vec<u8>>,
+    builtin: bool,
 }
 
 fn sha256_hex(bytes: &[u8]) -> String {
@@ -237,6 +244,12 @@ impl Pack {
     /// Reads and checks a `.hxpack`. The signature is checked if present
     /// (see [`Pack::trust`] for whether its key is trusted).
     pub fn read(bytes: &[u8]) -> PackResult<Self> {
+        let mut pack = Self::read_unrecognised(bytes)?;
+        pack.builtin = builtin::is_builtin(&pack);
+        Ok(pack)
+    }
+
+    fn read_unrecognised(bytes: &[u8]) -> PackResult<Self> {
         if bytes.len() > MAX_BYTES {
             return Err(PackError::TooLarge);
         }
@@ -311,6 +324,7 @@ impl Pack {
             signature,
             manifest_bytes,
             files: entries,
+            builtin: false,
         };
         if let Some(signature) = &pack.signature {
             verify(&pack.manifest_bytes, signature)?;
@@ -328,8 +342,24 @@ impl Pack {
         self.file(path).and_then(|b| std::str::from_utf8(b).ok())
     }
 
+    /// Every content file, by path.
+    pub fn files(&self) -> &BTreeMap<String, Vec<u8>> {
+        &self.files
+    }
+
+    /// The same pack, signed with `key` for `publisher` (replacing any
+    /// signature it had).
+    pub fn sign(&self, key: &SigningKey, publisher: &str) -> PackResult<Vec<u8>> {
+        build(self.manifest.clone(), &self.files, Some((key, publisher)))
+    }
+
     /// Whether `trusted` keys (`hxpk_…`) vouch for it.
     pub fn trust(&self, trusted: &[String]) -> Trust {
+        if self.builtin {
+            return Trust::BuiltIn {
+                publisher: self.manifest.publisher.clone(),
+            };
+        }
         match &self.signature {
             None => Trust::Unsigned,
             Some(s) if trusted.iter().any(|k| k.trim() == s.key) => Trust::Trusted {
@@ -566,6 +596,22 @@ mod tests {
         // The key file round-trips.
         let again = SigningKey::from_text(&key.to_text()).unwrap();
         assert_eq!(again.public(), key.public());
+    }
+
+    #[test]
+    fn packs_can_be_signed_later() {
+        let unsigned = Pack::read(&build(manifest(), &files(), None).unwrap()).unwrap();
+        let key = SigningKey::generate().unwrap();
+        let signed = Pack::read(&unsigned.sign(&key, "Contoso").unwrap()).unwrap();
+        assert_eq!(
+            signed.trust(&[key.public()]),
+            Trust::Trusted {
+                publisher: "Contoso".into(),
+                key: key.public()
+            }
+        );
+        assert_eq!(signed.files(), unsigned.files());
+        assert_eq!(signed.manifest, unsigned.manifest);
     }
 
     #[test]

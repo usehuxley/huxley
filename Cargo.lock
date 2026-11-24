@@ -2147,6 +2147,7 @@ dependencies = [
  "base64 0.23.1",
  "ring",
  "serde",
+ "serde-saphyr",
  "serde_json",
  "thiserror 2.0.21",
  "utoipa",

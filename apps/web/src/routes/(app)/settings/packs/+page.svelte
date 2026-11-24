@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
-	import { Badge, Button, Card, EmptyState, Field } from '@usehuxley/ui';
+	import { resolve } from '$app/paths';
+	import { Badge, Button, Card, EmptyState, Field, Input } from '@usehuxley/ui';
 	import { Package } from '@lucide/svelte';
 	import type { PageProps } from './$types';
 
@@ -20,13 +21,23 @@
 		update: 'Updates',
 		conflict: 'Conflict'
 	};
-	const trustLabel = (status: string) =>
-		status === 'trusted'
-			? 'Signed, trusted'
-			: status === 'unknown_signer'
-				? 'Signed by an unknown key'
-				: 'Unsigned';
-	const trustTone = (status: string) => (status === 'trusted' ? 'success' : 'warning');
+	const trustLabels: Record<string, string> = {
+		built_in: 'Built in',
+		trusted: 'Signed, trusted',
+		unknown_signer: 'Signed by an unknown key',
+		unsigned: 'Unsigned'
+	};
+	const trustLabel = (status: string) => trustLabels[status] ?? status;
+	const trustTone = (status: string) =>
+		status === 'trusted' || status === 'built_in' ? 'success' : 'warning';
+	let installedKeys = $derived(new Set(data.installed.map((p) => p.key)));
+	const exportKinds = [
+		['integrations', 'Integrations'],
+		['workflows', 'Workflows (their drafts)'],
+		['forms', 'Forms'],
+		['scripts', 'Scripts']
+	] as const;
+	let hasExportable = $derived(exportKinds.some(([k]) => data.exportable[k].length > 0));
 </script>
 
 <svelte:head>
@@ -74,7 +85,7 @@
 						<Badge tone="info">Upgrades {review.installedVersion}</Badge>
 					{/if}
 				</p>
-				{#if review.trust.status !== 'trusted'}
+				{#if review.trust.status !== 'trusted' && review.trust.status !== 'built_in'}
 					<p class="rounded-control bg-warning-soft p-3 text-warning" role="alert">
 						{#if review.trust.status === 'unsigned'}
 							Nobody vouches for this pack. Install it only if you trust where it came from.
@@ -179,6 +190,28 @@
 		{/if}
 	</Card>
 
+	{#if data.builtin.length}
+		<Card title="Built-in packs" description="Shipped with Huxley.">
+			<ul class="flex flex-col divide-y divide-border" aria-label="Built-in packs">
+				{#each data.builtin as pack (pack.key)}
+					<li class="flex items-center justify-between gap-4 py-3 text-sm first:pt-0 last:pb-0">
+						<div>
+							<p class="font-medium text-fg">{pack.name} {pack.version}</p>
+							<p class="text-xs text-fg-muted">{pack.description}</p>
+						</div>
+						<form method="POST" action="?/reviewBuiltin" use:enhance>
+							<input type="hidden" name="orgId" value={data.orgId} />
+							<input type="hidden" name="key" value={pack.key} />
+							<Button type="submit" variant="secondary" size="sm" aria-label="Review {pack.name}">
+								{installedKeys.has(pack.key) ? 'Review again' : 'Review'}
+							</Button>
+						</form>
+					</li>
+				{/each}
+			</ul>
+		</Card>
+	{/if}
+
 	<Card
 		title="Install a pack"
 		description="Upload a .hxpack file. You'll see what it adds before anything changes."
@@ -196,5 +229,55 @@
 			</Field>
 			<Button type="submit" variant="secondary">Review</Button>
 		</form>
+	</Card>
+
+	<Card
+		title="Export a pack"
+		description="Bundle this organization's items to install elsewhere. Connections and secrets are never included. Sign it with huxley pack sign."
+	>
+		{#if !hasExportable}
+			<p class="text-sm text-fg-muted">Nothing here to export yet.</p>
+		{:else}
+			<form
+				method="POST"
+				action={resolve('/(app)/settings/packs/export')}
+				class="flex flex-col gap-4"
+			>
+				<input type="hidden" name="orgId" value={data.orgId} />
+				<div class="grid gap-3 sm:grid-cols-2">
+					<Field label="Pack key" for="export-key" hint="owner/name, lowercase">
+						<Input id="export-key" name="key" required pattern="[a-z][a-z0-9-]*/[a-z][a-z0-9-]*" />
+					</Field>
+					<Field label="Pack name" for="export-name">
+						<Input id="export-name" name="name" required maxlength={200} />
+					</Field>
+					<Field label="Version" for="export-version" hint="e.g. 1.0.0">
+						<Input id="export-version" name="version" required value="1.0.0" />
+					</Field>
+					<Field label="Publisher" for="export-publisher">
+						<Input id="export-publisher" name="publisher" maxlength={200} />
+					</Field>
+				</div>
+				<Field label="Description" for="export-description">
+					<Input id="export-description" name="description" maxlength={2000} />
+				</Field>
+				{#each exportKinds as [kind, label] (kind)}
+					{#if data.exportable[kind].length}
+						<fieldset class="text-sm">
+							<legend class="font-medium text-fg">{label}</legend>
+							<div class="mt-1 flex flex-wrap gap-x-4 gap-y-1">
+								{#each data.exportable[kind] as item (item.id)}
+									<label class="flex items-center gap-1.5">
+										<input type="checkbox" name={kind} value={item.id} />
+										{item.name} <span class="font-mono text-xs text-fg-muted">{item.key}</span>
+									</label>
+								{/each}
+							</div>
+						</fieldset>
+					{/if}
+				{/each}
+				<div><Button type="submit" variant="secondary">Download pack</Button></div>
+			</form>
+		{/if}
 	</Card>
 </div>

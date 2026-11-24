@@ -21,7 +21,30 @@ export const load: PageServerLoad = async (event) => {
 		error(403, 'You do not have access to packs here.');
 	}
 	if (!data) error(503, 'Could not load packs.');
-	return { installed: data, orgId, orgs: orgs.map((o) => ({ id: o.id, name: o.name })) };
+	// What can be exported from here (lists you can't see come back empty).
+	const [builtin, integrations, workflows, forms, scripts] = await Promise.all([
+		client.GET('/api/v1/packs/builtin'),
+		client.GET('/api/v1/integrations'),
+		client.GET('/api/v1/workflows'),
+		client.GET('/api/v1/forms'),
+		client.GET('/api/v1/scripts')
+	]);
+	const here = <T extends { orgId: string; id: string; key: string; name: string }>(items?: T[]) =>
+		(items ?? [])
+			.filter((i) => i.orgId === orgId)
+			.map((i) => ({ id: i.id, key: i.key, name: i.name }));
+	return {
+		installed: data,
+		builtin: builtin.data ?? [],
+		orgId,
+		orgs: orgs.map((o) => ({ id: o.id, name: o.name })),
+		exportable: {
+			integrations: here(integrations.data),
+			workflows: here(workflows.data),
+			forms: here(forms.data),
+			scripts: here(scripts.data)
+		}
+	};
 };
 
 export const actions: Actions = {
@@ -51,6 +74,22 @@ export const actions: Actions = {
 			});
 		}
 		return { review: body as Review, orgId };
+	},
+	reviewBuiltin: async (event) => {
+		const form = await event.request.formData();
+		const orgId = formString(form, 'orgId');
+		const [owner = '', name = ''] = formString(form, 'key').split('/');
+		const {
+			data,
+			error: problem,
+			response
+		} = await api(event).POST('/api/v1/packs/builtin/{owner}/{name}', {
+			params: { path: { owner, name }, query: { orgId } }
+		});
+		if (!data) {
+			return fail(response.status, { message: problemMessage(problem, 'Could not review it.') });
+		}
+		return { review: data, orgId };
 	},
 	install: async (event) => {
 		const form = await event.request.formData();

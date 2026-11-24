@@ -189,13 +189,37 @@ pub async fn add_built_in(
     authed
         .require_at(&state, permissions::INTEGRATION_MANAGE, body.org_id)
         .await?;
-    let mut tx = begin_scoped(&state.db, &authed.scope(&state).await?)
+    // Built-ins are installed as their pack, so later versions arrive as
+    // pack upgrades (with a review).
+    let pack = huxley_packs::builtin::for_integration(&key).ok_or_else(ApiError::not_found)?;
+    let mut tx = begin_scoped(&state.db, &huxley_db::OrgScope::System)
         .await
         .map_err(db_err)?;
-    let detail = huxley_integrations::catalog::add(&mut tx, &authed.user.ctx, body.org_id, &key)
+    if crate::packs::existing(&mut tx, body.org_id, "integrations", &key)
         .await
-        .map_err(map_store)?
-        .ok_or_else(ApiError::not_found)?;
+        .map_err(db_err)?
+        .is_some()
+    {
+        return Err(ApiError::conflict(format!(
+            "this organization already has an integration called {key:?}"
+        )));
+    }
+    let trust = pack.trust(&[]);
+    let items = crate::packs::install(
+        &mut tx,
+        &authed.user.ctx,
+        state.engine.expr(),
+        &pack,
+        body.org_id,
+        &trust,
+    )
+    .await
+    .map_err(|e| match e {
+        crate::packs::InstallError::Conflict { .. } => ApiError::conflict(e.to_string()),
+        other => ApiError::internal(&other),
+    })?;
+    let id = items["integrations"][&key];
+    let detail = store::get(&mut tx, id).await.map_err(map_store)?;
     tx.commit().await.map_err(db_err)?;
     Ok((StatusCode::CREATED, Json(detail)))
 }

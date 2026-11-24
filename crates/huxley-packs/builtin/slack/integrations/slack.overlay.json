@@ -1,0 +1,7 @@
+{
+  "actions": {
+    "listChannels": {
+      "pagination": { "style": "cursor", "cursor": "response_metadata.next_cursor", "param": "cursor", "items": "channels" }
+    }
+  }
+}
