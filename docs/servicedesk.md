@@ -154,11 +154,20 @@ Posting needs `mailbox:ingest`, so give that to a service account used only for 
 
 ### Email to ticket
 
-The built-in pack **Service desk email** (`huxley/servicedesk-email`) adds three workflows:
+Set it up in four steps:
+
+1. Install the built-in pack **Service desk email** at your MSP, under **Settings → Packs → Built-in packs**.
+2. Publish its workflows. Like any pack's workflows, they arrive as drafts.
+3. Add a mailbox under **Settings → Mailboxes**.
+4. Send it an email.
+
+The pack (`huxley/servicedesk-email`) adds three workflows:
 
 - *Poll mailboxes* fetches IMAP mail every minute.
 - *Email to ticket* turns each email into a ticket or a reply (below).
-- *Email replies* emails your public notes to the requester (see [Email replies](#email-replies)). Install it at your MSP under **Settings → Packs → Built-in packs**. It runs the `core.ticket.from_email` step for each email, which does this:
+- *Email replies* emails your public notes to the requester (see [Email replies](#email-replies)).
+
+*Email to ticket* runs the `core.ticket.from_email` step for each email, which does this:
 
 1. **Skips automatic mail:** out-of-office and other auto-replies, bounces, and list or bulk mail.
 2. **Skips loops:** mail from one of Huxley's own mailboxes, or more than 20 messages from one sender to a mailbox in an hour.
