@@ -583,3 +583,83 @@ async fn email_steps_send_one_copy_per_recipient() {
     assert_eq!(error.unwrap()["kind"], "input");
     assert_eq!(h.mail.lock().unwrap().len(), 2);
 }
+
+#[tokio::test]
+async fn pinned_secret_results_are_resealed_for_the_new_run() {
+    let Some(h) = harness(1 << 20).await else {
+        return;
+    };
+    let ctx = huxley_core::RequestContext::system(huxley_core::Via::System);
+    let crypto =
+        huxley_crypto::Crypto::new(h.pools.app.clone(), huxley_crypto::testing::key_ring());
+    let mut tx = begin_scoped(&h.pools.app, &OrgScope::System).await.unwrap();
+    let input = huxley_variables::VariableInput {
+        kind: huxley_variables::VariableType::Secret,
+        value: json!("tok-PINNED-1"),
+        description: None,
+        locked: false,
+    };
+    huxley_variables::set(&mut tx, &ctx, &crypto, h.org, "api_token", &input)
+        .await
+        .unwrap();
+    tx.commit().await.unwrap();
+    // `use` fails the run unless it reads the real token (19 characters).
+    let spec = r#"  steps:
+    - { id: auth, type: transform, output: "Bearer {{ secrets.api_token }}" }
+    - id: use
+      type: if
+      condition: "{{ (steps.auth.output | length) == 19 }}"
+      else: [ { id: wrong, type: fail, message: "the pinned value didn't decrypt" } ]
+"#;
+    let (source, status, _, error) = h.run(spec).await;
+    assert_eq!(status, RunStatus::Succeeded, "{error:?}");
+
+    // A second run of the same document, starting at `use`.
+    let yaml = format!(
+        "apiVersion: usehuxley.com/v1\nkind: Workflow\nmetadata: {{ key: t, name: T }}\nspec:\n{spec}"
+    );
+    let document = serde_json::to_value(huxley_hwf::parse_yaml(&yaml).unwrap()).unwrap();
+    let steps = huxley_engine::replay::steps_before(&document, "use").unwrap();
+    let mut tx = begin_scoped(&h.pools.app, &OrgScope::System).await.unwrap();
+    let run = h
+        .engine
+        .start_run(
+            &mut tx,
+            StartRun {
+                org_id: h.org,
+                workflow_id: None,
+                version: None,
+                document: Some(document),
+                trigger_type: "manual".into(),
+                trigger: json!({}),
+                inputs: json!({}),
+                actor_id: None,
+            },
+        )
+        .await
+        .unwrap();
+    let pinned = h
+        .engine
+        .pin_steps(&mut tx, h.org, run, source, &steps)
+        .await
+        .unwrap();
+    tx.commit().await.unwrap();
+    assert_eq!(pinned, 1);
+    let deadline = Instant::now() + Duration::from_secs(20);
+    loop {
+        h.engine.drain("steps-test", 50).await.unwrap();
+        let (status, error): (RunStatus, Option<Json>) =
+            sqlx::query_as("SELECT status, error FROM runs WHERE id = $1")
+                .bind(run)
+                .fetch_one(&h.pools.owner)
+                .await
+                .unwrap();
+        if status.is_finished() {
+            // `use` read the real (resealed) value.
+            assert_eq!(status, RunStatus::Succeeded, "{error:?}");
+            break;
+        }
+        assert!(Instant::now() < deadline, "the pinned run didn't finish");
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    }
+}
