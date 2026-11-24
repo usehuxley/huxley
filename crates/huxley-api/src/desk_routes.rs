@@ -11,6 +11,7 @@ use huxley_authz::permissions;
 use huxley_db::{OrgScope, begin_scoped};
 use huxley_servicedesk::config::{self, MatrixCell, TicketType};
 use huxley_servicedesk::queues::{self, Queue, QueueInput};
+use huxley_servicedesk::sla::{self, Policy, PolicyInput, SlaAssignment};
 use huxley_servicedesk::tickets::{
     self, Activity, NewNote, NewTicket, Note, StatusChange, Ticket, TicketChanges, TicketFilter,
     TicketPage,
@@ -28,6 +29,14 @@ pub fn routes() -> Router<AppState> {
     Router::new()
         .route("/servicedesk/types", get(list_types))
         .route("/servicedesk/priority-matrix", get(priority_matrix))
+        .route(
+            "/servicedesk/sla-policies",
+            get(list_policies).post(create_policy),
+        )
+        .route(
+            "/servicedesk/sla-policies/{id}",
+            axum::routing::put(update_policy).delete(archive_policy),
+        )
         .route("/queues", get(list_queues).post(create_queue))
         .route(
             "/queues/{id}",
@@ -38,6 +47,11 @@ pub fn routes() -> Router<AppState> {
         .route("/tickets/{id}/status", post(change_status))
         .route("/tickets/{id}/notes", get(list_notes).post(add_note))
         .route("/tickets/{id}/activity", get(list_activity))
+}
+
+/// Routes under `/orgs`.
+pub fn org_routes() -> Router<AppState> {
+    Router::new().route("/{id}/sla", get(get_assignment).put(set_assignment))
 }
 
 fn map(e: DeskError) -> ApiError {
@@ -279,10 +293,15 @@ pub async fn create_ticket(
 ) -> ApiResult<(StatusCode, Json<Ticket>)> {
     allow(&state, &authed, permissions::TICKET_WRITE, body.org_id).await?;
     let prefix = prefix(&state, body.org_id).await?;
+    // The SLA terms come from the organizations above too: system scope.
+    let plan = scoped(&state, &OrgScope::System, async |tx| {
+        sla::plan_for(tx, body.org_id).await
+    })
+    .await?;
     let ctx = authed.user.ctx.clone();
     let scope = authed.scope(&state).await?;
     let ticket = scoped(&state, &scope, async |tx| {
-        tickets::create(tx, &ctx, &body, &prefix).await
+        tickets::create(tx, &ctx, &body, &prefix, plan.as_ref()).await
     })
     .await?;
     Ok((StatusCode::CREATED, Json(ticket)))
@@ -400,5 +419,129 @@ pub async fn list_activity(
     let scope = ticket_access(&state, &authed, id, permissions::TICKET_READ).await?;
     Ok(Json(
         scoped(&state, &scope, async |tx| tickets::activity(tx, id).await).await?,
+    ))
+}
+
+/// SLA policies, the default first.
+#[utoipa::path(get, path = "/api/v1/servicedesk/sla-policies", tag = "servicedesk",
+    responses((status = 200, body = Vec<Policy>)))]
+pub async fn list_policies(
+    State(state): State<AppState>,
+    _authed: Authed,
+) -> ApiResult<Json<Vec<Policy>>> {
+    require_module(&state, MODULE).await?;
+    Ok(Json(
+        scoped(&state, &OrgScope::System, async |tx| {
+            sla::policies(tx).await
+        })
+        .await?,
+    ))
+}
+
+/// Creates an SLA policy. Needs `servicedesk:configure`.
+#[utoipa::path(post, path = "/api/v1/servicedesk/sla-policies", tag = "servicedesk",
+    request_body = PolicyInput,
+    responses((status = 201, body = Policy), (status = 422, body = ApiError, content_type = "application/problem+json")))]
+pub async fn create_policy(
+    State(state): State<AppState>,
+    authed: Authed,
+    Json(body): Json<PolicyInput>,
+) -> ApiResult<(StatusCode, Json<Policy>)> {
+    require_module(&state, MODULE).await?;
+    authed.require_instance(permissions::SERVICEDESK_CONFIGURE)?;
+    let ctx = authed.user.ctx.clone();
+    let policy = scoped(&state, &OrgScope::System, async |tx| {
+        sla::create(tx, &ctx, &body).await
+    })
+    .await?;
+    Ok((StatusCode::CREATED, Json(policy)))
+}
+
+/// Changes an SLA policy; tickets already open keep their terms. Needs
+/// `servicedesk:configure`.
+#[utoipa::path(put, path = "/api/v1/servicedesk/sla-policies/{id}", tag = "servicedesk",
+    params(("id" = Uuid, Path)), request_body = PolicyInput,
+    responses((status = 200, body = Policy), (status = 409, body = ApiError, content_type = "application/problem+json"),
+              (status = 422, body = ApiError, content_type = "application/problem+json")))]
+pub async fn update_policy(
+    State(state): State<AppState>,
+    authed: Authed,
+    Path(id): Path<Uuid>,
+    Json(body): Json<PolicyInput>,
+) -> ApiResult<Json<Policy>> {
+    require_module(&state, MODULE).await?;
+    authed.require_instance(permissions::SERVICEDESK_CONFIGURE)?;
+    let ctx = authed.user.ctx.clone();
+    Ok(Json(
+        scoped(&state, &OrgScope::System, async |tx| {
+            sla::update(tx, &ctx, id, &body).await
+        })
+        .await?,
+    ))
+}
+
+/// Archives an SLA policy (not the default). Needs `servicedesk:configure`.
+#[utoipa::path(delete, path = "/api/v1/servicedesk/sla-policies/{id}", tag = "servicedesk",
+    params(("id" = Uuid, Path)),
+    responses((status = 204), (status = 422, body = ApiError, content_type = "application/problem+json")))]
+pub async fn archive_policy(
+    State(state): State<AppState>,
+    authed: Authed,
+    Path(id): Path<Uuid>,
+) -> ApiResult<StatusCode> {
+    require_module(&state, MODULE).await?;
+    authed.require_instance(permissions::SERVICEDESK_CONFIGURE)?;
+    let ctx = authed.user.ctx.clone();
+    scoped(&state, &OrgScope::System, async |tx| {
+        sla::archive(tx, &ctx, id).await
+    })
+    .await?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+/// The SLA policy for an organization: set here, inherited, or the default.
+#[utoipa::path(get, path = "/api/v1/orgs/{id}/sla", tag = "servicedesk", params(("id" = Uuid, Path)),
+    responses((status = 200, body = SlaAssignment), (status = 404, body = ApiError, content_type = "application/problem+json")))]
+pub async fn get_assignment(
+    State(state): State<AppState>,
+    authed: Authed,
+    Path(id): Path<Uuid>,
+) -> ApiResult<Json<SlaAssignment>> {
+    allow(&state, &authed, permissions::TICKET_READ, id).await?;
+    Ok(Json(
+        scoped(&state, &OrgScope::System, async |tx| {
+            sla::assignment(tx, id).await
+        })
+        .await?,
+    ))
+}
+
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct AssignmentInput {
+    /// The policy for this organization and those below it; null follows
+    /// the one above.
+    pub policy_id: Option<Uuid>,
+}
+
+/// Sets the SLA policy for an organization and those below it. Needs
+/// `servicedesk:configure`.
+#[utoipa::path(put, path = "/api/v1/orgs/{id}/sla", tag = "servicedesk", params(("id" = Uuid, Path)),
+    request_body = AssignmentInput,
+    responses((status = 200, body = SlaAssignment), (status = 422, body = ApiError, content_type = "application/problem+json")))]
+pub async fn set_assignment(
+    State(state): State<AppState>,
+    authed: Authed,
+    Path(id): Path<Uuid>,
+    Json(body): Json<AssignmentInput>,
+) -> ApiResult<Json<SlaAssignment>> {
+    authed.require_instance(permissions::SERVICEDESK_CONFIGURE)?;
+    require_module_at(&state, MODULE, id).await?;
+    let ctx = authed.user.ctx.clone();
+    Ok(Json(
+        scoped(&state, &OrgScope::System, async |tx| {
+            sla::assign(tx, &ctx, id, body.policy_id).await
+        })
+        .await?,
     ))
 }

@@ -5,6 +5,7 @@
 	import { Plus, Search } from '@lucide/svelte';
 	import { Badge, Button, EmptyState, Input, Select } from '@usehuxley/ui';
 	import { VIEWS, ago, categoryTone, priorityOf } from '#lib/tickets/labels.ts';
+	import { missed } from '#lib/tickets/sla.ts';
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
@@ -138,7 +139,10 @@
 							</td>
 							<td class="px-4 py-2.5 text-fg-muted">{ticket.orgName}</td>
 							<td class="px-4 py-2.5">
-								<Badge tone={categoryTone(ticket.statusCategory)}>{ticket.statusName}</Badge>
+								<span class="flex flex-wrap gap-1">
+									<Badge tone={categoryTone(ticket.statusCategory)}>{ticket.statusName}</Badge>
+									{#if missed(ticket)}<Badge tone="danger">SLA missed</Badge>{/if}
+								</span>
 							</td>
 							<td class="px-4 py-2.5">
 								<Badge tone={priority.tone}>{priority.short}</Badge>

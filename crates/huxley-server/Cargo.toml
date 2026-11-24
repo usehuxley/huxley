@@ -27,6 +27,7 @@ huxley-email.workspace = true
 huxley-engine.workspace = true
 huxley-triggers.workspace = true
 huxley-modules.workspace = true
+huxley-servicedesk.workspace = true
 huxley-notify.workspace = true
 huxley-storage.workspace = true
 huxley-orgs.workspace = true

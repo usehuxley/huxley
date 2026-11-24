@@ -58,6 +58,7 @@ utoipa.workspace = true
 uuid.workspace = true
 
 [dev-dependencies]
+jiff.workspace = true
 huxley-integrations.workspace = true
 huxley-engine.workspace = true
 huxley-scripts.workspace = true

@@ -2013,6 +2013,27 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
+	'/api/v1/orgs/{id}/sla': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** The SLA policy for an organization: set here, inherited, or the default. */
+		get: operations['get_assignment'];
+		/**
+		 * Sets the SLA policy for an organization and those below it. Needs
+		 *     `servicedesk:configure`.
+		 */
+		put: operations['set_assignment'];
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
 	'/api/v1/orgs/{id}/variables': {
 		parameters: {
 			query?: never;
@@ -2835,6 +2856,45 @@ export interface paths {
 		put?: never;
 		post?: never;
 		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/servicedesk/sla-policies': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** SLA policies, the default first. */
+		get: operations['list_policies'];
+		put?: never;
+		/** Creates an SLA policy. Needs `servicedesk:configure`. */
+		post: operations['create_policy'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/servicedesk/sla-policies/{id}': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		/**
+		 * Changes an SLA policy; tickets already open keep their terms. Needs
+		 *     `servicedesk:configure`.
+		 */
+		put: operations['update_policy'];
+		post?: never;
+		/** Archives an SLA policy (not the default). Needs `servicedesk:configure`. */
+		delete: operations['archive_policy'];
 		options?: never;
 		head?: never;
 		patch?: never;
@@ -3774,6 +3834,14 @@ export interface components {
 			 * @description Set for an assignment to a user.
 			 */
 			userId?: string | null;
+		};
+		AssignmentInput: {
+			/**
+			 * Format: uuid
+			 * @description The policy for this organization and those below it; null follows
+			 *     the one above.
+			 */
+			policyId?: string | null;
 		};
 		Attachment: {
 			contentType: string;
@@ -5084,6 +5152,44 @@ export interface components {
 		 * @enum {string}
 		 */
 		PermissionScope: 'org' | 'instance';
+		Policy: {
+			description: string;
+			/** @description `{"mon": [["09:00", "17:00"]], …}`. */
+			hours: Record<string, never>;
+			/** @description `client_site`, `policy` or `always`. */
+			hoursSource: string;
+			/** Format: uuid */
+			id: string;
+			isDefault: boolean;
+			name: string;
+			/** @description Targets by priority (`p1` … `p4`). */
+			targets: {
+				[key: string]: components['schemas']['Target'];
+			};
+			/** @description For the policy's hours; none: the organization's time zone. */
+			timezone?: string | null;
+			/** Format: int32 */
+			version: number;
+		};
+		PolicyInput: {
+			description?: string | null;
+			hours?: Record<string, never> | null;
+			/** @description `client_site` (default), `policy` or `always`. */
+			hoursSource?: string | null;
+			/** @description Make it the default policy. */
+			isDefault?: boolean;
+			name: string;
+			/** @description Targets by priority; priorities left out have none. */
+			targets?: {
+				[key: string]: components['schemas']['Target'];
+			};
+			timezone?: string | null;
+			/**
+			 * Format: int32
+			 * @description The version you read (updates only).
+			 */
+			version?: number | null;
+		};
 		/** @description An organization that requires MFA. */
 		PolicyOrg: {
 			/** Format: uuid */
@@ -5710,6 +5816,22 @@ export interface components {
 			 */
 			version?: number | null;
 		};
+		/** @description The policy for an organization: where it's set, and which applies. */
+		SlaAssignment: {
+			/**
+			 * Format: uuid
+			 * @description The policy that applies here, if any.
+			 */
+			effectivePolicyId?: string | null;
+			effectivePolicyName?: string | null;
+			/**
+			 * Format: uuid
+			 * @description Set on this organization (none: it follows the one above).
+			 */
+			policyId?: string | null;
+			/** @description Where the effective policy comes from: `here`, `above` or `default`. */
+			source?: string | null;
+		};
 		SqlRequest: {
 			/** @description One `SELECT` (or `WITH … SELECT`) over the `datasets` schema. */
 			query: string;
@@ -5922,6 +6044,13 @@ export interface components {
 			description?: string;
 			name: string;
 		};
+		/** @description A priority's targets, in minutes of business time. */
+		Target: {
+			/** Format: int32 */
+			resolution?: number | null;
+			/** Format: int32 */
+			response?: number | null;
+		};
 		/** @enum {string} */
 		TaskStatus: 'queued' | 'running' | 'succeeded' | 'failed';
 		/** @description A script step attempt's task, as the run page shows it. */
@@ -6050,7 +6179,29 @@ export interface components {
 			requesterId?: string | null;
 			requesterName?: string | null;
 			/** Format: date-time */
+			resolutionBreachedAt?: string | null;
+			/**
+			 * Format: date-time
+			 * @description When resolution is due; none while the clock is paused or stopped.
+			 */
+			resolutionDueAt?: string | null;
+			/** @description Whether resolution met its target (once resolved). */
+			resolutionMet?: boolean | null;
+			/** Format: date-time */
 			resolvedAt?: string | null;
+			/** Format: date-time */
+			responseBreachedAt?: string | null;
+			/**
+			 * Format: date-time
+			 * @description When the first response is due.
+			 */
+			responseDueAt?: string | null;
+			/** @description Whether the first response met its target (once there is one). */
+			responseMet?: boolean | null;
+			/** @description The resolution clock is paused (by a waiting status). */
+			slaPaused: boolean;
+			/** @description The SLA policy the ticket was opened under, if any. */
+			slaPolicy?: string | null;
 			source: string;
 			/** @description `new`, `open`, `pending`, `resolved` or `closed`. */
 			statusCategory: string;
@@ -10517,6 +10668,68 @@ export interface operations {
 			};
 		};
 	};
+	get_assignment: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['SlaAssignment'];
+				};
+			};
+			404: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	set_assignment: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['AssignmentInput'];
+			};
+		};
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['SlaAssignment'];
+				};
+			};
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
 	list_org_variables: {
 		parameters: {
 			query?: never;
@@ -12232,6 +12445,124 @@ export interface operations {
 				};
 				content: {
 					'application/json': components['schemas']['MatrixCell'][];
+				};
+			};
+		};
+	};
+	list_policies: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['Policy'][];
+				};
+			};
+		};
+	};
+	create_policy: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['PolicyInput'];
+			};
+		};
+		responses: {
+			201: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['Policy'];
+				};
+			};
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	update_policy: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['PolicyInput'];
+			};
+		};
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['Policy'];
+				};
+			};
+			409: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	archive_policy: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			204: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content?: never;
+			};
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
 				};
 			};
 		};

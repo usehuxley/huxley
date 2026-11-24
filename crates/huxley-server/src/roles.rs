@@ -54,6 +54,31 @@ impl Role {
 
 type Tasks = JoinSet<anyhow::Result<()>>;
 
+/// Starts the schedule triggers (one leader across processes) and the SLA
+/// sweeper (safe in several processes).
+fn spawn_scheduler(
+    tasks: &mut Tasks,
+    config: &Config,
+    db: &huxley_db::sqlx::PgPool,
+    crypto: &huxley_crypto::Crypto,
+    storage: &huxley_storage::Storage,
+    shutdown: &CancellationToken,
+) {
+    let engine = huxley_engine::Engine::with_config(db.clone(), crypto.clone(), &config.engine)
+        .with_storage(storage.clone())
+        .with_public_url(config.auth.public_url.clone());
+    let stop = shutdown.clone();
+    tasks.spawn(async move {
+        huxley_triggers::run_scheduler(engine, stop).await;
+        Ok(())
+    });
+    let (sla_db, sla_stop) = (db.clone(), shutdown.clone());
+    tasks.spawn(async move {
+        huxley_servicedesk::sla::run_sweeper(sla_db, sla_stop).await;
+        Ok(())
+    });
+}
+
 /// Starts the HTTP API and its real-time notification listener.
 async fn spawn_api(
     tasks: &mut Tasks,
@@ -177,16 +202,7 @@ pub async fn serve(config: Config, roles: BTreeSet<Role>) -> anyhow::Result<()> 
                 });
             }
             Role::Scheduler => {
-                // Schedule triggers; one leader at a time across processes.
-                let engine =
-                    huxley_engine::Engine::with_config(db.clone(), crypto.clone(), &config.engine)
-                        .with_storage(storage.clone())
-                        .with_public_url(config.auth.public_url.clone());
-                let stop = shutdown.clone();
-                tasks.spawn(async move {
-                    huxley_triggers::run_scheduler(engine, stop).await;
-                    Ok(())
-                });
+                spawn_scheduler(&mut tasks, &config, &db, &crypto, &storage, &shutdown);
             }
             Role::All => unreachable!("expanded before serve"),
         }

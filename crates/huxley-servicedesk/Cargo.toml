@@ -10,19 +10,24 @@ publish = false
 
 [dependencies]
 huxley-core.workspace = true
+huxley-crm.workspace = true
 huxley-db.workspace = true
+huxley-modules.workspace = true
+huxley-orgs.workspace = true
+jiff.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 sqlx.workspace = true
 thiserror.workspace = true
 time.workspace = true
+tokio.workspace = true
+tokio-util.workspace = true
+tracing.workspace = true
 utoipa.workspace = true
 uuid.workspace = true
 
 [dev-dependencies]
 huxley-db = { workspace = true, features = ["testing"] }
-huxley-orgs.workspace = true
-tokio.workspace = true
 
 [lints]
 workspace = true

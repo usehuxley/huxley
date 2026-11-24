@@ -5363,6 +5363,90 @@
 				}
 			}
 		},
+		"/api/v1/orgs/{id}/sla": {
+			"get": {
+				"tags": ["servicedesk"],
+				"summary": "The SLA policy for an organization: set here, inherited, or the default.",
+				"operationId": "get_assignment",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/SlaAssignment"
+								}
+							}
+						}
+					},
+					"404": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			},
+			"put": {
+				"tags": ["servicedesk"],
+				"summary": "Sets the SLA policy for an organization and those below it. Needs\n`servicedesk:configure`.",
+				"operationId": "set_assignment",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/AssignmentInput"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/SlaAssignment"
+								}
+							}
+						}
+					},
+					"422": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
 		"/api/v1/orgs/{id}/variables": {
 			"get": {
 				"tags": ["workflows"],
@@ -7630,6 +7714,147 @@
 									"items": {
 										"$ref": "#/components/schemas/MatrixCell"
 									}
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/servicedesk/sla-policies": {
+			"get": {
+				"tags": ["servicedesk"],
+				"summary": "SLA policies, the default first.",
+				"operationId": "list_policies",
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "array",
+									"items": {
+										"$ref": "#/components/schemas/Policy"
+									}
+								}
+							}
+						}
+					}
+				}
+			},
+			"post": {
+				"tags": ["servicedesk"],
+				"summary": "Creates an SLA policy. Needs `servicedesk:configure`.",
+				"operationId": "create_policy",
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/PolicyInput"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"201": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Policy"
+								}
+							}
+						}
+					},
+					"422": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/servicedesk/sla-policies/{id}": {
+			"put": {
+				"tags": ["servicedesk"],
+				"summary": "Changes an SLA policy; tickets already open keep their terms. Needs\n`servicedesk:configure`.",
+				"operationId": "update_policy",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/PolicyInput"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Policy"
+								}
+							}
+						}
+					},
+					"409": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					},
+					"422": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			},
+			"delete": {
+				"tags": ["servicedesk"],
+				"summary": "Archives an SLA policy (not the default). Needs `servicedesk:configure`.",
+				"operationId": "archive_policy",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"responses": {
+					"204": {},
+					"422": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
 								}
 							}
 						}
@@ -10409,6 +10634,17 @@
 						"description": "Set for an assignment to a user."
 					}
 				}
+			},
+			"AssignmentInput": {
+				"type": "object",
+				"properties": {
+					"policyId": {
+						"type": ["string", "null"],
+						"format": "uuid",
+						"description": "The policy for this organization and those below it; null follows\nthe one above."
+					}
+				},
+				"additionalProperties": false
 			},
 			"Attachment": {
 				"type": "object",
@@ -13559,6 +13795,102 @@
 				"description": "Where a permission is evaluated.",
 				"enum": ["org", "instance"]
 			},
+			"Policy": {
+				"type": "object",
+				"required": [
+					"id",
+					"name",
+					"description",
+					"hoursSource",
+					"hours",
+					"isDefault",
+					"targets",
+					"version"
+				],
+				"properties": {
+					"description": {
+						"type": "string"
+					},
+					"hours": {
+						"type": "object",
+						"description": "`{\"mon\": [[\"09:00\", \"17:00\"]], …}`."
+					},
+					"hoursSource": {
+						"type": "string",
+						"description": "`client_site`, `policy` or `always`."
+					},
+					"id": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"isDefault": {
+						"type": "boolean"
+					},
+					"name": {
+						"type": "string"
+					},
+					"targets": {
+						"type": "object",
+						"description": "Targets by priority (`p1` … `p4`).",
+						"additionalProperties": {
+							"$ref": "#/components/schemas/Target"
+						},
+						"propertyNames": {
+							"type": "string"
+						}
+					},
+					"timezone": {
+						"type": ["string", "null"],
+						"description": "For the policy's hours; none: the organization's time zone."
+					},
+					"version": {
+						"type": "integer",
+						"format": "int32"
+					}
+				}
+			},
+			"PolicyInput": {
+				"type": "object",
+				"required": ["name"],
+				"properties": {
+					"description": {
+						"type": ["string", "null"]
+					},
+					"hours": {
+						"type": ["object", "null"]
+					},
+					"hoursSource": {
+						"type": ["string", "null"],
+						"description": "`client_site` (default), `policy` or `always`."
+					},
+					"isDefault": {
+						"type": "boolean",
+						"description": "Make it the default policy."
+					},
+					"name": {
+						"type": "string"
+					},
+					"targets": {
+						"type": "object",
+						"description": "Targets by priority; priorities left out have none.",
+						"additionalProperties": {
+							"$ref": "#/components/schemas/Target"
+						},
+						"propertyNames": {
+							"type": "string"
+						}
+					},
+					"timezone": {
+						"type": ["string", "null"]
+					},
+					"version": {
+						"type": ["integer", "null"],
+						"format": "int32",
+						"description": "The version you read (updates only)."
+					}
+				},
+				"additionalProperties": false
+			},
 			"PolicyOrg": {
 				"type": "object",
 				"description": "An organization that requires MFA.",
@@ -15203,6 +15535,29 @@
 				},
 				"additionalProperties": false
 			},
+			"SlaAssignment": {
+				"type": "object",
+				"description": "The policy for an organization: where it's set, and which applies.",
+				"properties": {
+					"effectivePolicyId": {
+						"type": ["string", "null"],
+						"format": "uuid",
+						"description": "The policy that applies here, if any."
+					},
+					"effectivePolicyName": {
+						"type": ["string", "null"]
+					},
+					"policyId": {
+						"type": ["string", "null"],
+						"format": "uuid",
+						"description": "Set on this organization (none: it follows the one above)."
+					},
+					"source": {
+						"type": ["string", "null"],
+						"description": "Where the effective policy comes from: `here`, `above` or `default`."
+					}
+				}
+			},
 			"SqlRequest": {
 				"type": "object",
 				"required": ["query"],
@@ -15670,6 +16025,20 @@
 					}
 				}
 			},
+			"Target": {
+				"type": "object",
+				"description": "A priority's targets, in minutes of business time.",
+				"properties": {
+					"resolution": {
+						"type": ["integer", "null"],
+						"format": "int32"
+					},
+					"response": {
+						"type": ["integer", "null"],
+						"format": "int32"
+					}
+				}
+			},
 			"TaskStatus": {
 				"type": "string",
 				"enum": ["queued", "running", "succeeded", "failed"]
@@ -15894,7 +16263,8 @@
 					"customFields",
 					"version",
 					"createdAt",
-					"updatedAt"
+					"updatedAt",
+					"slaPaused"
 				],
 				"properties": {
 					"assigneeTeamId": {
@@ -15982,9 +16352,43 @@
 					"requesterName": {
 						"type": ["string", "null"]
 					},
+					"resolutionBreachedAt": {
+						"type": ["string", "null"],
+						"format": "date-time"
+					},
+					"resolutionDueAt": {
+						"type": ["string", "null"],
+						"format": "date-time",
+						"description": "When resolution is due; none while the clock is paused or stopped."
+					},
+					"resolutionMet": {
+						"type": ["boolean", "null"],
+						"description": "Whether resolution met its target (once resolved)."
+					},
 					"resolvedAt": {
 						"type": ["string", "null"],
 						"format": "date-time"
+					},
+					"responseBreachedAt": {
+						"type": ["string", "null"],
+						"format": "date-time"
+					},
+					"responseDueAt": {
+						"type": ["string", "null"],
+						"format": "date-time",
+						"description": "When the first response is due."
+					},
+					"responseMet": {
+						"type": ["boolean", "null"],
+						"description": "Whether the first response met its target (once there is one)."
+					},
+					"slaPaused": {
+						"type": "boolean",
+						"description": "The resolution clock is paused (by a waiting status)."
+					},
+					"slaPolicy": {
+						"type": ["string", "null"],
+						"description": "The SLA policy the ticket was opened under, if any."
 					},
 					"source": {
 						"type": "string"

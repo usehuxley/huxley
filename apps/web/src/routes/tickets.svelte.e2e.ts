@@ -82,6 +82,12 @@ test.describe('service desk', () => {
 		await page.getByRole('textbox', { name: 'Reply' }).fill('Looking for it now.');
 		await page.getByRole('button', { name: 'Reply' }).click();
 		await expect(page.getByText('Looking for it now.')).toBeVisible();
+		// The default SLA: the reply met the first-response target.
+		const sla = page
+			.locator('section')
+			.filter({ has: page.getByRole('heading', { name: 'SLA', exact: true }) });
+		await expect(sla.getByText('Standard')).toBeVisible();
+		await expect(sla.getByText('Met')).toBeVisible();
 		await expect(page.getByText('Not yet')).toBeHidden();
 		await page.getByRole('radio', { name: 'Internal note' }).check();
 		await page.getByRole('textbox', { name: 'Internal note' }).fill('Check the basement.');

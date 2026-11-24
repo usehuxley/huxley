@@ -65,6 +65,24 @@ pub struct Ticket {
     pub resolved_at: Option<OffsetDateTime>,
     #[serde(with = "time::serde::rfc3339::option")]
     pub closed_at: Option<OffsetDateTime>,
+    /// The SLA policy the ticket was opened under, if any.
+    pub sla_policy: Option<String>,
+    /// When the first response is due.
+    #[serde(with = "time::serde::rfc3339::option")]
+    pub response_due_at: Option<OffsetDateTime>,
+    /// Whether the first response met its target (once there is one).
+    pub response_met: Option<bool>,
+    #[serde(with = "time::serde::rfc3339::option")]
+    pub response_breached_at: Option<OffsetDateTime>,
+    /// When resolution is due; none while the clock is paused or stopped.
+    #[serde(with = "time::serde::rfc3339::option")]
+    pub resolution_due_at: Option<OffsetDateTime>,
+    /// Whether resolution met its target (once resolved).
+    pub resolution_met: Option<bool>,
+    #[serde(with = "time::serde::rfc3339::option")]
+    pub resolution_breached_at: Option<OffsetDateTime>,
+    /// The resolution clock is paused (by a waiting status).
+    pub sla_paused: bool,
 }
 
 const SELECT: &str = "SELECT t.id, t.number_prefix || '-' || t.number AS reference, t.number, t.org_id, \
@@ -74,7 +92,10 @@ const SELECT: &str = "SELECT t.id, t.number_prefix || '-' || t.number AS referen
     nullif(btrim(c.first_name || ' ' || c.last_name), '') AS requester_name, c.email AS requester_email, \
     t.assignee_user_id, u.display_name AS assignee_user_name, t.assignee_team_id, tm.name AS assignee_team_name, \
     t.source, t.custom_fields, t.version, t.created_at, t.updated_at, t.first_response_at, t.resolved_at, \
-    t.closed_at \
+    t.closed_at, sla.policy_name AS sla_policy, sla.response_due_at, sla.response_met, \
+    sla.response_breached_at, sla.resolution_due_at, sla.resolution_met, sla.resolution_breached_at, \
+    coalesce(sla.resolution_clock_at IS NULL AND sla.resolution_met IS NULL \
+             AND sla.targets -> t.priority ->> 'resolution' IS NOT NULL, false) AS sla_paused \
     FROM sd_tickets t \
     JOIN organizations o ON o.id = t.org_id \
     JOIN sd_ticket_types ty ON ty.id = t.type_id \
@@ -82,7 +103,8 @@ const SELECT: &str = "SELECT t.id, t.number_prefix || '-' || t.number AS referen
     LEFT JOIN sd_queues q ON q.id = t.queue_id \
     LEFT JOIN crm_contacts c ON c.id = t.requester_id \
     LEFT JOIN users u ON u.id = t.assignee_user_id \
-    LEFT JOIN teams tm ON tm.id = t.assignee_team_id";
+    LEFT JOIN teams tm ON tm.id = t.assignee_team_id \
+    LEFT JOIN sd_ticket_sla sla ON sla.ticket_id = t.id";
 
 /// Present-or-null fields of an update: missing leaves the field alone,
 /// `null` clears it.
@@ -402,12 +424,13 @@ async fn record(
 }
 
 /// Creates a ticket in its type's first `new` status. `prefix` is the
-/// organization's ticket prefix.
+/// organization's ticket prefix; `sla` the terms it's opened under.
 pub async fn create(
     conn: &mut PgConnection,
     ctx: &RequestContext,
     input: &NewTicket,
     prefix: &str,
+    sla: Option<&crate::sla::Plan>,
 ) -> DeskResult<Ticket> {
     let title = text("title", Some(&input.title), 300)?
         .ok_or_else(|| DeskError::invalid("title", "a ticket needs a title"))?;
@@ -467,6 +490,9 @@ pub async fn create(
     .bind(ctx.actor.id())
     .execute(&mut *conn)
     .await?;
+    if let Some(plan) = sla {
+        crate::sla::start(conn, id, input.org_id, plan).await?;
+    }
     let ticket = get(conn, id).await?;
     record(
         conn,
@@ -477,6 +503,40 @@ pub async fn create(
     )
     .await?;
     Ok(ticket)
+}
+
+/// What changed between two versions of a ticket, field by field.
+fn changes_between(before: &Ticket, after: &Ticket) -> serde_json::Map<String, Json> {
+    let mut diff = serde_json::Map::new();
+    let mut note = |field: &str, from: Json, to: Json| {
+        if from != to {
+            diff.insert(field.to_owned(), json!({ "from": from, "to": to }));
+        }
+    };
+    note("title", json!(before.title), json!(after.title));
+    note("impact", json!(before.impact), json!(after.impact));
+    note("urgency", json!(before.urgency), json!(after.urgency));
+    note("priority", json!(before.priority), json!(after.priority));
+    note("queue", json!(before.queue_name), json!(after.queue_name));
+    note(
+        "requester",
+        json!(before.requester_name),
+        json!(after.requester_name),
+    );
+    note(
+        "assignee",
+        json!(before.assignee_user_name),
+        json!(after.assignee_user_name),
+    );
+    note(
+        "team",
+        json!(before.assignee_team_name),
+        json!(after.assignee_team_name),
+    );
+    if before.description != after.description {
+        diff.insert("description".into(), json!({ "changed": true }));
+    }
+    diff
 }
 
 /// Changes a ticket's fields (not its status: see [`change_status`]).
@@ -544,36 +604,9 @@ pub async fn update(
     if rows == 0 {
         return Err(DeskError::VersionConflict);
     }
+    crate::sla::sync(conn, id).await?;
     let after = get(conn, id).await?;
-    let mut diff = serde_json::Map::new();
-    let mut note = |field: &str, from: Json, to: Json| {
-        if from != to {
-            diff.insert(field.to_owned(), json!({ "from": from, "to": to }));
-        }
-    };
-    note("title", json!(before.title), json!(after.title));
-    note("impact", json!(before.impact), json!(after.impact));
-    note("urgency", json!(before.urgency), json!(after.urgency));
-    note("priority", json!(before.priority), json!(after.priority));
-    note("queue", json!(before.queue_name), json!(after.queue_name));
-    note(
-        "requester",
-        json!(before.requester_name),
-        json!(after.requester_name),
-    );
-    note(
-        "assignee",
-        json!(before.assignee_user_name),
-        json!(after.assignee_user_name),
-    );
-    note(
-        "team",
-        json!(before.assignee_team_name),
-        json!(after.assignee_team_name),
-    );
-    if before.description != after.description {
-        diff.insert("description".into(), json!({ "changed": true }));
-    }
+    let diff = changes_between(&before, &after);
     if !diff.is_empty() {
         let reassigned = diff.contains_key("assignee") || diff.contains_key("team");
         let kind = if reassigned && diff.len() <= 2 {
@@ -682,6 +715,7 @@ pub async fn change_status(
     if rows == 0 {
         return Err(DeskError::VersionConflict);
     }
+    crate::sla::sync(conn, id).await?;
     let after = get(conn, id).await?;
     record(
         conn,
@@ -767,6 +801,7 @@ pub async fn add_note(
             .execute(&mut *conn)
             .await?;
     }
+    crate::sla::sync(conn, id).await?;
     record(
         conn,
         ctx,
