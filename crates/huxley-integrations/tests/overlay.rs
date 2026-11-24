@@ -47,6 +47,7 @@ async fn overlays_survive_new_versions_and_renames() {
             ("unused".to_owned(), ActionOverlay::default()),
         ]
         .into(),
+        rate_limit: None,
     };
     let detail = store::set_overlay(&mut tx, &ctx, id, overlay)
         .await
@@ -109,6 +110,7 @@ async fn overlays_survive_new_versions_and_renames() {
             },
         )]
         .into(),
+        rate_limit: None,
     };
     let err = store::set_overlay(&mut tx, &ctx, id, long)
         .await

@@ -128,6 +128,12 @@ test.describe('integrations', () => {
 		await remove.getByLabel(/Hide it from the action picker/).check();
 		await remove.getByRole('button', { name: 'Save' }).click();
 		await expect(remove.getByText('Hidden', { exact: true })).toBeVisible();
+
+		// A rate limit for its calls.
+		await page.getByLabel('Calls').fill('60');
+		await page.getByLabel('Per seconds').fill('60');
+		await page.getByRole('button', { name: 'Save' }).last().click();
+		await expect(page.getByText('At most 60 calls per 60s per connection.')).toBeVisible();
 		await page.goto('/integrations');
 		await expect(
 			page.getByRole('list', { name: 'Built-in integrations' }).getByText('Added').first()

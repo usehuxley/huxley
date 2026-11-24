@@ -21,6 +21,7 @@ pub mod oauth;
 mod pages;
 mod payload;
 pub mod queue;
+mod rate;
 mod run;
 pub mod runs;
 pub mod script;

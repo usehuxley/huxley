@@ -130,6 +130,7 @@ export const actions: Actions = {
 		const current = await client.GET('/api/v1/integrations/{id}', { params });
 		if (!current.data) return fail(404, { message: 'Integration not found.' });
 		const actions = { ...(current.data.overlay.actions ?? {}) };
+		const rateLimit = current.data.overlay.rateLimit ?? null;
 		actions[key] = {
 			name: formString(form, 'name') || null,
 			group: formString(form, 'group') || null,
@@ -140,11 +141,40 @@ export const actions: Actions = {
 			data,
 			error: problem,
 			response
-		} = await client.PUT('/api/v1/integrations/{id}/overlay', { params, body: { actions } });
+		} = await client.PUT('/api/v1/integrations/{id}/overlay', {
+			params,
+			body: { actions, rateLimit }
+		});
 		if (!data) {
 			return fail(response.status, { message: problemMessage(problem, 'Could not save it.') });
 		}
 		return { message: `Saved your changes to ${key}.` };
+	},
+	rateLimit: async (event) => {
+		const form = await event.request.formData();
+		const requests = Number(formString(form, 'requests'));
+		const perSeconds = Number(formString(form, 'perSeconds'));
+		const client = api(event);
+		const params = { path: { id: event.params.id } };
+		const current = await client.GET('/api/v1/integrations/{id}', { params });
+		if (!current.data) return fail(404, { message: 'Integration not found.' });
+		const rateLimit = requests > 0 && perSeconds > 0 ? { requests, perSeconds } : null;
+		const {
+			data,
+			error: problem,
+			response
+		} = await client.PUT('/api/v1/integrations/{id}/overlay', {
+			params,
+			body: { actions: current.data.overlay.actions ?? {}, rateLimit }
+		});
+		if (!data) {
+			return fail(response.status, { message: problemMessage(problem, 'Could not save it.') });
+		}
+		return {
+			message: rateLimit
+				? `At most ${requests} calls per ${perSeconds}s per connection.`
+				: 'No rate limit.'
+		};
 	},
 	setCurrent: async (event) => {
 		const version = Number(formString(await event.request.formData(), 'version'));

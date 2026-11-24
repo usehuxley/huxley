@@ -9680,6 +9680,17 @@
 						"propertyNames": {
 							"type": "string"
 						}
+					},
+					"rateLimit": {
+						"oneOf": [
+							{
+								"$ref": "#/components/schemas/RateLimit",
+								"description": "At most this many calls per connection in a window, across every\nworker; calls over it wait for the next window."
+							},
+							{
+								"type": "null"
+							}
+						]
 					}
 				},
 				"additionalProperties": false
@@ -10209,6 +10220,26 @@
 						"type": ["string", "null"]
 					}
 				}
+			},
+			"RateLimit": {
+				"type": "object",
+				"description": "A fixed-window rate limit.",
+				"required": ["requests", "perSeconds"],
+				"properties": {
+					"perSeconds": {
+						"type": "integer",
+						"format": "int32",
+						"description": "The window's length in seconds (1–86400).",
+						"minimum": 0
+					},
+					"requests": {
+						"type": "integer",
+						"format": "int32",
+						"description": "Calls allowed per window (1–100000).",
+						"minimum": 0
+					}
+				},
+				"additionalProperties": false
 			},
 			"Received": {
 				"type": "object",

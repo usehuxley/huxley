@@ -58,6 +58,11 @@ pub(crate) async fn all_pages(
     base_url: &str,
     pagination: &Pagination,
     max_pages: u64,
+    rate_limit: Option<(
+        sqlx::PgPool,
+        uuid::Uuid,
+        huxley_integrations::overlay::RateLimit,
+    )>,
 ) -> Result<Json, Json> {
     let home = origin(base_url);
     let mut items: Vec<Json> = Vec::new();
@@ -72,6 +77,13 @@ pub(crate) async fn all_pages(
         spec["query"][limit] = json!(page_size);
     }
     loop {
+        // Every page after the first counts against the rate limit (the
+        // first was counted before the call); wait for room, briefly.
+        if pages > 0
+            && let Some((db, connection, limit)) = &rate_limit
+        {
+            wait_for_room(db, *connection, *limit).await?;
+        }
         let response = crate::http::request(egress, &spec).await?;
         pages += 1;
         let body = &response["body"];
@@ -129,6 +141,27 @@ pub(crate) async fn all_pages(
             Next::Query(param, value) => {
                 spec["query"][param] = value;
             }
+        }
+    }
+}
+
+/// Waits for the rate limit's next window, at most a minute in all.
+async fn wait_for_room(
+    db: &sqlx::PgPool,
+    connection: uuid::Uuid,
+    limit: huxley_integrations::overlay::RateLimit,
+) -> Result<(), Json> {
+    let give_up = time::OffsetDateTime::now_utc() + time::Duration::seconds(60);
+    loop {
+        match crate::rate::acquire(db, connection, limit).await {
+            Ok(Ok(())) => return Ok(()),
+            Ok(Err(at)) if at <= give_up => {
+                let wait =
+                    (at - time::OffsetDateTime::now_utc()).max(time::Duration::milliseconds(10));
+                tokio::time::sleep(wait.try_into().unwrap_or_default()).await;
+            }
+            Ok(Err(at)) => return Err(crate::action::rate_limited(at)),
+            Err(e) => return Err(error("internal", e.to_string())),
         }
     }
 }
