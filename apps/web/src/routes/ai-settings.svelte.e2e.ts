@@ -13,8 +13,22 @@ async function signIn(browser: Browser): Promise<Page> {
 	return page;
 }
 
-test.describe('AI settings', () => {
+// These share the organization's one AI provider, so they run in order.
+test.describe('AI settings and the assistant', () => {
+	test.describe.configure({ mode: 'serial' });
 	test.skip(!ownerEmail || !ownerPassword, 'set E2E_EMAIL and E2E_PASSWORD');
+
+	test('without an AI provider, the assistant says how to set one up', async ({ browser }) => {
+		const page = await signIn(browser);
+		await page.getByRole('link', { name: 'Assistant' }).click();
+		await expect(page.getByRole('heading', { level: 1 })).toHaveText('Assistant');
+		await page.getByLabel('Message').fill('List my workflows');
+		await page.getByRole('button', { name: 'Ask' }).click();
+		await expect(page.getByRole('alert')).toContainText('Set up an AI provider first');
+		await expect(page.getByRole('list', { name: 'Conversations' })).not.toContainText(
+			'List my workflows'
+		);
+	});
 
 	test('a provider is set, tested, logged and removed', async ({ browser }) => {
 		const page = await signIn(browser);
@@ -38,6 +52,13 @@ test.describe('AI settings', () => {
 		await expect(page.getByRole('list', { name: 'AI calls' })).toContainText('provider_test');
 		await expect(page.getByRole('list', { name: 'AI calls' })).toContainText('failed');
 
+		// The assistant reports a provider it can't reach, plainly.
+		await page.goto('/assistant');
+		await page.getByLabel('Message').fill('Hello there');
+		await page.getByRole('button', { name: 'Ask' }).click();
+		await expect(page.getByRole('alert')).toContainText("couldn't reach the provider");
+
+		await page.goto('/settings/ai');
 		await page.getByRole('button', { name: 'Remove' }).click();
 		await expect(page.getByText('AI provider removed.')).toBeVisible();
 		await expect(page.getByText('No AI provider')).toBeVisible();

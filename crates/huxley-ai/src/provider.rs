@@ -126,14 +126,14 @@ fn base(endpoint: &Endpoint, default: &str) -> Result<String, AiError> {
 }
 
 /// An HTTP request to a provider.
-struct Http {
-    url: String,
-    headers: Vec<(&'static str, String)>,
-    body: Json,
+pub(crate) struct Http {
+    pub(crate) url: String,
+    pub(crate) headers: Vec<(&'static str, String)>,
+    pub(crate) body: Json,
 }
 
 /// The HTTP request for `request`.
-fn build(endpoint: &Endpoint, key: &str, request: &Request) -> Result<Http, AiError> {
+pub(crate) fn build(endpoint: &Endpoint, key: &str, request: &Request) -> Result<Http, AiError> {
     let max_tokens = if request.max_tokens == 0 {
         16_000
     } else {
@@ -203,7 +203,7 @@ fn build(endpoint: &Endpoint, key: &str, request: &Request) -> Result<Http, AiEr
 }
 
 /// The error a failed HTTP response means.
-fn failure(kind: ProviderKind, status: u16, body: &Json) -> AiError {
+pub(crate) fn failure(kind: ProviderKind, status: u16, body: &Json) -> AiError {
     let message = body["error"]["message"]
         .as_str()
         .or_else(|| body["message"].as_str())

@@ -296,6 +296,14 @@ pub struct Ai {
     http: reqwest::Client,
 }
 
+/// What a successful call used.
+#[derive(Debug, Clone, Copy)]
+struct Usage<'a> {
+    model: &'a str,
+    input: i64,
+    output: i64,
+}
+
 /// What a call is for, for the log.
 #[derive(Debug, Clone, Copy)]
 pub struct Purpose<'a> {
@@ -312,17 +320,17 @@ impl Ai {
     async fn log(
         &self,
         org_id: Uuid,
-        provider: Option<&ProviderView>,
+        provider: &ProviderView,
         purpose: Purpose<'_>,
-        result: &Result<Completion, AiError>,
+        result: Result<Usage<'_>, &AiError>,
     ) -> Result<(), AiError> {
         let (outcome, error, model, input, output) = match result {
-            Ok(done) => (
+            Ok(usage) => (
                 "ok",
                 None,
-                done.model.clone(),
-                done.input_tokens,
-                done.output_tokens,
+                usage.model.to_owned(),
+                usage.input,
+                usage.output,
             ),
             Err(e) => {
                 let outcome = match e {
@@ -330,13 +338,7 @@ impl Ai {
                     AiError::OverBudget { .. } => "over_budget",
                     _ => "failed",
                 };
-                (
-                    outcome,
-                    Some(e.to_string()),
-                    provider.map(|p| p.model.clone()).unwrap_or_default(),
-                    0,
-                    0,
-                )
+                (outcome, Some(e.to_string()), provider.model.clone(), 0, 0)
             }
         };
         let internal = |e: &dyn std::fmt::Display| AiError::Internal(e.to_string());
@@ -349,7 +351,7 @@ impl Ai {
         )
         .bind(huxley_core::new_id())
         .bind(org_id)
-        .bind(provider.map(|p| p.id))
+        .bind(provider.id)
         .bind(purpose.feature)
         .bind(purpose.run_id)
         .bind(model)
@@ -364,21 +366,18 @@ impl Ai {
         Ok(())
     }
 
-    /// Calls `org_id`'s provider (its own or the nearest above) with
-    /// `request`, optionally with another `model`. Every call is logged.
-    pub async fn complete(
+    /// The provider serving `org_id`, and either its endpoint and key or
+    /// why it can't be used now (its budget is spent).
+    async fn prepare(
         &self,
         org_id: Uuid,
-        purpose: Purpose<'_>,
         model: Option<&str>,
-        request: &Request,
-    ) -> Result<Completion, AiError> {
+    ) -> Result<(ProviderView, Result<(Endpoint, String), AiError>), AiError> {
         let internal = |e: &dyn std::fmt::Display| AiError::Internal(e.to_string());
         let mut tx = begin_scoped(&self.db, &OrgScope::System)
             .await
             .map_err(|e| internal(&e))?;
-        let provider = effective(&mut tx, org_id).await.map_err(|e| internal(&e))?;
-        let Some(provider) = provider else {
+        let Some(provider) = effective(&mut tx, org_id).await.map_err(|e| internal(&e))? else {
             return Err(AiError::NotConfigured);
         };
         let sealed: Vec<u8> =
@@ -391,34 +390,81 @@ impl Ai {
             .await
             .map_err(|e| internal(&e))?;
         tx.commit().await.map_err(|e| internal(&e))?;
-
-        let result = if let Some(budget) = provider.monthly_token_budget.filter(|b| used >= *b) {
-            Err(AiError::OverBudget { used, budget })
-        } else {
-            let key = self
-                .crypto
-                .decrypt(
-                    Binding {
-                        purpose: KEY_PURPOSE,
-                        record: provider.id,
-                    },
-                    &sealed,
-                )
-                .await
-                .map_err(|e| internal(&e))?;
-            let key = String::from_utf8_lossy(&key).into_owned();
-            let endpoint = Endpoint {
-                kind: provider.kind,
-                model: model
-                    .filter(|m| !m.trim().is_empty())
-                    .unwrap_or(&provider.model)
-                    .to_owned(),
-                base_url: provider.base_url.clone(),
-                deployment: provider.deployment.clone(),
-            };
-            provider::complete(&self.http, &endpoint, &key, request).await
+        if let Some(budget) = provider.monthly_token_budget.filter(|b| used >= *b) {
+            return Ok((provider, Err(AiError::OverBudget { used, budget })));
+        }
+        let key = self
+            .crypto
+            .decrypt(
+                Binding {
+                    purpose: KEY_PURPOSE,
+                    record: provider.id,
+                },
+                &sealed,
+            )
+            .await
+            .map_err(|e| internal(&e))?;
+        let endpoint = Endpoint {
+            kind: provider.kind,
+            model: model
+                .filter(|m| !m.trim().is_empty())
+                .unwrap_or(&provider.model)
+                .to_owned(),
+            base_url: provider.base_url.clone(),
+            deployment: provider.deployment.clone(),
         };
-        self.log(org_id, Some(&provider), purpose, &result).await?;
+        Ok((
+            provider,
+            Ok((endpoint, String::from_utf8_lossy(&key).into_owned())),
+        ))
+    }
+
+    /// Calls `org_id`'s provider (its own or the nearest above) with
+    /// `request`, optionally with another `model`. Every call is logged.
+    pub async fn complete(
+        &self,
+        org_id: Uuid,
+        purpose: Purpose<'_>,
+        model: Option<&str>,
+        request: &Request,
+    ) -> Result<Completion, AiError> {
+        let (provider, ready) = self.prepare(org_id, model).await?;
+        let result = match ready {
+            Ok((endpoint, key)) => provider::complete(&self.http, &endpoint, &key, request).await,
+            Err(e) => Err(e),
+        };
+        let usage = result.as_ref().map(|c| Usage {
+            model: &c.model,
+            input: c.input_tokens,
+            output: c.output_tokens,
+        });
+        self.log(org_id, &provider, purpose, usage).await?;
+        result
+    }
+
+    /// The next assistant turn of a conversation with tools, through
+    /// `org_id`'s provider. Logged and budgeted like any call.
+    pub async fn turn(
+        &self,
+        org_id: Uuid,
+        purpose: Purpose<'_>,
+        system: Option<&str>,
+        messages: &[crate::chat::Message],
+        tools: &[crate::chat::ToolDef],
+    ) -> Result<crate::chat::Turn, AiError> {
+        let (provider, ready) = self.prepare(org_id, None).await?;
+        let result = match ready {
+            Ok((endpoint, key)) => {
+                crate::chat::turn(&self.http, &endpoint, &key, system, messages, tools, 0).await
+            }
+            Err(e) => Err(e),
+        };
+        let usage = result.as_ref().map(|t| Usage {
+            model: &t.model,
+            input: t.input_tokens,
+            output: t.output_tokens,
+        });
+        self.log(org_id, &provider, purpose, usage).await?;
         result
     }
 }
