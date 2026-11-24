@@ -47,6 +47,7 @@
 			{#if form && 'redirectTo' in form && form.redirectTo}
 				<p>
 					{form.approved ? 'Connected.' : 'Cancelled.'} Returning you to the app…
+					<!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- the app's own redirect URI, checked by the API -->
 					<a class="text-accent underline" href={form.redirectTo}>Continue</a>
 				</p>
 			{:else}

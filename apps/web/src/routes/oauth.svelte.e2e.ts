@@ -26,7 +26,7 @@ async function startSignIn(page: Page, name: string) {
 		data: { client_name: name, redirect_uris: [REDIRECT] }
 	});
 	expect(registered.status()).toBe(201);
-	const { client_id: clientId } = await registered.json();
+	const { client_id: clientId } = (await registered.json()) as { client_id: string };
 	const verifier = randomBytes(32).toString('base64url');
 	const challenge = createHash('sha256').update(verifier).digest('base64url');
 	const authorize = new URLSearchParams({
@@ -91,7 +91,7 @@ test.describe('OAuth for MCP clients', () => {
 			}
 		});
 		expect(tokens.status()).toBe(200);
-		const { access_token: access } = await tokens.json();
+		const { access_token: access } = (await tokens.json()) as { access_token: string };
 		expect(await mcpStatus(access)).toBe(200);
 
 		await page.goto('/profile');
