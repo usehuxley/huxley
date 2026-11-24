@@ -5,6 +5,7 @@
 
 mod admin;
 mod config;
+mod pack_cli;
 mod roles;
 mod runner;
 mod shutdown;
@@ -58,6 +59,11 @@ enum Command {
         #[command(subcommand)]
         command: admin::AdminCommand,
     },
+    /// Make signing keys, build packs, and look inside them.
+    Pack {
+        #[command(subcommand)]
+        command: pack_cli::PackCommand,
+    },
     /// Run a script runner (enrol it first).
     Runner {
         #[command(subcommand)]
@@ -77,6 +83,7 @@ async fn main() -> anyhow::Result<()> {
 
     match cli.command {
         Command::Healthcheck { addr } => healthcheck(addr),
+        Command::Pack { command } => pack_cli::run(command),
         Command::Runner { command } => {
             let telemetry =
                 huxley_telemetry::init(&huxley_telemetry::TelemetryConfig::default(), "runner")?;

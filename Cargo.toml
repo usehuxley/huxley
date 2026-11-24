@@ -17,6 +17,7 @@ tonic-prost = "0.14"
 tonic-prost-build = { version = "0.14", default-features = false, features = ["transport"] }
 prost = "0.14"
 protox = "0.10"
+zip = { version = "9.8", default-features = false, features = ["deflate-flate2-zlib-rs"] }
 kube = { version = "5.1", default-features = false, features = ["client", "rustls-tls", "ring"] }
 k8s-openapi = { version = "0.29", features = ["v1_33"] }
 rustls = { version = "0.23", default-features = false, features = ["ring", "std"] }
@@ -43,6 +44,7 @@ huxley-integrations = { path = "crates/huxley-integrations" }
 huxley-orgs = { path = "crates/huxley-orgs" }
 huxley-runners = { path = "crates/huxley-runners" }
 huxley-templates = { path = "crates/huxley-templates" }
+huxley-packs = { path = "crates/huxley-packs" }
 huxley-scripts = { path = "crates/huxley-scripts" }
 huxley-storage = { path = "crates/huxley-storage" }
 huxley-telemetry = { path = "crates/huxley-telemetry" }
