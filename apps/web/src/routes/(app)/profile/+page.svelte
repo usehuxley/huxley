@@ -119,12 +119,18 @@
 </svelte:head>
 
 <div class="mx-auto flex max-w-3xl flex-col gap-6">
-	<div>
-		<h1 class="text-2xl font-semibold text-fg">Your profile</h1>
-		<p class="mt-1 text-fg-muted">
-			Manage your password, passkeys, two-factor authentication, API tokens, connected apps, and
-			where you're signed in.
-		</p>
+	<div class="flex items-start justify-between gap-4">
+		<div>
+			<h1 class="text-2xl font-semibold text-fg">Your profile</h1>
+			<p class="mt-1 text-fg-muted">
+				Manage your password, passkeys, two-factor authentication, API tokens, connected apps, and
+				where you're signed in.
+			</p>
+		</div>
+		<!-- On phones the top bar has no Sign out: it's here. -->
+		<form method="POST" action="/logout" class="shrink-0 sm:hidden">
+			<Button type="submit">Sign out of Huxley</Button>
+		</form>
 	</div>
 
 	{#if data.user.mfaSetupRequired}

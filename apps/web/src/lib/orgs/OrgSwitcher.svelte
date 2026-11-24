@@ -56,7 +56,7 @@
 <button
 	type="button"
 	onclick={show}
-	class="flex max-w-56 items-center gap-1.5 rounded-control px-2 py-1.5 text-sm font-medium text-fg-muted hover:bg-surface-sunken hover:text-fg"
+	class="flex max-w-40 min-w-0 items-center gap-1.5 rounded-control px-2 py-1.5 text-sm font-medium text-fg-muted hover:bg-surface-sunken hover:text-fg sm:max-w-56"
 	aria-label="Switch organization, current: {current?.name ?? 'all organizations'}"
 	data-testid="org-switcher"
 >

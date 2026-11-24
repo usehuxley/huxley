@@ -10,6 +10,7 @@
 		Building2,
 		ChartColumn,
 		CircleCheck,
+		CircleUserRound,
 		ClipboardList,
 		Database,
 		FileCode,
@@ -150,7 +151,15 @@
 		>
 			{data.user.displayName}
 		</a>
-		<form method="POST" action="/logout">
+		<!-- On phones: the profile, which has Sign out, instead of the name. -->
+		<a
+			href={resolve('/(app)/profile')}
+			class="shrink-0 rounded-control p-2 text-fg-muted hover:bg-surface-sunken hover:text-fg sm:hidden"
+			aria-label={`Account: ${data.user.displayName}`}
+		>
+			<CircleUserRound size={18} />
+		</a>
+		<form method="POST" action="/logout" class="hidden sm:block">
 			<Button type="submit" variant="ghost" size="sm">Sign out</Button>
 		</form>
 	{/snippet}

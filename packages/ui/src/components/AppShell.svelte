@@ -101,7 +101,7 @@
 		>
 			<button
 				type="button"
-				class="rounded-control p-1.5 text-fg-muted hover:bg-surface-sunken md:hidden"
+				class="shrink-0 rounded-control p-1.5 text-fg-muted hover:bg-surface-sunken md:hidden"
 				aria-label="Open navigation"
 				onclick={() => (mobileOpen = true)}
 			>
@@ -111,16 +111,17 @@
 				<button
 					type="button"
 					onclick={onSearch}
-					class="flex h-9 w-full max-w-md items-center gap-2 rounded-control border border-border bg-surface-sunken px-3 text-sm text-fg-subtle hover:border-border-strong"
+					aria-label="Search or jump to…"
+					class="flex h-9 w-9 shrink-0 items-center justify-center gap-2 rounded-control border border-border bg-surface-sunken text-sm text-fg-subtle hover:border-border-strong sm:w-full sm:max-w-md sm:shrink sm:justify-start sm:px-3"
 				>
-					<Search size={16} />
-					<span class="flex-1 text-left">Search or jump to…</span>
+					<Search size={16} class="shrink-0" />
+					<span class="hidden flex-1 text-left sm:inline">Search or jump to…</span>
 					<kbd class="hidden rounded border border-border px-1.5 font-mono text-xs sm:inline">
 						⌘K
 					</kbd>
 				</button>
 			{/if}
-			<div class="ml-auto flex items-center gap-1">
+			<div class="ml-auto flex min-w-0 items-center gap-1">
 				<ThemeToggle />
 				{#if topbar}{@render topbar()}{/if}
 			</div>
