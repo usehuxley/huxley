@@ -10,6 +10,159 @@
 		"version": "0.1.0"
 	},
 	"paths": {
+		"/api/v1/ai/calls": {
+			"get": {
+				"tags": ["ai"],
+				"summary": "Recent AI calls made for an organization.",
+				"operationId": "list_ai_calls",
+				"parameters": [
+					{
+						"name": "orgId",
+						"in": "query",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "array",
+									"items": {
+										"$ref": "#/components/schemas/AiCall"
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/ai/provider": {
+			"get": {
+				"tags": ["ai"],
+				"summary": "An organization's AI provider (never its key), and the one it uses.",
+				"operationId": "get_ai_provider",
+				"parameters": [
+					{
+						"name": "orgId",
+						"in": "query",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/AiProviderState"
+								}
+							}
+						}
+					}
+				}
+			},
+			"put": {
+				"tags": ["ai"],
+				"summary": "Sets an organization's AI provider; organizations below without their\nown use it too. The key is stored encrypted and never shown again.",
+				"operationId": "set_ai_provider",
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/SetAiProviderRequest"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/AiProviderState"
+								}
+							}
+						}
+					},
+					"422": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			},
+			"delete": {
+				"tags": ["ai"],
+				"summary": "Removes an organization's own AI provider.",
+				"operationId": "remove_ai_provider",
+				"parameters": [
+					{
+						"name": "orgId",
+						"in": "query",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"responses": {
+					"204": {},
+					"404": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/ai/provider/test": {
+			"post": {
+				"tags": ["ai"],
+				"summary": "Sends a tiny request through the provider the organization uses (it's\nlogged and counts toward the budget).",
+				"operationId": "test_ai_provider",
+				"parameters": [
+					{
+						"name": "orgId",
+						"in": "query",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/AiProviderTest"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
 		"/api/v1/approvals": {
 			"get": {
 				"tags": ["workflows"],
@@ -8308,6 +8461,171 @@
 					}
 				}
 			},
+			"AiCall": {
+				"type": "object",
+				"description": "A logged call.",
+				"required": [
+					"id",
+					"orgId",
+					"feature",
+					"model",
+					"inputTokens",
+					"outputTokens",
+					"outcome",
+					"createdAt"
+				],
+				"properties": {
+					"createdAt": {
+						"type": "string",
+						"format": "date-time"
+					},
+					"error": {
+						"type": ["string", "null"]
+					},
+					"feature": {
+						"type": "string"
+					},
+					"id": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"inputTokens": {
+						"type": "integer",
+						"format": "int64"
+					},
+					"model": {
+						"type": "string"
+					},
+					"orgId": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"outcome": {
+						"type": "string"
+					},
+					"outputTokens": {
+						"type": "integer",
+						"format": "int64"
+					},
+					"runId": {
+						"type": ["string", "null"],
+						"format": "uuid"
+					}
+				}
+			},
+			"AiProviderInput": {
+				"type": "object",
+				"description": "Settings for an organization's provider.",
+				"required": ["kind"],
+				"properties": {
+					"apiKey": {
+						"type": ["string", "null"],
+						"description": "The API key. Required when first set; omit to keep the current one."
+					},
+					"baseUrl": {
+						"type": ["string", "null"]
+					},
+					"deployment": {
+						"type": ["string", "null"]
+					},
+					"kind": {
+						"$ref": "#/components/schemas/ProviderKind"
+					},
+					"model": {
+						"type": ["string", "null"],
+						"description": "Default: the provider's default model, where it has one."
+					},
+					"monthlyTokenBudget": {
+						"type": ["integer", "null"],
+						"format": "int64"
+					}
+				},
+				"additionalProperties": false
+			},
+			"AiProviderState": {
+				"type": "object",
+				"required": ["usedThisMonth"],
+				"properties": {
+					"effective": {
+						"oneOf": [
+							{
+								"$ref": "#/components/schemas/AiProviderView",
+								"description": "The one it uses: its own, or the nearest above it."
+							},
+							{
+								"type": "null"
+							}
+						]
+					},
+					"own": {
+						"oneOf": [
+							{
+								"$ref": "#/components/schemas/AiProviderView",
+								"description": "This organization's own provider."
+							},
+							{
+								"type": "null"
+							}
+						]
+					},
+					"usedThisMonth": {
+						"type": "integer",
+						"format": "int64",
+						"description": "Tokens the effective provider has used this month, across every\norganization using it."
+					}
+				}
+			},
+			"AiProviderTest": {
+				"type": "object",
+				"required": ["ok", "message"],
+				"properties": {
+					"message": {
+						"type": "string",
+						"description": "The model's reply, or what went wrong."
+					},
+					"model": {
+						"type": ["string", "null"]
+					},
+					"ok": {
+						"type": "boolean"
+					}
+				}
+			},
+			"AiProviderView": {
+				"type": "object",
+				"description": "A provider as shown (never with its key).",
+				"required": ["id", "orgId", "kind", "model", "updatedAt"],
+				"properties": {
+					"baseUrl": {
+						"type": ["string", "null"]
+					},
+					"deployment": {
+						"type": ["string", "null"]
+					},
+					"id": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"kind": {
+						"$ref": "#/components/schemas/ProviderKind"
+					},
+					"model": {
+						"type": "string"
+					},
+					"monthlyTokenBudget": {
+						"type": ["integer", "null"],
+						"format": "int64"
+					},
+					"orgId": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"updatedAt": {
+						"type": "string",
+						"format": "date-time"
+					}
+				}
+			},
 			"ApiError": {
 				"type": "object",
 				"description": "An RFC 9457 problem details response.",
@@ -11313,6 +11631,10 @@
 					}
 				}
 			},
+			"ProviderKind": {
+				"type": "string",
+				"enum": ["anthropic", "openai", "azure_openai", "openai_compatible"]
+			},
 			"PublicForm": {
 				"type": "object",
 				"description": "What someone with the link sees.",
@@ -12184,6 +12506,20 @@
 						"type": ["string", "null"]
 					}
 				}
+			},
+			"SetAiProviderRequest": {
+				"type": "object",
+				"required": ["orgId", "provider"],
+				"properties": {
+					"orgId": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"provider": {
+						"$ref": "#/components/schemas/AiProviderInput"
+					}
+				},
+				"additionalProperties": false
 			},
 			"SetCurrentRequest": {
 				"type": "object",
@@ -13571,6 +13907,10 @@
 		{
 			"name": "templates",
 			"description": "Workflow and form templates"
+		},
+		{
+			"name": "ai",
+			"description": "AI providers (bring your own key) and AI usage"
 		},
 		{
 			"name": "datasets",

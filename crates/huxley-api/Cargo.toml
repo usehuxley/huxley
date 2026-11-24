@@ -29,6 +29,7 @@ huxley-runners.workspace = true
 huxley-templates.workspace = true
 huxley-packs.workspace = true
 huxley-datasets.workspace = true
+huxley-ai.workspace = true
 huxley-expr.workspace = true
 serde-saphyr.workspace = true
 thiserror.workspace = true

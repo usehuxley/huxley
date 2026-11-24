@@ -4,6 +4,65 @@
  */
 
 export interface paths {
+	'/api/v1/ai/calls': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** Recent AI calls made for an organization. */
+		get: operations['list_ai_calls'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/ai/provider': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** An organization's AI provider (never its key), and the one it uses. */
+		get: operations['get_ai_provider'];
+		/**
+		 * Sets an organization's AI provider; organizations below without their
+		 *     own use it too. The key is stored encrypted and never shown again.
+		 */
+		put: operations['set_ai_provider'];
+		post?: never;
+		/** Removes an organization's own AI provider. */
+		delete: operations['remove_ai_provider'];
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/ai/provider/test': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/**
+		 * Sends a tiny request through the provider the organization uses (it's
+		 *     logged and counts toward the budget).
+		 */
+		post: operations['test_ai_provider'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
 	'/api/v1/approvals': {
 		parameters: {
 			query?: never;
@@ -3122,6 +3181,68 @@ export interface components {
 			/** Format: uuid */
 			workflowId: string;
 		};
+		/** @description A logged call. */
+		AiCall: {
+			/** Format: date-time */
+			createdAt: string;
+			error?: string | null;
+			feature: string;
+			/** Format: uuid */
+			id: string;
+			/** Format: int64 */
+			inputTokens: number;
+			model: string;
+			/** Format: uuid */
+			orgId: string;
+			outcome: string;
+			/** Format: int64 */
+			outputTokens: number;
+			/** Format: uuid */
+			runId?: string | null;
+		};
+		/** @description Settings for an organization's provider. */
+		AiProviderInput: {
+			/** @description The API key. Required when first set; omit to keep the current one. */
+			apiKey?: string | null;
+			baseUrl?: string | null;
+			deployment?: string | null;
+			kind: components['schemas']['ProviderKind'];
+			/** @description Default: the provider's default model, where it has one. */
+			model?: string | null;
+			/** Format: int64 */
+			monthlyTokenBudget?: number | null;
+		};
+		AiProviderState: {
+			effective?: components['schemas']['AiProviderView'] | null;
+			own?: components['schemas']['AiProviderView'] | null;
+			/**
+			 * Format: int64
+			 * @description Tokens the effective provider has used this month, across every
+			 *     organization using it.
+			 */
+			usedThisMonth: number;
+		};
+		AiProviderTest: {
+			/** @description The model's reply, or what went wrong. */
+			message: string;
+			model?: string | null;
+			ok: boolean;
+		};
+		/** @description A provider as shown (never with its key). */
+		AiProviderView: {
+			baseUrl?: string | null;
+			deployment?: string | null;
+			/** Format: uuid */
+			id: string;
+			kind: components['schemas']['ProviderKind'];
+			model: string;
+			/** Format: int64 */
+			monthlyTokenBudget?: number | null;
+			/** Format: uuid */
+			orgId: string;
+			/** Format: date-time */
+			updatedAt: string;
+		};
 		/** @description An RFC 9457 problem details response. */
 		ApiError: {
 			detail?: string | null;
@@ -4339,6 +4460,8 @@ export interface components {
 			tenantId?: string | null;
 			trustEmail?: boolean | null;
 		};
+		/** @enum {string} */
+		ProviderKind: 'anthropic' | 'openai' | 'azure_openai' | 'openai_compatible';
 		/** @description What someone with the link sees. */
 		PublicForm: {
 			description?: string | null;
@@ -4674,6 +4797,11 @@ export interface components {
 			/** Format: date-time */
 			lastSeenAt?: string | null;
 			userAgent?: string | null;
+		};
+		SetAiProviderRequest: {
+			/** Format: uuid */
+			orgId: string;
+			provider: components['schemas']['AiProviderInput'];
 		};
 		SetCurrentRequest: {
 			/** Format: int32 */
@@ -5267,6 +5395,127 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+	list_ai_calls: {
+		parameters: {
+			query: {
+				orgId: string;
+			};
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['AiCall'][];
+				};
+			};
+		};
+	};
+	get_ai_provider: {
+		parameters: {
+			query: {
+				orgId: string;
+			};
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['AiProviderState'];
+				};
+			};
+		};
+	};
+	set_ai_provider: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['SetAiProviderRequest'];
+			};
+		};
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['AiProviderState'];
+				};
+			};
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	remove_ai_provider: {
+		parameters: {
+			query: {
+				orgId: string;
+			};
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			204: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content?: never;
+			};
+			404: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	test_ai_provider: {
+		parameters: {
+			query: {
+				orgId: string;
+			};
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['AiProviderTest'];
+				};
+			};
+		};
+	};
 	list_my_approvals: {
 		parameters: {
 			query?: never;

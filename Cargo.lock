@@ -1792,6 +1792,26 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "15cdd26707701c53297e2fa6afb323d55fbc1d0810c3aec078ae3ef0424c3c15"
 
 [[package]]
+name = "huxley-ai"
+version = "0.1.0"
+dependencies = [
+ "axum",
+ "huxley-core",
+ "huxley-crypto",
+ "huxley-db",
+ "huxley-orgs",
+ "reqwest 0.13.5",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "thiserror 2.0.21",
+ "time",
+ "tokio",
+ "utoipa",
+ "uuid",
+]
+
+[[package]]
 name = "huxley-api"
 version = "0.1.0"
 dependencies = [
@@ -1802,6 +1822,7 @@ dependencies = [
  "getrandom 0.4.3",
  "http",
  "http-body-util",
+ "huxley-ai",
  "huxley-auth",
  "huxley-authz",
  "huxley-core",
@@ -1983,6 +2004,7 @@ dependencies = [
  "axum",
  "base64 0.23.1",
  "getrandom 0.4.3",
+ "huxley-ai",
  "huxley-core",
  "huxley-crypto",
  "huxley-datasets",
