@@ -16,6 +16,8 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value as Json};
 use utoipa::ToSchema;
 
+pub mod store;
+
 /// The built-in templates' sources, in display order.
 const SOURCES: &[&str] = &[
     include_str!("../templates/request-and-notify.yaml"),
@@ -72,10 +74,14 @@ pub struct TemplateInfo {
     /// Whether using it also creates a form.
     #[serde(default)]
     pub has_form: bool,
+    /// Set for your organization's templates (saved from workflows):
+    /// where it lives. Built-ins have none.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub org_id: Option<uuid::Uuid>,
 }
 
 /// A form a template creates.
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct FormPart {
     pub name: String,
@@ -84,14 +90,18 @@ pub struct FormPart {
     pub ui: Json,
 }
 
+/// A template: what the gallery shows, the form (if any) and the workflow,
+/// with `%{key}` placeholders.
 #[derive(Debug, Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
-struct Source {
-    template: TemplateInfo,
+pub struct Template {
+    pub template: TemplateInfo,
     #[serde(default)]
-    form: Option<FormPart>,
-    workflow: Json,
+    pub form: Option<FormPart>,
+    pub workflow: Json,
 }
+
+type Source = Template;
 
 static TEMPLATES: LazyLock<Vec<Source>> = LazyLock::new(|| {
     SOURCES
@@ -108,6 +118,11 @@ static TEMPLATES: LazyLock<Vec<Source>> = LazyLock::new(|| {
 /// Every built-in template.
 pub fn list() -> Vec<TemplateInfo> {
     TEMPLATES.iter().map(|s| s.template.clone()).collect()
+}
+
+/// A built-in template.
+pub fn builtin(key: &str) -> Option<Template> {
+    TEMPLATES.iter().find(|s| s.template.key == key).cloned()
 }
 
 pub fn get(key: &str) -> Option<TemplateInfo> {
@@ -138,6 +153,17 @@ pub fn resolve(
         .iter()
         .find(|s| s.template.key == key)
         .ok_or(TemplateError::NotFound)?;
+    resolve_template(source, values, workflow_key, workflow_name, form_key)
+}
+
+/// Resolves `source` (a built-in or one of your organization's).
+pub fn resolve_template(
+    source: &Template,
+    values: &BTreeMap<String, String>,
+    workflow_key: &str,
+    workflow_name: &str,
+    form_key: Option<&str>,
+) -> Result<Resolved, TemplateError> {
     let mut bound: BTreeMap<String, (String, Json)> = BTreeMap::new();
     for binding in &source.template.bindings {
         let raw = values
@@ -166,6 +192,34 @@ pub fn resolve(
         ..f
     });
     Ok(Resolved { form, workflow })
+}
+
+/// A template made from a workflow (and the form that starts it, if any):
+/// the form trigger is pointed at `%{form}`, so each use gets its own form.
+pub fn from_workflow(
+    info: TemplateInfo,
+    mut workflow: Json,
+    form: Option<(&str, FormPart)>,
+) -> Template {
+    let form = form.map(|(form_key, part)| {
+        if let Some(triggers) = workflow["spec"]["triggers"].as_array_mut() {
+            for trigger in triggers {
+                if trigger["type"] == "form" && trigger["form"] == form_key {
+                    trigger["form"] = Json::String("%{form}".into());
+                }
+            }
+        }
+        part
+    });
+    Template {
+        template: TemplateInfo {
+            has_form: form.is_some(),
+            bindings: Vec::new(),
+            ..info
+        },
+        form,
+        workflow,
+    }
 }
 
 fn is_key(value: &str) -> bool {

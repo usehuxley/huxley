@@ -34,6 +34,7 @@ pub fn workflow_routes() -> Router<AppState> {
         .route("/{id}", get(get_one))
         .route("/{id}/draft", put(save_draft))
         .route("/{id}/publish", post(publish))
+        .route("/{id}/template", post(save_as_template))
         .route("/{id}/archive", post(archive))
         .route("/{id}/restore", post(restore))
         .route("/{id}/run-as", put(set_run_as))
@@ -328,6 +329,80 @@ pub async fn save_draft(
 #[derive(Debug, Default, Deserialize, ToSchema)]
 pub struct PublishRequest {
     pub notes: Option<String>,
+}
+
+#[derive(Debug, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct SaveTemplateRequest {
+    pub name: String,
+    #[serde(default)]
+    pub description: String,
+    /// Where it's shown in the gallery (default "Your templates").
+    #[serde(default)]
+    pub category: String,
+}
+
+/// Saves the workflow's draft as a template of its organization, offered
+/// there and below. If a form starts it, the form comes along, and each
+/// use of the template gets its own copy.
+#[utoipa::path(post, path = "/api/v1/workflows/{id}/template", operation_id = "save_workflow_as_template", tag = "templates",
+    params(("id" = Uuid, Path)), request_body = SaveTemplateRequest,
+    responses((status = 201, body = huxley_templates::TemplateInfo),
+              (status = 422, body = ApiError, content_type = "application/problem+json")))]
+pub async fn save_as_template(
+    State(state): State<AppState>,
+    authed: Authed,
+    Path(id): Path<Uuid>,
+    Json(body): Json<SaveTemplateRequest>,
+) -> ApiResult<(StatusCode, Json<huxley_templates::TemplateInfo>)> {
+    authorize(&state, &authed, permissions::WORKFLOW_PUBLISH, id).await?;
+    let mut tx = begin_scoped(&state.db, &authed.scope(&state).await?)
+        .await
+        .map_err(db_err)?;
+    let workflow = huxley_workflows::get(&mut tx, state.engine.expr(), id)
+        .await
+        .map_err(map_workflow)?;
+    let org_id = workflow.summary.org_id;
+    let form_key = workflow.draft["spec"]["triggers"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .find(|t| t["type"] == "form")
+        .and_then(|t| t["form"].as_str())
+        .map(str::to_owned);
+    let form = match &form_key {
+        Some(key) => sqlx::query_as::<_, (String, JsonValue, JsonValue)>(
+            "SELECT name, schema, ui FROM forms WHERE org_id = $1 AND key = $2",
+        )
+        .bind(org_id)
+        .bind(key)
+        .fetch_optional(&mut *tx)
+        .await
+        .map_err(db_err)?
+        .map(|(name, schema, ui)| huxley_templates::FormPart { name, schema, ui }),
+        None => None,
+    };
+    let info = huxley_templates::TemplateInfo {
+        key: String::new(),
+        name: body.name,
+        description: body.description,
+        category: body.category,
+        bindings: Vec::new(),
+        has_form: false,
+        org_id: Some(org_id),
+    };
+    let template =
+        huxley_templates::from_workflow(info, workflow.draft, form_key.as_deref().zip(form));
+    let saved = huxley_templates::store::save(&mut tx, &authed.user.ctx, org_id, &template)
+        .await
+        .map_err(|e| match e {
+            huxley_templates::store::StoreError::Invalid(at, message) => {
+                ApiError::validation().with_field_error(at, message)
+            }
+            other => ApiError::internal(&other),
+        })?;
+    tx.commit().await.map_err(db_err)?;
+    Ok((StatusCode::CREATED, Json(saved)))
 }
 
 /// Publishes the draft as a new version. 422 lists its problems if it has any.

@@ -7,10 +7,13 @@ import type { Actions, PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async (event) => {
 	const client = api(event);
-	const [templates, orgs] = await Promise.all([
-		client.GET('/api/v1/templates'),
-		client.GET('/api/v1/orgs')
-	]);
+	const { currentOrg } = await event.parent();
+	const orgs = await client.GET('/api/v1/orgs');
+	// Your organization's templates: the one you're in, else your first.
+	const orgId = currentOrg?.id ?? orgs.data?.[0]?.id;
+	const templates = await client.GET('/api/v1/templates', {
+		params: { query: orgId ? { orgId } : {} }
+	});
 	const template = templates.data?.find((t) => t.key === event.params.key);
 	if (!template) error(404, 'No such template.');
 	return { template, orgs: orgs.data ?? [] };

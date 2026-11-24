@@ -315,4 +315,27 @@ spec:
 		await page.goto('/forms');
 		await expect(page.getByRole('link', { name: 'Request', exact: true }).first()).toBeVisible();
 	});
+
+	test('a workflow saved as a template can be used again', async ({ browser }) => {
+		const page = await signIn(browser);
+		const suffix = Date.now().toString(36);
+		await page.goto('/workflows');
+		await page.getByLabel('Name').fill(`Original ${suffix}`);
+		await page.getByRole('button', { name: 'Create' }).click();
+		await expect(page.getByRole('heading', { level: 1 })).toHaveText(`Original ${suffix}`);
+		await page.getByLabel('Template name').fill(`Reusable ${suffix}`);
+		await page.getByRole('button', { name: 'Save as template' }).click();
+		await expect(page.getByText(`Saved as the template “Reusable ${suffix}”`)).toBeVisible();
+
+		await page.goto('/workflows/templates');
+		await page.getByRole('link', { name: new RegExp(`Reusable ${suffix}`) }).click();
+		await page.getByLabel('Name').fill(`Copy ${suffix}`);
+		await page.getByRole('button', { name: 'Create draft' }).click();
+		await expect(page.getByRole('heading', { level: 1 })).toHaveText(`Copy ${suffix}`);
+
+		await page.goto('/workflows/templates');
+		await page.getByRole('button', { name: `Delete Reusable ${suffix}` }).click();
+		await expect(page.getByText('Template deleted.')).toBeVisible();
+		await expect(page.getByRole('link', { name: new RegExp(`Reusable ${suffix}`) })).toHaveCount(0);
+	});
 });

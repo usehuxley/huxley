@@ -2300,11 +2300,31 @@ export interface paths {
 			path?: never;
 			cookie?: never;
 		};
-		/** The templates there are. */
+		/**
+		 * The built-in templates, and (with `orgId`) those saved at that
+		 *     organization and above it.
+		 */
 		get: operations['list_templates'];
 		put?: never;
 		post?: never;
 		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/templates/{id}': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		post?: never;
+		/** Deletes one of your organization's templates. */
+		delete: operations['delete_template'];
 		options?: never;
 		head?: never;
 		patch?: never;
@@ -2574,6 +2594,27 @@ export interface paths {
 		 *     the draft.
 		 */
 		post: operations['start_workflow_run'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/workflows/{id}/template': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/**
+		 * Saves the workflow's draft as a template of its organization, offered
+		 *     there and below. If a form starts it, the form comes along, and each
+		 *     use of the template gets its own copy.
+		 */
+		post: operations['save_workflow_as_template'];
 		delete?: never;
 		options?: never;
 		head?: never;
@@ -4039,6 +4080,12 @@ export interface components {
 			 */
 			revision: number;
 		};
+		SaveTemplateRequest: {
+			/** @description Where it's shown in the gallery (default "Your templates"). */
+			category?: string;
+			description?: string;
+			name: string;
+		};
 		/** @description A script with its current version. */
 		Script: components['schemas']['ScriptSummary'] & {
 			parameters: {
@@ -4333,6 +4380,12 @@ export interface components {
 			hasForm?: boolean;
 			key: string;
 			name: string;
+			/**
+			 * Format: uuid
+			 * @description Set for your organization's templates (saved from workflows):
+			 *     where it lives. Built-ins have none.
+			 */
+			orgId?: string | null;
 		};
 		TotpEnrollmentView: {
 			/** @description `otpauth://` URI to show as a QR code. */
@@ -9257,7 +9310,10 @@ export interface operations {
 	};
 	list_templates: {
 		parameters: {
-			query?: never;
+			query?: {
+				/** @description Also list the templates saved at this organization and above it. */
+				orgId?: string | null;
+			};
 			header?: never;
 			path?: never;
 			cookie?: never;
@@ -9270,6 +9326,33 @@ export interface operations {
 				};
 				content: {
 					'application/json': components['schemas']['TemplateInfo'][];
+				};
+			};
+		};
+	};
+	delete_template: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			204: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content?: never;
+			};
+			404: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
 				};
 			};
 		};
@@ -9837,6 +9920,39 @@ export interface operations {
 				};
 			};
 			/** @description Invalid inputs or draft */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	save_workflow_as_template: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['SaveTemplateRequest'];
+			};
+		};
+		responses: {
+			201: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['TemplateInfo'];
+				};
+			};
 			422: {
 				headers: {
 					[name: string]: unknown;

@@ -2265,13 +2265,19 @@ dependencies = [
 name = "huxley-templates"
 version = "0.1.0"
 dependencies = [
+ "huxley-core",
+ "huxley-db",
  "huxley-expr",
  "huxley-hwf",
  "serde",
  "serde-saphyr",
  "serde_json",
+ "sqlx",
  "thiserror 2.0.21",
+ "time",
+ "tokio",
  "utoipa",
+ "uuid",
 ]
 
 [[package]]
