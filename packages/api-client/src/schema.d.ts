@@ -783,6 +783,99 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
+	'/api/v1/datasets': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** Datasets you can see. */
+		get: operations['list_datasets'];
+		put?: never;
+		/** Creates a dataset and its table. */
+		post: operations['create_dataset'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/datasets/{id}': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get: operations['get_dataset'];
+		/**
+		 * Changes a dataset's definition and migrates its table (a type change
+		 *     whose values don't convert is refused, and nothing changes).
+		 */
+		put: operations['update_dataset'];
+		post?: never;
+		/** Deletes a dataset and all its rows. */
+		delete: operations['delete_dataset'];
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/datasets/{id}/rows': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/**
+		 * Adds rows (updating those whose key exists), or replaces an
+		 *     organization's rows.
+		 */
+		post: operations['write_dataset_rows'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/datasets/{id}/rows/delete': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/** Deletes the rows matching equality filters (in your scope). */
+		post: operations['delete_dataset_rows'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/datasets/{id}/rows/query': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/** Rows matching equality filters (those of organizations in your scope). */
+		post: operations['query_dataset_rows'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
 	'/api/v1/entities/{entity_type}/{id}/attachments': {
 		parameters: {
 			query?: never;
@@ -3222,6 +3315,16 @@ export interface components {
 			label: string;
 			value: string;
 		};
+		Column: {
+			/** @description Lowercase letters, digits and underscores, starting with a letter. */
+			name: string;
+			type: components['schemas']['ColumnType'];
+		};
+		/**
+		 * @description A column's type.
+		 * @enum {string}
+		 */
+		ColumnType: 'text' | 'integer' | 'number' | 'boolean' | 'timestamp' | 'date' | 'json' | 'uuid';
 		ConfirmPasswordResetRequest: {
 			/** Format: password */
 			newPassword: string;
@@ -3316,6 +3419,11 @@ export interface components {
 			/** Format: uuid */
 			orgId: string;
 		};
+		CreateDatasetRequest: {
+			dataset: components['schemas']['DatasetInput'];
+			/** Format: uuid */
+			orgId: string;
+		};
 		CreateFormRequest: {
 			form: components['schemas']['FormInput'];
 			/** Format: uuid */
@@ -3402,6 +3510,34 @@ export interface components {
 		CreatedTokenView: components['schemas']['ApiTokenView'] & {
 			/** @description Send as `Authorization: Bearer <token>`. Shown only now. */
 			tokenSecret: string;
+		};
+		Dataset: {
+			columns: components['schemas']['Column'][];
+			/** Format: date-time */
+			createdAt: string;
+			description?: string | null;
+			/** Format: uuid */
+			id: string;
+			key: string;
+			name: string;
+			/** Format: uuid */
+			orgId: string;
+			primaryKey: string[];
+			/** Format: date-time */
+			updatedAt: string;
+		};
+		/** @description A dataset's definition, to create or change it. */
+		DatasetInput: {
+			columns: components['schemas']['Column'][];
+			description?: string | null;
+			/** @description Lowercase letters, digits and hyphens. Fixed once created. */
+			key: string;
+			name: string;
+			/**
+			 * @description Columns whose values identify a row within an organization
+			 *     (writes with the same key update it). Empty: rows are just added.
+			 */
+			primaryKey?: string[];
 		};
 		/** @description A job that used up its attempts. */
 		DeadJob: {
@@ -4167,6 +4303,24 @@ export interface components {
 		PublishRequest: {
 			notes?: string | null;
 		};
+		/**
+		 * @description Which rows: equality filters on columns, and optionally one
+		 *     organization's rows only.
+		 */
+		Query: {
+			/** @description Column values rows must equal (`null` matches missing values). */
+			filters?: {
+				[key: string]: unknown;
+			};
+			/** Format: int64 */
+			limit?: number | null;
+			/** Format: int64 */
+			offset?: number | null;
+			/** @description A column to sort by; `-name` sorts descending. */
+			orderBy?: string | null;
+			/** Format: uuid */
+			orgId?: string | null;
+		};
 		/** @description A fixed-window rate limit. */
 		RateLimit: {
 			/**
@@ -4297,6 +4451,17 @@ export interface components {
 			orgId: string;
 			/** Format: uuid */
 			roleId: string;
+		};
+		/** @description Rows, as objects of column values plus `_org_id` and `_synced_at`. */
+		Rows: {
+			rows: {
+				[key: string]: unknown;
+			}[];
+			/**
+			 * Format: int64
+			 * @description How many rows match, in all.
+			 */
+			total: number;
 		};
 		RunAsRequest: {
 			/**
@@ -4756,6 +4921,9 @@ export interface components {
 			/** Format: int64 */
 			unreadCount: number;
 		};
+		UpdateDatasetRequest: {
+			dataset: components['schemas']['DatasetInput'];
+		};
 		UpdateOrgRequest: {
 			name: string;
 			/**
@@ -4943,6 +5111,25 @@ export interface components {
 			status: components['schemas']['WorkflowStatus'];
 			/** Format: date-time */
 			updatedAt: string;
+		};
+		WriteRowsRequest: {
+			/**
+			 * Format: uuid
+			 * @description The organization the rows belong to: the dataset's or one below.
+			 */
+			orgId: string;
+			/**
+			 * @description Replace all of that organization's rows (a full refresh) instead of
+			 *     adding and updating.
+			 */
+			replace?: boolean;
+			rows: {
+				[key: string]: unknown;
+			}[];
+		};
+		WrittenRows: {
+			/** Format: int64 */
+			written: number;
 		};
 	};
 	responses: never;
@@ -6487,6 +6674,252 @@ export interface operations {
 				};
 				content: {
 					'application/json': components['schemas']['FieldDef'];
+				};
+			};
+		};
+	};
+	list_datasets: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['Dataset'][];
+				};
+			};
+		};
+	};
+	create_dataset: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['CreateDatasetRequest'];
+			};
+		};
+		responses: {
+			201: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['Dataset'];
+				};
+			};
+			409: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	get_dataset: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['Dataset'];
+				};
+			};
+			404: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	update_dataset: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['UpdateDatasetRequest'];
+			};
+		};
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['Dataset'];
+				};
+			};
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	delete_dataset: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			204: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content?: never;
+			};
+			404: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	write_dataset_rows: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['WriteRowsRequest'];
+			};
+		};
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['WrittenRows'];
+				};
+			};
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	delete_dataset_rows: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['Query'];
+			};
+		};
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['WrittenRows'];
+				};
+			};
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	query_dataset_rows: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['Query'];
+			};
+		};
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['Rows'];
+				};
+			};
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
 				};
 			};
 		};

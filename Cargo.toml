@@ -46,6 +46,7 @@ huxley-orgs = { path = "crates/huxley-orgs" }
 huxley-runners = { path = "crates/huxley-runners" }
 huxley-templates = { path = "crates/huxley-templates" }
 huxley-packs = { path = "crates/huxley-packs" }
+huxley-datasets = { path = "crates/huxley-datasets" }
 huxley-scripts = { path = "crates/huxley-scripts" }
 huxley-storage = { path = "crates/huxley-storage" }
 huxley-telemetry = { path = "crates/huxley-telemetry" }

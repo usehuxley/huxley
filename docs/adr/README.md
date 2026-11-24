@@ -32,3 +32,4 @@ Decisions that shape Huxley. Add a new ADR by copying `0000-template.md` with th
 | [026](0026-kubernetes-jobs-sandbox.md) | On Kubernetes, scripts run as confined Jobs, with egress through a proxy enforced by NetworkPolicy | Accepted |
 | [027](0027-per-organization-connections.md) | One partner connection serves every client through organization variables | Accepted |
 | [028](0028-packs.md) | Packs are signed zips whose manifest lists every file's hash | Accepted |
+| [029](0029-datasets-as-managed-tables.md) | Datasets are managed tables whose DDL the database generates | Accepted |
