@@ -220,6 +220,18 @@ impl Engine {
                 Ok(output) => Executed::Done(output),
                 Err(failure) => Executed::Failed(failure),
             },
+            Step::ContactFind(_)
+            | Step::ContactUpsert(_)
+            | Step::CompanyGet(_)
+            | Step::CompanyUpdate(_) => {
+                match self
+                    .crm_step(step.type_name(), org_id, input, record.tainted)
+                    .await
+                {
+                    Ok(output) => Executed::Done(output),
+                    Err(failure) => Executed::Failed(failure),
+                }
+            }
             Step::DatasetUpsert(_) => {
                 match self.upsert_dataset(org_id, input, record.tainted).await {
                     Ok(output) => Executed::Done(output),

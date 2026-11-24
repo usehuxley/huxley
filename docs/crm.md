@@ -25,6 +25,35 @@ The people at your companies: names, email, phone and mobile, a site, and identi
 - **Custom fields and tags:** contacts and sites take them like organizations do (**Settings → Custom fields**).
 - **History:** changes are audited, and emit events (`contact.created`, `contact.updated`, `contact.archived`, `site.*`, `company.updated`) that workflows can be triggered by.
 
+## In workflows
+
+Four steps work with these records. Like the dataset steps, they act on the run's organization and those below it, they won't store secrets, and they fail with `module_disabled` where the module is off.
+
+```yaml
+- id: person
+  type: core.contact.upsert
+  with:
+    org_id: "{{ inputs.client }}"
+    match: entra
+    first_name: "{{ item.givenName }}"
+    last_name: "{{ item.surname }}"
+    email: "{{ item.mail }}"
+    job_title: "{{ item.jobTitle }}"
+    external_ids: { entra: "{{ item.id }}" }
+- id: onboarded
+  type: core.company.update
+  with: { org_id: "{{ inputs.client }}", status: active }
+```
+
+| Step | Does |
+|---|---|
+| `core.contact.find` | Finds contacts by `email` and/or `external_id` |
+| `core.contact.upsert` | Updates the matching contact (by email or an external id), or adds one. Fields left out keep their values. |
+| `core.company.get` | Company details and sites |
+| `core.company.update` | Changes the company details given |
+
+Their outputs are the same objects the API returns, so their fields are in camelCase (`steps.person.output.contact.lastName`), while their inputs, like every step's, are in snake_case.
+
 ## Permissions
 
 | Permission | Allows |

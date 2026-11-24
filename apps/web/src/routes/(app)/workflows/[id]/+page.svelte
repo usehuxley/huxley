@@ -128,6 +128,7 @@
 							bind:dirty={visualDirty}
 							bind:document={visualDocument}
 							actions={data.actions}
+							modules={data.user.activeModules}
 						/>
 						{#if canWrite && !archived}
 							<div class="flex items-center gap-3">

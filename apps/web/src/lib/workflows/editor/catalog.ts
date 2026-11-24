@@ -26,6 +26,8 @@ export interface StepSpec {
 	/** Nested step lists: fixed ones (`then`), or a list of lanes (`cases`). */
 	blocks?: { path: string; label: string }[];
 	lanes?: 'cases' | 'branches';
+	/** The feature module the step belongs to; offered only while it's on. */
+	module?: string;
 }
 
 const methods = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'].map((m) => ({
@@ -123,6 +125,90 @@ export const STEPS: StepSpec[] = [
 				hint: 'A column; -column sorts descending'
 			},
 			{ path: 'with.limit', label: 'Limit', kind: 'expression', hint: 'Default 100, at most 1000' }
+		]
+	},
+	{
+		type: 'core.contact.find',
+		label: 'Find contacts',
+		description: 'Look contacts up by email or an external id, such as their Entra ID.',
+		group: 'Data',
+		module: 'crm',
+		template: { with: { email: '' } },
+		fields: [
+			{ path: 'with.email', label: 'Email', kind: 'expression' },
+			{
+				path: 'with.external_id',
+				label: 'External id',
+				kind: 'json',
+				hint: 'One system and id, e.g. { "entra": "<object id>" }'
+			},
+			{ path: 'with.org_id', label: 'Only this organization', kind: 'expression' }
+		]
+	},
+	{
+		type: 'core.contact.upsert',
+		label: 'Add or update a contact',
+		description: 'Update the contact with this email (or external id), or add them.',
+		group: 'Data',
+		module: 'crm',
+		template: { with: { email: '', first_name: '', last_name: '' } },
+		fields: [
+			{ path: 'with.email', label: 'Email', kind: 'expression' },
+			{ path: 'with.first_name', label: 'First name', kind: 'expression' },
+			{ path: 'with.last_name', label: 'Last name', kind: 'expression' },
+			{ path: 'with.job_title', label: 'Job title', kind: 'expression' },
+			{ path: 'with.phone', label: 'Phone', kind: 'expression' },
+			{ path: 'with.mobile', label: 'Mobile', kind: 'expression' },
+			{
+				path: 'with.external_ids',
+				label: 'External ids',
+				kind: 'json',
+				hint: 'Merged into theirs, e.g. { "entra": "<object id>" }'
+			},
+			{
+				path: 'with.match',
+				label: 'Match on',
+				kind: 'text',
+				hint: 'email (default), or an external id’s system such as entra'
+			},
+			{ path: 'with.org_id', label: 'Organization', kind: 'expression', hint: 'Default: the run’s' }
+		]
+	},
+	{
+		type: 'core.company.get',
+		label: 'Get company details',
+		description: 'An organization’s company details and sites.',
+		group: 'Data',
+		module: 'crm',
+		template: {},
+		fields: [
+			{ path: 'with.org_id', label: 'Organization', kind: 'expression', hint: 'Default: the run’s' }
+		]
+	},
+	{
+		type: 'core.company.update',
+		label: 'Update company details',
+		description: 'Change status, relationship, website, phone or notes; the rest stays.',
+		group: 'Data',
+		module: 'crm',
+		template: { with: { status: 'active' } },
+		fields: [
+			{
+				path: 'with.status',
+				label: 'Status',
+				kind: 'expression',
+				hint: 'active, onboarding, offboarding or inactive'
+			},
+			{
+				path: 'with.relationship',
+				label: 'Relationship',
+				kind: 'expression',
+				hint: 'client, prospect, vendor or partner'
+			},
+			{ path: 'with.website', label: 'Website', kind: 'expression' },
+			{ path: 'with.phone', label: 'Phone', kind: 'expression' },
+			{ path: 'with.notes', label: 'Notes', kind: 'expression' },
+			{ path: 'with.org_id', label: 'Organization', kind: 'expression', hint: 'Default: the run’s' }
 		]
 	},
 	{
@@ -543,6 +629,11 @@ export function summary(step: Step): string {
 		case 'dataset.query':
 		case 'dataset.upsert':
 			return text(isStep(step.with) ? step.with.dataset : '');
+		case 'core.contact.find':
+		case 'core.contact.upsert':
+			return text(isStep(step.with) ? step.with.email : '');
+		case 'core.company.update':
+			return text(isStep(step.with) ? step.with.status : '');
 		case 'wait_for_callback':
 			return `expires after ${text(step.expires ?? '24h')}`;
 		case 'transform':

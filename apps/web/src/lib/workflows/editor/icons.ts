@@ -1,5 +1,6 @@
 import {
 	Bell,
+	Building2,
 	Braces,
 	CornerDownLeft,
 	Database,
@@ -21,6 +22,8 @@ import {
 	Tags,
 	Terminal,
 	UserCheck,
+	UserRoundSearch,
+	UserRoundPen,
 	Variable,
 	Webhook,
 	Workflow
@@ -37,6 +40,10 @@ const ICONS: Record<string, typeof Globe> = {
 	'ai.extract': ScanText,
 	'dataset.query': Database,
 	'dataset.upsert': DatabaseZap,
+	'core.contact.find': UserRoundSearch,
+	'core.contact.upsert': UserRoundPen,
+	'core.company.get': Building2,
+	'core.company.update': Building2,
 	transform: Shuffle,
 	set_var: Variable,
 	subworkflow: Workflow,

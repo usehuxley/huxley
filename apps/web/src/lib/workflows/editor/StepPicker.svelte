@@ -6,12 +6,15 @@
 	let {
 		where,
 		onpick,
-		oncancel
+		oncancel,
+		modules = []
 	}: {
 		/** Where the step goes, e.g. "Add a step after greet". */
 		where: string;
 		onpick: (type: string) => void;
 		oncancel: () => void;
+		/** Active feature modules: their steps are offered. */
+		modules?: string[];
 	} = $props();
 
 	const groups = ['Actions', 'Data', 'Control flow', 'Finish'] as const;
@@ -53,7 +56,7 @@
 	>
 		{#each groups as group (group)}
 			<p class="px-2 pt-3 text-xs font-semibold text-fg-muted first:pt-0">{group}</p>
-			{#each STEPS.filter((s) => s.group === group) as spec (spec.type)}
+			{#each STEPS.filter((s) => s.group === group && (!s.module || modules.includes(s.module))) as spec (spec.type)}
 				{@const Icon = stepIcon(spec.group, spec.type)}
 				<button
 					type="button"

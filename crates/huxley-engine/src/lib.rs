@@ -13,6 +13,7 @@ mod action;
 mod ai;
 pub mod approval;
 mod callback;
+mod crm;
 mod dataset;
 mod egress;
 mod email;

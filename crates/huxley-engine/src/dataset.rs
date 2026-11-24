@@ -64,7 +64,7 @@ fn map_rows(rows: &[Json], map: &serde_json::Map<String, Json>) -> Result<Vec<Js
 
 impl Engine {
     /// The run's organization and every one below it.
-    async fn subtree(&self, org_id: Uuid) -> Result<Vec<Uuid>, Json> {
+    pub(crate) async fn subtree(&self, org_id: Uuid) -> Result<Vec<Uuid>, Json> {
         let mut tx = begin_scoped(self.db(), &OrgScope::System)
             .await
             .map_err(|e| error("internal", e.to_string()))?;
@@ -96,7 +96,7 @@ impl Engine {
     }
 
     /// An `org_id` input, if given: the run's organization or one below it.
-    fn org_in(input: &Json, subtree: &[Uuid]) -> Result<Option<Uuid>, Json> {
+    pub(crate) fn org_in(input: &Json, subtree: &[Uuid]) -> Result<Option<Uuid>, Json> {
         match &input["org_id"] {
             Json::Null => Ok(None),
             Json::String(s) => {

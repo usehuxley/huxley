@@ -179,6 +179,85 @@
       },
       "type": "object"
     },
+    "CompanyRef": {
+      "additionalProperties": false,
+      "description": "Which organization (`core.company.get`): `org_id`, default the run's.\nOutput: `{ company, sites }`.",
+      "properties": {
+        "org_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "CompanyUpdate": {
+      "additionalProperties": false,
+      "description": "Company details to change (`core.company.update`); fields left out stay\nas they are. Output: `{ company }`.",
+      "properties": {
+        "notes": true,
+        "org_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "phone": true,
+        "relationship": {
+          "description": "`client`, `vendor`, `partner` or `prospect`."
+        },
+        "status": {
+          "description": "`active`, `inactive`, `onboarding` or `offboarding`."
+        },
+        "website": true
+      },
+      "type": "object"
+    },
+    "ContactFind": {
+      "additionalProperties": false,
+      "description": "Contacts to find (`core.contact.find`): by `email`, by `external_id`\n(e.g. `{ entra: \"<object id>\" }`), or both. Among the run's organization\nand those below it, or `org_id` and those below it. Output:\n`{ contacts, total }`.",
+      "properties": {
+        "email": true,
+        "external_id": {
+          "description": "One external id: `{ <system>: <id> }`."
+        },
+        "org_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "ContactUpsert": {
+      "additionalProperties": false,
+      "description": "A contact to create or update (`core.contact.upsert`). It's matched by\n`match` (`email`, the default, or an external id's system, e.g.\n`entra`) among the contacts of `org_id` (default: the run's\norganization); a match is updated with the fields given, otherwise a\ncontact is created there. Output: `{ contact, created }`.",
+      "properties": {
+        "email": true,
+        "external_ids": {
+          "description": "Identities elsewhere, merged into the contact's: `{ entra: \"…\" }`."
+        },
+        "first_name": true,
+        "job_title": {
+          "description": "At the contact's primary company."
+        },
+        "last_name": true,
+        "match": {
+          "description": "What identifies the contact: `email` or an external id's system."
+        },
+        "mobile": true,
+        "org_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "phone": true
+      },
+      "type": "object"
+    },
     "DatasetQuery": {
       "additionalProperties": false,
       "description": "Rows to read (`dataset.query`). Output: `{ rows, total }`.",
@@ -1956,6 +2035,258 @@
             },
             "with": {
               "$ref": "#/$defs/DatasetUpsert"
+            }
+          },
+          "required": [
+            "type",
+            "id",
+            "with"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Find contacts by email or external id (the `crm` module).",
+          "properties": {
+            "continue_on_error": {
+              "description": "Record the error as the step's output and carry on.",
+              "type": "boolean"
+            },
+            "description": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "id": {
+              "description": "Unique in the workflow: lowercase letters, digits, underscores.\nOther steps read this step's output as `steps.<id>.output`.",
+              "type": "string"
+            },
+            "if": {
+              "description": "Skip the step unless this expression is true.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "name": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "retry": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/RetryPolicy"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "timeout": {
+              "description": "Fail the attempt after this long, e.g. `30s`.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "type": {
+              "const": "core.contact.find",
+              "type": "string"
+            },
+            "with": {
+              "$ref": "#/$defs/ContactFind"
+            }
+          },
+          "required": [
+            "type",
+            "id",
+            "with"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Create a contact, or update the one with the same email or external\nid (the `crm` module).",
+          "properties": {
+            "continue_on_error": {
+              "description": "Record the error as the step's output and carry on.",
+              "type": "boolean"
+            },
+            "description": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "id": {
+              "description": "Unique in the workflow: lowercase letters, digits, underscores.\nOther steps read this step's output as `steps.<id>.output`.",
+              "type": "string"
+            },
+            "if": {
+              "description": "Skip the step unless this expression is true.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "name": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "retry": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/RetryPolicy"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "timeout": {
+              "description": "Fail the attempt after this long, e.g. `30s`.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "type": {
+              "const": "core.contact.upsert",
+              "type": "string"
+            },
+            "with": {
+              "$ref": "#/$defs/ContactUpsert"
+            }
+          },
+          "required": [
+            "type",
+            "id",
+            "with"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Read an organization's company details and sites (the `crm` module).",
+          "properties": {
+            "continue_on_error": {
+              "description": "Record the error as the step's output and carry on.",
+              "type": "boolean"
+            },
+            "description": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "id": {
+              "description": "Unique in the workflow: lowercase letters, digits, underscores.\nOther steps read this step's output as `steps.<id>.output`.",
+              "type": "string"
+            },
+            "if": {
+              "description": "Skip the step unless this expression is true.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "name": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "retry": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/RetryPolicy"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "timeout": {
+              "description": "Fail the attempt after this long, e.g. `30s`.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "type": {
+              "const": "core.company.get",
+              "type": "string"
+            },
+            "with": {
+              "$ref": "#/$defs/CompanyRef",
+              "default": {}
+            }
+          },
+          "required": [
+            "type",
+            "id"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Change an organization's company details (the `crm` module).",
+          "properties": {
+            "continue_on_error": {
+              "description": "Record the error as the step's output and carry on.",
+              "type": "boolean"
+            },
+            "description": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "id": {
+              "description": "Unique in the workflow: lowercase letters, digits, underscores.\nOther steps read this step's output as `steps.<id>.output`.",
+              "type": "string"
+            },
+            "if": {
+              "description": "Skip the step unless this expression is true.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "name": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "retry": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/RetryPolicy"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "timeout": {
+              "description": "Fail the attempt after this long, e.g. `30s`.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "type": {
+              "const": "core.company.update",
+              "type": "string"
+            },
+            "with": {
+              "$ref": "#/$defs/CompanyUpdate"
             }
           },
           "required": [
