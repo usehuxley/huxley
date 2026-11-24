@@ -7159,6 +7159,17 @@
 						"type": ["object", "null"],
 						"description": "The JSON schema of the first successful response, if it has one."
 					},
+					"pagination": {
+						"oneOf": [
+							{
+								"$ref": "#/components/schemas/Pagination",
+								"description": "How it pages through results (from the overlay)."
+							},
+							{
+								"type": "null"
+							}
+						]
+					},
 					"parameters": {
 						"type": "array",
 						"items": {
@@ -7257,6 +7268,17 @@
 					},
 					"name": {
 						"type": ["string", "null"]
+					},
+					"pagination": {
+						"oneOf": [
+							{
+								"$ref": "#/components/schemas/Pagination",
+								"description": "How the action pages through results, for `all_pages`."
+							},
+							{
+								"type": "null"
+							}
+						]
 					}
 				},
 				"additionalProperties": false
@@ -9506,6 +9528,87 @@
 					}
 				},
 				"additionalProperties": false
+			},
+			"Pagination": {
+				"oneOf": [
+					{
+						"type": "object",
+						"description": "The body says where the next page is, e.g. `@odata.nextLink`.",
+						"required": ["next", "style"],
+						"properties": {
+							"items": {
+								"type": ["string", "null"]
+							},
+							"next": {
+								"type": "string"
+							},
+							"style": {
+								"type": "string",
+								"enum": ["next_url"]
+							}
+						}
+					},
+					{
+						"type": "object",
+						"description": "The body gives a cursor, sent back as the query parameter `param`.",
+						"required": ["cursor", "param", "style"],
+						"properties": {
+							"cursor": {
+								"type": "string"
+							},
+							"items": {
+								"type": ["string", "null"]
+							},
+							"param": {
+								"type": "string"
+							},
+							"style": {
+								"type": "string",
+								"enum": ["cursor"]
+							}
+						}
+					},
+					{
+						"type": "object",
+						"description": "A `Link: <…>; rel=\"next\"` header.",
+						"required": ["style"],
+						"properties": {
+							"items": {
+								"type": ["string", "null"]
+							},
+							"style": {
+								"type": "string",
+								"enum": ["link_header"]
+							}
+						}
+					},
+					{
+						"type": "object",
+						"description": "The query parameter `param` counts items to skip; pages hold\n`page_size` items (sent as `limit_param` if given).",
+						"required": ["param", "page_size", "style"],
+						"properties": {
+							"items": {
+								"type": ["string", "null"]
+							},
+							"limit_param": {
+								"type": ["string", "null"]
+							},
+							"page_size": {
+								"type": "integer",
+								"format": "int32",
+								"minimum": 0
+							},
+							"param": {
+								"type": "string"
+							},
+							"style": {
+								"type": "string",
+								"enum": ["offset"]
+							}
+						}
+					}
+				],
+				"description": "How a list action pages through its results. Paths are dot-separated\npaths in the response body; `items` is where each page's list is\n(default: the body itself)."
 			},
 			"ParamLocation": {
 				"type": "string",

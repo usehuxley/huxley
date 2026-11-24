@@ -263,6 +263,12 @@ fn integration_action(c: &mut Checker, path: &str, s: &crate::IntegrationActionS
             "<integration key>/<action key>, e.g. tickets-api/createTicket (not an expression)",
         );
     }
+    if s.max_pages.is_some_and(|n| !(1..=100).contains(&n)) {
+        c.error(format!("{path}.max_pages"), "from 1 to 100");
+    }
+    if s.max_pages.is_some() && !s.all_pages {
+        c.error(format!("{path}.max_pages"), "only with all_pages: true");
+    }
     if s.connection.as_deref().is_some_and(|k| !is_valid_key(k)) {
         c.error(
             format!("{path}.connection"),

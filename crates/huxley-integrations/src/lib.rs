@@ -158,6 +158,75 @@ pub struct Action {
     /// Hidden by the integration's overlay: not offered, still callable.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub hidden: bool,
+    /// How it pages through results (from the overlay).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pagination: Option<Pagination>,
+}
+
+/// How a list action pages through its results. Paths are dot-separated
+/// paths in the response body; `items` is where each page's list is
+/// (default: the body itself).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(tag = "style", rename_all = "snake_case", deny_unknown_fields)]
+pub enum Pagination {
+    /// The body says where the next page is, e.g. `@odata.nextLink`.
+    NextUrl {
+        next: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        items: Option<String>,
+    },
+    /// The body gives a cursor, sent back as the query parameter `param`.
+    Cursor {
+        cursor: String,
+        param: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        items: Option<String>,
+    },
+    /// A `Link: <…>; rel="next"` header.
+    LinkHeader {
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        items: Option<String>,
+    },
+    /// The query parameter `param` counts items to skip; pages hold
+    /// `page_size` items (sent as `limit_param` if given).
+    Offset {
+        param: String,
+        page_size: u32,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        limit_param: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        items: Option<String>,
+    },
+}
+
+impl Pagination {
+    /// Where each page's list is.
+    pub fn items(&self) -> Option<&str> {
+        match self {
+            Self::NextUrl { items, .. }
+            | Self::Cursor { items, .. }
+            | Self::LinkHeader { items }
+            | Self::Offset { items, .. } => items.as_deref(),
+        }
+    }
+
+    pub fn check(&self) -> Result<(), &'static str> {
+        let empty = |s: &str| s.trim().is_empty();
+        match self {
+            Self::NextUrl { next, .. } if empty(next) => {
+                Err("next is the path to the next page's URL")
+            }
+            Self::Cursor { cursor, param, .. } if empty(cursor) || empty(param) => {
+                Err("cursor and param are needed")
+            }
+            Self::Offset {
+                param, page_size, ..
+            } if empty(param) || !(1..=1000).contains(page_size) => {
+                Err("param, and a page_size from 1 to 1000, are needed")
+            }
+            _ => Ok(()),
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema)]

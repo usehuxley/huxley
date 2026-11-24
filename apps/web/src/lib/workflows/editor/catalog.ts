@@ -138,6 +138,13 @@ export const STEPS: StepSpec[] = [
 				label: 'Inputs',
 				kind: 'json',
 				hint: 'Parameters by name; the request body as body'
+			},
+			{ path: 'all_pages', label: 'Follow every page', kind: 'boolean' },
+			{
+				path: 'max_pages',
+				label: 'At most this many pages',
+				kind: 'number',
+				hint: '1 to 100; default 20'
 			}
 		]
 	},

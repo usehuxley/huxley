@@ -481,6 +481,7 @@ fn action(
         auth,
         deprecated: op["deprecated"].as_bool() == Some(true),
         hidden: false,
+        pagination: None,
     }
 }
 

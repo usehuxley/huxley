@@ -574,6 +574,10 @@
               "description": "`<integration key>/<action key>`, e.g. `tickets-api/createTicket`.",
               "type": "string"
             },
+            "all_pages": {
+              "description": "Follow every page (the action's pagination, set in the integration's\noverlay): the output is `{items, pages, truncated}`.",
+              "type": "boolean"
+            },
             "connection": {
               "description": "A connection key. Default: the nearest connection to the\nintegration that the run's organization can use.",
               "type": [
@@ -599,6 +603,15 @@
               "description": "Skip the step unless this expression is true.",
               "type": [
                 "string",
+                "null"
+              ]
+            },
+            "max_pages": {
+              "description": "The most pages followed with `all_pages` (default 20, at most 100).",
+              "format": "uint32",
+              "minimum": 0,
+              "type": [
+                "integer",
                 "null"
               ]
             },

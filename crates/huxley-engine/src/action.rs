@@ -213,16 +213,19 @@ async fn target(
             format!("no integration {integration_key:?} here or above"),
         )));
     };
-    let (definition, aliases): (Json, Json) = sqlx::query_as(
-        "SELECT definition, aliases FROM integration_versions \
-          WHERE integration_id = $1 AND version = $2",
+    let (definition, aliases, overlay): (Json, Json, Json) = sqlx::query_as(
+        "SELECT v.definition, v.aliases, i.overlay FROM integration_versions v \
+           JOIN integrations i ON i.id = v.integration_id \
+          WHERE v.integration_id = $1 AND v.version = $2",
     )
     .bind(integration_id)
     .bind(version)
     .fetch_one(&mut *conn)
     .await?;
-    let definition: Definition = serde_json::from_value(definition)
+    let mut definition: Definition = serde_json::from_value(definition)
         .map_err(|e| crate::EngineError::Document(e.to_string()))?;
+    // The overlay's pagination applies to calls (names and hiding don't matter).
+    huxley_integrations::overlay::Overlay::from_json(&overlay).apply(&mut definition, &aliases);
     let key = aliases[action_key].as_str().unwrap_or(action_key);
     let Some(action) = definition.actions.into_iter().find(|a| a.key == key) else {
         return Ok(Err(error(
@@ -508,8 +511,41 @@ impl Engine {
             Ok(spec) => spec,
             Err(failure) => return Ok(Err(failure)),
         };
-        Ok(crate::http::request(&self.egress, &spec)
+        Ok(self
+            .send(&target.action, spec, &resolved.base_url, input)
+            .await)
+    }
+
+    /// Sends the request: one page, or every page with `all_pages`.
+    async fn send(
+        &self,
+        action: &Action,
+        spec: Json,
+        base_url: &str,
+        input: &Json,
+    ) -> Result<Json, Json> {
+        if input["all_pages"] == json!(true) {
+            let Some(pagination) = action.pagination.clone() else {
+                return Err(error(
+                    "definition",
+                    format!(
+                        "{} has no pagination set: set it in the integration's overlay to use all_pages",
+                        action.key
+                    ),
+                ));
+            };
+            let max_pages = input["max_pages"]
+                .as_u64()
+                .map_or(DEFAULT_MAX_PAGES, |n| n.clamp(1, MAX_PAGES));
+            return crate::pages::all_pages(&self.egress, spec, base_url, &pagination, max_pages)
+                .await;
+        }
+        crate::http::request(&self.egress, &spec)
             .await
-            .map(|response| response["body"].clone()))
+            .map(|response| response["body"].clone())
     }
 }
+
+/// Pages followed with `all_pages` when the step doesn't say.
+const DEFAULT_MAX_PAGES: u64 = 20;
+const MAX_PAGES: u64 = 100;
