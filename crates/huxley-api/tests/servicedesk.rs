@@ -1049,3 +1049,132 @@ async fn service_desk_notification_kinds_are_offered_while_it_is_on() {
         assert!(kinds.contains(&kind), "{kind}: {kinds:?}");
     }
 }
+
+#[tokio::test]
+async fn canned_responses_fill_in_the_ticket_and_technician() {
+    let Some(s) = setup().await else { return };
+    let (_, email) = user(&s.pools, Some(("technician", s.provider))).await;
+    let tech = login(&s.app, &email).await;
+    let name = unique("Password reset");
+    let created = s
+        .ok(&s.owner, "POST", "/api/v1/canned-responses", Some(json!({
+            "name": name, "category": "Accounts",
+            "body": "Hi {{requester.first_name}},\n\nYour password for {{ client.name }} is reset ({{ticket.reference}}). {{nope}}\n\n{{me.first_name}}",
+        })))
+        .await;
+    assert_eq!(created["kind"], "public");
+    // Technicians use them; only configurers manage them.
+    let (status, _) = s
+        .call(
+            &tech,
+            "POST",
+            "/api/v1/canned-responses",
+            Some(json!({ "name": "x", "body": "y" })),
+        )
+        .await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+    let contact = s
+        .ok(
+            &s.owner,
+            "POST",
+            &format!("/api/v1/orgs/{}/contacts", s.acme),
+            Some(json!({ "firstName": "Ada", "lastName": "Lovelace" })),
+        )
+        .await;
+    let ticket = s
+        .ticket(
+            &s.owner,
+            json!({ "orgId": s.acme, "title": "Locked out", "requesterId": contact["id"] }),
+        )
+        .await;
+    let filled = s
+        .ok(&tech, "GET", &format!("{}/responses", url(&ticket)), None)
+        .await;
+    let mine = filled
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|r| r["name"] == name.as_str())
+        .unwrap();
+    let reference = ticket["reference"].as_str().unwrap();
+    let expected = format!(
+        "Hi Ada,\n\nYour password for {} is reset ({reference}). {{{{nope}}}}\n\n",
+        ticket["orgName"].as_str().unwrap()
+    );
+    assert!(
+        mine["body"].as_str().unwrap().starts_with(&expected),
+        "{}",
+        mine["body"]
+    );
+
+    // Changing needs the version; archiving removes it from tickets.
+    let rurl = format!(
+        "/api/v1/canned-responses/{}",
+        created["id"].as_str().unwrap()
+    );
+    let (status, _) = s
+        .call(
+            &s.owner,
+            "PUT",
+            &rurl,
+            Some(json!({ "name": name, "body": "New", "version": 99 })),
+        )
+        .await;
+    assert_eq!(status, StatusCode::CONFLICT);
+    let changed = s
+        .ok(&s.owner, "PUT", &rurl, Some(json!({ "name": name, "body": "New", "kind": "internal", "version": created["version"] })))
+        .await;
+    assert_eq!(
+        (changed["body"].as_str(), changed["kind"].as_str()),
+        (Some("New"), Some("internal"))
+    );
+    assert_eq!(
+        s.call(&s.owner, "DELETE", &rurl, None).await.0,
+        StatusCode::NO_CONTENT
+    );
+    let after = s
+        .ok(&tech, "GET", &format!("{}/responses", url(&ticket)), None)
+        .await;
+    assert!(
+        !after
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|r| r["name"] == name.as_str())
+    );
+}
+
+#[tokio::test]
+async fn canned_responses_are_checked() {
+    let Some(s) = setup().await else { return };
+    let name = unique("Taken");
+    s.ok(
+        &s.owner,
+        "POST",
+        "/api/v1/canned-responses",
+        Some(json!({ "name": name, "body": "x" })),
+    )
+    .await;
+    for (body, pointer) in [
+        (json!({ "name": name, "body": "again" }), "/name"),
+        (json!({ "name": "Empty", "body": "  " }), "/body"),
+        (
+            json!({ "name": "Odd", "body": "x", "kind": "shout" }),
+            "/kind",
+        ),
+    ] {
+        let (status, problem) = s
+            .call(
+                &s.owner,
+                "POST",
+                "/api/v1/canned-responses",
+                Some(body.clone()),
+            )
+            .await;
+        assert_eq!(
+            (status, field(&problem)),
+            (StatusCode::UNPROCESSABLE_ENTITY, pointer.into()),
+            "{body}"
+        );
+    }
+}

@@ -12,6 +12,7 @@ use huxley_db::{OrgScope, begin_scoped};
 use huxley_servicedesk::config::{self, MatrixCell, TicketType};
 use huxley_servicedesk::mail::{self, Email, Mailbox, MailboxInput};
 use huxley_servicedesk::queues::{self, Queue, QueueInput};
+use huxley_servicedesk::responses::{self, CannedResponse, CannedResponseInput};
 use huxley_servicedesk::sla::{self, Policy, PolicyInput, SlaAssignment};
 use huxley_servicedesk::tickets::{
     self, Activity, NewNote, NewTicket, Note, StatusChange, Ticket, TicketChanges, TicketFilter,
@@ -43,6 +44,15 @@ pub fn routes() -> Router<AppState> {
             "/queues/{id}",
             get(get_queue).put(update_queue).delete(archive_queue),
         )
+        .route(
+            "/canned-responses",
+            get(list_responses).post(create_response),
+        )
+        .route(
+            "/canned-responses/{id}",
+            axum::routing::put(update_response).delete(archive_response),
+        )
+        .route("/tickets/{id}/responses", get(ticket_responses))
         .route("/my-work", get(my_work))
         .route("/tickets", get(list_tickets).post(create_ticket))
         .route("/tickets/{id}", get(get_ticket).patch(update_ticket))
@@ -784,5 +794,113 @@ pub async fn post_message(
             email_id: stored,
             duplicate: !new,
         }),
+    ))
+}
+
+/// The module is on and the caller works tickets somewhere.
+async fn response_reader(state: &AppState, authed: &Authed) -> ApiResult<()> {
+    require_module(state, MODULE).await?;
+    let granted = authed.principal.granted_anywhere();
+    if granted.contains(&permissions::TICKET_WRITE)
+        || granted.contains(&permissions::SERVICEDESK_CONFIGURE)
+    {
+        Ok(())
+    } else {
+        Err(ApiError::forbidden())
+    }
+}
+
+/// Canned responses, as written (placeholders and all).
+#[utoipa::path(get, path = "/api/v1/canned-responses", tag = "servicedesk",
+    responses((status = 200, body = Vec<CannedResponse>)))]
+pub async fn list_responses(
+    State(state): State<AppState>,
+    authed: Authed,
+) -> ApiResult<Json<Vec<CannedResponse>>> {
+    response_reader(&state, &authed).await?;
+    Ok(Json(
+        scoped(&state, &OrgScope::System, async |tx| {
+            responses::list(tx).await
+        })
+        .await?,
+    ))
+}
+
+/// Adds a canned response. Needs `servicedesk:configure`.
+#[utoipa::path(post, path = "/api/v1/canned-responses", tag = "servicedesk",
+    request_body = CannedResponseInput,
+    responses((status = 201, body = CannedResponse), (status = 422, body = ApiError, content_type = "application/problem+json")))]
+pub async fn create_response(
+    State(state): State<AppState>,
+    authed: Authed,
+    Json(body): Json<CannedResponseInput>,
+) -> ApiResult<(StatusCode, Json<CannedResponse>)> {
+    authed.require_instance(permissions::SERVICEDESK_CONFIGURE)?;
+    require_module(&state, MODULE).await?;
+    let ctx = authed.user.ctx.clone();
+    let created = scoped(&state, &OrgScope::System, async |tx| {
+        responses::create(tx, &ctx, &body).await
+    })
+    .await?;
+    Ok((StatusCode::CREATED, Json(created)))
+}
+
+/// Changes a canned response; send back the `version` you read.
+#[utoipa::path(put, path = "/api/v1/canned-responses/{id}", tag = "servicedesk",
+    params(("id" = Uuid, Path)), request_body = CannedResponseInput,
+    responses((status = 200, body = CannedResponse), (status = 409, body = ApiError, content_type = "application/problem+json"),
+              (status = 422, body = ApiError, content_type = "application/problem+json")))]
+pub async fn update_response(
+    State(state): State<AppState>,
+    authed: Authed,
+    Path(id): Path<Uuid>,
+    Json(body): Json<CannedResponseInput>,
+) -> ApiResult<Json<CannedResponse>> {
+    authed.require_instance(permissions::SERVICEDESK_CONFIGURE)?;
+    require_module(&state, MODULE).await?;
+    let ctx = authed.user.ctx.clone();
+    Ok(Json(
+        scoped(&state, &OrgScope::System, async |tx| {
+            responses::update(tx, &ctx, id, &body).await
+        })
+        .await?,
+    ))
+}
+
+/// Archives a canned response.
+#[utoipa::path(delete, path = "/api/v1/canned-responses/{id}", tag = "servicedesk",
+    params(("id" = Uuid, Path)), responses((status = 204)))]
+pub async fn archive_response(
+    State(state): State<AppState>,
+    authed: Authed,
+    Path(id): Path<Uuid>,
+) -> ApiResult<StatusCode> {
+    authed.require_instance(permissions::SERVICEDESK_CONFIGURE)?;
+    require_module(&state, MODULE).await?;
+    let ctx = authed.user.ctx.clone();
+    scoped(&state, &OrgScope::System, async |tx| {
+        responses::archive(tx, &ctx, id).await
+    })
+    .await?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+/// Canned responses filled in for this ticket and you. Needs
+/// `ticket:write` on the ticket.
+#[utoipa::path(get, path = "/api/v1/tickets/{id}/responses", tag = "servicedesk",
+    params(("id" = Uuid, Path)), responses((status = 200, body = Vec<CannedResponse>)))]
+pub async fn ticket_responses(
+    State(state): State<AppState>,
+    authed: Authed,
+    Path(id): Path<Uuid>,
+) -> ApiResult<Json<Vec<CannedResponse>>> {
+    let scope = ticket_access(&state, &authed, id, permissions::TICKET_WRITE).await?;
+    let ticket = scoped(&state, &scope, async |tx| tickets::get(tx, id).await).await?;
+    let me = authed.user.auth.user.display_name.clone();
+    Ok(Json(
+        scoped(&state, &OrgScope::System, async |tx| {
+            responses::for_ticket(tx, &ticket, &me).await
+        })
+        .await?,
     ))
 }

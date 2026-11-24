@@ -20,6 +20,12 @@ export const SETTINGS_SECTIONS = [
 		module: 'servicedesk'
 	},
 	{
+		key: 'responses',
+		label: 'Canned responses',
+		permission: 'servicedesk:configure',
+		module: 'servicedesk'
+	},
+	{
 		key: 'skills',
 		label: 'Skills & certifications',
 		permission: 'workforce:manage',

@@ -19,6 +19,7 @@
 		sla: resolve('/(app)/settings/sla'),
 		mailboxes: resolve('/(app)/settings/mailboxes'),
 		skills: resolve('/(app)/settings/skills'),
+		responses: resolve('/(app)/settings/responses'),
 		modules: resolve('/(app)/settings/modules'),
 		jobs: resolve('/(app)/settings/jobs'),
 		runners: resolve('/(app)/settings/runners'),

@@ -825,6 +825,42 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
+	'/api/v1/canned-responses': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** Canned responses, as written (placeholders and all). */
+		get: operations['list_responses'];
+		put?: never;
+		/** Adds a canned response. Needs `servicedesk:configure`. */
+		post: operations['create_response'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/canned-responses/{id}': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		/** Changes a canned response; send back the `version` you read. */
+		put: operations['update_response'];
+		post?: never;
+		/** Archives a canned response. */
+		delete: operations['archive_response'];
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
 	'/api/v1/companies': {
 		parameters: {
 			query?: never;
@@ -3262,6 +3298,26 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
+	'/api/v1/tickets/{id}/responses': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/**
+		 * Canned responses filled in for this ticket and you. Needs
+		 *     `ticket:write` on the ticket.
+		 */
+		get: operations['ticket_responses'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
 	'/api/v1/tickets/{id}/status': {
 		parameters: {
 			query?: never;
@@ -4411,6 +4467,29 @@ export interface components {
 		CancelRunResponse: {
 			/** @description False if the run had already finished. */
 			cancelled: boolean;
+		};
+		CannedResponse: {
+			body: string;
+			category: string;
+			/** Format: uuid */
+			id: string;
+			/** @description `public` (a reply to the requester) or `internal`. */
+			kind: string;
+			name: string;
+			/** Format: int32 */
+			version: number;
+		};
+		CannedResponseInput: {
+			body: string;
+			category?: string | null;
+			/** @description `public` (the default) or `internal`. */
+			kind?: string | null;
+			name: string;
+			/**
+			 * Format: int32
+			 * @description The version you read (updates only).
+			 */
+			version?: number | null;
 		};
 		/** @description A built-in integration as the catalog shows it. */
 		CatalogEntry: {
@@ -8894,6 +8973,116 @@ export interface operations {
 				content: {
 					'application/problem+json': components['schemas']['ApiError'];
 				};
+			};
+		};
+	};
+	list_responses: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['CannedResponse'][];
+				};
+			};
+		};
+	};
+	create_response: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['CannedResponseInput'];
+			};
+		};
+		responses: {
+			201: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['CannedResponse'];
+				};
+			};
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	update_response: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['CannedResponseInput'];
+			};
+		};
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['CannedResponse'];
+				};
+			};
+			409: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	archive_response: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			204: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content?: never;
 			};
 		};
 	};
@@ -14352,6 +14541,27 @@ export interface operations {
 				};
 				content: {
 					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	ticket_responses: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['CannedResponse'][];
 				};
 			};
 		};
