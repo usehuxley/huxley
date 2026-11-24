@@ -1987,3 +1987,63 @@ async fn test_runs_can_start_at_a_step_with_earlier_results_pinned() {
         assert_eq!(problem["errors"][0]["pointer"], pointer, "{problem}");
     }
 }
+
+#[tokio::test]
+async fn test_cases_run_unsaved_documents_with_mocked_steps() {
+    let Some(db) = isolated("api_test_cases").await else {
+        return;
+    };
+    let s = setup_in(db.pools.clone()).await;
+    let key = key("case");
+    // A saved draft, which the test case must leave alone.
+    let (status, saved) = s
+        .post(
+            &s.owner,
+            "/api/v1/workflows",
+            json!({ "orgId": s.org, "document": greeter(&key) }),
+        )
+        .await;
+    assert_eq!(status, StatusCode::CREATED, "{saved}");
+    // The document under test calls an API nobody can reach: its step is
+    // mocked, and the mocked output flows on.
+    let document = document(
+        &key,
+        &json!([
+            { "id": "lookup", "type": "http.request",
+              "with": { "method": "GET", "url": "https://unreachable.invalid/users" } },
+            { "id": "greet", "type": "transform",
+              "output": "Hi {{ inputs.name }} ({{ steps.lookup.output.body.count }} users)" }
+        ]),
+    );
+    let body = json!({
+        "orgId": s.org, "document": document, "inputs": { "name": "Ada" },
+        "mocks": { "lookup": { "status": 200, "body": { "count": 3 } } }
+    });
+    let (status, started) = s.post(&s.owner, "/api/v1/workflows/test-runs", body).await;
+    assert_eq!(status, StatusCode::CREATED, "{started}");
+    let run = finish(&s.pools, &s.app, &s.owner, started["id"].as_str().unwrap()).await;
+    assert_eq!(run["status"], "succeeded", "{run}");
+    assert_eq!(run["outputs"]["greeting"], "Hi Ada (3 users)");
+    assert_eq!(run["workflowId"], saved["id"]);
+    assert_eq!(run["triggerType"], "test");
+    // The draft wasn't touched.
+    let (_, detail) = s
+        .get(
+            &s.owner,
+            &format!("/api/v1/workflows/{}", saved["id"].as_str().unwrap()),
+        )
+        .await;
+    assert_eq!(detail["revision"], saved["revision"]);
+
+    // Mocks must name steps; documents must be valid; inputs must fit.
+    for (mocks, inputs) in [
+        (json!({ "nope": 1 }), json!({ "name": "Ada" })),
+        (json!({ "lookup[x]": 1 }), json!({ "name": "Ada" })),
+        (json!({}), json!({})),
+    ] {
+        let body =
+            json!({ "orgId": s.org, "document": document, "inputs": inputs, "mocks": mocks });
+        let (status, problem) = s.post(&s.owner, "/api/v1/workflows/test-runs", body).await;
+        assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{problem}");
+    }
+}

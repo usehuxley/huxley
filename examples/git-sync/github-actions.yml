@@ -1,0 +1,54 @@
+# Publish workflows from this repository to Huxley.
+# Copy to .github/workflows/huxley.yml. Repository settings:
+#   secret   HUXLEY_TOKEN   an API token scoped to workflow:read, workflow:write, workflow:publish
+#   variable HUXLEY_SERVER  e.g. https://huxley.example.com
+#   variable HUXLEY_ORG     the organization's name or id
+# Pull requests are validated, tested and diffed; pushes to main publish.
+name: Huxley workflows
+
+on:
+  pull_request:
+    paths: ["workflows/**"]
+  push:
+    branches: [main]
+    paths: ["workflows/**"]
+
+permissions:
+  contents: read
+
+env:
+  HUXLEY_SERVER: ${{ vars.HUXLEY_SERVER }}
+  HUXLEY_ORG: ${{ vars.HUXLEY_ORG }}
+  HUXLEY_TOKEN: ${{ secrets.HUXLEY_TOKEN }}
+  # Pin the version that matches your server.
+  HUXLEY_IMAGE: ghcr.io/usehuxley/huxley:latest
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Validate
+        run: docker run --rm -v "$PWD:/repo" -w /repo "$HUXLEY_IMAGE" workflows validate workflows/
+      - name: Test
+        run: >-
+          docker run --rm -v "$PWD:/repo" -w /repo -e HUXLEY_SERVER -e HUXLEY_ORG -e HUXLEY_TOKEN
+          "$HUXLEY_IMAGE" workflows test workflows/
+      - name: What would change
+        if: github.event_name == 'pull_request'
+        # Differences are expected in a pull request: show them, don't fail.
+        run: >-
+          docker run --rm -v "$PWD:/repo" -w /repo -e HUXLEY_SERVER -e HUXLEY_ORG -e HUXLEY_TOKEN
+          "$HUXLEY_IMAGE" workflows diff workflows/ || true
+
+  publish:
+    if: github.event_name == 'push'
+    needs: check
+    runs-on: ubuntu-latest
+    concurrency: huxley-publish
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Publish
+        run: >-
+          docker run --rm -v "$PWD:/repo" -w /repo -e HUXLEY_SERVER -e HUXLEY_ORG -e HUXLEY_TOKEN
+          "$HUXLEY_IMAGE" workflows push workflows/ --publish --notes "${GITHUB_SHA::12}: $(git log -1 --format=%s)"

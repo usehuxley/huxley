@@ -1,0 +1,37 @@
+# Publish workflows from this repository to Huxley.
+# Pipeline variables: HUXLEY_SERVER, HUXLEY_ORG, and HUXLEY_TOKEN (secret):
+# an API token scoped to workflow:read, workflow:write and workflow:publish.
+# Pull requests are validated, tested and diffed; main publishes.
+trigger:
+  branches: { include: [main] }
+  paths: { include: [workflows] }
+pr:
+  paths: { include: [workflows] }
+
+pool:
+  vmImage: ubuntu-latest
+
+variables:
+  HUXLEY_IMAGE: ghcr.io/usehuxley/huxley:latest # pin the version that matches your server
+
+steps:
+  - checkout: self
+  - script: docker run --rm -v "$PWD:/repo" -w /repo "$(HUXLEY_IMAGE)" workflows validate workflows/
+    displayName: Validate
+  - script: >-
+      docker run --rm -v "$PWD:/repo" -w /repo -e HUXLEY_SERVER -e HUXLEY_ORG -e HUXLEY_TOKEN
+      "$(HUXLEY_IMAGE)" workflows test workflows/
+    displayName: Test
+    env: { HUXLEY_TOKEN: $(HUXLEY_TOKEN) }
+  - script: >-
+      docker run --rm -v "$PWD:/repo" -w /repo -e HUXLEY_SERVER -e HUXLEY_ORG -e HUXLEY_TOKEN
+      "$(HUXLEY_IMAGE)" workflows diff workflows/ || true
+    displayName: What would change
+    condition: eq(variables['Build.Reason'], 'PullRequest')
+    env: { HUXLEY_TOKEN: $(HUXLEY_TOKEN) }
+  - script: >-
+      docker run --rm -v "$PWD:/repo" -w /repo -e HUXLEY_SERVER -e HUXLEY_ORG -e HUXLEY_TOKEN
+      "$(HUXLEY_IMAGE)" workflows push workflows/ --publish --notes "$(Build.SourceVersion)"
+    displayName: Publish
+    condition: and(succeeded(), eq(variables['Build.SourceBranch'], 'refs/heads/main'))
+    env: { HUXLEY_TOKEN: $(HUXLEY_TOKEN) }

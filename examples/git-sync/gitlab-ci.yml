@@ -1,0 +1,29 @@
+# Publish workflows from this repository to Huxley.
+# Copy into .gitlab-ci.yml. CI/CD variables: HUXLEY_SERVER, HUXLEY_ORG, and
+# HUXLEY_TOKEN (masked, protected): an API token scoped to workflow:read,
+# workflow:write and workflow:publish.
+# Merge requests are validated, tested and diffed; the default branch publishes.
+.huxley:
+  image:
+    name: ghcr.io/usehuxley/huxley:latest # pin the version that matches your server
+    entrypoint: [""]
+  rules:
+    - changes: ["workflows/**/*"]
+
+huxley:check:
+  extends: .huxley
+  stage: test
+  script:
+    - huxley workflows validate workflows/
+    - huxley workflows test workflows/
+    - huxley workflows diff workflows/ || true
+
+huxley:publish:
+  extends: .huxley
+  stage: deploy
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      changes: ["workflows/**/*"]
+  resource_group: huxley-publish
+  script:
+    - huxley workflows push workflows/ --publish --notes "$CI_COMMIT_SHORT_SHA: $CI_COMMIT_TITLE"

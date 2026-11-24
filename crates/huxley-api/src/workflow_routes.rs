@@ -31,6 +31,7 @@ pub fn workflow_routes() -> Router<AppState> {
     Router::new()
         .route("/", get(list).post(create))
         .route("/validate", post(validate))
+        .route("/test-runs", post(start_test_case))
         .route("/{id}", get(get_one))
         .route("/{id}/draft", put(save_draft))
         .route("/{id}/publish", post(publish))
@@ -266,6 +267,95 @@ pub async fn validate(
         })
         .collect();
     Json(ValidateResponse { diagnostics })
+}
+
+#[derive(Debug, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct TestCaseRequest {
+    pub org_id: Uuid,
+    /// The HWF document to test (not saved).
+    #[schema(value_type = std::collections::HashMap<String, serde_json::Value>)]
+    pub document: JsonValue,
+    #[serde(default = "empty_object")]
+    #[schema(value_type = std::collections::HashMap<String, serde_json::Value>)]
+    pub inputs: JsonValue,
+    /// Outputs for steps that shouldn't run, by step id (or, inside loops,
+    /// with iteration indices: `inner[2][0]`).
+    #[serde(default)]
+    #[schema(value_type = std::collections::HashMap<String, serde_json::Value>)]
+    pub mocks: std::collections::BTreeMap<String, JsonValue>,
+}
+
+/// Test-runs a document without saving it, with mocked steps: for
+/// fixture-based tests (`huxley workflows test`). The run is a test run of
+/// the organization's workflow with the same key, if there is one.
+#[utoipa::path(post, path = "/api/v1/workflows/test-runs", operation_id = "start_workflow_test_case", tag = "workflows",
+    request_body = TestCaseRequest,
+    responses((status = 201, body = StartRunResponse),
+              (status = 422, body = ApiError, content_type = "application/problem+json")))]
+pub async fn start_test_case(
+    State(state): State<AppState>,
+    authed: Authed,
+    Json(body): Json<TestCaseRequest>,
+) -> ApiResult<(StatusCode, Json<StartRunResponse>)> {
+    authed
+        .require_at(&state, permissions::WORKFLOW_WRITE, body.org_id)
+        .await?;
+    let diagnostics = huxley_workflows::diagnose(state.engine.expr(), &body.document);
+    if !diagnostics.is_empty() {
+        return Err(map_workflow(WorkflowError::Invalid(diagnostics)));
+    }
+    huxley_workflows::check_inputs(&body.document, &body.inputs).map_err(map_workflow)?;
+    huxley_engine::replay::check_mocks(&body.document, &body.mocks)
+        .map_err(|m| ApiError::validation().with_field_error("mocks", m))?;
+    let mut tx = begin_scoped(&state.db, &authed.scope(&state).await?)
+        .await
+        .map_err(db_err)?;
+    let workflow_id: Option<Uuid> =
+        sqlx::query_scalar("SELECT id FROM workflows WHERE org_id = $1 AND key = $2")
+            .bind(body.org_id)
+            .bind(
+                body.document["metadata"]["key"]
+                    .as_str()
+                    .unwrap_or_default(),
+            )
+            .fetch_optional(&mut *tx)
+            .await
+            .map_err(db_err)?;
+    let run = state
+        .engine
+        .start_run(
+            &mut tx,
+            StartRun {
+                org_id: body.org_id,
+                workflow_id,
+                version: None,
+                document: Some(body.document.clone()),
+                trigger_type: "test".into(),
+                trigger: json!({ "mocks": body.mocks.keys().collect::<Vec<_>>() }),
+                inputs: body.inputs,
+                actor_id: authed.user.ctx.actor.id(),
+            },
+        )
+        .await
+        .map_err(db_err)?;
+    state
+        .engine
+        .mock_steps(&mut tx, body.org_id, run, &body.document, &body.mocks)
+        .await
+        .map_err(db_err)?;
+    huxley_db::audit::record(
+        &mut tx,
+        &authed.user.ctx,
+        huxley_db::audit::AuditRecord::new("workflow.run_started")
+            .org(body.org_id)
+            .target("run", run)
+            .details(json!({ "workflow": workflow_id, "test": true, "mocks": body.mocks.len() })),
+    )
+    .await
+    .map_err(db_err)?;
+    tx.commit().await.map_err(db_err)?;
+    Ok((StatusCode::CREATED, Json(StartRunResponse { id: run })))
 }
 
 #[utoipa::path(get, path = "/api/v1/workflows/{id}", operation_id = "get_workflow", tag = "workflows",

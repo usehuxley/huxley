@@ -141,12 +141,55 @@ huxley workflows push workflows/                 # save them as drafts (creating
 huxley workflows push workflows/ --publish --notes "Release 12"
 huxley workflows run greet -i name=Ada           # run the published version, print its outputs
 huxley workflows run greet --draft -i name=Ada   # test-run the draft
+huxley workflows test workflows/                 # run the *.test.yaml fixture tests
 ```
 
 Things to know:
 
 - **Exit codes:** `validate` and `diff` exit 1 when there are problems or differences, so they work as CI checks. `run` exits 1 if the run fails.
-- **Pulled files** are written in a stable key order, so they diff cleanly. They start with a `yaml-language-server` comment pointing at the HWF schema, so editors autocomplete them.
+- **Pulled files** use the same key order as the YAML tab in the editor (other keys sorted), so they diff cleanly. They start with a `yaml-language-server` comment pointing at the HWF schema, so editors autocomplete them.
 - **Matching:** files are matched to workflows by `metadata.key`.
 - **Permissions:** `push` needs `workflow:write`, and `--publish` also needs `workflow:publish`. Use a token scoped to what CI needs.
 - **Inputs:** `-i name=value` parses the value as JSON when it can (`-i count=3`, `-i 'tags=["a"]'`), and `--inputs-file` takes a JSON object.
+
+### Fixture tests
+
+A `*.test.yaml` file next to a workflow file describes test cases:
+
+```yaml
+workflow: lookup.yaml          # relative to this file
+cases:
+  - name: uses the API's count
+    inputs: { name: Ada }
+    mocks:                     # these steps don't run: they return this
+      fetch: { status: 200, body: { count: 3 } }
+    expect:
+      outputs: { line: Ada has 3 friends }
+  - name: fails when the API can't be reached
+    inputs: { name: Ada }
+    expect: { status: failed, error: { kind: network } }
+```
+
+How tests run:
+
+- **On the server, without saving anything.** `huxley workflows test` test-runs each case's copy of the workflow file there, so integrations, connections and variables behave as they do for real.
+- **Mocks:** a mocked step doesn't run. It returns the given output, which later steps read as usual. Mock a step inside a loop with its iteration indices, e.g. `inner[2][0]`.
+- **Expectations:**
+  - `expect.status` defaults to `succeeded`.
+  - `outputs` and `error` match as subsets: every key you give must be there, equal, and extra keys are fine.
+- **Exit code:** the command exits 1 if any case fails.
+- **The API:** `POST /api/v1/workflows/test-runs` with `{ orgId, document, inputs, mocks }`. It needs `workflow:write`.
+
+Folders passed to `validate`, `diff` and `push` skip `*.test.yaml` files.
+
+### Publishing from Git
+
+Keep workflows in a repository and let CI publish them. Pull requests validate, test and show the diff, and merges to the main branch publish. Ready-made pipelines are in [`examples/git-sync`](../examples/git-sync):
+
+- [GitHub Actions](../examples/git-sync/github-actions.yml)
+- [GitLab CI](../examples/git-sync/gitlab-ci.yml)
+- [Azure Pipelines](../examples/git-sync/azure-pipelines.yml)
+
+Each needs `HUXLEY_SERVER`, `HUXLEY_ORG` and a secret `HUXLEY_TOKEN`. The token should belong to a service account and be scoped to `workflow:read`, `workflow:write` and `workflow:publish`. The pipelines run the CLI from the `ghcr.io/usehuxley/huxley` image, so pin the version that matches your server. Each published version's notes record the commit.
+
+To start a repository from what's already in Huxley, run `huxley workflows pull --dir workflows/` and commit the result.

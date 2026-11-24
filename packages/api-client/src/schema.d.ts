@@ -2590,6 +2590,27 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
+	'/api/v1/workflows/test-runs': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/**
+		 * Test-runs a document without saving it, with mocked steps: for
+		 *     fixture-based tests (`huxley workflows test`). The run is a test run of
+		 *     the organization's workflow with the same key, if there is one.
+		 */
+		post: operations['start_workflow_test_case'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
 	'/api/v1/workflows/validate': {
 		parameters: {
 			query?: never;
@@ -4670,6 +4691,24 @@ export interface components {
 			 *     where it lives. Built-ins have none.
 			 */
 			orgId?: string | null;
+		};
+		TestCaseRequest: {
+			/** @description The HWF document to test (not saved). */
+			document: {
+				[key: string]: unknown;
+			};
+			inputs?: {
+				[key: string]: unknown;
+			};
+			/**
+			 * @description Outputs for steps that shouldn't run, by step id (or, inside loops,
+			 *     with iteration indices: `inner[2][0]`).
+			 */
+			mocks?: {
+				[key: string]: unknown;
+			};
+			/** Format: uuid */
+			orgId: string;
 		};
 		TotpEnrollmentView: {
 			/** @description `otpauth://` URI to show as a QR code. */
@@ -10205,6 +10244,37 @@ export interface operations {
 				};
 				content: {
 					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	start_workflow_test_case: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['TestCaseRequest'];
+			};
+		};
+		responses: {
+			201: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['StartRunResponse'];
 				};
 			};
 			422: {

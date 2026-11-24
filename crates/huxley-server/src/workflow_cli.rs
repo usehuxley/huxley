@@ -64,6 +64,19 @@ pub enum WorkflowCommand {
         #[arg(long)]
         notes: Option<String>,
     },
+    /// Run fixture tests (`*.test.yaml`): each case test-runs its workflow
+    /// file on the server, with mocked steps, and checks the result.
+    /// Nothing is saved. Exits 1 if any case fails.
+    Test {
+        #[command(flatten)]
+        server: Connection,
+        /// Test files, or folders of them.
+        #[arg(required = true)]
+        paths: Vec<PathBuf>,
+        /// How long one case may take, in seconds.
+        #[arg(long, default_value_t = 120)]
+        timeout: u64,
+    },
     /// Run a workflow and wait for it to finish; prints its outputs.
     Run {
         #[command(flatten)]
@@ -105,6 +118,18 @@ pub async fn run(command: WorkflowCommand) -> anyhow::Result<()> {
             )
             .await
         }
+        WorkflowCommand::Test {
+            server,
+            paths,
+            timeout,
+        } => {
+            test(
+                &Client::new(&server).await?,
+                &paths,
+                Duration::from_secs(timeout),
+            )
+            .await
+        }
         WorkflowCommand::Run {
             server,
             key,
@@ -129,12 +154,7 @@ fn files(paths: &[PathBuf]) -> anyhow::Result<Vec<PathBuf>> {
             let mut found: Vec<PathBuf> = std::fs::read_dir(path)?
                 .filter_map(Result::ok)
                 .map(|e| e.path())
-                .filter(|p| {
-                    p.is_file()
-                        && p.extension()
-                            .and_then(|e| e.to_str())
-                            .is_some_and(|e| matches!(e, "yaml" | "yml" | "json"))
-                })
+                .filter(|p| p.is_file() && is_workflow_file(p))
                 .collect();
             found.sort();
             out.extend(found);
@@ -143,6 +163,20 @@ fn files(paths: &[PathBuf]) -> anyhow::Result<Vec<PathBuf>> {
         }
     }
     Ok(out)
+}
+
+fn is_test_file(path: &Path) -> bool {
+    path.file_name()
+        .and_then(|n| n.to_str())
+        .is_some_and(|n| n.ends_with(".test.yaml") || n.ends_with(".test.yml"))
+}
+
+fn is_workflow_file(path: &Path) -> bool {
+    !is_test_file(path)
+        && path
+            .extension()
+            .and_then(|e| e.to_str())
+            .is_some_and(|e| matches!(e, "yaml" | "yml" | "json"))
 }
 
 fn load(path: &Path) -> anyhow::Result<Json> {
@@ -167,68 +201,179 @@ fn key_of(document: &Json, path: &Path) -> anyhow::Result<String> {
 const SCHEMA_COMMENT: &str =
     "# yaml-language-server: $schema=https://usehuxley.com/schemas/hwf/v1.json";
 
-/// Keys first in this order, then the rest alphabetically, so pulled files
-/// read naturally and diff cleanly.
-const KEY_ORDER: &[&str] = &[
-    "apiVersion",
-    "kind",
-    "metadata",
-    "spec",
-    "key",
-    "id",
-    "name",
-    "description",
-    "type",
-    "inputs",
-    "triggers",
-    "if",
-    "with",
-    "steps",
-    "outputs",
+// HWF's keys in the order people write them: the same rules as the web
+// editor's YAML view (apps/web/src/lib/workflows/yaml.ts), so a draft
+// reads the same in both. Other keys are sorted.
+const TOP: &[&str] = &["apiVersion", "kind", "metadata", "spec", "ui"];
+const METADATA: &[&str] = &["key", "name", "description", "tags"];
+const SPEC: &[&str] = &[
+    "inputs", "triggers", "steps", "outputs", "on_error", "settings",
 ];
+const STEP_FIRST: &[&str] = &["id", "type", "name", "description", "if"];
+const STEP_LAST: &[&str] = &[
+    "then",
+    "else",
+    "cases",
+    "default",
+    "items",
+    "as",
+    "concurrency",
+    "steps",
+    "branches",
+    "join",
+    "catch",
+    "finally",
+    "retry",
+    "timeout",
+    "continue_on_error",
+];
+const TRIGGER_FIRST: &[&str] = &["type", "id"];
 
-fn key_rank(key: &str) -> (usize, &str) {
-    (
-        KEY_ORDER
-            .iter()
-            .position(|o| *o == key)
-            .unwrap_or(KEY_ORDER.len()),
-        key,
-    )
+/// A JSON value with its object keys in a chosen order.
+enum Node {
+    Map(Vec<(String, Node)>),
+    Seq(Vec<Node>),
+    Leaf(Json),
 }
 
-/// Serializes a JSON value with object keys in a stable, readable order
-/// (whatever order the map itself keeps).
-struct Ordered<'a>(&'a Json);
-
-impl serde::Serialize for Ordered<'_> {
+impl serde::Serialize for Node {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         use serde::ser::{SerializeMap as _, SerializeSeq as _};
-        match self.0 {
-            Json::Object(map) => {
-                let mut keys: Vec<&String> = map.keys().collect();
-                keys.sort_by(|a, b| key_rank(a).cmp(&key_rank(b)));
-                let mut out = serializer.serialize_map(Some(keys.len()))?;
-                for key in keys {
-                    out.serialize_entry(key, &Ordered(&map[key]))?;
+        match self {
+            Self::Map(entries) => {
+                let mut out = serializer.serialize_map(Some(entries.len()))?;
+                for (key, value) in entries {
+                    out.serialize_entry(key, value)?;
                 }
                 out.end()
             }
-            Json::Array(items) => {
+            Self::Seq(items) => {
                 let mut out = serializer.serialize_seq(Some(items.len()))?;
                 for item in items {
-                    out.serialize_element(&Ordered(item))?;
+                    out.serialize_element(item)?;
                 }
                 out.end()
             }
-            other => other.serialize(serializer),
+            Self::Leaf(value) => value.serialize(serializer),
         }
     }
 }
 
-/// A workflow document as YAML, in canonical order.
+/// Any value, objects' keys sorted.
+fn plain(value: &Json) -> Node {
+    match value {
+        Json::Object(map) => {
+            let mut keys: Vec<&String> = map.keys().collect();
+            keys.sort();
+            Node::Map(
+                keys.into_iter()
+                    .map(|k| (k.clone(), plain(&map[k])))
+                    .collect(),
+            )
+        }
+        Json::Array(items) => Node::Seq(items.iter().map(plain).collect()),
+        other => Node::Leaf(other.clone()),
+    }
+}
+
+/// `object`'s keys: `first` (in order), the rest sorted, then `last`; each
+/// value converted by `child(key, value)`.
+fn ordered(
+    object: &serde_json::Map<String, Json>,
+    first: &[&str],
+    last: &[&str],
+    child: &dyn Fn(&str, &Json) -> Node,
+) -> Node {
+    let mut middle: Vec<&String> = object
+        .keys()
+        .filter(|k| !first.contains(&k.as_str()) && !last.contains(&k.as_str()))
+        .collect();
+    middle.sort();
+    let keys = first
+        .iter()
+        .filter(|k| object.contains_key(**k))
+        .map(|k| (*k).to_owned())
+        .chain(middle.into_iter().cloned())
+        .chain(
+            last.iter()
+                .filter(|k| object.contains_key(**k))
+                .map(|k| (*k).to_owned()),
+        );
+    Node::Map(
+        keys.map(|k| {
+            let node = child(&k, &object[&k]);
+            (k, node)
+        })
+        .collect(),
+    )
+}
+
+fn steps(value: &Json) -> Node {
+    match value {
+        Json::Array(items) => Node::Seq(items.iter().map(step).collect()),
+        other => plain(other),
+    }
+}
+
+fn keyed_blocks(value: &Json, first: &'static [&'static str]) -> Node {
+    match value {
+        Json::Array(items) => Node::Seq(
+            items
+                .iter()
+                .map(|item| match item {
+                    Json::Object(map) => ordered(map, first, &[], &|k, v| {
+                        if k == "steps" { steps(v) } else { plain(v) }
+                    }),
+                    other => plain(other),
+                })
+                .collect(),
+        ),
+        other => plain(other),
+    }
+}
+
+fn step(value: &Json) -> Node {
+    let Json::Object(map) = value else {
+        return plain(value);
+    };
+    ordered(map, STEP_FIRST, STEP_LAST, &|key, v| match key {
+        "then" | "else" | "default" | "steps" | "catch" | "finally" => steps(v),
+        "cases" => keyed_blocks(v, &["when", "steps"]),
+        "branches" => keyed_blocks(v, &["id", "steps"]),
+        _ => plain(v),
+    })
+}
+
+/// A workflow document with its keys in the conventional HWF order.
+fn order_document(document: &Json) -> Node {
+    let Json::Object(map) = document else {
+        return plain(document);
+    };
+    ordered(map, TOP, &[], &|key, v| match (key, v) {
+        ("metadata", Json::Object(m)) => ordered(m, METADATA, &[], &|_, v| plain(v)),
+        ("spec", Json::Object(spec)) => ordered(spec, SPEC, &[], &|key, v| match key {
+            "steps" | "on_error" => steps(v),
+            "triggers" => match v {
+                Json::Array(items) => Node::Seq(
+                    items
+                        .iter()
+                        .map(|t| match t {
+                            Json::Object(t) => ordered(t, TRIGGER_FIRST, &[], &|_, v| plain(v)),
+                            other => plain(other),
+                        })
+                        .collect(),
+                ),
+                other => plain(other),
+            },
+            _ => plain(v),
+        }),
+        _ => plain(v),
+    })
+}
+
+/// A workflow document as YAML, in the conventional order.
 pub fn to_yaml(document: &Json) -> anyhow::Result<String> {
-    serde_saphyr::to_string(&Ordered(document)).context("failed to write YAML")
+    serde_saphyr::to_string(&order_document(document)).context("failed to write YAML")
 }
 
 fn validate(paths: &[PathBuf]) -> anyhow::Result<()> {
@@ -518,23 +663,183 @@ async fn start(
         return Ok(());
     }
     eprintln!("run {run_id} started; waiting for it to finish");
-    let mut delay = Duration::from_millis(250);
-    loop {
-        let run = client.get(&format!("/api/v1/runs/{run_id}")).await?;
-        match run["status"].as_str().unwrap_or_default() {
-            "succeeded" => {
-                println!("{}", serde_json::to_string_pretty(&run["outputs"])?);
-                return Ok(());
-            }
-            status @ ("failed" | "cancelled") => {
-                eprintln!("{}", serde_json::to_string_pretty(&run["error"])?);
-                bail!("run {run_id} {status}");
-            }
-            _ => {}
+    let run = client.wait(&run_id, None).await?;
+    match run["status"].as_str().unwrap_or_default() {
+        "succeeded" => {
+            println!("{}", serde_json::to_string_pretty(&run["outputs"])?);
+            Ok(())
         }
-        tokio::time::sleep(delay).await;
-        delay = (delay * 2).min(Duration::from_secs(5));
+        status => {
+            eprintln!("{}", serde_json::to_string_pretty(&run["error"])?);
+            bail!("run {run_id} {status}");
+        }
     }
+}
+
+impl Client {
+    /// Waits for run `run_id` to finish (at most `limit`), and returns it.
+    async fn wait(&self, run_id: &str, limit: Option<Duration>) -> anyhow::Result<Json> {
+        let started = std::time::Instant::now();
+        let mut delay = Duration::from_millis(250);
+        loop {
+            let run = self.get(&format!("/api/v1/runs/{run_id}")).await?;
+            if matches!(
+                run["status"].as_str(),
+                Some("succeeded" | "failed" | "cancelled")
+            ) {
+                return Ok(run);
+            }
+            if limit.is_some_and(|l| started.elapsed() > l) {
+                bail!(
+                    "run {run_id} didn't finish in time (it's {})",
+                    run["status"]
+                );
+            }
+            tokio::time::sleep(delay).await;
+            delay = (delay * 2).min(Duration::from_secs(5));
+        }
+    }
+}
+
+// ---- fixture tests ----
+
+/// A `*.test.yaml` file.
+#[derive(Debug, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+struct TestFile {
+    /// The workflow file, relative to the test file.
+    workflow: PathBuf,
+    cases: Vec<TestCase>,
+}
+
+#[derive(Debug, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+struct TestCase {
+    name: String,
+    #[serde(default = "empty_object")]
+    inputs: Json,
+    /// Step outputs to use instead of running those steps.
+    #[serde(default)]
+    mocks: BTreeMap<String, Json>,
+    #[serde(default)]
+    expect: Expect,
+}
+
+#[derive(Debug, Default, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+struct Expect {
+    /// `succeeded` (the default), `failed` or `cancelled`.
+    #[serde(default)]
+    status: Option<String>,
+    /// Matched as a subset: every key given must be there, equal.
+    #[serde(default)]
+    outputs: Option<Json>,
+    #[serde(default)]
+    error: Option<Json>,
+}
+
+fn empty_object() -> Json {
+    json!({})
+}
+
+/// Whether `actual` has everything in `expected`: objects match key by
+/// key (extra keys are fine), everything else exactly.
+fn matches(expected: &Json, actual: &Json) -> bool {
+    match (expected, actual) {
+        (Json::Object(e), Json::Object(a)) => e
+            .iter()
+            .all(|(k, v)| a.get(k).is_some_and(|av| matches(v, av))),
+        _ => expected == actual,
+    }
+}
+
+/// What's wrong with `run` for `expect`, if anything.
+fn check(expect: &Expect, run: &Json) -> Vec<String> {
+    let mut problems = Vec::new();
+    let status = expect.status.as_deref().unwrap_or("succeeded");
+    if run["status"] != status {
+        problems.push(format!(
+            "status is {}, expected {status}; error: {}",
+            run["status"], run["error"]
+        ));
+    }
+    if let Some(outputs) = &expect.outputs
+        && !matches(outputs, &run["outputs"])
+    {
+        problems.push(format!(
+            "outputs are {}, expected {outputs}",
+            run["outputs"]
+        ));
+    }
+    if let Some(error) = &expect.error
+        && !matches(error, &run["error"])
+    {
+        problems.push(format!("error is {}, expected {error}", run["error"]));
+    }
+    problems
+}
+
+fn test_files(paths: &[PathBuf]) -> anyhow::Result<Vec<PathBuf>> {
+    let mut out = Vec::new();
+    for path in paths {
+        if path.is_dir() {
+            let mut found: Vec<PathBuf> = std::fs::read_dir(path)?
+                .filter_map(Result::ok)
+                .map(|e| e.path())
+                .filter(|p| p.is_file() && is_test_file(p))
+                .collect();
+            found.sort();
+            out.extend(found);
+        } else {
+            out.push(path.clone());
+        }
+    }
+    if out.is_empty() {
+        bail!("no *.test.yaml files found");
+    }
+    Ok(out)
+}
+
+async fn test(client: &Client, paths: &[PathBuf], timeout: Duration) -> anyhow::Result<()> {
+    let (mut passed, mut failed) = (0, 0);
+    for path in test_files(paths)? {
+        let text = std::fs::read_to_string(&path)
+            .with_context(|| format!("failed to read {}", path.display()))?;
+        let file: TestFile = serde_saphyr::from_str(&text)
+            .with_context(|| format!("{} isn't a valid test file", path.display()))?;
+        let workflow_path = path.parent().unwrap_or(Path::new(".")).join(&file.workflow);
+        let document = load(&workflow_path)?;
+        println!("{}", path.display());
+        for case in &file.cases {
+            let body = json!({ "orgId": client.org_id, "document": document,
+                               "inputs": case.inputs, "mocks": case.mocks });
+            let problems = match client.post("/api/v1/workflows/test-runs", &body).await {
+                Ok(started) => {
+                    let run_id = started["id"].as_str().unwrap_or_default().to_owned();
+                    match client.wait(&run_id, Some(timeout)).await {
+                        Ok(run) => check(&case.expect, &run),
+                        Err(e) => vec![format!("{e:#}")],
+                    }
+                }
+                Err(e) => vec![format!("{e:#}")],
+            };
+            if problems.is_empty() {
+                println!("  ok    {}", case.name);
+                passed += 1;
+            } else {
+                println!("  FAIL  {}", case.name);
+                for p in &problems {
+                    println!("        {p}");
+                }
+                failed += 1;
+            }
+        }
+    }
+    println!("{passed} passed, {failed} failed");
+    if failed > 0 {
+        bail!("{failed} test case(s) failed");
+    }
+    Ok(())
 }
 
 #[cfg(test)]
@@ -565,6 +870,29 @@ mod tests {
         // It reads back as the same document.
         let back: Json = serde_saphyr::from_str(&yaml).unwrap();
         assert_eq!(back, doc);
+    }
+
+    #[test]
+    fn expectations_match_subsets() {
+        assert!(matches(&json!({ "a": 1 }), &json!({ "a": 1, "b": 2 })));
+        assert!(matches(
+            &json!({ "a": { "x": 1 } }),
+            &json!({ "a": { "x": 1, "y": 2 } })
+        ));
+        assert!(!matches(&json!({ "a": 1 }), &json!({ "a": 2 })));
+        assert!(!matches(&json!({ "a": 1 }), &json!(null)));
+        assert!(!matches(&json!([1]), &json!([1, 2])));
+        let run = json!({ "status": "failed", "error": { "kind": "network", "message": "x" }, "outputs": null });
+        let expect = Expect {
+            status: Some("failed".into()),
+            outputs: None,
+            error: Some(json!({ "kind": "network" })),
+        };
+        assert_eq!(check(&expect, &run), Vec::<String>::new());
+        assert_eq!(check(&Expect::default(), &run).len(), 1);
+        assert!(is_test_file(Path::new("a/greet.test.yaml")));
+        assert!(!is_workflow_file(Path::new("a/greet.test.yaml")));
+        assert!(is_workflow_file(Path::new("a/greet.yaml")));
     }
 
     #[test]
