@@ -10546,6 +10546,20 @@
 					}
 				]
 			},
+			"RunFrom": {
+				"type": "object",
+				"required": ["runId", "stepId"],
+				"properties": {
+					"runId": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"stepId": {
+						"type": "string"
+					}
+				},
+				"additionalProperties": false
+			},
 			"RunStatus": {
 				"type": "string",
 				"enum": ["queued", "running", "succeeded", "failed", "cancelled"]
@@ -11044,6 +11058,17 @@
 			"StartRunRequest": {
 				"type": "object",
 				"properties": {
+					"from": {
+						"oneOf": [
+							{
+								"$ref": "#/components/schemas/RunFrom",
+								"description": "With `test`: start at a top-level step, taking the results of the\nsteps before it from an earlier run of this workflow (and its\ninputs, unless `inputs` are given)."
+							},
+							{
+								"type": "null"
+							}
+						]
+					},
 					"inputs": {
 						"type": "object",
 						"additionalProperties": {},

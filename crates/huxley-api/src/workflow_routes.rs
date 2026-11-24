@@ -618,6 +618,18 @@ pub struct StartRunRequest {
     /// permission to edit the workflow).
     #[serde(default)]
     pub test: bool,
+    /// With `test`: start at a top-level step, taking the results of the
+    /// steps before it from an earlier run of this workflow (and its
+    /// inputs, unless `inputs` are given).
+    #[serde(default)]
+    pub from: Option<RunFrom>,
+}
+
+#[derive(Debug, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct RunFrom {
+    pub run_id: Uuid,
+    pub step_id: String,
 }
 
 fn empty_object() -> JsonValue {
@@ -649,6 +661,9 @@ pub async fn start_run(
     } else {
         permissions::WORKFLOW_RUN
     };
+    if body.from.is_some() && !body.test {
+        return Err(ApiError::validation().with_field_error("from", "only for test runs"));
+    }
     let workflow = authorize(&state, &authed, permission, id).await?;
     if workflow.status == WorkflowStatus::Archived {
         return Err(map_workflow(WorkflowError::Archived));
@@ -675,7 +690,34 @@ pub async fn start_run(
             .map_err(map_workflow)?;
         (Some(current), version.document, None)
     };
-    huxley_workflows::check_inputs(&document, &body.inputs).map_err(map_workflow)?;
+    // Starting from a step: the steps before it, and the source's inputs.
+    let mut inputs = body.inputs;
+    let pinned = match &body.from {
+        None => None,
+        Some(from) => {
+            let source: Option<(Option<Uuid>, JsonValue)> =
+                sqlx::query_as("SELECT workflow_id, inputs FROM runs WHERE id = $1")
+                    .bind(from.run_id)
+                    .fetch_optional(&mut *tx)
+                    .await
+                    .map_err(db_err)?;
+            let Some((Some(source_workflow), source_inputs)) = source else {
+                return Err(ApiError::validation().with_field_error("from.runId", "no such run"));
+            };
+            if source_workflow != id {
+                return Err(
+                    ApiError::validation().with_field_error("from.runId", "a run of this workflow")
+                );
+            }
+            let steps = huxley_engine::replay::steps_before(&document, &from.step_id)
+                .map_err(|m| ApiError::validation().with_field_error("from.stepId", m))?;
+            if inputs.as_object().is_some_and(serde_json::Map::is_empty) {
+                inputs = source_inputs;
+            }
+            Some((from.run_id, steps))
+        }
+    };
+    huxley_workflows::check_inputs(&document, &inputs).map_err(map_workflow)?;
     let run = state
         .engine
         .start_run(
@@ -687,12 +729,19 @@ pub async fn start_run(
                 document: run_document,
                 trigger_type: "manual".into(),
                 trigger: json!({}),
-                inputs: body.inputs,
+                inputs,
                 actor_id: authed.user.ctx.actor.id(),
             },
         )
         .await
         .map_err(db_err)?;
+    if let Some((source, steps)) = &pinned {
+        state
+            .engine
+            .pin_steps(&mut tx, workflow.org_id, run, *source, steps)
+            .await
+            .map_err(db_err)?;
+    }
     huxley_db::audit::record(
         &mut tx,
         &authed.user.ctx,

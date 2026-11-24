@@ -16,6 +16,7 @@
 	let live = $state.raw<{ base: Run; run: Run } | null>(null);
 	let run = $derived(live?.base === data.run ? live.run : data.run);
 	let active = $derived(run.status === 'queued' || run.status === 'running');
+	let canRerunFrom = $derived(data.user.grantedPermissions.includes('workflow:write'));
 	let canCancel = $derived(
 		data.user.grantedPermissions.includes(run.workflowVersion ? 'workflow:run' : 'workflow:write')
 	);
@@ -132,6 +133,16 @@
 									<RunStatusBadge status={step.status} />
 								</span>
 							</summary>
+							{#if canRerunFrom && data.workflow && data.topLevel.indexOf(step.stepKey) > 0}
+								<form method="POST" action="?/rerunFrom" use:enhance class="mt-2">
+									<input type="hidden" name="workflowId" value={data.workflow.id} />
+									<input type="hidden" name="stepId" value={step.stepKey} />
+									<Button type="submit" size="sm" variant="secondary">Run again from here</Button>
+									<span class="ml-2 text-xs text-fg-muted">
+										A test run; the steps before keep this run's results.
+									</span>
+								</form>
+							{/if}
 							<div class="mt-2 grid gap-2 md:grid-cols-2">
 								{#if spilled(step.input) !== null}
 									<div>

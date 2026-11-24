@@ -4075,6 +4075,11 @@ export interface components {
 				[key: string]: unknown;
 			};
 		};
+		RunFrom: {
+			/** Format: uuid */
+			runId: string;
+			stepId: string;
+		};
 		/** @enum {string} */
 		RunStatus: 'queued' | 'running' | 'succeeded' | 'failed' | 'cancelled';
 		RunSummary: {
@@ -4270,6 +4275,7 @@ export interface components {
 			state: string;
 		};
 		StartRunRequest: {
+			from?: components['schemas']['RunFrom'] | null;
 			inputs?: {
 				[key: string]: unknown;
 			};

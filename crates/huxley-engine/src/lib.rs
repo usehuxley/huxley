@@ -22,6 +22,7 @@ mod pages;
 mod payload;
 pub mod queue;
 mod rate;
+pub mod replay;
 mod run;
 pub mod runs;
 pub mod script;

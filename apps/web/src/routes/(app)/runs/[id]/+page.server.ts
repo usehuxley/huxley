@@ -1,4 +1,5 @@
-import { error, fail } from '@sveltejs/kit';
+import { error, fail, redirect } from '@sveltejs/kit';
+import { formString } from '#lib/forms.ts';
 import { api } from '#lib/server/api.ts';
 import { problemMessage } from '#lib/server/problems.ts';
 import type { Actions, PageServerLoad } from './$types';
@@ -13,13 +14,38 @@ export const load: PageServerLoad = async (event) => {
 				params: { path: { id: run.data.workflowId } }
 			})
 		: null;
+	// Top-level steps of the current draft: a test run can start at one.
+	const draftSteps = (
+		workflow?.data?.draft as { spec?: { steps?: { id?: unknown }[] } } | undefined
+	)?.spec?.steps;
+	const topLevel = (draftSteps ?? [])
+		.map((s) => s.id)
+		.filter((id): id is string => typeof id === 'string');
 	return {
 		run: run.data,
-		workflow: workflow?.data ? { id: workflow.data.id, name: workflow.data.name } : null
+		workflow: workflow?.data ? { id: workflow.data.id, name: workflow.data.name } : null,
+		topLevel
 	};
 };
 
 export const actions: Actions = {
+	rerunFrom: async (event) => {
+		const form = await event.request.formData();
+		const workflowId = formString(form, 'workflowId');
+		const stepId = formString(form, 'stepId');
+		const {
+			data,
+			error: problem,
+			response
+		} = await api(event).POST('/api/v1/workflows/{id}/runs', {
+			params: { path: { id: workflowId } },
+			body: { test: true, inputs: {}, from: { runId: event.params.id, stepId } }
+		});
+		if (!data) {
+			return fail(response.status, { message: problemMessage(problem, 'Could not start it.') });
+		}
+		redirect(303, `/runs/${data.id}`);
+	},
 	resume: async (event) => {
 		const {
 			data,
