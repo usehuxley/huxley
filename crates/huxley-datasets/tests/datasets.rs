@@ -117,10 +117,13 @@ async fn datasets_keep_typed_rows() {
         json!({ "upn": "x@y", "nope": 1 }),
         json!({ "licensed": true }),
     ] {
-        let mut sp = begin_scoped(&pools.app, &OrgScope::System).await.unwrap();
+        // A savepoint of the same transaction: a second connection would
+        // wait on this one's locks (and Postgres can't see that wait).
+        let mut sp = sqlx::Acquire::begin(&mut *tx).await.unwrap();
         let error = huxley_datasets::upsert(&mut sp, &dataset, client, std::slice::from_ref(&bad))
             .await
             .unwrap_err();
+        sp.rollback().await.unwrap();
         assert!(
             matches!(error, DatasetError::Invalid(..)),
             "{bad}: {error:?}"
@@ -268,7 +271,8 @@ async fn schema_changes_migrate_the_table() {
         .await
         .unwrap_err();
     assert!(matches!(error, DatasetError::Invalid(..)), "{error:?}");
-    drop(tx);
+    // Now, not when the pool gets round to it: the failed change holds locks.
+    tx.rollback().await.unwrap();
     let mut tx = begin_scoped(&pools.app, &OrgScope::System).await.unwrap();
     let still = huxley_datasets::get(&mut tx, dataset.id).await.unwrap();
     assert_eq!(still.columns, changed.columns);
