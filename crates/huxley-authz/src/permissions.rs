@@ -81,6 +81,8 @@ permissions! {
     TICKET_WRITE = "ticket:write", Org, "Create and work tickets: change them, add notes, change status, assign";
     SERVICEDESK_CONFIGURE = "servicedesk:configure", Instance, "Set up service queues, SLA policies and mailboxes";
     MAILBOX_INGEST = "mailbox:ingest", Instance, "Post email to service desk mailboxes (for a mail server's forwarding)";
+    WORKFORCE_READ = "workforce:read", Instance, "See people's skills, certifications and availability";
+    WORKFORCE_MANAGE = "workforce:manage", Instance, "Keep the skills and certifications catalogs, verify skills, and set what work requires";
 }
 
 /// Wildcard granting every permission.

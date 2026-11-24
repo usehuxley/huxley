@@ -3626,6 +3626,205 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
+	'/api/v1/workforce/certifications': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** The certifications catalog. */
+		get: operations['list_certifications'];
+		put?: never;
+		/** Adds a certification to the catalog. Needs `workforce:manage`. */
+		post: operations['create_certification'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/workforce/certifications/{id}': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put: operations['update_certification'];
+		post?: never;
+		/** Archives a certification; requirements on it go, held ones stay. */
+		delete: operations['archive_certification'];
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/workforce/fit': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/**
+		 * How everyone fits work in a queue and/or of a ticket type, best first:
+		 *     required certifications held, and how well skills meet the levels.
+		 */
+		get: operations['fit'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/workforce/people': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** People, with how many skills and certifications they have. */
+		get: operations['list_people'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/workforce/people/{user_id}': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** A person's skills and certifications. Yours, or with `workforce:read`. */
+		get: operations['get_person'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/workforce/people/{user_id}/certifications': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/** Adds a certification someone holds. Yours, or with `workforce:manage`. */
+		post: operations['add_certification'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/workforce/people/{user_id}/certifications/{held_id}': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		/** Changes a held certification (e.g. renewed). */
+		put: operations['update_held'];
+		post?: never;
+		delete: operations['remove_held'];
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/workforce/people/{user_id}/skills/{skill_id}': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		/**
+		 * Sets someone's level in a skill (`null` removes it). Your own levels are
+		 *     self-assessed; verifying needs `workforce:manage`, and not for yourself.
+		 */
+		put: operations['set_skill'];
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/workforce/requirements/{target_type}/{target_id}': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** What a queue or ticket type requires. */
+		get: operations['get_requirements'];
+		/**
+		 * Replaces what a queue or ticket type requires: skills at a minimum
+		 *     level, and certifications (hard requirements). Needs `workforce:manage`.
+		 */
+		put: operations['set_requirements'];
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/workforce/skills': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** The skills catalog. */
+		get: operations['list_skills'];
+		put?: never;
+		/** Adds a skill to the catalog. Needs `workforce:manage`. */
+		post: operations['create_skill'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/workforce/skills/{id}': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put: operations['update_skill'];
+		post?: never;
+		/** Archives a skill; people's levels in it and requirements on it go too. */
+		delete: operations['archive_skill'];
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
 	'/healthz': {
 		parameters: {
 			query?: never;
@@ -4100,6 +4299,55 @@ export interface components {
 			 *     `navigator.credentials.create` / `.get`.
 			 */
 			options: Record<string, never>;
+		};
+		Certification: {
+			/** @description The vendor's code, e.g. `AZ-104`. */
+			code: string;
+			description: string;
+			/**
+			 * Format: int64
+			 * @description People holding it, unexpired.
+			 */
+			holders: number;
+			/** Format: uuid */
+			id: string;
+			name: string;
+			/**
+			 * Format: int32
+			 * @description How long it's valid once earned; none: it doesn't expire.
+			 */
+			validityMonths?: number | null;
+			/** @description e.g. `Microsoft`, `Cisco`. */
+			vendor: string;
+			/** Format: int32 */
+			version: number;
+		};
+		CertificationHeld: {
+			/**
+			 * Format: uuid
+			 * @description The certification (when adding one; ignored when changing it).
+			 */
+			certificationId?: string | null;
+			credentialId?: string | null;
+			/** @description `YYYY-MM-DD`. */
+			earnedOn: string;
+			/** @description `YYYY-MM-DD`; left out, from the certification's validity. */
+			expiresOn?: string | null;
+			/** @description An `https://` link where the credential can be checked. */
+			verifyUrl?: string | null;
+		};
+		CertificationInput: {
+			code?: string | null;
+			description?: string | null;
+			name: string;
+			/** Format: int32 */
+			validityMonths?: number | null;
+			vendor: string;
+			/**
+			 * Format: int32
+			 * @description The version you read (updates only).
+			 */
+			version?: number | null;
 		};
 		/** @description One difference, and whether it can break workflows or connections. */
 		Change: {
@@ -4734,6 +4982,22 @@ export interface components {
 			/** @description A label to tell passkeys apart, e.g. "Work laptop". */
 			name: string;
 		};
+		/** @description How well someone fits a piece of work. */
+		Fit: {
+			/** @description Requirements they don't meet, by name. */
+			missing: string[];
+			name: string;
+			/** @description Holds every required certification (unexpired). */
+			qualified: boolean;
+			/**
+			 * Format: double
+			 * @description How well their skills meet the required levels, 0 to 1 (1 with no
+			 *     skill requirements).
+			 */
+			skillMatch: number;
+			/** Format: uuid */
+			userId: string;
+		};
 		Form: {
 			archived: boolean;
 			/** Format: date-time */
@@ -5365,6 +5629,64 @@ export interface components {
 		 * @enum {string}
 		 */
 		PermissionScope: 'org' | 'instance';
+		Person: {
+			certifications: components['schemas']['PersonCertification'][];
+			email: string;
+			name: string;
+			skills: components['schemas']['PersonSkill'][];
+			/** Format: uuid */
+			userId: string;
+		};
+		PersonCertification: {
+			/** Format: uuid */
+			certificationId: string;
+			code: string;
+			credentialId: string;
+			/** @description `YYYY-MM-DD`. */
+			earnedOn: string;
+			/** @description `YYYY-MM-DD`; none: it doesn't expire. */
+			expiresOn?: string | null;
+			/** Format: uuid */
+			id: string;
+			name: string;
+			/** @description `valid`, `expiring` (within 30 days) or `expired`. */
+			state: string;
+			vendor: string;
+			verifyUrl?: string | null;
+		};
+		PersonSkill: {
+			category: string;
+			/**
+			 * Format: int32
+			 * @description 1 learning, 2 working, 3 proficient, 4 expert.
+			 */
+			level: number;
+			name: string;
+			/** Format: uuid */
+			skillId: string;
+			/** @description Who verified the level (none: self-assessed). */
+			verifiedBy?: string | null;
+			/** @description `YYYY-MM-DD`. */
+			verifiedOn?: string | null;
+		};
+		PersonSummary: {
+			/**
+			 * Format: int64
+			 * @description Certifications held, unexpired.
+			 */
+			certifications: number;
+			email: string;
+			/**
+			 * Format: int64
+			 * @description Certifications expiring within 30 days.
+			 */
+			expiring: number;
+			name: string;
+			/** Format: int64 */
+			skills: number;
+			/** Format: uuid */
+			userId: string;
+		};
 		Policy: {
 			description: string;
 			/** @description `{"mon": [["09:00", "17:00"]], …}`. */
@@ -5619,6 +5941,22 @@ export interface components {
 		};
 		RenamePasskeyRequest: {
 			name: string;
+		};
+		Requirement: {
+			/**
+			 * Format: uuid
+			 * @description A certification, held and unexpired: a hard requirement.
+			 */
+			certificationId?: string | null;
+			/** Format: int32 */
+			minLevel?: number | null;
+			/** @description The skill's or certification's name (ignored when setting). */
+			name?: string | null;
+			/**
+			 * Format: uuid
+			 * @description A skill, at `minLevel` or above (1 learning … 4 expert).
+			 */
+			skillId?: string | null;
 		};
 		/** @description A setting's effective value at an org, and why. */
 		ResolvedSetting: components['schemas']['SettingDef'] & {
@@ -6033,6 +6371,40 @@ export interface components {
 			 * @description The version you read (updates only).
 			 */
 			version?: number | null;
+		};
+		Skill: {
+			/** @description e.g. `Microsoft 365`, `Networking`. */
+			category: string;
+			description: string;
+			/** Format: uuid */
+			id: string;
+			name: string;
+			/**
+			 * Format: int64
+			 * @description People with this skill.
+			 */
+			people: number;
+			/** Format: int32 */
+			version: number;
+		};
+		SkillInput: {
+			category?: string | null;
+			description?: string | null;
+			name: string;
+			/**
+			 * Format: int32
+			 * @description The version you read (updates only).
+			 */
+			version?: number | null;
+		};
+		SkillLevel: {
+			/**
+			 * Format: int32
+			 * @description 1 learning … 4 expert; none removes the skill.
+			 */
+			level?: number | null;
+			/** @description Mark the level verified (needs `workforce:manage`, and not your own). */
+			verified?: boolean;
 		};
 		/** @description The policy for an organization: where it's set, and which applies. */
 		SlaAssignment: {
@@ -14454,6 +14826,484 @@ export interface operations {
 				content: {
 					'application/json': components['schemas']['Version'];
 				};
+			};
+			404: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	list_certifications: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['Certification'][];
+				};
+			};
+		};
+	};
+	create_certification: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['CertificationInput'];
+			};
+		};
+		responses: {
+			201: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['Certification'];
+				};
+			};
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	update_certification: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['CertificationInput'];
+			};
+		};
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['Certification'];
+				};
+			};
+			409: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	archive_certification: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			204: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content?: never;
+			};
+			404: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	fit: {
+		parameters: {
+			query?: {
+				queueId?: string | null;
+				ticketTypeId?: string | null;
+			};
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['Fit'][];
+				};
+			};
+		};
+	};
+	list_people: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['PersonSummary'][];
+				};
+			};
+		};
+	};
+	get_person: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				user_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['Person'];
+				};
+			};
+			404: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	add_certification: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				user_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['CertificationHeld'];
+			};
+		};
+		responses: {
+			201: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['Person'];
+				};
+			};
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	update_held: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				user_id: string;
+				held_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['CertificationHeld'];
+			};
+		};
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['Person'];
+				};
+			};
+			404: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	remove_held: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				user_id: string;
+				held_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['Person'];
+				};
+			};
+			404: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	set_skill: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				user_id: string;
+				skill_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['SkillLevel'];
+			};
+		};
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['Person'];
+				};
+			};
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	get_requirements: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				/** @description `queue` or `ticket_type` */
+				target_type: string;
+				target_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['Requirement'][];
+				};
+			};
+		};
+	};
+	set_requirements: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				target_type: string;
+				target_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['Requirement'][];
+			};
+		};
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['Requirement'][];
+				};
+			};
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	list_skills: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['Skill'][];
+				};
+			};
+		};
+	};
+	create_skill: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['SkillInput'];
+			};
+		};
+		responses: {
+			201: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['Skill'];
+				};
+			};
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	update_skill: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['SkillInput'];
+			};
+		};
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['Skill'];
+				};
+			};
+			409: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	archive_skill: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			204: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content?: never;
 			};
 			404: {
 				headers: {

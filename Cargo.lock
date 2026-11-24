@@ -1980,6 +1980,7 @@ dependencies = [
  "huxley-triggers",
  "huxley-variables",
  "huxley-workflows",
+ "huxley-workforce",
  "jiff 0.2.46",
  "ring",
  "secrecy",
@@ -2466,6 +2467,7 @@ dependencies = [
  "huxley-telemetry",
  "huxley-triggers",
  "huxley-workflows",
+ "huxley-workforce",
  "k8s-openapi",
  "kube",
  "reqwest 0.13.5",
@@ -2644,6 +2646,25 @@ dependencies = [
  "thiserror 2.0.21",
  "time",
  "tokio",
+ "utoipa",
+ "uuid",
+]
+
+[[package]]
+name = "huxley-workforce"
+version = "0.1.0"
+dependencies = [
+ "huxley-core",
+ "huxley-db",
+ "huxley-modules",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "thiserror 2.0.21",
+ "time",
+ "tokio",
+ "tokio-util",
+ "tracing",
  "utoipa",
  "uuid",
 ]

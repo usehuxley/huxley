@@ -54,6 +54,14 @@ pub const REGISTRY: &[Module] = &[
         released: true,
     },
     Module {
+        key: "workforce",
+        name: "Workforce",
+        description: "Skills, certifications, availability, and timesheets.",
+        requires: &[],
+        phase: 5,
+        released: true,
+    },
+    Module {
         key: "cmdb",
         name: "Assets and CMDB",
         description: "Assets, configuration items, relationships, and dependency maps.",
@@ -152,7 +160,14 @@ impl Preset {
     pub fn modules(self) -> Vec<&'static str> {
         match self {
             Self::AutomationOnly => vec![],
-            Self::ServiceDesk => vec!["crm", "servicedesk", "cmdb", "knowledge", "portal"],
+            Self::ServiceDesk => vec![
+                "crm",
+                "servicedesk",
+                "workforce",
+                "cmdb",
+                "knowledge",
+                "portal",
+            ],
             Self::FullPsa => REGISTRY.iter().map(|m| m.key).collect(),
         }
     }

@@ -20,7 +20,7 @@ use crate::{
     health, hook_routes, integration_routes, mcp, mfa_routes, module_routes, notification_routes,
     oauth_routes, openapi, org_routes, pack_routes, passkey_routes, public_form_routes,
     runner_routes, script_routes, security_routes, sso_routes, team_routes, template_routes,
-    token_routes, user_routes, variable_routes, workflow_routes,
+    token_routes, user_routes, variable_routes, workflow_routes, workforce_routes,
 };
 
 const REQUEST_ID: HeaderName = HeaderName::from_static("x-request-id");
@@ -57,6 +57,7 @@ pub fn router(state: AppState) -> Router {
         )
         .merge(crm_routes::record_routes())
         .merge(desk_routes::routes())
+        .nest("/workforce", workforce_routes::routes())
         .nest("/audit", audit_routes::routes())
         .nest("/modules", module_routes::routes())
         .nest("/teams", team_routes::routes())
