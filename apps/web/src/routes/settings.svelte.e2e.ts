@@ -72,6 +72,12 @@ test.describe('settings (as the bootstrap owner)', () => {
 	});
 
 	test('owner turns a module on with its dependencies, then off', async ({ page }) => {
+		// Starts from an install with every module off, and changes the
+		// instance's modules: only in that run of the suite.
+		test.skip(
+			(process.env.E2E_PRESET ?? 'automation') !== 'automation',
+			'modules are on in this run'
+		);
 		await signIn(page);
 		await page.goto('/settings/modules');
 		await expect(page.getByText('No modules on: automation engine only.')).toBeVisible();
@@ -91,5 +97,13 @@ test.describe('settings (as the bootstrap owner)', () => {
 
 		await row.getByRole('button', { name: 'Turn off' }).click();
 		await expect(page.getByText('Turned off: Customer experience')).toBeVisible();
+
+		// Leave the instance as it was: every module off.
+		await desk.getByRole('button', { name: 'Turn off' }).click();
+		await expect(page.getByText('Turned off: Service desk')).toBeVisible();
+		const crm = page.getByRole('listitem').filter({ hasText: 'Companies, contacts, sites' });
+		await crm.getByRole('button', { name: 'Turn off' }).click();
+		await expect(page.getByText('Turned off: Clients and contacts')).toBeVisible();
+		await expect(page.getByText('No modules on: automation engine only.')).toBeVisible();
 	});
 });

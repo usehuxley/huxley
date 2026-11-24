@@ -825,6 +825,27 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
+	'/api/v1/companies': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/**
+		 * Companies you can see with `crm:read`, by name (at most 500), with
+		 *     their details and how many contacts and sites they have. Organizations
+		 *     where the module is turned off are left out.
+		 */
+		get: operations['list_companies'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
 	'/api/v1/connections': {
 		parameters: {
 			query?: never;
@@ -3819,6 +3840,24 @@ export interface components {
 			 * @description The version you read (0 if never saved).
 			 */
 			version: number;
+			website?: string | null;
+		};
+		/** @description A company in the list: the organization and its details. */
+		CompanySummary: {
+			/** Format: int64 */
+			contacts: number;
+			/** @description The organization's kind (`client` or `provider`). */
+			kind: string;
+			name: string;
+			/** Format: uuid */
+			orgId: string;
+			/** Format: uuid */
+			parentId?: string | null;
+			phone?: string | null;
+			relationship: string;
+			/** Format: int64 */
+			sites: number;
+			status: string;
 			website?: string | null;
 		};
 		ConfirmPasswordResetRequest: {
@@ -7465,6 +7504,38 @@ export interface operations {
 					[name: string]: unknown;
 				};
 				content?: never;
+			};
+			404: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	list_companies: {
+		parameters: {
+			query?: {
+				/** @description Matches names. */
+				search?: string | null;
+				/** @description Include provider organizations too (default: clients only). */
+				providers?: boolean;
+			};
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['CompanySummary'][];
+				};
 			};
 			404: {
 				headers: {

@@ -51,7 +51,9 @@
 			? [{ href: '/forms', label: 'Forms', icon: ClipboardList }]
 			: []),
 		{ href: '/tickets', label: 'Tickets', icon: Ticket, soon: true },
-		{ href: '/clients', label: 'Clients', icon: Building2, soon: true },
+		...(data.user.activeModules.includes('crm') && data.user.grantedPermissions.includes('crm:read')
+			? [{ href: '/clients', label: 'Clients', icon: Building2 }]
+			: [{ href: '/clients', label: 'Clients', icon: Building2, soon: true }]),
 		{ href: '/assets', label: 'Assets', icon: Boxes, soon: true },
 		{ href: '/knowledge', label: 'Knowledge', icon: BookOpen, soon: true },
 		{ href: '/reports', label: 'Reports', icon: ChartColumn, soon: true },
