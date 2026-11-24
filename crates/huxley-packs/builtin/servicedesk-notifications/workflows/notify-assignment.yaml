@@ -1,0 +1,40 @@
+apiVersion: usehuxley.io/v1
+kind: Workflow
+metadata:
+  key: notify-assignment
+  name: Notify on assignment
+  description: >-
+    Tells the person a ticket is assigned to (or, with no person, everyone in
+    its team), unless they assigned it themselves.
+spec:
+  triggers:
+    - id: created
+      type: event
+      event: ticket.created
+      filter: "{{ event.payload.assigneeUserId is not none or event.payload.assigneeTeamId is not none }}"
+    - id: assigned
+      type: event
+      event: ticket.assigned
+      filter: >-
+        {{ (event.payload.change.assignee is defined and event.payload.assigneeUserId is not none)
+           or (event.payload.change.team is defined and event.payload.assigneeUserId is none
+               and event.payload.assigneeTeamId is not none) }}
+    - id: updated
+      type: event
+      event: ticket.updated
+      filter: >-
+        {{ (event.payload.change.assignee is defined and event.payload.assigneeUserId is not none)
+           or (event.payload.change.team is defined and event.payload.assigneeUserId is none
+               and event.payload.assigneeTeamId is not none) }}
+  steps:
+    - id: tell
+      type: core.notify
+      with:
+        to: "{{ ('user:' ~ inputs.assigneeUserId) if inputs.assigneeUserId else ('team:' ~ inputs.assigneeTeamId) }}"
+        kind: ticket.assigned
+        title: "{{ inputs.reference }} assigned to {{ 'you' if inputs.assigneeUserId else 'your team' }}"
+        message: "{{ inputs.title }}"
+        url: "/tickets/{{ trigger.subject_id }}"
+        exclude: "{{ inputs.actorId }}"
+  outputs:
+    sent: "{{ steps.tell.output.sent }}"

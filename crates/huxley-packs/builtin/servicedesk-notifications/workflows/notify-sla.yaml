@@ -1,0 +1,31 @@
+apiVersion: usehuxley.io/v1
+kind: Workflow
+metadata:
+  key: notify-sla
+  name: Notify on SLA warnings and breaches
+  description: >-
+    Tells the person a ticket is assigned to (or, with no person, its team)
+    when it's close to an SLA target, and when it misses one.
+spec:
+  triggers:
+    - id: warning
+      type: event
+      event: ticket.sla_warning
+      filter: "{{ event.payload.assigneeUserId is not none or event.payload.assigneeTeamId is not none }}"
+    - id: breached
+      type: event
+      event: ticket.sla_breached
+      filter: "{{ event.payload.assigneeUserId is not none or event.payload.assigneeTeamId is not none }}"
+  steps:
+    - id: tell
+      type: core.notify
+      with:
+        to: "{{ ('user:' ~ inputs.assigneeUserId) if inputs.assigneeUserId else ('team:' ~ inputs.assigneeTeamId) }}"
+        kind: ticket.sla
+        title: >-
+          {{ inputs.reference }} {{ 'missed' if trigger.type == 'ticket.sla_breached' else 'is close to' }}
+          its {{ 'first response' if inputs.clock == 'response' else 'resolution' }} target
+        message: "{{ inputs.title }} ({{ inputs.priority | upper }})"
+        url: "/tickets/{{ trigger.subject_id }}"
+  outputs:
+    sent: "{{ steps.tell.output.sent }}"

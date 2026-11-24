@@ -19,6 +19,14 @@ const POLL_MAILBOXES: &str =
     include_str!("../../huxley-packs/builtin/servicedesk-email/workflows/poll-mailboxes.yaml");
 const EMAIL_TO_TICKET: &str =
     include_str!("../../huxley-packs/builtin/servicedesk-email/workflows/email-to-ticket.yaml");
+const NOTIFY_ASSIGNMENT: &str = include_str!(
+    "../../huxley-packs/builtin/servicedesk-notifications/workflows/notify-assignment.yaml"
+);
+const NOTIFY_REPLY: &str = include_str!(
+    "../../huxley-packs/builtin/servicedesk-notifications/workflows/notify-reply.yaml"
+);
+const NOTIFY_SLA: &str =
+    include_str!("../../huxley-packs/builtin/servicedesk-notifications/workflows/notify-sla.yaml");
 const DISPATCH_TICKETS: &str =
     include_str!("../../huxley-packs/builtin/servicedesk-dispatch/workflows/dispatch-tickets.yaml");
 
@@ -1040,4 +1048,264 @@ async fn the_dispatch_workflow_assigns_new_and_moved_tickets() {
         ),
         (json!(true), json!("Amy"))
     );
+}
+
+/// Each event trigger's filter in a workflow, by event.
+fn filters(yaml: &str) -> Vec<(String, String)> {
+    huxley_hwf::parse_yaml(yaml)
+        .unwrap()
+        .spec
+        .triggers
+        .iter()
+        .map(|t| match t {
+            huxley_hwf::Trigger::Event(e) => (e.event.clone(), e.filter.clone().unwrap()),
+            _ => panic!("event triggers"),
+        })
+        .collect()
+}
+
+impl Harness {
+    fn passes(&self, yaml: &str, event: &str, payload: &Json) -> bool {
+        let found = filters(yaml);
+        let (_, filter) = found.iter().find(|(e, _)| e == event).unwrap();
+        let event = json!({ "type": event, "payload": payload });
+        let scope = huxley_expr::Scope::new().with("event", &event);
+        self.engine.expr().eval_condition(filter, &scope).unwrap()
+    }
+
+    /// Runs a notification workflow for an event about `ticket`; what each
+    /// person was sent: (user, kind, title).
+    async fn notified(
+        &self,
+        yaml: &str,
+        event: &str,
+        ticket: Uuid,
+        payload: Json,
+    ) -> Vec<(Uuid, String, String)> {
+        let (status, _, error) = self
+            .run_triggered(
+                yaml,
+                payload,
+                json!({ "type": event, "subject_type": "ticket", "subject_id": ticket }),
+            )
+            .await;
+        assert_eq!(status, RunStatus::Succeeded, "{error:?}");
+        sqlx::query_as(
+            "SELECT user_id, kind, title FROM notifications WHERE link = $1 ORDER BY created_at, user_id",
+        )
+        .bind(format!("/tickets/{ticket}"))
+        .fetch_all(&self.pools.owner)
+        .await
+        .unwrap()
+    }
+}
+
+#[tokio::test]
+async fn assignment_notifies_the_assignee_or_their_team_but_not_whoever_did_it() {
+    let Some(h) = harness().await else { return };
+    let (amy, ben) = (person(&h, "Amy").await, person(&h, "Ben").await);
+    let ticket = ticket_in(&h, None).await;
+    let assigned = |user: Option<Uuid>, team: Option<Uuid>, actor: Option<Uuid>, change: Json| {
+        json!({ "reference": "T-1", "title": "Printer jammed", "assigneeUserId": user,
+                "assigneeTeamId": team, "actorId": actor, "change": change })
+    };
+    // Which changes start it.
+    let who = json!({ "assignee": { "from": null, "to": "Amy" } });
+    assert!(h.passes(
+        NOTIFY_ASSIGNMENT,
+        "ticket.assigned",
+        &assigned(Some(amy), None, None, who.clone())
+    ));
+    assert!(!h.passes(
+        NOTIFY_ASSIGNMENT,
+        "ticket.assigned",
+        &assigned(None, None, None, who.clone())
+    ));
+    let team = Uuid::now_v7();
+    let to_team = json!({ "team": { "from": null, "to": "Desk" } });
+    assert!(h.passes(
+        NOTIFY_ASSIGNMENT,
+        "ticket.updated",
+        &assigned(None, Some(team), None, to_team.clone())
+    ));
+    // A team change while a person has it: they've been told already.
+    assert!(!h.passes(
+        NOTIFY_ASSIGNMENT,
+        "ticket.updated",
+        &assigned(Some(amy), Some(team), None, to_team.clone())
+    ));
+    assert!(!h.passes(
+        NOTIFY_ASSIGNMENT,
+        "ticket.updated",
+        &assigned(Some(amy), None, None, json!({ "title": {} }))
+    ));
+    assert!(h.passes(
+        NOTIFY_ASSIGNMENT,
+        "ticket.created",
+        &assigned(Some(amy), None, None, json!({}))
+    ));
+
+    // Dispatch (no actor) assigns Amy: she's told.
+    let sent = h
+        .notified(
+            NOTIFY_ASSIGNMENT,
+            "ticket.assigned",
+            ticket,
+            assigned(Some(amy), None, None, who.clone()),
+        )
+        .await;
+    assert_eq!(
+        sent,
+        [(amy, "ticket.assigned".into(), "T-1 assigned to you".into())]
+    );
+    // Amy takes another herself: nobody is told.
+    let other = ticket_in(&h, None).await;
+    let nobody: Vec<(Uuid, String, String)> = Vec::new();
+    assert_eq!(
+        h.notified(
+            NOTIFY_ASSIGNMENT,
+            "ticket.assigned",
+            other,
+            assigned(Some(amy), None, Some(amy), who.clone())
+        )
+        .await,
+        nobody
+    );
+    // A team: everyone in it, except whoever assigned it.
+    exec(
+        &h,
+        "INSERT INTO teams (id, name) VALUES ($1, 'Desk ' || $1::text)",
+        &[team],
+    )
+    .await;
+    for member in [amy, ben] {
+        exec(
+            &h,
+            "INSERT INTO team_members (team_id, user_id) VALUES ($1, $2)",
+            &[team, member],
+        )
+        .await;
+    }
+    let third = ticket_in(&h, None).await;
+    let sent = h
+        .notified(
+            NOTIFY_ASSIGNMENT,
+            "ticket.updated",
+            third,
+            assigned(None, Some(team), Some(amy), to_team),
+        )
+        .await;
+    assert_eq!(
+        sent,
+        [(
+            ben,
+            "ticket.assigned".into(),
+            "T-1 assigned to your team".into()
+        )]
+    );
+}
+
+#[tokio::test]
+async fn replies_and_sla_alerts_notify_the_assignee() {
+    let Some(h) = harness().await else { return };
+    let amy = person(&h, "Amy").await;
+    let reply = |user: Option<Uuid>, change: Json| {
+        json!({ "reference": "T-2", "title": "VPN drops", "assigneeUserId": user,
+                "assigneeTeamId": null, "actorId": null, "change": change })
+    };
+    let emailed =
+        json!({ "kind": "public", "note": "n1", "email": "e1", "from": "ada@acme.example" });
+    assert!(h.passes(
+        NOTIFY_REPLY,
+        "ticket.note_added",
+        &reply(Some(amy), emailed.clone())
+    ));
+    // Written in Huxley, internal, or nobody to tell: no.
+    assert!(!h.passes(
+        NOTIFY_REPLY,
+        "ticket.note_added",
+        &reply(Some(amy), json!({ "kind": "public", "note": "n1" }))
+    ));
+    assert!(!h.passes(
+        NOTIFY_REPLY,
+        "ticket.note_added",
+        &reply(
+            Some(amy),
+            json!({ "kind": "internal", "note": "n1", "email": "e1" })
+        )
+    ));
+    assert!(!h.passes(
+        NOTIFY_REPLY,
+        "ticket.note_added",
+        &reply(None, emailed.clone())
+    ));
+    let ticket = ticket_in(&h, None).await;
+    let sent = h
+        .notified(
+            NOTIFY_REPLY,
+            "ticket.note_added",
+            ticket,
+            reply(Some(amy), emailed),
+        )
+        .await;
+    assert_eq!(
+        sent,
+        [(
+            amy,
+            "ticket.replied".into(),
+            "T-2: the requester replied".into()
+        )]
+    );
+
+    let alert = |clock: &str| {
+        json!({ "reference": "T-3", "title": "Server down", "priority": "p1", "clock": clock,
+                "assigneeUserId": amy, "assigneeTeamId": null })
+    };
+    assert!(!h.passes(
+        NOTIFY_SLA,
+        "ticket.sla_warning",
+        &json!({ "assigneeUserId": null, "assigneeTeamId": null })
+    ));
+    let late = ticket_in(&h, None).await;
+    h.notified(NOTIFY_SLA, "ticket.sla_warning", late, alert("response"))
+        .await;
+    let sent = h
+        .notified(NOTIFY_SLA, "ticket.sla_breached", late, alert("resolution"))
+        .await;
+    let titles: Vec<&str> = sent.iter().map(|(_, _, t)| t.as_str()).collect();
+    assert_eq!(
+        titles,
+        [
+            "T-3 is close to its first response target",
+            "T-3 missed its resolution target"
+        ]
+    );
+    assert!(sent.iter().all(|(u, k, _)| *u == amy && k == "ticket.sla"));
+}
+
+#[tokio::test]
+async fn notify_checks_its_kind_and_exclusions() {
+    let Some(h) = harness().await else { return };
+    let amy = person(&h, "Amy").await;
+    for (with, problem) in [
+        (
+            format!("{{ to: \"user:{amy}\", title: Hi, kind: security.password_changed }}"),
+            "kind workflows can send",
+        ),
+        (
+            format!("{{ to: \"user:{amy}\", title: Hi, exclude: [\"nobody\"] }}"),
+            "isn't a user id",
+        ),
+    ] {
+        let (status, _, error) = h
+            .run(
+                &workflow(&format!(
+                    "  steps:\n    - id: n\n      type: core.notify\n      with: {with}\n"
+                )),
+                json!({}),
+            )
+            .await;
+        assert_eq!(status, RunStatus::Failed, "{with}");
+        assert!(error.unwrap().to_string().contains(problem), "{with}");
+    }
 }

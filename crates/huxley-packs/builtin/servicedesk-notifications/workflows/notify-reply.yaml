@@ -1,0 +1,26 @@
+apiVersion: usehuxley.io/v1
+kind: Workflow
+metadata:
+  key: notify-reply
+  name: Notify on requester replies
+  description: >-
+    Tells the person a ticket is assigned to (or, with no person, its team)
+    when the requester replies by email.
+spec:
+  triggers:
+    - type: event
+      event: ticket.note_added
+      filter: >-
+        {{ event.payload.change.kind == 'public' and event.payload.change.email is defined
+           and (event.payload.assigneeUserId is not none or event.payload.assigneeTeamId is not none) }}
+  steps:
+    - id: tell
+      type: core.notify
+      with:
+        to: "{{ ('user:' ~ inputs.assigneeUserId) if inputs.assigneeUserId else ('team:' ~ inputs.assigneeTeamId) }}"
+        kind: ticket.replied
+        title: "{{ inputs.reference }}: the requester replied"
+        message: "{{ inputs.change.from or 'The requester' }} wrote on “{{ inputs.title }}”."
+        url: "/tickets/{{ trigger.subject_id }}"
+  outputs:
+    sent: "{{ steps.tell.output.sent }}"

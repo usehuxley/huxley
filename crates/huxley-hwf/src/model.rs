@@ -1330,4 +1330,12 @@ pub struct Notification {
     /// A link in the app.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub url: Option<String>,
+    /// The kind of notification, for people's channel preferences:
+    /// `workflow.notification` (the default), `ticket.assigned`,
+    /// `ticket.replied` or `ticket.sla`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub kind: Option<String>,
+    /// People not to notify (user ids), e.g. whoever made the change.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub exclude: Option<Value>,
 }

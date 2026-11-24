@@ -145,6 +145,20 @@ Dispatch runs as a workflow, so it can be followed, changed or replaced like any
 
 Each dispatch run's output says who was chosen, or why nobody was, and what was considered about each member: their open tickets, skill match, and why anyone was skipped.
 
+## Notifications
+
+The built-in **Service desk notifications** pack (`huxley/servicedesk-notifications`) tells technicians about their tickets. Each workflow notifies the person a ticket is assigned to or, when no person has it, everyone in its team:
+
+| Workflow | When | Kind |
+|---|---|---|
+| *Notify on assignment* | A ticket is created with an assignee, or assigned. Whoever assigned it isn't told, and dispatch counts as nobody. | `ticket.assigned` |
+| *Notify on requester replies* | The requester replies by email. | `ticket.replied` |
+| *Notify on SLA warnings and breaches* | A ticket is close to an SLA target, or misses one. | `ticket.sla` |
+
+Install it under **Settings → Packs → Built-in packs** and publish its workflows. They're ordinary workflows, so they can be changed: for example, to also post to a Teams or Slack channel. Each person chooses how they hear about each kind (in the app, by email, or neither) under **Notifications**.
+
+Ticket events carry `actorId` (who made the change; none for the system or a requester) and the assignee's `assigneeUserId` and `assigneeTeamId`. The SLA events carry the assignee too.
+
 ## Email
 
 Mail sent to a service desk mailbox becomes tickets and replies.

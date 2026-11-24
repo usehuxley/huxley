@@ -1027,3 +1027,25 @@ async fn my_work_puts_what_needs_attention_first() {
         (Some(1), &waiting["id"])
     );
 }
+
+#[tokio::test]
+async fn service_desk_notification_kinds_are_offered_while_it_is_on() {
+    let Some(s) = setup().await else { return };
+    let prefs = s
+        .ok(&s.owner, "GET", "/api/v1/notifications/preferences", None)
+        .await;
+    let kinds: Vec<&str> = prefs
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|p| p["kind"].as_str().unwrap())
+        .collect();
+    for kind in [
+        "ticket.assigned",
+        "ticket.replied",
+        "ticket.sla",
+        "workflow.notification",
+    ] {
+        assert!(kinds.contains(&kind), "{kind}: {kinds:?}");
+    }
+}

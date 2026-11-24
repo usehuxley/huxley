@@ -470,6 +470,16 @@
     "Notification": {
       "additionalProperties": false,
       "properties": {
+        "exclude": {
+          "description": "People not to notify (user ids), e.g. whoever made the change."
+        },
+        "kind": {
+          "description": "The kind of notification, for people's channel preferences:\n`workflow.notification` (the default), `ticket.assigned`,\n`ticket.replied` or `ticket.sla`.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "message": {
           "type": [
             "string",

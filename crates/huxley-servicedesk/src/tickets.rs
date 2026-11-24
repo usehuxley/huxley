@@ -415,6 +415,9 @@ async fn record(
                 "priority": ticket.priority,
                 "queueId": ticket.queue_id,
                 "assigneeUserId": ticket.assignee_user_id,
+                "assigneeTeamId": ticket.assignee_team_id,
+                // Who made the change (none: the system or a requester).
+                "actorId": ctx.actor.id(),
                 "change": details,
             }),
         },

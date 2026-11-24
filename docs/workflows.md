@@ -83,7 +83,7 @@ You fill in a few **bindings**, such as who to tell or which script, and get a *
 | Type | What it does |
 |---|---|
 | `http.request` | Calls an API. Output: `{status, headers, body}`. 4xx/5xx fail the step (with `status`, so retries can match) unless `allow_error_status`. Only public addresses are reachable unless the operator allows private ones; cloud metadata addresses never are. |
-| `core.notify` | Notifies `user:<id>`, `team:<id>`, `role:<key>` (holders at the run's organization), in the app and by email. Sent exactly once. |
+| `core.notify` | Notifies `user:<id>`, `team:<id>`, `role:<key>` (holders at the run's organization), in the app and by email, as each person's preferences for its `kind` say. `kind` is `workflow.notification` (the default), or a service desk kind: `ticket.assigned`, `ticket.replied` or `ticket.sla`. `exclude` lists user ids to leave out, such as whoever made the change. Sent exactly once. |
 | `integration.action` | Calls an action of an imported integration: `action: <integration>/<action>`, inputs under `with` (parameters by name, the request body as `body`), and optionally `connection: <key>`. Output: the response body. See [integrations.md](integrations.md#calling-actions). |
 | `subworkflow` | Runs another published workflow (found by key here or in an organization above) and, by default, waits for its outputs. |
 | `core.contact.find` | Finds contacts by `email` and/or `external_id` (`{ entra: "<object id>" }`) among the run's organization and those below it. Output: `{ contacts, total }`. Needs the [Clients and contacts](crm.md) module. |
