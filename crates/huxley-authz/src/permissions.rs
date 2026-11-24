@@ -68,6 +68,7 @@ permissions! {
     FORM_MANAGE = "form:manage", Org, "Create and change forms";
     SCRIPT_READ = "script:read", Org, "View scripts in the library";
     SCRIPT_MANAGE = "script:manage", Org, "Add scripts to the library and change them";
+    PACK_INSTALL = "pack:install", Org, "Install, upgrade and export packs";
     VARIABLE_MANAGE = "variable:manage", Org, "Set organization variables and secrets for workflows, and lock them for sub-organizations";
 }
 

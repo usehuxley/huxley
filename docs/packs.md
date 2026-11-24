@@ -1,6 +1,38 @@
 # Packs
 
-A **pack** bundles integrations, workflows, forms, scripts and templates so they can be shared between instances, by Huxley, MSPs and the community (design doc §6.6, ADR-028). Installing packs in the app (with a review of what they add), exporting them, and the built-in packs come next. This page covers the format and the `huxley pack` command.
+A **pack** bundles integrations, workflows, forms, scripts and templates so they can be shared between instances, by Huxley, MSPs and the community (design doc §6.6, ADR-028). This page covers installing packs, the format, and the `huxley pack` command. Exporting packs and the built-in packs come next.
+
+## Installing a pack
+
+In **Settings → Packs**, choose the organization, then upload a `.hxpack`. Before anything changes, you see the review:
+
+- what it adds, and for each item whether it **adds** it, **updates** something this pack installed before, or **conflicts** with something else of the same key
+- **where it connects**: the hosts of its integrations and of literal URLs in its HTTP steps
+- the **scripts** it adds, which run in sandboxes on your runners
+- **who signed it**, with a warning if it's unsigned or signed by a key this instance doesn't trust
+
+Things to know about installing:
+
+- **Workflows arrive as drafts.** Nothing is published until someone reviews it.
+- **Packs never overwrite** what they didn't install. A conflict blocks the install until you rename or remove the other item.
+- **Upgrading** (uploading a newer version) updates what the pack installed, in place:
+  - scripts get a new version and workflows a new draft
+  - integration specs are updated, and your own overlay edits stay
+  - the pack's templates are replaced
+  - items an older version had and the new one doesn't are left alone
+- **Permissions:** installing needs `pack:install` *and* the permissions for what the pack adds (`integration:manage`, `form:manage`, `script:manage`, `workflow:write`). A pack never lets anyone do more than they could by hand.
+- Installs are audited (`pack.installed`). Uploads are kept for a day, for reviewing.
+
+To trust your own or a partner's signing key, list it in the server config:
+
+```toml
+[packs]
+trusted_keys = ["hxpk_…"]
+```
+
+Or set `HUXLEY_PACKS__TRUSTED_KEYS='["hxpk_…"]'` in the environment.
+
+The API is `POST /api/v1/packs/uploads?orgId=` (the raw file; it returns the review), `POST /api/v1/packs/uploads/{id}/install`, and `GET /api/v1/packs?orgId=`.
 
 ## The format
 

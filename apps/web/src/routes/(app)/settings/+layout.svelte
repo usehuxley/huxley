@@ -18,6 +18,7 @@
 		modules: resolve('/(app)/settings/modules'),
 		jobs: resolve('/(app)/settings/jobs'),
 		runners: resolve('/(app)/settings/runners'),
+		packs: resolve('/(app)/settings/packs'),
 		security: resolve('/(app)/settings/security'),
 		sso: resolve('/(app)/settings/sso')
 	};

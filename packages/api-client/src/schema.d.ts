@@ -1586,6 +1586,80 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
+	'/api/v1/packs': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** The packs installed in an organization. */
+		get: operations['list_installed_packs'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/packs/uploads': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/**
+		 * Uploads a `.hxpack` (the request body) and returns what installing it in
+		 *     `orgId` would do. Nothing is installed yet.
+		 */
+		post: operations['upload_pack'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/packs/uploads/{id}': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** What installing an uploaded pack in `orgId` would do. */
+		get: operations['review_pack'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/packs/uploads/{id}/install': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/**
+		 * Installs (or upgrades) an uploaded pack in an organization. Workflows
+		 *     arrive as drafts, to review and publish.
+		 */
+		post: operations['install_pack'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
 	'/api/v1/permissions': {
 		parameters: {
 			query?: never;
@@ -3448,6 +3522,32 @@ export interface components {
 			/** @description The OpenAPI 3.x or Swagger 2.0 document, as JSON or YAML text. */
 			spec: string;
 		};
+		InstallRequest: {
+			/** Format: uuid */
+			orgId: string;
+			/** @description The version you reviewed: installing fails if the upload isn't it. */
+			version: string;
+		};
+		Installed: {
+			/** @description What was created or updated, by kind then key. */
+			items: {
+				[key: string]: {
+					[key: string]: string;
+				};
+			};
+			key: string;
+			version: string;
+		};
+		InstalledPack: {
+			/** Format: date-time */
+			installedAt: string;
+			key: string;
+			name: string;
+			publisher: string;
+			/** @description `trusted`, `unknown_signer` or `unsigned`, when installed. */
+			trust: string;
+			version: string;
+		};
 		/** @description An integration with its current definition. */
 		IntegrationDetail: components['schemas']['IntegrationSummary'] & {
 			/** @description The current version, with the overlay applied. */
@@ -4022,6 +4122,37 @@ export interface components {
 			/** @description False if the job wasn't dead (or doesn't exist). */
 			retried: boolean;
 		};
+		/** @description What a pack would add, for an admin to approve. */
+		Review: {
+			description: string;
+			/** @description Hosts its integrations and HTTP steps call. */
+			egress: string[];
+			/** @description The version already installed in this organization, if any. */
+			installedVersion?: string | null;
+			items: components['schemas']['ReviewItem'][];
+			key: string;
+			name: string;
+			publisher: string;
+			scripts: components['schemas']['ReviewScript'][];
+			trust: components['schemas']['Trust'];
+			/** Format: uuid */
+			uploadId: string;
+			version: string;
+		};
+		/** @description What installing would do to one item. */
+		ReviewItem: {
+			/**
+			 * @description `add`, `update` (installed by this pack before) or `conflict`
+			 *     (something else has this key: installing is refused).
+			 */
+			action: string;
+			key: string;
+			kind: string;
+		};
+		ReviewScript: {
+			key: string;
+			language: string;
+		};
 		Role: {
 			description: string;
 			/** Format: uuid */
@@ -4467,6 +4598,24 @@ export interface components {
 			triggerId: string;
 			type: string;
 		};
+		/** @description Who vouches for a pack. */
+		Trust:
+			| {
+					key: string;
+					publisher: string;
+					/** @enum {string} */
+					status: 'trusted';
+			  }
+			| {
+					key: string;
+					publisher: string;
+					/** @enum {string} */
+					status: 'unknown_signer';
+			  }
+			| {
+					/** @enum {string} */
+					status: 'unsigned';
+			  };
 		UnreadCount: {
 			/** Format: int64 */
 			unreadCount: number;
@@ -7788,6 +7937,148 @@ export interface operations {
 				content?: never;
 			};
 			404: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	list_installed_packs: {
+		parameters: {
+			query: {
+				orgId: string;
+			};
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['InstalledPack'][];
+				};
+			};
+		};
+	};
+	upload_pack: {
+		parameters: {
+			query: {
+				orgId: string;
+			};
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/octet-stream': number[];
+			};
+		};
+		responses: {
+			201: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['Review'];
+				};
+			};
+			413: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	review_pack: {
+		parameters: {
+			query: {
+				orgId: string;
+			};
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['Review'];
+				};
+			};
+			404: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	install_pack: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['InstallRequest'];
+			};
+		};
+		responses: {
+			201: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['Installed'];
+				};
+			};
+			404: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+			409: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+			422: {
 				headers: {
 					[name: string]: unknown;
 				};
