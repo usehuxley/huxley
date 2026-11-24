@@ -132,7 +132,7 @@ This is a long-term project. The plan follows four rules:
 **Goal:** finish the automation platform. Data, AI-assisted building, code-first workflows, shareable packs.
 
 - **Datasets** (§9): definitions, typed managed tables + DDL migrations, sync system workflow (full/incremental/upsert), per-descendant-org syncs, `dataset.query`/`dataset.upsert` steps, `lookup()` in Jinja, dataset browser UI, admin read-only SQL console.
-- **AI provider layer** (§10.1): BYOK provider abstraction (Anthropic, OpenAI, Azure OpenAI, OpenAI-compatible), per-org config and inheritance, budgets, call logging, `ai.prompt`/`ai.classify`/`ai.extract` steps, embeddings + pgvector.
+- **AI provider layer** (§10.1): BYOK provider abstraction (Anthropic, OpenAI, Azure OpenAI, OpenAI-compatible), per-org config and inheritance, budgets, call logging, `ai.prompt`/`ai.classify`/`ai.extract` steps. (Embeddings + pgvector moved to Phase 5, where their first consumer is.)
 - **MCP server** (§10.2): Streamable HTTP + stdio, OAuth 2.1 + PAT auth, automation tool group, workflows exposed as `mcp_tool`, drafts-only + human publish.
 - **AI assistant** (§10.3) v1 in the web app: workflow building, debugging failed runs, and Q&A over platform data within the user's permissions.
 - **Workflows-as-code** (§6.7): `huxley-cli` (validate/test/push/pull/diff/run), fixtures-based tests, YAML code view in-app with canvas round-trip, per-org Git sync (GitHub/GitLab/Azure DevOps).
@@ -159,6 +159,7 @@ This is a long-term project. The plan follows four rules:
 - **Client 360 Actions panel**: forms flagged `action` with automatic context injection (org/contact/asset/ticket). Ticket macros run workflows.
 - **`core.*` actions** for tickets, contacts, companies. Domain events for all of them.
 - **Command palette + global search** (Postgres FTS + trigram).
+- **Embeddings + pgvector** (moved from Phase 4, decided 2026-11-25): pgvector stays optional (semantic features switch off without it); an embeddings call in `huxley-ai` (OpenAI, Azure OpenAI, OpenAI-compatible, Voyage) with its own provider setting, since Anthropic has no embeddings API; semantic ticket search alongside FTS as the first consumer. Knowledge-base search (Phase 6) and similar tickets (Phase 8) build on it.
 - **Notifications** expanded: ticket assignment/update rules as system workflows, Teams/Slack channels.
 
 **Exit criteria:** a small MSP can run day-to-day support in Huxley. Email in → ticket → triage to queue → SLA tracked → technician works it from My Work, runs a "Reset MFA" Action from the client view, replies by email → resolves. All automation is visible as system workflows.
