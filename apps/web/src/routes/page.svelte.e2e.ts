@@ -67,4 +67,25 @@ test.describe('with the API', () => {
 		await page.goto('/');
 		await expect(page).toHaveURL(/\/login/);
 	});
+
+	test('on a phone the top bar fits, and Sign out is on your profile', async ({ page }) => {
+		await page.setViewportSize({ width: 360, height: 780 });
+		await page.goto('/login');
+		await page.getByLabel('Email').fill(email!);
+		await page.getByLabel('Password').fill(password!);
+		await page.getByRole('button', { name: 'Sign in', exact: true }).click();
+		await expect(page.getByRole('heading', { level: 1 })).toHaveText('Welcome to Huxley');
+
+		// Nothing wider than the screen.
+		const overflow = await page.evaluate(
+			() => document.documentElement.scrollWidth - document.documentElement.clientWidth
+		);
+		expect(overflow).toBe(0);
+		await expect(page.getByRole('button', { name: 'Search or jump to…' })).toBeVisible();
+
+		await page.getByRole('link', { name: /^Account:/ }).click();
+		await expect(page.getByRole('heading', { level: 1 })).toHaveText('Your profile');
+		await page.getByRole('button', { name: 'Sign out of Huxley' }).click();
+		await expect(page).toHaveURL(/\/login$/);
+	});
 });
