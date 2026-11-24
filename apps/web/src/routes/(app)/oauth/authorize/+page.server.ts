@@ -37,7 +37,9 @@ export const load: PageServerLoad = async (event) => {
 		body: { params }
 	});
 	if (problem || !data) {
-		const message = problem ? problemMessage(problem, 'Try again from the app.') : 'Try again from the app.';
+		const message = problem
+			? problemMessage(problem, 'Try again from the app.')
+			: 'Try again from the app.';
 		error(400, message);
 	}
 	// Problems the app should hear about go straight back to it.
@@ -52,7 +54,9 @@ async function decide(event: Parameters<Actions[string]>[0], approve: boolean) {
 	});
 	if (problem || !data?.redirectTo) {
 		return fail(400, {
-			message: problem ? problemMessage(problem, 'Try again from the app.') : 'Try again from the app.'
+			message: problem
+				? problemMessage(problem, 'Try again from the app.')
+				: 'Try again from the app.'
 		});
 	}
 	// Not a redirect: the CSP's form-action 'self' would block a form post

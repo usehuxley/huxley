@@ -23,8 +23,8 @@
 			</p>
 			{#if view.fullAccess}
 				<p>
-					It can do <strong>anything your roles allow</strong>: read and change workflows, run
-					them, and use integrations and data you can see. It can't do more than you can.
+					It can do <strong>anything your roles allow</strong>: read and change workflows, run them,
+					and use integrations and data you can see. It can't do more than you can.
 				</p>
 			{:else}
 				<div>
@@ -37,9 +37,9 @@
 				</div>
 			{/if}
 			<p class="text-fg-muted">
-				Afterwards you'll go back to <strong class="text-fg">{view.redirectHost}</strong>.
-				The app chose its own name, so only approve this if you just started connecting it
-				yourself. You can disconnect it at any time from your profile.
+				Afterwards you'll go back to <strong class="text-fg">{view.redirectHost}</strong>. The app
+				chose its own name, so only approve this if you just started connecting it yourself. You can
+				disconnect it at any time from your profile.
 			</p>
 			{#if form && 'message' in form && form.message}
 				<p role="alert" class="text-danger">{form.message}</p>

@@ -121,8 +121,8 @@
 	<div>
 		<h1 class="text-2xl font-semibold text-fg">Your profile</h1>
 		<p class="mt-1 text-fg-muted">
-			Manage your password, passkeys, two-factor authentication, API tokens, connected apps, and where you're signed
-			in.
+			Manage your password, passkeys, two-factor authentication, API tokens, connected apps, and
+			where you're signed in.
 		</p>
 	</div>
 
@@ -435,7 +435,9 @@
 						<div class="min-w-0">
 							<p class="flex items-center gap-2 text-sm font-medium text-fg">
 								{app.name}
-								<Badge>{app.scopes.includes('*') ? 'Full access' : `${app.scopes.length} permissions`}</Badge>
+								<Badge>
+									{app.scopes.includes('*') ? 'Full access' : `${app.scopes.length} permissions`}
+								</Badge>
 							</p>
 							<p class="mt-0.5 text-sm text-fg-muted">
 								Connected {formatDate(app.connectedAt)} · {app.lastUsedAt

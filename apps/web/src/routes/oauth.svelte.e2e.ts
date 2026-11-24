@@ -51,7 +51,12 @@ async function mcpStatus(token: string): Promise<number> {
 	const api = await request.newContext({ baseURL: apiUrl });
 	const res = await api.post('/mcp', {
 		headers: { authorization: `Bearer ${token}` },
-		data: { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'list_organizations', arguments: {} } }
+		data: {
+			jsonrpc: '2.0',
+			id: 1,
+			method: 'tools/call',
+			params: { name: 'list_organizations', arguments: {} }
+		}
 	});
 	await api.dispose();
 	return res.status();
