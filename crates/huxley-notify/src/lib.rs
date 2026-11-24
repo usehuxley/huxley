@@ -48,6 +48,7 @@ pub mod kinds {
     pub const PASSWORD_CHANGED: &str = "security.password_changed";
     pub const MFA_CHANGED: &str = "security.mfa_changed";
     pub const API_TOKEN_CREATED: &str = "security.api_token_created";
+    pub const OAUTH_APP_CONNECTED: &str = "security.oauth_app_connected";
     pub const ROLE_GRANTED: &str = "access.role_granted";
     pub const TEAM_JOINED: &str = "access.team_joined";
     pub const WORKFLOW: &str = "workflow.notification";
@@ -70,6 +71,13 @@ pub mod kinds {
         Kind {
             key: API_TOKEN_CREATED,
             description: "An API token was created for your account",
+            in_app: true,
+            email: true,
+            mandatory: true,
+        },
+        Kind {
+            key: OAUTH_APP_CONNECTED,
+            description: "An app (such as an AI client) was connected to your account",
             in_app: true,
             email: true,
             mandatory: true,

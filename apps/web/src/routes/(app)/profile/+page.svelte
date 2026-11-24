@@ -121,8 +121,8 @@
 	<div>
 		<h1 class="text-2xl font-semibold text-fg">Your profile</h1>
 		<p class="mt-1 text-fg-muted">
-			Manage your password, passkeys, two-factor authentication, API tokens, and where you're signed
-			in.
+			Manage your password, passkeys, two-factor authentication, API tokens, connected apps, and
+			where you're signed in.
 		</p>
 	</div>
 
@@ -421,6 +421,39 @@
 			description="Personal access tokens act as you from scripts and tools, limited to what you choose. Each expires within a year."
 		/>
 	{/if}
+
+	<Card
+		title="Connected apps"
+		description="Apps you approved to act as you, such as AI clients using Huxley's MCP server. Disconnecting one stops it at once."
+	>
+		{#if data.connectedApps.length === 0}
+			<p class="text-sm text-fg-muted">No apps are connected.</p>
+		{:else}
+			<ul class="flex flex-col divide-y divide-border" aria-label="Connected apps">
+				{#each data.connectedApps as app (app.id)}
+					<li class="flex items-center justify-between gap-4 py-3 first:pt-0 last:pb-0">
+						<div class="min-w-0">
+							<p class="flex items-center gap-2 text-sm font-medium text-fg">
+								{app.name}
+								<Badge>
+									{app.scopes.includes('*') ? 'Full access' : `${app.scopes.length} permissions`}
+								</Badge>
+							</p>
+							<p class="mt-0.5 text-sm text-fg-muted">
+								Connected {formatDate(app.connectedAt)} · {app.lastUsedAt
+									? `Last used ${formatDate(app.lastUsedAt)}${app.lastUsedIp ? ` from ${app.lastUsedIp}` : ''}`
+									: 'Not used yet'}
+							</p>
+						</div>
+						<form method="POST" action="?/disconnectApp" use:enhance>
+							<input type="hidden" name="id" value={app.id} />
+							<Button type="submit" size="sm">Disconnect</Button>
+						</form>
+					</li>
+				{/each}
+			</ul>
+		{/if}
+	</Card>
 
 	<Card title="Active sessions" description="Devices currently signed in to your account.">
 		<ul class="flex flex-col divide-y divide-border">

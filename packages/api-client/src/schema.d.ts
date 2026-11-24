@@ -272,6 +272,40 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
+	'/api/v1/auth/connected-apps': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** Apps (such as AI clients) connected to your account. Needs a session. */
+		get: operations['list_connected'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/auth/connected-apps/{id}': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		post?: never;
+		/** Disconnects an app: its tokens stop working at once. */
+		delete: operations['disconnect'];
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
 	'/api/v1/auth/email/verification': {
 		parameters: {
 			query?: never;
@@ -1678,6 +1712,27 @@ export interface paths {
 		get?: never;
 		put?: never;
 		post: operations['read_one'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/oauth/authorization': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/**
+		 * Checks an authorization request for the consent page and, once the
+		 *     person decides, approves or denies it. Needs a signed-in session: an API
+		 *     token can't approve anything.
+		 */
+		post: operations['authorization'];
 		delete?: never;
 		options?: never;
 		head?: never;
@@ -3498,6 +3553,41 @@ export interface components {
 			/** @description The spec's name for it (the `securitySchemes` key). */
 			key: string;
 		};
+		/** @description The authorization request's parameters, as the consent page received them. */
+		AuthorizationParams: {
+			clientId?: string | null;
+			codeChallenge?: string | null;
+			codeChallengeMethod?: string | null;
+			redirectUri?: string | null;
+			resource?: string | null;
+			responseType?: string | null;
+			scope?: string | null;
+			state?: string | null;
+		};
+		/** @description `POST /api/v1/oauth/authorization`. */
+		AuthorizationRequest: {
+			/**
+			 * @description Omit to only check the request (to show the consent page); `true` to
+			 *     approve it, `false` to deny it.
+			 */
+			approve?: boolean | null;
+			params: components['schemas']['AuthorizationParams'];
+		};
+		/** @description What the consent page shows, or where it sends the person. */
+		AuthorizationView: {
+			/** @description The name the client registered with (it chose it itself). */
+			clientName: string;
+			/** @description `true` when the client gets everything the person's roles allow. */
+			fullAccess: boolean;
+			/** @description Where the browser goes afterwards, e.g. `localhost` or `claude.ai`. */
+			redirectHost: string;
+			/**
+			 * @description Set when the page should send the browser on (back to the client,
+			 *     with a code or an error). Otherwise, ask the person.
+			 */
+			redirectTo?: string | null;
+			scopes: components['schemas']['ScopeView'][];
+		};
 		Binding: {
 			default?: string | null;
 			help?: string | null;
@@ -3589,6 +3679,20 @@ export interface components {
 		ConfirmTotpRequest: {
 			/** @description A current six-digit code from the app. */
 			code: string;
+		};
+		/** @description An app connected to your account through OAuth. */
+		ConnectedAppView: {
+			/** Format: date-time */
+			connectedAt: string;
+			/** Format: uuid */
+			id: string;
+			/** Format: date-time */
+			lastUsedAt?: string | null;
+			lastUsedIp?: string | null;
+			/** @description The name the app registered with. */
+			name: string;
+			/** @description Permission keys, or `["*"]` for everything your roles allow. */
+			scopes: string[];
 		};
 		/** @description What a connection is made from (or changed to). */
 		ConnectionInput: {
@@ -4840,6 +4944,11 @@ export interface components {
 		SayRequest: {
 			text: string;
 		};
+		/** @description A permission the client would get. */
+		ScopeView: {
+			description: string;
+			key: string;
+		};
 		/** @description A script with its current version. */
 		Script: components['schemas']['ScriptSummary'] & {
 			parameters: {
@@ -6040,6 +6149,53 @@ export interface operations {
 				};
 			};
 			403: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	list_connected: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ConnectedAppView'][];
+				};
+			};
+		};
+	};
+	disconnect: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				/** @description Connected app id */
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			204: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content?: never;
+			};
+			404: {
 				headers: {
 					[name: string]: unknown;
 				};
@@ -8884,6 +9040,37 @@ export interface operations {
 				content?: never;
 			};
 			404: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	authorization: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['AuthorizationRequest'];
+			};
+		};
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['AuthorizationView'];
+				};
+			};
+			400: {
 				headers: {
 					[name: string]: unknown;
 				};

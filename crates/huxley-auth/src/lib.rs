@@ -8,6 +8,7 @@
 pub mod api_tokens;
 pub mod email_flows;
 pub mod mfa;
+pub mod oauth;
 pub mod passkey;
 pub mod password;
 pub mod token;

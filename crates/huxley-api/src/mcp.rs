@@ -676,14 +676,17 @@ pub async fn post(
     headers: HeaderMap,
     Json(body): Json<Value>,
 ) -> Response {
-    if authed.is_err() || crate::authz::bearer_token(&headers).is_none() {
+    // No token: point the client at OAuth discovery (RFC 9728). A bad one:
+    // the same, with `invalid_token`.
+    let sent = crate::authz::bearer_token(&headers).is_some();
+    if authed.is_err() || !sent {
         let mut response = json_response(
             StatusCode::UNAUTHORIZED,
-            &json!({ "error": "invalid_token", "error_description": "Send an API token as Authorization: Bearer <token>." }),
+            &json!({ "error": "invalid_token", "error_description": "Sign in with OAuth, or send an API token as Authorization: Bearer <token>." }),
         );
         response.headers_mut().insert(
             header::WWW_AUTHENTICATE,
-            HeaderValue::from_static("Bearer realm=\"huxley\""),
+            crate::oauth_routes::www_authenticate(&state, sent.then_some("invalid_token")),
         );
         return response;
     }

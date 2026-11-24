@@ -10,7 +10,7 @@ The MCP server (design doc §10.2) lets AI clients, such as Claude Code with the
 ## Decision
 
 - **The transport is Streamable HTTP at `/mcp`.** JSON-RPC 2.0 messages arrive by POST and each gets a single JSON response; notifications get `202`. `GET` returns `405`: the server opens no streams. It supports `initialize`, `ping`, `tools/list`, `tools/call`, `resources/list` and `resources/read`.
-- **Auth is an API token** (`Authorization: Bearer`), so a token's scopes narrow what an MCP client may do. A request without a token gets `401` with `WWW-Authenticate`. OAuth 2.1 can be added later.
+- **Auth is an API token** (`Authorization: Bearer`), so a token's scopes narrow what an MCP client may do. A request without a token gets `401` with `WWW-Authenticate`. OAuth sign-in was added later (ADR-032).
 - **Each tool is a call to the API router itself**, made in-process with the client's own `Authorization` header. Permission checks, validation, organization scoping and errors are exactly the API's. A failed call comes back as a tool result with `isError` and the problem's detail, which the model can act on.
 - **Audit:** in-process calls carry a request extension, which clients can't set, so their audit records say `via = mcp`.
 - **Drafts only:** no tool publishes or deletes. AI-made workflows land as drafts that a person reviews and publishes. `test_workflow_document` test-runs a document without saving it, with mocked steps.

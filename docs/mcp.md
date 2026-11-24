@@ -4,9 +4,26 @@ Huxley is an [MCP](https://modelcontextprotocol.io) server, so AI clients such a
 
 ## Connecting
 
-Make an API token (**Profile → API tokens**), scoped to what the client may do. For building workflows, that's `workflow:read`, `workflow:write`, `integration:read`, `org:read` and, to read run details, the default read scopes.
+Add the server's `/mcp` URL to your client. The first time it connects, your browser opens Huxley: sign in if you aren't, check the app's name, and select **Connect**.
 
-Over HTTP, which is the server's `/mcp` endpoint:
+```sh
+claude mcp add --transport http huxley https://huxley.example.com/mcp
+```
+
+What happens behind that:
+
+- The client discovers how to sign in from `/mcp` itself, registers, and uses OAuth 2.1 with PKCE (ADR-032).
+- **Access:** the app gets **everything your roles allow**, never more. A client can ask for less by requesting permission keys as scopes, such as `workflow:read workflow:write`.
+- **Tokens:** the app's token works only with the MCP server, not the rest of the API. It lasts an hour and the client renews it by itself.
+- **Disconnecting:** connected apps are listed under **Profile → Connected apps**, and you get a security notice when one connects. **Disconnect** stops one at once.
+
+The server needs `auth.public_url` (its address as browsers see it) for sign-in to work.
+
+### With an API token instead
+
+For scripts, CI, or clients without OAuth, make an API token (**Profile → API tokens**) scoped to what the client may do. For building workflows, that's `workflow:read`, `workflow:write`, `integration:read`, `org:read` and, to read run details, the default read scopes.
+
+Over HTTP:
 
 ```sh
 claude mcp add --transport http huxley https://huxley.example.com/mcp \
@@ -58,6 +75,6 @@ How workflow tools work:
 
 ## Safety
 
-- **Every tool call runs as you.** It's made through Huxley's own API with your token, so it gets your permissions, narrowed by the token's scopes, and the same validation. A refused call comes back as an error the model can read.
+- **Every tool call runs as you.** It's made through Huxley's own API with your token, so it gets your permissions, narrowed by the token's (or connected app's) scopes, and the same validation. A refused call comes back as an error the model can read.
 - **Drafts only.** No tool publishes or deletes anything. A person reviews and publishes what an AI built.
 - **Audited.** Everything done through MCP is in the audit log with `via = mcp`.
