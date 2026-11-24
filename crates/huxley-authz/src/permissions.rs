@@ -77,6 +77,9 @@ permissions! {
     VARIABLE_MANAGE = "variable:manage", Org, "Set organization variables and secrets for workflows, and lock them for sub-organizations";
     CRM_READ = "crm:read", Org, "View company details, contacts and sites";
     CRM_MANAGE = "crm:manage", Org, "Create and change contacts and sites, and edit company details";
+    TICKET_READ = "ticket:read", Org, "View tickets, their notes and activity";
+    TICKET_WRITE = "ticket:write", Org, "Create and work tickets: change them, add notes, change status, assign";
+    SERVICEDESK_CONFIGURE = "servicedesk:configure", Instance, "Set up service queues";
 }
 
 /// Wildcard granting every permission.

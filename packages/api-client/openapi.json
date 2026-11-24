@@ -5834,6 +5834,192 @@
 				}
 			}
 		},
+		"/api/v1/queues": {
+			"get": {
+				"tags": ["servicedesk"],
+				"summary": "Service queues you can see.",
+				"operationId": "list_queues",
+				"parameters": [
+					{
+						"name": "orgId",
+						"in": "query",
+						"required": false,
+						"schema": {
+							"type": ["string", "null"],
+							"format": "uuid"
+						}
+					},
+					{
+						"name": "includeArchived",
+						"in": "query",
+						"required": false,
+						"schema": {
+							"type": "boolean"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "array",
+									"items": {
+										"$ref": "#/components/schemas/Queue"
+									}
+								}
+							}
+						}
+					}
+				}
+			},
+			"post": {
+				"tags": ["servicedesk"],
+				"summary": "Creates a service queue. Needs `servicedesk:configure`.",
+				"operationId": "create_queue",
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/CreateQueue"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"201": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Queue"
+								}
+							}
+						}
+					},
+					"422": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/queues/{id}": {
+			"get": {
+				"tags": ["servicedesk"],
+				"operationId": "get_queue",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Queue"
+								}
+							}
+						}
+					},
+					"404": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			},
+			"put": {
+				"tags": ["servicedesk"],
+				"summary": "Changes a queue (and, if given, its members). Needs `servicedesk:configure`.",
+				"operationId": "update_queue",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/QueueInput"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Queue"
+								}
+							}
+						}
+					},
+					"409": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			},
+			"delete": {
+				"tags": ["servicedesk"],
+				"summary": "Archives a queue. Needs `servicedesk:configure`.",
+				"operationId": "archive_queue",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"responses": {
+					"204": {},
+					"404": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
 		"/api/v1/role-assignments": {
 			"post": {
 				"tags": ["users"],
@@ -7430,6 +7616,48 @@
 				}
 			}
 		},
+		"/api/v1/servicedesk/priority-matrix": {
+			"get": {
+				"tags": ["servicedesk"],
+				"summary": "How impact and urgency (1 high … 3 low) make a priority.",
+				"operationId": "priority_matrix",
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "array",
+									"items": {
+										"$ref": "#/components/schemas/MatrixCell"
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/servicedesk/types": {
+			"get": {
+				"tags": ["servicedesk"],
+				"summary": "Ticket types with their statuses and allowed changes.",
+				"operationId": "list_types",
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "array",
+									"items": {
+										"$ref": "#/components/schemas/TicketType"
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		},
 		"/api/v1/sites/{id}": {
 			"get": {
 				"tags": ["crm"],
@@ -8057,6 +8285,383 @@
 							"application/problem+json": {
 								"schema": {
 									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					},
+					"409": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					},
+					"422": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/tickets": {
+			"get": {
+				"tags": ["servicedesk"],
+				"summary": "Tickets you can see, most urgent first. `assignee=me` means you.",
+				"operationId": "list_tickets",
+				"parameters": [
+					{
+						"name": "orgId",
+						"in": "query",
+						"required": false,
+						"schema": {
+							"type": ["string", "null"],
+							"format": "uuid"
+						}
+					},
+					{
+						"name": "queueId",
+						"in": "query",
+						"required": false,
+						"schema": {
+							"type": ["string", "null"],
+							"format": "uuid"
+						}
+					},
+					{
+						"name": "assignee",
+						"in": "query",
+						"description": "A person's id, or `none` for unassigned.",
+						"required": false,
+						"schema": {
+							"type": ["string", "null"]
+						}
+					},
+					{
+						"name": "state",
+						"in": "query",
+						"description": "`open` (not resolved or closed, the default), `resolved`, `closed` or `all`.",
+						"required": false,
+						"schema": {
+							"type": ["string", "null"]
+						}
+					},
+					{
+						"name": "search",
+						"in": "query",
+						"description": "Matches titles and the ticket number.",
+						"required": false,
+						"schema": {
+							"type": ["string", "null"]
+						}
+					},
+					{
+						"name": "limit",
+						"in": "query",
+						"description": "1 to 200 (default 50).",
+						"required": false,
+						"schema": {
+							"type": ["integer", "null"],
+							"format": "int64"
+						}
+					},
+					{
+						"name": "offset",
+						"in": "query",
+						"required": false,
+						"schema": {
+							"type": ["integer", "null"],
+							"format": "int64"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/TicketPage"
+								}
+							}
+						}
+					}
+				}
+			},
+			"post": {
+				"tags": ["servicedesk"],
+				"summary": "Creates a ticket for an organization.",
+				"operationId": "create_ticket",
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/NewTicket"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"201": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Ticket"
+								}
+							}
+						}
+					},
+					"422": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/tickets/{id}": {
+			"get": {
+				"tags": ["servicedesk"],
+				"operationId": "get_ticket",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Ticket"
+								}
+							}
+						}
+					},
+					"404": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			},
+			"patch": {
+				"tags": ["servicedesk"],
+				"summary": "Changes a ticket's fields; send back the `version` you read. `null`\nclears queue, requester or assignee; leaving a field out keeps it.",
+				"operationId": "update_ticket",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/TicketChanges"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Ticket"
+								}
+							}
+						}
+					},
+					"409": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					},
+					"422": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/tickets/{id}/activity": {
+			"get": {
+				"tags": ["servicedesk"],
+				"summary": "A ticket's timeline: what changed, when and by whom.",
+				"operationId": "list_activity",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "array",
+									"items": {
+										"$ref": "#/components/schemas/Activity"
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/tickets/{id}/notes": {
+			"get": {
+				"tags": ["servicedesk"],
+				"operationId": "list_notes",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "array",
+									"items": {
+										"$ref": "#/components/schemas/Note"
+									}
+								}
+							}
+						}
+					}
+				}
+			},
+			"post": {
+				"tags": ["servicedesk"],
+				"summary": "Adds a public, internal or resolution note.",
+				"operationId": "add_note",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/NewNote"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"201": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Note"
+								}
+							}
+						}
+					},
+					"422": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/tickets/{id}/status": {
+			"post": {
+				"tags": ["servicedesk"],
+				"summary": "Moves a ticket to another status (allowed changes only, with what the\nstatus needs: a resolution for Resolved).",
+				"operationId": "change_status",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/StatusChange"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Ticket"
 								}
 							}
 						}
@@ -9367,6 +9972,34 @@
 					}
 				},
 				"additionalProperties": false
+			},
+			"Activity": {
+				"type": "object",
+				"required": ["id", "kind", "details", "at"],
+				"properties": {
+					"actorId": {
+						"type": ["string", "null"],
+						"format": "uuid"
+					},
+					"actorName": {
+						"type": ["string", "null"]
+					},
+					"at": {
+						"type": "string",
+						"format": "date-time"
+					},
+					"details": {
+						"type": "object"
+					},
+					"id": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"kind": {
+						"type": "string",
+						"description": "`created`, `updated`, `status`, `assigned` or `note`."
+					}
+				}
 			},
 			"AddBuiltInRequest": {
 				"type": "object",
@@ -10984,6 +11617,24 @@
 					}
 				}
 			},
+			"CreateQueue": {
+				"allOf": [
+					{
+						"$ref": "#/components/schemas/QueueInput"
+					},
+					{
+						"type": "object",
+						"required": ["orgId"],
+						"properties": {
+							"orgId": {
+								"type": "string",
+								"format": "uuid",
+								"description": "The organization it belongs to (usually your MSP)."
+							}
+						}
+					}
+				]
+			},
 			"CreateScriptRequest": {
 				"type": "object",
 				"required": ["orgId", "script"],
@@ -12118,6 +12769,24 @@
 				],
 				"description": "The result of a sign-in step."
 			},
+			"MatrixCell": {
+				"type": "object",
+				"description": "One cell of the priority matrix.",
+				"required": ["impact", "urgency", "priority"],
+				"properties": {
+					"impact": {
+						"type": "integer",
+						"format": "int32"
+					},
+					"priority": {
+						"type": "string"
+					},
+					"urgency": {
+						"type": "integer",
+						"format": "int32"
+					}
+				}
+			},
 			"MeView": {
 				"allOf": [
 					{
@@ -12341,6 +13010,20 @@
 					}
 				}
 			},
+			"NewNote": {
+				"type": "object",
+				"required": ["kind", "body"],
+				"properties": {
+					"body": {
+						"type": "string"
+					},
+					"kind": {
+						"type": "string",
+						"description": "`public` (the requester can see it), `internal` or `resolution`."
+					}
+				},
+				"additionalProperties": false
+			},
 			"NewScript": {
 				"type": "object",
 				"description": "A new script.",
@@ -12372,6 +13055,63 @@
 				},
 				"additionalProperties": false
 			},
+			"NewTicket": {
+				"type": "object",
+				"required": ["orgId", "title"],
+				"properties": {
+					"assigneeTeamId": {
+						"type": ["string", "null"],
+						"format": "uuid"
+					},
+					"assigneeUserId": {
+						"type": ["string", "null"],
+						"format": "uuid"
+					},
+					"description": {
+						"type": ["string", "null"]
+					},
+					"impact": {
+						"type": ["integer", "null"],
+						"format": "int32",
+						"description": "1 (high) to 3 (low); default 2."
+					},
+					"orgId": {
+						"type": "string",
+						"format": "uuid",
+						"description": "The organization it's for."
+					},
+					"priority": {
+						"type": ["string", "null"],
+						"description": "`p1` to `p4`, instead of the priority matrix."
+					},
+					"queueId": {
+						"type": ["string", "null"],
+						"format": "uuid"
+					},
+					"requesterId": {
+						"type": ["string", "null"],
+						"format": "uuid",
+						"description": "A contact at the organization."
+					},
+					"source": {
+						"type": ["string", "null"],
+						"description": "Where it came from (default `web`)."
+					},
+					"title": {
+						"type": "string"
+					},
+					"type": {
+						"type": ["string", "null"],
+						"description": "A ticket type's key (default `incident`)."
+					},
+					"urgency": {
+						"type": ["integer", "null"],
+						"format": "int32",
+						"description": "1 (high) to 3 (low); default 2."
+					}
+				},
+				"additionalProperties": false
+			},
 			"NewVersion": {
 				"type": "object",
 				"description": "The next version of a script.",
@@ -12397,6 +13137,38 @@
 					}
 				},
 				"additionalProperties": false
+			},
+			"Note": {
+				"type": "object",
+				"required": ["id", "kind", "body", "createdAt"],
+				"properties": {
+					"authorContactId": {
+						"type": ["string", "null"],
+						"format": "uuid"
+					},
+					"authorName": {
+						"type": ["string", "null"]
+					},
+					"authorUserId": {
+						"type": ["string", "null"],
+						"format": "uuid"
+					},
+					"body": {
+						"type": "string"
+					},
+					"createdAt": {
+						"type": "string",
+						"format": "date-time"
+					},
+					"id": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"kind": {
+						"type": "string",
+						"description": "`public`, `internal` or `resolution`."
+					}
+				}
 			},
 			"Notification": {
 				"type": "object",
@@ -13135,6 +13907,103 @@
 					"orgId": {
 						"type": ["string", "null"],
 						"format": "uuid"
+					}
+				},
+				"additionalProperties": false
+			},
+			"Queue": {
+				"type": "object",
+				"required": [
+					"id",
+					"orgId",
+					"name",
+					"description",
+					"openTickets",
+					"userIds",
+					"teamIds",
+					"version",
+					"createdAt"
+				],
+				"properties": {
+					"archivedAt": {
+						"type": ["string", "null"],
+						"format": "date-time"
+					},
+					"createdAt": {
+						"type": "string",
+						"format": "date-time"
+					},
+					"description": {
+						"type": "string"
+					},
+					"id": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"name": {
+						"type": "string"
+					},
+					"openTickets": {
+						"type": "integer",
+						"format": "int64",
+						"description": "Tickets in it that aren't closed."
+					},
+					"orgId": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"teamIds": {
+						"type": "array",
+						"items": {
+							"type": "string",
+							"format": "uuid"
+						},
+						"description": "Member teams' ids."
+					},
+					"userIds": {
+						"type": "array",
+						"items": {
+							"type": "string",
+							"format": "uuid"
+						},
+						"description": "Member people's ids."
+					},
+					"version": {
+						"type": "integer",
+						"format": "int32"
+					}
+				}
+			},
+			"QueueInput": {
+				"type": "object",
+				"required": ["name"],
+				"properties": {
+					"description": {
+						"type": ["string", "null"]
+					},
+					"name": {
+						"type": "string"
+					},
+					"teamIds": {
+						"type": ["array", "null"],
+						"items": {
+							"type": "string",
+							"format": "uuid"
+						},
+						"description": "Member teams (replaces the list when given)."
+					},
+					"userIds": {
+						"type": ["array", "null"],
+						"items": {
+							"type": "string",
+							"format": "uuid"
+						},
+						"description": "Member people (replaces the list when given)."
+					},
+					"version": {
+						"type": ["integer", "null"],
+						"format": "int32",
+						"description": "The version you read (updates only)."
 					}
 				},
 				"additionalProperties": false
@@ -14464,6 +15333,58 @@
 					}
 				}
 			},
+			"Status": {
+				"type": "object",
+				"required": ["id", "key", "name", "category", "pausesSla", "requires"],
+				"properties": {
+					"category": {
+						"type": "string",
+						"description": "`new`, `open`, `pending`, `resolved` or `closed`."
+					},
+					"id": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"key": {
+						"type": "string"
+					},
+					"name": {
+						"type": "string"
+					},
+					"pausesSla": {
+						"type": "boolean",
+						"description": "The SLA clock stops while a ticket is here."
+					},
+					"requires": {
+						"type": "array",
+						"items": {
+							"type": "string"
+						},
+						"description": "Needed to enter it: `resolution` (a resolution note), `assignee`."
+					}
+				}
+			},
+			"StatusChange": {
+				"type": "object",
+				"description": "A status change.",
+				"required": ["status", "version"],
+				"properties": {
+					"resolution": {
+						"type": ["string", "null"],
+						"description": "A resolution note, for statuses that need one."
+					},
+					"status": {
+						"type": "string",
+						"description": "The new status's key."
+					},
+					"version": {
+						"type": "integer",
+						"format": "int32",
+						"description": "The version you read."
+					}
+				},
+				"additionalProperties": false
+			},
 			"StepRunView": {
 				"type": "object",
 				"description": "The latest attempt of a step.",
@@ -14949,6 +15870,258 @@
 					}
 				},
 				"additionalProperties": false
+			},
+			"Ticket": {
+				"type": "object",
+				"required": [
+					"id",
+					"reference",
+					"number",
+					"orgId",
+					"orgName",
+					"typeKey",
+					"typeName",
+					"statusKey",
+					"statusName",
+					"statusCategory",
+					"title",
+					"description",
+					"impact",
+					"urgency",
+					"priority",
+					"priorityOverridden",
+					"source",
+					"customFields",
+					"version",
+					"createdAt",
+					"updatedAt"
+				],
+				"properties": {
+					"assigneeTeamId": {
+						"type": ["string", "null"],
+						"format": "uuid"
+					},
+					"assigneeTeamName": {
+						"type": ["string", "null"]
+					},
+					"assigneeUserId": {
+						"type": ["string", "null"],
+						"format": "uuid"
+					},
+					"assigneeUserName": {
+						"type": ["string", "null"]
+					},
+					"closedAt": {
+						"type": ["string", "null"],
+						"format": "date-time"
+					},
+					"createdAt": {
+						"type": "string",
+						"format": "date-time"
+					},
+					"customFields": {
+						"type": "object",
+						"additionalProperties": {},
+						"propertyNames": {
+							"type": "string"
+						}
+					},
+					"description": {
+						"type": "string"
+					},
+					"firstResponseAt": {
+						"type": ["string", "null"],
+						"format": "date-time"
+					},
+					"id": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"impact": {
+						"type": "integer",
+						"format": "int32",
+						"description": "1 (high) to 3 (low)."
+					},
+					"number": {
+						"type": "integer",
+						"format": "int64"
+					},
+					"orgId": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"orgName": {
+						"type": "string"
+					},
+					"priority": {
+						"type": "string",
+						"description": "`p1` to `p4`."
+					},
+					"priorityOverridden": {
+						"type": "boolean",
+						"description": "Chosen by someone rather than following the matrix."
+					},
+					"queueId": {
+						"type": ["string", "null"],
+						"format": "uuid"
+					},
+					"queueName": {
+						"type": ["string", "null"]
+					},
+					"reference": {
+						"type": "string",
+						"description": "The ticket's number with its prefix, e.g. `T-1042`."
+					},
+					"requesterEmail": {
+						"type": ["string", "null"]
+					},
+					"requesterId": {
+						"type": ["string", "null"],
+						"format": "uuid"
+					},
+					"requesterName": {
+						"type": ["string", "null"]
+					},
+					"resolvedAt": {
+						"type": ["string", "null"],
+						"format": "date-time"
+					},
+					"source": {
+						"type": "string"
+					},
+					"statusCategory": {
+						"type": "string",
+						"description": "`new`, `open`, `pending`, `resolved` or `closed`."
+					},
+					"statusKey": {
+						"type": "string"
+					},
+					"statusName": {
+						"type": "string"
+					},
+					"title": {
+						"type": "string"
+					},
+					"typeKey": {
+						"type": "string"
+					},
+					"typeName": {
+						"type": "string"
+					},
+					"updatedAt": {
+						"type": "string",
+						"format": "date-time"
+					},
+					"urgency": {
+						"type": "integer",
+						"format": "int32",
+						"description": "1 (high) to 3 (low)."
+					},
+					"version": {
+						"type": "integer",
+						"format": "int32"
+					}
+				}
+			},
+			"TicketChanges": {
+				"type": "object",
+				"required": ["version"],
+				"properties": {
+					"assigneeTeamId": {
+						"type": ["string", "null"],
+						"format": "uuid"
+					},
+					"assigneeUserId": {
+						"type": ["string", "null"],
+						"format": "uuid"
+					},
+					"description": {
+						"type": ["string", "null"]
+					},
+					"impact": {
+						"type": ["integer", "null"],
+						"format": "int32"
+					},
+					"priority": {
+						"type": ["string", "null"],
+						"description": "`p1` to `p4`, or `auto` to follow the priority matrix again."
+					},
+					"queueId": {
+						"type": ["string", "null"],
+						"format": "uuid"
+					},
+					"requesterId": {
+						"type": ["string", "null"],
+						"format": "uuid"
+					},
+					"title": {
+						"type": ["string", "null"]
+					},
+					"urgency": {
+						"type": ["integer", "null"],
+						"format": "int32"
+					},
+					"version": {
+						"type": "integer",
+						"format": "int32",
+						"description": "The version you read."
+					}
+				},
+				"additionalProperties": false
+			},
+			"TicketPage": {
+				"type": "object",
+				"required": ["items", "total"],
+				"properties": {
+					"items": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/Ticket"
+						}
+					},
+					"total": {
+						"type": "integer",
+						"format": "int64"
+					}
+				}
+			},
+			"TicketType": {
+				"type": "object",
+				"required": ["id", "key", "name", "description", "statuses", "transitions"],
+				"properties": {
+					"description": {
+						"type": "string"
+					},
+					"id": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"key": {
+						"type": "string"
+					},
+					"name": {
+						"type": "string"
+					},
+					"statuses": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/Status"
+						}
+					},
+					"transitions": {
+						"type": "object",
+						"description": "Allowed status changes (from key → to keys). Empty: any change.",
+						"additionalProperties": {
+							"type": "array",
+							"items": {
+								"type": "string"
+							}
+						},
+						"propertyNames": {
+							"type": "string"
+						}
+					}
+				}
 			},
 			"TotpEnrollmentView": {
 				"type": "object",
@@ -15546,6 +16719,10 @@
 		{
 			"name": "crm",
 			"description": "Company details, sites and contacts (the crm module)"
+		},
+		{
+			"name": "servicedesk",
+			"description": "Tickets, service queues and their configuration (the servicedesk module)"
 		},
 		{
 			"name": "users",

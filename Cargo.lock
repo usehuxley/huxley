@@ -1843,6 +1843,7 @@ dependencies = [
  "huxley-packs",
  "huxley-runners",
  "huxley-scripts",
+ "huxley-servicedesk",
  "huxley-sso",
  "huxley-storage",
  "huxley-telemetry",
@@ -2328,6 +2329,23 @@ dependencies = [
  "tokio-util",
  "tonic",
  "tracing",
+ "uuid",
+]
+
+[[package]]
+name = "huxley-servicedesk"
+version = "0.1.0"
+dependencies = [
+ "huxley-core",
+ "huxley-db",
+ "huxley-orgs",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "thiserror 2.0.21",
+ "time",
+ "tokio",
+ "utoipa",
  "uuid",
 ]
 

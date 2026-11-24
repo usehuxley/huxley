@@ -173,12 +173,10 @@ pub struct CompanySummary {
 
 /// Organizations visible in the caller's transaction (its scope), as
 /// companies, by name: clients only unless `providers`, matching `search`.
-/// Leaves out organizations under `hidden` paths (where the module is off).
 pub async fn list(
     conn: &mut PgConnection,
     search: Option<&str>,
     providers: bool,
-    hidden: &[String],
 ) -> CrmResult<Vec<CompanySummary>> {
     let pattern = search.map(str::trim).filter(|s| !s.is_empty()).map(|s| {
         format!(
@@ -199,12 +197,10 @@ pub async fn list(
           WHERE o.status = 'active' AND o.parent_id IS NOT NULL \
             AND ($1 OR o.kind = 'client') \
             AND ($2::text IS NULL OR o.name ILIKE $2) \
-            AND NOT (o.path <@ ANY ($3::ltree[])) \
           ORDER BY lower(o.name) LIMIT 500",
     )
     .bind(providers)
     .bind(&pattern)
-    .bind(hidden)
     .fetch_all(conn)
     .await?)
 }

@@ -119,39 +119,11 @@ pub async fn list_companies(
     Query(params): Query<CompanyListParams>,
 ) -> ApiResult<Json<Vec<CompanySummary>>> {
     crate::module_routes::require_module(&state, MODULE).await?;
-    // Where the caller may read CRM records, and where the module is off
-    // (narrowings are only readable in system scope).
-    let mut tx = begin_scoped(&state.db, &OrgScope::System)
-        .await
-        .map_err(db_err)?;
-    let visible = huxley_authz::visible_orgs(&mut tx, &authed.principal)
-        .await
-        .map_err(db_err)?;
-    let paths: Vec<(Uuid, String)> =
-        sqlx::query_as("SELECT id, path::text FROM organizations WHERE id = ANY($1)")
-            .bind(&visible)
-            .fetch_all(&mut *tx)
-            .await
-            .map_err(db_err)?;
-    let hidden: Vec<String> = sqlx::query_scalar(
-        "SELECT o.path::text FROM module_settings s \
-           JOIN organizations o ON o.id = s.org_id AND o.parent_id IS NOT NULL \
-          WHERE s.module_key = $1 AND NOT s.enabled",
-    )
-    .bind(MODULE)
-    .fetch_all(&mut *tx)
-    .await
-    .map_err(db_err)?;
-    tx.commit().await.map_err(db_err)?;
-    let readable: Vec<Uuid> = paths
-        .into_iter()
-        .filter(|(_, path)| authed.principal.can_at_path(permissions::CRM_READ, path))
-        .map(|(id, _)| id)
-        .collect();
-    let mut tx = begin_scoped(&state.db, &OrgScope::Orgs(readable))
-        .await
-        .map_err(db_err)?;
-    let companies = companies::list(&mut tx, params.search.as_deref(), params.providers, &hidden)
+    let scope = authed
+        .module_scope(&state, permissions::CRM_READ, MODULE)
+        .await?;
+    let mut tx = begin_scoped(&state.db, &scope).await.map_err(db_err)?;
+    let companies = companies::list(&mut tx, params.search.as_deref(), params.providers)
         .await
         .map_err(map)?;
     tx.commit().await.map_err(db_err)?;
