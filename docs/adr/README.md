@@ -38,3 +38,4 @@ Decisions that shape Huxley. Add a new ADR by copying `0000-template.md` with th
 | [032](0032-oauth-for-mcp-clients.md) | Huxley is the OAuth authorization server for its own MCP endpoint | Accepted |
 | [033](0033-lookups-are-recorded-per-run.md) | A run records each `lookup()` answer the first time it asks | Accepted |
 | [034](0034-workflow-canvas-with-derived-edges.md) | The visual workflow editor is a SvelteFlow canvas whose edges come from the document | Accepted |
+| [035](0035-crm-records-belong-to-organizations.md) | CRM records belong to organizations; contacts can link to several | Accepted |

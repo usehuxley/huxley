@@ -28,12 +28,36 @@ pub struct EntityType {
 }
 
 pub const ORGANIZATION: &str = "organization";
+/// A contact (the `crm` module).
+pub const CONTACT: &str = "contact";
+/// A site (the `crm` module).
+pub const SITE: &str = "site";
 
-pub const TYPES: &[EntityType] = &[EntityType {
-    key: ORGANIZATION,
-    label: "Organization",
-    table: "organizations",
-}];
+pub const TYPES: &[EntityType] = &[
+    EntityType {
+        key: ORGANIZATION,
+        label: "Organization",
+        table: "organizations",
+    },
+    EntityType {
+        key: CONTACT,
+        label: "Contact",
+        table: "crm_contacts",
+    },
+    EntityType {
+        key: SITE,
+        label: "Site",
+        table: "crm_sites",
+    },
+];
+
+/// The feature module an entity type belongs to (`None`: the core).
+pub fn module_of(entity_type: &str) -> Option<&'static str> {
+    match entity_type {
+        CONTACT | SITE => Some("crm"),
+        _ => None,
+    }
+}
 
 pub fn entity_type(key: &str) -> EntityResult<&'static EntityType> {
     TYPES
@@ -87,6 +111,16 @@ pub async fn owning_org(
                 .bind(id)
                 .fetch_optional(conn)
                 .await?
+        }
+        CONTACT | SITE => {
+            let table = ty.table;
+            sqlx::query_as(sqlx::AssertSqlSafe(format!(
+                "SELECT o.id, o.path::text FROM {table} r JOIN organizations o ON o.id = r.org_id \
+                  WHERE r.id = $1"
+            )))
+            .bind(id)
+            .fetch_optional(conn)
+            .await?
         }
         other => return Err(EntityError::UnknownEntityType(other.to_owned())),
     };

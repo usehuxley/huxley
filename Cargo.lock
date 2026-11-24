@@ -1826,6 +1826,7 @@ dependencies = [
  "huxley-auth",
  "huxley-authz",
  "huxley-core",
+ "huxley-crm",
  "huxley-crypto",
  "huxley-datasets",
  "huxley-db",
@@ -1927,6 +1928,24 @@ dependencies = [
  "serde",
  "serde_json",
  "thiserror 2.0.21",
+ "uuid",
+]
+
+[[package]]
+name = "huxley-crm"
+version = "0.1.0"
+dependencies = [
+ "huxley-core",
+ "huxley-db",
+ "huxley-orgs",
+ "jiff 0.2.46",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "thiserror 2.0.21",
+ "time",
+ "tokio",
+ "utoipa",
  "uuid",
 ]
 

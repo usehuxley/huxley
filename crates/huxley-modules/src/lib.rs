@@ -43,7 +43,7 @@ pub const REGISTRY: &[Module] = &[
         description: "Companies, contacts, sites, and the client 360 view.",
         requires: &[],
         phase: 5,
-        released: false,
+        released: true,
     },
     Module {
         key: "servicedesk",

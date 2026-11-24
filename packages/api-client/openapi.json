@@ -2108,6 +2108,183 @@
 				}
 			}
 		},
+		"/api/v1/contacts/{id}": {
+			"get": {
+				"tags": ["crm"],
+				"operationId": "get_contact",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Contact"
+								}
+							}
+						}
+					},
+					"404": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			},
+			"put": {
+				"tags": ["crm"],
+				"summary": "Changes a contact's details. Send back the `version` you read.",
+				"operationId": "update_contact",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/ContactInput"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Contact"
+								}
+							}
+						}
+					},
+					"409": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					},
+					"422": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			},
+			"delete": {
+				"tags": ["crm"],
+				"summary": "Archives a contact.",
+				"operationId": "archive_contact",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"responses": {
+					"204": {},
+					"404": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/contacts/{id}/companies": {
+			"put": {
+				"tags": ["crm"],
+				"summary": "Sets a contact's companies; the primary one becomes the company it\nbelongs to. Needs `crm:manage` at every company involved, before and\nafter.",
+				"operationId": "set_contact_companies",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/ContactCompaniesInput"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Contact"
+								}
+							}
+						}
+					},
+					"409": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					},
+					"422": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
 		"/api/v1/custom-fields": {
 			"get": {
 				"tags": ["fields"],
@@ -4572,6 +4749,210 @@
 				}
 			}
 		},
+		"/api/v1/orgs/{id}/company": {
+			"get": {
+				"tags": ["crm"],
+				"summary": "An organization's company details.",
+				"operationId": "get_company",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Company"
+								}
+							}
+						}
+					},
+					"404": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			},
+			"put": {
+				"tags": ["crm"],
+				"summary": "Saves an organization's company details. Send back the `version` you\nread (0 the first time).",
+				"operationId": "update_company",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/CompanyInput"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Company"
+								}
+							}
+						}
+					},
+					"409": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					},
+					"422": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/orgs/{id}/contacts": {
+			"get": {
+				"tags": ["crm"],
+				"summary": "Contacts of an organization (whether it's their primary company or\nnot), by name.",
+				"operationId": "list_contacts",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					},
+					{
+						"name": "search",
+						"in": "query",
+						"description": "Matches names and email addresses.",
+						"required": false,
+						"schema": {
+							"type": ["string", "null"]
+						}
+					},
+					{
+						"name": "includeArchived",
+						"in": "query",
+						"required": false,
+						"schema": {
+							"type": "boolean"
+						}
+					},
+					{
+						"name": "limit",
+						"in": "query",
+						"description": "1 to 200 (default 50).",
+						"required": false,
+						"schema": {
+							"type": ["integer", "null"],
+							"format": "int64"
+						}
+					},
+					{
+						"name": "offset",
+						"in": "query",
+						"required": false,
+						"schema": {
+							"type": ["integer", "null"],
+							"format": "int64"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ContactPage"
+								}
+							}
+						}
+					}
+				}
+			},
+			"post": {
+				"tags": ["crm"],
+				"summary": "Adds a contact whose primary company is this organization.",
+				"operationId": "create_contact",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/ContactInput"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"201": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Contact"
+								}
+							}
+						}
+					},
+					"422": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
 		"/api/v1/orgs/{id}/modules": {
 			"get": {
 				"tags": ["modules"],
@@ -4843,6 +5224,92 @@
 				],
 				"responses": {
 					"204": {}
+				}
+			}
+		},
+		"/api/v1/orgs/{id}/sites": {
+			"get": {
+				"tags": ["crm"],
+				"summary": "An organization's sites, the primary one first.",
+				"operationId": "list_sites",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					},
+					{
+						"name": "includeArchived",
+						"in": "query",
+						"required": false,
+						"schema": {
+							"type": "boolean"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "array",
+									"items": {
+										"$ref": "#/components/schemas/Site"
+									}
+								}
+							}
+						}
+					}
+				}
+			},
+			"post": {
+				"tags": ["crm"],
+				"summary": "Adds a site. An organization's first site is its primary one.",
+				"operationId": "create_site",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/SiteInput"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"201": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Site"
+								}
+							}
+						}
+					},
+					"422": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
 				}
 			}
 		},
@@ -6892,6 +7359,126 @@
 						"name": "token_id",
 						"in": "path",
 						"description": "Token id",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"responses": {
+					"204": {},
+					"404": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/sites/{id}": {
+			"get": {
+				"tags": ["crm"],
+				"operationId": "get_site",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Site"
+								}
+							}
+						}
+					},
+					"404": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			},
+			"put": {
+				"tags": ["crm"],
+				"summary": "Changes a site. Send back the `version` you read.",
+				"operationId": "update_site",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/SiteInput"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Site"
+								}
+							}
+						}
+					},
+					"409": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					},
+					"422": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			},
+			"delete": {
+				"tags": ["crm"],
+				"summary": "Archives a site.",
+				"operationId": "archive_site",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
 						"required": true,
 						"schema": {
 							"type": "string",
@@ -9655,6 +10242,69 @@
 				"description": "A column's type.",
 				"enum": ["text", "integer", "number", "boolean", "timestamp", "date", "json", "uuid"]
 			},
+			"Company": {
+				"type": "object",
+				"required": ["orgId", "relationship", "status", "version"],
+				"properties": {
+					"notes": {
+						"type": ["string", "null"]
+					},
+					"orgId": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"phone": {
+						"type": ["string", "null"]
+					},
+					"relationship": {
+						"type": "string",
+						"description": "`client`, `vendor`, `partner` or `prospect`."
+					},
+					"status": {
+						"type": "string",
+						"description": "`active`, `inactive`, `onboarding` or `offboarding`."
+					},
+					"updatedAt": {
+						"type": ["string", "null"],
+						"format": "date-time"
+					},
+					"version": {
+						"type": "integer",
+						"format": "int32",
+						"description": "0 until the details are first saved. Send it back when updating."
+					},
+					"website": {
+						"type": ["string", "null"]
+					}
+				}
+			},
+			"CompanyInput": {
+				"type": "object",
+				"required": ["relationship", "status", "version"],
+				"properties": {
+					"notes": {
+						"type": ["string", "null"]
+					},
+					"phone": {
+						"type": ["string", "null"]
+					},
+					"relationship": {
+						"type": "string"
+					},
+					"status": {
+						"type": "string"
+					},
+					"version": {
+						"type": "integer",
+						"format": "int32",
+						"description": "The version you read (0 if never saved)."
+					},
+					"website": {
+						"type": ["string", "null"]
+					}
+				},
+				"additionalProperties": false
+			},
 			"ConfirmPasswordResetRequest": {
 				"type": "object",
 				"required": ["token", "newPassword"],
@@ -9849,6 +10499,198 @@
 					"updatedAt": {
 						"type": "string",
 						"format": "date-time"
+					}
+				}
+			},
+			"Contact": {
+				"type": "object",
+				"required": [
+					"id",
+					"orgId",
+					"firstName",
+					"lastName",
+					"name",
+					"externalIds",
+					"customFields",
+					"companies",
+					"version",
+					"createdAt",
+					"updatedAt"
+				],
+				"properties": {
+					"archivedAt": {
+						"type": ["string", "null"],
+						"format": "date-time"
+					},
+					"companies": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/ContactCompany"
+						},
+						"description": "Every company, the primary one first."
+					},
+					"createdAt": {
+						"type": "string",
+						"format": "date-time"
+					},
+					"customFields": {
+						"type": "object",
+						"additionalProperties": {},
+						"propertyNames": {
+							"type": "string"
+						}
+					},
+					"email": {
+						"type": ["string", "null"]
+					},
+					"externalIds": {
+						"type": "object",
+						"description": "Identities elsewhere, e.g. `{\"entra\": \"<object id>\"}`.",
+						"additionalProperties": {
+							"type": "string"
+						},
+						"propertyNames": {
+							"type": "string"
+						}
+					},
+					"firstName": {
+						"type": "string"
+					},
+					"id": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"lastName": {
+						"type": "string"
+					},
+					"mobile": {
+						"type": ["string", "null"]
+					},
+					"name": {
+						"type": "string",
+						"description": "First and last name together."
+					},
+					"orgId": {
+						"type": "string",
+						"format": "uuid",
+						"description": "The primary company."
+					},
+					"phone": {
+						"type": ["string", "null"]
+					},
+					"siteId": {
+						"type": ["string", "null"],
+						"format": "uuid"
+					},
+					"updatedAt": {
+						"type": "string",
+						"format": "date-time"
+					},
+					"version": {
+						"type": "integer",
+						"format": "int32"
+					}
+				}
+			},
+			"ContactCompaniesInput": {
+				"type": "object",
+				"description": "A contact's companies.",
+				"required": ["companies", "version"],
+				"properties": {
+					"companies": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/ContactCompany"
+						},
+						"description": "Every company, exactly one of them primary."
+					},
+					"version": {
+						"type": "integer",
+						"format": "int32",
+						"description": "The contact's version you read."
+					}
+				},
+				"additionalProperties": false
+			},
+			"ContactCompany": {
+				"type": "object",
+				"description": "One of a contact's companies.",
+				"required": ["orgId"],
+				"properties": {
+					"isPrimary": {
+						"type": "boolean"
+					},
+					"jobTitle": {
+						"type": ["string", "null"]
+					},
+					"orgId": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"orgName": {
+						"type": "string",
+						"description": "The company's name (ignored when setting links)."
+					}
+				}
+			},
+			"ContactInput": {
+				"type": "object",
+				"properties": {
+					"email": {
+						"type": ["string", "null"]
+					},
+					"externalIds": {
+						"type": ["object", "null"],
+						"additionalProperties": {
+							"type": "string"
+						},
+						"propertyNames": {
+							"type": "string"
+						}
+					},
+					"firstName": {
+						"type": "string"
+					},
+					"jobTitle": {
+						"type": ["string", "null"],
+						"description": "The job title at the primary company."
+					},
+					"lastName": {
+						"type": "string"
+					},
+					"mobile": {
+						"type": ["string", "null"]
+					},
+					"phone": {
+						"type": ["string", "null"]
+					},
+					"siteId": {
+						"type": ["string", "null"],
+						"format": "uuid",
+						"description": "A site of the primary company."
+					},
+					"version": {
+						"type": ["integer", "null"],
+						"format": "int32",
+						"description": "The version you read (updates only)."
+					}
+				},
+				"additionalProperties": false
+			},
+			"ContactPage": {
+				"type": "object",
+				"description": "A page of contacts.",
+				"required": ["items", "total"],
+				"properties": {
+					"items": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/Contact"
+						}
+					},
+					"total": {
+						"type": "integer",
+						"format": "int64"
 					}
 				}
 			},
@@ -13246,6 +14088,160 @@
 					}
 				}
 			},
+			"Site": {
+				"type": "object",
+				"required": [
+					"id",
+					"orgId",
+					"name",
+					"timezone",
+					"hours",
+					"isPrimary",
+					"customFields",
+					"version",
+					"createdAt",
+					"updatedAt"
+				],
+				"properties": {
+					"addressLine1": {
+						"type": ["string", "null"]
+					},
+					"addressLine2": {
+						"type": ["string", "null"]
+					},
+					"archivedAt": {
+						"type": ["string", "null"],
+						"format": "date-time"
+					},
+					"city": {
+						"type": ["string", "null"]
+					},
+					"country": {
+						"type": ["string", "null"],
+						"description": "ISO 3166-1 alpha-2, e.g. `GB`."
+					},
+					"createdAt": {
+						"type": "string",
+						"format": "date-time"
+					},
+					"customFields": {
+						"type": "object",
+						"additionalProperties": {},
+						"propertyNames": {
+							"type": "string"
+						}
+					},
+					"hours": {
+						"type": "object",
+						"description": "Opening hours per weekday: `{\"mon\": [[\"09:00\", \"17:00\"]], …}`. A\nmissing day is closed.",
+						"additionalProperties": {
+							"type": "array",
+							"items": {
+								"type": "array",
+								"items": {
+									"type": "string"
+								}
+							}
+						},
+						"propertyNames": {
+							"type": "string"
+						}
+					},
+					"id": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"isPrimary": {
+						"type": "boolean"
+					},
+					"name": {
+						"type": "string"
+					},
+					"orgId": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"phone": {
+						"type": ["string", "null"]
+					},
+					"postalCode": {
+						"type": ["string", "null"]
+					},
+					"region": {
+						"type": ["string", "null"]
+					},
+					"timezone": {
+						"type": "string",
+						"description": "IANA timezone, e.g. `Europe/London`."
+					},
+					"updatedAt": {
+						"type": "string",
+						"format": "date-time"
+					},
+					"version": {
+						"type": "integer",
+						"format": "int32"
+					}
+				}
+			},
+			"SiteInput": {
+				"type": "object",
+				"required": ["name"],
+				"properties": {
+					"addressLine1": {
+						"type": ["string", "null"]
+					},
+					"addressLine2": {
+						"type": ["string", "null"]
+					},
+					"city": {
+						"type": ["string", "null"]
+					},
+					"country": {
+						"type": ["string", "null"]
+					},
+					"hours": {
+						"type": ["object", "null"],
+						"additionalProperties": {
+							"type": "array",
+							"items": {
+								"type": "array",
+								"items": {
+									"type": "string"
+								}
+							}
+						},
+						"propertyNames": {
+							"type": "string"
+						}
+					},
+					"isPrimary": {
+						"type": "boolean"
+					},
+					"name": {
+						"type": "string"
+					},
+					"phone": {
+						"type": ["string", "null"]
+					},
+					"postalCode": {
+						"type": ["string", "null"]
+					},
+					"region": {
+						"type": ["string", "null"]
+					},
+					"timezone": {
+						"type": ["string", "null"],
+						"description": "IANA timezone; defaults to UTC."
+					},
+					"version": {
+						"type": ["integer", "null"],
+						"format": "int32",
+						"description": "The version you read (updates only)."
+					}
+				},
+				"additionalProperties": false
+			},
 			"SqlRequest": {
 				"type": "object",
 				"required": ["query"],
@@ -14454,6 +15450,10 @@
 		{
 			"name": "orgs",
 			"description": "The organization tree"
+		},
+		{
+			"name": "crm",
+			"description": "Company details, sites and contacts (the crm module)"
 		},
 		{
 			"name": "users",

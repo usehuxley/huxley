@@ -16,11 +16,11 @@ use tower_http::trace::TraceLayer;
 
 use crate::{
     ApiError, AppState, ai_routes, approval_routes, assistant_routes, audit_routes, auth_routes,
-    connection_routes, csrf, dataset_routes, entity_routes, form_routes, health, hook_routes,
-    integration_routes, mcp, mfa_routes, module_routes, notification_routes, oauth_routes, openapi,
-    org_routes, pack_routes, passkey_routes, public_form_routes, runner_routes, script_routes,
-    security_routes, sso_routes, team_routes, template_routes, token_routes, user_routes,
-    variable_routes, workflow_routes,
+    connection_routes, crm_routes, csrf, dataset_routes, entity_routes, form_routes, health,
+    hook_routes, integration_routes, mcp, mfa_routes, module_routes, notification_routes,
+    oauth_routes, openapi, org_routes, pack_routes, passkey_routes, public_form_routes,
+    runner_routes, script_routes, security_routes, sso_routes, team_routes, template_routes,
+    token_routes, user_routes, variable_routes, workflow_routes,
 };
 
 const REQUEST_ID: HeaderName = HeaderName::from_static("x-request-id");
@@ -49,7 +49,11 @@ pub fn router(state: AppState) -> Router {
         .nest("/oauth", oauth_routes::consent_routes())
         .nest("/service-accounts", token_routes::service_account_routes())
         .nest("/security/sso/providers", sso_routes::admin_routes())
-        .nest("/orgs", org_routes::routes())
+        .nest(
+            "/orgs",
+            org_routes::routes().merge(crm_routes::org_routes()),
+        )
+        .merge(crm_routes::record_routes())
         .nest("/audit", audit_routes::routes())
         .nest("/modules", module_routes::routes())
         .nest("/teams", team_routes::routes())
