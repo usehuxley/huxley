@@ -101,6 +101,32 @@ fn is_lookup_pending(e: &Json) -> bool {
     e["kind"] == LOOKUP_PENDING
 }
 
+/// A `script` step's input, before expressions.
+fn script_input(s: &huxley_hwf::ScriptStep) -> Json {
+    let mut value = json!({ "script": s.script, "with": s.inputs });
+    if !s.env.is_empty() {
+        value["env"] = json!(s.env);
+    }
+    if !s.connections.is_empty() {
+        value["connections"] = json!(s.connections);
+    }
+    value
+}
+
+/// An `approval` step's input: it expires `expires` after `now`.
+fn approval_input(s: &huxley_hwf::ApprovalStep, now: OffsetDateTime) -> Json {
+    // Validation checked `expires`; fall back to the default.
+    let expires = huxley_hwf::duration::parse(s.expires.as_deref().unwrap_or("7d"))
+        .or_else(|| huxley_hwf::duration::parse("7d"))
+        .unwrap_or_default();
+    json!({
+        "title": s.title,
+        "message": s.message,
+        "approvers": s.approvers,
+        "expires_at": (now + expires).format(&Rfc3339).unwrap_or_default(),
+    })
+}
+
 /// An `integration.action` step's input, before expressions.
 fn action_input(s: &huxley_hwf::IntegrationActionStep) -> Json {
     let mut value = json!({ "action": s.action, "connection": s.connection, "inputs": s.inputs });
@@ -364,6 +390,11 @@ impl<'a> Walker<'a> {
             | Step::TicketFromEmail(_)
             | Step::MailFetch(_)
             | Step::TicketEmailReply(_)
+            | Step::TicketCreate(_)
+            | Step::TicketGet(_)
+            | Step::TicketFind(_)
+            | Step::TicketUpdate(_)
+            | Step::TicketNote(_)
             | Step::AiPrompt(_)
             | Step::AiClassify(_)
             | Step::AiExtract(_) => self.external(step, &with_block(step), frame),
@@ -372,27 +403,9 @@ impl<'a> Walker<'a> {
                 self.external(step, &value, frame)
             }
             Step::WaitForCallback(s) => self.callback_step(step, s, frame),
-            Step::Script(s) => {
-                let mut value = json!({ "script": s.script, "with": s.inputs });
-                if !s.env.is_empty() {
-                    value["env"] = json!(s.env);
-                }
-                if !s.connections.is_empty() {
-                    value["connections"] = json!(s.connections);
-                }
-                self.external(step, &value, frame)
-            }
+            Step::Script(s) => self.external(step, &script_input(s), frame),
             Step::Approval(s) => {
-                // Validation checked `expires`; fall back to the default.
-                let expires = huxley_hwf::duration::parse(s.expires.as_deref().unwrap_or("7d"))
-                    .or_else(|| huxley_hwf::duration::parse("7d"))
-                    .unwrap_or_default();
-                let value = json!({
-                    "title": s.title,
-                    "message": s.message,
-                    "approvers": s.approvers,
-                    "expires_at": (self.now + expires).format(&Rfc3339).unwrap_or_default(),
-                });
+                let value = approval_input(s, self.now);
                 self.external(step, &value, frame)
             }
             Step::IntegrationAction(s) => self.external(step, &action_input(s), frame),
@@ -825,6 +838,11 @@ fn with_block(step: &Step) -> Json {
         Step::TicketFromEmail(s) => serde_json::to_value(&s.email),
         Step::MailFetch(s) => serde_json::to_value(&s.fetch),
         Step::TicketEmailReply(s) => serde_json::to_value(&s.reply),
+        Step::TicketCreate(s) => serde_json::to_value(&s.ticket),
+        Step::TicketGet(s) => serde_json::to_value(&s.ticket),
+        Step::TicketFind(s) => serde_json::to_value(&s.ticket),
+        Step::TicketUpdate(s) => serde_json::to_value(&s.ticket),
+        Step::TicketNote(s) => serde_json::to_value(&s.ticket),
         Step::AiPrompt(s) => serde_json::to_value(&s.ai),
         Step::AiClassify(s) => serde_json::to_value(&s.ai),
         Step::AiExtract(s) => serde_json::to_value(&s.ai),

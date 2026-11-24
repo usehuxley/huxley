@@ -228,6 +228,14 @@ impl Engine {
                 .crm_step(step.type_name(), org_id, input, record.tainted)
                 .await
                 .into(),
+            Step::TicketCreate(_)
+            | Step::TicketGet(_)
+            | Step::TicketFind(_)
+            | Step::TicketUpdate(_)
+            | Step::TicketNote(_) => self
+                .ticket_step(step.type_name(), org_id, input, record.tainted)
+                .await
+                .into(),
             Step::MailFetch(_) | Step::TicketFromEmail(_) | Step::TicketEmailReply(_) => {
                 self.desk_step(step.type_name(), org_id, input).await.into()
             }

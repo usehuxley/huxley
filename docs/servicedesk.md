@@ -201,6 +201,10 @@ The email goes out through the instance's mail server (`email.smtp_url`), with t
 
 **Tickets as records.** Tickets now also take attachments, custom fields and tags, like organizations and contacts do.
 
+## In workflows
+
+Workflows can open, read, find and update tickets and add notes, with the `core.ticket.*` steps (see [workflows.md](workflows.md)). Like the other record steps, they work with the run's organization and those below it. They refuse to write values derived from secrets.
+
 ## Permissions
 
 | Permission | Allows | Built-in roles |
@@ -227,4 +231,4 @@ The email goes out through the instance's mail server (`email.smtp_url`), with t
 
 ## Coming next
 
-Microsoft 365 mailboxes, sending through a mailbox's own server, mailbox screens, holidays in business hours, time entries, merging and linking tickets, templates, saved views, and workflow steps for tickets.
+Microsoft 365 mailboxes, sending through a mailbox's own server, holidays in business hours, time entries, merging and linking tickets, templates, saved views, and dispatch (assigning tickets automatically).

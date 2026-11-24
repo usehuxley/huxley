@@ -30,7 +30,7 @@ fn internal(e: impl std::fmt::Display) -> Json {
 
 impl Engine {
     /// Fails unless the `servicedesk` module is active at `org_id`.
-    async fn require_desk(&self, org_id: Uuid) -> Result<(), Json> {
+    pub(crate) async fn require_desk(&self, org_id: Uuid) -> Result<(), Json> {
         let mut tx = begin_scoped(self.db(), &OrgScope::System)
             .await
             .map_err(internal)?;

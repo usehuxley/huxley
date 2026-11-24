@@ -2370,6 +2370,321 @@
         },
         {
           "additionalProperties": false,
+          "description": "Open a ticket (the `servicedesk` module).",
+          "properties": {
+            "continue_on_error": {
+              "description": "Record the error as the step's output and carry on.",
+              "type": "boolean"
+            },
+            "description": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "id": {
+              "description": "Unique in the workflow: lowercase letters, digits, underscores.\nOther steps read this step's output as `steps.<id>.output`.",
+              "type": "string"
+            },
+            "if": {
+              "description": "Skip the step unless this expression is true.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "name": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "retry": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/RetryPolicy"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "timeout": {
+              "description": "Fail the attempt after this long, e.g. `30s`.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "type": {
+              "const": "core.ticket.create",
+              "type": "string"
+            },
+            "with": {
+              "$ref": "#/$defs/TicketCreate"
+            }
+          },
+          "required": [
+            "type",
+            "id",
+            "with"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Read a ticket, and optionally its notes (the `servicedesk` module).",
+          "properties": {
+            "continue_on_error": {
+              "description": "Record the error as the step's output and carry on.",
+              "type": "boolean"
+            },
+            "description": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "id": {
+              "description": "Unique in the workflow: lowercase letters, digits, underscores.\nOther steps read this step's output as `steps.<id>.output`.",
+              "type": "string"
+            },
+            "if": {
+              "description": "Skip the step unless this expression is true.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "name": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "retry": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/RetryPolicy"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "timeout": {
+              "description": "Fail the attempt after this long, e.g. `30s`.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "type": {
+              "const": "core.ticket.get",
+              "type": "string"
+            },
+            "with": {
+              "$ref": "#/$defs/TicketGet"
+            }
+          },
+          "required": [
+            "type",
+            "id",
+            "with"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Find tickets (the `servicedesk` module).",
+          "properties": {
+            "continue_on_error": {
+              "description": "Record the error as the step's output and carry on.",
+              "type": "boolean"
+            },
+            "description": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "id": {
+              "description": "Unique in the workflow: lowercase letters, digits, underscores.\nOther steps read this step's output as `steps.<id>.output`.",
+              "type": "string"
+            },
+            "if": {
+              "description": "Skip the step unless this expression is true.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "name": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "retry": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/RetryPolicy"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "timeout": {
+              "description": "Fail the attempt after this long, e.g. `30s`.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "type": {
+              "const": "core.ticket.find",
+              "type": "string"
+            },
+            "with": {
+              "$ref": "#/$defs/TicketFind"
+            }
+          },
+          "required": [
+            "type",
+            "id",
+            "with"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Change a ticket's fields or status (the `servicedesk` module).",
+          "properties": {
+            "continue_on_error": {
+              "description": "Record the error as the step's output and carry on.",
+              "type": "boolean"
+            },
+            "description": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "id": {
+              "description": "Unique in the workflow: lowercase letters, digits, underscores.\nOther steps read this step's output as `steps.<id>.output`.",
+              "type": "string"
+            },
+            "if": {
+              "description": "Skip the step unless this expression is true.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "name": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "retry": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/RetryPolicy"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "timeout": {
+              "description": "Fail the attempt after this long, e.g. `30s`.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "type": {
+              "const": "core.ticket.update",
+              "type": "string"
+            },
+            "with": {
+              "$ref": "#/$defs/TicketUpdate"
+            }
+          },
+          "required": [
+            "type",
+            "id",
+            "with"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Add a note to a ticket (the `servicedesk` module).",
+          "properties": {
+            "continue_on_error": {
+              "description": "Record the error as the step's output and carry on.",
+              "type": "boolean"
+            },
+            "description": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "id": {
+              "description": "Unique in the workflow: lowercase letters, digits, underscores.\nOther steps read this step's output as `steps.<id>.output`.",
+              "type": "string"
+            },
+            "if": {
+              "description": "Skip the step unless this expression is true.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "name": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "retry": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/RetryPolicy"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "timeout": {
+              "description": "Fail the attempt after this long, e.g. `30s`.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "type": {
+              "const": "core.ticket.note",
+              "type": "string"
+            },
+            "with": {
+              "$ref": "#/$defs/TicketNote"
+            }
+          },
+          "required": [
+            "type",
+            "id",
+            "with"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
           "description": "Fetch new mail from IMAP mailboxes (the `servicedesk` module).",
           "properties": {
             "continue_on_error": {
@@ -2704,6 +3019,33 @@
       ],
       "type": "object"
     },
+    "TicketCreate": {
+      "additionalProperties": false,
+      "description": "A ticket to open (`core.ticket.create`): at `org_id` (default: the run's\norganization), with `title` and optionally `description`, `type` (a\nticket type's key, default `incident`), `impact` and `urgency` (1 high …\n3 low), `priority` (`p1`…`p4`, instead of the matrix), `queue_id`,\n`requester_id` (a contact there), `assignee_user_id`,\n`assignee_team_id` and `source` (default `workflow`). The SLA applies as\nusual. Output: `{ ticket }`.",
+      "properties": {
+        "assignee_team_id": true,
+        "assignee_user_id": true,
+        "description": true,
+        "impact": true,
+        "org_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "priority": true,
+        "queue_id": true,
+        "requester_id": true,
+        "source": true,
+        "title": true,
+        "type": true,
+        "urgency": true
+      },
+      "required": [
+        "title"
+      ],
+      "type": "object"
+    },
     "TicketEmailReply": {
       "additionalProperties": false,
       "description": "A public note to email to its ticket's requester\n(`core.ticket.email_reply`), from the mailbox the ticket's mail came to\n(else the nearest one at its organization or above). The subject carries\nthe ticket's `[HX#…]` token and the message continues the email thread,\nso the requester's answer comes back to the ticket. Notes that aren't\nfor the requester (internal, written by them, already sent) are skipped.\nOutput: `{ sent: true, to, message_id }` or `{ sent: false, reason }`.",
@@ -2717,6 +3059,24 @@
       ],
       "type": "object"
     },
+    "TicketFind": {
+      "additionalProperties": false,
+      "description": "Tickets to find (`core.ticket.find`) among the run's organization and\nthose below it (or `org_id`'s): by `queue_id`, `assignee` (a person's\nid, or `none`), `state` (`open`, the default, `resolved`, `closed` or\n`all`) and `search` (title or number), most urgent first, at most\n`limit` (default 50). Output: `{ tickets, total }`.",
+      "properties": {
+        "assignee": true,
+        "limit": true,
+        "org_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "queue_id": true,
+        "search": true,
+        "state": true
+      },
+      "type": "object"
+    },
     "TicketFromEmail": {
       "additionalProperties": false,
       "description": "A received email to turn into ticket work (`core.ticket.from_email`):\nskipped if it's automatic mail or a loop, added as a reply to the ticket\nit belongs to (by its `[HX#…]` subject token or the messages it answers;\na resolved ticket reopens), or opened as a new ticket for its sender, per\nits mailbox's rules. Its attachments go on the ticket. Output:\n`{ outcome, detail, ticket_id, created }`; `outcome` is `ticket_created`,\n`note_added`, `ticket_reopened`, `ignored_automatic`, `ignored_loop` or\n`ignored_unknown_sender`. Running it again for the same email changes\nnothing.",
@@ -2727,6 +3087,54 @@
       },
       "required": [
         "email_id"
+      ],
+      "type": "object"
+    },
+    "TicketGet": {
+      "additionalProperties": false,
+      "description": "A ticket to read (`core.ticket.get`), with its notes if `notes` is\ntrue. Output: `{ ticket, notes }`.",
+      "properties": {
+        "notes": true,
+        "ticket_id": true
+      },
+      "required": [
+        "ticket_id"
+      ],
+      "type": "object"
+    },
+    "TicketNote": {
+      "additionalProperties": false,
+      "description": "A note to add (`core.ticket.note`): `body`, and `kind`: `internal` (the\ndefault), `public` or `resolution`. Output: `{ note }`.",
+      "properties": {
+        "body": true,
+        "kind": true,
+        "ticket_id": true
+      },
+      "required": [
+        "ticket_id",
+        "body"
+      ],
+      "type": "object"
+    },
+    "TicketUpdate": {
+      "additionalProperties": false,
+      "description": "Changes to a ticket (`core.ticket.update`): any of `title`,\n`description`, `impact`, `urgency`, `priority` (or `auto`), and\n`queue_id`, `requester_id`, `assignee_user_id`, `assignee_team_id`\n(`null` clears); then `status` (a status's key), with `resolution` where\nthe status needs one. Applied to the ticket as it is now. Output:\n`{ ticket }`.",
+      "properties": {
+        "assignee_team_id": true,
+        "assignee_user_id": true,
+        "description": true,
+        "impact": true,
+        "priority": true,
+        "queue_id": true,
+        "requester_id": true,
+        "resolution": true,
+        "status": true,
+        "ticket_id": true,
+        "title": true,
+        "urgency": true
+      },
+      "required": [
+        "ticket_id"
       ],
       "type": "object"
     },
