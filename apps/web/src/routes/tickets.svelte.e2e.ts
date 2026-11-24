@@ -114,4 +114,48 @@ test.describe('service desk', () => {
 		await expect(page).toHaveURL(/view=resolved/);
 		await expect(page.getByRole('link', { name: title })).toBeVisible();
 	});
+
+	test('an SLA policy is set up and chosen for a client', async ({ page }) => {
+		const stamp = Date.now().toString(36);
+		const client = `Chotchkie ${stamp}`;
+		const policy = `Gold ${stamp}`;
+		const orgId = await newClient(client);
+		await signIn(page);
+
+		// A round-the-clock policy with P3 targets.
+		await page.goto('/settings/sla');
+		await page.getByRole('button', { name: 'New policy' }).click();
+		const dialog = page.getByRole('dialog');
+		await dialog.getByLabel('Name').fill(policy);
+		await dialog.getByLabel('P3 first response').fill('soon');
+		await dialog.getByRole('radio', { name: /Around the clock/ }).check();
+		await dialog.getByRole('button', { name: 'Save policy' }).click();
+		await expect(page.getByText('Some targets are not durations.').first()).toBeVisible();
+		await dialog.getByLabel('P3 first response').fill('2h');
+		await dialog.getByLabel('P3 resolution').fill('1d');
+		await dialog.getByRole('button', { name: 'Save policy' }).click();
+		await expect(page.getByText('Policy saved.')).toBeVisible();
+		const targets = page.getByRole('table', { name: `${policy} targets` });
+		await expect(targets.getByRole('row', { name: /P3 2h 24h/ })).toBeVisible();
+
+		// Chosen for the client on its settings page.
+		await page.goto(`/settings/organizations/${orgId}`);
+		await expect(page.getByText(/Follows the default/)).toBeVisible();
+		const card = page
+			.locator('section')
+			.filter({ has: page.getByRole('heading', { name: 'SLA policy', exact: true }) });
+		await card.getByLabel('Policy').selectOption({ label: policy });
+		await card.getByRole('button', { name: 'Save' }).click();
+		await expect(page.getByText('SLA policy set.')).toBeVisible();
+
+		// A new ticket there is opened under it.
+		await page.goto(`/tickets/new?org=${orgId}`);
+		await page.getByLabel('Title').fill(`Flair ${stamp}`);
+		await page.getByRole('button', { name: 'Create ticket' }).click();
+		const sla = page
+			.locator('section')
+			.filter({ has: page.getByRole('heading', { name: 'SLA', exact: true }) });
+		await expect(sla.getByText(policy)).toBeVisible();
+		await expect(sla.getByText(/Due in (1|2) hours?/)).toBeVisible();
+	});
 });

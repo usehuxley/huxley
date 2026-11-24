@@ -10,6 +10,7 @@
 
 	let { data, form }: PageProps = $props();
 	let canEdit = $derived(data.user.grantedPermissions.includes('org:update'));
+	let canConfigureDesk = $derived(data.user.grantedPermissions.includes('servicedesk:configure'));
 	let canManageModules = $derived(data.user.grantedPermissions.includes('platform:modules:manage'));
 	let fieldErrors = $derived(
 		(form && 'fieldErrors' in form ? form.fieldErrors : {}) as Record<string, string>
@@ -208,6 +209,49 @@
 					</li>
 				{/each}
 			</ul>
+		</Card>
+	{/if}
+
+	{#if data.sla}
+		{@const sla = data.sla}
+		<Card
+			title="SLA policy"
+			description="The service desk targets for tickets here and in the organizations below."
+		>
+			<form
+				method="POST"
+				action="?/sla"
+				class="flex flex-wrap items-end gap-2"
+				use:enhance={notify}
+			>
+				<Field
+					label="Policy"
+					for="sla-policy"
+					hint={sla.policyId
+						? 'Set here.'
+						: sla.source === 'above'
+							? `Follows ${sla.effectivePolicyName} from an organization above.`
+							: `Follows the default, ${sla.effectivePolicyName}.`}
+				>
+					<Select
+						id="sla-policy"
+						name="policyId"
+						value={sla.policyId ?? ''}
+						disabled={!canConfigureDesk}
+						options={[
+							{
+								value: '',
+								label:
+									sla.source === 'here'
+										? 'Follow the one above'
+										: `Follow ${sla.effectivePolicyName}`
+							},
+							...data.slaPolicies.map((p) => ({ value: p.id, label: p.name }))
+						]}
+					/>
+				</Field>
+				{#if canConfigureDesk}<Button type="submit">Save</Button>{/if}
+			</form>
 		</Card>
 	{/if}
 

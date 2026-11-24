@@ -10,8 +10,8 @@ export const load: PageServerLoad = async (event) => {
 	const client = api(event);
 	const id = event.params.id;
 	const path = { params: { path: { entity_type: 'organization', id } } };
-	const [org, fields, tags, allTags, attachments, settings, modules, variables] = await Promise.all(
-		[
+	const [org, fields, tags, allTags, attachments, settings, modules, variables, sla, policies] =
+		await Promise.all([
 			client.GET('/api/v1/orgs/{id}', { params: { path: { id } } }),
 			client.GET('/api/v1/entities/{entity_type}/{id}/fields', path),
 			client.GET('/api/v1/entities/{entity_type}/{id}/tags', path),
@@ -19,9 +19,11 @@ export const load: PageServerLoad = async (event) => {
 			client.GET('/api/v1/entities/{entity_type}/{id}/attachments', path),
 			client.GET('/api/v1/orgs/{id}/settings', { params: { path: { id } } }),
 			client.GET('/api/v1/orgs/{id}/modules', { params: { path: { id } } }),
-			client.GET('/api/v1/orgs/{id}/variables', { params: { path: { id } } })
-		]
-	);
+			client.GET('/api/v1/orgs/{id}/variables', { params: { path: { id } } }),
+			// Both 404 where the service desk is off.
+			client.GET('/api/v1/orgs/{id}/sla', { params: { path: { id } } }),
+			client.GET('/api/v1/servicedesk/sla-policies')
+		]);
 	if (org.response.status === 404) error(404, 'Organization not found.');
 	if (!org.data || !fields.data || !tags.data) error(503, 'Could not load the organization.');
 	return {
@@ -32,7 +34,9 @@ export const load: PageServerLoad = async (event) => {
 		attachments: attachments.data ?? [],
 		settings: settings.data ?? [],
 		modules: modules.data ?? [],
-		variables: variables.data ?? null
+		variables: variables.data ?? null,
+		sla: sla.data ?? null,
+		slaPolicies: policies.data ?? []
 	};
 };
 
@@ -131,6 +135,20 @@ export const actions: Actions = {
 		return { message: 'Removed.' };
 	},
 
+	sla: async (event) => {
+		const form = await event.request.formData();
+		const policyId = formString(form, 'policyId') || null;
+		const { error: problem, response } = await api(event).PUT('/api/v1/orgs/{id}/sla', {
+			params: { path: { id: event.params.id } },
+			body: { policyId }
+		});
+		if (response.status !== 200) {
+			return fail(response.status, {
+				message: problemMessage(problem, 'Could not set the SLA policy.')
+			});
+		}
+		return { message: policyId ? 'SLA policy set.' : 'Follows the policy above now.' };
+	},
 	module: async (event) => {
 		const form = await event.request.formData();
 		const key = formString(form, 'key');

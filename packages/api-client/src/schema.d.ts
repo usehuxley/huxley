@@ -5155,7 +5155,9 @@ export interface components {
 		Policy: {
 			description: string;
 			/** @description `{"mon": [["09:00", "17:00"]], …}`. */
-			hours: Record<string, never>;
+			hours: {
+				[key: string]: string[][];
+			};
 			/** @description `client_site`, `policy` or `always`. */
 			hoursSource: string;
 			/** Format: uuid */
@@ -5173,7 +5175,10 @@ export interface components {
 		};
 		PolicyInput: {
 			description?: string | null;
-			hours?: Record<string, never> | null;
+			/** @description `{"mon": [["09:00", "17:00"]], …}`. */
+			hours?: {
+				[key: string]: string[][];
+			} | null;
 			/** @description `client_site` (default), `policy` or `always`. */
 			hoursSource?: string | null;
 			/** @description Make it the default policy. */

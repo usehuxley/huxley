@@ -13813,7 +13813,19 @@
 					},
 					"hours": {
 						"type": "object",
-						"description": "`{\"mon\": [[\"09:00\", \"17:00\"]], …}`."
+						"description": "`{\"mon\": [[\"09:00\", \"17:00\"]], …}`.",
+						"additionalProperties": {
+							"type": "array",
+							"items": {
+								"type": "array",
+								"items": {
+									"type": "string"
+								}
+							}
+						},
+						"propertyNames": {
+							"type": "string"
+						}
 					},
 					"hoursSource": {
 						"type": "string",
@@ -13857,7 +13869,20 @@
 						"type": ["string", "null"]
 					},
 					"hours": {
-						"type": ["object", "null"]
+						"type": ["object", "null"],
+						"description": "`{\"mon\": [[\"09:00\", \"17:00\"]], …}`.",
+						"additionalProperties": {
+							"type": "array",
+							"items": {
+								"type": "array",
+								"items": {
+									"type": "string"
+								}
+							}
+						},
+						"propertyNames": {
+							"type": "string"
+						}
 					},
 					"hoursSource": {
 						"type": ["string", "null"],
