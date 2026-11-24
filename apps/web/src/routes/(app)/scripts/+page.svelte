@@ -15,7 +15,7 @@
 	const languages = [
 		{ value: 'pwsh', label: 'PowerShell 7' },
 		{ value: 'python', label: 'Python 3' },
-		{ value: 'javascript', label: 'JavaScript (Deno)' }
+		{ value: 'javascript', label: 'JavaScript (Node.js)' }
 	];
 	const languageLabel = (l: string) =>
 		l === 'pwsh' ? 'PowerShell' : l === 'javascript' ? 'JavaScript' : 'Python';

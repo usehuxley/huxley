@@ -120,62 +120,67 @@ if os.environ.get("HUXLEY_RESULT_MARKER"):
 
 /// The PowerShell side of the egress relay: 127.0.0.1:3128 to the proxy's
 /// socket (Python's is in its wrapper).
-pub(crate) const JS_WRAPPER: &str = r#"// Huxley's wrapper for JavaScript scripts (Deno).
+pub(crate) const JS_WRAPPER: &str = r#"// Huxley's wrapper for JavaScript scripts (Node.js).
+import fs from "node:fs";
+import net from "node:net";
+
 const SOCKET = "/huxley/net/proxy.sock";
 
-async function pump(from, to) {
-  try { await from.readable.pipeTo(to.writable); } catch { /* the other side closed */ }
+// Scripts' HTTP(S) goes to a proxy on 127.0.0.1:3128 (fetch uses it:
+// NODE_USE_ENV_PROXY), relayed to the runner's egress proxy over a unix
+// socket: the container has no network.
+if (fs.existsSync(SOCKET)) {
+  const relay = net.createServer((client) => {
+    const upstream = net.connect({ path: SOCKET });
+    upstream.on("error", () => client.destroy());
+    client.on("error", () => upstream.destroy());
+    client.pipe(upstream);
+    upstream.pipe(client);
+  });
+  await new Promise((resolve, reject) => {
+    relay.once("error", reject);
+    relay.listen(3128, "127.0.0.1", resolve);
+  });
+  relay.unref();
 }
-
-// Scripts' HTTP(S) goes to a proxy on 127.0.0.1:3128, relayed to the
-// runner's egress proxy over a unix socket (the container has no network).
-try {
-  Deno.statSync(SOCKET);
-  const listener = Deno.listen({ hostname: "127.0.0.1", port: 3128 });
-  (async () => {
-    for await (const client of listener) {
-      Deno.connect({ transport: "unix", path: SOCKET }).then(
-        (upstream) => { pump(client, upstream); pump(upstream, client); },
-        () => client.close(),
-      );
-    }
-  })();
-} catch { /* no egress */ }
 
 // Kubernetes: the pod's network policy may take a moment to apply. Hold
 // the script until a connection the policy forbids no longer gets through.
-const probe = Deno.env.get("HUXLEY_EGRESS_PROBE");
+const probe = process.env.HUXLEY_EGRESS_PROBE;
 if (probe) {
   const at = probe.lastIndexOf(":");
-  const hostname = probe.slice(0, at);
+  const host = probe.slice(0, at);
   const port = Number(probe.slice(at + 1));
+  const reachable = () =>
+    new Promise((resolve) => {
+      const socket = net.connect({ host, port });
+      const done = (open) => { socket.destroy(); resolve(open); };
+      socket.setTimeout(1000, () => done(false));
+      socket.once("connect", () => done(true));
+      socket.once("error", () => done(false));
+    });
   const deadline = Date.now() + 60_000;
-  while (true) {
-    const open = await Promise.race([
-      Deno.connect({ hostname, port }).then((c) => { c.close(); return true; }, () => false),
-      new Promise((resolve) => setTimeout(() => resolve(false), 1000)),
-    ]);
-    if (!open) break;
+  while (await reachable()) {
     if (Date.now() > deadline) {
       console.error("huxley: the network policy isn't in force; not running the script");
-      Deno.exit(97);
+      process.exit(97);
     }
     await new Promise((resolve) => setTimeout(resolve, 500));
   }
 }
 
-const inputs = JSON.parse(Deno.readTextFileSync("/huxley/in/inputs.json"));
+const inputs = JSON.parse(fs.readFileSync("/huxley/in/inputs.json", "utf8"));
 globalThis.inputs = inputs;
-const script = await import("file:///huxley/in/script.js");
+const script = await import("/huxley/in/script.mjs");
 // export default <value> or <async function(inputs)>; or globalThis.result.
 let value = script.default;
 if (typeof value === "function") value = await value(inputs);
 if (value === undefined) value = globalThis.result;
 const result = JSON.stringify(value === undefined ? null : value);
-Deno.writeTextFileSync("/huxley/out/result.json", result);
-const marker = Deno.env.get("HUXLEY_RESULT_MARKER");
+fs.writeFileSync("/huxley/out/result.json", result);
+const marker = process.env.HUXLEY_RESULT_MARKER;
 if (marker) console.log(marker + result);
-Deno.exit(0);
+process.exit(0);
 "#;
 
 /// A language's files and the command that runs them: the script's file
@@ -209,20 +214,19 @@ pub(crate) fn language(
             &["python3", "-I", "-u", "/huxley/in/wrapper.py"],
         )),
         "javascript" => Some((
-            "script.js",
-            "wrapper.js",
+            "script.mjs",
+            "wrapper.mjs",
             JS_WRAPPER,
             &[
-                "deno",
-                "run",
-                "--quiet",
-                "--no-prompt",
-                "--no-config",
-                "--allow-read=/huxley",
-                "--allow-write=/huxley/out,/huxley/net",
-                "--allow-env",
+                "node",
+                // Node's own permissions, inside the container's: the job's
+                // files, its result, the relay; no subprocesses.
+                "--permission",
+                "--allow-fs-read=/huxley/",
+                "--allow-fs-write=/huxley/out/",
                 "--allow-net",
-                "/huxley/in/wrapper.js",
+                "--disable-warning=ExperimentalWarning",
+                "/huxley/in/wrapper.mjs",
             ],
         )),
         _ => None,
@@ -233,10 +237,10 @@ pub(crate) fn language(
 pub(crate) const SCRIPT_FILES: &[&str] = &[
     "script.ps1",
     "script.py",
-    "script.js",
+    "script.mjs",
     "wrapper.ps1",
     "wrapper.py",
-    "wrapper.js",
+    "wrapper.mjs",
 ];
 
 pub(crate) const PWSH_RELAY: &str = r"using System.Net;
@@ -341,7 +345,7 @@ pub struct Podman {
     pub binary: String,
     pub pwsh_image: String,
     pub python_image: String,
-    pub deno_image: String,
+    pub node_image: String,
     pub memory: String,
     pub cpus: String,
     pub pids: u32,
@@ -356,7 +360,7 @@ impl Default for Podman {
             binary: "podman".into(),
             pwsh_image: "mcr.microsoft.com/powershell:7.5-alpine-3.20".into(),
             python_image: "docker.io/library/python:3.13-alpine".into(),
-            deno_image: "docker.io/denoland/deno:alpine-2.9.8".into(),
+            node_image: "docker.io/library/node:26.13.1-alpine".into(),
             memory: "512m".into(),
             cpus: "1".into(),
             pids: 256,
@@ -381,7 +385,7 @@ impl Podman {
     /// never trigger a pull). Returns the ones that failed.
     pub async fn pull(&self) -> Vec<String> {
         let mut failed = Vec::new();
-        for image in [&self.pwsh_image, &self.python_image, &self.deno_image] {
+        for image in [&self.pwsh_image, &self.python_image, &self.node_image] {
             let ok = Command::new(&self.binary)
                 .args(["pull", "--quiet", image])
                 .stdout(Stdio::null())
@@ -401,7 +405,7 @@ impl Podman {
         for (language, image) in [
             ("pwsh", &self.pwsh_image),
             ("python", &self.python_image),
-            ("javascript", &self.deno_image),
+            ("javascript", &self.node_image),
         ] {
             let present = Command::new(&self.binary)
                 .args(["image", "exists", image])
@@ -420,7 +424,7 @@ impl Podman {
         let image = match job.language.as_str() {
             "pwsh" => &self.pwsh_image,
             "python" => &self.python_image,
-            "javascript" => &self.deno_image,
+            "javascript" => &self.node_image,
             _ => return None,
         };
         let (_, _, _, command) = language(&job.language)?;
@@ -437,8 +441,9 @@ impl Podman {
             "--pull=never",
             "--tmpfs=/tmp:rw,nosuid,nodev,size=64m",
             "--env=HOME=/tmp",
-            // Plain logs (Deno colours its output otherwise).
             "--env=NO_COLOR=1",
+            // fetch() uses HTTP(S)_PROXY (the egress relay).
+            "--env=NODE_USE_ENV_PROXY=1",
             "--workdir=/tmp",
         ]
         .iter()
@@ -721,6 +726,19 @@ fn permissions(_: &Path, _: u32) -> std::io::Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn every_languages_files_are_listed() {
+        for name in ["pwsh", "python", "javascript"] {
+            let (script, wrapper, _, command) = language(name).unwrap();
+            assert!(SCRIPT_FILES.contains(&script), "{name}: {script}");
+            assert!(SCRIPT_FILES.contains(&wrapper), "{name}: {wrapper}");
+            assert!(
+                command.iter().any(|c| c.ends_with(wrapper)),
+                "{name} runs its wrapper"
+            );
+        }
+    }
 
     #[test]
     fn the_sandbox_is_locked_down() {

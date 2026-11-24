@@ -62,7 +62,7 @@ jobs:
         run: |
           podman version
           podman pull -q docker.io/library/python:3.13-alpine
-          podman pull -q docker.io/denoland/deno:alpine-2.9.8
+          podman pull -q docker.io/library/node:26.13.1-alpine
           podman pull -q mcr.microsoft.com/powershell:7.5-alpine-3.20
       - run: cargo nextest run --workspace --locked --profile ci
       - run: cargo test --workspace --locked --doc

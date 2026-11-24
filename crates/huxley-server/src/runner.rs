@@ -99,10 +99,10 @@ pub struct SandboxArgs {
     python_image: String,
     #[arg(
         long,
-        env = "HUXLEY_RUNNER_DENO_IMAGE",
-        default_value = "docker.io/denoland/deno:alpine-2.9.8"
+        env = "HUXLEY_RUNNER_NODE_IMAGE",
+        default_value = "docker.io/library/node:26.13.1-alpine"
     )]
-    deno_image: String,
+    node_image: String,
     /// Memory per script container.
     #[arg(long, env = "HUXLEY_RUNNER_MEMORY", default_value = "512m")]
     memory: String,
@@ -254,7 +254,7 @@ impl SandboxArgs {
             namespace,
             pwsh_image: self.pwsh_image.clone(),
             python_image: self.python_image.clone(),
-            deno_image: self.deno_image.clone(),
+            node_image: self.node_image.clone(),
             memory: kube_memory(&self.memory),
             cpus: self.cpus.clone(),
             runtime_class: self.kubernetes.runtime_class.clone(),
@@ -272,7 +272,7 @@ impl SandboxArgs {
             binary: self.podman.clone(),
             pwsh_image: self.pwsh_image.clone(),
             python_image: self.python_image.clone(),
-            deno_image: self.deno_image.clone(),
+            node_image: self.node_image.clone(),
             memory: self.memory.clone(),
             cpus: self.cpus.clone(),
             egress: (!self.no_network).then(|| self.egress.policy()),
@@ -346,7 +346,7 @@ async fn prepare(args: &SandboxArgs) -> anyhow::Result<(Sandbox, Vec<String>)> {
             "no script images are present: pull {}, {} and/or {} with podman",
             podman.pwsh_image,
             podman.python_image,
-            podman.deno_image
+            podman.node_image
         );
     }
     Ok((Sandbox::Podman(podman), languages))

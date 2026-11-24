@@ -53,7 +53,7 @@ pub enum Language {
     Pwsh,
     /// Python 3.
     Python,
-    /// JavaScript (or TypeScript), run with Deno.
+    /// JavaScript, run with Node.js.
     Javascript,
 }
 

@@ -39,7 +39,7 @@ pub struct Kubernetes {
     pub namespace: String,
     pub pwsh_image: String,
     pub python_image: String,
-    pub deno_image: String,
+    pub node_image: String,
     pub memory: String,
     pub cpus: String,
     /// e.g. `gvisor`, when the cluster has it.
@@ -185,7 +185,7 @@ impl Kubernetes {
         match language {
             "pwsh" => Some(&self.pwsh_image),
             "python" => Some(&self.python_image),
-            "javascript" => Some(&self.deno_image),
+            "javascript" => Some(&self.node_image),
             _ => None,
         }
     }
@@ -198,6 +198,7 @@ impl Kubernetes {
         let mut env = vec![
             json!({ "name": "HOME", "value": "/tmp" }),
             json!({ "name": "NO_COLOR", "value": "1" }),
+            json!({ "name": "NODE_USE_ENV_PROXY", "value": "1" }),
             json!({ "name": "HUXLEY_RESULT_MARKER", "value": marker }),
             // The API server: the policy forbids it, so reaching it means
             // the policy isn't in force for this pod yet.

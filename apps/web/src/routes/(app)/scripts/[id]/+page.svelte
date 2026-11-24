@@ -44,7 +44,7 @@
 			<span class="font-mono">{script.key}</span> · {script.language === 'pwsh'
 				? 'PowerShell 7'
 				: script.language === 'javascript'
-					? 'JavaScript (Deno)'
+					? 'JavaScript (Node.js)'
 					: 'Python 3'}
 			· version {script.currentVersion}
 		</p>

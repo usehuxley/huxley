@@ -311,7 +311,7 @@ fn javascript(source: &str, inputs: serde_json::Value) -> Job {
 }
 
 #[tokio::test]
-async fn javascript_scripts_run_with_deno() {
+async fn javascript_scripts_run_with_node() {
     let Some(podman) = podman("javascript").await else {
         return;
     };
@@ -328,6 +328,11 @@ async fn javascript_scripts_run_with_deno() {
         Some(json!({ "greeting": "hi ada", "typed": "string" }))
     );
     assert!(outcome.logs.contains("hello ada"));
+    assert!(
+        !outcome.logs.contains("ExperimentalWarning"),
+        "{}",
+        outcome.logs
+    );
     // Or globalThis.result.
     let outcome = podman
         .run(&javascript("globalThis.result = [1, 2, 3];", json!({})))
@@ -338,7 +343,7 @@ async fn javascript_scripts_run_with_deno() {
         .run(&javascript("throw new Error('nope');", json!({})))
         .await;
     assert!(!failed.succeeded);
-    assert!(failed.logs.contains("nope"), "{failed:?}");
+    assert!(failed.logs.contains("Error: nope"), "{failed:?}");
 }
 
 #[tokio::test]
@@ -347,15 +352,21 @@ async fn javascript_is_confined_like_the_rest() {
         return;
     };
     let source = r#"
-let direct = "blocked";
-try { (await Deno.connect({ hostname: "1.1.1.1", port: 53 })).close(); direct = "open"; } catch {}
-let root = "read-only";
-try { Deno.writeTextFileSync("/etc/huxley", "x"); root = "writable"; } catch {}
+import fs from "node:fs";
+import net from "node:net";
+const direct = await new Promise((resolve) => {
+  const s = net.connect({ host: "1.1.1.1", port: 53 });
+  s.setTimeout(3000, () => { s.destroy(); resolve("blocked"); });
+  s.once("connect", () => { s.destroy(); resolve("open"); });
+  s.once("error", () => resolve("blocked"));
+});
 let host = "denied";
-try { Deno.readTextFileSync("/etc/passwd"); host = "readable"; } catch {}
-let sys = "denied";
-try { Deno.uid(); sys = "allowed"; } catch {}
-export default { direct, root, host, sys };
+try { fs.readFileSync("/etc/passwd"); host = "readable"; } catch {}
+let tmp = "denied";
+try { fs.writeFileSync("/tmp/x", "x"); tmp = "writable"; } catch {}
+let child = "denied";
+try { (await import("node:child_process")).execSync("id"); child = "allowed"; } catch {}
+export default { direct, host, tmp, child, uid: process.getuid() };
 "#;
     let without = Podman {
         egress: None,
@@ -363,11 +374,12 @@ export default { direct, root, host, sys };
     };
     let outcome = without.run(&javascript(source, json!({}))).await;
     assert!(outcome.succeeded, "{outcome:?}");
-    // Deno's own permissions also keep the script to the job's files.
+    // Node's own permissions also keep the script to the job's files, and
+    // no subprocesses.
     assert_eq!(
         outcome.output,
         Some(
-            json!({ "direct": "blocked", "root": "read-only", "host": "denied", "sys": "denied" })
+            json!({ "direct": "blocked", "host": "denied", "tmp": "denied", "child": "denied", "uid": 65534 })
         )
     );
 

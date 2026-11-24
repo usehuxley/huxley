@@ -151,7 +151,7 @@ impl Cluster {
             namespace: self.namespace.clone(),
             pwsh_image: "mcr.microsoft.com/powershell:7.5-alpine-3.20".into(),
             python_image: "docker.io/library/python:3.13-alpine".into(),
-            deno_image: "docker.io/denoland/deno:alpine-2.9.8".into(),
+            node_image: "docker.io/library/node:26.13.1-alpine".into(),
             memory: "256Mi".into(),
             cpus: "1".into(),
             runtime_class: None,
@@ -297,18 +297,16 @@ async fn javascript_runs_too() {
         return;
     };
     let sandbox = cluster.sandbox().await;
-    // Deno, confined: the network policy blocks direct connections, and
+    // Node, confined: the network policy blocks direct connections, and
     // fetch goes through the egress proxy.
     let source = r#"
-let direct = "blocked";
-try {
-  const c = await Promise.race([
-    Deno.connect({ hostname: "10.96.0.1", port: 443 }),
-    new Promise((_, reject) => setTimeout(() => reject(new Error("timeout")), 3000)),
-  ]);
-  c.close();
-  direct = "open";
-} catch {}
+import net from "node:net";
+const direct = await new Promise((resolve) => {
+  const s = net.connect({ host: "10.96.0.1", port: 443 });
+  s.setTimeout(3000, () => { s.destroy(); resolve("blocked"); });
+  s.once("connect", () => { s.destroy(); resolve("open"); });
+  s.once("error", () => resolve("blocked"));
+});
 const r = await fetch("http://example.invalid/hello");
 export default { direct, proxied: await r.text(), name: inputs.name };
 "#;
