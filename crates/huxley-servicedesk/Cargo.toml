@@ -11,6 +11,7 @@ publish = false
 [dependencies]
 huxley-core.workspace = true
 huxley-crm.workspace = true
+huxley-crypto.workspace = true
 huxley-db.workspace = true
 huxley-mail.workspace = true
 huxley-modules.workspace = true

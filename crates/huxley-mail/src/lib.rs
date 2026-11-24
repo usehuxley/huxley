@@ -3,6 +3,8 @@
 //! quoted replies and signatures, and the `[HX#1042]` ticket token in
 //! subjects. Pure functions: storage and tickets live elsewhere.
 
+pub mod imap;
+
 use mail_parser::{MessageParser, MessageRef};
 use serde::Serialize;
 

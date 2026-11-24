@@ -424,6 +424,7 @@ use crate::workflow_routes::{
         huxley_servicedesk::mail::Mailbox,
         huxley_servicedesk::mail::MailboxInput,
         huxley_servicedesk::mail::Email,
+        huxley_servicedesk::mail::ImapSettings,
         huxley_servicedesk::sla::Policy,
         huxley_servicedesk::sla::PolicyInput,
         huxley_servicedesk::sla::Target,

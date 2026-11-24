@@ -12,7 +12,9 @@ use huxley_storage::Storage;
 use serde_json::{Value as Json, json};
 use uuid::Uuid;
 
-/// The workflow the built-in pack ships.
+/// The workflows the built-in pack ships.
+const POLL_MAILBOXES: &str =
+    include_str!("../../huxley-packs/builtin/servicedesk-email/workflows/poll-mailboxes.yaml");
 const EMAIL_TO_TICKET: &str =
     include_str!("../../huxley-packs/builtin/servicedesk-email/workflows/email-to-ticket.yaml");
 
@@ -73,8 +75,16 @@ async fn harness() -> Option<Harness> {
 impl Harness {
     /// Runs the built-in workflow for an email, at the provider.
     async fn email_to_ticket(&self, email: Uuid) -> (RunStatus, Option<Json>, Option<Json>) {
-        let document =
-            serde_json::to_value(huxley_hwf::parse_yaml(EMAIL_TO_TICKET).unwrap()).unwrap();
+        self.run(
+            EMAIL_TO_TICKET,
+            json!({ "email_id": email, "subject": "x" }),
+        )
+        .await
+    }
+
+    /// Runs a workflow document at the provider until it finishes.
+    async fn run(&self, yaml: &str, inputs: Json) -> (RunStatus, Option<Json>, Option<Json>) {
+        let document = serde_json::to_value(huxley_hwf::parse_yaml(yaml).unwrap()).unwrap();
         let mut tx = begin_scoped(&self.pools.app, &OrgScope::System)
             .await
             .unwrap();
@@ -89,7 +99,7 @@ impl Harness {
                     document: Some(document),
                     trigger_type: "event".into(),
                     trigger: json!({}),
-                    inputs: json!({ "email_id": email, "subject": "x" }),
+                    inputs,
                     actor_id: None,
                 },
             )
@@ -123,9 +133,16 @@ impl Harness {
             "name": "Help", "address": format!("help@{}.example", Uuid::now_v7().simple())
         }))
         .unwrap();
-        let mailbox = huxley_servicedesk::mail::create(&mut tx, &ctx, self.provider, &input)
-            .await
-            .unwrap();
+        let mailbox = huxley_servicedesk::mail::create(
+            &mut tx,
+            &ctx,
+            self.provider,
+            Uuid::now_v7(),
+            &input,
+            None,
+        )
+        .await
+        .unwrap();
         let raw = raw.replace('\n', "\r\n");
         let parsed = huxley_mail::parse(raw.as_bytes()).unwrap();
         let id = Uuid::now_v7();
@@ -223,4 +240,168 @@ async fn the_step_needs_the_module() {
     let (status, _, error) = h.email_to_ticket(email).await;
     assert_eq!(status, RunStatus::Failed);
     assert!(error.unwrap().to_string().contains("module_disabled"));
+}
+
+/// A test IMAP server (`HUXLEY_TEST_IMAP`: `host:imap_port:smtp_port`, a
+/// GreenMail-style server that makes accounts on delivery, with the
+/// address as the password).
+fn imap_server() -> Option<(String, u16, u16)> {
+    let Ok(spec) = std::env::var("HUXLEY_TEST_IMAP") else {
+        assert!(
+            std::env::var("HUXLEY_REQUIRE_IMAP_TESTS").is_err(),
+            "HUXLEY_REQUIRE_IMAP_TESTS is set but HUXLEY_TEST_IMAP isn't"
+        );
+        return None;
+    };
+    let mut parts = spec.split(':');
+    let host = parts.next()?.to_owned();
+    Some((
+        host,
+        parts.next()?.parse().ok()?,
+        parts.next()?.parse().ok()?,
+    ))
+}
+
+/// Delivers a message over SMTP.
+fn send(host: &str, port: u16, to: &str, id: &str) {
+    use std::io::{BufRead, BufReader, Write};
+    let stream = std::net::TcpStream::connect((host, port)).unwrap();
+    let mut reader = BufReader::new(stream.try_clone().unwrap());
+    let mut writer = stream;
+    let expect = |reader: &mut BufReader<std::net::TcpStream>| {
+        let mut line = String::new();
+        loop {
+            line.clear();
+            reader.read_line(&mut line).unwrap();
+            if line.len() < 4 || &line[3..4] != "-" {
+                break;
+            }
+        }
+        assert!(line.starts_with('2') || line.starts_with('3'), "{line}");
+    };
+    expect(&mut reader);
+    for command in [
+        "EHLO test",
+        "MAIL FROM:<ada@acme.example>",
+        &format!("RCPT TO:<{to}>"),
+        "DATA",
+    ] {
+        writer
+            .write_all(format!("{command}\r\n").as_bytes())
+            .unwrap();
+        expect(&mut reader);
+    }
+    let body = format!(
+        "From: Ada <ada@acme.example>\r\nTo: {to}\r\nSubject: Help\r\nMessage-ID: <{id}>\r\n\r\nHi\r\n.\r\n"
+    );
+    writer.write_all(body.as_bytes()).unwrap();
+    expect(&mut reader);
+    writer.write_all(b"QUIT\r\n").unwrap();
+}
+
+#[tokio::test]
+async fn poll_mailboxes_fetches_new_mail_and_reports_failures() {
+    let Some((host, imap_port, smtp_port)) = imap_server() else {
+        return;
+    };
+    let Some(h) = harness().await else { return };
+    let address = format!("t{}@desk.example", Uuid::now_v7().simple());
+    // The account exists once it has mail; this first message is already
+    // there when the mailbox is added, and unread, so it's fetched too.
+    send(&host, smtp_port, &address, &format!("0.{address}"));
+    let crypto =
+        huxley_crypto::Crypto::new(h.pools.app.clone(), huxley_crypto::testing::key_ring());
+    let ctx = RequestContext::system(Via::System);
+    let mut made = Vec::new();
+    for password in [address.as_str(), "wrong"] {
+        let id = Uuid::now_v7();
+        let sealed = crypto
+            .encrypt(
+                h.provider,
+                huxley_servicedesk::mail::secret_binding(id),
+                password.as_bytes(),
+            )
+            .await
+            .unwrap();
+        let input: huxley_servicedesk::mail::MailboxInput = serde_json::from_value(json!({
+            "name": "Imap", "address": format!("in{}.{}@x.example", made.len(), Uuid::now_v7().simple()), "kind": "imap",
+            "imap": { "host": host, "port": imap_port, "security": "none", "username": address },
+        }))
+        .unwrap();
+        let mut tx = begin_scoped(&h.pools.app, &OrgScope::System).await.unwrap();
+        huxley_servicedesk::mail::create(&mut tx, &ctx, h.provider, id, &input, Some(&sealed))
+            .await
+            .unwrap();
+        tx.commit().await.unwrap();
+        made.push(id);
+    }
+    send(&host, smtp_port, &address, &format!("1.{address}"));
+
+    let (status, outputs, error) = h.run(POLL_MAILBOXES, json!({})).await;
+    assert_eq!(status, RunStatus::Succeeded, "{error:?}");
+    let report = outputs.unwrap()["mailboxes"].clone();
+    let good = report
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|m| m["mailbox_id"] == json!(made[0]))
+        .unwrap();
+    let bad = report
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|m| m["mailbox_id"] == json!(made[1]))
+        .unwrap();
+    assert_eq!(
+        (good["fetched"].clone(), good["new"].clone()),
+        (json!(2), json!(2)),
+        "{report}"
+    );
+    assert!(
+        bad["error"]
+            .as_str()
+            .unwrap()
+            .contains("username or password"),
+        "{report}"
+    );
+
+    let mut tx = begin_scoped(&h.pools.app, &OrgScope::System).await.unwrap();
+    let (emails, events, last_error): (i64, i64, Option<String>) = sqlx::query_as(
+        "SELECT (SELECT count(*) FROM sd_inbound_emails WHERE mailbox_id = $1), \
+                (SELECT count(*) FROM events_outbox WHERE event_type = 'email.received'), \
+                (SELECT last_error FROM sd_mailboxes WHERE id = $2)",
+    )
+    .bind(made[0])
+    .bind(made[1])
+    .fetch_one(&mut *tx)
+    .await
+    .unwrap();
+    tx.commit().await.unwrap();
+    assert_eq!((emails, events), (2, 2));
+    assert!(last_error.unwrap().contains("username or password"));
+
+    // Nothing new: nothing fetched; new mail: just that.
+    let (_, outputs, _) = h.run(POLL_MAILBOXES, json!({})).await;
+    let report = outputs.unwrap()["mailboxes"].clone();
+    let good = report
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|m| m["mailbox_id"] == json!(made[0]))
+        .unwrap();
+    assert_eq!(good["fetched"], 0, "{report}");
+    send(&host, smtp_port, &address, &format!("2.{address}"));
+    let (_, outputs, _) = h.run(POLL_MAILBOXES, json!({})).await;
+    let report = outputs.unwrap()["mailboxes"].clone();
+    let good = report
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|m| m["mailbox_id"] == json!(made[0]))
+        .unwrap();
+    assert_eq!(
+        (good["fetched"].clone(), good["new"].clone()),
+        (json!(1), json!(1)),
+        "{report}"
+    );
 }

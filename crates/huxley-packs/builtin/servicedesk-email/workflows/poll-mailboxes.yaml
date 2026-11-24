@@ -1,0 +1,18 @@
+apiVersion: usehuxley.io/v1
+kind: Workflow
+metadata:
+  key: poll-mailboxes
+  name: Poll mailboxes
+  description: >-
+    Every minute, fetches new mail from the IMAP mailboxes here and below.
+    Each new message is announced with email.received, which Email to ticket
+    picks up. A mailbox that can't be reached shows its error on its page.
+spec:
+  triggers:
+    - type: schedule
+      interval: 1m
+  steps:
+    - id: fetch
+      type: core.mail.fetch
+  outputs:
+    mailboxes: "{{ steps.fetch.output.mailboxes }}"

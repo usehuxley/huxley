@@ -42,6 +42,65 @@ const PERSONAL_DOMAINS: &[&str] = &[
     "zoho.com",
 ];
 
+/// Where an IMAP mailbox fetches from.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ImapSettings {
+    pub host: String,
+    /// Default 993 (TLS) or 143.
+    #[serde(default)]
+    pub port: Option<u16>,
+    /// `tls` (default), `start_tls` or `none` (a server on your own network).
+    #[serde(default)]
+    #[schema(value_type = Option<String>)]
+    pub security: Option<huxley_mail::imap::Security>,
+    pub username: String,
+    /// Default `INBOX`.
+    #[serde(default)]
+    pub folder: Option<String>,
+}
+
+impl ImapSettings {
+    /// The settings with defaults filled in, checked.
+    fn checked(&self) -> DeskResult<Self> {
+        let host = self.host.trim().to_lowercase();
+        if host.is_empty()
+            || host.len() > 253
+            || host.contains(|c: char| c.is_whitespace() || c == '/')
+        {
+            return Err(DeskError::invalid("imap", "host is a server name"));
+        }
+        let security = self.security.unwrap_or(huxley_mail::imap::Security::Tls);
+        let port = self
+            .port
+            .unwrap_or(if security == huxley_mail::imap::Security::Tls {
+                993
+            } else {
+                143
+            });
+        if port == 0 {
+            return Err(DeskError::invalid("imap", "port is 1 to 65535"));
+        }
+        let username = self.username.trim().to_owned();
+        if username.is_empty() || username.len() > 320 {
+            return Err(DeskError::invalid("imap", "username is needed"));
+        }
+        let folder = self
+            .folder
+            .as_deref()
+            .map(str::trim)
+            .filter(|f| !f.is_empty())
+            .unwrap_or("INBOX");
+        Ok(Self {
+            host,
+            port: Some(port),
+            security: Some(security),
+            username,
+            folder: Some(folder.to_owned()),
+        })
+    }
+}
+
 #[derive(Debug, Clone, Serialize, ToSchema, sqlx::FromRow)]
 #[serde(rename_all = "camelCase")]
 pub struct Mailbox {
@@ -60,6 +119,11 @@ pub struct Mailbox {
     pub unknown_org_id: Option<Uuid>,
     pub strip_replies: bool,
     pub enabled: bool,
+    /// Where it fetches from (`imap` mailboxes).
+    #[sqlx(json(nullable))]
+    pub imap: Option<ImapSettings>,
+    /// A password is stored (it's never shown).
+    pub has_password: bool,
     #[serde(with = "time::serde::rfc3339::option")]
     pub last_checked_at: Option<OffsetDateTime>,
     pub last_error: Option<String>,
@@ -88,13 +152,21 @@ pub struct MailboxInput {
     pub strip_replies: Option<bool>,
     #[serde(default)]
     pub enabled: Option<bool>,
+    /// Where to fetch from (`imap` mailboxes).
+    #[serde(default)]
+    pub imap: Option<ImapSettings>,
+    /// The IMAP password; left out, the stored one stays.
+    #[serde(default)]
+    #[schema(format = Password, write_only)]
+    pub password: Option<String>,
     /// The version you read (updates only).
     #[serde(default)]
     pub version: Option<i32>,
 }
 
 const SELECT: &str = "SELECT id, org_id, name, address, kind, ticket_type, queue_id, unknown_sender, \
-    unknown_org_id, strip_replies, enabled, last_checked_at, last_error, version, created_at \
+    unknown_org_id, strip_replies, enabled, imap, secret IS NOT NULL AS has_password, last_checked_at, \
+    last_error, version, created_at \
     FROM sd_mailboxes";
 
 pub async fn mailboxes(conn: &mut PgConnection) -> DeskResult<Vec<Mailbox>> {
@@ -121,6 +193,7 @@ struct Checked {
     kind: String,
     ticket_type: String,
     unknown_sender: String,
+    imap: Option<ImapSettings>,
 }
 
 async fn check(conn: &mut PgConnection, input: &MailboxInput) -> DeskResult<Checked> {
@@ -170,12 +243,23 @@ async fn check(conn: &mut PgConnection, input: &MailboxInput) -> DeskResult<Chec
             return Err(DeskError::invalid("queueId", "there's no such queue"));
         }
     }
+    let imap = match (&input.imap, kind.as_str()) {
+        (Some(settings), "imap") => Some(settings.checked()?),
+        (None, "imap") => {
+            return Err(DeskError::invalid(
+                "imap",
+                "an IMAP mailbox needs its server",
+            ));
+        }
+        _ => None,
+    };
     Ok(Checked {
         name,
         address,
         kind,
         ticket_type,
         unknown_sender,
+        imap,
     })
 }
 
@@ -192,18 +276,29 @@ fn taken(e: sqlx::Error) -> DeskError {
 }
 
 /// Creates a mailbox (system scope; the caller checks the organization).
+/// The binding a mailbox's password is sealed with.
+pub const fn secret_binding(mailbox: Uuid) -> huxley_crypto::Binding<'static> {
+    huxley_crypto::Binding {
+        purpose: "sd_mailbox.password",
+        record: mailbox,
+    }
+}
+
+/// Creates mailbox `id` (system scope; the caller checks the organization).
+/// `secret` is its password, sealed with [`secret_binding`].
 pub async fn create(
     conn: &mut PgConnection,
     ctx: &RequestContext,
     org_id: Uuid,
+    id: Uuid,
     input: &MailboxInput,
+    secret: Option<&[u8]>,
 ) -> DeskResult<Mailbox> {
     let c = check(conn, input).await?;
-    let id = huxley_core::new_id();
     sqlx::query(
         "INSERT INTO sd_mailboxes (id, org_id, name, address, kind, ticket_type, queue_id, unknown_sender, \
-                                   unknown_org_id, strip_replies, enabled) \
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)",
+                                   unknown_org_id, strip_replies, enabled, imap, secret) \
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)",
     )
     .bind(id)
     .bind(org_id)
@@ -216,6 +311,8 @@ pub async fn create(
     .bind(input.unknown_org_id)
     .bind(input.strip_replies.unwrap_or(true))
     .bind(input.enabled.unwrap_or(true))
+    .bind(c.imap.as_ref().map(|i| json!(i)))
+    .bind(secret)
     .execute(&mut *conn)
     .await
     .map_err(taken)?;
@@ -231,17 +328,21 @@ pub async fn create(
     mailbox(conn, id).await
 }
 
+/// Changes a mailbox. `secret`: a new sealed password (`None` keeps it).
 pub async fn update(
     conn: &mut PgConnection,
     ctx: &RequestContext,
     id: Uuid,
     input: &MailboxInput,
+    secret: Option<&[u8]>,
 ) -> DeskResult<Mailbox> {
     let c = check(conn, input).await?;
     let before = mailbox(conn, id).await?;
     let rows = sqlx::query(
         "UPDATE sd_mailboxes SET name = $3, address = $4, kind = $5, ticket_type = $6, queue_id = $7, \
                 unknown_sender = $8, unknown_org_id = $9, strip_replies = $10, enabled = $11, \
+                imap = $12, secret = coalesce($13, secret), \
+                cursor = CASE WHEN imap IS DISTINCT FROM $12 THEN '{}'::jsonb ELSE cursor END, \
                 version = version + 1 \
           WHERE id = $1 AND version = $2 AND archived_at IS NULL",
     )
@@ -256,6 +357,8 @@ pub async fn update(
     .bind(input.unknown_org_id)
     .bind(input.strip_replies.unwrap_or(before.strip_replies))
     .bind(input.enabled.unwrap_or(before.enabled))
+    .bind(c.imap.as_ref().map(|i| json!(i)))
+    .bind(secret)
     .execute(&mut *conn)
     .await
     .map_err(taken)?
@@ -289,6 +392,69 @@ pub async fn archive(conn: &mut PgConnection, ctx: &RequestContext, id: Uuid) ->
             .target("mailbox", id)
             .details(json!({ "name": m.name, "address": m.address })),
     )
+    .await?;
+    Ok(())
+}
+
+/// An IMAP mailbox to fetch from: its settings, sealed password and cursor.
+#[derive(Debug, Clone)]
+pub struct Fetchable {
+    pub mailbox: Mailbox,
+    pub settings: ImapSettings,
+    pub secret: Option<Vec<u8>>,
+    pub cursor: huxley_mail::imap::Cursor,
+}
+
+/// Enabled IMAP mailboxes at `within` and below (or just `only`), oldest
+/// check first. System scope.
+pub async fn fetchable(
+    conn: &mut PgConnection,
+    within: Uuid,
+    only: Option<Uuid>,
+) -> DeskResult<Vec<Fetchable>> {
+    let ids: Vec<(Uuid, Option<Vec<u8>>, Json)> = sqlx::query_as(
+        "SELECT m.id, m.secret, m.cursor FROM sd_mailboxes m \
+           JOIN organizations o ON o.id = m.org_id JOIN organizations w ON w.id = $1 \
+          WHERE m.kind = 'imap' AND m.enabled AND m.archived_at IS NULL AND o.path <@ w.path \
+            AND ($2::uuid IS NULL OR m.id = $2) \
+          ORDER BY m.last_checked_at NULLS FIRST, m.id",
+    )
+    .bind(within)
+    .bind(only)
+    .fetch_all(&mut *conn)
+    .await?;
+    let mut out = Vec::with_capacity(ids.len());
+    for (id, secret, cursor) in ids {
+        let mailbox = mailbox(conn, id).await?;
+        let Some(settings) = mailbox.imap.clone() else {
+            continue;
+        };
+        out.push(Fetchable {
+            mailbox,
+            settings,
+            secret,
+            cursor: serde_json::from_value(cursor).unwrap_or_default(),
+        });
+    }
+    Ok(out)
+}
+
+/// Records a check: the cursor reached (none: unchanged) and the error, if
+/// it failed.
+pub async fn checked(
+    conn: &mut PgConnection,
+    id: Uuid,
+    cursor: Option<huxley_mail::imap::Cursor>,
+    error: Option<&str>,
+) -> DeskResult<()> {
+    sqlx::query(
+        "UPDATE sd_mailboxes SET last_checked_at = now(), last_error = $3, \
+                cursor = coalesce($2, cursor) WHERE id = $1",
+    )
+    .bind(id)
+    .bind(cursor.map(|c| json!(c)))
+    .bind(error)
+    .execute(conn)
     .await?;
     Ok(())
 }

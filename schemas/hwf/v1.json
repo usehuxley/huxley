@@ -429,6 +429,15 @@
         }
       ]
     },
+    "MailFetch": {
+      "additionalProperties": false,
+      "description": "Mail to fetch (`core.mail.fetch`): new messages from the enabled IMAP\nmailboxes at the run's organization and below, or just `mailbox_id`, up\nto `limit` each (default 50). Each new message is kept and announced with\n`email.received`. A mailbox that can't be reached is reported (and shown\non it) without failing the step. Output: `{ mailboxes: [{ mailbox_id,\naddress, fetched, new } | { mailbox_id, address, error }] }`.",
+      "properties": {
+        "limit": true,
+        "mailbox_id": true
+      },
+      "type": "object"
+    },
     "Metadata": {
       "additionalProperties": false,
       "properties": {
@@ -2356,6 +2365,69 @@
             "type",
             "id",
             "with"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Fetch new mail from IMAP mailboxes (the `servicedesk` module).",
+          "properties": {
+            "continue_on_error": {
+              "description": "Record the error as the step's output and carry on.",
+              "type": "boolean"
+            },
+            "description": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "id": {
+              "description": "Unique in the workflow: lowercase letters, digits, underscores.\nOther steps read this step's output as `steps.<id>.output`.",
+              "type": "string"
+            },
+            "if": {
+              "description": "Skip the step unless this expression is true.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "name": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "retry": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/RetryPolicy"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "timeout": {
+              "description": "Fail the attempt after this long, e.g. `30s`.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "type": {
+              "const": "core.mail.fetch",
+              "type": "string"
+            },
+            "with": {
+              "$ref": "#/$defs/MailFetch",
+              "default": {}
+            }
+          },
+          "required": [
+            "type",
+            "id"
           ],
           "type": "object"
         },
