@@ -744,6 +744,13 @@ pub struct Note {
     pub author_email: Option<String>,
     /// The email it came in, if it did.
     pub email_id: Option<Uuid>,
+    /// Who it was emailed to (public notes, with the service desk's email
+    /// workflows).
+    pub emailed_to: Option<String>,
+    #[serde(with = "time::serde::rfc3339::option")]
+    pub emailed_at: Option<OffsetDateTime>,
+    /// Why emailing it failed, if it did.
+    pub email_error: Option<String>,
     #[serde(with = "time::serde::rfc3339")]
     pub created_at: OffsetDateTime,
 }
@@ -883,7 +890,7 @@ pub async fn notes(conn: &mut PgConnection, id: Uuid) -> DeskResult<Vec<Note>> {
     Ok(sqlx::query_as(
         "SELECT n.id, n.kind, n.body, n.author_user_id, u.display_name AS author_name, n.author_contact_id, \
                 nullif(btrim(c.first_name || ' ' || c.last_name), '') AS author_contact_name, \
-                n.author_email, n.email_id, n.created_at \
+                n.author_email, n.email_id, n.emailed_to, n.emailed_at, n.email_error, n.created_at \
            FROM sd_ticket_notes n LEFT JOIN users u ON u.id = n.author_user_id \
            LEFT JOIN crm_contacts c ON c.id = n.author_contact_id \
           WHERE n.ticket_id = $1 ORDER BY n.created_at, n.id",

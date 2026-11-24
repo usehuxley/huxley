@@ -2,6 +2,8 @@
 //! steps, a run works with its own organization and those below it, and
 //! each step needs the module active there.
 
+use std::fmt::Write as _;
+
 use huxley_core::{RequestContext, Via};
 use huxley_db::{OrgScope, begin_scoped};
 use huxley_servicedesk::DeskError;
@@ -56,7 +58,78 @@ impl Engine {
         match kind {
             "core.mail.fetch" => self.fetch_mail(org_id, input).await,
             "core.ticket.from_email" => self.ticket_from_email(org_id, input).await,
+            "core.ticket.email_reply" => self.email_reply(org_id, input).await,
             other => Err(internal(format!("not a service desk step: {other}"))),
+        }
+    }
+
+    /// `core.ticket.email_reply`: emails a public note to the ticket's
+    /// requester from its mailbox, threaded so their answer comes back to
+    /// the ticket. A note that shouldn't be emailed (internal, from the
+    /// requester, already sent) is skipped, not failed.
+    async fn email_reply(&self, org_id: Uuid, input: &Json) -> Result<Json, Json> {
+        self.require_desk(org_id).await?;
+        let note_id = input["note_id"]
+            .as_str()
+            .and_then(|s| s.parse::<Uuid>().ok())
+            .ok_or_else(|| error("input", "note_id is a note's id"))?;
+        let Some(mailer) = self.mailer.as_ref().filter(|m| m.enabled()) else {
+            return Err(error(
+                "email",
+                "email isn't set up for this instance (email.smtp_url)",
+            ));
+        };
+        let mut tx = begin_scoped(self.db(), &OrgScope::System)
+            .await
+            .map_err(internal)?;
+        let planned = mail::reply_for(&mut tx, note_id, org_id)
+            .await
+            .map_err(desk_error)?;
+        tx.commit().await.map_err(internal)?;
+        let reply = match planned {
+            Ok(reply) => reply,
+            Err(reason) => return Ok(json!({ "sent": false, "reason": reason })),
+        };
+        let mut paragraphs = String::new();
+        for p in reply.text.split("\n\n") {
+            let _ = write!(
+                paragraphs,
+                "<p>{}</p>",
+                huxley_email::escape_html(p).replace('\n', "<br>")
+            );
+        }
+        let html = format!(
+            "<!doctype html><html><body style=\"font-family:system-ui,sans-serif;line-height:1.5\">{paragraphs}</body></html>"
+        );
+        let email = huxley_email::Email {
+            to: reply.to.clone(),
+            subject: reply.subject.clone(),
+            text: reply.text.clone(),
+            html,
+            reply: Some(huxley_email::Reply {
+                from_name: reply.from_name.clone(),
+                from_address: reply.from_address.clone(),
+                message_id: reply.message_id.clone(),
+                in_reply_to: reply.in_reply_to.clone(),
+                references: reply.references.clone(),
+            }),
+        };
+        let sent = mailer.send(email).await;
+        let failure = sent.as_ref().err().map(ToString::to_string);
+        let mut tx = begin_scoped(self.db(), &OrgScope::System)
+            .await
+            .map_err(internal)?;
+        mail::replied(&mut tx, &reply, failure.as_deref())
+            .await
+            .map_err(desk_error)?;
+        tx.commit().await.map_err(internal)?;
+        match failure {
+            // Failed: retried by the step's retry policy.
+            Some(e) => Err(error(
+                "email",
+                format!("sending to {} failed: {e}", reply.to),
+            )),
+            None => Ok(json!({ "sent": true, "to": reply.to, "message_id": reply.message_id })),
         }
     }
 

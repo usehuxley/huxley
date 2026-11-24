@@ -13,6 +13,8 @@ use serde_json::{Value as Json, json};
 use uuid::Uuid;
 
 /// The workflows the built-in pack ships.
+const EMAIL_REPLIES: &str =
+    include_str!("../../huxley-packs/builtin/servicedesk-email/workflows/email-replies.yaml");
 const POLL_MAILBOXES: &str =
     include_str!("../../huxley-packs/builtin/servicedesk-email/workflows/poll-mailboxes.yaml");
 const EMAIL_TO_TICKET: &str =
@@ -23,6 +25,8 @@ struct Harness {
     pools: TestPools,
     engine: Engine,
     storage: Storage,
+    /// What the engine emailed.
+    sent: std::sync::Arc<std::sync::Mutex<Vec<huxley_email::Email>>>,
     provider: Uuid,
     client: Uuid,
 }
@@ -60,13 +64,16 @@ async fn harness() -> Option<Harness> {
     tx.commit().await.unwrap();
     let crypto = huxley_crypto::Crypto::new(pools.app.clone(), huxley_crypto::testing::key_ring());
     let storage = Storage::memory();
+    let (mailer, sent) = huxley_email::Mailer::memory();
     let engine = Engine::with_config(pools.app.clone(), crypto, &EngineConfig::default())
-        .with_storage(storage.clone());
+        .with_storage(storage.clone())
+        .with_mailer(mailer);
     Some(Harness {
         _db: db,
         pools,
         engine,
         storage,
+        sent,
         provider,
         client,
     })
@@ -404,4 +411,172 @@ async fn poll_mailboxes_fetches_new_mail_and_reports_failures() {
         (json!(1), json!(1)),
         "{report}"
     );
+}
+
+/// Ada at the client, and a technician; returns the technician's id.
+async fn ada_and_tech(h: &Harness) -> Uuid {
+    let ctx = RequestContext::system(Via::System);
+    let mut tx = begin_scoped(&h.pools.app, &OrgScope::System).await.unwrap();
+    let contact = huxley_crm::contacts::ContactInput {
+        first_name: "Ada".into(),
+        email: Some("ada@acme.example".into()),
+        ..Default::default()
+    };
+    huxley_crm::contacts::create(&mut tx, &ctx, h.client, &contact)
+        .await
+        .unwrap();
+    let tech = Uuid::now_v7();
+    sqlx::query("INSERT INTO users (id, email, display_name) VALUES ($1, $2, 'Tess Tech')")
+        .bind(tech)
+        .bind(format!("{}@msp.example", tech.simple()))
+        .execute(&mut *tx)
+        .await
+        .unwrap();
+    tx.commit().await.unwrap();
+    tech
+}
+
+impl Harness {
+    async fn number(&self, ticket: Uuid) -> i64 {
+        let mut tx = begin_scoped(&self.pools.app, &OrgScope::System)
+            .await
+            .unwrap();
+        let n = sqlx::query_scalar("SELECT number FROM sd_tickets WHERE id = $1")
+            .bind(ticket)
+            .fetch_one(&mut *tx)
+            .await
+            .unwrap();
+        tx.commit().await.unwrap();
+        n
+    }
+
+    /// Delivers a raw message to the mailbox that received `earlier`.
+    async fn deliver_like(&self, earlier: Uuid, raw: &str) -> Uuid {
+        let mut tx = begin_scoped(&self.pools.app, &OrgScope::System)
+            .await
+            .unwrap();
+        let mailbox_id: Uuid =
+            sqlx::query_scalar("SELECT mailbox_id FROM sd_inbound_emails WHERE id = $1")
+                .bind(earlier)
+                .fetch_one(&mut *tx)
+                .await
+                .unwrap();
+        let mailbox = huxley_servicedesk::mail::mailbox(&mut tx, mailbox_id)
+            .await
+            .unwrap();
+        let raw = raw.replace('\n', "\r\n");
+        let parsed = huxley_mail::parse(raw.as_bytes()).unwrap();
+        let id = Uuid::now_v7();
+        self.storage
+            .put(
+                &huxley_servicedesk::mail::raw_key(mailbox.org_id, id),
+                raw.clone().into(),
+            )
+            .await
+            .unwrap();
+        let (id, _) = huxley_servicedesk::mail::store(&mut tx, &mailbox, id, &parsed, raw.len())
+            .await
+            .unwrap();
+        tx.commit().await.unwrap();
+        id
+    }
+}
+
+#[tokio::test]
+async fn public_notes_are_emailed_and_answers_thread_back() {
+    let Some(h) = harness().await else { return };
+    let tech = ada_and_tech(&h).await;
+    let email = h
+        .receive("From: Ada <ada@acme.example>\nSubject: VPN down\nMessage-ID: <vpn@acme.example>\n\nIt's down.\n")
+        .await;
+    let (_, outputs, _) = h.email_to_ticket(email).await;
+    let ticket = Uuid::parse_str(outputs.unwrap()["ticket_id"].as_str().unwrap()).unwrap();
+
+    // A public and an internal note from the technician.
+    let user_ctx = RequestContext::system(Via::Ui).with_actor(huxley_core::Actor::User(tech));
+    let mut tx = begin_scoped(&h.pools.app, &OrgScope::System).await.unwrap();
+    let mut add = async |kind: &str, body: &str| {
+        let note = huxley_servicedesk::tickets::NewNote {
+            kind: kind.into(),
+            body: body.into(),
+        };
+        huxley_servicedesk::tickets::add_note(&mut tx, &user_ctx, ticket, &note)
+            .await
+            .unwrap()
+            .id
+    };
+    let public = add("public", "Restarting it now.").await;
+    let internal = add("internal", "Firewall again?").await;
+    tx.commit().await.unwrap();
+
+    let (status, outputs, error) = h
+        .run(EMAIL_REPLIES, json!({ "change": { "note": public } }))
+        .await;
+    assert_eq!(status, RunStatus::Succeeded, "{error:?}");
+    assert_eq!(outputs.unwrap()["sent"], true);
+    let sent = h.sent.lock().unwrap().clone();
+    assert_eq!(sent.len(), 1);
+    let mail = &sent[0];
+    assert_eq!(mail.to, "ada@acme.example");
+    let number = h.number(ticket).await;
+    assert_eq!(mail.subject, format!("Re: VPN down [HX#{number}]"));
+    assert!(
+        mail.text
+            .starts_with("Restarting it now.\n\nTess Tech\nHelp"),
+        "{}",
+        mail.text
+    );
+    let reply = mail.reply.clone().unwrap();
+    assert_eq!(reply.in_reply_to, ["vpn@acme.example"]);
+    assert!(reply.from_address.starts_with("help@"));
+    assert_eq!(
+        reply.message_id,
+        format!(
+            "hx.{public}@{}",
+            reply.from_address.split('@').nth(1).unwrap()
+        )
+    );
+
+    // Internal notes and repeats aren't emailed.
+    for note in [internal, public] {
+        let (_, outputs, _) = h
+            .run(EMAIL_REPLIES, json!({ "change": { "note": note } }))
+            .await;
+        assert_eq!(outputs.unwrap()["sent"], false);
+    }
+    assert_eq!(h.sent.lock().unwrap().len(), 1);
+
+    // Ada answers our message (no token in the subject): it threads back.
+    let answer = format!(
+        "From: ada@acme.example\nSubject: Re: thanks\nMessage-ID: <ans@acme.example>\nIn-Reply-To: <{}>\n\nWorks now.\n",
+        reply.message_id
+    );
+    let id = h.deliver_like(email, &answer).await;
+    let (_, outputs, _) = h.email_to_ticket(id).await;
+    let outputs = outputs.unwrap();
+    assert_eq!(
+        (outputs["outcome"].as_str(), outputs["ticket_id"].clone()),
+        (Some("note_added"), json!(ticket))
+    );
+}
+
+#[tokio::test]
+async fn email_replies_only_starts_for_public_notes_written_in_huxley() {
+    let Some(h) = harness().await else { return };
+    let document = huxley_hwf::parse_yaml(EMAIL_REPLIES).unwrap();
+    let Some(huxley_hwf::Trigger::Event(trigger)) = document.spec.triggers.first() else {
+        panic!("an event trigger");
+    };
+    assert_eq!(trigger.event, "ticket.note_added");
+    let filter = trigger.filter.as_deref().unwrap();
+    let passes = |change: Json| {
+        let event = json!({ "payload": { "reference": "T-1", "change": change } });
+        let scope = huxley_expr::Scope::new().with("event", &event);
+        h.engine.expr().eval_condition(filter, &scope).unwrap()
+    };
+    assert!(passes(json!({ "kind": "public", "note": "n1" })));
+    assert!(!passes(json!({ "kind": "internal", "note": "n1" })));
+    assert!(!passes(
+        json!({ "kind": "public", "note": "n1", "email": "e1", "from": "ada@acme.example" })
+    ));
 }

@@ -154,7 +154,11 @@ Posting needs `mailbox:ingest`, so give that to a service account used only for 
 
 ### Email to ticket
 
-The built-in pack **Service desk email** (`huxley/servicedesk-email`) adds two workflows: *Poll mailboxes*, which fetches IMAP mail every minute, and *Email to ticket*. Install it at your MSP under **Settings → Packs → Built-in packs**. It runs the `core.ticket.from_email` step for each email, which does this:
+The built-in pack **Service desk email** (`huxley/servicedesk-email`) adds three workflows:
+
+- *Poll mailboxes* fetches IMAP mail every minute.
+- *Email to ticket* turns each email into a ticket or a reply (below).
+- *Email replies* emails your public notes to the requester (see [Email replies](#email-replies)). Install it at your MSP under **Settings → Packs → Built-in packs**. It runs the `core.ticket.from_email` step for each email, which does this:
 
 1. **Skips automatic mail:** out-of-office and other auto-replies, bounces, and list or bulk mail.
 2. **Skips loops:** mail from one of Huxley's own mailboxes, or more than 20 messages from one sender to a mailbox in an hour.
@@ -171,6 +175,20 @@ Mailboxes are managed with `servicedesk:configure`:
 
 - `GET`, `POST /api/v1/mailboxes`
 - `GET`, `PUT`, `DELETE /api/v1/mailboxes/{id}`
+
+### Email replies
+
+A public note written on a ticket is emailed to the ticket's requester by the *Email replies* workflow.
+
+- **Who it's from:** the mailbox the ticket's mail came to. If no mail came, it's the nearest mailbox at the ticket's organization or above.
+- **The subject:** it carries the ticket's `[HX#1042]` token.
+- **Threading:** the message continues the email thread (`In-Reply-To`, `References`), so the requester's answer comes back to the same ticket, even if their mail client drops the token.
+- **The text:** your note, your name and the mailbox's name, and a line saying that replying adds to the ticket.
+- **What isn't emailed:** internal and resolution notes, notes that came from the requester by email, and notes already sent. A ticket without a requester address isn't emailed either.
+
+Each note shows whether it was emailed, and to whom, or why sending failed. A failed send is retried by the workflow.
+
+The email goes out through the instance's mail server (`email.smtp_url`), with the mailbox's address as the sender and as **Reply-To**. That server must be allowed to send as the mailbox's address. Otherwise the message may be rejected or marked as spam, so set up SPF and DKIM for that domain accordingly.
 
 **Tickets as records.** Tickets now also take attachments, custom fields and tags, like organizations and contacts do.
 
@@ -200,4 +218,4 @@ Mailboxes are managed with `servicedesk:configure`:
 
 ## Coming next
 
-Fetching mail from Microsoft 365, emailing replies to requesters, mailbox screens, holidays in business hours, time entries, merging and linking tickets, templates, saved views, and workflow steps for tickets.
+Microsoft 365 mailboxes, sending through a mailbox's own server, mailbox screens, holidays in business hours, time entries, merging and linking tickets, templates, saved views, and workflow steps for tickets.

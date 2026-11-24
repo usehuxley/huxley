@@ -655,6 +655,17 @@ async fn thread(
             .await?;
     }
     if candidate.is_none() {
+        // A reply to one of our emailed notes.
+        candidate = sqlx::query_scalar(
+            "SELECT n.ticket_id FROM sd_ticket_notes n, sd_inbound_emails me \
+              WHERE me.id = $1 AND n.message_id = ANY (me.in_reply_to || me.refs) \
+              ORDER BY n.created_at DESC LIMIT 1",
+        )
+        .bind(email.id)
+        .fetch_optional(&mut *conn)
+        .await?;
+    }
+    if candidate.is_none() {
         candidate = sqlx::query_scalar(
             "SELECT e.ticket_id FROM sd_inbound_emails e, sd_inbound_emails me \
               WHERE me.id = $1 AND e.id <> me.id AND e.ticket_id IS NOT NULL \
@@ -942,6 +953,156 @@ pub async fn to_ticket(
         }
     };
     finish(conn, email.id, outcome).await
+}
+
+#[derive(sqlx::FromRow)]
+struct NoteRow {
+    ticket_id: Uuid,
+    kind: String,
+    body: String,
+    email_id: Option<Uuid>,
+    author_user_id: Option<Uuid>,
+    emailed_at: Option<OffsetDateTime>,
+    author_name: Option<String>,
+}
+
+/// A public note to email to the requester.
+#[derive(Debug, Clone)]
+pub struct Reply {
+    pub note_id: Uuid,
+    pub to: String,
+    pub subject: String,
+    pub text: String,
+    pub from_name: String,
+    pub from_address: String,
+    pub message_id: String,
+    pub in_reply_to: Vec<String>,
+    pub references: Vec<String>,
+}
+
+/// What to email for note `note_id`, or why nothing (`Err`). A note is
+/// emailed once: a public note written in Huxley, on a ticket whose
+/// requester has an address, from the mailbox the ticket's mail came to
+/// (else the nearest one at its organization or above). System scope;
+/// tickets at `within` and below.
+pub async fn reply_for(
+    conn: &mut PgConnection,
+    note_id: Uuid,
+    within: Uuid,
+) -> DeskResult<Result<Reply, &'static str>> {
+    let note: Option<NoteRow> = sqlx::query_as(
+        "SELECT n.ticket_id, n.kind, n.body, n.email_id, n.author_user_id, n.emailed_at, \
+                u.display_name AS author_name \
+           FROM sd_ticket_notes n LEFT JOIN users u ON u.id = n.author_user_id WHERE n.id = $1",
+    )
+    .bind(note_id)
+    .fetch_optional(&mut *conn)
+    .await?;
+    let Some(NoteRow {
+        ticket_id,
+        kind,
+        body,
+        email_id,
+        author_user_id: author,
+        emailed_at,
+        author_name,
+    }) = note
+    else {
+        return Err(DeskError::NotFound);
+    };
+    let ticket = tickets::get(conn, ticket_id).await?;
+    if !under(conn, ticket.org_id, within).await? {
+        return Err(DeskError::NotFound);
+    }
+    if kind != "public" {
+        return Ok(Err("only public notes are emailed"));
+    }
+    if email_id.is_some() || author.is_none() {
+        return Ok(Err("the note came from the requester"));
+    }
+    if emailed_at.is_some() {
+        return Ok(Err("already emailed"));
+    }
+    let Some(to) = ticket.requester_email.clone() else {
+        return Ok(Err("the ticket has no requester with an email address"));
+    };
+    // The mailbox the ticket's mail came to, else the nearest one above.
+    let mailbox: Option<(String, String)> = sqlx::query_as(
+        "SELECT m.name, m.address FROM sd_inbound_emails e JOIN sd_mailboxes m ON m.id = e.mailbox_id \
+          WHERE e.ticket_id = $1 AND m.archived_at IS NULL AND m.enabled \
+          ORDER BY e.received_at DESC LIMIT 1",
+    )
+    .bind(ticket.id)
+    .fetch_optional(&mut *conn)
+    .await?;
+    let mailbox = match mailbox {
+        Some(m) => Some(m),
+        None => {
+            sqlx::query_as(
+                "SELECT m.name, m.address FROM sd_mailboxes m \
+                   JOIN organizations o ON o.id = m.org_id JOIN organizations t ON t.id = $1 \
+                  WHERE t.path <@ o.path AND m.archived_at IS NULL AND m.enabled \
+                  ORDER BY nlevel(o.path) DESC, m.created_at LIMIT 1",
+            )
+            .bind(ticket.org_id)
+            .fetch_optional(&mut *conn)
+            .await?
+        }
+    };
+    let Some((mailbox_name, from_address)) = mailbox else {
+        return Ok(Err("there's no mailbox to send from"));
+    };
+    // The conversation so far: what came in and what we sent.
+    let thread: Vec<String> = sqlx::query_scalar(
+        "SELECT id FROM ( \
+           SELECT message_id AS id, received_at AS at FROM sd_inbound_emails WHERE ticket_id = $1 \
+           UNION ALL \
+           SELECT message_id, created_at FROM sd_ticket_notes \
+            WHERE ticket_id = $1 AND message_id IS NOT NULL) t \
+          ORDER BY at DESC LIMIT 20",
+    )
+    .bind(ticket.id)
+    .fetch_all(&mut *conn)
+    .await?;
+    let domain = from_address
+        .rsplit_once('@')
+        .map_or_else(|| "huxley.invalid".to_owned(), |(_, d)| d.to_owned());
+    let signature =
+        author_name.map_or_else(|| mailbox_name.clone(), |a| format!("{a}\n{mailbox_name}"));
+    Ok(Ok(Reply {
+        note_id,
+        to,
+        subject: huxley_mail::with_token(&format!("Re: {}", ticket.title), ticket.number),
+        text: format!(
+            "{body}\n\n{signature}\n\n--\nReply to this email to add to your request {}.",
+            ticket.reference
+        ),
+        from_name: mailbox_name,
+        from_address,
+        message_id: format!("hx.{note_id}@{domain}"),
+        in_reply_to: thread.first().cloned().into_iter().collect(),
+        references: thread.into_iter().rev().collect(),
+    }))
+}
+
+/// Records that a note was emailed (or why it couldn't be).
+pub async fn replied(
+    conn: &mut PgConnection,
+    reply: &Reply,
+    error: Option<&str>,
+) -> DeskResult<()> {
+    sqlx::query(
+        "UPDATE sd_ticket_notes SET message_id = CASE WHEN $4::text IS NULL THEN $2 END, \
+                emailed_to = $3, emailed_at = CASE WHEN $4::text IS NULL THEN now() END, email_error = $4 \
+          WHERE id = $1",
+    )
+    .bind(reply.note_id)
+    .bind(&reply.message_id)
+    .bind(&reply.to)
+    .bind(error)
+    .execute(conn)
+    .await?;
+    Ok(())
 }
 
 #[cfg(test)]

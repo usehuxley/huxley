@@ -2433,6 +2433,69 @@
         },
         {
           "additionalProperties": false,
+          "description": "Email a public note to the ticket's requester (the `servicedesk`\nmodule).",
+          "properties": {
+            "continue_on_error": {
+              "description": "Record the error as the step's output and carry on.",
+              "type": "boolean"
+            },
+            "description": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "id": {
+              "description": "Unique in the workflow: lowercase letters, digits, underscores.\nOther steps read this step's output as `steps.<id>.output`.",
+              "type": "string"
+            },
+            "if": {
+              "description": "Skip the step unless this expression is true.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "name": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "retry": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/RetryPolicy"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "timeout": {
+              "description": "Fail the attempt after this long, e.g. `30s`.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "type": {
+              "const": "core.ticket.email_reply",
+              "type": "string"
+            },
+            "with": {
+              "$ref": "#/$defs/TicketEmailReply"
+            }
+          },
+          "required": [
+            "type",
+            "id",
+            "with"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
           "description": "Ask the organization's AI provider; the answer is text.",
           "properties": {
             "continue_on_error": {
@@ -2638,6 +2701,19 @@
       "required": [
         "when",
         "steps"
+      ],
+      "type": "object"
+    },
+    "TicketEmailReply": {
+      "additionalProperties": false,
+      "description": "A public note to email to its ticket's requester\n(`core.ticket.email_reply`), from the mailbox the ticket's mail came to\n(else the nearest one at its organization or above). The subject carries\nthe ticket's `[HX#…]` token and the message continues the email thread,\nso the requester's answer comes back to the ticket. Notes that aren't\nfor the requester (internal, written by them, already sent) are skipped.\nOutput: `{ sent: true, to, message_id }` or `{ sent: false, reason }`.",
+      "properties": {
+        "note_id": {
+          "description": "The note's id (from `ticket.note_added`)."
+        }
+      },
+      "required": [
+        "note_id"
       ],
       "type": "object"
     },

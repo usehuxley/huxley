@@ -363,6 +363,7 @@ impl<'a> Walker<'a> {
             | Step::CompanyUpdate(_)
             | Step::TicketFromEmail(_)
             | Step::MailFetch(_)
+            | Step::TicketEmailReply(_)
             | Step::AiPrompt(_)
             | Step::AiClassify(_)
             | Step::AiExtract(_) => self.external(step, &with_block(step), frame),
@@ -823,6 +824,7 @@ fn with_block(step: &Step) -> Json {
         Step::CompanyUpdate(s) => serde_json::to_value(&s.company),
         Step::TicketFromEmail(s) => serde_json::to_value(&s.email),
         Step::MailFetch(s) => serde_json::to_value(&s.fetch),
+        Step::TicketEmailReply(s) => serde_json::to_value(&s.reply),
         Step::AiPrompt(s) => serde_json::to_value(&s.ai),
         Step::AiClassify(s) => serde_json::to_value(&s.ai),
         Step::AiExtract(s) => serde_json::to_value(&s.ai),

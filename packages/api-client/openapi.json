@@ -13954,10 +13954,22 @@
 						"type": "string",
 						"format": "date-time"
 					},
+					"emailError": {
+						"type": ["string", "null"],
+						"description": "Why emailing it failed, if it did."
+					},
 					"emailId": {
 						"type": ["string", "null"],
 						"format": "uuid",
 						"description": "The email it came in, if it did."
+					},
+					"emailedAt": {
+						"type": ["string", "null"],
+						"format": "date-time"
+					},
+					"emailedTo": {
+						"type": ["string", "null"],
+						"description": "Who it was emailed to (public notes, with the service desk's email\nworkflows)."
 					},
 					"id": {
 						"type": "string",

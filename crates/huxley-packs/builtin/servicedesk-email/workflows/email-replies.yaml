@@ -1,0 +1,22 @@
+apiVersion: usehuxley.io/v1
+kind: Workflow
+metadata:
+  key: email-replies
+  name: Email replies
+  description: >-
+    Emails each public note written on a ticket to its requester, from the
+    mailbox the ticket's mail came to. The subject carries the ticket's
+    [HX#…] token, so their answer comes back to the ticket.
+spec:
+  triggers:
+    - type: event
+      event: ticket.note_added
+      filter: "{{ event.payload.change.kind == 'public' and event.payload.change.email is not defined }}"
+  steps:
+    - id: email
+      type: core.ticket.email_reply
+      with:
+        note_id: "{{ inputs.change.note }}"
+      retry: { max_attempts: 4 }
+  outputs:
+    sent: "{{ steps.email.output.sent }}"

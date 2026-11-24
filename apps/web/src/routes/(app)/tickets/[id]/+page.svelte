@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { enhance, type SubmitFunction } from '$app/forms';
 	import { resolve } from '$app/paths';
-	import { Lock, MessageSquare, Pencil } from '@lucide/svelte';
+	import { Lock, Mail, MessageSquare, Pencil } from '@lucide/svelte';
 	import { Badge, Button, Card, Dialog, Field, Input, Select, toast } from '@usehuxley/ui';
 	import { describe } from '#lib/tickets/activity.ts';
 	import { clockLines } from '#lib/tickets/sla.ts';
@@ -159,7 +159,10 @@
 										: 'border-border bg-surface'}"
 							>
 								<div class="flex flex-wrap items-center gap-2 text-xs text-fg-muted">
-									<span class="font-medium text-fg">{note.authorName ?? 'Someone'}</span>
+									<span class="font-medium text-fg">
+										{note.authorName ?? note.authorContactName ?? note.authorEmail ?? 'Someone'}
+									</span>
+									{#if note.emailId}<Badge tone="info"><Mail size={12} /> By email</Badge>{/if}
 									{#if note.kind === 'internal'}
 										<Badge tone="warning"><Lock size={12} /> Internal</Badge>
 									{:else if note.kind === 'resolution'}
@@ -170,6 +173,15 @@
 									</time>
 								</div>
 								<p class="mt-2 text-sm break-words whitespace-pre-wrap text-fg">{note.body}</p>
+								{#if note.emailedAt}
+									<p class="mt-2 text-xs text-fg-muted">
+										Emailed to {note.emailedTo} · {ago(note.emailedAt)}
+									</p>
+								{:else if note.emailError}
+									<p class="mt-2 text-xs text-danger">
+										Couldn’t email {note.emailedTo}: {note.emailError}
+									</p>
+								{/if}
 							</li>
 						{:else}
 							{@const change = entry.change}
