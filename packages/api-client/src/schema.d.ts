@@ -3743,6 +3743,7 @@ export interface components {
 			actions?: {
 				[key: string]: components['schemas']['ActionOverlay'];
 			};
+			rateLimit?: components['schemas']['RateLimit'] | null;
 		};
 		/**
 		 * @description How a list action pages through its results. Paths are dot-separated
@@ -3952,6 +3953,19 @@ export interface components {
 		};
 		PublishRequest: {
 			notes?: string | null;
+		};
+		/** @description A fixed-window rate limit. */
+		RateLimit: {
+			/**
+			 * Format: int32
+			 * @description The window's length in seconds (1–86400).
+			 */
+			perSeconds: number;
+			/**
+			 * Format: int32
+			 * @description Calls allowed per window (1–100000).
+			 */
+			requests: number;
 		};
 		/** @description Only that it was received: nothing about the runs. */
 		Received: {

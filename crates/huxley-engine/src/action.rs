@@ -187,6 +187,7 @@ pub(crate) async fn connection_for(
 struct Target {
     action: Action,
     connection_id: Uuid,
+    rate_limit: Option<huxley_integrations::overlay::RateLimit>,
 }
 
 async fn target(
@@ -225,7 +226,9 @@ async fn target(
     let mut definition: Definition = serde_json::from_value(definition)
         .map_err(|e| crate::EngineError::Document(e.to_string()))?;
     // The overlay's pagination applies to calls (names and hiding don't matter).
-    huxley_integrations::overlay::Overlay::from_json(&overlay).apply(&mut definition, &aliases);
+    let overlay = huxley_integrations::overlay::Overlay::from_json(&overlay);
+    overlay.apply(&mut definition, &aliases);
+    let rate_limit = overlay.rate_limit;
     let key = aliases[action_key].as_str().unwrap_or(action_key);
     let Some(action) = definition.actions.into_iter().find(|a| a.key == key) else {
         return Ok(Err(error(
@@ -252,6 +255,7 @@ async fn target(
     Ok(Ok(Target {
         action,
         connection_id,
+        rate_limit,
     }))
 }
 
@@ -511,19 +515,23 @@ impl Engine {
             Ok(spec) => spec,
             Err(failure) => return Ok(Err(failure)),
         };
-        Ok(self
-            .send(&target.action, spec, &resolved.base_url, input)
-            .await)
+        if let Some(limit) = target.rate_limit
+            && let Err(at) = crate::rate::acquire(self.db(), target.connection_id, limit).await?
+        {
+            return Ok(Err(rate_limited(at)));
+        }
+        Ok(self.send(&target, spec, &resolved.base_url, input).await)
     }
 
     /// Sends the request: one page, or every page with `all_pages`.
     async fn send(
         &self,
-        action: &Action,
+        target: &Target,
         spec: Json,
         base_url: &str,
         input: &Json,
     ) -> Result<Json, Json> {
+        let action = &target.action;
         if input["all_pages"] == json!(true) {
             let Some(pagination) = action.pagination.clone() else {
                 return Err(error(
@@ -537,13 +545,36 @@ impl Engine {
             let max_pages = input["max_pages"]
                 .as_u64()
                 .map_or(DEFAULT_MAX_PAGES, |n| n.clamp(1, MAX_PAGES));
-            return crate::pages::all_pages(&self.egress, spec, base_url, &pagination, max_pages)
-                .await;
+            let limit = target
+                .rate_limit
+                .map(|l| (self.db().clone(), target.connection_id, l));
+            return crate::pages::all_pages(
+                &self.egress,
+                spec,
+                base_url,
+                &pagination,
+                max_pages,
+                limit,
+            )
+            .await;
         }
         crate::http::request(&self.egress, &spec)
             .await
             .map(|response| response["body"].clone())
     }
+}
+
+/// The failure of a call over its rate limit: the step waits until `at`.
+pub(crate) fn rate_limited(at: time::OffsetDateTime) -> Json {
+    let mut failure = error(
+        "rate_limited",
+        "the integration's rate limit is used up for now",
+    );
+    failure["retry_at"] = json!(
+        at.format(&time::format_description::well_known::Rfc3339)
+            .unwrap_or_default()
+    );
+    failure
 }
 
 /// Pages followed with `all_pages` when the step doesn't say.

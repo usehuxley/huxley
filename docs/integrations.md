@@ -34,7 +34,14 @@ On an integration's page, **Edit** on an action changes how it's shown: its name
 - `{ "style": "link_header", "items": "data" }`: a `Link: <…>; rel="next"` header.
 - `{ "style": "offset", "param": "offset", "page_size": 100, "limit_param": "limit" }`: skip counts.
 
-An `integration.action` step with `all_pages: true` then follows the pages, up to `max_pages` (default 20, at most 100), and returns `{ items, pages, truncated }`. A next-page URL must be on the connection's own server, so its credentials never go anywhere else. The built-in integrations come with their list actions' pagination already set. Rate-limit settings will come later.
+An `integration.action` step with `all_pages: true` then follows the pages, up to `max_pages` (default 20, at most 100), and returns `{ items, pages, truncated }`. A next-page URL must be on the connection's own server, so its credentials never go anywhere else. The built-in integrations come with their list actions' pagination already set.
+
+**Rate limit.** The overlay's `rateLimit: { requests, perSeconds }`, under **Rate limit** on the integration's page, caps calls per connection in each window, shared by every worker.
+- **Action steps:** a step over the limit waits for the next window, without failing or using a retry attempt.
+- **Paging:** with `all_pages`, each page counts. The step pauses up to a minute for room.
+- **Polls:** a poll over the limit tries again at its next interval.
+
+A vendor's own `429` answers are still handled by a step's `retry` (`on: ["429"]`).
 
 ## Built-in integrations
 

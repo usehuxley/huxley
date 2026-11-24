@@ -672,3 +672,61 @@ async fn all_pages_follows_the_overlays_pagination() {
         "{error}"
     );
 }
+
+#[tokio::test]
+async fn calls_over_the_rate_limit_wait_for_the_next_window() {
+    let Some(h) = harness().await else { return };
+    h.connect(h.msp, "main", "key", "k-123", false).await;
+    let ctx = RequestContext::system(Via::System);
+    let mut tx = begin_scoped(&h.pools.app, &OrgScope::System).await.unwrap();
+    let overlay: huxley_integrations::overlay::Overlay =
+        serde_json::from_value(json!({ "rateLimit": { "requests": 1, "perSeconds": 3 } })).unwrap();
+    store::set_overlay(&mut tx, &ctx, h.integration, overlay)
+        .await
+        .unwrap();
+    tx.commit().await.unwrap();
+    // Start in a fresh window, so both calls fall in the same one.
+    loop {
+        let into = time::OffsetDateTime::now_utc().unix_timestamp() % 3;
+        if into == 0 {
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(200)).await;
+    }
+    let step = "    - { id: open, type: integration.action, action: tickets/listTickets }\n";
+    let first = h.start(h.msp, step).await;
+    assert_eq!(h.finish(first).await.status, RunStatus::Succeeded);
+    let second = h.start(h.msp, step).await;
+    h.engine.drain("test", 20).await.unwrap();
+    // Over the limit: the step waits (it didn't call, and didn't fail).
+    assert_eq!(h.seen().len(), 1);
+    let status: String = sqlx::query_scalar(
+        "SELECT status::text FROM step_runs WHERE run_id = $1 AND step_key = 'open'",
+    )
+    .bind(second)
+    .fetch_one(&h.pools.owner)
+    .await
+    .unwrap();
+    assert_eq!(status, "running");
+    // The next window: it goes through, on its first attempt.
+    assert_eq!(h.finish(second).await.status, RunStatus::Succeeded);
+    assert_eq!(h.seen().len(), 1);
+    let attempts: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM step_runs WHERE run_id = $1 AND step_key = 'open'",
+    )
+    .bind(second)
+    .fetch_one(&h.pools.owner)
+    .await
+    .unwrap();
+    assert_eq!(attempts, 1);
+
+    // Out-of-range limits are refused.
+    let bad: huxley_integrations::overlay::Overlay =
+        serde_json::from_value(json!({ "rateLimit": { "requests": 0, "perSeconds": 3 } })).unwrap();
+    let mut tx = begin_scoped(&h.pools.app, &OrgScope::System).await.unwrap();
+    assert!(
+        store::set_overlay(&mut tx, &ctx, h.integration, bad)
+            .await
+            .is_err()
+    );
+}

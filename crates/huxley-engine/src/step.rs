@@ -200,6 +200,14 @@ impl Engine {
             },
             Step::IntegrationAction(_) => match self.call_action(run_id, org_id, input).await {
                 Ok(Ok(output)) => Executed::Done(output),
+                // Over the rate limit: wait for the next window (not a retry).
+                Ok(Err(failure)) if failure["kind"] == "rate_limited" => {
+                    let at = failure["retry_at"]
+                        .as_str()
+                        .and_then(|t| OffsetDateTime::parse(t, &Rfc3339).ok())
+                        .unwrap_or_else(OffsetDateTime::now_utc);
+                    Executed::NotYet(at)
+                }
                 Ok(Err(failure)) => Executed::Failed(failure),
                 Err(e) => Executed::Failed(error("internal", e.to_string())),
             },

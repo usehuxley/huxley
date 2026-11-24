@@ -38,6 +38,20 @@ pub struct ActionOverlay {
 pub struct Overlay {
     #[serde(default)]
     pub actions: BTreeMap<String, ActionOverlay>,
+    /// At most this many calls per connection in a window, across every
+    /// worker; calls over it wait for the next window.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub rate_limit: Option<RateLimit>,
+}
+
+/// A fixed-window rate limit.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct RateLimit {
+    /// Calls allowed per window (1–100000).
+    pub requests: u32,
+    /// The window's length in seconds (1–86400).
+    pub per_seconds: u32,
 }
 
 impl Overlay {
@@ -71,6 +85,15 @@ impl Overlay {
             }
         }
         self.actions.retain(|_, e| *e != ActionOverlay::default());
+        if let Some(limit) = self.rate_limit
+            && (!(1..=100_000).contains(&limit.requests)
+                || !(1..=86_400).contains(&limit.per_seconds))
+        {
+            return Err((
+                "rateLimit".into(),
+                "requests from 1 to 100000, per_seconds from 1 to 86400",
+            ));
+        }
         Ok(self)
     }
 

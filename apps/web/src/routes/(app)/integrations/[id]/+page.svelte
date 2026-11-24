@@ -198,6 +198,44 @@
 		{/each}
 	</Card>
 
+	{#if canManage}
+		<Card
+			title="Rate limit"
+			description="At most this many calls per connection in each window, shared by every worker. Calls over it wait for the next window. Leave empty for none."
+		>
+			<form
+				method="POST"
+				action="?/rateLimit"
+				use:enhance={() =>
+					({ update }) =>
+						update({ reset: false })}
+				class="flex flex-wrap items-end gap-3"
+			>
+				<Field label="Calls" for="rate-requests">
+					<Input
+						id="rate-requests"
+						name="requests"
+						type="number"
+						min={1}
+						max={100000}
+						value={integration.overlay.rateLimit?.requests ?? ''}
+					/>
+				</Field>
+				<Field label="Per seconds" for="rate-per">
+					<Input
+						id="rate-per"
+						name="perSeconds"
+						type="number"
+						min={1}
+						max={86400}
+						value={integration.overlay.rateLimit?.perSeconds ?? ''}
+					/>
+				</Field>
+				<Button type="submit" variant="secondary">Save</Button>
+			</form>
+		</Card>
+	{/if}
+
 	<div class="grid gap-6 md:grid-cols-2">
 		<Card title="Authentication">
 			{#if definition.authSchemes.length === 0}
