@@ -115,6 +115,19 @@ test.describe('integrations', () => {
 		await builtIns.getByRole('button', { name: 'Add Microsoft Graph' }).click();
 		await expect(page.getByRole('heading', { level: 1 })).toHaveText('Microsoft Graph');
 		await expect(page.getByText('listUsers').first()).toBeVisible();
+
+		// Your own name for an action, and one hidden from the picker.
+		const users = page.getByRole('listitem').filter({ hasText: 'listUsers ·' });
+		await users.getByText('Edit').click();
+		await users.getByLabel('Name').fill('Find people');
+		await users.getByRole('button', { name: 'Save' }).click();
+		await expect(page.getByText('Saved your changes to listUsers.')).toBeVisible();
+		await expect(page.getByText('Find people')).toBeVisible();
+		const remove = page.getByRole('listitem').filter({ hasText: 'deleteUser ·' });
+		await remove.getByText('Edit').click();
+		await remove.getByLabel(/Hide it from the action picker/).check();
+		await remove.getByRole('button', { name: 'Save' }).click();
+		await expect(remove.getByText('Hidden', { exact: true })).toBeVisible();
 		await page.goto('/integrations');
 		await expect(
 			page.getByRole('list', { name: 'Built-in integrations' }).getByText('Added').first()

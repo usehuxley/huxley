@@ -122,6 +122,30 @@ export const actions: Actions = {
 		}
 		return { message: 'Connection deleted.' };
 	},
+	editAction: async (event) => {
+		const form = await event.request.formData();
+		const key = formString(form, 'key');
+		const client = api(event);
+		const params = { path: { id: event.params.id } };
+		const current = await client.GET('/api/v1/integrations/{id}', { params });
+		if (!current.data) return fail(404, { message: 'Integration not found.' });
+		const actions = { ...(current.data.overlay.actions ?? {}) };
+		actions[key] = {
+			name: formString(form, 'name') || null,
+			group: formString(form, 'group') || null,
+			description: formString(form, 'description') || null,
+			hidden: form.get('hidden') === 'on'
+		};
+		const {
+			data,
+			error: problem,
+			response
+		} = await client.PUT('/api/v1/integrations/{id}/overlay', { params, body: { actions } });
+		if (!data) {
+			return fail(response.status, { message: problemMessage(problem, 'Could not save it.') });
+		}
+		return { message: `Saved your changes to ${key}.` };
+	},
 	setCurrent: async (event) => {
 		const version = Number(formString(await event.request.formData(), 'version'));
 		const {
