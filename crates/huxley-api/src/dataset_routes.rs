@@ -21,6 +21,7 @@ use crate::{ApiError, ApiResult, AppState};
 pub fn routes() -> Router<AppState> {
     Router::new()
         .route("/", get(list).post(create))
+        .route("/sql", post(run_sql))
         .route("/{id}", get(detail).put(update).delete(remove))
         .route("/{id}/rows", post(write_rows))
         .route("/{id}/rows/query", post(query_rows))
@@ -405,4 +406,42 @@ pub async fn run_sync(
     .map_err(db_err)?;
     tx.commit().await.map_err(db_err)?;
     Ok((StatusCode::CREATED, Json(SyncStarted { runs })))
+}
+
+/// Runs a read-only query over the `datasets` schema (every organization's
+/// rows), for instance admins. Needs `datasets.console_url` set up.
+#[utoipa::path(post, path = "/api/v1/datasets/sql", operation_id = "run_dataset_sql", tag = "datasets",
+    request_body = huxley_datasets::console::SqlRequest,
+    responses((status = 200, body = huxley_datasets::console::SqlResult),
+              (status = 409, body = ApiError, content_type = "application/problem+json"),
+              (status = 422, body = ApiError, content_type = "application/problem+json")))]
+pub async fn run_sql(
+    State(state): State<AppState>,
+    authed: Authed,
+    Json(body): Json<huxley_datasets::console::SqlRequest>,
+) -> ApiResult<Json<huxley_datasets::console::SqlResult>> {
+    authed.require_instance(permissions::DATASETS_SQL)?;
+    let Some(pool) = &state.datasets_console else {
+        return Err(ApiError::conflict(
+            "the SQL console isn't set up on this instance (datasets.console_url)",
+        ));
+    };
+    let result = huxley_datasets::console::run(pool, &body.query).await;
+    // Every query is audited, including those that fail.
+    let mut tx = begin_scoped(&state.db, &OrgScope::System)
+        .await
+        .map_err(db_err)?;
+    let query: String = body.query.chars().take(2000).collect();
+    huxley_db::audit::record(
+        &mut tx,
+        &authed.user.ctx,
+        huxley_db::audit::AuditRecord::new("dataset.sql_run")
+            .details(serde_json::json!({ "query": query, "ok": result.is_ok() })),
+    )
+    .await
+    .map_err(db_err)?;
+    tx.commit().await.map_err(db_err)?;
+    result
+        .map(Json)
+        .map_err(|message| ApiError::validation().with_field_error("query", message))
 }

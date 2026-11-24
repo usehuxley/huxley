@@ -153,7 +153,17 @@ jobs:
         run: |
           echo "$E2E_PASSWORD" | ./target/debug/huxley admin bootstrap \
             --org-name "E2E MSP" --email "$E2E_EMAIL" --name "E2E User" --password-stdin
+      # The datasets SQL console's login: a member of the reader role only.
+      - name: Create the SQL console login
+        env:
+          PGPASSWORD: huxley
+        run: |
+          psql -h localhost -U huxley -d huxley -v ON_ERROR_STOP=1 \
+            -c "CREATE ROLE huxley_console LOGIN PASSWORD 'console-e2e'" \
+            -c "GRANT huxley_datasets_reader TO huxley_console"
       - name: Start the API
+        env:
+          HUXLEY_DATASETS__CONSOLE_URL: postgres://huxley_console:console-e2e@localhost:5432/huxley
         run: |
           ./target/debug/huxley serve --roles all > api.log 2>&1 &
           for i in $(seq 60); do ./target/debug/huxley healthcheck --addr 127.0.0.1:8080 && exit 0; sleep 1; done

@@ -102,6 +102,8 @@ pub struct AppState {
     pub runner_gateway_url: Option<String>,
     /// Public keys (`packs.trusted_keys`) whose signed packs are trusted.
     pub trusted_pack_keys: Arc<Vec<String>>,
+    /// The datasets SQL console's login (`datasets.console_url`), if set.
+    pub datasets_console: Option<PgPool>,
     pub config: Arc<ApiConfig>,
     pub login_limiter: Arc<RateLimiter>,
     /// Public form links, per client address.
@@ -130,6 +132,7 @@ impl AppState {
             engine,
             runner_gateway_url: None,
             trusted_pack_keys: Arc::new(Vec::new()),
+            datasets_console: None,
             auth,
             crypto,
             config: Arc::new(config),

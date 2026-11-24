@@ -50,10 +50,22 @@ pub struct Config {
     /// Packs (ADR-028).
     #[serde(default)]
     pub packs: PacksConfig,
+    /// Datasets (ADR-029).
+    #[serde(default)]
+    pub datasets: DatasetsConfig,
     /// Apply migrations at startup. Convenient for single-node installs; larger
     /// deployments run `huxley migrate` as a separate step before rollout.
     #[serde(default)]
     pub migrate_on_start: bool,
+}
+
+/// Datasets (ADR-029).
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(default)]
+pub struct DatasetsConfig {
+    /// A connection URL for the SQL console: a login that is a member of
+    /// `huxley_datasets_reader` and nothing else. Unset: no console.
+    pub console_url: Option<secrecy::SecretString>,
 }
 
 /// Packs (ADR-028).

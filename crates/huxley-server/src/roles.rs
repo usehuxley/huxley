@@ -81,6 +81,7 @@ async fn spawn_api(
     let state = huxley_api::AppState {
         runner_gateway_url: config.runners.public_url.clone(),
         trusted_pack_keys: Arc::new(config.packs.trusted_keys.clone()),
+        datasets_console: datasets_console(config).await?,
         ..state
     };
     spawn_runner_gateway(tasks, config, db, crypto, shutdown).await?;
@@ -268,6 +269,26 @@ async fn spawn_runner_gateway(
             .context("runner gateway failed")
     });
     Ok(())
+}
+
+/// The SQL console's pool, if `datasets.console_url` is set; refuses a
+/// login that could do more than read datasets.
+async fn datasets_console(config: &Config) -> anyhow::Result<Option<huxley_db::sqlx::PgPool>> {
+    use secrecy::ExposeSecret as _;
+    let Some(url) = &config.datasets.console_url else {
+        return Ok(None);
+    };
+    let pool = huxley_db::sqlx::postgres::PgPoolOptions::new()
+        .max_connections(2)
+        .acquire_timeout(Duration::from_secs(5))
+        .connect(url.expose_secret())
+        .await
+        .context("couldn't connect with datasets.console_url")?;
+    huxley_datasets::console::check_login(&pool)
+        .await
+        .map_err(|e| anyhow::anyhow!("datasets.console_url: {e}"))?;
+    tracing::info!("datasets SQL console enabled");
+    Ok(Some(pool))
 }
 
 #[cfg(test)]

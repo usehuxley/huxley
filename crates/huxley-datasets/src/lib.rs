@@ -15,6 +15,7 @@ use time::OffsetDateTime;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
+pub mod console;
 pub mod sync;
 
 /// Most columns a dataset may have.

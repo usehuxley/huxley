@@ -59,6 +59,7 @@ permissions! {
     WORKFLOW_PUBLISH = "workflow:publish", Org, "Publish and archive workflows";
     WORKFLOW_RUN = "workflow:run", Org, "Start and cancel runs of published workflows";
     RUNNERS_MANAGE = "platform:runners:manage", Instance, "Enrol, register and revoke script runners";
+    DATASETS_SQL = "platform:datasets:sql", Instance, "Run read-only SQL over every organization's dataset rows";
     JOBS_MANAGE = "platform:jobs:manage", Instance, "See workflow jobs that failed repeatedly and retry them";
     INTEGRATION_READ = "integration:read", Org, "View integrations and their actions";
     INTEGRATION_MANAGE = "integration:manage", Org, "Import integrations from OpenAPI specs and update them";
