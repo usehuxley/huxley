@@ -1912,6 +1912,52 @@
 				}
 			}
 		},
+		"/api/v1/datasets/sql": {
+			"post": {
+				"tags": ["datasets"],
+				"summary": "Runs a read-only query over the `datasets` schema (every organization's\nrows), for instance admins. Needs `datasets.console_url` set up.",
+				"operationId": "run_dataset_sql",
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/SqlRequest"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/SqlResult"
+								}
+							}
+						}
+					},
+					"409": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					},
+					"422": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
 		"/api/v1/datasets/{id}": {
 			"get": {
 				"tags": ["datasets"],
@@ -12297,6 +12343,44 @@
 					"authorizeUrl": {
 						"type": "string",
 						"description": "Send the browser here; the provider returns it to the callback."
+					}
+				}
+			},
+			"SqlRequest": {
+				"type": "object",
+				"required": ["query"],
+				"properties": {
+					"query": {
+						"type": "string",
+						"description": "One `SELECT` (or `WITH … SELECT`) over the `datasets` schema."
+					}
+				},
+				"additionalProperties": false
+			},
+			"SqlResult": {
+				"type": "object",
+				"required": ["columns", "rows", "truncated"],
+				"properties": {
+					"columns": {
+						"type": "array",
+						"items": {
+							"type": "string"
+						}
+					},
+					"rows": {
+						"type": "array",
+						"items": {
+							"type": "object",
+							"additionalProperties": {},
+							"propertyNames": {
+								"type": "string"
+							}
+						},
+						"description": "Each row, by column name."
+					},
+					"truncated": {
+						"type": "boolean",
+						"description": "More rows matched than were returned."
 					}
 				}
 			},

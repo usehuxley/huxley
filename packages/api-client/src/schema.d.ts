@@ -801,6 +801,26 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
+	'/api/v1/datasets/sql': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/**
+		 * Runs a read-only query over the `datasets` schema (every organization's
+		 *     rows), for instance admins. Needs `datasets.console_url` set up.
+		 */
+		post: operations['run_dataset_sql'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
 	'/api/v1/datasets/{id}': {
 		parameters: {
 			query?: never;
@@ -4717,6 +4737,19 @@ export interface components {
 			/** @description Send the browser here; the provider returns it to the callback. */
 			authorizeUrl: string;
 		};
+		SqlRequest: {
+			/** @description One `SELECT` (or `WITH … SELECT`) over the `datasets` schema. */
+			query: string;
+		};
+		SqlResult: {
+			columns: string[];
+			/** @description Each row, by column name. */
+			rows: {
+				[key: string]: unknown;
+			}[];
+			/** @description More rows matched than were returned. */
+			truncated: boolean;
+		};
 		SsoCallbackRequest: {
 			code: string;
 			state: string;
@@ -6810,6 +6843,45 @@ export interface operations {
 				};
 				content: {
 					'application/json': components['schemas']['Dataset'];
+				};
+			};
+			409: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	run_dataset_sql: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['SqlRequest'];
+			};
+		};
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['SqlResult'];
 				};
 			};
 			409: {

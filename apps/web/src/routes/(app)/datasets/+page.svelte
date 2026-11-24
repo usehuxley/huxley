@@ -7,6 +7,7 @@
 
 	let { data, form }: PageProps = $props();
 	let canManage = $derived(data.user.grantedPermissions.includes('dataset:manage'));
+	let canQuery = $derived(data.user.grantedPermissions.includes('platform:datasets:sql'));
 	let orgId = $state('');
 	$effect(() => {
 		if (!orgId) orgId = data.currentOrg?.id ?? data.orgs[0]?.id ?? '';
@@ -29,6 +30,11 @@
 			Typed tables of data kept in Huxley, synced from integrations or written by workflows, for
 			workflows and forms to use. Each organization sees only its own rows.
 		</p>
+		{#if canQuery}
+			<a href={resolve('/(app)/datasets/sql')} class="mt-2 inline-block text-sm hover:underline">
+				SQL console
+			</a>
+		{/if}
 	</header>
 	<Card title="Datasets">
 		{#if data.datasets.length === 0}

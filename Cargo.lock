@@ -2254,6 +2254,7 @@ dependencies = [
  "huxley-authz",
  "huxley-core",
  "huxley-crypto",
+ "huxley-datasets",
  "huxley-db",
  "huxley-email",
  "huxley-engine",

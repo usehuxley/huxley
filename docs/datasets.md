@@ -1,6 +1,6 @@
 # Datasets
 
-A **dataset** is a typed table of data kept in Huxley, such as "Microsoft 365 users for every client", so workflows, forms and reports can use it without calling an API each time (design doc §9, ADR-029). This page covers definitions, rows, the Datasets page, workflow steps, form choices, syncing from integrations, and the API. A read-only SQL console comes later.
+A **dataset** is a typed table of data kept in Huxley, such as "Microsoft 365 users for every client", so workflows, forms and reports can use it without calling an API each time (design doc §9, ADR-029). This page covers definitions, rows, the Datasets page, workflow steps, form choices, syncing from integrations, the SQL console, and the API.
 
 ## Definitions
 
@@ -95,6 +95,31 @@ How a sync works:
 | `POST /api/v1/datasets/{id}/sync/run` | sync now: one run per target organization |
 
 Values are checked against their column types. A write holds at most 10,000 rows, and a query returns at most 1,000. Reading needs `dataset:read` and changing needs `dataset:manage`, at the dataset's organization; Technician and Read-only have `dataset:read`. Creating, changing and deleting datasets is audited.
+
+## The SQL console
+
+Instance administrators (`platform:datasets:sql`) can run read-only SQL over every organization's dataset rows under **Datasets → SQL console**, or with `POST /api/v1/datasets/sql { query }`.
+
+Limits:
+
+- one `SELECT` (or `WITH … SELECT`) at a time
+- at most 5 seconds and 1,000 rows
+- only the `datasets` schema, whose tables are named `ds_<id>`
+- every query, including failed ones, is audited (`dataset.sql_run`)
+
+The console runs on **its own database login**, which can read dataset tables and nothing else. It isn't available until you create one and set `datasets.console_url`:
+
+```sql
+CREATE ROLE huxley_console LOGIN PASSWORD '…';
+GRANT huxley_datasets_reader TO huxley_console;
+```
+
+```toml
+[datasets]
+console_url = "postgres://huxley_console:…@db:5432/huxley"
+```
+
+**Why a separate login?** Queries on Huxley's own connection could switch roles with `set_config('role', …)`, which Postgres allows for any role the connecting user may use. On the console's login there's nothing to switch to. Huxley refuses to start if that login is a superuser, can bypass row security, or belongs to any role besides `huxley_datasets_reader`. Queries also run in a read-only transaction, as a single subquery.
 
 ## How it's stored
 
