@@ -301,7 +301,7 @@
 			},
 			"post": {
 				"tags": ["assistant"],
-				"summary": "Starts a conversation with a first message, and returns it answered\n(or waiting for your approval of an action).",
+				"summary": "Starts a conversation with a first message, and returns it answered\n(or waiting for your approval of an action). With\n`Accept: text/event-stream`, streams the answer as it's written.",
 				"operationId": "start_assistant_conversation",
 				"requestBody": {
 					"content": {
@@ -404,7 +404,7 @@
 		"/api/v1/assistant/conversations/{id}/decisions": {
 			"post": {
 				"tags": ["assistant"],
-				"summary": "Approves or denies the actions waiting for you, and lets the assistant\ncarry on.",
+				"summary": "Approves or denies the actions waiting for you, and lets the assistant\ncarry on. With `Accept: text/event-stream`, streams the rest of the\nanswer.",
 				"operationId": "decide_assistant_actions",
 				"parameters": [
 					{
@@ -452,7 +452,7 @@
 		"/api/v1/assistant/conversations/{id}/messages": {
 			"post": {
 				"tags": ["assistant"],
-				"summary": "Sends a message, and returns the conversation answered (or waiting for\nyour approval of an action).",
+				"summary": "Sends a message, and returns the conversation answered (or waiting for\nyour approval of an action). With `Accept: text/event-stream`, streams\nthe answer as it's written: `text`, `turn_ended`, `tool_started` and\n`tool_finished` events, then `done` (the conversation) or `failed`.",
 				"operationId": "send_assistant_message",
 				"parameters": [
 					{

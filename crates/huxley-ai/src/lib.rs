@@ -3,6 +3,7 @@
 pub mod chat;
 pub mod provider;
 pub mod store;
+mod stream;
 
 pub use provider::{AiError, Completion, Endpoint, ProviderKind, Request, complete};
 pub use store::{Ai, Purpose};

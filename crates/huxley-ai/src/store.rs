@@ -443,7 +443,9 @@ impl Ai {
     }
 
     /// The next assistant turn of a conversation with tools, through
-    /// `org_id`'s provider. Logged and budgeted like any call.
+    /// `org_id`'s provider. Logged and budgeted like any call. With
+    /// `on_text`, the turn is streamed and the text reaches it as it's
+    /// written; the turn is the same either way.
     pub async fn turn(
         &self,
         org_id: Uuid,
@@ -451,13 +453,20 @@ impl Ai {
         system: Option<&str>,
         messages: &[crate::chat::Message],
         tools: &[crate::chat::ToolDef],
+        on_text: Option<&(dyn Fn(&str) + Send + Sync)>,
     ) -> Result<crate::chat::Turn, AiError> {
         let (provider, ready) = self.prepare(org_id, None).await?;
-        let result = match ready {
-            Ok((endpoint, key)) => {
+        let result = match (ready, on_text) {
+            (Ok((endpoint, key)), None) => {
                 crate::chat::turn(&self.http, &endpoint, &key, system, messages, tools, 0).await
             }
-            Err(e) => Err(e),
+            (Ok((endpoint, key)), Some(on_text)) => {
+                crate::chat::turn_streaming(
+                    &self.http, &endpoint, &key, system, messages, tools, 0, on_text,
+                )
+                .await
+            }
+            (Err(e), _) => Err(e),
         };
         let usage = result.as_ref().map(|t| Usage {
             model: &t.model,

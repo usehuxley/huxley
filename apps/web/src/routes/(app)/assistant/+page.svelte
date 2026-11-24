@@ -1,7 +1,10 @@
 <script lang="ts">
-	import { enhance } from '$app/forms';
+	import { enhance, type SubmitFunction } from '$app/forms';
+	import { goto, invalidateAll } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { Badge, Button, Card } from '@usehuxley/ui';
+	import { formString } from '#lib/forms.ts';
+	import { readEvents } from '#lib/sse.ts';
 	import type { PageProps } from './$types';
 
 	let { data, form }: PageProps = $props();
@@ -14,14 +17,130 @@
 		test_run_workflow: 'Test-run a workflow'
 	};
 	const label = (name: string) => labels[name] ?? name.replaceAll('_', ' ');
-	const submitting = () => {
+	// An answer as it streams in: the question, then text and tool calls in
+	// the order they happen. Replaced by the saved conversation at the end.
+	type LiveItem =
+		| { kind: 'text'; text: string }
+		| { kind: 'tool'; id: string; name: string; state: 'running' | 'done' | 'failed' };
+	type Problem = { title?: string; detail?: string; message?: string } | null;
+	let live = $state<{ question: string | null; items: LiveItem[]; turnOpen: boolean } | null>(null);
+	let streamError = $state<string | null>(null);
+	const problemText = (p: Problem) =>
+		p?.detail ?? p?.message ?? p?.title ?? 'The assistant could not answer.';
+
+	/** Streams an answer; true once the conversation is saved and shown. */
+	async function stream(
+		action: 'start' | 'say' | 'decide',
+		payload: Record<string, unknown>,
+		question: string | null
+	): Promise<boolean> {
 		busy = true;
-		return async ({ update }: { update: (o?: { reset?: boolean }) => Promise<void> }) => {
-			await update();
+		streamError = null;
+		live = { question, items: [], turnOpen: false };
+		try {
+			const res = await fetch(resolve('/(app)/assistant/stream'), {
+				method: 'POST',
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify({ action, ...payload })
+			});
+			if (!res.ok || !res.body) {
+				streamError = problemText((await res.json().catch(() => null)) as Problem);
+				return false;
+			}
+			for await (const { event, data } of readEvents(res.body)) {
+				const state = live;
+				if (event === 'text') {
+					const text = (data as { text: string }).text;
+					const last = state.items.at(-1);
+					if (state.turnOpen && last?.kind === 'text') last.text += text;
+					else state.items.push({ kind: 'text', text });
+					state.turnOpen = true;
+				} else if (event === 'turn_ended') {
+					state.turnOpen = false;
+				} else if (event === 'tool_started') {
+					const tool = data as { id: string; name: string };
+					state.items.push({ kind: 'tool', id: tool.id, name: tool.name, state: 'running' });
+				} else if (event === 'tool_finished') {
+					const done = data as { id: string; isError: boolean };
+					for (const item of state.items) {
+						if (item.kind === 'tool' && item.id === done.id) {
+							item.state = done.isError ? 'failed' : 'done';
+						}
+					}
+				} else if (event === 'done') {
+					const { id } = (data as { conversation: { id: string } }).conversation;
+					if (action === 'start') {
+						// eslint-disable-next-line svelte/no-navigation-without-resolve -- resolve() plus a query string
+						await goto(`${resolve('/(app)/assistant')}?c=${id}`, { invalidateAll: true });
+					} else {
+						await invalidateAll();
+					}
+					return true;
+				} else if (event === 'failed') {
+					streamError = problemText((data as { problem: Problem }).problem);
+					await invalidateAll();
+					return false;
+				}
+			}
+			streamError = 'The answer stopped early. Reload to see what was saved.';
+			return false;
+		} catch {
+			streamError = 'The connection was lost. Reload to see what was saved.';
+			return false;
+		} finally {
 			busy = false;
+			live = null;
+		}
+	}
+
+	/** Forms stream with JavaScript; without it they post as usual. */
+	const streamed =
+		(action: 'start' | 'say' | 'decide'): SubmitFunction =>
+		({ formElement, formData, cancel }) => {
+			cancel();
+			const id = formString(formData, 'id');
+			if (action === 'decide') {
+				const decisions: Record<string, boolean> = {};
+				for (const [key, value] of formData.entries()) {
+					if (key.startsWith('call:')) decisions[key.slice(5)] = value === 'approve';
+				}
+				void stream('decide', { id, decisions }, null);
+				return;
+			}
+			const text = formString(formData, 'text').trim();
+			void stream(action, { id, orgId: formString(formData, 'orgId'), text }, text).then((ok) => {
+				if (ok) formElement.reset();
+			});
 		};
-	};
 </script>
+
+{#snippet answering()}
+	{#if live}
+		<ol class="flex flex-col gap-3" aria-label="Answer in progress" aria-busy="true">
+			{#if live.question}
+				<li
+					class="self-end rounded-card bg-accent-soft px-3 py-2 text-sm whitespace-pre-wrap text-fg"
+				>
+					{live.question}
+				</li>
+			{/if}
+			{#each live.items as item, i (i)}
+				{#if item.kind === 'text'}
+					<li class="text-sm whitespace-pre-wrap text-fg">{item.text}</li>
+				{:else}
+					<li class="text-xs text-fg-muted">
+						{label(item.name)}:
+						{item.state === 'running' ? 'running…' : item.state === 'done' ? 'done' : 'failed'}
+					</li>
+				{/if}
+			{/each}
+			{#if live.items.length === 0}
+				<li class="text-sm text-fg-muted">Thinking…</li>
+			{/if}
+		</ol>
+	{/if}
+	<p class="sr-only" role="status">{live ? 'The assistant is answering…' : ''}</p>
+{/snippet}
 
 <svelte:head>
 	<title>Assistant · Huxley</title>
@@ -59,7 +178,9 @@
 				only drafts, and asks before changing anything.
 			</p>
 		</header>
-		{#if form && 'message' in form && form.message}
+		{#if streamError}
+			<p class="text-sm text-danger" role="alert">{streamError}</p>
+		{:else if form && 'message' in form && form.message}
 			<p class="text-sm text-danger" role="alert">{form.message}</p>
 		{/if}
 
@@ -101,13 +222,14 @@
 					{/if}
 				{/each}
 			</ol>
+			{@render answering()}
 
-			{#if conversation.pending.length}
+			{#if conversation.pending.length && !live}
 				<Card title="Waiting for your approval">
 					<form
 						method="POST"
 						action="?/decide"
-						use:enhance={submitting}
+						use:enhance={streamed('decide')}
 						class="flex flex-col gap-3"
 					>
 						<input type="hidden" name="id" value={conversation.id} />
@@ -136,7 +258,12 @@
 					</form>
 				</Card>
 			{:else}
-				<form method="POST" action="?/say" use:enhance={submitting} class="flex flex-col gap-2">
+				<form
+					method="POST"
+					action="?/say"
+					use:enhance={streamed('say')}
+					class="flex flex-col gap-2"
+				>
 					<input type="hidden" name="id" value={conversation.id} />
 					<label for="say" class="sr-only">Message</label>
 					<textarea
@@ -157,7 +284,13 @@
 				</form>
 			{/if}
 		{:else}
-			<form method="POST" action="?/start" use:enhance={submitting} class="flex flex-col gap-2">
+			{@render answering()}
+			<form
+				method="POST"
+				action="?/start"
+				use:enhance={streamed('start')}
+				class="flex flex-col gap-2"
+			>
 				<input type="hidden" name="orgId" value={data.orgId} />
 				<label for="start" class="sr-only">Message</label>
 				<textarea
