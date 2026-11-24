@@ -212,6 +212,23 @@ export const STEPS: StepSpec[] = [
 		]
 	},
 	{
+		type: 'core.ticket.from_email',
+		label: 'Email to ticket',
+		description:
+			'Open a ticket from a received email, or add it to the ticket it replies to. Skips auto-replies and loops.',
+		group: 'Data',
+		module: 'servicedesk',
+		template: { with: { email_id: '{{ inputs.email_id }}' } },
+		fields: [
+			{
+				path: 'with.email_id',
+				label: 'Email',
+				kind: 'expression',
+				hint: 'The email’s id, from email.received'
+			}
+		]
+	},
+	{
 		type: 'dataset.upsert',
 		label: 'Write to a dataset',
 		description: 'Add or update rows (by the dataset’s key), or replace an organization’s rows.',
@@ -634,6 +651,8 @@ export function summary(step: Step): string {
 			return text(isStep(step.with) ? step.with.email : '');
 		case 'core.company.update':
 			return text(isStep(step.with) ? step.with.status : '');
+		case 'core.ticket.from_email':
+			return text(isStep(step.with) ? step.with.email_id : '');
 		case 'wait_for_callback':
 			return `expires after ${text(step.expires ?? '24h')}`;
 		case 'transform':

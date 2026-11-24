@@ -6,6 +6,7 @@
 
 pub mod calendar;
 pub mod config;
+pub mod mail;
 pub mod queues;
 pub mod sla;
 pub mod tickets;

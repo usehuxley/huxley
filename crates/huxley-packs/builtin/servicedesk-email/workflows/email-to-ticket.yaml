@@ -1,0 +1,29 @@
+apiVersion: usehuxley.io/v1
+kind: Workflow
+metadata:
+  key: email-to-ticket
+  name: Email to ticket
+  description: >-
+    Each email a mailbox receives opens a ticket, or is added to the ticket it
+    replies to. Auto-replies, bounces, lists and mail loops are skipped. Copy
+    it to change what happens, for example to triage new tickets with AI.
+spec:
+  inputs:
+    type: object
+    required: [email_id]
+    properties:
+      email_id: { type: string }
+      mailbox_id: { type: string }
+      from: { type: [string, "null"] }
+      subject: { type: string }
+  triggers:
+    - type: event
+      event: email.received
+  steps:
+    - id: ticket
+      type: core.ticket.from_email
+      with:
+        email_id: "{{ inputs.email_id }}"
+  outputs:
+    outcome: "{{ steps.ticket.output.outcome }}"
+    ticket_id: "{{ steps.ticket.output.ticket_id }}"

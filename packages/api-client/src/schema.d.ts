@@ -1625,6 +1625,83 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
+	'/api/v1/mailboxes': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** Service desk mailboxes. Needs `servicedesk:configure`. */
+		get: operations['list_mailboxes'];
+		put?: never;
+		/** Adds a mailbox. Needs `servicedesk:configure`. */
+		post: operations['create_mailbox'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/mailboxes/{id}': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get: operations['get_mailbox'];
+		/** Changes a mailbox. Needs `servicedesk:configure`. */
+		put: operations['update_mailbox'];
+		post?: never;
+		/** Archives a mailbox: it takes no more mail. Needs `servicedesk:configure`. */
+		delete: operations['archive_mailbox'];
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/mailboxes/{id}/emails': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/**
+		 * A mailbox's latest emails and what became of them. Needs
+		 *     `servicedesk:configure`.
+		 */
+		get: operations['list_emails'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/mailboxes/{id}/messages': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/**
+		 * Delivers a raw message (`message/rfc822`) to a mailbox, as a mail
+		 *     server's forwarding rule would. It's stored and `email.received` is
+		 *     emitted for workflows such as *Email to ticket*. Needs `mailbox:ingest`.
+		 */
+		post: operations['post_message'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
 	'/api/v1/modules': {
 		parameters: {
 			query?: never;
@@ -4333,6 +4410,13 @@ export interface components {
 			 */
 			orgId?: string | null;
 		};
+		CreateMailbox: components['schemas']['MailboxInput'] & {
+			/**
+			 * Format: uuid
+			 * @description The organization it belongs to (usually your MSP).
+			 */
+			orgId: string;
+		};
 		CreateOrgRequest: {
 			kind: components['schemas']['OrgKindInput'];
 			name: string;
@@ -4498,6 +4582,38 @@ export interface components {
 			message: string;
 			/** @description e.g. `spec.steps[2].then[0].id` */
 			path: string;
+		};
+		/** @description A received message, as kept. */
+		Email: {
+			/** @description `[{filename, contentType, size, inline}]` */
+			attachments: Record<string, never>[];
+			/** @description Why it looks automatic, if it does. */
+			automatic?: string | null;
+			bodyText: string;
+			fromAddress?: string | null;
+			fromName?: string | null;
+			/** Format: uuid */
+			id: string;
+			/** Format: uuid */
+			mailboxId: string;
+			messageId: string;
+			/** Format: uuid */
+			orgId: string;
+			/**
+			 * @description What became of it: `ticket_created`, `note_added`, `ticket_reopened`,
+			 *     `ignored_automatic`, `ignored_loop` or `ignored_unknown_sender`.
+			 */
+			outcome?: string | null;
+			outcomeDetail?: string | null;
+			/** Format: date-time */
+			processedAt?: string | null;
+			/** Format: date-time */
+			receivedAt: string;
+			/** Format: int64 */
+			sizeBytes: number;
+			subject: string;
+			/** Format: uuid */
+			ticketId?: string | null;
 		};
 		EnrollRequest: {
 			/** @description PEM certificate signing request for the runner's own key. */
@@ -4798,6 +4914,55 @@ export interface components {
 					/** @enum {string} */
 					status: 'mfaRequired';
 			  };
+		Mailbox: {
+			address: string;
+			/** Format: date-time */
+			createdAt: string;
+			enabled: boolean;
+			/** Format: uuid */
+			id: string;
+			/** @description `forward` (posted to Huxley), `imap` or `graph` (fetched). */
+			kind: string;
+			/** Format: date-time */
+			lastCheckedAt?: string | null;
+			lastError?: string | null;
+			name: string;
+			/** Format: uuid */
+			orgId: string;
+			/** Format: uuid */
+			queueId?: string | null;
+			stripReplies: boolean;
+			/** @description The type of new tickets (a ticket type's key). */
+			ticketType: string;
+			/**
+			 * Format: uuid
+			 * @description Where unknown senders' tickets go; none: the mailbox's organization.
+			 */
+			unknownOrgId?: string | null;
+			/** @description `create_contact`, `no_requester` or `ignore`. */
+			unknownSender: string;
+			/** Format: int32 */
+			version: number;
+		};
+		MailboxInput: {
+			address: string;
+			enabled?: boolean | null;
+			/** @description `forward` (default), `imap` or `graph`. */
+			kind?: string | null;
+			name: string;
+			/** Format: uuid */
+			queueId?: string | null;
+			stripReplies?: boolean | null;
+			ticketType?: string | null;
+			/** Format: uuid */
+			unknownOrgId?: string | null;
+			unknownSender?: string | null;
+			/**
+			 * Format: int32
+			 * @description The version you read (updates only).
+			 */
+			version?: number | null;
+		};
 		/** @description One cell of the priority matrix. */
 		MatrixCell: {
 			/** Format: int32 */
@@ -4823,6 +4988,13 @@ export interface components {
 			 *     `403 mfa-setup-required`.
 			 */
 			mfaSetupRequired: boolean;
+		};
+		/** @description What happened to a posted message. */
+		MessageReceived: {
+			/** @description The mailbox already had this message (by its `Message-ID`). */
+			duplicate: boolean;
+			/** Format: uuid */
+			emailId: string;
 		};
 		MfaChallengeRequest: {
 			/** @description From the `mfaRequired` response. */
@@ -4978,12 +5150,21 @@ export interface components {
 		Note: {
 			/** Format: uuid */
 			authorContactId?: string | null;
+			/** @description The contact who wrote it (by email). */
+			authorContactName?: string | null;
+			/** @description The address it came from, when it came by email. */
+			authorEmail?: string | null;
 			authorName?: string | null;
 			/** Format: uuid */
 			authorUserId?: string | null;
 			body: string;
 			/** Format: date-time */
 			createdAt: string;
+			/**
+			 * Format: uuid
+			 * @description The email it came in, if it did.
+			 */
+			emailId?: string | null;
 			/** Format: uuid */
 			id: string;
 			/** @description `public`, `internal` or `resolution`. */
@@ -9882,6 +10063,202 @@ export interface operations {
 				};
 				content: {
 					'application/json': components['schemas']['RetryJobResponse'];
+				};
+			};
+		};
+	};
+	list_mailboxes: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['Mailbox'][];
+				};
+			};
+		};
+	};
+	create_mailbox: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['CreateMailbox'];
+			};
+		};
+		responses: {
+			201: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['Mailbox'];
+				};
+			};
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	get_mailbox: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['Mailbox'];
+				};
+			};
+			404: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	update_mailbox: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['MailboxInput'];
+			};
+		};
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['Mailbox'];
+				};
+			};
+			409: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	archive_mailbox: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			204: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content?: never;
+			};
+			404: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	list_emails: {
+		parameters: {
+			query?: {
+				/** @description 1 to 200 (default 50). */
+				limit?: number | null;
+			};
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['Email'][];
+				};
+			};
+		};
+	};
+	post_message: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'message/rfc822': number[];
+			};
+		};
+		responses: {
+			202: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['MessageReceived'];
+				};
+			};
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
 				};
 			};
 		};

@@ -2298,6 +2298,69 @@
         },
         {
           "additionalProperties": false,
+          "description": "Turn a received email into ticket work: a new ticket, or a reply on\nthe ticket it belongs to (the `servicedesk` module).",
+          "properties": {
+            "continue_on_error": {
+              "description": "Record the error as the step's output and carry on.",
+              "type": "boolean"
+            },
+            "description": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "id": {
+              "description": "Unique in the workflow: lowercase letters, digits, underscores.\nOther steps read this step's output as `steps.<id>.output`.",
+              "type": "string"
+            },
+            "if": {
+              "description": "Skip the step unless this expression is true.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "name": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "retry": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/RetryPolicy"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "timeout": {
+              "description": "Fail the attempt after this long, e.g. `30s`.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "type": {
+              "const": "core.ticket.from_email",
+              "type": "string"
+            },
+            "with": {
+              "$ref": "#/$defs/TicketFromEmail"
+            }
+          },
+          "required": [
+            "type",
+            "id",
+            "with"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
           "description": "Ask the organization's AI provider; the answer is text.",
           "properties": {
             "continue_on_error": {
@@ -2503,6 +2566,19 @@
       "required": [
         "when",
         "steps"
+      ],
+      "type": "object"
+    },
+    "TicketFromEmail": {
+      "additionalProperties": false,
+      "description": "A received email to turn into ticket work (`core.ticket.from_email`):\nskipped if it's automatic mail or a loop, added as a reply to the ticket\nit belongs to (by its `[HX#…]` subject token or the messages it answers;\na resolved ticket reopens), or opened as a new ticket for its sender, per\nits mailbox's rules. Its attachments go on the ticket. Output:\n`{ outcome, detail, ticket_id, created }`; `outcome` is `ticket_created`,\n`note_added`, `ticket_reopened`, `ignored_automatic`, `ignored_loop` or\n`ignored_unknown_sender`. Running it again for the same email changes\nnothing.",
+      "properties": {
+        "email_id": {
+          "description": "The email's id (from `email.received`)."
+        }
+      },
+      "required": [
+        "email_id"
       ],
       "type": "object"
     },

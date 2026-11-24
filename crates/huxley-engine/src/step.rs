@@ -232,6 +232,10 @@ impl Engine {
                     Err(failure) => Executed::Failed(failure),
                 }
             }
+            Step::TicketFromEmail(_) => match self.ticket_from_email(org_id, input).await {
+                Ok(output) => Executed::Done(output),
+                Err(failure) => Executed::Failed(failure),
+            },
             Step::DatasetUpsert(_) => {
                 match self.upsert_dataset(org_id, input, record.tainted).await {
                     Ok(output) => Executed::Done(output),

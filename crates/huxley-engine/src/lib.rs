@@ -15,6 +15,7 @@ pub mod approval;
 mod callback;
 mod crm;
 mod dataset;
+mod desk;
 mod egress;
 mod email;
 mod http;

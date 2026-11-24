@@ -1,0 +1,9 @@
+apiVersion: usehuxley.io/v1
+kind: Pack
+key: huxley/servicedesk-email
+name: Service desk email
+version: 1.0.0
+publisher: Huxley
+description: Turns email received by your service desk mailboxes into tickets and replies.
+contents:
+  workflows: [email-to-ticket]

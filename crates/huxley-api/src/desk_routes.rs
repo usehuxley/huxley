@@ -10,6 +10,7 @@ use axum::{Json, Router};
 use huxley_authz::permissions;
 use huxley_db::{OrgScope, begin_scoped};
 use huxley_servicedesk::config::{self, MatrixCell, TicketType};
+use huxley_servicedesk::mail::{self, Email, Mailbox, MailboxInput};
 use huxley_servicedesk::queues::{self, Queue, QueueInput};
 use huxley_servicedesk::sla::{self, Policy, PolicyInput, SlaAssignment};
 use huxley_servicedesk::tickets::{
@@ -47,6 +48,16 @@ pub fn routes() -> Router<AppState> {
         .route("/tickets/{id}/status", post(change_status))
         .route("/tickets/{id}/notes", get(list_notes).post(add_note))
         .route("/tickets/{id}/activity", get(list_activity))
+        .route("/mailboxes", get(list_mailboxes).post(create_mailbox))
+        .route(
+            "/mailboxes/{id}",
+            get(get_mailbox).put(update_mailbox).delete(archive_mailbox),
+        )
+        .route("/mailboxes/{id}/emails", get(list_emails))
+        .route(
+            "/mailboxes/{id}/messages",
+            post(post_message).layer(axum::extract::DefaultBodyLimit::max(MAX_MESSAGE_BYTES)),
+        )
 }
 
 /// Routes under `/orgs`.
@@ -267,22 +278,6 @@ pub async fn list_tickets(
     ))
 }
 
-/// The organization's ticket prefix (`numbering.ticket_prefix`).
-async fn prefix(state: &AppState, org_id: Uuid) -> ApiResult<String> {
-    let mut tx = begin_scoped(&state.db, &OrgScope::System)
-        .await
-        .map_err(db_err)?;
-    let settings = huxley_orgs::settings::resolve(&mut tx, org_id)
-        .await
-        .map_err(db_err)?;
-    tx.commit().await.map_err(db_err)?;
-    Ok(settings
-        .into_iter()
-        .find(|s| s.def.key == huxley_orgs::settings::TICKET_PREFIX)
-        .and_then(|s| s.value)
-        .unwrap_or_else(|| "T".into()))
-}
-
 /// Creates a ticket for an organization.
 #[utoipa::path(post, path = "/api/v1/tickets", tag = "servicedesk", request_body = NewTicket,
     responses((status = 201, body = Ticket), (status = 422, body = ApiError, content_type = "application/problem+json")))]
@@ -292,7 +287,10 @@ pub async fn create_ticket(
     Json(body): Json<NewTicket>,
 ) -> ApiResult<(StatusCode, Json<Ticket>)> {
     allow(&state, &authed, permissions::TICKET_WRITE, body.org_id).await?;
-    let prefix = prefix(&state, body.org_id).await?;
+    let prefix = scoped(&state, &OrgScope::System, async |tx| {
+        tickets::prefix_for(tx, body.org_id).await
+    })
+    .await?;
     // The SLA terms come from the organizations above too: system scope.
     let plan = scoped(&state, &OrgScope::System, async |tx| {
         sla::plan_for(tx, body.org_id).await
@@ -543,5 +541,197 @@ pub async fn set_assignment(
             sla::assign(tx, &ctx, id, body.policy_id).await
         })
         .await?,
+    ))
+}
+
+/// The largest message a mailbox takes (with its attachments).
+const MAX_MESSAGE_BYTES: usize = 40 * 1024 * 1024;
+
+/// Checks `servicedesk:configure` and the module at a mailbox's organization.
+async fn configure_mailbox(state: &AppState, authed: &Authed, id: Uuid) -> ApiResult<()> {
+    authed.require_instance(permissions::SERVICEDESK_CONFIGURE)?;
+    let org = owner(state, "sd_mailboxes", id).await?;
+    require_module_at(state, MODULE, org).await
+}
+
+/// Service desk mailboxes. Needs `servicedesk:configure`.
+#[utoipa::path(get, path = "/api/v1/mailboxes", tag = "servicedesk",
+    responses((status = 200, body = Vec<Mailbox>)))]
+pub async fn list_mailboxes(
+    State(state): State<AppState>,
+    authed: Authed,
+) -> ApiResult<Json<Vec<Mailbox>>> {
+    require_module(&state, MODULE).await?;
+    authed.require_instance(permissions::SERVICEDESK_CONFIGURE)?;
+    Ok(Json(
+        scoped(&state, &OrgScope::System, async |tx| {
+            mail::mailboxes(tx).await
+        })
+        .await?,
+    ))
+}
+
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct CreateMailbox {
+    /// The organization it belongs to (usually your MSP).
+    pub org_id: Uuid,
+    #[serde(flatten)]
+    pub mailbox: MailboxInput,
+}
+
+/// Adds a mailbox. Needs `servicedesk:configure`.
+#[utoipa::path(post, path = "/api/v1/mailboxes", tag = "servicedesk", request_body = CreateMailbox,
+    responses((status = 201, body = Mailbox), (status = 422, body = ApiError, content_type = "application/problem+json")))]
+pub async fn create_mailbox(
+    State(state): State<AppState>,
+    authed: Authed,
+    Json(body): Json<CreateMailbox>,
+) -> ApiResult<(StatusCode, Json<Mailbox>)> {
+    authed.require_instance(permissions::SERVICEDESK_CONFIGURE)?;
+    require_module_at(&state, MODULE, body.org_id).await?;
+    let ctx = authed.user.ctx.clone();
+    let mailbox = scoped(&state, &OrgScope::System, async |tx| {
+        mail::create(tx, &ctx, body.org_id, &body.mailbox).await
+    })
+    .await?;
+    Ok((StatusCode::CREATED, Json(mailbox)))
+}
+
+#[utoipa::path(get, path = "/api/v1/mailboxes/{id}", tag = "servicedesk", params(("id" = Uuid, Path)),
+    responses((status = 200, body = Mailbox), (status = 404, body = ApiError, content_type = "application/problem+json")))]
+pub async fn get_mailbox(
+    State(state): State<AppState>,
+    authed: Authed,
+    Path(id): Path<Uuid>,
+) -> ApiResult<Json<Mailbox>> {
+    configure_mailbox(&state, &authed, id).await?;
+    Ok(Json(
+        scoped(&state, &OrgScope::System, async |tx| {
+            mail::mailbox(tx, id).await
+        })
+        .await?,
+    ))
+}
+
+/// Changes a mailbox. Needs `servicedesk:configure`.
+#[utoipa::path(put, path = "/api/v1/mailboxes/{id}", tag = "servicedesk", params(("id" = Uuid, Path)),
+    request_body = MailboxInput,
+    responses((status = 200, body = Mailbox), (status = 409, body = ApiError, content_type = "application/problem+json")))]
+pub async fn update_mailbox(
+    State(state): State<AppState>,
+    authed: Authed,
+    Path(id): Path<Uuid>,
+    Json(body): Json<MailboxInput>,
+) -> ApiResult<Json<Mailbox>> {
+    configure_mailbox(&state, &authed, id).await?;
+    let ctx = authed.user.ctx.clone();
+    Ok(Json(
+        scoped(&state, &OrgScope::System, async |tx| {
+            mail::update(tx, &ctx, id, &body).await
+        })
+        .await?,
+    ))
+}
+
+/// Archives a mailbox: it takes no more mail. Needs `servicedesk:configure`.
+#[utoipa::path(delete, path = "/api/v1/mailboxes/{id}", tag = "servicedesk", params(("id" = Uuid, Path)),
+    responses((status = 204), (status = 404, body = ApiError, content_type = "application/problem+json")))]
+pub async fn archive_mailbox(
+    State(state): State<AppState>,
+    authed: Authed,
+    Path(id): Path<Uuid>,
+) -> ApiResult<StatusCode> {
+    configure_mailbox(&state, &authed, id).await?;
+    let ctx = authed.user.ctx.clone();
+    scoped(&state, &OrgScope::System, async |tx| {
+        mail::archive(tx, &ctx, id).await
+    })
+    .await?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+#[derive(Debug, Deserialize, IntoParams)]
+pub struct EmailListParams {
+    /// 1 to 200 (default 50).
+    pub limit: Option<i64>,
+}
+
+/// A mailbox's latest emails and what became of them. Needs
+/// `servicedesk:configure`.
+#[utoipa::path(get, path = "/api/v1/mailboxes/{id}/emails", tag = "servicedesk",
+    params(("id" = Uuid, Path), EmailListParams),
+    responses((status = 200, body = Vec<Email>)))]
+pub async fn list_emails(
+    State(state): State<AppState>,
+    authed: Authed,
+    Path(id): Path<Uuid>,
+    Query(params): Query<EmailListParams>,
+) -> ApiResult<Json<Vec<Email>>> {
+    configure_mailbox(&state, &authed, id).await?;
+    Ok(Json(
+        scoped(&state, &OrgScope::System, async |tx| {
+            mail::emails(tx, id, params.limit.unwrap_or(50)).await
+        })
+        .await?,
+    ))
+}
+
+/// What happened to a posted message.
+#[derive(Debug, serde::Serialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct MessageReceived {
+    pub email_id: Uuid,
+    /// The mailbox already had this message (by its `Message-ID`).
+    pub duplicate: bool,
+}
+
+/// Delivers a raw message (`message/rfc822`) to a mailbox, as a mail
+/// server's forwarding rule would. It's stored and `email.received` is
+/// emitted for workflows such as *Email to ticket*. Needs `mailbox:ingest`.
+#[utoipa::path(post, path = "/api/v1/mailboxes/{id}/messages", tag = "servicedesk",
+    params(("id" = Uuid, Path)),
+    request_body(content = Vec<u8>, content_type = "message/rfc822"),
+    responses((status = 202, body = MessageReceived), (status = 422, body = ApiError, content_type = "application/problem+json")))]
+pub async fn post_message(
+    State(state): State<AppState>,
+    authed: Authed,
+    Path(id): Path<Uuid>,
+    body: axum::body::Bytes,
+) -> ApiResult<(StatusCode, Json<MessageReceived>)> {
+    authed.require_instance(permissions::MAILBOX_INGEST)?;
+    let org = owner(&state, "sd_mailboxes", id).await?;
+    require_module_at(&state, MODULE, org).await?;
+    let mailbox = scoped(&state, &OrgScope::System, async |tx| {
+        mail::mailbox(tx, id).await
+    })
+    .await?;
+    if !mailbox.enabled {
+        return Err(ApiError::conflict("This mailbox is turned off."));
+    }
+    let parsed = huxley_mail::parse(&body).ok_or_else(|| {
+        ApiError::validation().with_field_error("/body", "not an email message (RFC 5322)")
+    })?;
+    let email_id = huxley_core::new_id();
+    let key = mail::raw_key(mailbox.org_id, email_id);
+    state
+        .storage
+        .put(&key, body.clone())
+        .await
+        .map_err(|e| ApiError::internal(&e))?;
+    let (stored, new) = scoped(&state, &OrgScope::System, async |tx| {
+        mail::store(tx, &mailbox, email_id, &parsed, body.len()).await
+    })
+    .await?;
+    if !new {
+        // Kept once: drop the copy just stored.
+        let _ = state.storage.delete(&key).await;
+    }
+    Ok((
+        StatusCode::ACCEPTED,
+        Json(MessageReceived {
+            email_id: stored,
+            duplicate: !new,
+        }),
     ))
 }

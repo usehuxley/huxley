@@ -363,6 +363,10 @@ pub enum Step {
     /// Change an organization's company details (the `crm` module).
     #[serde(rename = "core.company.update")]
     CompanyUpdate(CompanyUpdateStep),
+    /// Turn a received email into ticket work: a new ticket, or a reply on
+    /// the ticket it belongs to (the `servicedesk` module).
+    #[serde(rename = "core.ticket.from_email")]
+    TicketFromEmail(TicketFromEmailStep),
     /// Ask the organization's AI provider; the answer is text.
     #[serde(rename = "ai.prompt")]
     AiPrompt(AiPromptStep),
@@ -617,6 +621,11 @@ step!(CompanyUpdateStep {
     pub company: Box<CompanyUpdate>,
 });
 
+step!(TicketFromEmailStep {
+    #[serde(rename = "with")]
+    pub email: TicketFromEmail,
+});
+
 step!(AiPromptStep {
     #[serde(rename = "with")]
     pub ai: AiPrompt,
@@ -682,6 +691,7 @@ impl Step {
             ContactUpsert,
             CompanyGet,
             CompanyUpdate,
+            TicketFromEmail,
             AiPrompt,
             AiClassify,
             AiExtract
@@ -719,6 +729,7 @@ impl Step {
             Self::ContactUpsert(_) => "core.contact.upsert",
             Self::CompanyGet(_) => "core.company.get",
             Self::CompanyUpdate(_) => "core.company.update",
+            Self::TicketFromEmail(_) => "core.ticket.from_email",
             Self::AiPrompt(_) => "ai.prompt",
             Self::AiClassify(_) => "ai.classify",
             Self::AiExtract(_) => "ai.extract",
@@ -915,6 +926,22 @@ pub struct DatasetUpsert {
     /// the item (e.g. `upn: userPrincipalName`, `city: address.city`).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub map: Option<Value>,
+}
+
+/// A received email to turn into ticket work (`core.ticket.from_email`):
+/// skipped if it's automatic mail or a loop, added as a reply to the ticket
+/// it belongs to (by its `[HX#…]` subject token or the messages it answers;
+/// a resolved ticket reopens), or opened as a new ticket for its sender, per
+/// its mailbox's rules. Its attachments go on the ticket. Output:
+/// `{ outcome, detail, ticket_id, created }`; `outcome` is `ticket_created`,
+/// `note_added`, `ticket_reopened`, `ignored_automatic`, `ignored_loop` or
+/// `ignored_unknown_sender`. Running it again for the same email changes
+/// nothing.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct TicketFromEmail {
+    /// The email's id (from `email.received`).
+    pub email_id: Value,
 }
 
 /// Contacts to find (`core.contact.find`): by `email`, by `external_id`

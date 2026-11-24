@@ -14,6 +14,13 @@ struct Source {
 
 const SOURCES: &[Source] = &[
     Source {
+        manifest: include_str!("../builtin/servicedesk-email/pack.yaml"),
+        files: &[(
+            "workflows/email-to-ticket.yaml",
+            include_str!("../builtin/servicedesk-email/workflows/email-to-ticket.yaml"),
+        )],
+    },
+    Source {
         manifest: include_str!("../builtin/msgraph/pack.yaml"),
         files: &[
             (
