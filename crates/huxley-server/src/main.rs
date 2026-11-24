@@ -5,6 +5,7 @@
 
 mod admin;
 mod config;
+mod mcp_cli;
 mod pack_cli;
 mod roles;
 mod runner;
@@ -65,6 +66,8 @@ enum Command {
         #[command(subcommand)]
         command: pack_cli::PackCommand,
     },
+    /// Huxley's MCP server over stdio (relayed to a server's /mcp).
+    Mcp(mcp_cli::McpArgs),
     /// Workflows as code: validate, pull, diff, push and run HWF files.
     Workflows {
         #[command(subcommand)]
@@ -91,6 +94,7 @@ async fn main() -> anyhow::Result<()> {
         Command::Healthcheck { addr } => healthcheck(addr),
         Command::Pack { command } => pack_cli::run(command),
         Command::Workflows { command } => workflow_cli::run(command).await,
+        Command::Mcp(args) => mcp_cli::run(args).await,
         Command::Runner { command } => {
             let telemetry =
                 huxley_telemetry::init(&huxley_telemetry::TelemetryConfig::default(), "runner")?;

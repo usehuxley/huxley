@@ -38,7 +38,12 @@ fn extract(parts: &Parts, trust_forwarded_for: bool) -> RequestContext {
         .and_then(rightmost_ip);
     RequestContext {
         actor: Actor::Anonymous,
-        via: Via::Api,
+        // Tool calls of the MCP server come through the API, marked.
+        via: if parts.extensions.get::<crate::mcp::McpCall>().is_some() {
+            Via::Mcp
+        } else {
+            Via::Api
+        },
         ip: forwarded.or(peer),
         user_agent: header(parts, "user-agent").map(str::to_owned),
         request_id: header(parts, "x-request-id").map(str::to_owned),

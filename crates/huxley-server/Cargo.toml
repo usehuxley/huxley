@@ -46,7 +46,7 @@ getrandom.workspace = true
 huxley-telemetry.workspace = true
 serde.workspace = true
 serde_json.workspace = true
-tokio.workspace = true
+tokio = { workspace = true, features = ["io-std", "io-util"] }
 tonic.workspace = true
 time.workspace = true
 tokio-util.workspace = true
