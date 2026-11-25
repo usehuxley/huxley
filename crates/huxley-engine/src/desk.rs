@@ -63,6 +63,47 @@ impl Engine {
         }
     }
 
+    /// A mailer for a mailbox's own SMTP server, with its stored password.
+    async fn mailbox_mailer(
+        &self,
+        mailbox: Uuid,
+        settings: &mail::SmtpSettings,
+        secret: Option<Vec<u8>>,
+    ) -> Result<huxley_email::Mailer, Json> {
+        let password = match secret {
+            Some(sealed) => {
+                let plain = self
+                    .crypto
+                    .decrypt(mail::secret_binding(mailbox), &sealed)
+                    .await
+                    .map_err(|e| {
+                        error(
+                            "email",
+                            format!("the mailbox's password can't be read: {e}"),
+                        )
+                    })?;
+                String::from_utf8(plain.to_vec())
+                    .map_err(|_| error("email", "the mailbox's password isn't text"))?
+            }
+            None => String::new(),
+        };
+        huxley_email::Mailer::server(&huxley_email::SmtpServer {
+            host: settings.host.clone(),
+            port: settings.port.unwrap_or(465),
+            security: match settings
+                .security
+                .unwrap_or(huxley_mail::imap::Security::Tls)
+            {
+                huxley_mail::imap::Security::Tls => huxley_email::SmtpSecurity::Tls,
+                huxley_mail::imap::Security::StartTls => huxley_email::SmtpSecurity::StartTls,
+                huxley_mail::imap::Security::None => huxley_email::SmtpSecurity::None,
+            },
+            username: settings.username.clone().unwrap_or_default(),
+            password,
+        })
+        .map_err(|e| error("email", format!("the mailbox's SMTP server: {e}")))
+    }
+
     /// `core.ticket.email_reply`: emails a public note to the ticket's
     /// requester from its mailbox, threaded so their answer comes back to
     /// the ticket. A note that shouldn't be emailed (internal, from the
@@ -73,22 +114,43 @@ impl Engine {
             .as_str()
             .and_then(|s| s.parse::<Uuid>().ok())
             .ok_or_else(|| error("input", "note_id is a note's id"))?;
-        let Some(mailer) = self.mailer.as_ref().filter(|m| m.enabled()) else {
-            return Err(error(
-                "email",
-                "email isn't set up for this instance (email.smtp_url)",
-            ));
-        };
         let mut tx = begin_scoped(self.db(), &OrgScope::System)
             .await
             .map_err(internal)?;
         let planned = mail::reply_for(&mut tx, note_id, org_id)
             .await
             .map_err(desk_error)?;
-        tx.commit().await.map_err(internal)?;
         let reply = match planned {
             Ok(reply) => reply,
-            Err(reason) => return Ok(json!({ "sent": false, "reason": reason })),
+            Err(reason) => {
+                tx.commit().await.map_err(internal)?;
+                return Ok(json!({ "sent": false, "reason": reason }));
+            }
+        };
+        let own = mail::smtp_for(&mut tx, reply.mailbox_id)
+            .await
+            .map_err(desk_error)?;
+        tx.commit().await.map_err(internal)?;
+        // The mailbox's own server if it has one, else the instance's.
+        let own_mailer = match own {
+            Some((settings, secret)) => Some(
+                self.mailbox_mailer(reply.mailbox_id, &settings, secret)
+                    .await?,
+            ),
+            None => None,
+        };
+        let mailer = match &own_mailer {
+            Some(m) => m,
+            None => self
+                .mailer
+                .as_ref()
+                .filter(|m| m.enabled())
+                .ok_or_else(|| {
+                    error(
+                        "email",
+                        "email isn't set up for this instance (email.smtp_url)",
+                    )
+                })?,
         };
         let mut paragraphs = String::new();
         for p in reply.text.split("\n\n") {

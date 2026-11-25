@@ -164,5 +164,17 @@ test.describe('mailboxes', () => {
 		await expect(page.getByLabel('Microsoft Graph connection')).toHaveValue('contoso');
 		await expect(page.getByLabel('Mailbox', { exact: true })).toHaveValue('');
 		await expect(page.getByLabel('Folder')).toHaveValue('');
+
+		// Replies through its own SMTP server, saved.
+		await page.getByLabel("Send replies through this mailbox's own SMTP server").check();
+		await page.getByLabel('SMTP server', { exact: true }).fill('smtp.contoso.example');
+		await page.getByLabel('SMTP security').selectOption('start_tls');
+		await page.getByRole('button', { name: 'Save' }).click();
+		await expect(page.getByText('Mailbox saved.')).toBeVisible();
+		await page.reload();
+		await expect(page.getByLabel('SMTP server', { exact: true })).toHaveValue(
+			'smtp.contoso.example'
+		);
+		await expect(page.getByLabel('SMTP port')).toHaveValue('587');
 	});
 });

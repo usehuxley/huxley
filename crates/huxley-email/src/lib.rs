@@ -28,6 +28,38 @@ pub struct EmailConfig {
     pub from: Option<String>,
 }
 
+/// How to reach an SMTP server.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SmtpSecurity {
+    /// TLS from the start (usually port 465).
+    Tls,
+    /// STARTTLS (usually port 587).
+    StartTls,
+    /// Neither: a server on your own network.
+    None,
+}
+
+/// An SMTP server and the login to send with.
+#[derive(Clone)]
+pub struct SmtpServer {
+    pub host: String,
+    pub port: u16,
+    pub security: SmtpSecurity,
+    pub username: String,
+    pub password: String,
+}
+
+impl std::fmt::Debug for SmtpServer {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("SmtpServer")
+            .field("host", &self.host)
+            .field("port", &self.port)
+            .field("security", &self.security)
+            .field("username", &self.username)
+            .finish_non_exhaustive()
+    }
+}
+
 #[derive(Debug, thiserror::Error)]
 pub enum EmailError {
     #[error("invalid email.smtp_url: {0}")]
@@ -117,6 +149,37 @@ impl Mailer {
         Ok(Self {
             transport: Transport::Smtp(transport),
             from,
+        })
+    }
+
+    /// A mailer for one SMTP server with its own login (a mailbox's), in
+    /// place of the instance's. Messages need a `reply` (its From).
+    pub fn server(server: &SmtpServer) -> Result<Self, EmailError> {
+        let builder = match server.security {
+            SmtpSecurity::Tls => AsyncSmtpTransport::<Tokio1Executor>::relay(&server.host),
+            SmtpSecurity::StartTls => {
+                AsyncSmtpTransport::<Tokio1Executor>::starttls_relay(&server.host)
+            }
+            SmtpSecurity::None => Ok(AsyncSmtpTransport::<Tokio1Executor>::builder_dangerous(
+                &server.host,
+            )),
+        }
+        .map_err(|e| EmailError::InvalidUrl(e.to_string()))?;
+        let mut builder = builder
+            .port(server.port)
+            .timeout(Some(std::time::Duration::from_secs(15)));
+        if !server.username.is_empty() {
+            builder =
+                builder.credentials(lettre::transport::smtp::authentication::Credentials::new(
+                    server.username.clone(),
+                    server.password.clone(),
+                ));
+        }
+        Ok(Self {
+            transport: Transport::Smtp(builder.build()),
+            from: "Huxley <huxley@localhost.invalid>"
+                .parse()
+                .expect("valid mailbox"),
         })
     }
 

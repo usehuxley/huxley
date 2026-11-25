@@ -101,6 +101,59 @@ impl ImapSettings {
     }
 }
 
+/// The SMTP server a mailbox's replies go out through, with its login
+/// (the username here, the mailbox's stored password). None: the
+/// instance's mail server.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct SmtpSettings {
+    pub host: String,
+    /// Default 465 (TLS), 587 (STARTTLS) or 25.
+    #[serde(default)]
+    pub port: Option<u16>,
+    /// `tls` (default), `start_tls` or `none` (a server on your own network).
+    #[serde(default)]
+    #[schema(value_type = Option<String>)]
+    pub security: Option<huxley_mail::imap::Security>,
+    /// Default: the IMAP username.
+    #[serde(default)]
+    pub username: Option<String>,
+}
+
+impl SmtpSettings {
+    fn checked(&self, imap: Option<&ImapSettings>) -> DeskResult<Self> {
+        let host = self.host.trim().to_lowercase();
+        if host.is_empty()
+            || host.len() > 253
+            || host.contains(|c: char| c.is_whitespace() || c == '/')
+        {
+            return Err(DeskError::invalid("smtp", "host is a server name"));
+        }
+        let security = self.security.unwrap_or(huxley_mail::imap::Security::Tls);
+        let port = self.port.unwrap_or(match security {
+            huxley_mail::imap::Security::Tls => 465,
+            huxley_mail::imap::Security::StartTls => 587,
+            huxley_mail::imap::Security::None => 25,
+        });
+        if port == 0 {
+            return Err(DeskError::invalid("smtp", "port is 1 to 65535"));
+        }
+        let username = self
+            .username
+            .as_deref()
+            .map(str::trim)
+            .filter(|u| !u.is_empty())
+            .map(str::to_owned)
+            .or_else(|| imap.map(|i| i.username.clone()));
+        Ok(Self {
+            host,
+            port: Some(port),
+            security: Some(security),
+            username,
+        })
+    }
+}
+
 /// Where a Microsoft 365 mailbox fetches from, through Microsoft Graph.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -164,6 +217,9 @@ pub struct Mailbox {
     /// Where it fetches from (`graph` mailboxes).
     #[sqlx(json(nullable))]
     pub graph: Option<GraphSettings>,
+    /// Where its replies go out (none: the instance's mail server).
+    #[sqlx(json(nullable))]
+    pub smtp: Option<SmtpSettings>,
     /// A password is stored (it's never shown).
     pub has_password: bool,
     #[serde(with = "time::serde::rfc3339::option")]
@@ -200,6 +256,10 @@ pub struct MailboxInput {
     /// Where to fetch from (`graph` mailboxes; defaults if left out).
     #[serde(default)]
     pub graph: Option<GraphSettings>,
+    /// Send replies through this SMTP server, with the mailbox's login
+    /// (none: the instance's mail server).
+    #[serde(default)]
+    pub smtp: Option<SmtpSettings>,
     /// The IMAP password; left out, the stored one stays.
     #[serde(default)]
     #[schema(format = Password, write_only)]
@@ -210,7 +270,7 @@ pub struct MailboxInput {
 }
 
 const SELECT: &str = "SELECT id, org_id, name, address, kind, ticket_type, queue_id, unknown_sender, \
-    unknown_org_id, strip_replies, enabled, imap, graph, secret IS NOT NULL AS has_password, last_checked_at, \
+    unknown_org_id, strip_replies, enabled, imap, graph, smtp, secret IS NOT NULL AS has_password, last_checked_at, \
     last_error, version, created_at \
     FROM sd_mailboxes";
 
@@ -240,6 +300,7 @@ struct Checked {
     unknown_sender: String,
     imap: Option<ImapSettings>,
     graph: Option<GraphSettings>,
+    smtp: Option<SmtpSettings>,
 }
 
 async fn check(conn: &mut PgConnection, input: &MailboxInput) -> DeskResult<Checked> {
@@ -314,6 +375,11 @@ async fn check(conn: &mut PgConnection, input: &MailboxInput) -> DeskResult<Chec
     } else {
         None
     };
+    let smtp = input
+        .smtp
+        .as_ref()
+        .map(|s| s.checked(imap.as_ref()))
+        .transpose()?;
     Ok(Checked {
         name,
         address,
@@ -322,6 +388,7 @@ async fn check(conn: &mut PgConnection, input: &MailboxInput) -> DeskResult<Chec
         unknown_sender,
         imap,
         graph,
+        smtp,
     })
 }
 
@@ -359,8 +426,8 @@ pub async fn create(
     let c = check(conn, input).await?;
     sqlx::query(
         "INSERT INTO sd_mailboxes (id, org_id, name, address, kind, ticket_type, queue_id, unknown_sender, \
-                                   unknown_org_id, strip_replies, enabled, imap, secret, graph) \
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)",
+                                   unknown_org_id, strip_replies, enabled, imap, secret, graph, smtp) \
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)",
     )
     .bind(id)
     .bind(org_id)
@@ -376,6 +443,7 @@ pub async fn create(
     .bind(c.imap.as_ref().map(|i| json!(i)))
     .bind(secret)
     .bind(c.graph.as_ref().map(|g| json!(g)))
+    .bind(c.smtp.as_ref().map(|g| json!(g)))
     .execute(&mut *conn)
     .await
     .map_err(taken)?;
@@ -404,7 +472,7 @@ pub async fn update(
     let rows = sqlx::query(
         "UPDATE sd_mailboxes SET name = $3, address = $4, kind = $5, ticket_type = $6, queue_id = $7, \
                 unknown_sender = $8, unknown_org_id = $9, strip_replies = $10, enabled = $11, \
-                imap = $12, secret = coalesce($13, secret), graph = $14, \
+                imap = $12, secret = coalesce($13, secret), graph = $14, smtp = $15, \
                 cursor = CASE WHEN imap IS DISTINCT FROM $12 THEN '{}'::jsonb ELSE cursor END, \
                 version = version + 1 \
           WHERE id = $1 AND version = $2 AND archived_at IS NULL",
@@ -423,6 +491,7 @@ pub async fn update(
     .bind(c.imap.as_ref().map(|i| json!(i)))
     .bind(secret)
     .bind(c.graph.as_ref().map(|g| json!(g)))
+    .bind(c.smtp.as_ref().map(|g| json!(g)))
     .execute(&mut *conn)
     .await
     .map_err(taken)?
@@ -1057,6 +1126,8 @@ struct NoteRow {
 #[derive(Debug, Clone)]
 pub struct Reply {
     pub note_id: Uuid,
+    /// The mailbox it's sent from.
+    pub mailbox_id: Uuid,
     pub to: String,
     pub subject: String,
     pub text: String,
@@ -1114,8 +1185,8 @@ pub async fn reply_for(
         return Ok(Err("the ticket has no requester with an email address"));
     };
     // The mailbox the ticket's mail came to, else the nearest one above.
-    let mailbox: Option<(String, String)> = sqlx::query_as(
-        "SELECT m.name, m.address FROM sd_inbound_emails e JOIN sd_mailboxes m ON m.id = e.mailbox_id \
+    let mailbox: Option<(Uuid, String, String)> = sqlx::query_as(
+        "SELECT m.id, m.name, m.address FROM sd_inbound_emails e JOIN sd_mailboxes m ON m.id = e.mailbox_id \
           WHERE e.ticket_id = $1 AND m.archived_at IS NULL AND m.enabled \
           ORDER BY e.received_at DESC LIMIT 1",
     )
@@ -1126,7 +1197,7 @@ pub async fn reply_for(
         Some(m) => Some(m),
         None => {
             sqlx::query_as(
-                "SELECT m.name, m.address FROM sd_mailboxes m \
+                "SELECT m.id, m.name, m.address FROM sd_mailboxes m \
                    JOIN organizations o ON o.id = m.org_id JOIN organizations t ON t.id = $1 \
                   WHERE t.path <@ o.path AND m.archived_at IS NULL AND m.enabled \
                   ORDER BY nlevel(o.path) DESC, m.created_at LIMIT 1",
@@ -1136,7 +1207,7 @@ pub async fn reply_for(
             .await?
         }
     };
-    let Some((mailbox_name, from_address)) = mailbox else {
+    let Some((mailbox_id, mailbox_name, from_address)) = mailbox else {
         return Ok(Err("there's no mailbox to send from"));
     };
     // The conversation so far: what came in and what we sent.
@@ -1158,6 +1229,7 @@ pub async fn reply_for(
         author_name.map_or_else(|| mailbox_name.clone(), |a| format!("{a}\n{mailbox_name}"));
     Ok(Ok(Reply {
         note_id,
+        mailbox_id,
         to,
         subject: huxley_mail::with_token(&format!("Re: {}", ticket.title), ticket.number),
         text: format!(
@@ -1169,6 +1241,23 @@ pub async fn reply_for(
         message_id: format!("hx.{note_id}@{domain}"),
         in_reply_to: thread.first().cloned().into_iter().collect(),
         references: thread.into_iter().rev().collect(),
+    }))
+}
+
+/// A mailbox's own SMTP server and login, if it sends through one. System
+/// scope; the password is sealed with [`secret_binding`].
+pub async fn smtp_for(
+    conn: &mut PgConnection,
+    mailbox: Uuid,
+) -> DeskResult<Option<(SmtpSettings, Option<Vec<u8>>)>> {
+    let row: Option<(Option<Json>, Option<Vec<u8>>)> =
+        sqlx::query_as("SELECT smtp, secret FROM sd_mailboxes WHERE id = $1")
+            .bind(mailbox)
+            .fetch_optional(conn)
+            .await?;
+    Ok(row.and_then(|(smtp, secret)| {
+        smtp.and_then(|s| serde_json::from_value::<SmtpSettings>(s).ok())
+            .map(|s| (s, secret))
     }))
 }
 

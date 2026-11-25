@@ -329,7 +329,11 @@ A public note written on a ticket is emailed to the ticket's requester by the *E
 
 Each note shows whether it was emailed, and to whom, or why sending failed. A failed send is retried by the workflow.
 
-The email goes out through the instance's mail server (`email.smtp_url`), with the mailbox's address as the sender and as **Reply-To**. That server must be allowed to send as the mailbox's address. Otherwise the message may be rejected or marked as spam, so set up SPF and DKIM for that domain accordingly.
+**Which server sends it.** The email has the mailbox's address as its sender and as **Reply-To**. It goes out through one of two servers:
+
+- **The mailbox's own SMTP server**, if it has one. Tick **Send replies through this mailbox's own SMTP server** and give the server, security and port. It signs in with the IMAP username, or another one, and the mailbox's stored password. The reply then leaves from the mailbox's own account, which is often what its domain's SPF and DKIM already allow.
+  - **Security:** TLS (port 465), STARTTLS (587), or none for a server on your own network.
+- **Otherwise, the instance's mail server** (`email.smtp_url`). That server must be allowed to send as the mailbox's address. If it isn't, the message may be rejected or marked as spam, so set up SPF and DKIM for that domain accordingly.
 
 **Tickets as records.** Tickets now also take attachments, custom fields and tags, like organizations and contacts do.
 
@@ -378,4 +382,4 @@ Workflows can open, read, find, update and dispatch tickets and add notes, with 
 
 ## Coming next
 
-Sending replies through a mailbox's own server (SMTP) or through Microsoft Graph.
+Sending replies through Microsoft Graph.

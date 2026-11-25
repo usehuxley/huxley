@@ -16243,6 +16243,17 @@
 						"type": ["string", "null"],
 						"format": "uuid"
 					},
+					"smtp": {
+						"oneOf": [
+							{
+								"$ref": "#/components/schemas/SmtpSettings",
+								"description": "Where its replies go out (none: the instance's mail server)."
+							},
+							{
+								"type": "null"
+							}
+						]
+					},
 					"stripReplies": {
 						"type": "boolean"
 					},
@@ -16313,6 +16324,17 @@
 					"queueId": {
 						"type": ["string", "null"],
 						"format": "uuid"
+					},
+					"smtp": {
+						"oneOf": [
+							{
+								"$ref": "#/components/schemas/SmtpSettings",
+								"description": "Send replies through this SMTP server, with the mailbox's login\n(none: the instance's mail server)."
+							},
+							{
+								"type": "null"
+							}
+						]
 					},
 					"stripReplies": {
 						"type": ["boolean", "null"]
@@ -19396,6 +19418,31 @@
 						"description": "Where the effective policy comes from: `here`, `above` or `default`."
 					}
 				}
+			},
+			"SmtpSettings": {
+				"type": "object",
+				"description": "The SMTP server a mailbox's replies go out through, with its login\n(the username here, the mailbox's stored password). None: the\ninstance's mail server.",
+				"required": ["host"],
+				"properties": {
+					"host": {
+						"type": "string"
+					},
+					"port": {
+						"type": ["integer", "null"],
+						"format": "int32",
+						"description": "Default 465 (TLS), 587 (STARTTLS) or 25.",
+						"minimum": 0
+					},
+					"security": {
+						"type": ["string", "null"],
+						"description": "`tls` (default), `start_tls` or `none` (a server on your own network)."
+					},
+					"username": {
+						"type": ["string", "null"],
+						"description": "Default: the IMAP username."
+					}
+				},
+				"additionalProperties": false
 			},
 			"SqlRequest": {
 				"type": "object",
