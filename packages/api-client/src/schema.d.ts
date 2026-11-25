@@ -1704,6 +1704,238 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
+	'/api/v1/kb/articles': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/**
+		 * Articles you can see, best match first when searching. Where you may
+		 *     write you see drafts and reviews too; elsewhere, what's published.
+		 */
+		get: operations['list_articles'];
+		put?: never;
+		/**
+		 * Writes a new article: a draft, at an organization where you hold
+		 *     `kb:write`.
+		 */
+		post: operations['create_article'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/kb/articles/{id}': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/**
+		 * An article. With `kb:write` there, its working copy and history; with
+		 *     only `kb:read`, what's published (404 if nothing is).
+		 */
+		get: operations['get_article'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		/**
+		 * Changes an article; send back the `version` you read. A new title or
+		 *     body is a new revision and a draft (readers keep the published one).
+		 *     Changing who can see a published article needs `kb:publish`.
+		 */
+		patch: operations['update_article'];
+		trace?: never;
+	};
+	'/api/v1/kb/articles/{id}/archive': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/** Hides an article from readers (`kb:publish`). */
+		post: operations['archive_article'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/kb/articles/{id}/publish': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/**
+		 * Publishes the working copy (`kb:publish`): approves one in review, or
+		 *     publishes a draft directly. An optional comment is kept.
+		 */
+		post: operations['publish_article'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/kb/articles/{id}/reject': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/**
+		 * Sends an article in review back as a draft, saying what needs changing
+		 *     (`kb:publish`).
+		 */
+		post: operations['reject_article'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/kb/articles/{id}/restore': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/**
+		 * Brings back an archived article: published again if nothing changed
+		 *     since, else as a draft (`kb:publish`).
+		 */
+		post: operations['restore_article'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/kb/articles/{id}/revisions': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** An article's revisions, newest first (`kb:write`). */
+		get: operations['list_revisions'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/kb/articles/{id}/revisions/{number}': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** One revision, with its text (`kb:write`). */
+		get: operations['get_revision'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/kb/articles/{id}/submit': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/** Submits a draft for review (`kb:write`). */
+		post: operations['submit_article'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/kb/categories': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** Categories you can see, in order. */
+		get: operations['list_kb_categories'];
+		put?: never;
+		/**
+		 * Adds a category at an organization (`kb:publish` there). Articles there
+		 *     and below can use it.
+		 */
+		post: operations['create_kb_category'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/kb/categories/{id}': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put: operations['update_kb_category'];
+		post?: never;
+		/** Deletes a category; its articles stay, uncategorized. */
+		delete: operations['delete_kb_category'];
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/kb/preview': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/** Renders markdown as an article would show it (for the editor's preview). */
+		post: operations['preview_article'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
 	'/api/v1/mailboxes': {
 		parameters: {
 			query?: never;
@@ -4703,6 +4935,18 @@ export interface components {
 		ArchiveRequest: {
 			archived: boolean;
 		};
+		ArticlePage: {
+			items: components['schemas']['KbArticleSummary'][];
+			/** Format: int64 */
+			total: number;
+		};
+		/** @description An article, with what you may do with it. */
+		ArticleView: components['schemas']['KbArticle'] & {
+			/** @description You may approve, reject, publish and archive it. */
+			canPublish: boolean;
+			/** @description You may change it and see its drafts and history. */
+			canWrite: boolean;
+		};
 		Assignment: {
 			/** Format: date-time */
 			createdAt: string;
@@ -5857,6 +6101,142 @@ export interface components {
 			/** Format: int32 */
 			warnings: number;
 		};
+		/** @description Something that happened to an article. */
+		KbActivity: {
+			actorName?: string | null;
+			/** Format: date-time */
+			createdAt: string;
+			details: components['schemas']['Value'];
+			kind: string;
+		};
+		/**
+		 * @description An article in full. `title`, `body` and `bodyHtml` are the working copy
+		 *     (the latest revision); `published` is what readers see.
+		 */
+		KbArticle: components['schemas']['KbArticleSummary'] & {
+			activity: components['schemas']['KbActivity'][];
+			body: string;
+			bodyHtml: string;
+			createdByName?: string | null;
+			published?: components['schemas']['KbPublished'] | null;
+			reviewRequestedByName?: string | null;
+			updatedByName?: string | null;
+			/**
+			 * Format: int32
+			 * @description For optimistic locking: send it back when changing the article.
+			 */
+			version: number;
+		};
+		/** @description Changes to an article: what's given changes. */
+		KbArticleChanges: {
+			body?: string | null;
+			/**
+			 * Format: uuid
+			 * @description A category, or `null` for none.
+			 */
+			categoryId?: string | null;
+			tags?: string[] | null;
+			title?: string | null;
+			/**
+			 * Format: int32
+			 * @description The version you read.
+			 */
+			version: number;
+			visibility?: string | null;
+		};
+		/** @description A new article. */
+		KbArticleInput: {
+			/** @description Markdown. */
+			body?: string | null;
+			/** Format: uuid */
+			categoryId?: string | null;
+			/**
+			 * Format: uuid
+			 * @description The organization it belongs to: the MSP's for shared know-how, a
+			 *     client's for its own documentation.
+			 */
+			orgId: string;
+			tags?: string[] | null;
+			title: string;
+			/** @description `internal` (the default), `clients` or `public`. */
+			visibility?: string | null;
+		};
+		/** @description An article as listed. */
+		KbArticleSummary: {
+			/** Format: uuid */
+			categoryId?: string | null;
+			categoryName?: string | null;
+			/** Format: uuid */
+			id: string;
+			/** Format: uuid */
+			orgId: string;
+			orgName: string;
+			/** Format: date-time */
+			publishedAt?: string | null;
+			/** Format: int32 */
+			publishedRevision?: number | null;
+			/** Format: int32 */
+			revision: number;
+			/** @description Where the search matched, with the matched words in `<b>`. */
+			snippet?: string | null;
+			status: string;
+			tags: string[];
+			title: string;
+			/** Format: date-time */
+			updatedAt: string;
+			visibility: string;
+		};
+		KbCategory: {
+			/**
+			 * Format: int64
+			 * @description Published articles in it.
+			 */
+			articles: number;
+			description: string;
+			/** Format: uuid */
+			id: string;
+			name: string;
+			/** Format: uuid */
+			orgId: string;
+			/** Format: int32 */
+			position: number;
+		};
+		KbCategoryInput: {
+			description?: string | null;
+			name: string;
+			/** Format: int32 */
+			position?: number | null;
+		};
+		KbPreviewRequest: {
+			/** @description Markdown. */
+			body: string;
+		};
+		KbPreviewResponse: {
+			/** @description The markdown as sanitized HTML, as readers will see it. */
+			html: string;
+		};
+		/** @description What readers see: a published revision. */
+		KbPublished: {
+			body: string;
+			bodyHtml: string;
+			/** Format: date-time */
+			publishedAt?: string | null;
+			/** Format: int32 */
+			revision: number;
+			title: string;
+		};
+		/** @description A saved revision. */
+		KbRevision: {
+			/** @description Markdown (left out when listing). */
+			body?: string | null;
+			bodyHtml?: string | null;
+			/** Format: date-time */
+			createdAt: string;
+			createdByName?: string | null;
+			/** Format: int32 */
+			number: number;
+			title: string;
+		};
 		/** @enum {string} */
 		Language: 'pwsh' | 'python' | 'javascript';
 		/** @description A public link as its managers see it (never the token). */
@@ -6157,6 +6537,11 @@ export interface components {
 			required?: boolean;
 			/** Format: uuid */
 			scopeOrgId?: string | null;
+		};
+		NewKbCategory: {
+			category: components['schemas']['KbCategoryInput'];
+			/** Format: uuid */
+			orgId: string;
 		};
 		NewLink: {
 			/**
@@ -6847,6 +7232,10 @@ export interface components {
 			/** Format: uuid */
 			uploadId: string;
 			version: string;
+		};
+		ReviewDecision: {
+			/** @description Required to reject: what needs changing. */
+			comment?: string | null;
 		};
 		/** @description What installing would do to one item. */
 		ReviewItem: {
@@ -8053,6 +8442,7 @@ export interface components {
 			/** @description Empty when the document is ready to publish. */
 			diagnostics: components['schemas']['DiagnosticView'][];
 		};
+		Value: unknown;
 		/** @description A variable to set. */
 		VariableInput: {
 			description?: string | null;
@@ -11751,6 +12141,480 @@ export interface operations {
 				};
 				content: {
 					'application/json': components['schemas']['RetryJobResponse'];
+				};
+			};
+		};
+	};
+	list_articles: {
+		parameters: {
+			query?: {
+				/** @description Words to search for in titles, tags and text. */
+				q?: string | null;
+				categoryId?: string | null;
+				/** @description `draft`, `in_review`, `published` or `archived`. */
+				status?: string | null;
+				/** @description Default 50, at most 200. */
+				limit?: number | null;
+				offset?: number | null;
+			};
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ArticlePage'];
+				};
+			};
+		};
+	};
+	create_article: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['KbArticleInput'];
+			};
+		};
+		responses: {
+			201: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ArticleView'];
+				};
+			};
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	get_article: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ArticleView'];
+				};
+			};
+			404: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	update_article: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['KbArticleChanges'];
+			};
+		};
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ArticleView'];
+				};
+			};
+			409: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	archive_article: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ArticleView'];
+				};
+			};
+			409: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	publish_article: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['ReviewDecision'];
+			};
+		};
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ArticleView'];
+				};
+			};
+			409: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	reject_article: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['ReviewDecision'];
+			};
+		};
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ArticleView'];
+				};
+			};
+			409: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	restore_article: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ArticleView'];
+				};
+			};
+			409: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	list_revisions: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['KbRevision'][];
+				};
+			};
+		};
+	};
+	get_revision: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+				number: number;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['KbRevision'];
+				};
+			};
+			404: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	submit_article: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ArticleView'];
+				};
+			};
+			409: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	list_kb_categories: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['KbCategory'][];
+				};
+			};
+		};
+	};
+	create_kb_category: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['NewKbCategory'];
+			};
+		};
+		responses: {
+			201: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['KbCategory'];
+				};
+			};
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	update_kb_category: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['KbCategoryInput'];
+			};
+		};
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['KbCategory'];
+				};
+			};
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	delete_kb_category: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			204: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content?: never;
+			};
+		};
+	};
+	preview_article: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['KbPreviewRequest'];
+			};
+		};
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['KbPreviewResponse'];
+				};
+			};
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
 				};
 			};
 		};

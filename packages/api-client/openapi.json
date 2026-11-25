@@ -4617,6 +4617,657 @@
 				}
 			}
 		},
+		"/api/v1/kb/articles": {
+			"get": {
+				"tags": ["knowledge"],
+				"summary": "Articles you can see, best match first when searching. Where you may\nwrite you see drafts and reviews too; elsewhere, what's published.",
+				"operationId": "list_articles",
+				"parameters": [
+					{
+						"name": "q",
+						"in": "query",
+						"description": "Words to search for in titles, tags and text.",
+						"required": false,
+						"schema": {
+							"type": ["string", "null"]
+						}
+					},
+					{
+						"name": "categoryId",
+						"in": "query",
+						"required": false,
+						"schema": {
+							"type": ["string", "null"],
+							"format": "uuid"
+						}
+					},
+					{
+						"name": "status",
+						"in": "query",
+						"description": "`draft`, `in_review`, `published` or `archived`.",
+						"required": false,
+						"schema": {
+							"type": ["string", "null"]
+						}
+					},
+					{
+						"name": "limit",
+						"in": "query",
+						"description": "Default 50, at most 200.",
+						"required": false,
+						"schema": {
+							"type": ["integer", "null"],
+							"format": "int64"
+						}
+					},
+					{
+						"name": "offset",
+						"in": "query",
+						"required": false,
+						"schema": {
+							"type": ["integer", "null"],
+							"format": "int64"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ArticlePage"
+								}
+							}
+						}
+					}
+				}
+			},
+			"post": {
+				"tags": ["knowledge"],
+				"summary": "Writes a new article: a draft, at an organization where you hold\n`kb:write`.",
+				"operationId": "create_article",
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/KbArticleInput"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"201": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ArticleView"
+								}
+							}
+						}
+					},
+					"422": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/kb/articles/{id}": {
+			"get": {
+				"tags": ["knowledge"],
+				"summary": "An article. With `kb:write` there, its working copy and history; with\nonly `kb:read`, what's published (404 if nothing is).",
+				"operationId": "get_article",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ArticleView"
+								}
+							}
+						}
+					},
+					"404": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			},
+			"patch": {
+				"tags": ["knowledge"],
+				"summary": "Changes an article; send back the `version` you read. A new title or\nbody is a new revision and a draft (readers keep the published one).\nChanging who can see a published article needs `kb:publish`.",
+				"operationId": "update_article",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/KbArticleChanges"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ArticleView"
+								}
+							}
+						}
+					},
+					"409": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					},
+					"422": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/kb/articles/{id}/archive": {
+			"post": {
+				"tags": ["knowledge"],
+				"summary": "Hides an article from readers (`kb:publish`).",
+				"operationId": "archive_article",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ArticleView"
+								}
+							}
+						}
+					},
+					"409": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/kb/articles/{id}/publish": {
+			"post": {
+				"tags": ["knowledge"],
+				"summary": "Publishes the working copy (`kb:publish`): approves one in review, or\npublishes a draft directly. An optional comment is kept.",
+				"operationId": "publish_article",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/ReviewDecision"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ArticleView"
+								}
+							}
+						}
+					},
+					"409": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/kb/articles/{id}/reject": {
+			"post": {
+				"tags": ["knowledge"],
+				"summary": "Sends an article in review back as a draft, saying what needs changing\n(`kb:publish`).",
+				"operationId": "reject_article",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/ReviewDecision"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ArticleView"
+								}
+							}
+						}
+					},
+					"409": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					},
+					"422": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/kb/articles/{id}/restore": {
+			"post": {
+				"tags": ["knowledge"],
+				"summary": "Brings back an archived article: published again if nothing changed\nsince, else as a draft (`kb:publish`).",
+				"operationId": "restore_article",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ArticleView"
+								}
+							}
+						}
+					},
+					"409": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/kb/articles/{id}/revisions": {
+			"get": {
+				"tags": ["knowledge"],
+				"summary": "An article's revisions, newest first (`kb:write`).",
+				"operationId": "list_revisions",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "array",
+									"items": {
+										"$ref": "#/components/schemas/KbRevision"
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/kb/articles/{id}/revisions/{number}": {
+			"get": {
+				"tags": ["knowledge"],
+				"summary": "One revision, with its text (`kb:write`).",
+				"operationId": "get_revision",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					},
+					{
+						"name": "number",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "integer",
+							"format": "int32"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/KbRevision"
+								}
+							}
+						}
+					},
+					"404": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/kb/articles/{id}/submit": {
+			"post": {
+				"tags": ["knowledge"],
+				"summary": "Submits a draft for review (`kb:write`).",
+				"operationId": "submit_article",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ArticleView"
+								}
+							}
+						}
+					},
+					"409": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/kb/categories": {
+			"get": {
+				"tags": ["knowledge"],
+				"summary": "Categories you can see, in order.",
+				"operationId": "list_kb_categories",
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "array",
+									"items": {
+										"$ref": "#/components/schemas/KbCategory"
+									}
+								}
+							}
+						}
+					}
+				}
+			},
+			"post": {
+				"tags": ["knowledge"],
+				"summary": "Adds a category at an organization (`kb:publish` there). Articles there\nand below can use it.",
+				"operationId": "create_kb_category",
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/NewKbCategory"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"201": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/KbCategory"
+								}
+							}
+						}
+					},
+					"422": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/kb/categories/{id}": {
+			"put": {
+				"tags": ["knowledge"],
+				"operationId": "update_kb_category",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/KbCategoryInput"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/KbCategory"
+								}
+							}
+						}
+					},
+					"422": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			},
+			"delete": {
+				"tags": ["knowledge"],
+				"summary": "Deletes a category; its articles stay, uncategorized.",
+				"operationId": "delete_kb_category",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"responses": {
+					"204": {}
+				}
+			}
+		},
+		"/api/v1/kb/preview": {
+			"post": {
+				"tags": ["knowledge"],
+				"summary": "Renders markdown as an article would show it (for the editor's preview).",
+				"operationId": "preview_article",
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/KbPreviewRequest"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/KbPreviewResponse"
+								}
+							}
+						}
+					},
+					"422": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
 		"/api/v1/mailboxes": {
 			"get": {
 				"tags": ["servicedesk"],
@@ -13338,6 +13989,44 @@
 					}
 				}
 			},
+			"ArticlePage": {
+				"type": "object",
+				"required": ["items", "total"],
+				"properties": {
+					"items": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/KbArticleSummary"
+						}
+					},
+					"total": {
+						"type": "integer",
+						"format": "int64"
+					}
+				}
+			},
+			"ArticleView": {
+				"allOf": [
+					{
+						"$ref": "#/components/schemas/KbArticle"
+					},
+					{
+						"type": "object",
+						"required": ["canWrite", "canPublish"],
+						"properties": {
+							"canPublish": {
+								"type": "boolean",
+								"description": "You may approve, reject, publish and archive it."
+							},
+							"canWrite": {
+								"type": "boolean",
+								"description": "You may change it and see its drafts and history."
+							}
+						}
+					}
+				],
+				"description": "An article, with what you may do with it."
+			},
 			"Assignment": {
 				"type": "object",
 				"required": [
@@ -16090,6 +16779,332 @@
 					}
 				}
 			},
+			"KbActivity": {
+				"type": "object",
+				"description": "Something that happened to an article.",
+				"required": ["kind", "details", "createdAt"],
+				"properties": {
+					"actorName": {
+						"type": ["string", "null"]
+					},
+					"createdAt": {
+						"type": "string",
+						"format": "date-time"
+					},
+					"details": {
+						"$ref": "#/components/schemas/Value"
+					},
+					"kind": {
+						"type": "string"
+					}
+				}
+			},
+			"KbArticle": {
+				"allOf": [
+					{
+						"$ref": "#/components/schemas/KbArticleSummary"
+					},
+					{
+						"type": "object",
+						"required": ["body", "bodyHtml", "version", "activity"],
+						"properties": {
+							"activity": {
+								"type": "array",
+								"items": {
+									"$ref": "#/components/schemas/KbActivity"
+								}
+							},
+							"body": {
+								"type": "string"
+							},
+							"bodyHtml": {
+								"type": "string"
+							},
+							"createdByName": {
+								"type": ["string", "null"]
+							},
+							"published": {
+								"oneOf": [
+									{
+										"$ref": "#/components/schemas/KbPublished"
+									},
+									{
+										"type": "null"
+									}
+								]
+							},
+							"reviewRequestedByName": {
+								"type": ["string", "null"]
+							},
+							"updatedByName": {
+								"type": ["string", "null"]
+							},
+							"version": {
+								"type": "integer",
+								"format": "int32",
+								"description": "For optimistic locking: send it back when changing the article."
+							}
+						}
+					}
+				],
+				"description": "An article in full. `title`, `body` and `bodyHtml` are the working copy\n(the latest revision); `published` is what readers see."
+			},
+			"KbArticleChanges": {
+				"type": "object",
+				"description": "Changes to an article: what's given changes.",
+				"required": ["version"],
+				"properties": {
+					"body": {
+						"type": ["string", "null"]
+					},
+					"categoryId": {
+						"type": ["string", "null"],
+						"format": "uuid",
+						"description": "A category, or `null` for none."
+					},
+					"tags": {
+						"type": ["array", "null"],
+						"items": {
+							"type": "string"
+						}
+					},
+					"title": {
+						"type": ["string", "null"]
+					},
+					"version": {
+						"type": "integer",
+						"format": "int32",
+						"description": "The version you read."
+					},
+					"visibility": {
+						"type": ["string", "null"]
+					}
+				},
+				"additionalProperties": false
+			},
+			"KbArticleInput": {
+				"type": "object",
+				"description": "A new article.",
+				"required": ["orgId", "title"],
+				"properties": {
+					"body": {
+						"type": ["string", "null"],
+						"description": "Markdown."
+					},
+					"categoryId": {
+						"type": ["string", "null"],
+						"format": "uuid"
+					},
+					"orgId": {
+						"type": "string",
+						"format": "uuid",
+						"description": "The organization it belongs to: the MSP's for shared know-how, a\nclient's for its own documentation."
+					},
+					"tags": {
+						"type": ["array", "null"],
+						"items": {
+							"type": "string"
+						}
+					},
+					"title": {
+						"type": "string"
+					},
+					"visibility": {
+						"type": ["string", "null"],
+						"description": "`internal` (the default), `clients` or `public`."
+					}
+				},
+				"additionalProperties": false
+			},
+			"KbArticleSummary": {
+				"type": "object",
+				"description": "An article as listed.",
+				"required": [
+					"id",
+					"orgId",
+					"orgName",
+					"title",
+					"visibility",
+					"status",
+					"tags",
+					"revision",
+					"updatedAt"
+				],
+				"properties": {
+					"categoryId": {
+						"type": ["string", "null"],
+						"format": "uuid"
+					},
+					"categoryName": {
+						"type": ["string", "null"]
+					},
+					"id": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"orgId": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"orgName": {
+						"type": "string"
+					},
+					"publishedAt": {
+						"type": ["string", "null"],
+						"format": "date-time"
+					},
+					"publishedRevision": {
+						"type": ["integer", "null"],
+						"format": "int32"
+					},
+					"revision": {
+						"type": "integer",
+						"format": "int32"
+					},
+					"snippet": {
+						"type": ["string", "null"],
+						"description": "Where the search matched, with the matched words in `<b>`."
+					},
+					"status": {
+						"type": "string"
+					},
+					"tags": {
+						"type": "array",
+						"items": {
+							"type": "string"
+						}
+					},
+					"title": {
+						"type": "string"
+					},
+					"updatedAt": {
+						"type": "string",
+						"format": "date-time"
+					},
+					"visibility": {
+						"type": "string"
+					}
+				}
+			},
+			"KbCategory": {
+				"type": "object",
+				"required": ["id", "orgId", "name", "description", "position", "articles"],
+				"properties": {
+					"articles": {
+						"type": "integer",
+						"format": "int64",
+						"description": "Published articles in it."
+					},
+					"description": {
+						"type": "string"
+					},
+					"id": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"name": {
+						"type": "string"
+					},
+					"orgId": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"position": {
+						"type": "integer",
+						"format": "int32"
+					}
+				}
+			},
+			"KbCategoryInput": {
+				"type": "object",
+				"required": ["name"],
+				"properties": {
+					"description": {
+						"type": ["string", "null"]
+					},
+					"name": {
+						"type": "string"
+					},
+					"position": {
+						"type": ["integer", "null"],
+						"format": "int32"
+					}
+				},
+				"additionalProperties": false
+			},
+			"KbPreviewRequest": {
+				"type": "object",
+				"required": ["body"],
+				"properties": {
+					"body": {
+						"type": "string",
+						"description": "Markdown."
+					}
+				},
+				"additionalProperties": false
+			},
+			"KbPreviewResponse": {
+				"type": "object",
+				"required": ["html"],
+				"properties": {
+					"html": {
+						"type": "string",
+						"description": "The markdown as sanitized HTML, as readers will see it."
+					}
+				}
+			},
+			"KbPublished": {
+				"type": "object",
+				"description": "What readers see: a published revision.",
+				"required": ["revision", "title", "body", "bodyHtml"],
+				"properties": {
+					"body": {
+						"type": "string"
+					},
+					"bodyHtml": {
+						"type": "string"
+					},
+					"publishedAt": {
+						"type": ["string", "null"],
+						"format": "date-time"
+					},
+					"revision": {
+						"type": "integer",
+						"format": "int32"
+					},
+					"title": {
+						"type": "string"
+					}
+				}
+			},
+			"KbRevision": {
+				"type": "object",
+				"description": "A saved revision.",
+				"required": ["number", "title", "createdAt"],
+				"properties": {
+					"body": {
+						"type": ["string", "null"],
+						"description": "Markdown (left out when listing)."
+					},
+					"bodyHtml": {
+						"type": ["string", "null"]
+					},
+					"createdAt": {
+						"type": "string",
+						"format": "date-time"
+					},
+					"createdByName": {
+						"type": ["string", "null"]
+					},
+					"number": {
+						"type": "integer",
+						"format": "int32"
+					},
+					"title": {
+						"type": "string"
+					}
+				}
+			},
 			"Language": {
 				"type": "string",
 				"enum": ["pwsh", "python", "javascript"]
@@ -16815,6 +17830,20 @@
 						"format": "uuid"
 					}
 				}
+			},
+			"NewKbCategory": {
+				"type": "object",
+				"required": ["orgId", "category"],
+				"properties": {
+					"category": {
+						"$ref": "#/components/schemas/KbCategoryInput"
+					},
+					"orgId": {
+						"type": "string",
+						"format": "uuid"
+					}
+				},
+				"additionalProperties": false
 			},
 			"NewLink": {
 				"type": "object",
@@ -18470,6 +19499,16 @@
 						"type": "string"
 					}
 				}
+			},
+			"ReviewDecision": {
+				"type": "object",
+				"properties": {
+					"comment": {
+						"type": ["string", "null"],
+						"description": "Required to reject: what needs changing."
+					}
+				},
+				"additionalProperties": false
 			},
 			"ReviewItem": {
 				"type": "object",
@@ -21287,6 +22326,7 @@
 					}
 				}
 			},
+			"Value": {},
 			"VariableInput": {
 				"type": "object",
 				"description": "A variable to set.",
@@ -21594,6 +22634,10 @@
 		{
 			"name": "workforce",
 			"description": "Skills, certifications and what work requires (the workforce module)"
+		},
+		{
+			"name": "knowledge",
+			"description": "Knowledge base articles, their review and revisions, and categories (the knowledge module)"
 		},
 		{
 			"name": "users",

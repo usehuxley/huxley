@@ -83,6 +83,9 @@ permissions! {
     MAILBOX_INGEST = "mailbox:ingest", Instance, "Post email to service desk mailboxes (for a mail server's forwarding)";
     WORKFORCE_READ = "workforce:read", Instance, "See people's skills, certifications and availability";
     WORKFORCE_MANAGE = "workforce:manage", Instance, "Keep the skills and certifications catalogs, verify skills, and set what work requires";
+    KB_READ = "kb:read", Org, "Read published knowledge base articles";
+    KB_WRITE = "kb:write", Org, "Write knowledge base articles and submit them for review";
+    KB_PUBLISH = "kb:publish", Org, "Approve, reject, publish and archive knowledge base articles, and keep their categories";
 }
 
 /// Wildcard granting every permission.

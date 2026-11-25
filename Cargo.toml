@@ -12,6 +12,7 @@ homepage = "https://usehuxley.io"
 authors = ["Huxley contributors"]
 
 [workspace.dependencies]
+pulldown-cmark = { version = "0.13.6", default-features = false, features = ["html"] }
 tonic = { version = "0.14", default-features = false, features = ["transport", "codegen", "tls-ring", "router"] }
 tonic-prost = "0.14"
 tonic-prost-build = { version = "0.14", default-features = false, features = ["transport"] }
@@ -46,6 +47,7 @@ huxley-crm = { path = "crates/huxley-crm" }
 huxley-servicedesk = { path = "crates/huxley-servicedesk" }
 huxley-mail = { path = "crates/huxley-mail" }
 huxley-workforce = { path = "crates/huxley-workforce" }
+huxley-knowledge = { path = "crates/huxley-knowledge" }
 huxley-orgs = { path = "crates/huxley-orgs" }
 huxley-runners = { path = "crates/huxley-runners" }
 huxley-templates = { path = "crates/huxley-templates" }
