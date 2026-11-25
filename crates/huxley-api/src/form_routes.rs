@@ -258,6 +258,108 @@ pub struct SubmitRequest {
     pub org_id: Option<Uuid>,
     #[schema(value_type = std::collections::HashMap<String, serde_json::Value>)]
     pub answers: JsonValue,
+    /// Run as an Action on a contact or ticket (of `orgId`): its workflows
+    /// get them, and the client, as `trigger.context`.
+    #[serde(default)]
+    pub context: Option<ActionContext>,
+}
+
+/// The record an Action is run on.
+#[derive(Debug, Default, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ActionContext {
+    #[serde(default)]
+    pub contact_id: Option<Uuid>,
+    #[serde(default)]
+    pub ticket_id: Option<Uuid>,
+}
+
+/// `trigger.context` for an Action: the client, and the contact and ticket
+/// it was run on (each checked: yours to read, and of `org_id`). A ticket
+/// brings its requester as the contact unless one is given. `None` for a
+/// form that isn't an Action and was given no record.
+async fn action_context(
+    state: &AppState,
+    authed: &Authed,
+    form: &Form,
+    org_id: Uuid,
+    given: Option<&ActionContext>,
+) -> ApiResult<Option<JsonValue>> {
+    let none = ActionContext::default();
+    let given = given.unwrap_or(&none);
+    if form.action_for.is_none() && given.contact_id.is_none() && given.ticket_id.is_none() {
+        return Ok(None);
+    }
+    let mut tx = begin_scoped(&state.db, &OrgScope::System)
+        .await
+        .map_err(db_err)?;
+    let client: Option<(Uuid, String, String)> =
+        sqlx::query_as("SELECT id, name, kind::text FROM organizations WHERE id = $1")
+            .bind(org_id)
+            .fetch_optional(&mut *tx)
+            .await
+            .map_err(db_err)?;
+    let mut context = serde_json::Map::new();
+    if let Some((id, name, kind)) = client {
+        context.insert(
+            "client".into(),
+            serde_json::json!({ "id": id, "name": name, "kind": kind }),
+        );
+    }
+    let mut contact_id = given.contact_id;
+    if let Some(ticket_id) = given.ticket_id {
+        let ticket = huxley_servicedesk::tickets::get(&mut tx, ticket_id)
+            .await
+            .map_err(|_| {
+                ApiError::validation()
+                    .with_field_error("/context/ticketId", "there's no such ticket")
+            })?;
+        if ticket.org_id != org_id {
+            return Err(ApiError::validation()
+                .with_field_error("/context/ticketId", "a ticket of the organization it's for"));
+        }
+        authed
+            .require_at(state, permissions::TICKET_READ, ticket.org_id)
+            .await?;
+        contact_id = contact_id.or(ticket.requester_id);
+        context.insert(
+            "ticket".into(),
+            serde_json::json!({
+                "id": ticket.id, "reference": ticket.reference, "title": ticket.title,
+                "priority": ticket.priority, "status": ticket.status_key, "type": ticket.type_key,
+                "queue": ticket.queue_name, "assignee": ticket.assignee_user_name,
+            }),
+        );
+    }
+    if let Some(contact_id) = contact_id {
+        let contact = huxley_crm::contacts::get(&mut tx, contact_id)
+            .await
+            .map_err(|_| {
+                ApiError::validation()
+                    .with_field_error("/context/contactId", "there's no such contact")
+            })?;
+        let of_org =
+            contact.org_id == org_id || contact.companies.iter().any(|c| c.org_id == org_id);
+        if !of_org {
+            return Err(ApiError::validation().with_field_error(
+                "/context/contactId",
+                "a contact of the organization it's for",
+            ));
+        }
+        authed
+            .require_at(state, permissions::CRM_READ, org_id)
+            .await?;
+        context.insert(
+            "contact".into(),
+            serde_json::json!({
+                "id": contact.id, "name": contact.name, "first_name": contact.first_name,
+                "last_name": contact.last_name, "email": contact.email, "phone": contact.phone,
+                "mobile": contact.mobile, "external_ids": contact.external_ids,
+            }),
+        );
+    }
+    tx.commit().await.map_err(db_err)?;
+    Ok(Some(JsonValue::Object(context)))
 }
 
 /// Submits answers. Starts the published workflows with a form trigger
@@ -275,6 +377,7 @@ pub async fn submit(
 ) -> ApiResult<(StatusCode, Json<Submitted>)> {
     let form = load(&state, &authed, id).await?;
     let org_id = submit_org(&state, &authed, &form, body.org_id).await?;
+    let context = action_context(&state, &authed, &form, org_id, body.context.as_ref()).await?;
     // Looked-up choices are checked against a fresh lookup.
     huxley_forms::check_choices(&state.engine, &form, &body.answers, org_id)
         .await
@@ -290,10 +393,25 @@ pub async fn submit(
         id,
         org_id,
         huxley_forms::Submitter::User(authed.user.auth.user.id),
-        body.answers,
+        huxley_forms::Submission {
+            answers: body.answers,
+            context,
+        },
     )
     .await
     .map_err(map_err)?;
+    // Run from a ticket: its history says so.
+    if let Some(ticket) = body.context.as_ref().and_then(|c| c.ticket_id) {
+        huxley_servicedesk::tickets::record_action(
+            &mut tx,
+            &authed.user.ctx,
+            ticket,
+            &form.name,
+            &submitted.runs,
+        )
+        .await
+        .map_err(|e| ApiError::internal(&e))?;
+    }
     tx.commit().await.map_err(db_err)?;
     Ok((StatusCode::CREATED, Json(submitted)))
 }

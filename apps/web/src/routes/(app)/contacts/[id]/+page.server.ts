@@ -1,6 +1,7 @@
 import { error, fail, redirect } from '@sveltejs/kit';
 import { isApiProblem } from '@usehuxley/api-client';
 import { readFieldValues } from '#lib/fields/values.ts';
+import { actionsFor } from '#lib/forms/actions.server.ts';
 import { formString } from '#lib/forms.ts';
 import { api } from '#lib/server/api.ts';
 import { problemMessage } from '#lib/server/problems.ts';
@@ -12,18 +13,20 @@ export const load: PageServerLoad = async (event) => {
 	const contact = await client.GET('/api/v1/contacts/{id}', { params: { path: { id } } });
 	if (contact.response.status === 404) error(404, 'Contact not found.');
 	if (!contact.data) error(503, 'Could not load the contact.');
-	const [fields, sites, companies] = await Promise.all([
+	const [fields, sites, companies, actions] = await Promise.all([
 		client.GET('/api/v1/entities/{entity_type}/{id}/fields', {
 			params: { path: { entity_type: 'contact', id } }
 		}),
 		client.GET('/api/v1/orgs/{id}/sites', { params: { path: { id: contact.data.orgId } } }),
-		client.GET('/api/v1/companies', { params: { query: { providers: true } } })
+		client.GET('/api/v1/companies', { params: { query: { providers: true } } }),
+		actionsFor(event, 'contact', contact.data.orgId)
 	]);
 	return {
 		contact: contact.data,
 		fields: fields.data ?? [],
 		sites: sites.data ?? [],
-		companies: companies.data ?? []
+		companies: companies.data ?? [],
+		actions
 	};
 };
 

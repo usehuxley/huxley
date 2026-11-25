@@ -12,7 +12,27 @@ export const load: PageServerLoad = async (event) => {
 	]);
 	if (found.response.status === 404) error(404, 'Form not found.');
 	if (!found.data) error(503, 'Could not load the form.');
-	return { form: found.data, orgs: orgs.data ?? [] };
+	// Run as an Action from a record: what it's on, for the page to say.
+	const params = event.url.searchParams;
+	const contactId = params.get('contact') ?? '';
+	const ticketId = params.get('ticket') ?? '';
+	const [contact, ticket] = await Promise.all([
+		contactId ? client.GET('/api/v1/contacts/{id}', { params: { path: { id: contactId } } }) : null,
+		ticketId ? client.GET('/api/v1/tickets/{id}', { params: { path: { id: ticketId } } }) : null
+	]);
+	const orgId = params.get('org') ?? '';
+	const on = orgId
+		? {
+				orgId,
+				orgName: (orgs.data ?? []).find((o) => o.id === orgId)?.name ?? 'the client',
+				contactId: contact?.data?.id ?? '',
+				contactName: contact?.data?.name ?? '',
+				ticketId: ticket?.data?.id ?? '',
+				ticketReference: ticket?.data?.reference ?? '',
+				ticketTitle: ticket?.data?.title ?? ''
+			}
+		: null;
+	return { form: found.data, orgs: orgs.data ?? [], on };
 };
 
 /** Field errors by name, from the API's `answers/<field>` pointers. */
@@ -42,7 +62,17 @@ export const actions: Actions = {
 			response
 		} = await api(event).POST('/api/v1/forms/{id}/submissions', {
 			params: { path: { id: event.params.id } },
-			body: { orgId: formString(form, 'orgId') || null, answers }
+			body: {
+				orgId: formString(form, 'orgId') || null,
+				answers,
+				context:
+					formString(form, 'contactId') || formString(form, 'ticketId')
+						? {
+								contactId: formString(form, 'contactId') || null,
+								ticketId: formString(form, 'ticketId') || null
+							}
+						: null
+			}
 		});
 		if (!data) {
 			return fail(response.status, {

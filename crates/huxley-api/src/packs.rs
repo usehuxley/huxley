@@ -329,6 +329,9 @@ impl Target<'_> {
             schema: Json,
             #[serde(default)]
             ui: Json,
+            /// Offered as an Action on a client, contact or ticket.
+            #[serde(default, rename = "actionFor")]
+            action_for: Option<String>,
         }
         let file: FormFile =
             serde_json::from_str(pack.text(&format!("forms/{key}.json")).unwrap_or_default())
@@ -339,6 +342,7 @@ impl Target<'_> {
             description: file.description,
             schema: file.schema,
             ui: file.ui,
+            action_for: file.action_for,
         };
         let form = match current {
             Some(id) => huxley_forms::update(&mut *self.conn, self.ctx, id, &input).await,

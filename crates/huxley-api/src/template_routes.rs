@@ -201,6 +201,7 @@ pub async fn use_template(
                 description: None,
                 schema: form.schema,
                 ui: form.ui,
+                action_for: None,
             };
             let created = huxley_forms::create(&mut tx, &authed.user.ctx, body.org_id, &input)
                 .await

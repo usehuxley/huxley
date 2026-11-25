@@ -205,7 +205,9 @@ pub fn shown(form: &Form, answers: &Json) -> (Json, BTreeSet<String>) {
 /// The schema to check answers against: hidden fields aren't required.
 pub(crate) fn schema_for(form: &Form, hidden: &BTreeSet<String>) -> Json {
     let mut schema = form.schema.clone();
-    if let Some(required) = schema["required"].as_array_mut() {
+    // `get_mut`, not indexing: indexing a missing key inserts `null`, and
+    // `"required": null` isn't a valid schema.
+    if let Some(required) = schema.get_mut("required").and_then(Json::as_array_mut) {
         required.retain(|r| r.as_str().is_none_or(|r| !hidden.contains(r)));
     }
     schema
@@ -309,6 +311,7 @@ mod tests {
             description: None,
             schema,
             ui,
+            action_for: None,
             archived: false,
             created_at: time::OffsetDateTime::UNIX_EPOCH,
             updated_at: time::OffsetDateTime::UNIX_EPOCH,

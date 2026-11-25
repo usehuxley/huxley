@@ -682,6 +682,26 @@ impl BulkFields {
     }
 }
 
+/// Notes on a ticket that an Action (a form) was run from it, and the runs
+/// it started.
+pub async fn record_action(
+    conn: &mut PgConnection,
+    ctx: &RequestContext,
+    ticket: Uuid,
+    form: &str,
+    runs: &[Uuid],
+) -> DeskResult<()> {
+    let t = get(conn, ticket).await?;
+    record(
+        conn,
+        ctx,
+        &t,
+        "action",
+        json!({ "form": form, "runs": runs }),
+    )
+    .await
+}
+
 /// A status change.
 #[derive(Debug, Clone, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]

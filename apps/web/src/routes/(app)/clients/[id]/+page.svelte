@@ -1,4 +1,5 @@
 <script lang="ts">
+	import ActionsCard from '#lib/forms/ActionsCard.svelte';
 	import { enhance, type SubmitFunction } from '$app/forms';
 	import { resolve } from '$app/paths';
 	import { Globe, MapPin, Phone, Plus, Search, UserPlus } from '@lucide/svelte';
@@ -102,6 +103,7 @@
 	>
 		{#snippet panel(value)}
 			{#if value === 'overview'}
+				<ActionsCard actions={data.actions} orgId={data.org.id} />
 				<Card title="Company details">
 					<form
 						method="POST"

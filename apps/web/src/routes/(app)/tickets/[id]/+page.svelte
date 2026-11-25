@@ -28,6 +28,7 @@
 	import { formatDuration } from '#lib/tickets/duration.ts';
 	import { clock, timers } from '#lib/time/timer.svelte.ts';
 	import { describePresence, type Viewer } from '#lib/tickets/presence.ts';
+	import ActionsCard from '#lib/forms/ActionsCard.svelte';
 	import { onMount, untrack } from 'svelte';
 	import type { PageProps } from './$types';
 
@@ -387,6 +388,12 @@
 		</div>
 
 		<aside class="flex flex-col gap-6">
+			<ActionsCard
+				actions={data.actions}
+				orgId={ticket.orgId}
+				ticketId={ticket.id}
+				contactId={ticket.requesterId ?? undefined}
+			/>
 			<Card title="Status">
 				<form
 					method="POST"

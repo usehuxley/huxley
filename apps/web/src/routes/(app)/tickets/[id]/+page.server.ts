@@ -2,6 +2,7 @@ import { error, fail, redirect } from '@sveltejs/kit';
 import { formString } from '#lib/forms.ts';
 import { api } from '#lib/server/api.ts';
 import { problemMessage } from '#lib/server/problems.ts';
+import { actionsFor } from '#lib/forms/actions.server.ts';
 import { parseDuration } from '#lib/tickets/duration.ts';
 import { assignees, fieldErrors } from '#lib/tickets/server.ts';
 import type { Actions, PageServerLoad } from './$types';
@@ -20,7 +21,7 @@ export const load: PageServerLoad = async (event) => {
 	if (!ticket.data || !notes.data || !activity.data || !types.data) {
 		error(503, 'Could not load the ticket.');
 	}
-	const [people, contacts, responses, links, time, workTypes] = await Promise.all([
+	const [people, contacts, responses, links, time, workTypes, actions] = await Promise.all([
 		assignees(event),
 		client.GET('/api/v1/orgs/{id}/contacts', {
 			params: { path: { id: ticket.data.orgId }, query: { limit: 200 } }
@@ -29,7 +30,8 @@ export const load: PageServerLoad = async (event) => {
 		client.GET('/api/v1/tickets/{id}/responses', path),
 		client.GET('/api/v1/tickets/{id}/links', path),
 		client.GET('/api/v1/tickets/{id}/time', path),
-		client.GET('/api/v1/work-types')
+		client.GET('/api/v1/work-types'),
+		actionsFor(event, 'ticket', ticket.data.orgId)
 	]);
 	return {
 		ticket: ticket.data,
@@ -42,7 +44,8 @@ export const load: PageServerLoad = async (event) => {
 		responses: responses.data ?? [],
 		links: links.data ?? [],
 		time: time.data ?? [],
-		workTypes: (workTypes.data ?? []).filter((w) => w.onTickets)
+		workTypes: (workTypes.data ?? []).filter((w) => w.onTickets),
+		actions
 	};
 };
 

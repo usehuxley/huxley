@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
 	import { resolve } from '$app/paths';
+	import { page } from '$app/state';
 	import { ArrowLeft } from '@lucide/svelte';
 	import { Button, Card, Field, Select } from '@usehuxley/ui';
 	import FormRenderer from '#lib/form-renderer/FormRenderer.svelte';
@@ -13,8 +14,29 @@
 	let answers = $derived(JSON.stringify(answersOf(fields, values)));
 	let orgId = $state('');
 	$effect(() => {
-		if (!orgId) orgId = data.form.orgId;
+		if (!orgId) orgId = data.on?.orgId ?? data.form.orgId;
 	});
+	// Keeps the record (org, contact, ticket) in the URL through submitting.
+	let submitAction = $derived(page.url.search ? `${page.url.search}&/submit` : '?/submit');
+	// Where to go back to after running it from a record.
+	let back = $derived(
+		data.on?.ticketId
+			? {
+					href: resolve('/(app)/tickets/[id]', { id: data.on.ticketId }),
+					label: `Back to ${data.on.ticketReference}`
+				}
+			: data.on?.contactId
+				? {
+						href: resolve('/(app)/contacts/[id]', { id: data.on.contactId }),
+						label: `Back to ${data.on.contactName}`
+					}
+				: data.on
+					? {
+							href: resolve('/(app)/clients/[id]', { id: data.on.orgId }),
+							label: `Back to ${data.on.orgName}`
+						}
+					: null
+	);
 	let orgOptions = $derived(data.orgs.map((o) => ({ value: o.id, label: o.name })));
 	// Looked-up choices depend on the organization it's for.
 	const optionsUrl = (name: string) =>
@@ -67,22 +89,42 @@
 						Not started (their inputs don't match this form): {form.submitted.skipped.join(', ')}
 					</p>
 				{/if}
+				{#if back}
+					<a href={back.href} class="text-accent hover:underline">{back.label}</a>
+				{/if}
 			</div>
 		</Card>
 	{:else}
 		<Card>
 			<form
 				method="POST"
-				action="?/submit"
+				action={submitAction}
 				class="flex flex-col gap-4"
 				use:enhance={() =>
 					async ({ update }) => {
 						await update({ reset: false });
 					}}
 			>
-				<Field label="For" for="orgId" hint="The organization this is for">
-					<Select id="orgId" name="orgId" options={orgOptions} bind:value={orgId} />
-				</Field>
+				{#if data.on}
+					<!-- Run as an Action: on this record, for its organization. -->
+					<p
+						class="rounded-control bg-surface-sunken px-3 py-2 text-sm text-fg"
+						data-testid="action-on"
+					>
+						Runs on
+						{#if data.on.ticketId}<strong>{data.on.ticketReference} {data.on.ticketTitle}</strong>
+							·
+						{/if}{#if data.on.contactName}<strong>{data.on.contactName}</strong> ·
+						{/if}<strong>{data.on.orgName}</strong>
+					</p>
+					<input type="hidden" name="orgId" value={data.on.orgId} />
+					<input type="hidden" name="contactId" value={data.on.contactId} />
+					<input type="hidden" name="ticketId" value={data.on.ticketId} />
+				{:else}
+					<Field label="For" for="orgId" hint="The organization this is for">
+						<Select id="orgId" name="orgId" options={orgOptions} bind:value={orgId} />
+					</Field>
+				{/if}
 				<FormRenderer
 					schema={data.form.schema}
 					ui={data.form.ui}

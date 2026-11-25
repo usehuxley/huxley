@@ -1,6 +1,7 @@
 import { error, fail, redirect } from '@sveltejs/kit';
 import { isApiProblem } from '@usehuxley/api-client';
 import { hoursFromForm } from '#lib/crm/hours.ts';
+import { actionsFor } from '#lib/forms/actions.server.ts';
 import { formString } from '#lib/forms.ts';
 import { api } from '#lib/server/api.ts';
 import { problemMessage } from '#lib/server/problems.ts';
@@ -11,13 +12,14 @@ export const load: PageServerLoad = async (event) => {
 	const id = event.params.id;
 	const search = event.url.searchParams.get('q') ?? '';
 	const path = { params: { path: { id } } };
-	const [org, company, sites, contacts] = await Promise.all([
+	const [org, company, sites, contacts, actions] = await Promise.all([
 		client.GET('/api/v1/orgs/{id}', path),
 		client.GET('/api/v1/orgs/{id}/company', path),
 		client.GET('/api/v1/orgs/{id}/sites', path),
 		client.GET('/api/v1/orgs/{id}/contacts', {
 			params: { path: { id }, query: { search: search || undefined, limit: 200 } }
-		})
+		}),
+		actionsFor(event, 'client', id)
 	]);
 	if (org.response.status === 404 || company.response.status === 404) {
 		error(404, 'Client not found.');
@@ -30,6 +32,7 @@ export const load: PageServerLoad = async (event) => {
 		company: company.data,
 		sites: sites.data,
 		contacts: contacts.data,
+		actions,
 		search,
 		tab: event.url.searchParams.get('tab') ?? 'overview'
 	};
