@@ -3,6 +3,7 @@
 	import { Plus } from '@lucide/svelte';
 	import { Badge, Button, Card, Dialog, Field, Input, toast } from '@usehuxley/ui';
 	import HoursFields from '#lib/crm/HoursFields.svelte';
+	import { formatHolidays, type Holiday } from '#lib/tickets/holidays.ts';
 	import { hoursSummary } from '#lib/crm/labels.ts';
 	import { formatDuration } from '#lib/tickets/duration.ts';
 	import { PRIORITIES } from '#lib/tickets/labels.ts';
@@ -40,14 +41,19 @@
 		open = true;
 	}
 
+	function holidaysOf(policy: Policy): string {
+		const n = policy.holidays.length;
+		return n === 0 ? '' : ` · ${n} holiday${n === 1 ? '' : 's'}`;
+	}
+
 	function hoursOf(policy: Policy): string {
 		switch (policy.hoursSource) {
 			case 'always':
 				return 'Around the clock';
 			case 'policy':
-				return `${hoursSummary(policy.hours)}${policy.timezone ? ` (${policy.timezone})` : ''}`;
+				return `${hoursSummary(policy.hours)}${policy.timezone ? ` (${policy.timezone})` : ''}${holidaysOf(policy)}`;
 			default:
-				return "The client's site hours";
+				return `The client's site hours${holidaysOf(policy)}`;
 		}
 	}
 
@@ -214,6 +220,19 @@
 				<datalist id="sla-zones">
 					{#each zones as zone (zone)}<option value={zone}></option>{/each}
 				</datalist>
+			</Field>
+			<Field
+				label="Holidays"
+				for="sla-holidays"
+				hint="Days the clocks don't count: one a line, a date then a name, e.g. 2026-12-25 Christmas Day."
+				error={errors.holidays}
+			>
+				<textarea
+					id="sla-holidays"
+					name="holidays"
+					rows="5"
+					class="w-full rounded-control border border-border-strong bg-surface px-3 py-2 font-mono text-sm text-fg"
+					value={formatHolidays((editing?.holidays ?? []) as Holiday[])}></textarea>
 			</Field>
 		{/if}
 

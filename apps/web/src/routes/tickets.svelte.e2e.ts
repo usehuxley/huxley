@@ -158,4 +158,22 @@ test.describe('service desk', () => {
 		await expect(sla.getByText(policy)).toBeVisible();
 		await expect(sla.getByText(/Due in (1|2) hours?/)).toBeVisible();
 	});
+
+	test('a policy keeps holidays, which its clocks skip', async ({ page }) => {
+		const policy = `Holidays ${Date.now().toString(36)}`;
+		await signIn(page);
+		await page.goto('/settings/sla');
+		await page.getByRole('button', { name: 'New policy' }).click();
+		const dialog = page.getByRole('dialog');
+		await dialog.getByLabel('Name').fill(policy);
+		await dialog.getByLabel('Holidays').fill('2099-12-26 Boxing Day\n2099-12-25 Christmas Day');
+		await dialog.getByRole('button', { name: 'Save policy' }).click();
+		await expect(page.getByText('Policy saved.')).toBeVisible();
+		const row = page.getByRole('listitem').filter({ hasText: policy });
+		await expect(row).toContainText('2 holidays');
+		await row.getByRole('button', { name: 'Edit' }).click();
+		await expect(page.getByRole('dialog').getByLabel('Holidays')).toHaveValue(
+			'2099-12-25 Christmas Day\n2099-12-26 Boxing Day'
+		);
+	});
 });

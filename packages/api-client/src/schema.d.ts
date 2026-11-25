@@ -5474,6 +5474,12 @@ export interface components {
 			status: string;
 			version: string;
 		};
+		/** @description A day a policy's clocks don't count. */
+		Holiday: {
+			/** @description `YYYY-MM-DD`, in the calendar's time zone. */
+			date: string;
+			name?: string;
+		};
 		/** @description Where an IMAP mailbox fetches from. */
 		ImapSettings: {
 			/** @description Default `INBOX`. */
@@ -6171,6 +6177,11 @@ export interface components {
 		};
 		Policy: {
 			description: string;
+			/**
+			 * @description Days its clocks don't count (unless it's around the clock):
+			 *     `[{"date": "2026-12-25", "name": "Christmas Day"}, …]`, in order.
+			 */
+			holidays: components['schemas']['Holiday'][];
 			/** @description `{"mon": [["09:00", "17:00"]], …}`. */
 			hours: {
 				[key: string]: string[][];
@@ -6192,6 +6203,8 @@ export interface components {
 		};
 		PolicyInput: {
 			description?: string | null;
+			/** @description Days its clocks don't count (replaces the list when given). */
+			holidays?: components['schemas']['Holiday'][] | null;
 			/** @description `{"mon": [["09:00", "17:00"]], …}`. */
 			hours?: {
 				[key: string]: string[][];

@@ -40,6 +40,10 @@ pub struct Policy {
     pub hours: Json,
     /// For the policy's hours; none: the organization's time zone.
     pub timezone: Option<String>,
+    /// Days its clocks don't count (unless it's around the clock):
+    /// `[{"date": "2026-12-25", "name": "Christmas Day"}, …]`, in order.
+    #[schema(value_type = Vec<Holiday>)]
+    pub holidays: Json,
     pub is_default: bool,
     /// Targets by priority (`p1` … `p4`).
     #[sqlx(skip)]
@@ -62,6 +66,9 @@ pub struct PolicyInput {
     pub hours: Option<Json>,
     #[serde(default)]
     pub timezone: Option<String>,
+    /// Days its clocks don't count (replaces the list when given).
+    #[serde(default)]
+    pub holidays: Option<Vec<Holiday>>,
     /// Make it the default policy.
     #[serde(default)]
     pub is_default: bool,
@@ -71,6 +78,39 @@ pub struct PolicyInput {
     /// The version you read (updates only).
     #[serde(default)]
     pub version: Option<i32>,
+}
+
+/// A day a policy's clocks don't count.
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct Holiday {
+    /// `YYYY-MM-DD`, in the calendar's time zone.
+    pub date: String,
+    #[serde(default)]
+    pub name: String,
+}
+
+/// The holidays, checked: real dates, short names, each date once, in order.
+fn check_holidays(list: &[Holiday]) -> DeskResult<Json> {
+    if list.len() > 400 {
+        return Err(DeskError::invalid("holidays", "at most 400"));
+    }
+    let mut out: BTreeMap<jiff::civil::Date, String> = BTreeMap::new();
+    for h in list {
+        let date: jiff::civil::Date = h.date.trim().parse().map_err(|_| {
+            DeskError::invalid(
+                "holidays",
+                format!("{:?} isn't a date (YYYY-MM-DD)", h.date),
+            )
+        })?;
+        let name = text("holidays", Some(&h.name), 100)?.unwrap_or_default();
+        out.insert(date, name);
+    }
+    Ok(Json::Array(
+        out.into_iter()
+            .map(|(date, name)| json!({ "date": date.to_string(), "name": name }))
+            .collect(),
+    ))
 }
 
 async fn targets_of(conn: &mut PgConnection, policy: Uuid) -> DeskResult<BTreeMap<String, Target>> {
@@ -95,7 +135,7 @@ async fn targets_of(conn: &mut PgConnection, policy: Uuid) -> DeskResult<BTreeMa
         .collect())
 }
 
-const SELECT: &str = "SELECT id, name, description, hours_source, hours, timezone, is_default, version \
+const SELECT: &str = "SELECT id, name, description, hours_source, hours, timezone, holidays, is_default, version \
     FROM sd_sla_policies";
 
 /// Active policies, the default first.
@@ -129,6 +169,7 @@ struct Checked {
     hours_source: String,
     hours: Json,
     timezone: Option<String>,
+    holidays: Option<Json>,
 }
 
 fn check(input: &PolicyInput) -> DeskResult<Checked> {
@@ -189,6 +230,7 @@ fn check(input: &PolicyInput) -> DeskResult<Checked> {
         hours_source,
         hours,
         timezone,
+        holidays: input.holidays.as_deref().map(check_holidays).transpose()?,
     })
 }
 
@@ -248,8 +290,8 @@ pub async fn create(
     let c = check(input)?;
     let id = huxley_core::new_id();
     sqlx::query(
-        "INSERT INTO sd_sla_policies (id, name, description, hours_source, hours, timezone) \
-         VALUES ($1, $2, $3, $4, $5, $6)",
+        "INSERT INTO sd_sla_policies (id, name, description, hours_source, hours, timezone, holidays) \
+         VALUES ($1, $2, $3, $4, $5, $6, coalesce($7, '[]'::jsonb))",
     )
     .bind(id)
     .bind(&c.name)
@@ -257,6 +299,7 @@ pub async fn create(
     .bind(&c.hours_source)
     .bind(&c.hours)
     .bind(&c.timezone)
+    .bind(&c.holidays)
     .execute(&mut *conn)
     .await
     .map_err(taken)?;
@@ -291,7 +334,7 @@ pub async fn update(
     }
     let rows = sqlx::query(
         "UPDATE sd_sla_policies SET name = $3, description = $4, hours_source = $5, hours = $6, \
-                timezone = $7, version = version + 1 \
+                timezone = $7, holidays = coalesce($8, holidays), version = version + 1 \
           WHERE id = $1 AND version = $2 AND archived_at IS NULL",
     )
     .bind(id)
@@ -301,6 +344,7 @@ pub async fn update(
     .bind(&c.hours_source)
     .bind(&c.hours)
     .bind(&c.timezone)
+    .bind(&c.holidays)
     .execute(&mut *conn)
     .await
     .map_err(taken)?
@@ -507,6 +551,21 @@ pub async fn plan_for(conn: &mut PgConnection, org_id: Uuid) -> DeskResult<Optio
             }
         }
     };
+    // Holidays from a day ago to two years ahead: the ticket keeps them.
+    let today = jiff::Zoned::now().date();
+    let (from, to) = (
+        today.yesterday().unwrap_or(today).to_string(),
+        today.saturating_add(jiff::Span::new().years(2)).to_string(),
+    );
+    let dates: Vec<&str> = p
+        .holidays
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(|h| h["date"].as_str())
+        .filter(|d| *d >= from.as_str() && *d <= to.as_str())
+        .collect();
+    let calendar = calendar.closed_on(dates);
     Ok(Some(Plan {
         policy_id: p.id,
         policy_name: p.name,

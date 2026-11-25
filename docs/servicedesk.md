@@ -86,6 +86,8 @@ An SLA policy sets targets for each priority: how long until the first response,
 - **The policy's own hours**, in its timezone. Without one, it uses the organization's time zone setting.
 - **Around the clock.**
 
+**Holidays.** A policy can list holidays: days its clocks don't count, such as public holidays, written one a line in its **Holidays** box (`2026-12-25 Christmas Day`). They apply to whichever hours the policy uses, but not to around-the-clock policies. A ticket keeps the hours and holidays it was opened under, including holidays up to two years ahead, so holidays added later apply to new tickets only.
+
 **Which policy applies.** A policy can be set on any organization and applies to the organizations below it too. The nearest one wins. Without one, the default policy applies: the seeded **Standard** policy.
 
 | Priority | First response | Resolution |
@@ -326,4 +328,4 @@ Workflows can open, read, find, update and dispatch tickets and add notes, with 
 
 ## Coming next
 
-Microsoft 365 mailboxes, sending through a mailbox's own server, holidays in business hours, time entries, and a dispatch board.
+Microsoft 365 mailboxes, sending through a mailbox's own server, time entries, and a dispatch board.

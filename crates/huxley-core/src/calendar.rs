@@ -1,5 +1,8 @@
 //! Business time (ADR-037): weekly opening hours in a time zone, or around
-//! the clock. Times are Unix seconds. Used by SLAs and people's schedules.
+//! the clock, less closed days (holidays). Times are Unix seconds. Used by
+//! SLAs and people's schedules.
+
+use std::collections::BTreeSet;
 
 use jiff::civil::Date;
 use jiff::tz::TimeZone;
@@ -17,7 +20,9 @@ pub enum Calendar {
     Weekly {
         tz_name: String,
         tz: TimeZone,
-        days: [Vec<(u32, u32)>; 7],
+        days: Box<[Vec<(u32, u32)>; 7]>,
+        /// Days closed all day (holidays), in the calendar's zone.
+        closed: Box<BTreeSet<Date>>,
     },
 }
 
@@ -59,17 +64,33 @@ impl Calendar {
         days.iter().any(|d| !d.is_empty()).then(|| Self::Weekly {
             tz_name: tz_name.to_owned(),
             tz,
-            days,
+            days: Box::new(days),
+            closed: Box::default(),
         })
+    }
+
+    /// These days closed too (`YYYY-MM-DD`; others are ignored). No effect
+    /// around the clock.
+    #[must_use]
+    pub fn closed_on<'a>(mut self, dates: impl IntoIterator<Item = &'a str>) -> Self {
+        if let Self::Weekly { closed, .. } = &mut self {
+            closed.extend(dates.into_iter().filter_map(|d| d.parse::<Date>().ok()));
+        }
+        self
     }
 
     pub fn to_json(&self) -> Json {
         match self {
             Self::Always => json!({ "kind": "always" }),
-            Self::Weekly { tz_name, days, .. } => {
+            Self::Weekly {
+                tz_name,
+                days,
+                closed,
+                ..
+            } => {
                 let hours: serde_json::Map<String, Json> = DAYS
                     .iter()
-                    .zip(days)
+                    .zip(days.iter())
                     .filter(|(_, ranges)| !ranges.is_empty())
                     .map(|(day, ranges)| {
                         let list = ranges
@@ -79,7 +100,12 @@ impl Calendar {
                         ((*day).to_owned(), Json::Array(list))
                     })
                     .collect();
-                json!({ "kind": "weekly", "tz": tz_name, "hours": hours })
+                let closed: Vec<String> = closed.iter().map(ToString::to_string).collect();
+                if closed.is_empty() {
+                    json!({ "kind": "weekly", "tz": tz_name, "hours": hours })
+                } else {
+                    json!({ "kind": "weekly", "tz": tz_name, "hours": hours, "closed": closed })
+                }
             }
         }
     }
@@ -90,9 +116,20 @@ impl Calendar {
             value.get("kind").and_then(Json::as_str),
             value.get("tz").and_then(Json::as_str),
         ) {
-            (Some("weekly"), Some(tz)) => {
-                Self::weekly(tz, value.get("hours").unwrap_or(&Json::Null)).unwrap_or(Self::Always)
-            }
+            (Some("weekly"), Some(tz)) => Self::weekly(
+                tz,
+                value.get("hours").unwrap_or(&Json::Null),
+            )
+            .map_or(Self::Always, |c| {
+                c.closed_on(
+                    value
+                        .get("closed")
+                        .and_then(Json::as_array)
+                        .into_iter()
+                        .flatten()
+                        .filter_map(Json::as_str),
+                )
+            }),
             _ => Self::Always,
         }
     }
@@ -100,7 +137,10 @@ impl Calendar {
     /// Open windows (as Unix-second ranges) on the days from `from`'s day,
     /// in order, until `f` returns `false`.
     fn windows(&self, from: i64, mut f: impl FnMut(i64, i64) -> bool) {
-        let Self::Weekly { tz, days, .. } = self else {
+        let Self::Weekly {
+            tz, days, closed, ..
+        } = self
+        else {
             f(from, i64::MAX);
             return;
         };
@@ -131,7 +171,12 @@ impl Calendar {
         };
         for _ in 0..MAX_DAYS {
             let weekday = usize::try_from(date.weekday().to_monday_zero_offset()).unwrap_or(0);
-            for &(open, close) in &days[weekday] {
+            let today: &[(u32, u32)] = if closed.contains(&date) {
+                &[]
+            } else {
+                &days[weekday]
+            };
+            for &(open, close) in today {
                 let (Some(s), Some(e)) = (at(date, open), at(date, close)) else {
                     continue;
                 };
@@ -278,6 +323,30 @@ mod tests {
         let back = Calendar::from_json(&c.to_json());
         assert_eq!(back.to_json(), c.to_json());
         assert_eq!(c.to_json()["hours"], hours);
+    }
+
+    #[test]
+    fn closed_days_are_skipped_and_kept() {
+        // Friday 2026-12-25 closed: from Thursday 16:00, 2 hours of work is
+        // done Monday 10:00, not Friday 10:00.
+        let c = nine_to_five("UTC").closed_on(["2026-12-25", "not a date"]);
+        assert_eq!(
+            c.add(ts("2026-12-24T16:00:00Z"), 2 * 3600),
+            ts("2026-12-28T10:00:00Z")
+        );
+        assert!(!c.is_open(ts("2026-12-25T12:00:00Z")));
+        let again = Calendar::from_json(&c.to_json());
+        assert_eq!(again.to_json()["closed"], json!(["2026-12-25"]));
+        assert_eq!(
+            again.add(ts("2026-12-24T16:00:00Z"), 2 * 3600),
+            ts("2026-12-28T10:00:00Z")
+        );
+        // Around the clock, nothing is closed.
+        assert!(
+            Calendar::Always
+                .closed_on(["2026-12-25"])
+                .is_open(ts("2026-12-25T12:00:00Z"))
+        );
     }
 
     #[test]
