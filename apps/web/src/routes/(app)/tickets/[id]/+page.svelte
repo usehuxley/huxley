@@ -27,7 +27,8 @@
 	} from '#lib/tickets/labels.ts';
 	import { formatDuration } from '#lib/tickets/duration.ts';
 	import { clock, timers } from '#lib/time/timer.svelte.ts';
-	import { onMount } from 'svelte';
+	import { describePresence, type Viewer } from '#lib/tickets/presence.ts';
+	import { onMount, untrack } from 'svelte';
 	import type { PageProps } from './$types';
 
 	let { data, form }: PageProps = $props();
@@ -69,6 +70,54 @@
 	let workTypeId = $state('');
 	let timeSpent = $state('');
 	onMount(() => timers.init());
+
+	// Who else is on this ticket: check in now, every 15 seconds, and when
+	// typing starts or stops; say goodbye when the page goes.
+	let viewers: Viewer[] = $state([]);
+	let typing = $state(false);
+	let typingTimer: ReturnType<typeof setTimeout> | undefined;
+	const presenceUrl = $derived(`/tickets/${ticket.id}/presence`);
+	async function checkIn(body: { typing?: boolean } = {}) {
+		try {
+			const res = await fetch(presenceUrl, {
+				method: 'POST',
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify(body)
+			});
+			if (res.ok) viewers = (await res.json()) as Viewer[];
+		} catch {
+			// Offline for a moment: the next check-in catches up.
+		}
+	}
+	function noteTyped() {
+		if (!typing) {
+			typing = true;
+			void checkIn({ typing: true });
+		}
+		clearTimeout(typingTimer);
+		typingTimer = setTimeout(() => {
+			typing = false;
+			void checkIn({ typing: false });
+		}, 6000);
+	}
+	$effect(() => {
+		const url = presenceUrl;
+		// Only the ticket restarts this: typing mustn't (the cleanup says
+		// goodbye, which would race the next check-in).
+		void checkIn({ typing: untrack(() => typing) });
+		const beat = setInterval(() => void checkIn({ typing }), 15_000);
+		const leave = () =>
+			navigator.sendBeacon(
+				url,
+				new Blob([JSON.stringify({ leaving: true })], { type: 'application/json' })
+			);
+		window.addEventListener('pagehide', leave);
+		return () => {
+			clearInterval(beat);
+			window.removeEventListener('pagehide', leave);
+			leave();
+		};
+	});
 	let billable = $state(true);
 	// The first work type to start with; billable follows the type chosen.
 	$effect(() => {
@@ -183,6 +232,20 @@
 			{/if}
 		</div>
 	</div>
+
+	{#if viewers.length > 0}
+		<p
+			class="-mt-2 flex items-center gap-2 text-sm text-fg-muted"
+			aria-live="polite"
+			data-testid="presence"
+		>
+			<span
+				class="size-2 rounded-full {viewers.some((v) => v.typing) ? 'bg-warning' : 'bg-success'}"
+				aria-hidden="true"
+			></span>
+			{describePresence(viewers)}
+		</p>
+	{/if}
 
 	{#if ticket.mergedIntoId}
 		<div
@@ -300,6 +363,7 @@
 							{noteKind === 'internal' ? 'Internal note' : 'Reply'}
 						</label>
 						<textarea
+							oninput={noteTyped}
 							bind:this={noteBox}
 							id="note-body"
 							name="body"

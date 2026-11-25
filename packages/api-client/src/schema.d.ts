@@ -3474,6 +3474,27 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
+	'/api/v1/tickets/{id}/presence': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/**
+		 * Says you have the ticket open (and whether you're typing), or that
+		 *     you've left it; returns who else is there. Pages check in every 15
+		 *     seconds or so; anyone not heard from in 40 has gone.
+		 */
+		post: operations['ticket_presence'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
 	'/api/v1/tickets/{id}/responses': {
 		parameters: {
 			query?: never;
@@ -6331,6 +6352,12 @@ export interface components {
 			kind: string;
 			mandatory: boolean;
 		};
+		PresenceCheckIn: {
+			/** @description Leaving the ticket. */
+			leaving?: boolean;
+			/** @description Writing a note or reply right now. */
+			typing?: boolean;
+		};
 		/**
 		 * @description Provider templates with sensible defaults.
 		 * @enum {string}
@@ -7568,6 +7595,13 @@ export interface components {
 			 * @description The version you read (updates only).
 			 */
 			version?: number | null;
+		};
+		TicketViewer: {
+			name: string;
+			/** @description Writing a note or reply right now. */
+			typing: boolean;
+			/** Format: uuid */
+			userId: string;
 		};
 		TimeEntry: {
 			billable: boolean;
@@ -15430,6 +15464,31 @@ export interface operations {
 				};
 				content: {
 					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	ticket_presence: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['PresenceCheckIn'];
+			};
+		};
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['TicketViewer'][];
 				};
 			};
 		};

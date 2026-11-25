@@ -9780,6 +9780,48 @@
 				}
 			}
 		},
+		"/api/v1/tickets/{id}/presence": {
+			"post": {
+				"tags": ["servicedesk"],
+				"summary": "Says you have the ticket open (and whether you're typing), or that\nyou've left it; returns who else is there. Pages check in every 15\nseconds or so; anyone not heard from in 40 has gone.",
+				"operationId": "ticket_presence",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/PresenceCheckIn"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "array",
+									"items": {
+										"$ref": "#/components/schemas/TicketViewer"
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		},
 		"/api/v1/tickets/{id}/responses": {
 			"get": {
 				"tags": ["servicedesk"],
@@ -17103,6 +17145,20 @@
 					}
 				}
 			},
+			"PresenceCheckIn": {
+				"type": "object",
+				"properties": {
+					"leaving": {
+						"type": "boolean",
+						"description": "Leaving the ticket."
+					},
+					"typing": {
+						"type": "boolean",
+						"description": "Writing a note or reply right now."
+					}
+				},
+				"additionalProperties": false
+			},
 			"Preset": {
 				"type": "string",
 				"description": "Provider templates with sensible defaults.",
@@ -20049,6 +20105,23 @@
 					}
 				},
 				"additionalProperties": false
+			},
+			"TicketViewer": {
+				"type": "object",
+				"required": ["userId", "name", "typing"],
+				"properties": {
+					"name": {
+						"type": "string"
+					},
+					"typing": {
+						"type": "boolean",
+						"description": "Writing a note or reply right now."
+					},
+					"userId": {
+						"type": "string",
+						"format": "uuid"
+					}
+				}
 			},
 			"TimeEntry": {
 				"type": "object",

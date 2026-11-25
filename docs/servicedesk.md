@@ -10,6 +10,8 @@ Turn it on under **Settings → Modules**. A provider organization can turn it o
 
 **Changing many at once.** Tick tickets on the list (or **Select all**) to change them together: assignee (you, someone, a team, or nobody), priority, queue and status. Each ticket is changed on its own, so one you can't change, or that can't take the status, is reported and the rest still change.
 
+**Who else is here.** A ticket's page shows who else has it open, and who's writing a note or reply, so two people don't answer the same requester. It updates every few seconds while you're on the page.
+
 **Saved views.** **Save view** keeps the filters you have now under a name, as a tab after the built-in views. The filters are the view, priority, queue, client and search. A saved view is yours, unless you share it with everyone, which needs `servicedesk:configure` (shared views show a people icon). A view holds filters, not tickets, so each person sees the tickets they're allowed to. A ticket's page shows its conversation: replies, internal notes and every change, oldest first. Its status and properties are alongside.
 
 A ticket belongs to the organization it's for, usually a client, and is visible to the people who can see that organization. Each has:
@@ -332,6 +334,7 @@ Workflows can open, read, find, update and dispatch tickets and add notes, with 
 | `POST /api/v1/tickets/{id}/status` | Change the status, with a `resolution` where it's needed |
 | `GET`, `POST /api/v1/tickets/{id}/notes` | Read or add notes |
 | `GET /api/v1/tickets/{id}/activity` | Read the timeline |
+| `POST /api/v1/tickets/{id}/presence` | Say you're on the ticket (`typing`, or `leaving`); returns who else is there |
 | `GET`, `POST /api/v1/canned-responses`, and `PUT`, `DELETE /api/v1/canned-responses/{id}` | Read and manage canned responses |
 | `GET`, `POST /api/v1/tickets/{id}/links`, `DELETE /api/v1/tickets/{id}/links/{otherId}` | Read, add (by `otherId` or `reference`, as `related`, `parent` or `child`) and remove links |
 | `POST /api/v1/tickets/{id}/merge` | Merge into another ticket (`intoId` or `into`, a reference) |
