@@ -21,7 +21,8 @@ export const load: PageServerLoad = async (event) => {
 	if (!ticket.data || !notes.data || !activity.data || !types.data) {
 		error(503, 'Could not load the ticket.');
 	}
-	const [people, contacts, responses, links, time, workTypes, actions, appointments] =
+	const { user } = await event.parent();
+	const [people, contacts, responses, links, time, workTypes, actions, appointments, knowledge] =
 		await Promise.all([
 			assignees(event),
 			client.GET('/api/v1/orgs/{id}/contacts', {
@@ -33,7 +34,12 @@ export const load: PageServerLoad = async (event) => {
 			client.GET('/api/v1/tickets/{id}/time', path),
 			client.GET('/api/v1/work-types'),
 			actionsFor(event, 'ticket', ticket.data.orgId),
-			client.GET('/api/v1/tickets/{id}/appointments', path)
+			client.GET('/api/v1/tickets/{id}/appointments', path),
+			user.activeModules.includes('knowledge') && user.grantedPermissions.includes('kb:read')
+				? client.GET('/api/v1/kb/tickets/{ticket_id}/articles', {
+						params: { path: { ticket_id: event.params.id } }
+					})
+				: Promise.resolve({ data: undefined })
 		]);
 	return {
 		ticket: ticket.data,
@@ -48,7 +54,8 @@ export const load: PageServerLoad = async (event) => {
 		time: time.data ?? [],
 		workTypes: (workTypes.data ?? []).filter((w) => w.onTickets),
 		actions,
-		appointments: appointments.data ?? []
+		appointments: appointments.data ?? [],
+		knowledge: knowledge.data ?? null
 	};
 };
 
@@ -75,6 +82,35 @@ async function patch(
 }
 
 export const actions: Actions = {
+	linkArticle: async (event) => {
+		const articleId = formString(await event.request.formData(), 'articleId');
+		const { error: problem, response } = await api(event).POST(
+			'/api/v1/kb/tickets/{ticket_id}/articles',
+			{
+				params: { path: { ticket_id: event.params.id } },
+				body: { articleId }
+			}
+		);
+		if (response.status !== 204) {
+			return fail(response.status, {
+				knowledge: { message: problemMessage(problem, 'Could not link it.') }
+			});
+		}
+		return { knowledge: { message: 'Article linked.' } };
+	},
+	unlinkArticle: async (event) => {
+		const articleId = formString(await event.request.formData(), 'articleId');
+		const { error: problem, response } = await api(event).DELETE(
+			'/api/v1/kb/tickets/{ticket_id}/articles/{article_id}',
+			{ params: { path: { ticket_id: event.params.id, article_id: articleId } } }
+		);
+		if (response.status !== 204) {
+			return fail(response.status, {
+				knowledge: { message: problemMessage(problem, 'Could not unlink it.') }
+			});
+		}
+		return { knowledge: { message: 'Article unlinked.' } };
+	},
 	logTime: async (event) => {
 		const form = await event.request.formData();
 		const minutes = parseDuration(formString(form, 'duration'));

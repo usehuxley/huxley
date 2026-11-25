@@ -9,7 +9,14 @@ export const load: PageServerLoad = async (event) => {
 		params: { path: { id: event.params.id } }
 	});
 	if (!data) error(response.status === 404 ? 404 : 503, 'Could not load the article.');
-	return { article: data };
+	const tickets = data.canWrite
+		? ((
+				await api(event).GET('/api/v1/kb/articles/{id}/tickets', {
+					params: { path: { id: event.params.id } }
+				})
+			).data ?? [])
+		: [];
+	return { article: data, tickets };
 };
 
 type Step = 'submit' | 'publish' | 'reject' | 'archive' | 'restore';

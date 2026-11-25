@@ -2308,6 +2308,7 @@ dependencies = [
  "huxley-db",
  "huxley-modules",
  "huxley-orgs",
+ "huxley-servicedesk",
  "pulldown-cmark",
  "serde",
  "serde_json",

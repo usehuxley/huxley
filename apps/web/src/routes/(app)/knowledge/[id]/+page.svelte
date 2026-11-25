@@ -188,6 +188,24 @@
 					{/if}
 				</dl>
 			</Card>
+			{#if data.tickets.length > 0}
+				<Card title="Linked tickets">
+					<ul class="flex flex-col gap-2" aria-label="Linked tickets">
+						{#each data.tickets as t (t.id)}
+							<li>
+								<a
+									class="text-fg hover:underline"
+									href={resolve('/(app)/tickets/[id]', { id: t.id })}
+								>
+									<span class="font-mono text-xs text-fg-muted">{t.reference}</span>
+									{t.title}
+								</a>
+								<p class="text-xs text-fg-subtle">{t.orgName} · {t.statusName}</p>
+							</li>
+						{/each}
+					</ul>
+				</Card>
+			{/if}
 			{#if a.activity.length > 0}
 				<Card title="History">
 					<ol class="flex flex-col gap-2" aria-label="History">

@@ -49,6 +49,16 @@ Technicians have `kb:read` and `kb:write`, and read-only users have `kb:read`. W
 
 **Knowledge** searches titles, tags and text, best match first, showing where each article matched. Readers search only what's published. Filter by category, and, if you write, by status.
 
+## Articles on tickets
+
+With the service desk on, a ticket's **Knowledge** card shows:
+
+- **Linked articles:** what the ticket was solved with, or what to follow. Writers also see drafts linked there; readers only published articles.
+- **Suggested:** published articles whose words best match the ticket's title and description, with where they matched. **Link** one to keep it with the ticket.
+- **Find an article to link:** search the knowledge base from the ticket.
+
+Linking needs `ticket:write` on the ticket and `kb:read` where the article is; archived articles can't be linked. An article's page lists the tickets it's linked to (for writers), so you can see where it's used.
+
 ## Categories
 
 Publishers keep categories under **Knowledge → Categories**. A category belongs to an organization, and articles there and below can use it. Deleting a category leaves its articles uncategorized.
@@ -65,6 +75,7 @@ Workflows can react to articles:
 | `kb.review_rejected` | A review sends it back (`change.comment` says why). |
 | `kb.article_published` | It's published (`change.reviewed` says whether it was reviewed). |
 | `kb.article_archived` | It's archived. |
+| `kb.article_linked`, `kb.article_unlinked` | It's linked to or unlinked from a ticket (`ticketId`, `reference`). |
 
 Each carries the article's `title`, `status`, `visibility`, `revision` and the `actorId` of who made the change. For example, notify publishers when a review is requested.
 
@@ -79,9 +90,12 @@ Each carries the article's `title`, `status`, `visibility`, `revision` and the `
 | `GET /api/v1/kb/articles/{id}/revisions`, `/revisions/{number}` | Its revisions |
 | `GET`, `POST /api/v1/kb/categories`, `PUT`, `DELETE /api/v1/kb/categories/{id}` | Categories |
 | `POST /api/v1/kb/preview` | Markdown rendered as an article shows it |
+| `GET /api/v1/kb/tickets/{ticketId}/articles` | A ticket's linked and suggested articles, and whether you may link |
+| `POST /api/v1/kb/tickets/{ticketId}/articles`, `DELETE …/articles/{articleId}` | Link an article (`articleId`); unlink it |
+| `GET /api/v1/kb/articles/{id}/tickets` | The tickets an article is linked to |
 
 An article read through the API has `bodyHtml` (the text rendered and made safe), `published` (what readers see), and `canWrite` and `canPublish` for you.
 
 ## Coming next
 
-Linking articles to tickets, suggested articles on a ticket, and search by meaning.
+Search by meaning, for articles and for suggestions on tickets.

@@ -1881,6 +1881,26 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
+	'/api/v1/kb/articles/{id}/tickets': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/**
+		 * The tickets an article is linked to that you can see (`kb:write` where
+		 *     the article is). Empty when the service desk is off.
+		 */
+		get: operations['list_article_tickets'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
 	'/api/v1/kb/categories': {
 		parameters: {
 			query?: never;
@@ -1931,6 +1951,48 @@ export interface paths {
 		/** Renders markdown as an article would show it (for the editor's preview). */
 		post: operations['preview_article'];
 		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/kb/tickets/{ticket_id}/articles': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/**
+		 * The articles linked to a ticket, and published articles suggested for
+		 *     it by its title and description (`ticket:read` on the ticket; what you
+		 *     may read of the knowledge base).
+		 */
+		get: operations['ticket_articles'];
+		put?: never;
+		/**
+		 * Links an article to a ticket (`ticket:write` on the ticket, `kb:read`
+		 *     where the article is). Linking it again is fine.
+		 */
+		post: operations['link_article'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/kb/tickets/{ticket_id}/articles/{article_id}': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		post?: never;
+		/** Removes an article's link to a ticket (`ticket:write` on the ticket). */
+		delete: operations['unlink_article'];
 		options?: never;
 		head?: never;
 		patch?: never;
@@ -6207,6 +6269,17 @@ export interface components {
 			/** Format: int32 */
 			position?: number | null;
 		};
+		/** @description A ticket an article is linked to. */
+		KbLinkedTicket: {
+			/** Format: uuid */
+			id: string;
+			/** Format: date-time */
+			linkedAt: string;
+			orgName: string;
+			reference: string;
+			statusName: string;
+			title: string;
+		};
 		KbPreviewRequest: {
 			/** @description Markdown. */
 			body: string;
@@ -6237,8 +6310,27 @@ export interface components {
 			number: number;
 			title: string;
 		};
+		/** @description An article linked to (or suggested for) a ticket. */
+		KbTicketArticle: {
+			categoryName?: string | null;
+			/** Format: uuid */
+			id: string;
+			/** Format: date-time */
+			linkedAt?: string | null;
+			/** @description Who linked it, and when (none for a suggestion). */
+			linkedByName?: string | null;
+			orgName: string;
+			/** @description Where a suggestion matched, with the matched words in `<b>`. */
+			snippet?: string | null;
+			status: string;
+			title: string;
+		};
 		/** @enum {string} */
 		Language: 'pwsh' | 'python' | 'javascript';
+		LinkArticle: {
+			/** Format: uuid */
+			articleId: string;
+		};
 		/** @description A public link as its managers see it (never the token). */
 		LinkView: {
 			/** Format: date-time */
@@ -8119,6 +8211,15 @@ export interface components {
 			 * @description The version you read.
 			 */
 			version: number;
+		};
+		/** @description What the knowledge base has for a ticket. */
+		TicketKnowledge: {
+			/** @description You may link and unlink articles (`ticket:write` on the ticket). */
+			canLink: boolean;
+			/** @description Articles linked to it. */
+			linked: components['schemas']['KbTicketArticle'][];
+			/** @description Published articles matching its title and description. */
+			suggested: components['schemas']['KbTicketArticle'][];
 		};
 		TicketPage: {
 			items: components['schemas']['Ticket'][];
@@ -12486,6 +12587,27 @@ export interface operations {
 			};
 		};
 	};
+	list_article_tickets: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['KbLinkedTicket'][];
+				};
+			};
+		};
+	};
 	list_kb_categories: {
 		parameters: {
 			query?: never;
@@ -12610,6 +12732,102 @@ export interface operations {
 				};
 			};
 			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	ticket_articles: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				ticket_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['TicketKnowledge'];
+				};
+			};
+			404: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	link_article: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				ticket_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['LinkArticle'];
+			};
+		};
+		responses: {
+			204: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content?: never;
+			};
+			404: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+			409: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	unlink_article: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				ticket_id: string;
+				article_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			204: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content?: never;
+			};
+			404: {
 				headers: {
 					[name: string]: unknown;
 				};

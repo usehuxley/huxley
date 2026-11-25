@@ -7,6 +7,7 @@
 
 pub mod articles;
 pub mod categories;
+pub mod links;
 mod markdown;
 
 pub use markdown::render;
