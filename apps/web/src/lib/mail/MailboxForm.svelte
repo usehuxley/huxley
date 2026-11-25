@@ -26,6 +26,8 @@
 	let kind = $state(mailbox?.kind ?? 'imap');
 	// svelte-ignore state_referenced_locally
 	let security = $state(mailbox?.imap?.security ?? 'tls');
+	// svelte-ignore state_referenced_locally
+	let useSmtp = $state(Boolean(mailbox?.smtp));
 </script>
 
 {#if mailbox}
@@ -146,6 +148,69 @@
 			<Input id="mb-password" name="password" type="password" autocomplete="new-password" />
 		</Field>
 	{/if}
+
+	<fieldset class="flex flex-col gap-3 sm:col-span-2">
+		<legend class="sr-only">Sending replies</legend>
+		<label class="flex items-center gap-2 text-sm text-fg">
+			<input type="checkbox" name="useSmtp" bind:checked={useSmtp} />
+			Send replies through this mailbox's own SMTP server
+		</label>
+		{#if !useSmtp}
+			<p class="text-sm text-fg-muted">
+				Replies go out through Huxley's mail server, from this address.
+			</p>
+		{:else}
+			<div class="grid gap-4 sm:grid-cols-2">
+				<Field label="SMTP server" for="mb-smtp-host" error={errors.smtp}>
+					<Input
+						id="mb-smtp-host"
+						name="smtpHost"
+						required
+						value={mailbox?.smtp?.host ?? ''}
+						placeholder="smtp.example.com"
+					/>
+				</Field>
+				<Field label="SMTP security" for="mb-smtp-security">
+					<Select
+						id="mb-smtp-security"
+						name="smtpSecurity"
+						value={mailbox?.smtp?.security ?? 'tls'}
+						options={[
+							{ value: 'tls', label: 'TLS (port 465)' },
+							{ value: 'start_tls', label: 'STARTTLS (port 587)' },
+							{ value: 'none', label: 'None (your own network only)' }
+						]}
+					/>
+				</Field>
+				<Field
+					label="SMTP port"
+					for="mb-smtp-port"
+					hint="Empty: the usual one for the security chosen."
+				>
+					<Input
+						id="mb-smtp-port"
+						name="smtpPort"
+						type="number"
+						min={1}
+						max={65535}
+						value={mailbox?.smtp?.port ? String(mailbox.smtp.port) : ''}
+					/>
+				</Field>
+				<Field
+					label="SMTP username"
+					for="mb-smtp-username"
+					hint="Empty: the IMAP username. The mailbox's password is used."
+				>
+					<Input
+						id="mb-smtp-username"
+						name="smtpUsername"
+						autocomplete="off"
+						value={mailbox?.smtp?.username ?? ''}
+					/>
+				</Field>
+			</div>
+		{/if}
+	</fieldset>
 
 	<Field label="New tickets are" for="mb-type" error={errors.ticketType}>
 		<Select

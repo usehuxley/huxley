@@ -5915,6 +5915,7 @@ export interface components {
 			orgId: string;
 			/** Format: uuid */
 			queueId?: string | null;
+			smtp?: components['schemas']['SmtpSettings'] | null;
 			stripReplies: boolean;
 			/** @description The type of new tickets (a ticket type's key). */
 			ticketType: string;
@@ -5943,6 +5944,7 @@ export interface components {
 			password?: string | null;
 			/** Format: uuid */
 			queueId?: string | null;
+			smtp?: components['schemas']['SmtpSettings'] | null;
 			stripReplies?: boolean | null;
 			ticketType?: string | null;
 			/** Format: uuid */
@@ -7235,6 +7237,23 @@ export interface components {
 			policyId?: string | null;
 			/** @description Where the effective policy comes from: `here`, `above` or `default`. */
 			source?: string | null;
+		};
+		/**
+		 * @description The SMTP server a mailbox's replies go out through, with its login
+		 *     (the username here, the mailbox's stored password). None: the
+		 *     instance's mail server.
+		 */
+		SmtpSettings: {
+			host: string;
+			/**
+			 * Format: int32
+			 * @description Default 465 (TLS), 587 (STARTTLS) or 25.
+			 */
+			port?: number | null;
+			/** @description `tls` (default), `start_tls` or `none` (a server on your own network). */
+			security?: string | null;
+			/** @description Default: the IMAP username. */
+			username?: string | null;
 		};
 		SqlRequest: {
 			/** @description One `SELECT` (or `WITH … SELECT`) over the `datasets` schema. */

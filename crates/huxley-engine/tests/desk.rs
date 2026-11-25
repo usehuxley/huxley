@@ -1309,3 +1309,95 @@ async fn notify_checks_its_kind_and_exclusions() {
         assert!(error.unwrap().to_string().contains(problem), "{with}");
     }
 }
+
+#[tokio::test]
+async fn replies_go_out_through_the_mailboxs_own_smtp_server() {
+    let Some((host, imap_port, smtp_port)) = imap_server() else {
+        return;
+    };
+    let Some(h) = harness().await else { return };
+    let tech = ada_and_tech(&h).await;
+    let email = h
+        .receive("From: Ada <ada@acme.example>\nSubject: Printer\nMessage-ID: <printer@acme.example>\n\nJammed.\n")
+        .await;
+    let (_, outputs, _) = h.email_to_ticket(email).await;
+    let ticket = Uuid::parse_str(outputs.unwrap()["ticket_id"].as_str().unwrap()).unwrap();
+    // The mailbox sends through its own server (GreenMail, no login).
+    let ctx = RequestContext::system(Via::System);
+    let mut tx = begin_scoped(&h.pools.app, &OrgScope::System).await.unwrap();
+    let mailbox_id: Uuid =
+        sqlx::query_scalar("SELECT mailbox_id FROM sd_inbound_emails WHERE id = $1")
+            .bind(email)
+            .fetch_one(&mut *tx)
+            .await
+            .unwrap();
+    let mailbox = huxley_servicedesk::mail::mailbox(&mut tx, mailbox_id)
+        .await
+        .unwrap();
+    let input: huxley_servicedesk::mail::MailboxInput = serde_json::from_value(json!({
+        "name": mailbox.name, "address": mailbox.address, "kind": "forward", "version": mailbox.version,
+        "smtp": { "host": host, "port": smtp_port, "security": "none" },
+    }))
+    .unwrap();
+    let mailbox = huxley_servicedesk::mail::update(&mut tx, &ctx, mailbox_id, &input, None)
+        .await
+        .unwrap();
+    assert_eq!(mailbox.smtp.as_ref().and_then(|s| s.port), Some(smtp_port));
+    let user_ctx = RequestContext::system(Via::Ui).with_actor(huxley_core::Actor::User(tech));
+    let note = huxley_servicedesk::tickets::add_note(
+        &mut tx,
+        &user_ctx,
+        ticket,
+        &huxley_servicedesk::tickets::NewNote {
+            kind: "public".into(),
+            body: "Cleared it.".into(),
+        },
+    )
+    .await
+    .unwrap();
+    tx.commit().await.unwrap();
+
+    let (status, outputs, error) = h
+        .run(EMAIL_REPLIES, json!({ "change": { "note": note.id } }))
+        .await;
+    assert_eq!(status, RunStatus::Succeeded, "{error:?}");
+    assert_eq!(outputs.unwrap()["sent"], true);
+    // Not through the instance's mailer…
+    assert!(h.sent.lock().unwrap().is_empty());
+    // …but delivered by the mailbox's server, from the mailbox, threaded.
+    let token = format!("[HX#{}]", h.number(ticket).await);
+    let config = huxley_mail::imap::Config {
+        host,
+        port: imap_port,
+        security: huxley_mail::imap::Security::None,
+        username: "ada@acme.example".into(),
+        password: "ada@acme.example".into(),
+        folder: "INBOX".into(),
+    };
+    let deadline = Instant::now() + Duration::from_secs(10);
+    let raw = loop {
+        let (messages, _) = huxley_mail::imap::fetch(
+            &config,
+            huxley_mail::imap::Cursor::default(),
+            200,
+            Duration::from_secs(10),
+        )
+        .await
+        .unwrap();
+        if let Some(m) = messages
+            .iter()
+            .map(|m| String::from_utf8_lossy(&m.raw).into_owned())
+            .find(|raw| raw.contains(&token))
+        {
+            break m;
+        }
+        assert!(Instant::now() < deadline, "the reply never arrived");
+        tokio::time::sleep(Duration::from_millis(200)).await;
+    };
+    assert!(
+        raw.contains(&format!("From: Help <{}>", mailbox.address)),
+        "{raw}"
+    );
+    assert!(raw.contains("In-Reply-To: <printer@acme.example>"), "{raw}");
+    assert!(raw.contains("Cleared it."), "{raw}");
+}

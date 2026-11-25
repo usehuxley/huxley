@@ -63,6 +63,15 @@ export function mailboxBody(form: FormData) {
 						folder: formString(form, 'graphFolder') || null
 					}
 				: null,
+		smtp:
+			form.get('useSmtp') === 'on'
+				? {
+						host: formString(form, 'smtpHost'),
+						port: formString(form, 'smtpPort') ? Number(formString(form, 'smtpPort')) : null,
+						security: formString(form, 'smtpSecurity') || 'tls',
+						username: formString(form, 'smtpUsername') || null
+					}
+				: null,
 		password: formString(form, 'password') || undefined,
 		...(version ? { version: Number(version) } : {})
 	};
