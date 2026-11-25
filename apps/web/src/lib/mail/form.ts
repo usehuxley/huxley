@@ -1,6 +1,7 @@
 import { formString } from '#lib/forms.ts';
 
 export const KINDS = [
+	{ value: 'graph', label: 'Microsoft 365 (Microsoft Graph)' },
 	{ value: 'imap', label: 'Fetched over IMAP' },
 	{ value: 'forward', label: 'Forwarded to Huxley' }
 ] as const;
@@ -52,6 +53,14 @@ export function mailboxBody(form: FormData) {
 						security: formString(form, 'security') || 'tls',
 						username: formString(form, 'username'),
 						folder: formString(form, 'folder') || null
+					}
+				: null,
+		graph:
+			kind === 'graph'
+				? {
+						connection: formString(form, 'graphConnection') || null,
+						user: formString(form, 'graphUser') || null,
+						folder: formString(form, 'graphFolder') || null
 					}
 				: null,
 		password: formString(form, 'password') || undefined,

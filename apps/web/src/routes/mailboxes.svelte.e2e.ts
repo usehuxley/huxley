@@ -145,4 +145,24 @@ test.describe('mailboxes', () => {
 			await expect(page.getByText(`Emailed to ${requester}`)).toBeVisible({ timeout: 1000 });
 		}).toPass({ timeout: 20_000 });
 	});
+
+	test('a Microsoft 365 mailbox keeps its Graph settings', async ({ page }) => {
+		const stamp = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+		const address = `help-${stamp}@contoso.example`;
+		await signIn(page);
+		await page.goto('/settings/mailboxes');
+		await page.getByRole('button', { name: 'New mailbox' }).click();
+		const dialog = page.getByRole('dialog');
+		await dialog.getByLabel('Name', { exact: true }).fill(`M365 ${stamp}`);
+		await dialog.getByLabel('Address', { exact: true }).fill(address);
+		await dialog.getByLabel('How mail arrives').selectOption('graph');
+		await dialog.getByLabel('Microsoft Graph connection').fill('contoso');
+		await dialog.getByRole('button', { name: 'Add mailbox' }).click();
+		await expect(page.getByRole('heading', { name: `M365 ${stamp}` })).toBeVisible();
+		await expect(page.getByLabel('How mail arrives')).toHaveValue('graph');
+		// Saved, with the address and inbox as the defaults.
+		await expect(page.getByLabel('Microsoft Graph connection')).toHaveValue('contoso');
+		await expect(page.getByLabel('Mailbox', { exact: true })).toHaveValue('');
+		await expect(page.getByLabel('Folder')).toHaveValue('');
+	});
 });

@@ -15728,6 +15728,25 @@
 					}
 				}
 			},
+			"GraphSettings": {
+				"type": "object",
+				"description": "Where a Microsoft 365 mailbox fetches from, through Microsoft Graph.",
+				"properties": {
+					"connection": {
+						"type": ["string", "null"],
+						"description": "The Microsoft Graph connection's key (default: the one the\norganization uses)."
+					},
+					"folder": {
+						"type": ["string", "null"],
+						"description": "A folder's ID or well-known name (default `inbox`)."
+					},
+					"user": {
+						"type": ["string", "null"],
+						"description": "Whose mailbox: a user or shared mailbox's address or ID (default:\nthe mailbox's address)."
+					}
+				},
+				"additionalProperties": false
+			},
 			"HealthStatus": {
 				"type": "object",
 				"required": ["status", "version"],
@@ -16172,6 +16191,17 @@
 					"enabled": {
 						"type": "boolean"
 					},
+					"graph": {
+						"oneOf": [
+							{
+								"$ref": "#/components/schemas/GraphSettings",
+								"description": "Where it fetches from (`graph` mailboxes)."
+							},
+							{
+								"type": "null"
+							}
+						]
+					},
 					"hasPassword": {
 						"type": "boolean",
 						"description": "A password is stored (it's never shown)."
@@ -16244,6 +16274,17 @@
 					},
 					"enabled": {
 						"type": ["boolean", "null"]
+					},
+					"graph": {
+						"oneOf": [
+							{
+								"$ref": "#/components/schemas/GraphSettings",
+								"description": "Where to fetch from (`graph` mailboxes; defaults if left out)."
+							},
+							{
+								"type": "null"
+							}
+						]
 					},
 					"imap": {
 						"oneOf": [

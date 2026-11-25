@@ -338,7 +338,8 @@ export const STEPS: StepSpec[] = [
 	{
 		type: 'core.mail.fetch',
 		label: 'Fetch mail',
-		description: 'Fetch new mail from IMAP mailboxes; each new message raises email.received.',
+		description:
+			'Fetch new mail from IMAP and Microsoft 365 mailboxes; each new message raises email.received.',
 		group: 'Data',
 		module: 'servicedesk',
 		template: {},

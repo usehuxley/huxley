@@ -224,7 +224,7 @@ impl Engine {
                 .map_err(internal)?;
             let entry = match result {
                 Ok((fetched, new, cursor)) => {
-                    mail::checked(&mut tx, m.mailbox.id, Some(cursor), None)
+                    mail::checked(&mut tx, m.mailbox.id, cursor, None)
                         .await
                         .map_err(desk_error)?;
                     json!({ "mailbox_id": m.mailbox.id, "address": m.mailbox.address, "fetched": fetched, "new": new })
@@ -242,11 +242,31 @@ impl Engine {
         Ok(json!({ "mailboxes": report }))
     }
 
-    /// Fetches one mailbox and keeps what's new: (fetched, new, cursor).
+    /// Fetches one mailbox and keeps what's new: (fetched, new, the IMAP
+    /// cursor reached, if it's IMAP).
     async fn fetch_one(
         &self,
         storage: &huxley_storage::Storage,
         m: &mail::Fetchable,
+        limit: usize,
+    ) -> Result<(usize, usize, Option<huxley_mail::imap::Cursor>), String> {
+        match &m.source {
+            mail::Source::Imap(settings) => {
+                let (fetched, new, cursor) = self.fetch_imap(storage, m, settings, limit).await?;
+                Ok((fetched, new, Some(cursor)))
+            }
+            mail::Source::Graph(settings) => {
+                let (fetched, new) = self.fetch_graph(storage, m, settings, limit).await?;
+                Ok((fetched, new, None))
+            }
+        }
+    }
+
+    async fn fetch_imap(
+        &self,
+        storage: &huxley_storage::Storage,
+        m: &mail::Fetchable,
+        settings: &mail::ImapSettings,
         limit: usize,
     ) -> Result<(usize, usize, huxley_mail::imap::Cursor), String> {
         let password = match &m.secret {
@@ -262,15 +282,14 @@ impl Engine {
             None => String::new(),
         };
         let config = huxley_mail::imap::Config {
-            host: m.settings.host.clone(),
-            port: m.settings.port.unwrap_or(993),
-            security: m
-                .settings
+            host: settings.host.clone(),
+            port: settings.port.unwrap_or(993),
+            security: settings
                 .security
                 .unwrap_or(huxley_mail::imap::Security::Tls),
-            username: m.settings.username.clone(),
+            username: settings.username.clone(),
             password,
-            folder: m.settings.folder.clone().unwrap_or_else(|| "INBOX".into()),
+            folder: settings.folder.clone().unwrap_or_else(|| "INBOX".into()),
         };
         let (messages, cursor) =
             huxley_mail::imap::fetch(&config, m.cursor, limit, std::time::Duration::from_secs(60))
@@ -278,29 +297,106 @@ impl Engine {
                 .map_err(|e| e.to_string())?;
         let mut new = 0;
         for message in &messages {
-            // Unreadable messages are skipped (they've no headers to keep).
-            let Some(parsed) = huxley_mail::parse(&message.raw) else {
-                continue;
-            };
-            let id = huxley_core::new_id();
-            let key = mail::raw_key(m.mailbox.org_id, id);
-            storage
-                .put(&key, bytes::Bytes::from(message.raw.clone()))
-                .await
-                .map_err(|e| e.to_string())?;
-            let mut tx = begin_scoped(self.db(), &OrgScope::System)
-                .await
-                .map_err(|e| e.to_string())?;
-            let (_, fresh) = mail::store(&mut tx, &m.mailbox, id, &parsed, message.raw.len())
-                .await
-                .map_err(|e| e.to_string())?;
-            tx.commit().await.map_err(|e| e.to_string())?;
-            if fresh {
+            if self.keep(storage, m, &message.raw).await? {
                 new += 1;
-            } else {
-                let _ = storage.delete(&key).await;
             }
         }
         Ok((messages.len(), new, cursor))
+    }
+
+    /// Fetches unread mail through Microsoft Graph (the `msgraph`
+    /// integration's mail actions, with the mailbox's connection): each
+    /// message as MIME, kept, then marked read.
+    async fn fetch_graph(
+        &self,
+        storage: &huxley_storage::Storage,
+        m: &mail::Fetchable,
+        settings: &mail::GraphSettings,
+        limit: usize,
+    ) -> Result<(usize, usize), String> {
+        let user = settings
+            .user
+            .clone()
+            .unwrap_or_else(|| m.mailbox.address.clone());
+        let folder = settings.folder.clone().unwrap_or_else(|| "inbox".into());
+        let call = async |action: &str, inputs: Json| -> Result<Json, String> {
+            let request = json!({ "action": format!("msgraph/{action}"), "connection": settings.connection, "inputs": inputs });
+            match self.poll_action(m.mailbox.org_id, &request).await {
+                Ok(Ok(body)) => Ok(body),
+                Ok(Err(failure)) => Err(format!(
+                    "Microsoft Graph: {}",
+                    failure["message"].as_str().unwrap_or("the call failed")
+                )),
+                Err(e) => Err(e.to_string()),
+            }
+        };
+        let listed = call(
+            "listMailMessages",
+            json!({ "user": user, "folder": folder, "$filter": "isRead eq false",
+                    "$select": "id", "$orderby": "receivedDateTime", "$top": limit }),
+        )
+        .await?;
+        let ids: Vec<String> = listed["value"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter_map(|m| m["id"].as_str().map(str::to_owned))
+            .collect();
+        let mut new = 0;
+        for id in &ids {
+            let mime = call("getMailMessageMime", json!({ "user": user, "message": id })).await?;
+            let raw = match &mime {
+                Json::String(text) => text.clone().into_bytes(),
+                other => match other["base64"].as_str() {
+                    Some(encoded) => {
+                        base64::Engine::decode(&base64::engine::general_purpose::STANDARD, encoded)
+                            .map_err(|_| {
+                                "Microsoft Graph sent a message that isn't MIME".to_owned()
+                            })?
+                    }
+                    None => return Err("Microsoft Graph sent a message that isn't MIME".into()),
+                },
+            };
+            if self.keep(storage, m, &raw).await? {
+                new += 1;
+            }
+            // Read now: the next fetch doesn't see it again.
+            call(
+                "updateMailMessage",
+                json!({ "user": user, "message": id, "body": { "isRead": true } }),
+            )
+            .await?;
+        }
+        Ok((ids.len(), new))
+    }
+
+    /// Keeps a raw message (in storage and as an email): whether it's new.
+    /// Unreadable messages are skipped (they've no headers to keep).
+    async fn keep(
+        &self,
+        storage: &huxley_storage::Storage,
+        m: &mail::Fetchable,
+        raw: &[u8],
+    ) -> Result<bool, String> {
+        let Some(parsed) = huxley_mail::parse(raw) else {
+            return Ok(false);
+        };
+        let id = huxley_core::new_id();
+        let key = mail::raw_key(m.mailbox.org_id, id);
+        storage
+            .put(&key, bytes::Bytes::from(raw.to_vec()))
+            .await
+            .map_err(|e| e.to_string())?;
+        let mut tx = begin_scoped(self.db(), &OrgScope::System)
+            .await
+            .map_err(|e| e.to_string())?;
+        let (_, fresh) = mail::store(&mut tx, &m.mailbox, id, &parsed, raw.len())
+            .await
+            .map_err(|e| e.to_string())?;
+        tx.commit().await.map_err(|e| e.to_string())?;
+        if !fresh {
+            let _ = storage.delete(&key).await;
+        }
+        Ok(fresh)
     }
 }

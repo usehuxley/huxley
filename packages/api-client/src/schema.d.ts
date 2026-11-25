@@ -5712,6 +5712,21 @@ export interface components {
 			/** @description Set when the grant comes through a team. */
 			teamName?: string | null;
 		};
+		/** @description Where a Microsoft 365 mailbox fetches from, through Microsoft Graph. */
+		GraphSettings: {
+			/**
+			 * @description The Microsoft Graph connection's key (default: the one the
+			 *     organization uses).
+			 */
+			connection?: string | null;
+			/** @description A folder's ID or well-known name (default `inbox`). */
+			folder?: string | null;
+			/**
+			 * @description Whose mailbox: a user or shared mailbox's address or ID (default:
+			 *     the mailbox's address).
+			 */
+			user?: string | null;
+		};
 		HealthStatus: {
 			/** @description Always `ok` when the response is 200. */
 			status: string;
@@ -5884,6 +5899,7 @@ export interface components {
 			/** Format: date-time */
 			createdAt: string;
 			enabled: boolean;
+			graph?: components['schemas']['GraphSettings'] | null;
 			/** @description A password is stored (it's never shown). */
 			hasPassword: boolean;
 			/** Format: uuid */
@@ -5915,6 +5931,7 @@ export interface components {
 		MailboxInput: {
 			address: string;
 			enabled?: boolean | null;
+			graph?: components['schemas']['GraphSettings'] | null;
 			imap?: components['schemas']['ImapSettings'] | null;
 			/** @description `forward` (default), `imap` or `graph`. */
 			kind?: string | null;

@@ -101,6 +101,45 @@ impl ImapSettings {
     }
 }
 
+/// Where a Microsoft 365 mailbox fetches from, through Microsoft Graph.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct GraphSettings {
+    /// The Microsoft Graph connection's key (default: the one the
+    /// organization uses).
+    #[serde(default)]
+    pub connection: Option<String>,
+    /// Whose mailbox: a user or shared mailbox's address or ID (default:
+    /// the mailbox's address).
+    #[serde(default)]
+    pub user: Option<String>,
+    /// A folder's ID or well-known name (default `inbox`).
+    #[serde(default)]
+    pub folder: Option<String>,
+}
+
+impl GraphSettings {
+    fn checked(&self, address: &str) -> DeskResult<Self> {
+        let field = |value: &Option<String>, max: usize| -> DeskResult<Option<String>> {
+            let v = value.as_deref().map(str::trim).filter(|v| !v.is_empty());
+            match v {
+                Some(v) if v.len() > max || v.contains(char::is_whitespace) || v.contains('/') => {
+                    Err(DeskError::invalid(
+                        "graph",
+                        "connection, user and folder are names without spaces or slashes",
+                    ))
+                }
+                other => Ok(other.map(str::to_owned)),
+            }
+        };
+        Ok(Self {
+            connection: field(&self.connection, 64)?,
+            user: Some(field(&self.user, 320)?.unwrap_or_else(|| address.to_owned())),
+            folder: Some(field(&self.folder, 200)?.unwrap_or_else(|| "inbox".to_owned())),
+        })
+    }
+}
+
 #[derive(Debug, Clone, Serialize, ToSchema, sqlx::FromRow)]
 #[serde(rename_all = "camelCase")]
 pub struct Mailbox {
@@ -122,6 +161,9 @@ pub struct Mailbox {
     /// Where it fetches from (`imap` mailboxes).
     #[sqlx(json(nullable))]
     pub imap: Option<ImapSettings>,
+    /// Where it fetches from (`graph` mailboxes).
+    #[sqlx(json(nullable))]
+    pub graph: Option<GraphSettings>,
     /// A password is stored (it's never shown).
     pub has_password: bool,
     #[serde(with = "time::serde::rfc3339::option")]
@@ -155,6 +197,9 @@ pub struct MailboxInput {
     /// Where to fetch from (`imap` mailboxes).
     #[serde(default)]
     pub imap: Option<ImapSettings>,
+    /// Where to fetch from (`graph` mailboxes; defaults if left out).
+    #[serde(default)]
+    pub graph: Option<GraphSettings>,
     /// The IMAP password; left out, the stored one stays.
     #[serde(default)]
     #[schema(format = Password, write_only)]
@@ -165,7 +210,7 @@ pub struct MailboxInput {
 }
 
 const SELECT: &str = "SELECT id, org_id, name, address, kind, ticket_type, queue_id, unknown_sender, \
-    unknown_org_id, strip_replies, enabled, imap, secret IS NOT NULL AS has_password, last_checked_at, \
+    unknown_org_id, strip_replies, enabled, imap, graph, secret IS NOT NULL AS has_password, last_checked_at, \
     last_error, version, created_at \
     FROM sd_mailboxes";
 
@@ -194,6 +239,7 @@ struct Checked {
     ticket_type: String,
     unknown_sender: String,
     imap: Option<ImapSettings>,
+    graph: Option<GraphSettings>,
 }
 
 async fn check(conn: &mut PgConnection, input: &MailboxInput) -> DeskResult<Checked> {
@@ -253,6 +299,21 @@ async fn check(conn: &mut PgConnection, input: &MailboxInput) -> DeskResult<Chec
         }
         _ => None,
     };
+    let graph = if kind == "graph" {
+        Some(
+            input
+                .graph
+                .clone()
+                .unwrap_or(GraphSettings {
+                    connection: None,
+                    user: None,
+                    folder: None,
+                })
+                .checked(&address)?,
+        )
+    } else {
+        None
+    };
     Ok(Checked {
         name,
         address,
@@ -260,6 +321,7 @@ async fn check(conn: &mut PgConnection, input: &MailboxInput) -> DeskResult<Chec
         ticket_type,
         unknown_sender,
         imap,
+        graph,
     })
 }
 
@@ -297,8 +359,8 @@ pub async fn create(
     let c = check(conn, input).await?;
     sqlx::query(
         "INSERT INTO sd_mailboxes (id, org_id, name, address, kind, ticket_type, queue_id, unknown_sender, \
-                                   unknown_org_id, strip_replies, enabled, imap, secret) \
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)",
+                                   unknown_org_id, strip_replies, enabled, imap, secret, graph) \
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)",
     )
     .bind(id)
     .bind(org_id)
@@ -313,6 +375,7 @@ pub async fn create(
     .bind(input.enabled.unwrap_or(true))
     .bind(c.imap.as_ref().map(|i| json!(i)))
     .bind(secret)
+    .bind(c.graph.as_ref().map(|g| json!(g)))
     .execute(&mut *conn)
     .await
     .map_err(taken)?;
@@ -341,7 +404,7 @@ pub async fn update(
     let rows = sqlx::query(
         "UPDATE sd_mailboxes SET name = $3, address = $4, kind = $5, ticket_type = $6, queue_id = $7, \
                 unknown_sender = $8, unknown_org_id = $9, strip_replies = $10, enabled = $11, \
-                imap = $12, secret = coalesce($13, secret), \
+                imap = $12, secret = coalesce($13, secret), graph = $14, \
                 cursor = CASE WHEN imap IS DISTINCT FROM $12 THEN '{}'::jsonb ELSE cursor END, \
                 version = version + 1 \
           WHERE id = $1 AND version = $2 AND archived_at IS NULL",
@@ -359,6 +422,7 @@ pub async fn update(
     .bind(input.enabled.unwrap_or(before.enabled))
     .bind(c.imap.as_ref().map(|i| json!(i)))
     .bind(secret)
+    .bind(c.graph.as_ref().map(|g| json!(g)))
     .execute(&mut *conn)
     .await
     .map_err(taken)?
@@ -396,16 +460,23 @@ pub async fn archive(conn: &mut PgConnection, ctx: &RequestContext, id: Uuid) ->
     Ok(())
 }
 
-/// An IMAP mailbox to fetch from: its settings, sealed password and cursor.
+/// Where a fetched mailbox's mail comes from.
+#[derive(Debug, Clone)]
+pub enum Source {
+    Imap(ImapSettings),
+    Graph(GraphSettings),
+}
+
+/// A mailbox to fetch from: where, its sealed password and IMAP cursor.
 #[derive(Debug, Clone)]
 pub struct Fetchable {
     pub mailbox: Mailbox,
-    pub settings: ImapSettings,
+    pub source: Source,
     pub secret: Option<Vec<u8>>,
     pub cursor: huxley_mail::imap::Cursor,
 }
 
-/// Enabled IMAP mailboxes at `within` and below (or just `only`), oldest
+/// Enabled IMAP and Graph mailboxes at `within` and below (or just `only`), oldest
 /// check first. System scope.
 pub async fn fetchable(
     conn: &mut PgConnection,
@@ -415,7 +486,7 @@ pub async fn fetchable(
     let ids: Vec<(Uuid, Option<Vec<u8>>, Json)> = sqlx::query_as(
         "SELECT m.id, m.secret, m.cursor FROM sd_mailboxes m \
            JOIN organizations o ON o.id = m.org_id JOIN organizations w ON w.id = $1 \
-          WHERE m.kind = 'imap' AND m.enabled AND m.archived_at IS NULL AND o.path <@ w.path \
+          WHERE m.kind IN ('imap', 'graph') AND m.enabled AND m.archived_at IS NULL AND o.path <@ w.path \
             AND ($2::uuid IS NULL OR m.id = $2) \
           ORDER BY m.last_checked_at NULLS FIRST, m.id",
     )
@@ -426,12 +497,14 @@ pub async fn fetchable(
     let mut out = Vec::with_capacity(ids.len());
     for (id, secret, cursor) in ids {
         let mailbox = mailbox(conn, id).await?;
-        let Some(settings) = mailbox.imap.clone() else {
-            continue;
+        let source = match (mailbox.kind.as_str(), &mailbox.imap, &mailbox.graph) {
+            ("imap", Some(settings), _) => Source::Imap(settings.clone()),
+            ("graph", _, Some(settings)) => Source::Graph(settings.clone()),
+            _ => continue,
         };
         out.push(Fetchable {
             mailbox,
-            settings,
+            source,
             secret,
             cursor: serde_json::from_value(cursor).unwrap_or_default(),
         });

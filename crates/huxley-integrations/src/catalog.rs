@@ -111,6 +111,6 @@ mod tests {
             }
         }
         let graph = list().into_iter().find(|e| e.key == "msgraph").unwrap();
-        assert_eq!(graph.actions, 14);
+        assert_eq!(graph.actions, 17);
     }
 }

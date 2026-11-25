@@ -431,7 +431,7 @@
     },
     "MailFetch": {
       "additionalProperties": false,
-      "description": "Mail to fetch (`core.mail.fetch`): new messages from the enabled IMAP\nmailboxes at the run's organization and below, or just `mailbox_id`, up\nto `limit` each (default 50). Each new message is kept and announced with\n`email.received`. A mailbox that can't be reached is reported (and shown\non it) without failing the step. Output: `{ mailboxes: [{ mailbox_id,\naddress, fetched, new } | { mailbox_id, address, error }] }`.",
+      "description": "Mail to fetch (`core.mail.fetch`): new messages from the enabled IMAP\nand Microsoft 365 mailboxes at the run's organization and below, or just `mailbox_id`, up\nto `limit` each (default 50). Each new message is kept and announced with\n`email.received`. A mailbox that can't be reached is reported (and shown\non it) without failing the step. Output: `{ mailboxes: [{ mailbox_id,\naddress, fetched, new } | { mailbox_id, address, error }] }`.",
       "properties": {
         "limit": true,
         "mailbox_id": true
@@ -2758,7 +2758,7 @@
         },
         {
           "additionalProperties": false,
-          "description": "Fetch new mail from IMAP mailboxes (the `servicedesk` module).",
+          "description": "Fetch new mail from IMAP and Microsoft 365 mailboxes (the `servicedesk`\nmodule).",
           "properties": {
             "continue_on_error": {
               "description": "Record the error as the step's output and carry on.",

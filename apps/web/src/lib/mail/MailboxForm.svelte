@@ -59,18 +59,46 @@
 		class="sm:col-span-2"
 		hint={kind === 'forward'
 			? 'Your mail server or a mail service posts each message to Huxley.'
-			: 'Huxley fetches new mail every minute (with the Service desk email pack).'}
+			: kind === 'graph'
+				? 'Huxley fetches unread mail every minute through your Microsoft Graph connection, and marks it read (with the Service desk email pack).'
+				: 'Huxley fetches new mail every minute (with the Service desk email pack).'}
 	>
-		<Select
-			id="mb-kind"
-			name="kind"
-			bind:value={kind}
-			options={[
-				...KINDS,
-				...(kind === 'graph' ? [{ value: 'graph', label: 'Microsoft 365' }] : [])
-			]}
-		/>
+		<Select id="mb-kind" name="kind" bind:value={kind} options={[...KINDS]} />
 	</Field>
+
+	{#if kind === 'graph'}
+		<Field
+			label="Microsoft Graph connection"
+			for="mb-graph-connection"
+			error={errors.graph}
+			hint="The connection's key. Empty: the one this organization uses. It needs Mail.ReadWrite."
+		>
+			<Input
+				id="mb-graph-connection"
+				name="graphConnection"
+				value={mailbox?.graph?.connection ?? ''}
+				placeholder="e.g. contoso"
+			/>
+		</Field>
+		<Field
+			label="Mailbox"
+			for="mb-graph-user"
+			hint="A user or shared mailbox's address. Empty: the address above."
+		>
+			<Input
+				id="mb-graph-user"
+				name="graphUser"
+				value={mailbox?.graph?.user === mailbox?.address ? '' : (mailbox?.graph?.user ?? '')}
+			/>
+		</Field>
+		<Field label="Folder" for="mb-graph-folder" hint="Empty: the inbox.">
+			<Input
+				id="mb-graph-folder"
+				name="graphFolder"
+				value={mailbox?.graph?.folder === 'inbox' ? '' : (mailbox?.graph?.folder ?? '')}
+			/>
+		</Field>
+	{/if}
 
 	{#if kind === 'imap'}
 		<Field label="IMAP server" for="mb-host" error={errors.imap}>
