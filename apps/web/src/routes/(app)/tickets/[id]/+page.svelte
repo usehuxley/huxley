@@ -2,6 +2,7 @@
 	import { enhance, type SubmitFunction } from '$app/forms';
 	import { resolve } from '$app/paths';
 	import {
+		CalendarPlus,
 		Clock,
 		Link2,
 		Lock,
@@ -25,7 +26,8 @@
 		categoryTone,
 		priorityOf
 	} from '#lib/tickets/labels.ts';
-	import { formatDuration } from '#lib/tickets/duration.ts';
+	import { formatDuration, parseDuration } from '#lib/tickets/duration.ts';
+	import { localInstant, plusMinutes, span } from '#lib/tickets/appointments.ts';
 	import { clock, timers } from '#lib/time/timer.svelte.ts';
 	import { describePresence, type Viewer } from '#lib/tickets/presence.ts';
 	import ActionsCard from '#lib/forms/ActionsCard.svelte';
@@ -70,6 +72,18 @@
 	const today = new Date().toLocaleDateString('en-CA');
 	let workTypeId = $state('');
 	let timeSpent = $state('');
+	let bookWho = $state('');
+	$effect(() => {
+		if (!bookWho) bookWho = data.user.id;
+	});
+	let bookDay = $state(today);
+	let bookTime = $state('09:00');
+	let bookLength = $state('1h');
+	let bookStarts = $derived(bookDay && bookTime ? localInstant(bookDay, bookTime) : '');
+	let bookEnds = $derived.by(() => {
+		const minutes = parseDuration(bookLength);
+		return bookStarts && minutes && !Number.isNaN(minutes) ? plusMinutes(bookStarts, minutes) : '';
+	});
 	onMount(() => timers.init());
 
 	// Who else is on this ticket: check in now, every 15 seconds, and when
@@ -165,7 +179,7 @@
 	);
 
 	function errorsOf(
-		key: 'properties' | 'status' | 'note' | 'edit' | 'link' | 'merge' | 'time'
+		key: 'properties' | 'status' | 'note' | 'edit' | 'link' | 'merge' | 'time' | 'appointment'
 	): Record<string, string> {
 		const part = form?.[key] as { errors?: Record<string, string> } | undefined;
 		return part?.errors ?? {};
@@ -622,6 +636,67 @@
 							{/if}
 							<Button type="submit" size="sm"><Clock size={14} /> Log time</Button>
 						</div>
+					</form>
+				{/if}
+			</Card>
+
+			<Card title="Appointments">
+				{#if data.appointments.length === 0}
+					<p class="text-sm text-fg-muted">None booked.</p>
+				{:else}
+					<ul class="flex flex-col gap-2" aria-label="Appointments">
+						{#each data.appointments as a (a.id)}
+							<li class="flex items-start justify-between gap-2 text-sm">
+								<div class="min-w-0">
+									<p class="text-fg">{span(a.startsAt, a.endsAt)}</p>
+									<p class="text-xs text-fg-muted">{a.userName}{a.notes ? ` · ${a.notes}` : ''}</p>
+								</div>
+								{#if canWrite}
+									<form
+										method="POST"
+										action="?/cancelAppointment"
+										use:enhance={saved('Appointment cancelled.')}
+									>
+										<input type="hidden" name="id" value={a.id} />
+										<button
+											type="submit"
+											class="rounded-control p-1 text-fg-muted hover:bg-surface-sunken hover:text-fg"
+											aria-label={`Cancel ${a.userName}, ${span(a.startsAt, a.endsAt)}`}
+										>
+											<X size={14} />
+										</button>
+									</form>
+								{/if}
+							</li>
+						{/each}
+					</ul>
+				{/if}
+				{#if canWrite}
+					<form
+						method="POST"
+						action="?/book"
+						class="mt-3 flex flex-col gap-2 border-t border-border pt-3"
+						use:enhance={saved('Appointment booked.')}
+					>
+						<Select name="userId" aria-label="Who" bind:value={bookWho} options={data.people} />
+						<div class="grid grid-cols-3 gap-2">
+							<Input type="date" aria-label="Day" bind:value={bookDay} required />
+							<Input type="time" aria-label="Starts" bind:value={bookTime} required />
+							<Input aria-label="How long" placeholder="1h" bind:value={bookLength} required />
+						</div>
+						<Input name="notes" aria-label="Appointment notes" placeholder="Notes (optional)" />
+						<input type="hidden" name="startsAt" value={bookStarts} />
+						<input type="hidden" name="endsAt" value={bookEnds} />
+						{#if errorsOf('appointment').startsAt || errorsOf('appointment').endsAt || errorsOf('appointment').userId}
+							<p class="text-sm text-danger">
+								{errorsOf('appointment').startsAt ??
+									errorsOf('appointment').endsAt ??
+									errorsOf('appointment').userId}
+							</p>
+						{/if}
+						<Button type="submit" size="sm" disabled={!bookEnds}>
+							<CalendarPlus size={14} /> Book
+						</Button>
 					</form>
 				{/if}
 			</Card>

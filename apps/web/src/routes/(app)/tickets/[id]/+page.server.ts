@@ -21,18 +21,20 @@ export const load: PageServerLoad = async (event) => {
 	if (!ticket.data || !notes.data || !activity.data || !types.data) {
 		error(503, 'Could not load the ticket.');
 	}
-	const [people, contacts, responses, links, time, workTypes, actions] = await Promise.all([
-		assignees(event),
-		client.GET('/api/v1/orgs/{id}/contacts', {
-			params: { path: { id: ticket.data.orgId }, query: { limit: 200 } }
-		}),
-		// Filled in for this ticket and you; none without ticket:write here.
-		client.GET('/api/v1/tickets/{id}/responses', path),
-		client.GET('/api/v1/tickets/{id}/links', path),
-		client.GET('/api/v1/tickets/{id}/time', path),
-		client.GET('/api/v1/work-types'),
-		actionsFor(event, 'ticket', ticket.data.orgId)
-	]);
+	const [people, contacts, responses, links, time, workTypes, actions, appointments] =
+		await Promise.all([
+			assignees(event),
+			client.GET('/api/v1/orgs/{id}/contacts', {
+				params: { path: { id: ticket.data.orgId }, query: { limit: 200 } }
+			}),
+			// Filled in for this ticket and you; none without ticket:write here.
+			client.GET('/api/v1/tickets/{id}/responses', path),
+			client.GET('/api/v1/tickets/{id}/links', path),
+			client.GET('/api/v1/tickets/{id}/time', path),
+			client.GET('/api/v1/work-types'),
+			actionsFor(event, 'ticket', ticket.data.orgId),
+			client.GET('/api/v1/tickets/{id}/appointments', path)
+		]);
 	return {
 		ticket: ticket.data,
 		notes: notes.data,
@@ -45,7 +47,8 @@ export const load: PageServerLoad = async (event) => {
 		links: links.data ?? [],
 		time: time.data ?? [],
 		workTypes: (workTypes.data ?? []).filter((w) => w.onTickets),
-		actions
+		actions,
+		appointments: appointments.data ?? []
 	};
 };
 
@@ -99,6 +102,42 @@ export const actions: Actions = {
 			});
 		}
 		return { time: { saved: true } };
+	},
+	book: async (event) => {
+		const form = await event.request.formData();
+		const { error: problem, response } = await api(event).POST(
+			'/api/v1/tickets/{id}/appointments',
+			{
+				params: { path: { id: event.params.id } },
+				body: {
+					userId: formString(form, 'userId'),
+					startsAt: formString(form, 'startsAt'),
+					endsAt: formString(form, 'endsAt'),
+					notes: formString(form, 'notes') || null
+				}
+			}
+		);
+		if (response.status !== 201) {
+			return fail(response.status, {
+				appointment: {
+					errors: fieldErrors(problem),
+					message: problemMessage(problem, 'Could not book it.')
+				}
+			});
+		}
+		return { appointment: { saved: true } };
+	},
+	cancelAppointment: async (event) => {
+		const id = formString(await event.request.formData(), 'id');
+		const { error: problem, response } = await api(event).DELETE('/api/v1/appointments/{id}', {
+			params: { path: { id } }
+		});
+		if (response.status !== 204) {
+			return fail(response.status, {
+				appointment: { errors: {}, message: problemMessage(problem, 'Could not cancel it.') }
+			});
+		}
+		return { appointment: { saved: true } };
 	},
 	deleteTime: async (event) => {
 		const id = formString(await event.request.formData(), 'id');

@@ -206,6 +206,20 @@ Dispatch runs as a workflow, so it can be followed, changed or replaced like any
 
 Each dispatch run's output says who was chosen, or why nobody was, and what was considered about each member: their open tickets, skill match, and why anyone was skipped.
 
+## Appointments and the dispatch board
+
+**Appointments.** An appointment books someone for work on a ticket at a set time: an onsite visit, or a remote session the requester needs to be at. Book one from the ticket's **Appointments** card with who, the day, the start and how long. A booking can last up to 24 hours, and nobody can be booked twice at once, even across clients. Booking, moving and cancelling show in the ticket's history. Booking needs `ticket:write` on the ticket.
+
+**The dispatch board.** **Dispatch** in the sidebar shows a week, one row per person:
+
+- **Who's on it:** the members of a queue (or of every queue), and anyone with a booking that week.
+- **Each day shows:**
+  - their appointments, which link to the ticket
+  - their working hours, or "Off" on days they don't work
+  - their time off (both come from the [Workforce](workforce.md) module, when it's on)
+
+You see the appointments on tickets you can read.
+
 ## Notifications
 
 The built-in **Service desk notifications** pack (`huxley/servicedesk-notifications`) tells technicians about their tickets. Each workflow notifies the person a ticket is assigned to or, when no person has it, everyone in its team:
@@ -345,6 +359,8 @@ Workflows can open, read, find, update and dispatch tickets and add notes, with 
 | `GET /api/v1/time-entries?from=…&to=…`, `POST /api/v1/time-entries` | Your time over up to 62 days; log non-ticket time |
 | `PUT`, `DELETE /api/v1/time-entries/{id}` | Change or delete your entry |
 | `GET`, `POST /api/v1/work-types`, and `PUT`, `DELETE /api/v1/work-types/{id}` | Read and manage work types |
+| `GET`, `POST /api/v1/tickets/{id}/appointments`, and `PUT`, `DELETE /api/v1/appointments/{id}` | A ticket's appointments; book, move and cancel |
+| `GET /api/v1/dispatch/board?from=…&days=…&queueId=…` | The dispatch board: people with their appointments, hours and time off |
 | `GET /api/v1/my-work` | Your tickets (with why they need attention), your teams' unclaimed tickets, and what's unassigned in your queues |
 | `GET`, `POST /api/v1/queues`, and `GET`, `PUT`, `DELETE /api/v1/queues/{id}` | Read and manage queues, including `dispatch` (`manual`, `round_robin`, `load` or `skills`) |
 | `GET /api/v1/servicedesk/types` | Read ticket types, their statuses and allowed changes |
@@ -352,4 +368,4 @@ Workflows can open, read, find, update and dispatch tickets and add notes, with 
 
 ## Coming next
 
-Microsoft 365 mailboxes, sending through a mailbox's own server, and a dispatch board.
+Microsoft 365 mailboxes, and sending through a mailbox's own server.

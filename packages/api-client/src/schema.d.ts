@@ -63,6 +63,24 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
+	'/api/v1/appointments/{id}': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		/** Moves an appointment; send back the `version` you read. */
+		put: operations['reschedule_appointment'];
+		post?: never;
+		/** Cancels an appointment. */
+		delete: operations['cancel_appointment'];
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
 	'/api/v1/approvals': {
 		parameters: {
 			query?: never;
@@ -1197,6 +1215,27 @@ export interface paths {
 		put?: never;
 		/** Syncs a dataset now. */
 		post: operations['run_dataset_sync'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/dispatch/board': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/**
+		 * The dispatch board: people (a queue's members, or everyone in a queue,
+		 *     and anyone booked), with their appointments, working hours and time off
+		 *     over some days. Appointments are those on tickets you can read.
+		 */
+		get: operations['dispatch_board'];
+		put?: never;
+		post?: never;
 		delete?: never;
 		options?: never;
 		head?: never;
@@ -3398,6 +3437,27 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
+	'/api/v1/tickets/{id}/appointments': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** A ticket's appointments, in order. */
+		get: operations['ticket_appointments'];
+		put?: never;
+		/**
+		 * Books someone on a ticket (nobody is booked twice at once). Needs
+		 *     `ticket:write` on it.
+		 */
+		post: operations['book_appointment'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
 	'/api/v1/tickets/{id}/links': {
 		parameters: {
 			query?: never;
@@ -4540,6 +4600,45 @@ export interface components {
 			name: string;
 			scopes: string[];
 		};
+		Appointment: {
+			/** Format: date-time */
+			endsAt: string;
+			/** Format: uuid */
+			id: string;
+			notes: string;
+			orgName: string;
+			/** Format: date-time */
+			startsAt: string;
+			/** Format: uuid */
+			ticketId: string;
+			ticketReference: string;
+			ticketTitle: string;
+			/** Format: uuid */
+			userId: string;
+			userName: string;
+			/** Format: int32 */
+			version: number;
+		};
+		AppointmentInput: {
+			/**
+			 * Format: date-time
+			 * @description After `startsAt`, within 24 hours of it.
+			 */
+			endsAt: string;
+			notes?: string | null;
+			/** Format: date-time */
+			startsAt: string;
+			/**
+			 * Format: uuid
+			 * @description Who does the work.
+			 */
+			userId: string;
+			/**
+			 * Format: int32
+			 * @description The version you read (rescheduling only).
+			 */
+			version?: number | null;
+		};
 		/** @enum {string} */
 		ApprovalStatus: 'pending' | 'approved' | 'rejected' | 'expired';
 		/** @description An approval as approvers see it. */
@@ -4746,6 +4845,25 @@ export interface components {
 		 * @enum {string}
 		 */
 		BindingKind: 'text' | 'url' | 'recipients' | 'script';
+		/** @description One person on the dispatch board. */
+		BoardPerson: {
+			appointments: components['schemas']['Appointment'][];
+			hours?: {
+				[key: string]: string[][];
+			} | null;
+			name: string;
+			/** @description Approved time off overlapping the range: `[{ startsOn, endsOn, kind }]`. */
+			timeOff: {
+				[key: string]: string;
+			}[];
+			/**
+			 * @description Their working hours' time zone and hours (with the workforce
+			 *     module), if they have them.
+			 */
+			timezone?: string | null;
+			/** Format: uuid */
+			userId: string;
+		};
 		Body: {
 			/** @description e.g. `application/json`, `application/x-www-form-urlencoded`. */
 			contentType: string;
@@ -8098,6 +8216,66 @@ export interface operations {
 			};
 		};
 	};
+	reschedule_appointment: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['AppointmentInput'];
+			};
+		};
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['Appointment'];
+				};
+			};
+			409: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	cancel_appointment: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			204: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content?: never;
+			};
+		};
+	};
 	list_my_approvals: {
 		parameters: {
 			query?: never;
@@ -10502,6 +10680,40 @@ export interface operations {
 				};
 			};
 			409: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	dispatch_board: {
+		parameters: {
+			query: {
+				/** @description The first day, `YYYY-MM-DD` (UTC midnight). */
+				from: string;
+				/** @description How many days (1 to 31; default 7). */
+				days?: number | null;
+				/** @description Only this queue's members. */
+				queueId?: string | null;
+			};
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['BoardPerson'][];
+				};
+			};
+			422: {
 				headers: {
 					[name: string]: unknown;
 				};
@@ -15318,6 +15530,60 @@ export interface operations {
 				};
 				content: {
 					'application/json': components['schemas']['Activity'][];
+				};
+			};
+		};
+	};
+	ticket_appointments: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['Appointment'][];
+				};
+			};
+		};
+	};
+	book_appointment: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['AppointmentInput'];
+			};
+		};
+		responses: {
+			201: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['Appointment'];
+				};
+			};
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
 				};
 			};
 		};
