@@ -2171,6 +2171,7 @@ dependencies = [
  "huxley-expr",
  "huxley-hwf",
  "huxley-integrations",
+ "huxley-knowledge",
  "huxley-mail",
  "huxley-modules",
  "huxley-notify",

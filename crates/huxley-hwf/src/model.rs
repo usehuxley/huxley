@@ -393,6 +393,10 @@ pub enum Step {
     /// Embed tickets for search by meaning (the `servicedesk` module).
     #[serde(rename = "core.ticket.embed")]
     TicketEmbed(TicketEmbedStep),
+    /// Embed published knowledge base articles for search by meaning (the
+    /// `knowledge` module).
+    #[serde(rename = "core.kb.embed")]
+    KbEmbed(KbEmbedStep),
     /// Email a public note to the ticket's requester (the `servicedesk`
     /// module).
     #[serde(rename = "core.ticket.email_reply")]
@@ -701,6 +705,11 @@ step!(TicketEmbedStep {
     pub embed: TicketEmbed,
 });
 
+step!(KbEmbedStep {
+    #[serde(default, rename = "with")]
+    pub embed: KbEmbed,
+});
+
 step!(AiPromptStep {
     #[serde(rename = "with")]
     pub ai: AiPrompt,
@@ -769,6 +778,7 @@ impl Step {
             TicketFromEmail,
             MailFetch,
             TicketEmbed,
+            KbEmbed,
             TicketEmailReply,
             TicketCreate,
             TicketGet,
@@ -816,6 +826,7 @@ impl Step {
             Self::TicketFromEmail(_) => "core.ticket.from_email",
             Self::MailFetch(_) => "core.mail.fetch",
             Self::TicketEmbed(_) => "core.ticket.embed",
+            Self::KbEmbed(_) => "core.kb.embed",
             Self::TicketCreate(_) => "core.ticket.create",
             Self::TicketGet(_) => "core.ticket.get",
             Self::TicketFind(_) => "core.ticket.find",
@@ -1208,6 +1219,20 @@ pub struct MailFetch {
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct TicketEmbed {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub limit: Option<Value>,
+}
+
+/// Articles to embed (`core.kb.embed`): published knowledge base articles
+/// at the run's organization and below whose embedding is missing or stale
+/// (their published title or text changed, they moved organization, or the
+/// embeddings provider's model changed), up to `limit` (default 200), by
+/// each organization's embeddings provider. Does nothing when pgvector
+/// isn't installed. A provider that fails is reported without failing the
+/// step. Output: `{ available, embedded, errors: [{ org_id, error }] }`.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct KbEmbed {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub limit: Option<Value>,
 }

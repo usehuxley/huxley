@@ -5263,6 +5263,54 @@
 				}
 			}
 		},
+		"/api/v1/kb/meaning": {
+			"get": {
+				"tags": ["knowledge"],
+				"summary": "Searches published articles by meaning: your words are embedded by the\norganization's embeddings provider (a logged AI call), and the published\narticles you can read nearest in meaning come back, best first.",
+				"operationId": "search_articles_by_meaning",
+				"parameters": [
+					{
+						"name": "q",
+						"in": "query",
+						"description": "What to look for, in your own words: 2 to 500 characters.",
+						"required": true,
+						"schema": {
+							"type": "string"
+						}
+					},
+					{
+						"name": "orgId",
+						"in": "query",
+						"description": "The organization whose embeddings provider reads the query (you need\n`ai:use` there).",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/KbMeaningSearch"
+								}
+							}
+						}
+					},
+					"422": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
 		"/api/v1/kb/preview": {
 			"post": {
 				"tags": ["knowledge"],
@@ -17215,6 +17263,53 @@
 					}
 				}
 			},
+			"KbMeaningHit": {
+				"type": "object",
+				"description": "A published article found by meaning.",
+				"required": ["id", "title", "orgName", "score"],
+				"properties": {
+					"categoryName": {
+						"type": ["string", "null"]
+					},
+					"id": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"orgName": {
+						"type": "string"
+					},
+					"score": {
+						"type": "number",
+						"format": "double",
+						"description": "How close in meaning, from 0 to 1 (cosine similarity)."
+					},
+					"title": {
+						"type": "string",
+						"description": "The published title."
+					}
+				}
+			},
+			"KbMeaningSearch": {
+				"type": "object",
+				"description": "Articles found by meaning, or why searching by meaning isn't possible.",
+				"required": ["available", "hits"],
+				"properties": {
+					"available": {
+						"type": "boolean",
+						"description": "Whether searching by meaning is set up (pgvector and an embeddings\nprovider)."
+					},
+					"hits": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/KbMeaningHit"
+						}
+					},
+					"message": {
+						"type": ["string", "null"],
+						"description": "Why there are no results, when something stopped the search."
+					}
+				}
+			},
 			"KbPreviewRequest": {
 				"type": "object",
 				"required": ["body"],
@@ -17310,6 +17405,11 @@
 					},
 					"orgName": {
 						"type": "string"
+					},
+					"score": {
+						"type": ["number", "null"],
+						"format": "double",
+						"description": "For a suggestion by meaning: how close, from 0 to 1."
 					},
 					"snippet": {
 						"type": ["string", "null"],
@@ -21828,7 +21928,7 @@
 						"items": {
 							"$ref": "#/components/schemas/KbTicketArticle"
 						},
-						"description": "Published articles matching its title and description."
+						"description": "Published articles about the same thing: by meaning when tickets and\narticles are embedded (with a `score`), then by its words."
 					}
 				}
 			},

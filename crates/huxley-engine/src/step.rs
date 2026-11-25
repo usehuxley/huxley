@@ -237,6 +237,7 @@ impl Engine {
                 .ticket_step(step.type_name(), org_id, input, record.tainted)
                 .await
                 .into(),
+            Step::KbEmbed(_) => self.embed_articles(org_id, input).await.into(),
             Step::MailFetch(_)
             | Step::TicketEmbed(_)
             | Step::TicketFromEmail(_)

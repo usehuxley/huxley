@@ -366,6 +366,23 @@ export const STEPS: StepSpec[] = [
 		]
 	},
 	{
+		type: 'core.kb.embed',
+		label: 'Embed articles',
+		description:
+			'Embed newly published knowledge base articles, so they can be searched by meaning and suggested on tickets.',
+		group: 'Data',
+		module: 'knowledge',
+		template: {},
+		fields: [
+			{
+				path: 'with.limit',
+				label: 'Limit',
+				kind: 'expression',
+				hint: 'Articles a run; default 200'
+			}
+		]
+	},
+	{
 		type: 'core.ticket.email_reply',
 		label: 'Email a reply',
 		description:

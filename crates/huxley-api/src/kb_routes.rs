@@ -47,6 +47,7 @@ pub fn routes() -> Router<AppState> {
         .route("/articles/{id}/revisions", get(list_revisions))
         .route("/articles/{id}/revisions/{number}", get(get_revision))
         .route("/preview", post(preview_article))
+        .route("/meaning", get(search_articles_by_meaning))
         .route("/articles/{id}/tickets", get(list_article_tickets))
         .route(
             "/tickets/{ticket_id}/articles",
@@ -590,13 +591,20 @@ async fn ticket_org(
     Ok(org)
 }
 
+/// Articles suggested on a ticket.
+const SUGGESTIONS: i64 = 5;
+/// How close in meaning (cosine similarity) an article must be to a ticket
+/// to be suggested by meaning.
+const MIN_MEANING: f64 = 0.3;
+
 /// What the knowledge base has for a ticket.
 #[derive(Debug, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct TicketKnowledge {
     /// Articles linked to it.
     pub linked: Vec<TicketArticle>,
-    /// Published articles matching its title and description.
+    /// Published articles about the same thing: by meaning when tickets and
+    /// articles are embedded (with a `score`), then by its words.
     pub suggested: Vec<TicketArticle>,
     /// You may link and unlink articles (`ticket:write` on the ticket).
     pub can_link: bool,
@@ -646,7 +654,34 @@ pub async fn ticket_articles(
     let drafts = drafts_for(&state, &authed).await?;
     let (linked, suggested) = scoped(&state, &scope, async |tx| {
         let linked = links::for_ticket(tx, ticket_id, &drafts).await?;
-        let suggested = links::suggest(tx, ticket_id, &text, 5).await?;
+        let by_words = links::suggest(tx, ticket_id, &text, SUGGESTIONS).await?;
+        // By meaning first (the ticket's own embedding, no AI call), then by words.
+        let by_meaning = if huxley_knowledge::embeddings::available(tx).await? {
+            huxley_knowledge::embeddings::near_ticket(tx, ticket_id, SUGGESTIONS).await?
+        } else {
+            Vec::new()
+        };
+        let mut suggested: Vec<TicketArticle> = by_meaning
+            .into_iter()
+            .filter(|h| h.score >= MIN_MEANING)
+            .map(|h| TicketArticle {
+                id: h.id,
+                title: h.title,
+                status: "published".into(),
+                org_name: h.org_name,
+                category_name: h.category_name,
+                linked_by_name: None,
+                linked_at: None,
+                snippet: None,
+                score: Some(h.score),
+            })
+            .collect();
+        for article in by_words {
+            if !suggested.iter().any(|s| s.id == article.id) {
+                suggested.push(article);
+            }
+        }
+        suggested.truncate(usize::try_from(SUGGESTIONS).unwrap_or(5));
         Ok((linked, suggested))
     })
     .await?;
@@ -742,4 +777,125 @@ pub async fn list_article_tickets(
         })
         .await?,
     ))
+}
+
+#[derive(Debug, Deserialize, IntoParams)]
+#[serde(rename_all = "camelCase")]
+pub struct KbMeaningParams {
+    /// What to look for, in your own words: 2 to 500 characters.
+    pub q: String,
+    /// The organization whose embeddings provider reads the query (you need
+    /// `ai:use` there).
+    pub org_id: Uuid,
+}
+
+/// Articles found by meaning, or why searching by meaning isn't possible.
+#[derive(Debug, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct KbMeaningSearch {
+    /// Whether searching by meaning is set up (pgvector and an embeddings
+    /// provider).
+    pub available: bool,
+    /// Why there are no results, when something stopped the search.
+    pub message: Option<String>,
+    pub hits: Vec<huxley_knowledge::embeddings::MeaningHit>,
+}
+
+impl KbMeaningSearch {
+    fn unavailable(message: &str) -> Self {
+        Self {
+            available: false,
+            message: Some(message.to_owned()),
+            hits: Vec::new(),
+        }
+    }
+}
+
+/// Searches published articles by meaning: your words are embedded by the
+/// organization's embeddings provider (a logged AI call), and the published
+/// articles you can read nearest in meaning come back, best first.
+#[utoipa::path(get, path = "/api/v1/kb/meaning", tag = "knowledge", params(KbMeaningParams),
+    responses((status = 200, body = KbMeaningSearch), (status = 422, body = ApiError, content_type = "application/problem+json")))]
+pub async fn search_articles_by_meaning(
+    State(state): State<AppState>,
+    authed: Authed,
+    Query(params): Query<KbMeaningParams>,
+) -> ApiResult<Json<KbMeaningSearch>> {
+    let q = params.q.trim().to_owned();
+    if q.chars().count() < 2 || q.chars().count() > 500 {
+        return Err(ApiError::validation().with_field_error("/q", "2 to 500 characters"));
+    }
+    require_module(&state, MODULE).await?;
+    if !authed
+        .principal
+        .granted_anywhere()
+        .contains(&permissions::KB_READ)
+    {
+        return Err(ApiError::forbidden());
+    }
+    authed
+        .require_at(&state, permissions::AI_USE, params.org_id)
+        .await?;
+    let (available, provider) = {
+        let mut tx = begin_scoped(&state.db, &OrgScope::System)
+            .await
+            .map_err(db_err)?;
+        let available = huxley_knowledge::embeddings::available(&mut tx)
+            .await
+            .map_err(map)?;
+        let provider =
+            huxley_ai::store::effective(&mut tx, params.org_id, huxley_ai::store::Use::Embeddings)
+                .await
+                .map_err(db_err)?;
+        tx.commit().await.map_err(db_err)?;
+        (available, provider)
+    };
+    if !available {
+        return Ok(Json(KbMeaningSearch::unavailable(
+            "Searching by meaning needs the pgvector extension in the database.",
+        )));
+    }
+    let Some(provider) = provider else {
+        return Ok(Json(KbMeaningSearch::unavailable(
+            "Set up an embeddings provider first (Settings → AI).",
+        )));
+    };
+    let purpose = huxley_ai::Purpose {
+        feature: "kb_search",
+        run_id: None,
+    };
+    let vector = match state
+        .engine
+        .ai()
+        .embed(
+            params.org_id,
+            purpose,
+            std::slice::from_ref(&q),
+            huxley_ai::embed::InputType::Query,
+        )
+        .await
+    {
+        Ok(mut done) if !done.vectors.is_empty() => done.vectors.swap_remove(0),
+        Ok(_) => return Err(ApiError::internal(&"the provider returned no embedding")),
+        Err(e @ huxley_ai::AiError::Internal(_)) => return Err(ApiError::internal(&e)),
+        Err(e) => {
+            return Ok(Json(KbMeaningSearch {
+                available: true,
+                message: Some(e.to_string()),
+                hits: Vec::new(),
+            }));
+        }
+    };
+    let scope = authed
+        .module_scope(&state, permissions::KB_READ, MODULE)
+        .await?;
+    let hits = scoped(&state, &scope, async |tx| {
+        huxley_knowledge::embeddings::search(tx, &provider.model, &vector, 20).await
+    })
+    .await?;
+    Ok(Json(KbMeaningSearch {
+        available: true,
+        message: None,
+        hits,
+    }))
 }

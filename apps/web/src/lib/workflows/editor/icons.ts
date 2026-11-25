@@ -56,6 +56,7 @@ const ICONS: Record<string, typeof Globe> = {
 	'core.ticket.from_email': MailOpen,
 	'core.mail.fetch': Inbox,
 	'core.ticket.embed': Sparkles,
+	'core.kb.embed': Sparkles,
 	'core.ticket.create': TicketPlus,
 	'core.ticket.get': Ticket,
 	'core.ticket.find': TicketCheck,

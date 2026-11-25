@@ -390,6 +390,7 @@ impl<'a> Walker<'a> {
             | Step::TicketFromEmail(_)
             | Step::MailFetch(_)
             | Step::TicketEmbed(_)
+            | Step::KbEmbed(_)
             | Step::TicketEmailReply(_)
             | Step::TicketCreate(_)
             | Step::TicketGet(_)
@@ -840,6 +841,7 @@ fn with_block(step: &Step) -> Json {
         Step::TicketFromEmail(s) => serde_json::to_value(&s.email),
         Step::MailFetch(s) => serde_json::to_value(&s.fetch),
         Step::TicketEmbed(s) => serde_json::to_value(&s.embed),
+        Step::KbEmbed(s) => serde_json::to_value(&s.embed),
         Step::TicketEmailReply(s) => serde_json::to_value(&s.reply),
         Step::TicketCreate(s) => serde_json::to_value(&s.ticket),
         Step::TicketGet(s) => serde_json::to_value(&s.ticket),

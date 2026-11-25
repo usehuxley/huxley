@@ -44,8 +44,13 @@ async function ok(response: Promise<APIResponse>, status = 200) {
 	return r.json() as Promise<{ id: string; status?: string }>;
 }
 
-/** Embeds the client's tickets now: the embed step, run at the client. */
-async function embed(api: APIRequestContext, orgId: string, stamp: string) {
+/** Embeds the client's tickets (or articles) now: an embed step, run at the client. */
+async function embed(
+	api: APIRequestContext,
+	orgId: string,
+	stamp: string,
+	step = 'core.ticket.embed'
+) {
 	const workflow = await ok(
 		api.post('/api/v1/workflows', {
 			data: {
@@ -53,8 +58,11 @@ async function embed(api: APIRequestContext, orgId: string, stamp: string) {
 				document: {
 					apiVersion: 'usehuxley.io/v1',
 					kind: 'Workflow',
-					metadata: { key: `embed-${stamp}`, name: `Embed ${stamp}` },
-					spec: { steps: [{ id: 'embed', type: 'core.ticket.embed' }] }
+					metadata: {
+						key: `${step.replaceAll('.', '-')}-${stamp}`,
+						name: `Embed ${step} ${stamp}`
+					},
+					spec: { steps: [{ id: 'embed', type: step }] }
 				}
 			}
 		}),
@@ -129,19 +137,33 @@ test.describe('tickets by meaning', () => {
 					}
 				})
 			);
+			const tickets: string[] = [];
 			for (const [title, description] of [
 				['Second floor', 'The toner light is on and nothing comes out'],
 				['Working from home', 'The VPN drops every hour'],
 				['Outlook', 'Inbox will not sync']
 			]) {
-				await ok(
+				const t = await ok(
 					api.post('/api/v1/tickets', {
 						data: { orgId: client.id, title: `${title} ${stamp}`, description }
 					}),
 					201
 				);
+				tickets.push(t.id);
+			}
+			// Published articles at the client: about printers and about email.
+			for (const [title, body] of [
+				[`Toner ${stamp}`, 'Replace the toner cartridge'],
+				[`Mail ${stamp}`, 'Rebuild the Outlook profile']
+			]) {
+				const a = await ok(
+					api.post('/api/v1/kb/articles', { data: { orgId: client.id, title, body } }),
+					201
+				);
+				await ok(api.post(`/api/v1/kb/articles/${a.id}/publish`, { data: {} }));
 			}
 			await embed(api, client.id, stamp);
+			await embed(api, client.id, stamp, 'core.kb.embed');
 
 			// Searching as the client (its embeddings provider reads the words).
 			await signIn(page);
@@ -160,6 +182,24 @@ test.describe('tickets by meaning', () => {
 			await page.getByLabel("Describe what you're looking for").fill('wifi keeps dropping');
 			await page.getByRole('button', { name: 'Search', exact: true }).click();
 			await expect(found.first()).toContainText(`Working from home ${stamp}`);
+
+			// Articles by meaning.
+			await page.goto('/knowledge');
+			await page.getByRole('link', { name: 'By meaning' }).click();
+			await page.getByLabel("Describe what you're looking for").fill('my inbox is empty');
+			await page.getByRole('button', { name: 'Search', exact: true }).click();
+			const articles = page
+				.getByRole('list', { name: 'Articles by meaning' })
+				.getByRole('listitem');
+			await expect(articles.first()).toContainText(`Mail ${stamp}`);
+
+			// The printer ticket suggests the toner article, by its own meaning.
+			await page.goto(`/tickets/${tickets[0]}`);
+			const suggested = page
+				.getByRole('list', { name: 'Suggested articles' })
+				.getByRole('listitem');
+			await expect(suggested.first()).toContainText(`Toner ${stamp}`);
+			await expect(suggested.first()).toContainText('About the same thing (100%)');
 		} finally {
 			await api.dispose();
 			model.close();

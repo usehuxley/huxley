@@ -49,12 +49,22 @@ Technicians have `kb:read` and `kb:write`, and read-only users have `kb:read`. W
 
 **Knowledge** searches titles, tags and text, best match first, showing where each article matched. Readers search only what's published. Filter by category, and, if you write, by status.
 
+## Search by meaning
+
+**Knowledge → By meaning** finds published articles about the same thing as your words, even when they use other words: "a user can't sign in after changing their phone" finds *Reset MFA*. It uses the same setup as [searching tickets by meaning](servicedesk.md#search-by-meaning):
+
+1. **pgvector** in the database.
+2. **An embeddings provider** under **Settings → AI**.
+3. **The Knowledge search by meaning pack** (`huxley/knowledge-search`): install it and publish *Embed articles*. Every 5 minutes it embeds newly published and republished articles (their published title and text), up to 200 a run.
+
+A search is an AI call: logged, budgeted, and it needs `ai:use` at the organization you've picked as well as `kb:read`. Only published articles you may read are found, and drafts are never embedded.
+
 ## Articles on tickets
 
 With the service desk on, a ticket's **Knowledge** card shows:
 
 - **Linked articles:** what the ticket was solved with, or what to follow. Writers also see drafts linked there; readers only published articles.
-- **Suggested:** published articles whose words best match the ticket's title and description, with where they matched. **Link** one to keep it with the ticket.
+- **Suggested:** published articles about the same thing as the ticket. When tickets and articles are embedded (both packs above), the closest in meaning come first, shown as *About the same thing (84%)*. This uses the ticket's own embedding, so it costs no AI call. Then come articles whose words best match the ticket's title and description, with where they matched. **Link** one to keep it with the ticket.
 - **Find an article to link:** search the knowledge base from the ticket.
 
 Linking needs `ticket:write` on the ticket and `kb:read` where the article is; archived articles can't be linked. An article's page lists the tickets it's linked to (for writers), so you can see where it's used.
@@ -93,9 +103,10 @@ Each carries the article's `title`, `status`, `visibility`, `revision` and the `
 | `GET /api/v1/kb/tickets/{ticketId}/articles` | A ticket's linked and suggested articles, and whether you may link |
 | `POST /api/v1/kb/tickets/{ticketId}/articles`, `DELETE …/articles/{articleId}` | Link an article (`articleId`); unlink it |
 | `GET /api/v1/kb/articles/{id}/tickets` | The tickets an article is linked to |
+| `GET /api/v1/kb/meaning?q=…&orgId=…` | Published articles by meaning: `{ available, message, hits: [{ id, title, orgName, categoryName, score }] }` |
 
 An article read through the API has `bodyHtml` (the text rendered and made safe), `published` (what readers see), and `canWrite` and `canPublish` for you.
 
 ## Coming next
 
-Search by meaning, for articles and for suggestions on tickets.
+Client documentation and the credential vault.
