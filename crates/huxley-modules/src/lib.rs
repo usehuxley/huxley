@@ -67,7 +67,7 @@ pub const REGISTRY: &[Module] = &[
         description: "Assets, configuration items, relationships, and dependency maps.",
         requires: &["crm"],
         phase: 6,
-        released: false,
+        released: true,
     },
     Module {
         key: "knowledge",

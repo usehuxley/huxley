@@ -100,6 +100,7 @@
 			{ value: 'overview', label: 'Overview' },
 			{ value: 'contacts', label: `Contacts (${data.contacts.total})` },
 			{ value: 'sites', label: `Sites (${data.sites.length})` },
+			...(data.assets ? [{ value: 'assets', label: `Assets (${data.assets.length})` }] : []),
 			...(data.documents
 				? [{ value: 'documentation', label: `Documentation (${data.documents.length})` }]
 				: []),
@@ -300,6 +301,39 @@
 						</ul>
 					{/if}
 				</div>
+			{/if}
+			{#if value === 'assets' && data.assets}
+				<Card title="Assets">
+					{#snippet actions()}
+						{#if data.canWriteAssets}
+							<Button href={`${resolve('/(app)/assets/new')}?org=${data.org.id}`}>
+								<Plus size={16} /> New asset
+							</Button>
+						{/if}
+					{/snippet}
+					{#if data.assets.length === 0}
+						<p class="text-sm text-fg-muted">No assets yet.</p>
+					{:else}
+						<ul class="flex flex-col divide-y divide-border" aria-label="Client assets">
+							{#each data.assets as asset (asset.id)}
+								<li class="flex items-center justify-between gap-2 py-2 first:pt-0">
+									<span>
+										<a
+											class="text-fg hover:underline"
+											href={resolve('/(app)/assets/[id]', { id: asset.id })}
+										>
+											{asset.name}
+										</a>
+										<span class="text-xs text-fg-subtle">{asset.typeName}</span>
+									</span>
+									<span class="text-xs text-fg-muted">
+										{asset.status}{asset.contactName ? ` · ${asset.contactName}` : ''}
+									</span>
+								</li>
+							{/each}
+						</ul>
+					{/if}
+				</Card>
 			{/if}
 			{#if value === 'documentation' && data.documents}
 				<Card

@@ -88,6 +88,9 @@ permissions! {
     KB_PUBLISH = "kb:publish", Org, "Approve, reject, publish and archive knowledge base articles, and keep their categories";
     VAULT_READ = "vault:read", Org, "See credential vault items (never their secrets) and who revealed them";
     VAULT_REVEAL = "vault:reveal", Org, "Reveal credential vault secrets (each reveal is logged and audited)";
+    ASSET_READ = "asset:read", Org, "View assets, their relationships and impact";
+    ASSET_WRITE = "asset:write", Org, "Add, change, relate and delete assets";
+    CMDB_CONFIGURE = "cmdb:configure", Instance, "Keep asset types and their fields";
     VAULT_MANAGE = "vault:manage", Org, "Add, change and delete credential vault items and their secrets";
 }
 

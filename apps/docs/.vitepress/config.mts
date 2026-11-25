@@ -86,6 +86,7 @@ export default defineConfig({
 					{ text: 'Clients and contacts', link: '/crm' },
 					{ text: 'Service desk', link: '/servicedesk' },
 					{ text: 'Workforce', link: '/workforce' },
+					{ text: 'Assets', link: '/assets' },
 					{ text: 'Knowledge base', link: '/knowledge' },
 					{ text: 'Credential vault', link: '/vault' }
 				]

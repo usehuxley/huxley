@@ -139,6 +139,142 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
+	'/api/v1/asset-relationships/{id}': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		post?: never;
+		/** Removes a relationship (`asset:write` where it belongs). */
+		delete: operations['unrelate_asset'];
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/asset-types': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** Asset types and their fields (anyone who may read assets somewhere). */
+		get: operations['list_asset_types'];
+		put?: never;
+		/** Adds an asset type (`cmdb:configure`). */
+		post: operations['create_asset_type'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/asset-types/{id}': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		/**
+		 * Changes an asset type's name, fields and position (`cmdb:configure`);
+		 *     send back the `version` you read.
+		 */
+		put: operations['update_asset_type'];
+		post?: never;
+		/** Archives a custom asset type: no new assets of it (`cmdb:configure`). */
+		delete: operations['archive_asset_type'];
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/assets': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** Assets you can see, by name. */
+		get: operations['list_assets'];
+		put?: never;
+		/** Adds an asset at an organization (`asset:write` there). */
+		post: operations['create_asset'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/assets/{id}': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** An asset, with its relationships. */
+		get: operations['get_asset'];
+		/** Replaces an asset's fields (send them all, with the `version` you read). */
+		put: operations['update_asset'];
+		post?: never;
+		/**
+		 * Deletes an asset and its relationships (for mistakes; retire it to
+		 *     keep its history).
+		 */
+		delete: operations['delete_asset'];
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/assets/{id}/impact': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/**
+		 * What breaks if this asset goes down: what (transitively) runs on it,
+		 *     depends on it, is licensed by it, or is hosted by it, nearest first.
+		 */
+		get: operations['asset_impact'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/assets/{id}/relationships': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/**
+		 * Relates this asset to another: this one `kind` it (`asset:write` here,
+		 *     `asset:read` where the other is). Relating them again is fine.
+		 */
+		post: operations['relate_asset'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
 	'/api/v1/assistant/conversations': {
 		parameters: {
 			query?: never;
@@ -5131,6 +5267,173 @@ export interface components {
 			/** @description You may change it and see its drafts and history. */
 			canWrite: boolean;
 		};
+		Asset: {
+			/** @description The type's fields. */
+			attributes: {
+				[key: string]: unknown;
+			};
+			/** Format: uuid */
+			contactId?: string | null;
+			contactName?: string | null;
+			customFields: {
+				[key: string]: unknown;
+			};
+			/** @description Ids in other systems, e.g. `{ "rmm": "…" }`. */
+			externalIds: {
+				[key: string]: unknown;
+			};
+			hostname: string;
+			/** Format: uuid */
+			id: string;
+			manufacturer: string;
+			model: string;
+			name: string;
+			notes: string;
+			/** Format: uuid */
+			orgId: string;
+			orgName: string;
+			/** Format: date */
+			purchasedOn?: string | null;
+			serialNumber: string;
+			/** Format: uuid */
+			siteId?: string | null;
+			siteName?: string | null;
+			status: string;
+			/** Format: uuid */
+			typeId: string;
+			typeKey: string;
+			typeName: string;
+			/** Format: date-time */
+			updatedAt: string;
+			/**
+			 * Format: int32
+			 * @description For optimistic locking: send it back when changing the asset.
+			 */
+			version: number;
+			/** Format: date */
+			warrantyEndsOn?: string | null;
+		};
+		/** @description An asset's fields, for creating it or changing it (all of them). */
+		AssetInput: {
+			/** @description Values for the type's fields. */
+			attributes?: {
+				[key: string]: unknown;
+			};
+			/**
+			 * Format: uuid
+			 * @description Who uses or owns it: a contact of the asset's organization.
+			 */
+			contactId?: string | null;
+			externalIds?: {
+				[key: string]: unknown;
+			};
+			hostname?: string | null;
+			manufacturer?: string | null;
+			model?: string | null;
+			name: string;
+			notes?: string | null;
+			/**
+			 * Format: uuid
+			 * @description The client (or the MSP) it belongs to. Only for a new asset.
+			 */
+			orgId?: string | null;
+			/** Format: date */
+			purchasedOn?: string | null;
+			serialNumber?: string | null;
+			/**
+			 * Format: uuid
+			 * @description A site of the asset's organization.
+			 */
+			siteId?: string | null;
+			/**
+			 * @description `planned`, `in_stock`, `active` (the default), `maintenance`,
+			 *     `retired` or `disposed`.
+			 */
+			status?: string | null;
+			/** Format: uuid */
+			typeId: string;
+			/**
+			 * Format: int32
+			 * @description The version you read (changes only).
+			 */
+			version?: number | null;
+			/** Format: date */
+			warrantyEndsOn?: string | null;
+		};
+		AssetPage: {
+			items: components['schemas']['Asset'][];
+			/** Format: int64 */
+			total: number;
+		};
+		/** @description A relationship as seen from one asset. */
+		AssetRelationship: {
+			/** @description `out`: this asset `kind` the other; `in`: the other `kind` this one. */
+			direction: string;
+			/** Format: uuid */
+			id: string;
+			kind: string;
+			/** Format: uuid */
+			otherId: string;
+			otherName: string;
+			otherStatus: string;
+			otherType: string;
+		};
+		AssetRelationshipInput: {
+			kind: string;
+			/**
+			 * Format: uuid
+			 * @description The other asset: this one `kind` it.
+			 */
+			toId: string;
+		};
+		AssetType: {
+			archived: boolean;
+			/**
+			 * Format: int64
+			 * @description Assets of this type you can see.
+			 */
+			assets: number;
+			fields: components['schemas']['AssetTypeField'][];
+			/** Format: uuid */
+			id: string;
+			isSystem: boolean;
+			key: string;
+			name: string;
+			/** Format: int32 */
+			position: number;
+			/** Format: int32 */
+			version: number;
+		};
+		/** @description A field of an asset type. */
+		AssetTypeField: {
+			fieldType: components['schemas']['FieldType'];
+			help?: string;
+			/** @description The key its value is kept under. */
+			key: string;
+			label: string;
+			/** @description For `select` and `multi_select`. */
+			options?: components['schemas']['SelectOption'][];
+			required?: boolean;
+		};
+		/** @description A new type, or changes to one. */
+		AssetTypeInput: {
+			fields?: components['schemas']['AssetTypeField'][];
+			/** @description Only for a new type; default: from the name. */
+			key?: string | null;
+			name: string;
+			/** Format: int32 */
+			position?: number | null;
+			/**
+			 * Format: int32
+			 * @description The version you read (changes only).
+			 */
+			version?: number | null;
+		};
+		/** @description An asset with its relationships, and whether you may change it. */
+		AssetView: components['schemas']['Asset'] & {
+			canWrite: boolean;
+			relationships: components['schemas']['AssetRelationship'][];
+		};
 		Assignment: {
 			/** Format: date-time */
 			createdAt: string;
@@ -6211,6 +6514,27 @@ export interface components {
 			/** @description `tls` (default), `start_tls` or `none` (a server on your own network). */
 			security?: string | null;
 			username: string;
+		};
+		/** @description An asset affected when another goes down. */
+		Impacted: {
+			/**
+			 * Format: int32
+			 * @description How many steps away (1: directly).
+			 */
+			depth: number;
+			/** Format: uuid */
+			id: string;
+			name: string;
+			orgName: string;
+			status: string;
+			typeName: string;
+			/**
+			 * Format: uuid
+			 * @description The asset it's affected through (the one it runs on, depends on…).
+			 */
+			viaId: string;
+			viaKind: string;
+			viaName: string;
 		};
 		ImportRequest: {
 			/** @description Defaults to one made from the spec's title. */
@@ -9185,6 +9509,356 @@ export interface operations {
 				};
 			};
 			409: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	unrelate_asset: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			204: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content?: never;
+			};
+			404: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	list_asset_types: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['AssetType'][];
+				};
+			};
+		};
+	};
+	create_asset_type: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['AssetTypeInput'];
+			};
+		};
+		responses: {
+			201: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['AssetType'];
+				};
+			};
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	update_asset_type: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['AssetTypeInput'];
+			};
+		};
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['AssetType'];
+				};
+			};
+			409: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	archive_asset_type: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			204: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content?: never;
+			};
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	list_assets: {
+		parameters: {
+			query?: {
+				/** @description Words in the name, serial number, hostname, model or manufacturer. */
+				q?: string | null;
+				orgId?: string | null;
+				typeId?: string | null;
+				status?: string | null;
+				/** @description Leave out retired and disposed assets. */
+				inUse?: boolean;
+				/** @description Default 100, at most 500. */
+				limit?: number | null;
+				offset?: number | null;
+			};
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['AssetPage'];
+				};
+			};
+		};
+	};
+	create_asset: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['AssetInput'];
+			};
+		};
+		responses: {
+			201: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['AssetView'];
+				};
+			};
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	get_asset: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['AssetView'];
+				};
+			};
+			404: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	update_asset: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['AssetInput'];
+			};
+		};
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['AssetView'];
+				};
+			};
+			409: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	delete_asset: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			204: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content?: never;
+			};
+		};
+	};
+	asset_impact: {
+		parameters: {
+			query?: {
+				/** @description How many steps to follow (default 10, at most 20). */
+				depth?: number | null;
+			};
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['Impacted'][];
+				};
+			};
+		};
+	};
+	relate_asset: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['AssetRelationshipInput'];
+			};
+		};
+		responses: {
+			204: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content?: never;
+			};
+			422: {
 				headers: {
 					[name: string]: unknown;
 				};
