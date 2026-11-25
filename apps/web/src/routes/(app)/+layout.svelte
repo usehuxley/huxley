@@ -76,7 +76,10 @@
 		data.user.grantedPermissions.includes('workforce:read')
 			? [{ href: '/people', label: 'People', icon: UsersRound }]
 			: []),
-		{ href: '/assets', label: 'Assets', icon: Boxes, soon: true },
+		...(data.user.activeModules.includes('cmdb') &&
+		data.user.grantedPermissions.includes('asset:read')
+			? [{ href: '/assets', label: 'Assets', icon: Boxes }]
+			: [{ href: '/assets', label: 'Assets', icon: Boxes, soon: true }]),
 		...(data.user.activeModules.includes('knowledge') &&
 		data.user.grantedPermissions.includes('kb:read')
 			? [{ href: '/knowledge', label: 'Knowledge', icon: BookOpen }]

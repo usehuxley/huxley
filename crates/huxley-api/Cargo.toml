@@ -34,6 +34,7 @@ huxley-servicedesk.workspace = true
 huxley-workforce.workspace = true
 huxley-knowledge.workspace = true
 huxley-vault.workspace = true
+huxley-cmdb.workspace = true
 huxley-mail.workspace = true
 huxley-datasets.workspace = true
 huxley-ai.workspace = true

@@ -1953,6 +1953,7 @@ dependencies = [
  "huxley-ai",
  "huxley-auth",
  "huxley-authz",
+ "huxley-cmdb",
  "huxley-core",
  "huxley-crm",
  "huxley-crypto",
@@ -2043,6 +2044,24 @@ dependencies = [
  "huxley-core",
  "huxley-db",
  "huxley-notify",
+ "huxley-orgs",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "thiserror 2.0.21",
+ "time",
+ "tokio",
+ "utoipa",
+ "uuid",
+]
+
+[[package]]
+name = "huxley-cmdb"
+version = "0.1.0"
+dependencies = [
+ "huxley-core",
+ "huxley-db",
+ "huxley-entity",
  "huxley-orgs",
  "serde",
  "serde_json",

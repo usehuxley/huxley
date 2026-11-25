@@ -30,12 +30,15 @@ export const load: PageServerLoad = async (event) => {
 	const { user } = await event.parent();
 	const has = (module: string, permission: string) =>
 		user.activeModules.includes(module) && user.grantedPermissions.includes(permission);
-	const [vault, documents] = await Promise.all([
+	const [vault, documents, assets] = await Promise.all([
 		has('vault', 'vault:read')
 			? client.GET('/api/v1/vault/items', { params: { query: { orgId: id } } })
 			: Promise.resolve({ data: undefined }),
 		has('knowledge', 'kb:read')
 			? client.GET('/api/v1/kb/articles', { params: { query: { orgId: id, limit: 200 } } })
+			: Promise.resolve({ data: undefined }),
+		has('cmdb', 'asset:read')
+			? client.GET('/api/v1/assets', { params: { query: { orgId: id, limit: 500 } } })
 			: Promise.resolve({ data: undefined })
 	]);
 	return {
@@ -46,6 +49,8 @@ export const load: PageServerLoad = async (event) => {
 		actions,
 		vault: vault.data ?? null,
 		documents: documents.data?.items ?? null,
+		assets: assets.data?.items ?? null,
+		canWriteAssets: user.grantedPermissions.includes('asset:write'),
 		canWriteDocs: user.grantedPermissions.includes('kb:write'),
 		canManageVault: user.grantedPermissions.includes('vault:manage'),
 		search,
