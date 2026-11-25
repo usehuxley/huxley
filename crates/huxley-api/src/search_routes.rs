@@ -17,7 +17,9 @@ use crate::authz::Authed;
 use crate::{ApiError, ApiResult, AppState};
 
 pub fn routes() -> Router<AppState> {
-    Router::new().route("/", get(search))
+    Router::new()
+        .route("/", get(search))
+        .route("/tickets", get(search_tickets))
 }
 
 /// Results per kind.
@@ -203,4 +205,125 @@ pub async fn search(
         hits.extend(scoped(&state, &OrgScope::System, async |tx| people(tx, &q).await).await?);
     }
     Ok(Json(hits))
+}
+
+#[derive(Debug, Deserialize, IntoParams)]
+#[serde(rename_all = "camelCase")]
+pub struct MeaningParams {
+    /// What to look for, in your own words: 2 to 500 characters.
+    pub q: String,
+    /// The organization whose embeddings provider reads the query (you need
+    /// `ai:use` there).
+    pub org_id: Uuid,
+}
+
+/// Tickets found by meaning, or why searching by meaning isn't possible.
+#[derive(Debug, Clone, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct MeaningSearch {
+    /// Whether searching by meaning is set up here (pgvector and an
+    /// embeddings provider).
+    pub available: bool,
+    /// Why there are no results, when something stopped the search.
+    pub message: Option<String>,
+    pub hits: Vec<huxley_servicedesk::embeddings::MeaningHit>,
+}
+
+impl MeaningSearch {
+    fn unavailable(message: &str) -> Self {
+        Self {
+            available: false,
+            message: Some(message.to_owned()),
+            hits: Vec::new(),
+        }
+    }
+}
+
+/// Searches tickets by meaning (the `servicedesk` module): your words are
+/// embedded by the organization's embeddings provider (a logged AI call),
+/// and the tickets you can read nearest in meaning come back, best first.
+/// Needs pgvector in the database and an embeddings provider.
+#[utoipa::path(get, path = "/api/v1/search/tickets", tag = "search", params(MeaningParams),
+    responses((status = 200, body = MeaningSearch), (status = 422, body = ApiError, content_type = "application/problem+json")))]
+pub async fn search_tickets(
+    State(state): State<AppState>,
+    authed: Authed,
+    Query(params): Query<MeaningParams>,
+) -> ApiResult<Json<MeaningSearch>> {
+    let q = params.q.trim().to_owned();
+    if q.chars().count() < 2 || q.chars().count() > 500 {
+        return Err(ApiError::validation().with_field_error("/q", "2 to 500 characters"));
+    }
+    if !module_active(&state, huxley_servicedesk::MODULE).await?
+        || !authed
+            .principal
+            .granted_anywhere()
+            .contains(&permissions::TICKET_READ)
+    {
+        return Err(ApiError::forbidden());
+    }
+    authed
+        .require_at(&state, permissions::AI_USE, params.org_id)
+        .await?;
+    let (available, provider) = scoped(&state, &OrgScope::System, async |tx| {
+        let available = huxley_servicedesk::embeddings::available(tx)
+            .await
+            .map_err(|e| sqlx::Error::Protocol(e.to_string()))?;
+        let provider =
+            huxley_ai::store::effective(tx, params.org_id, huxley_ai::store::Use::Embeddings)
+                .await
+                .map_err(|e| sqlx::Error::Protocol(e.to_string()))?;
+        Ok((available, provider))
+    })
+    .await?;
+    if !available {
+        return Ok(Json(MeaningSearch::unavailable(
+            "Searching by meaning needs the pgvector extension in the database.",
+        )));
+    }
+    let Some(provider) = provider else {
+        return Ok(Json(MeaningSearch::unavailable(
+            "Set up an embeddings provider first (Settings → AI).",
+        )));
+    };
+    let purpose = huxley_ai::Purpose {
+        feature: "ticket_search",
+        run_id: None,
+    };
+    let embedded = state
+        .engine
+        .ai()
+        .embed(
+            params.org_id,
+            purpose,
+            std::slice::from_ref(&q),
+            huxley_ai::embed::InputType::Query,
+        )
+        .await;
+    let vector = match embedded {
+        Ok(mut done) if !done.vectors.is_empty() => done.vectors.swap_remove(0),
+        Ok(_) => return Err(ApiError::internal(&"the provider returned no embedding")),
+        Err(e @ huxley_ai::AiError::Internal(_)) => return Err(ApiError::internal(&e)),
+        Err(e) => {
+            return Ok(Json(MeaningSearch {
+                available: true,
+                message: Some(e.to_string()),
+                hits: Vec::new(),
+            }));
+        }
+    };
+    let scope = authed
+        .module_scope(&state, permissions::TICKET_READ, huxley_servicedesk::MODULE)
+        .await?;
+    let hits = scoped(&state, &scope, async |tx| {
+        huxley_servicedesk::embeddings::search(tx, &provider.model, &vector, 20)
+            .await
+            .map_err(|e| sqlx::Error::Protocol(e.to_string()))
+    })
+    .await?;
+    Ok(Json(MeaningSearch {
+        available: true,
+        message: None,
+        hits,
+    }))
 }

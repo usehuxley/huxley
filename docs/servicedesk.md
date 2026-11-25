@@ -386,6 +386,23 @@ Workflows can open, read, find, update and dispatch tickets and add notes, with 
 | `GET`, `POST /api/v1/queues`, and `GET`, `PUT`, `DELETE /api/v1/queues/{id}` | Read and manage queues, including `dispatch` (`manual`, `round_robin`, `load` or `skills`) |
 | `GET /api/v1/servicedesk/types` | Read ticket types, their statuses and allowed changes |
 | `GET /api/v1/servicedesk/priority-matrix` | Read the priority table |
+| `GET /api/v1/search/tickets?q=…&orgId=…` | Tickets by meaning: `{ available, message, hits: [{ id, reference, title, orgName, statusName, score }] }` |
+
+## Search by meaning
+
+**Tickets → By meaning** finds tickets about the same thing as your words, even when they use other words: "the printer is out of paper" finds *Toner light is on*. Results are ranked by how close they are in meaning, as a percentage.
+
+To set it up:
+
+1. **pgvector in the database.** Huxley installs the extension if the database has it and Huxley may install it: use a PostgreSQL image with pgvector, such as `pgvector/pgvector:0.8.2-pg18`, or install the `postgresql-18-pgvector` package. Without it, searching by meaning says so and nothing is embedded or spent.
+2. **An embeddings provider** under **Settings → AI** (see [AI providers](ai.md#embeddings-provider)).
+3. **The Service desk search by meaning pack** (`huxley/servicedesk-search`): install it and publish *Embed tickets*. Every 5 minutes it embeds new and changed tickets, up to 200 a run, so a backlog takes a few runs.
+
+How it works:
+
+- **What's embedded:** a ticket's title and description (its first 8,000 characters). A ticket is embedded again when either changes, when it moves organization, or when its provider's model changes. Merged tickets aren't embedded.
+- **Searching:** your words are embedded by the embeddings provider of the organization you've picked in the switcher, and compared with the tickets that provider's model embedded. A search is an AI call: it's logged and counts toward the budget, and it needs `ai:use` there as well as `ticket:read`.
+- **What you see:** only tickets you may read, the nearest 20.
 
 ## Coming next
 

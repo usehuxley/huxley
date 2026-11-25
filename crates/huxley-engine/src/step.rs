@@ -237,7 +237,10 @@ impl Engine {
                 .ticket_step(step.type_name(), org_id, input, record.tainted)
                 .await
                 .into(),
-            Step::MailFetch(_) | Step::TicketFromEmail(_) | Step::TicketEmailReply(_) => {
+            Step::MailFetch(_)
+            | Step::TicketEmbed(_)
+            | Step::TicketFromEmail(_)
+            | Step::TicketEmailReply(_) => {
                 self.desk_step(step.type_name(), org_id, input).await.into()
             }
             Step::DatasetUpsert(_) => self

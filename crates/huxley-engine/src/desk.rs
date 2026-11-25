@@ -57,6 +57,7 @@ impl Engine {
     ) -> Result<Json, Json> {
         match kind {
             "core.mail.fetch" => self.fetch_mail(org_id, input).await,
+            "core.ticket.embed" => self.embed_tickets(org_id, input).await,
             "core.ticket.from_email" => self.ticket_from_email(org_id, input).await,
             "core.ticket.email_reply" => self.email_reply(org_id, input).await,
             other => Err(internal(format!("not a service desk step: {other}"))),
@@ -243,6 +244,68 @@ impl Engine {
             "created": outcome.created,
             "attachments": attached,
         }))
+    }
+
+    /// `core.ticket.embed`: embeds stale tickets at `org_id` and below, a
+    /// batch per organization by its embeddings provider. Nothing to do
+    /// without pgvector. A provider that fails is reported, not fatal.
+    async fn embed_tickets(&self, org_id: Uuid, input: &Json) -> Result<Json, Json> {
+        use huxley_servicedesk::embeddings;
+        self.require_desk(org_id).await?;
+        let limit = input["limit"].as_i64().map_or(200, |n| n.clamp(1, 2000));
+        let mut tx = begin_scoped(self.db(), &OrgScope::System)
+            .await
+            .map_err(internal)?;
+        if !embeddings::available(&mut tx).await.map_err(desk_error)? {
+            tx.commit().await.map_err(internal)?;
+            return Ok(json!({ "available": false, "embedded": 0, "errors": [] }));
+        }
+        let stale = embeddings::stale(&mut tx, org_id, limit)
+            .await
+            .map_err(desk_error)?;
+        tx.commit().await.map_err(internal)?;
+        // A batch per organization (its provider), in order of first appearance.
+        let mut batches: Vec<(Uuid, Vec<embeddings::Stale>)> = Vec::new();
+        for ticket in stale {
+            match batches.iter_mut().find(|(org, _)| *org == ticket.org_id) {
+                Some((_, tickets)) => tickets.push(ticket),
+                None => batches.push((ticket.org_id, vec![ticket])),
+            }
+        }
+        let ai = self.ai();
+        let purpose = huxley_ai::Purpose {
+            feature: "ticket_embeddings",
+            run_id: None,
+        };
+        let (mut embedded, mut errors) = (0_u64, Vec::new());
+        for (org, tickets) in batches {
+            for chunk in tickets.chunks(huxley_ai::embed::MAX_BATCH) {
+                let texts: Vec<String> = chunk.iter().map(|t| t.text.clone()).collect();
+                let result = ai
+                    .embed(org, purpose, &texts, huxley_ai::embed::InputType::Document)
+                    .await;
+                let done = match result {
+                    Ok(done) => done,
+                    Err(huxley_ai::AiError::Internal(e)) => return Err(internal(e)),
+                    Err(e) => {
+                        errors.push(json!({ "org_id": org, "error": e.to_string() }));
+                        break;
+                    }
+                };
+                let mut tx = begin_scoped(self.db(), &OrgScope::System)
+                    .await
+                    .map_err(internal)?;
+                for (ticket, vector) in chunk.iter().zip(&done.vectors) {
+                    // Kept under the provider's model name, which stale() compares.
+                    embeddings::save(&mut tx, ticket, &ticket.model, vector)
+                        .await
+                        .map_err(desk_error)?;
+                    embedded += 1;
+                }
+                tx.commit().await.map_err(internal)?;
+            }
+        }
+        Ok(json!({ "available": true, "embedded": embedded, "errors": errors }))
     }
 
     /// `core.mail.fetch`: new mail from the IMAP mailboxes at the run's

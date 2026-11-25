@@ -354,6 +354,18 @@ export const STEPS: StepSpec[] = [
 		]
 	},
 	{
+		type: 'core.ticket.embed',
+		label: 'Embed tickets',
+		description:
+			'Embed new and changed tickets with the embeddings provider, so they can be searched by meaning.',
+		group: 'Data',
+		module: 'servicedesk',
+		template: {},
+		fields: [
+			{ path: 'with.limit', label: 'Limit', kind: 'expression', hint: 'Tickets a run; default 200' }
+		]
+	},
+	{
 		type: 'core.ticket.email_reply',
 		label: 'Email a reply',
 		description:

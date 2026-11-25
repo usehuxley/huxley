@@ -1,6 +1,6 @@
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
-import { expect, test, type Browser, type Page } from '@playwright/test';
+import { expect, test, type Browser, type Locator, type Page } from '@playwright/test';
 
 const ownerEmail = process.env.E2E_EMAIL;
 const ownerPassword = process.env.E2E_PASSWORD;
@@ -21,12 +21,16 @@ async function signIn(browser: Browser): Promise<Page> {
  * the page reacts to the choice, and a choice made before it's ready is
  * lost, so choose until the field shows.
  */
-async function chooseCompatible(page: Page) {
+async function chooseCompatible(card: Locator) {
 	await expect(async () => {
-		await page.getByLabel('Provider', { exact: true }).selectOption('openai_compatible');
-		await expect(page.getByLabel('Base URL')).toBeVisible({ timeout: 1000 });
+		await card.getByLabel('Provider', { exact: true }).selectOption('openai_compatible');
+		await expect(card.getByLabel('Base URL')).toBeVisible({ timeout: 1000 });
 	}).toPass({ timeout: 15_000 });
 }
+
+/** The AI settings page's card for one provider. */
+const aiCard = (page: Page) => page.getByRole('region', { name: 'AI provider' });
+const embeddingsCard = (page: Page) => page.getByRole('region', { name: 'Embeddings provider' });
 
 test.describe('AI settings and the assistant', () => {
 	test.describe.configure({ mode: 'serial' });
@@ -47,21 +51,22 @@ test.describe('AI settings and the assistant', () => {
 	test('a provider is set, tested, logged and removed', async ({ browser }) => {
 		const page = await signIn(browser);
 		await page.goto('/settings/ai');
-		await chooseCompatible(page);
-		await page.getByLabel('Model').fill('local-model');
+		const card = aiCard(page);
+		await chooseCompatible(card);
+		await card.getByLabel('Model').fill('local-model');
 		// Nothing answers at a .invalid host: the test fails without reaching any real service.
-		await page.getByLabel('Base URL').fill('https://ai.example.invalid/v1');
-		await page.getByLabel('API key').fill('sk-e2e-not-real');
-		await page.getByRole('button', { name: 'Save' }).click();
+		await card.getByLabel('Base URL').fill('https://ai.example.invalid/v1');
+		await card.getByLabel('API key').fill('sk-e2e-not-real');
+		await card.getByRole('button', { name: 'Save' }).click();
 		await expect(page.getByText('AI provider saved.')).toBeVisible();
-		await expect(page.getByTestId('ai-effective')).toContainText('OpenAI-compatible');
-		await expect(page.getByTestId('ai-effective')).toContainText('local-model');
+		await expect(page.getByTestId('chat-effective')).toContainText('OpenAI-compatible');
+		await expect(page.getByTestId('chat-effective')).toContainText('local-model');
 		// The key is never shown again.
-		await expect(page.getByLabel('API key')).toHaveValue('');
+		await expect(card.getByLabel('API key')).toHaveValue('');
 		await expect(page.locator('body')).not.toContainText('sk-e2e-not-real');
 
-		await page.getByRole('button', { name: 'Test' }).click();
-		await expect(page.getByTestId('ai-test')).toContainText("couldn't reach the provider");
+		await card.getByRole('button', { name: 'Test' }).click();
+		await expect(page.getByTestId('chat-test')).toContainText("couldn't reach the provider");
 		await page.reload();
 		await expect(page.getByRole('list', { name: 'AI calls' })).toContainText('provider_test');
 		await expect(page.getByRole('list', { name: 'AI calls' })).toContainText('failed');
@@ -73,7 +78,7 @@ test.describe('AI settings and the assistant', () => {
 		await expect(page.getByRole('alert')).toContainText("couldn't reach the provider");
 
 		await page.goto('/settings/ai');
-		await page.getByRole('button', { name: 'Remove' }).click();
+		await aiCard(page).getByRole('button', { name: 'Remove' }).click();
 		await expect(page.getByText('AI provider removed.')).toBeVisible();
 		await expect(page.getByText('No AI provider')).toBeVisible();
 	});
@@ -118,11 +123,12 @@ test.describe('AI settings and the assistant', () => {
 		try {
 			const page = await signIn(browser);
 			await page.goto('/settings/ai');
-			await chooseCompatible(page);
-			await page.getByLabel('Model').fill('mock');
-			await page.getByLabel('Base URL').fill(`http://127.0.0.1:${port}/v1`);
-			await page.getByLabel('API key').fill('sk-e2e-mock');
-			await page.getByRole('button', { name: 'Save' }).click();
+			const card = aiCard(page);
+			await chooseCompatible(card);
+			await card.getByLabel('Model').fill('mock');
+			await card.getByLabel('Base URL').fill(`http://127.0.0.1:${port}/v1`);
+			await card.getByLabel('API key').fill('sk-e2e-mock');
+			await card.getByRole('button', { name: 'Save' }).click();
 			await expect(page.getByText('AI provider saved.')).toBeVisible();
 
 			await page.goto('/assistant');
@@ -141,10 +147,61 @@ test.describe('AI settings and the assistant', () => {
 			await expect(page).toHaveURL(/\/assistant\?c=/);
 
 			await page.goto('/settings/ai');
-			await page.getByRole('button', { name: 'Remove' }).click();
+			await aiCard(page).getByRole('button', { name: 'Remove' }).click();
 			await expect(page.getByText('AI provider removed.')).toBeVisible();
 		} finally {
 			release();
+			model.close();
+		}
+	});
+
+	test('an embeddings provider is set apart from the AI provider', async ({ browser }) => {
+		// An OpenAI-compatible embeddings API: three numbers per text.
+		const model = createServer((req, res) => {
+			let body = '';
+			req.on('data', (chunk) => (body += chunk));
+			req.on('end', () => {
+				const { input } = JSON.parse(body) as { input: string[] };
+				res.writeHead(200, { 'content-type': 'application/json' });
+				res.end(
+					JSON.stringify({
+						model: 'mock-embed',
+						data: input.map((_, index) => ({ index, embedding: [0.1, 0.2, 0.3] })),
+						usage: { prompt_tokens: 1, total_tokens: 1 }
+					})
+				);
+			});
+		});
+		await new Promise<void>((resolve) => model.listen(0, '127.0.0.1', resolve));
+		const { port } = model.address() as AddressInfo;
+		try {
+			const page = await signIn(browser);
+			await page.goto('/settings/ai');
+			await expect(page.getByText('No embeddings provider')).toBeVisible();
+			const card = embeddingsCard(page);
+			// Anthropic makes no embeddings, so it isn't offered; Voyage is.
+			const kinds = card.getByLabel('Provider', { exact: true });
+			await expect(kinds.locator('option[value="anthropic"]')).toHaveCount(0);
+			await expect(kinds.locator('option[value="voyage"]')).toHaveCount(1);
+			await chooseCompatible(card);
+			await card.getByLabel('Model').fill('mock-embed');
+			await card.getByLabel('Base URL').fill(`http://127.0.0.1:${port}/v1`);
+			await card.getByLabel('API key').fill('sk-e2e-embed');
+			await card.getByRole('button', { name: 'Save' }).click();
+			await expect(page.getByText('Embeddings provider saved.')).toBeVisible();
+			await expect(page.getByTestId('embeddings-effective')).toContainText('mock-embed');
+			// The AI provider is untouched.
+			await expect(page.getByText('No AI provider')).toBeVisible();
+
+			await card.getByRole('button', { name: 'Test' }).click();
+			await expect(page.getByTestId('embeddings-test')).toContainText(
+				'Working: mock-embed gave 3 dimensions'
+			);
+
+			await embeddingsCard(page).getByRole('button', { name: 'Remove' }).click();
+			await expect(page.getByText('Embeddings provider removed.')).toBeVisible();
+			await expect(page.getByText('No embeddings provider')).toBeVisible();
+		} finally {
 			model.close();
 		}
 	});

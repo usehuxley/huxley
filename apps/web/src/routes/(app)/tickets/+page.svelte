@@ -3,7 +3,7 @@
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
 	import { enhance } from '$app/forms';
-	import { Bookmark, Plus, Search, Users } from '@lucide/svelte';
+	import { Bookmark, Plus, Search, Sparkles, Users } from '@lucide/svelte';
 	import { Badge, Button, Dialog, EmptyState, Field, Input, Select, toast } from '@usehuxley/ui';
 	import { VIEWS, ago, categoryTone, priorityOf } from '#lib/tickets/labels.ts';
 	import { missed } from '#lib/tickets/sla.ts';
@@ -176,6 +176,15 @@
 			<label for="q" class="sr-only">Search tickets</label>
 			<Input id="q" name="q" value={data.search} placeholder="Title or number" class="w-64" />
 			<Button type="submit"><Search size={16} /> Search</Button>
+			<Button
+				href={data.search
+					? `${resolve('/(app)/tickets/meaning')}?q=${encodeURIComponent(data.search)}`
+					: resolve('/(app)/tickets/meaning')}
+				variant="ghost"
+				title="Find tickets about the same thing, in other words"
+			>
+				<Sparkles size={16} /> By meaning
+			</Button>
 		</form>
 		<div class="w-40">
 			<label for="priority" class="sr-only">Priority</label>

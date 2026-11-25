@@ -10,7 +10,7 @@ name: huxley-dev
 
 services:
   postgres:
-    image: postgres:18
+    image: pgvector/pgvector:0.8.2-pg18
     environment:
       POSTGRES_USER: huxley
       POSTGRES_PASSWORD: huxley # development only

@@ -55,7 +55,7 @@ test.describe('canned responses', () => {
 	test.skip(preset === 'automation', 'the servicedesk module is off in this run');
 
 	test('a response is written once and filled in on a ticket', async ({ page }) => {
-		const stamp = Date.now().toString(36);
+		const stamp = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
 		const name = `Password reset ${stamp}`;
 		const ticket = await ticketFrom('Chidi', stamp);
 		await signIn(page);
@@ -82,7 +82,7 @@ test.describe('canned responses', () => {
 	});
 
 	test('a template fills in a new ticket', async ({ page }) => {
-		const stamp = Date.now().toString(36);
+		const stamp = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
 		await ticketFrom('Priya', stamp);
 		const name = `New starter ${stamp}`;
 		await signIn(page);

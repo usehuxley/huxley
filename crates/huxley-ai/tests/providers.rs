@@ -7,6 +7,7 @@ use axum::Json;
 use axum::extract::State;
 use axum::http::HeaderMap;
 use axum::routing::post;
+use huxley_ai::embed::InputType;
 use huxley_ai::store::{self, ProviderInput};
 use huxley_ai::{Ai, AiError, ProviderKind, Purpose, Request};
 use huxley_core::{RequestContext, Via};
@@ -53,11 +54,30 @@ async fn openai(
     )
 }
 
+/// Answers like Voyage's embeddings API: a vector per text, its first
+/// number the text's length.
+async fn voyage(
+    State(seen): State<Seen>,
+    headers: HeaderMap,
+    Json(body): Json<Value>,
+) -> Json<Value> {
+    seen.lock().unwrap().push((headers, body.clone()));
+    let data: Vec<Value> = body["input"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .enumerate()
+        .map(|(i, t)| json!({ "index": i, "embedding": [t.as_str().unwrap().len(), 0.5] }))
+        .collect();
+    Json(json!({ "model": body["model"], "data": data, "usage": { "total_tokens": 12 } }))
+}
+
 async fn mock() -> (String, Seen) {
     let seen: Seen = Arc::default();
     let app = axum::Router::new()
         .route("/v1/messages", post(anthropic))
         .route("/openai/deployments/{d}/chat/completions", post(openai))
+        .route("/v1/embeddings", post(voyage))
         .with_state(seen.clone());
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let url = format!("http://127.0.0.1:{}", listener.local_addr().unwrap().port());
@@ -107,7 +127,10 @@ async fn providers_are_inherited_budgeted_and_logged() {
     let Some(pools) = pools().await else { return };
     let (seen, msp, client, crypto, _) = anthropic_setup(&pools, Some(120)).await;
     let mut tx = begin_scoped(&pools.app, &OrgScope::System).await.unwrap();
-    let view = store::own(&mut tx, msp).await.unwrap().unwrap();
+    let view = store::own(&mut tx, msp, store::Use::Chat)
+        .await
+        .unwrap()
+        .unwrap();
     assert_eq!(view.model, "claude-opus-5-5");
     assert!(!serde_json::to_string(&view).unwrap().contains("SECRET"));
     drop(tx);
@@ -211,7 +234,7 @@ async fn anthropic_setup(
     };
     let ctx = RequestContext::system(Via::System);
     let mut tx = begin_scoped(&pools.app, &OrgScope::System).await.unwrap();
-    store::set(&mut tx, &ctx, &crypto, msp, &input)
+    store::set(&mut tx, &ctx, &crypto, msp, store::Use::Chat, &input)
         .await
         .unwrap();
     tx.commit().await.unwrap();
@@ -233,7 +256,7 @@ async fn changing_settings_without_a_key_keeps_it() {
     let mut changed = input.clone();
     changed.api_key = None;
     changed.monthly_token_budget = None;
-    store::set(&mut tx, &ctx, &crypto, msp, &changed)
+    store::set(&mut tx, &ctx, &crypto, msp, store::Use::Chat, &changed)
         .await
         .unwrap();
     let sealed: Vec<u8> =
@@ -291,7 +314,7 @@ async fn azure_and_missing_providers() {
         monthly_token_budget: None,
     };
     assert!(
-        store::set(&mut tx, &ctx, &crypto, client, &input)
+        store::set(&mut tx, &ctx, &crypto, client, store::Use::Chat, &input)
             .await
             .is_err()
     );
@@ -299,11 +322,11 @@ async fn azure_and_missing_providers() {
     let mut keyless = input.clone();
     keyless.api_key = None;
     assert!(
-        store::set(&mut tx, &ctx, &crypto, client, &keyless)
+        store::set(&mut tx, &ctx, &crypto, client, store::Use::Chat, &keyless)
             .await
             .is_err()
     );
-    store::set(&mut tx, &ctx, &crypto, client, &input)
+    store::set(&mut tx, &ctx, &crypto, client, store::Use::Chat, &input)
         .await
         .unwrap();
     tx.commit().await.unwrap();
@@ -321,4 +344,75 @@ async fn azure_and_missing_providers() {
             .unwrap_err(),
         AiError::NotConfigured
     );
+}
+
+#[tokio::test]
+async fn embeddings_have_their_own_provider() {
+    let Some(pools) = pools().await else { return };
+    let (seen, msp, client, crypto, chat) = anthropic_setup(&pools, None).await;
+    let ai = Ai::new(pools.app.clone(), crypto.clone(), reqwest::Client::new());
+    let purpose = Purpose {
+        feature: "embeddings",
+        run_id: None,
+    };
+    let texts = vec!["printer jam".to_owned(), "vpn".to_owned()];
+    // The chat provider doesn't make embeddings.
+    assert_eq!(
+        ai.embed(client, purpose, &texts, InputType::Document)
+            .await
+            .unwrap_err(),
+        AiError::NoEmbeddings
+    );
+    let ctx = RequestContext::system(Via::System);
+    let mut tx = begin_scoped(&pools.app, &OrgScope::System).await.unwrap();
+    let voyage = ProviderInput {
+        kind: ProviderKind::Voyage,
+        model: None,
+        api_key: Some("pa-SECRET".into()),
+        ..chat.clone()
+    };
+    // Voyage can't answer; Anthropic can't embed.
+    assert!(
+        store::set(&mut tx, &ctx, &crypto, msp, store::Use::Chat, &voyage)
+            .await
+            .is_err()
+    );
+    assert!(
+        store::set(&mut tx, &ctx, &crypto, msp, store::Use::Embeddings, &chat)
+            .await
+            .is_err()
+    );
+    let view = store::set(&mut tx, &ctx, &crypto, msp, store::Use::Embeddings, &voyage)
+        .await
+        .unwrap();
+    assert_eq!(view.model, "voyage-3.5");
+    // Both are kept: one of each.
+    assert_eq!(
+        store::own(&mut tx, msp, store::Use::Chat)
+            .await
+            .unwrap()
+            .unwrap()
+            .model,
+        "claude-opus-5-5"
+    );
+    tx.commit().await.unwrap();
+
+    let e = ai
+        .embed(client, purpose, &texts, InputType::Query)
+        .await
+        .unwrap();
+    assert_eq!(e.vectors, vec![vec![11.0, 0.5], vec![3.0, 0.5]]);
+    assert_eq!((e.model.as_str(), e.tokens), ("voyage-3.5", 12));
+    let (headers, body) = seen.lock().unwrap().last().cloned().unwrap();
+    assert_eq!(headers["authorization"], "Bearer pa-SECRET");
+    assert_eq!(body["input_type"], "query");
+    let logged: (String, i64) = sqlx::query_as(
+        "SELECT c.feature, c.input_tokens FROM ai_calls c JOIN ai_providers p ON p.id = c.provider_id \
+          WHERE c.org_id = $1 AND p.purpose = 'embeddings'",
+    )
+    .bind(client)
+    .fetch_one(&pools.owner)
+    .await
+    .unwrap();
+    assert_eq!(logged, ("embeddings".to_owned(), 12));
 }

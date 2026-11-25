@@ -22,7 +22,7 @@ jobs:
     runs-on: ubuntu-24.04
     services:
       postgres:
-        image: postgres:18
+        image: pgvector/pgvector:0.8.2-pg18
         env:
           POSTGRES_USER: huxley
           POSTGRES_PASSWORD: huxley
@@ -125,7 +125,7 @@ jobs:
             preset: service-desk
     services:
       postgres:
-        image: postgres:18
+        image: pgvector/pgvector:0.8.2-pg18
         env:
           POSTGRES_USER: huxley
           POSTGRES_PASSWORD: huxley

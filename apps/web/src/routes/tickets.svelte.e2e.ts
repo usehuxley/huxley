@@ -45,7 +45,7 @@ test.describe('service desk', () => {
 	test.skip(preset === 'automation', 'the servicedesk module is off in this run');
 
 	test('a ticket is raised, worked and resolved', async ({ page }) => {
-		const stamp = Date.now().toString(36);
+		const stamp = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
 		const client = `Initech ${stamp}`;
 		const queue = `Helpdesk ${stamp}`;
 		const title = `Stapler missing ${stamp}`;
@@ -116,7 +116,7 @@ test.describe('service desk', () => {
 	});
 
 	test('an SLA policy is set up and chosen for a client', async ({ page }) => {
-		const stamp = Date.now().toString(36);
+		const stamp = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
 		const client = `Chotchkie ${stamp}`;
 		const policy = `Gold ${stamp}`;
 		const orgId = await newClient(client);
