@@ -33,6 +33,7 @@ use crate::passkey_routes::{
     RenamePasskeyRequest,
 };
 use crate::problem::{ApiError, FieldError};
+use crate::search_routes;
 use crate::security_routes::{self, SetRequirementRequest};
 use crate::sso_routes::{
     self, ProviderDetail, SsoCallbackRequest, StartSsoRequest, StartSsoResponse,
@@ -175,6 +176,7 @@ use crate::workforce_routes;
         desk_routes::update_queue,
         desk_routes::archive_queue,
         desk_routes::my_work,
+        search_routes::search,
         desk_routes::list_views,
         desk_routes::create_view,
         desk_routes::update_view,
@@ -493,6 +495,7 @@ use crate::workforce_routes;
         huxley_servicedesk::tickets::Ticket,
         huxley_servicedesk::tickets::TicketPage,
         huxley_servicedesk::my_work::MyWork,
+        search_routes::SearchHit,
         huxley_servicedesk::views::TicketView,
         huxley_servicedesk::views::TicketViewInput,
         huxley_servicedesk::responses::CannedResponse,

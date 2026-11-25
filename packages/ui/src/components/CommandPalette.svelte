@@ -5,6 +5,8 @@
 		/** Extra words to match on, e.g. synonyms. */
 		keywords?: string[];
 		group?: string;
+		/** A second line, e.g. a ticket's reference and client. */
+		detail?: string;
 		run: () => void;
 	};
 </script>
@@ -23,6 +25,12 @@
 		hotkey?: boolean;
 		/** Most results shown at once; type to narrow. */
 		maxResults?: number;
+		/** What's typed, for searching elsewhere. */
+		query?: string;
+		/** Found for the query (e.g. by a server search): shown first, as given. */
+		found?: Command[];
+		/** A search for the query is under way. */
+		searching?: boolean;
 	};
 
 	let {
@@ -31,11 +39,13 @@
 		placeholder = 'Search or run a command…',
 		title = 'Command palette',
 		hotkey = true,
-		maxResults = 50
+		maxResults = 50,
+		query = $bindable(''),
+		found = [],
+		searching = false
 	}: Props = $props();
 	const uid = $props.id();
 
-	let query = $state('');
 	let active = $state(0);
 
 	let results = $derived.by(() => {
@@ -45,7 +55,7 @@
 					[c.label, c.group ?? '', ...(c.keywords ?? [])].some((s) => s.toLowerCase().includes(q))
 				)
 			: commands;
-		return matches.slice(0, maxResults);
+		return [...found, ...matches].slice(0, maxResults);
 	});
 
 	$effect(() => {
@@ -118,11 +128,20 @@
 						onkeydown={() => {}}
 						onmousemove={() => (active = i)}
 					>
-						<span>{command.label}</span>
-						{#if command.group}<span class="text-xs text-fg-subtle">{command.group}</span>{/if}
+						<span class="min-w-0">
+							<span class="block truncate">{command.label}</span>
+							{#if command.detail}
+								<span class="block truncate text-xs text-fg-subtle">{command.detail}</span>
+							{/if}
+						</span>
+						{#if command.group}
+							<span class="shrink-0 pl-3 text-xs text-fg-subtle">{command.group}</span>
+						{/if}
 					</li>
 				{:else}
-					<li class="px-3 py-6 text-center text-sm text-fg-muted">No matches.</li>
+					<li class="px-3 py-6 text-center text-sm text-fg-muted">
+						{searching ? 'Searching…' : 'No matches.'}
+					</li>
 				{/each}
 			</ul>
 		</Dialog.Content>

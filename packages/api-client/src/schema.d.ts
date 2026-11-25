@@ -2790,6 +2790,26 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
+	'/api/v1/search': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/**
+		 * Searches what you can see: tickets, clients and contacts (where their
+		 *     modules are on), workflows and people. Up to 5 of each, best first.
+		 */
+		get: operations['search'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
 	'/api/v1/security/mfa-policy': {
 		parameters: {
 			query?: never;
@@ -6599,6 +6619,19 @@ export interface components {
 			notes?: string | null;
 			/** Format: int32 */
 			version: number;
+		};
+		/** @description Something found. */
+		SearchHit: {
+			/** Format: uuid */
+			id: string;
+			/** @description `ticket`, `client`, `contact`, `workflow` or `person`. */
+			kind: string;
+			/**
+			 * @description A line of context: a ticket's reference and client, a contact's
+			 *     email and company, a person's email.
+			 */
+			subtitle: string;
+			title: string;
 		};
 		SelectOption: {
 			label: string;
@@ -13322,6 +13355,36 @@ export interface operations {
 				};
 				content: {
 					'application/json': components['schemas']['VersionSource'];
+				};
+			};
+		};
+	};
+	search: {
+		parameters: {
+			query: {
+				/** @description What to look for: at least 2 characters. */
+				q: string;
+			};
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['SearchHit'][];
+				};
+			};
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
 				};
 			};
 		};

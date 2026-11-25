@@ -39,6 +39,7 @@ pub mod rate_limit;
 mod router;
 mod runner_routes;
 mod script_routes;
+pub mod search_routes;
 pub mod security_routes;
 pub mod session;
 pub mod sso_routes;

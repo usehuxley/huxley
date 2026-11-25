@@ -1488,3 +1488,86 @@ async fn saved_views_are_yours_or_shared() {
         );
     }
 }
+
+#[tokio::test]
+async fn search_finds_what_you_can_see() {
+    let Some(s) = setup().await else { return };
+    let word = format!("Zebrafish{}", &Uuid::now_v7().simple().to_string()[..8]);
+    let acme_ticket = s
+        .ticket(
+            &s.owner,
+            json!({ "orgId": s.acme, "title": format!("{word} printer jam") }),
+        )
+        .await;
+    s.ticket(
+        &s.owner,
+        json!({ "orgId": s.globex, "title": format!("{word} VPN") }),
+    )
+    .await;
+    s.ok(
+        &s.owner,
+        "POST",
+        &format!("/api/v1/orgs/{}/contacts", s.acme),
+        Some(json!({ "firstName": word, "lastName": "Okafor" })),
+    )
+    .await;
+    let search = async |who: &str, q: &str| -> Vec<(String, String)> {
+        let found = s
+            .ok(
+                who,
+                "GET",
+                &format!("/api/v1/search?q={}", q.replace(' ', "%20")),
+                None,
+            )
+            .await;
+        found
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|h| {
+                (
+                    h["kind"].as_str().unwrap().to_owned(),
+                    h["title"].as_str().unwrap().to_owned(),
+                )
+            })
+            .collect()
+    };
+    let found = search(&s.owner, &word.to_lowercase()).await;
+    assert!(
+        found.contains(&("ticket".into(), format!("{word} printer jam"))),
+        "{found:?}"
+    );
+    assert!(
+        found.contains(&("ticket".into(), format!("{word} VPN"))),
+        "{found:?}"
+    );
+    assert!(
+        found.contains(&("contact".into(), format!("{word} Okafor"))),
+        "{found:?}"
+    );
+    // By reference.
+    let by_ref = search(&s.owner, acme_ticket["reference"].as_str().unwrap()).await;
+    assert_eq!(
+        by_ref.first(),
+        Some(&("ticket".into(), format!("{word} printer jam")))
+    );
+    // A technician at Globex sees Globex's ticket only, and no contacts at Acme.
+    let (_, email) = user(&s.pools, Some(("technician", s.globex))).await;
+    let theirs = login(&s.app, &email).await;
+    let found = search(&theirs, &word).await;
+    assert!(
+        found.contains(&("ticket".into(), format!("{word} VPN"))),
+        "{found:?}"
+    );
+    assert!(
+        !found
+            .iter()
+            .any(|(k, t)| (k == "ticket" && t.ends_with("printer jam")) || k == "contact"),
+        "{found:?}"
+    );
+    let (status, problem) = s.call(&s.owner, "GET", "/api/v1/search?q=a", None).await;
+    assert_eq!(
+        (status, field(&problem)),
+        (StatusCode::UNPROCESSABLE_ENTITY, "/q".into())
+    );
+}

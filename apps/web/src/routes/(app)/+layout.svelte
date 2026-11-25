@@ -109,6 +109,71 @@
 	];
 
 	let paletteOpen = $state(false);
+	let paletteQuery = $state('');
+	let found: Command[] = $state([]);
+	let searching = $state(false);
+
+	type Hit = { kind: string; id: string; title: string; subtitle: string };
+	const KIND_LABELS: Record<string, string> = {
+		ticket: 'Ticket',
+		client: 'Client',
+		contact: 'Contact',
+		workflow: 'Workflow',
+		person: 'Person'
+	};
+
+	/** Where a search hit opens. */
+	function hitPath(hit: Hit): string {
+		switch (hit.kind) {
+			case 'ticket':
+				return resolve('/(app)/tickets/[id]', { id: hit.id });
+			case 'client':
+				return resolve('/(app)/clients/[id]', { id: hit.id });
+			case 'contact':
+				return resolve('/(app)/contacts/[id]', { id: hit.id });
+			case 'workflow':
+				return resolve('/(app)/workflows/[id]', { id: hit.id });
+			default:
+				return data.user.activeModules.includes('workforce') &&
+					data.user.grantedPermissions.includes('workforce:read')
+					? resolve('/(app)/people/[id]', { id: hit.id })
+					: resolve('/(app)/settings/users/[id]', { id: hit.id });
+		}
+	}
+
+	// Searches as you type, a moment after you stop.
+	$effect(() => {
+		const q = paletteQuery.trim();
+		if (q.length < 2) {
+			found = [];
+			searching = false;
+			return;
+		}
+		searching = true;
+		const controller = new AbortController();
+		const timer = setTimeout(() => {
+			fetch(`/search?q=${encodeURIComponent(q)}`, { signal: controller.signal })
+				.then((res) => (res.ok ? (res.json() as Promise<Hit[]>) : []))
+				.then((hits) => {
+					found = hits.map((hit) => ({
+						id: `${hit.kind}:${hit.id}`,
+						label: hit.title,
+						detail: hit.subtitle,
+						group: KIND_LABELS[hit.kind] ?? hit.kind,
+						// eslint-disable-next-line svelte/no-navigation-without-resolve -- hitPath resolves
+						run: () => void goto(hitPath(hit))
+					}));
+					searching = false;
+				})
+				.catch(() => {
+					searching = false;
+				});
+		}, 200);
+		return () => {
+			clearTimeout(timer);
+			controller.abort();
+		};
+	});
 
 	// Live unread count: the server pushes it over Server-Sent Events.
 	let liveUnread = $state<number | null>(null);
@@ -166,4 +231,11 @@
 	{@render children()}
 </AppShell>
 
-<CommandPalette {commands} bind:open={paletteOpen} />
+<CommandPalette
+	{commands}
+	bind:open={paletteOpen}
+	bind:query={paletteQuery}
+	{found}
+	{searching}
+	placeholder="Search tickets, clients, people… or run a command"
+/>
