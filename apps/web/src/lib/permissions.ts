@@ -44,6 +44,12 @@ export const SETTINGS_SECTIONS = [
 		module: 'workforce'
 	},
 	{
+		key: 'asset-types',
+		label: 'Asset types',
+		permission: 'cmdb:configure',
+		module: 'cmdb'
+	},
+	{
 		key: 'mailboxes',
 		label: 'Mailboxes',
 		permission: 'servicedesk:configure',
