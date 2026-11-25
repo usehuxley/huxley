@@ -1,0 +1,42 @@
+apiVersion: usehuxley.io/v1
+kind: Workflow
+metadata:
+  key: slack-ticket-alerts
+  name: Ticket alerts in Slack
+  description: >-
+    Posts urgent (P1 and P2) new tickets and missed SLA targets to the Slack
+    channel in the organization variable servicedesk_slack_channel (e.g.
+    #service-desk), through the Slack integration. Does nothing until that
+    variable is set.
+spec:
+  triggers:
+    - id: urgent
+      type: event
+      event: ticket.created
+      filter: "{{ event.payload.priority in ['p1', 'p2'] }}"
+    - id: breached
+      type: event
+      event: ticket.sla_breached
+  steps:
+    - id: configured
+      type: if
+      condition: "{{ vars.servicedesk_slack_channel is defined and vars.servicedesk_slack_channel }}"
+      then:
+        - id: post
+          type: integration.action
+          action: slack/postMessage
+          with:
+            body:
+              channel: "{{ vars.servicedesk_slack_channel }}"
+              text: >-
+                {{ ':rotating_light: Missed SLA' if trigger.type == 'ticket.sla_breached' else ':red_circle: New ' ~ (inputs.priority | upper) }}:
+                {{ inputs.reference }} {{ inputs.title }}
+          retry: { max_attempts: 3 }
+        # Slack answers 200 even when it refuses: say why.
+        - id: refused
+          type: if
+          condition: "{{ not steps.post.output.ok }}"
+          then:
+            - id: why
+              type: fail
+              message: "Slack refused the message: {{ steps.post.output.error }}"

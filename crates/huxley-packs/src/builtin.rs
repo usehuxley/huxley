@@ -57,6 +57,19 @@ const SOURCES: &[Source] = &[
         ],
     },
     Source {
+        manifest: include_str!("../builtin/servicedesk-chat/pack.yaml"),
+        files: &[
+            (
+                "workflows/slack-ticket-alerts.yaml",
+                include_str!("../builtin/servicedesk-chat/workflows/slack-ticket-alerts.yaml"),
+            ),
+            (
+                "workflows/teams-ticket-alerts.yaml",
+                include_str!("../builtin/servicedesk-chat/workflows/teams-ticket-alerts.yaml"),
+            ),
+        ],
+    },
+    Source {
         manifest: include_str!("../builtin/msgraph/pack.yaml"),
         files: &[
             (
