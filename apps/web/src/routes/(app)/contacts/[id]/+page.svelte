@@ -1,4 +1,5 @@
 <script lang="ts">
+	import ActionsCard from '#lib/forms/ActionsCard.svelte';
 	import { enhance, type SubmitFunction } from '$app/forms';
 	import { resolve } from '$app/paths';
 	import { Badge, Button, Card, Field, Input, Select, toast } from '@usehuxley/ui';
@@ -63,6 +64,8 @@
 		</div>
 		{#if primary?.jobTitle}<p class="mt-1 text-fg-muted">{primary.jobTitle}</p>{/if}
 	</div>
+
+	<ActionsCard actions={data.actions} orgId={contact.orgId} contactId={contact.id} />
 
 	<Card title="Details">
 		<form

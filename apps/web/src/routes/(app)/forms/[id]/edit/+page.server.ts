@@ -47,6 +47,7 @@ export const actions: Actions = {
 				key: formString(form, 'key'),
 				name: formString(form, 'name'),
 				description: formString(form, 'description') || null,
+				actionFor: formString(form, 'actionFor') || null,
 				schema: schema as Record<string, unknown>,
 				ui: ui as Record<string, unknown>
 			}

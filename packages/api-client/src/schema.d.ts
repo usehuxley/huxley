@@ -4394,6 +4394,13 @@ export interface components {
 			changes: components['schemas']['Change'][];
 			key: string;
 		};
+		/** @description The record an Action is run on. */
+		ActionContext: {
+			/** Format: uuid */
+			contactId?: string | null;
+			/** Format: uuid */
+			ticketId?: string | null;
+		};
 		/** @description An action a workflow in some organization can call: for pickers. */
 		ActionOption: {
 			/** @description What a step's `action` says: `<integration>/<action>`. */
@@ -5536,6 +5543,11 @@ export interface components {
 			userId: string;
 		};
 		Form: {
+			/**
+			 * @description Offered as an Action on a `client`, `contact` or `ticket`: run from
+			 *     that record, its workflows get it as `trigger.context`.
+			 */
+			actionFor?: string | null;
 			archived: boolean;
 			/** Format: date-time */
 			createdAt: string;
@@ -5559,6 +5571,8 @@ export interface components {
 		};
 		/** @description A form's definition, to create or replace it. */
 		FormInput: {
+			/** @description Offer it as an Action on a `client`, `contact` or `ticket`. */
+			actionFor?: string | null;
 			description?: string | null;
 			key: string;
 			name: string;
@@ -7207,6 +7221,7 @@ export interface components {
 			answers: {
 				[key: string]: unknown;
 			};
+			context?: components['schemas']['ActionContext'] | null;
 			/**
 			 * Format: uuid
 			 * @description The organization it's for: the form's (default) or one below it.

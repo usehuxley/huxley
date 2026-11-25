@@ -32,6 +32,24 @@ A form is a **JSON Schema** of its answers (an object), plus **UI hints**.
 
 `title` is a field's label, and `required` lists the fields that must be answered. UI hints can set `order` (the fields' order) and, per field, `widget`, `help` and `placeholder`. The editor shows a live preview as you change it.
 
+## Actions
+
+A form can be an **Action**: something technicians run on a client, a contact or a ticket, such as *Reset MFA* or *Add to a group*. In the form's editor, set **Offered as an Action on** to clients, contacts or tickets. A form that isn't an Action is filled in from **Forms** as usual.
+
+**Where Actions show.** On a client's, contact's or ticket's page, the **Actions** card lists the Actions for that kind of record. It lists those owned by the record's organization or one above it. Choosing one opens the form for that record's organization, and says what it runs on.
+
+**What workflows get.** The workflows it starts get the answers as `inputs`, and the record as `trigger.context`:
+
+| `trigger.context.…` | |
+|---|---|
+| `client` | `id`, `name`, `kind` |
+| `contact` | `id`, `name`, `first_name`, `last_name`, `email`, `phone`, `mobile`, `external_ids` (e.g. `entra`) |
+| `ticket` | `id`, `reference`, `title`, `priority`, `status`, `type`, `queue`, `assignee` |
+
+Run from a ticket, the contact is its requester, and the ticket's history records which Action was run. Huxley checks that the contact or ticket belongs to the organization the form is for, and that you can see it.
+
+**From the API.** Through the API, send `context: { contactId, ticketId }` with the submission (`POST /api/v1/forms/{id}/submissions`). A pack's form can be an Action too, with `"actionFor"` in its JSON.
+
 ## Secret answers
 
 A **Secret (password)** field, which is `{ "type": "string", "writeOnly": true }` in JSON, is for answers such as a temporary password or a PIN. It shows as a password box. The stored submission keeps only `«redacted»`, and the runs it starts keep the answer encrypted, even if the workflow doesn't mark that input secret. Workflows read it as `inputs.<name>`, with the same masking as secrets (see [workflows](workflows.md#variables-and-secrets)).

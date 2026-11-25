@@ -122,7 +122,10 @@ pub async fn submit(
         form.id,
         link.org_id,
         Submitter::Link(link.id),
-        body.answers,
+        huxley_forms::Submission {
+            answers: body.answers,
+            context: None,
+        },
     )
     .await
     .map_err(map_err)?;

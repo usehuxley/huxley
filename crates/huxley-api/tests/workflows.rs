@@ -2047,3 +2047,161 @@ async fn test_cases_run_unsaved_documents_with_mocked_steps() {
         assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{problem}");
     }
 }
+
+/// Clients Acme (with Ada, and a ticket she raised) and Globex (with a
+/// ticket), with CRM and the service desk on: (Acme, Ada's email, Acme's
+/// ticket, Globex's ticket).
+async fn action_records(s: &Setup) -> (Uuid, String, Value, Value) {
+    let ctx = RequestContext::system(Via::System);
+    let mut tx = begin_scoped(&s.pools.app, &OrgScope::System).await.unwrap();
+    for module in ["crm", "servicedesk"] {
+        huxley_modules::set_enabled(&mut tx, &ctx, module, true, false)
+            .await
+            .unwrap();
+    }
+    let (client, other) = (
+        huxley_orgs::create(
+            &mut tx,
+            &ctx,
+            s.org,
+            huxley_orgs::OrgKind::Client,
+            &unique("Acme"),
+        )
+        .await
+        .unwrap(),
+        huxley_orgs::create(
+            &mut tx,
+            &ctx,
+            s.org,
+            huxley_orgs::OrgKind::Client,
+            &unique("Globex"),
+        )
+        .await
+        .unwrap(),
+    );
+    tx.commit().await.unwrap();
+    let email = format!("ada.{}@acme.example", Uuid::now_v7().simple());
+    let (_, contact) = s
+        .post(
+            &s.owner,
+            &format!("/api/v1/orgs/{}/contacts", client.id),
+            json!({ "firstName": "Ada", "email": email }),
+        )
+        .await;
+    let (status, ticket) = s
+        .post(
+            &s.owner,
+            "/api/v1/tickets",
+            json!({ "orgId": client.id, "title": "MFA lost", "requesterId": contact["id"] }),
+        )
+        .await;
+    assert_eq!(status, StatusCode::CREATED, "{ticket}");
+    let (_, elsewhere) = s
+        .post(
+            &s.owner,
+            "/api/v1/tickets",
+            json!({ "orgId": other.id, "title": "Theirs" }),
+        )
+        .await;
+
+    (client.id, email, ticket, elsewhere)
+}
+
+#[tokio::test]
+async fn actions_run_with_the_record_they_were_run_on() {
+    let Some(s) = setup().await else { return };
+    let (client_id, email, ticket, elsewhere) = action_records(&s).await;
+    let form_key = key("reset-mfa");
+    let schema = json!({ "type": "object", "properties": { "name": { "type": "string" }, "reason": { "type": "string" } } });
+    let (status, problem) = s
+        .post(
+            &s.owner,
+            "/api/v1/forms",
+            json!({ "orgId": s.org, "form": {
+            "key": key("odd"), "name": "Odd", "schema": schema, "actionFor": "printer" } }),
+        )
+        .await;
+    assert_eq!(
+        (status, problem["errors"][0]["pointer"].as_str()),
+        (StatusCode::UNPROCESSABLE_ENTITY, Some("actionFor"))
+    );
+    let (status, form) = s
+        .post(
+            &s.owner,
+            "/api/v1/forms",
+            json!({ "orgId": s.org, "form": {
+            "key": form_key, "name": "Reset MFA", "schema": schema, "actionFor": "ticket" } }),
+        )
+        .await;
+    assert_eq!(
+        (status, form["actionFor"].as_str()),
+        (StatusCode::CREATED, Some("ticket"))
+    );
+    listen(&s, &form_key).await;
+    let (_, tech) = technician(&s).await;
+    let submit = format!("/api/v1/forms/{}/submissions", form["id"].as_str().unwrap());
+
+    let (status, submitted) = s
+        .post(
+            &tech,
+            &submit,
+            json!({ "orgId": client_id, "answers": { "name": "Ada", "reason": "New phone" },
+                                       "context": { "ticketId": ticket["id"] } }),
+        )
+        .await;
+    assert_eq!(status, StatusCode::CREATED, "{submitted}");
+    let run: Uuid = submitted["runs"][0].as_str().unwrap().parse().unwrap();
+    let trigger: Value = sqlx::query_scalar("SELECT trigger FROM runs WHERE id = $1")
+        .bind(run)
+        .fetch_one(&s.pools.owner)
+        .await
+        .unwrap();
+    let context = &trigger["context"];
+    assert_eq!(context["client"]["id"], json!(client_id));
+    assert_eq!(context["ticket"]["reference"], ticket["reference"]);
+    // The ticket's requester comes along as the contact.
+    assert_eq!(
+        (
+            context["contact"]["email"].as_str(),
+            context["contact"]["first_name"].as_str()
+        ),
+        (Some(email.as_str()), Some("Ada"))
+    );
+    // The ticket's history says so.
+    let (_, activity) = s
+        .get(
+            &s.owner,
+            &format!(
+                "/api/v1/tickets/{}/activity",
+                ticket["id"].as_str().unwrap()
+            ),
+        )
+        .await;
+    assert!(
+        activity
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|a| a["kind"] == "action" && a["details"]["form"] == "Reset MFA"),
+        "{activity}"
+    );
+
+    // A ticket or contact of another organization isn't accepted.
+    for (bad, pointer) in [
+        (json!({ "ticketId": elsewhere["id"] }), "/context/ticketId"),
+        (json!({ "contactId": Uuid::now_v7() }), "/context/contactId"),
+    ] {
+        let (status, problem) = s
+            .post(
+                &tech,
+                &submit,
+                json!({ "orgId": client_id, "answers": {}, "context": bad }),
+            )
+            .await;
+        assert_eq!(
+            (status, problem["errors"][0]["pointer"].as_str()),
+            (StatusCode::UNPROCESSABLE_ENTITY, Some(pointer)),
+            "{problem}"
+        );
+    }
+}

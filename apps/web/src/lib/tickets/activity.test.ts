@@ -13,6 +13,7 @@ group('ticket activity', () => {
 		expect(describe('link', { linked: 'T-3', as: 'related' })).toBe('linked T-3');
 		expect(describe('link', { unlinked: 'T-3' })).toBe('unlinked T-3');
 		expect(describe('merge', { merged: 'T-4' })).toBe('merged T-4 into this ticket');
+		expect(describe('action', { form: 'Reset MFA', runs: [] })).toBe('ran Reset MFA');
 		expect(describe('status', { from: 'new', to: 'closed', mergedInto: 'T-1' })).toBe(
 			'merged this ticket into T-1'
 		);

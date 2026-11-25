@@ -12454,6 +12454,21 @@
 					}
 				}
 			},
+			"ActionContext": {
+				"type": "object",
+				"description": "The record an Action is run on.",
+				"properties": {
+					"contactId": {
+						"type": ["string", "null"],
+						"format": "uuid"
+					},
+					"ticketId": {
+						"type": ["string", "null"],
+						"format": "uuid"
+					}
+				},
+				"additionalProperties": false
+			},
 			"ActionOption": {
 				"type": "object",
 				"description": "An action a workflow in some organization can call: for pickers.",
@@ -15250,6 +15265,10 @@
 					"updatedAt"
 				],
 				"properties": {
+					"actionFor": {
+						"type": ["string", "null"],
+						"description": "Offered as an Action on a `client`, `contact` or `ticket`: run from\nthat record, its workflows get it as `trigger.context`."
+					},
 					"archived": {
 						"type": "boolean"
 					},
@@ -15301,6 +15320,10 @@
 				"description": "A form's definition, to create or replace it.",
 				"required": ["key", "name", "schema"],
 				"properties": {
+					"actionFor": {
+						"type": ["string", "null"],
+						"description": "Offer it as an Action on a `client`, `contact` or `ticket`."
+					},
 					"description": {
 						"type": ["string", "null"]
 					},
@@ -19249,6 +19272,17 @@
 						"propertyNames": {
 							"type": "string"
 						}
+					},
+					"context": {
+						"oneOf": [
+							{
+								"$ref": "#/components/schemas/ActionContext",
+								"description": "Run as an Action on a contact or ticket (of `orgId`): its workflows\nget them, and the client, as `trigger.context`."
+							},
+							{
+								"type": "null"
+							}
+						]
 					},
 					"orgId": {
 						"type": ["string", "null"],

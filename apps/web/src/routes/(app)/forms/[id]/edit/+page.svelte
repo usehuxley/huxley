@@ -2,7 +2,7 @@
 	import { enhance } from '$app/forms';
 	import { resolve } from '$app/paths';
 	import { ArrowLeft } from '@lucide/svelte';
-	import { Button, Card, Field, Input } from '@usehuxley/ui';
+	import { Button, Card, Field, Input, Select } from '@usehuxley/ui';
 	import FormBuilder from '#lib/form-renderer/FormBuilder.svelte';
 	import FormRenderer from '#lib/form-renderer/FormRenderer.svelte';
 	import {
@@ -103,6 +103,23 @@
 				</Field>
 				<Field label="Description" for="description">
 					<Input id="description" name="description" value={data.form.description ?? ''} />
+				</Field>
+				<Field
+					label="Offered as an Action on"
+					for="actionFor"
+					hint="Run from that record's page, with the record passed to the workflow as trigger.context."
+				>
+					<Select
+						id="actionFor"
+						name="actionFor"
+						value={data.form.actionFor ?? ''}
+						options={[
+							{ value: '', label: 'Nothing (fill it in from Forms)' },
+							{ value: 'client', label: 'Clients' },
+							{ value: 'contact', label: 'Contacts' },
+							{ value: 'ticket', label: 'Tickets' }
+						]}
+					/>
 				</Field>
 				<div class="flex items-center gap-2 text-sm" role="group" aria-label="Editor">
 					<Button

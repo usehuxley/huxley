@@ -87,6 +87,9 @@ pub struct Form {
     /// UI hints: `order`, and per field `widget`, `help`, `placeholder`.
     #[schema(value_type = std::collections::HashMap<String, serde_json::Value>)]
     pub ui: Json,
+    /// Offered as an Action on a `client`, `contact` or `ticket`: run from
+    /// that record, its workflows get it as `trigger.context`.
+    pub action_for: Option<String>,
     pub archived: bool,
     #[serde(with = "time::serde::rfc3339")]
     pub created_at: OffsetDateTime,
@@ -95,7 +98,7 @@ pub struct Form {
 }
 
 const COLUMNS: &str =
-    "id, org_id, key, name, description, schema, ui, archived, created_at, updated_at";
+    "id, org_id, key, name, description, schema, ui, action_for, archived, created_at, updated_at";
 
 /// A form's definition, to create or replace it.
 #[derive(Debug, Clone, Deserialize, ToSchema)]
@@ -110,6 +113,25 @@ pub struct FormInput {
     #[serde(default)]
     #[schema(value_type = std::collections::HashMap<String, serde_json::Value>)]
     pub ui: Json,
+    /// Offer it as an Action on a `client`, `contact` or `ticket`.
+    #[serde(default)]
+    pub action_for: Option<String>,
+}
+
+/// Where a form can be offered as an Action.
+pub const ACTION_TARGETS: &[&str] = &["client", "contact", "ticket"];
+
+fn action_for(input: &FormInput) -> FormResult<Option<&str>> {
+    match input
+        .action_for
+        .as_deref()
+        .map(str::trim)
+        .filter(|a| !a.is_empty())
+    {
+        None => Ok(None),
+        Some(a) if ACTION_TARGETS.contains(&a) => Ok(Some(a)),
+        Some(_) => Err(invalid("actionFor", "client, contact or ticket")),
+    }
 }
 
 fn invalid(at: impl Into<String>, message: impl Into<String>) -> FormError {
@@ -196,10 +218,11 @@ pub async fn create(
     input: &FormInput,
 ) -> FormResult<Form> {
     check(input)?;
+    let action = action_for(input)?;
     let id = huxley_core::new_id();
     let inserted = sqlx::query(
-        "INSERT INTO forms (id, org_id, key, name, description, schema, ui, created_by) \
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8) ON CONFLICT (org_id, key) DO NOTHING",
+        "INSERT INTO forms (id, org_id, key, name, description, schema, ui, created_by, action_for) \
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) ON CONFLICT (org_id, key) DO NOTHING",
     )
     .bind(id)
     .bind(org_id)
@@ -209,6 +232,7 @@ pub async fn create(
     .bind(&input.schema)
     .bind(ui(input))
     .bind(ctx.actor.id())
+    .bind(action)
     .execute(&mut *conn)
     .await?;
     if inserted.rows_affected() == 0 {
@@ -239,6 +263,7 @@ pub async fn update(
         return Err(invalid("key", "a form's key can't change"));
     }
     check(input)?;
+    let action = action_for(input)?;
     let public: bool = sqlx::query_scalar(
         "SELECT EXISTS (SELECT 1 FROM form_links WHERE form_id = $1 AND revoked_at IS NULL \
                           AND (expires_at IS NULL OR expires_at > now()))",
@@ -260,7 +285,8 @@ pub async fn update(
         })?;
     }
     sqlx::query(
-        "UPDATE forms SET name = $2, description = $3, schema = $4, ui = $5, updated_at = now() \
+        "UPDATE forms SET name = $2, description = $3, schema = $4, ui = $5, action_for = $6, \
+                updated_at = now() \
           WHERE id = $1",
     )
     .bind(id)
@@ -268,6 +294,7 @@ pub async fn update(
     .bind(&input.description)
     .bind(&input.schema)
     .bind(ui(input))
+    .bind(action)
     .execute(&mut *conn)
     .await?;
     audit::record(
@@ -435,6 +462,14 @@ pub struct Submitted {
 /// organization that have a `form` trigger for it, acting as `user_id`.
 /// The caller checks the submitter may submit there; this runs as the
 /// system, since the workflows usually live above the submitter's scope.
+/// What's submitted: the answers, and (for an Action) the record it was run
+/// on, as the workflows' `trigger.context`.
+#[derive(Debug, Clone, Default)]
+pub struct Submission {
+    pub answers: Json,
+    pub context: Option<Json>,
+}
+
 pub async fn submit(
     conn: &mut PgConnection,
     engine: &Engine,
@@ -442,8 +477,10 @@ pub async fn submit(
     form_id: Uuid,
     org_id: Uuid,
     by: Submitter,
-    answers: Json,
+    submission: Submission,
 ) -> FormResult<Submitted> {
+    let Submission { answers, context } = submission;
+    let context = context.as_ref();
     let form = get(&mut *conn, form_id).await?;
     if form.archived {
         return Err(FormError::Archived);
@@ -490,7 +527,7 @@ pub async fn submit(
                     version: Some(version),
                     document: None,
                     trigger_type: "form".into(),
-                    trigger: json!({ "form": form.key, "submission": submission_id }),
+                    trigger: json!({ "form": form.key, "submission": submission_id, "context": context }),
                     inputs: answers.clone(),
                     // As whoever filled the form in, or (public links)
                     // the workflow's run-as account.
@@ -502,8 +539,8 @@ pub async fn submit(
         runs.push(run);
     }
     sqlx::query(
-        "INSERT INTO form_submissions (id, form_id, org_id, submitted_by, link_id, data, run_ids) \
-         VALUES ($1, $2, $3, $4, $5, $6, $7)",
+        "INSERT INTO form_submissions (id, form_id, org_id, submitted_by, link_id, data, run_ids, context) \
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)",
     )
     .bind(submission_id)
     .bind(form_id)
@@ -518,6 +555,7 @@ pub async fn submit(
     })
     .bind(redacted(&answers, &secret_fields))
     .bind(&runs)
+    .bind(context)
     .execute(&mut *conn)
     .await?;
     if let Submitter::Link(link) = by {
@@ -554,7 +592,32 @@ mod tests {
             description: None,
             schema,
             ui: json!({}),
+            action_for: None,
         }
+    }
+
+    #[test]
+    fn a_form_with_nothing_required_takes_answers() {
+        // A schema with no `required` list: submitting once failed with
+        // "doesn't compile".
+        let form = Form {
+            id: Uuid::nil(),
+            org_id: Uuid::nil(),
+            key: "f".into(),
+            name: "F".into(),
+            description: None,
+            schema: json!({ "type": "object", "properties": { "reason": { "type": "string" } } }),
+            ui: json!({}),
+            action_for: None,
+            archived: false,
+            created_at: OffsetDateTime::UNIX_EPOCH,
+            updated_at: OffsetDateTime::UNIX_EPOCH,
+        };
+        assert_eq!(
+            check_answers(&form, &json!({ "reason": "x" })).unwrap(),
+            json!({ "reason": "x" })
+        );
+        assert_eq!(check_answers(&form, &json!({})).unwrap(), json!({}));
     }
 
     #[test]
