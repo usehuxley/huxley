@@ -20,6 +20,7 @@
 		mailboxes: resolve('/(app)/settings/mailboxes'),
 		skills: resolve('/(app)/settings/skills'),
 		responses: resolve('/(app)/settings/responses'),
+		templates: resolve('/(app)/settings/templates'),
 		modules: resolve('/(app)/settings/modules'),
 		jobs: resolve('/(app)/settings/jobs'),
 		runners: resolve('/(app)/settings/runners'),

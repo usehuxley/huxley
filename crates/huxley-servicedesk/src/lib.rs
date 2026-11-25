@@ -14,6 +14,7 @@ pub mod my_work;
 pub mod queues;
 pub mod responses;
 pub mod sla;
+pub mod templates;
 pub mod tickets;
 pub mod views;
 

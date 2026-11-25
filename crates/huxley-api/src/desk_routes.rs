@@ -15,6 +15,7 @@ use huxley_servicedesk::mail::{self, Email, Mailbox, MailboxInput};
 use huxley_servicedesk::queues::{self, Queue, QueueInput};
 use huxley_servicedesk::responses::{self, CannedResponse, CannedResponseInput};
 use huxley_servicedesk::sla::{self, Policy, PolicyInput, SlaAssignment};
+use huxley_servicedesk::templates::{self, TicketTemplate, TicketTemplateInput};
 use huxley_servicedesk::tickets::{
     self, Activity, NewNote, NewTicket, Note, StatusChange, Ticket, TicketChanges, TicketFilter,
     TicketPage,
@@ -65,6 +66,14 @@ pub fn routes() -> Router<AppState> {
         .route(
             "/ticket-views/{id}",
             axum::routing::put(update_view).delete(delete_view),
+        )
+        .route(
+            "/ticket-templates",
+            get(list_ticket_templates).post(create_ticket_template),
+        )
+        .route(
+            "/ticket-templates/{id}",
+            axum::routing::put(update_ticket_template).delete(archive_ticket_template),
         )
         .route("/my-work", get(my_work))
         .route("/tickets", get(list_tickets).post(create_ticket))
@@ -1242,4 +1251,79 @@ pub async fn bulk_update(
         });
     }
     Ok(Json(results))
+}
+
+/// Ticket templates.
+#[utoipa::path(get, path = "/api/v1/ticket-templates", tag = "servicedesk",
+    responses((status = 200, body = Vec<TicketTemplate>)))]
+pub async fn list_ticket_templates(
+    State(state): State<AppState>,
+    authed: Authed,
+) -> ApiResult<Json<Vec<TicketTemplate>>> {
+    response_reader(&state, &authed).await?;
+    Ok(Json(
+        scoped(&state, &OrgScope::System, async |tx| {
+            templates::list(tx).await
+        })
+        .await?,
+    ))
+}
+
+/// Adds a ticket template. Needs `servicedesk:configure`.
+#[utoipa::path(post, path = "/api/v1/ticket-templates", tag = "servicedesk",
+    request_body = TicketTemplateInput,
+    responses((status = 201, body = TicketTemplate), (status = 422, body = ApiError, content_type = "application/problem+json")))]
+pub async fn create_ticket_template(
+    State(state): State<AppState>,
+    authed: Authed,
+    Json(body): Json<TicketTemplateInput>,
+) -> ApiResult<(StatusCode, Json<TicketTemplate>)> {
+    authed.require_instance(permissions::SERVICEDESK_CONFIGURE)?;
+    require_module(&state, MODULE).await?;
+    let ctx = authed.user.ctx.clone();
+    let created = scoped(&state, &OrgScope::System, async |tx| {
+        templates::create(tx, &ctx, &body).await
+    })
+    .await?;
+    Ok((StatusCode::CREATED, Json(created)))
+}
+
+/// Changes a ticket template; send back the `version` you read.
+#[utoipa::path(put, path = "/api/v1/ticket-templates/{id}", tag = "servicedesk",
+    params(("id" = Uuid, Path)), request_body = TicketTemplateInput,
+    responses((status = 200, body = TicketTemplate), (status = 409, body = ApiError, content_type = "application/problem+json"),
+              (status = 422, body = ApiError, content_type = "application/problem+json")))]
+pub async fn update_ticket_template(
+    State(state): State<AppState>,
+    authed: Authed,
+    Path(id): Path<Uuid>,
+    Json(body): Json<TicketTemplateInput>,
+) -> ApiResult<Json<TicketTemplate>> {
+    authed.require_instance(permissions::SERVICEDESK_CONFIGURE)?;
+    require_module(&state, MODULE).await?;
+    let ctx = authed.user.ctx.clone();
+    Ok(Json(
+        scoped(&state, &OrgScope::System, async |tx| {
+            templates::update(tx, &ctx, id, &body).await
+        })
+        .await?,
+    ))
+}
+
+/// Archives a ticket template.
+#[utoipa::path(delete, path = "/api/v1/ticket-templates/{id}", tag = "servicedesk",
+    params(("id" = Uuid, Path)), responses((status = 204)))]
+pub async fn archive_ticket_template(
+    State(state): State<AppState>,
+    authed: Authed,
+    Path(id): Path<Uuid>,
+) -> ApiResult<StatusCode> {
+    authed.require_instance(permissions::SERVICEDESK_CONFIGURE)?;
+    require_module(&state, MODULE).await?;
+    let ctx = authed.user.ctx.clone();
+    scoped(&state, &OrgScope::System, async |tx| {
+        templates::archive(tx, &ctx, id).await
+    })
+    .await?;
+    Ok(StatusCode::NO_CONTENT)
 }

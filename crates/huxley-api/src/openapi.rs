@@ -176,6 +176,10 @@ use crate::workforce_routes;
         desk_routes::update_queue,
         desk_routes::archive_queue,
         desk_routes::my_work,
+        desk_routes::list_ticket_templates,
+        desk_routes::create_ticket_template,
+        desk_routes::update_ticket_template,
+        desk_routes::archive_ticket_template,
         desk_routes::bulk_update,
         search_routes::search,
         desk_routes::list_views,
@@ -496,6 +500,8 @@ use crate::workforce_routes;
         huxley_servicedesk::tickets::Ticket,
         huxley_servicedesk::tickets::TicketPage,
         huxley_servicedesk::my_work::MyWork,
+        huxley_servicedesk::templates::TicketTemplate,
+        huxley_servicedesk::templates::TicketTemplateInput,
         huxley_servicedesk::tickets::BulkFields,
         desk_routes::BulkUpdate,
         desk_routes::BulkResult,
@@ -722,4 +728,31 @@ pub fn to_pretty_json() -> String {
     ApiDoc::openapi()
         .to_pretty_json()
         .expect("OpenAPI document must serialize")
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::BTreeMap;
+
+    use super::ApiDoc;
+    use utoipa::OpenApi as _;
+
+    /// Two handlers with the same name in different modules get the same
+    /// operation id, and generated clients then mix them up.
+    #[test]
+    fn operation_ids_are_unique() {
+        let doc = serde_json::to_value(ApiDoc::openapi()).unwrap();
+        let mut seen: BTreeMap<String, Vec<String>> = BTreeMap::new();
+        for (path, item) in doc["paths"].as_object().unwrap() {
+            for (method, op) in item.as_object().unwrap() {
+                if let Some(id) = op["operationId"].as_str() {
+                    seen.entry(id.to_owned())
+                        .or_default()
+                        .push(format!("{method} {path}"));
+                }
+            }
+        }
+        let dupes: Vec<_> = seen.into_iter().filter(|(_, at)| at.len() > 1).collect();
+        assert!(dupes.is_empty(), "duplicate operation ids: {dupes:?}");
+    }
 }
