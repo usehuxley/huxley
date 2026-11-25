@@ -85,4 +85,26 @@ test.describe('linked and merged tickets', () => {
 		await expect(page.getByText(`Merged into ${symptom.reference}.`)).toBeVisible();
 		await expect(page.getByRole('button', { name: 'Merge' })).toBeHidden();
 	});
+
+	test('time is logged on a ticket and deleted', async ({ page }) => {
+		const stamp = Date.now().toString(36);
+		const [ticket] = await tickets(['Slow laptop'], stamp);
+		await signIn(page);
+		await page.goto(`/tickets/${ticket.id}`);
+		await page.getByLabel('Time spent').fill('1h 15m');
+		await page.getByLabel('Work type').selectOption({ label: 'Onsite' });
+		await page.getByLabel('Time notes').fill('Replaced the SSD.');
+		await page.getByRole('button', { name: 'Log time' }).click();
+		await expect(page.getByText('Time logged.')).toBeVisible();
+		await expect(page.getByText('1h 15m logged')).toBeVisible();
+		const entries = page.getByRole('list', { name: 'Time entries' });
+		await expect(entries).toContainText('Onsite');
+		await expect(entries).toContainText('Replaced the SSD.');
+		// Not a duration: said so, nothing logged.
+		await page.getByLabel('Time spent').fill('a while');
+		await page.getByRole('button', { name: 'Log time' }).click();
+		await expect(page.getByText('A duration, like 30m or 1h 15m.')).toBeVisible();
+		await entries.getByRole('button', { name: /^Delete 1h 15m/ }).click();
+		await expect(page.getByText('None logged.')).toBeVisible();
+	});
 });

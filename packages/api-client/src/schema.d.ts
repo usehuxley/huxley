@@ -3514,6 +3514,42 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
+	'/api/v1/tickets/{id}/time': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** Time logged on a ticket, newest first. */
+		get: operations['ticket_time'];
+		put?: never;
+		/** Logs your time on a ticket. Needs `ticket:write` on it. */
+		post: operations['log_ticket_time'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/time-entries/{id}': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		/** Changes one of your time entries; send back the `version` you read. */
+		put: operations['update_time'];
+		post?: never;
+		/** Deletes one of your time entries. */
+		delete: operations['delete_time'];
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
 	'/api/v1/users': {
 		parameters: {
 			query?: never;
@@ -3602,6 +3638,42 @@ export interface paths {
 		 *     owner can reset an owner's MFA.
 		 */
 		delete: operations['reset_mfa'];
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/work-types': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** Work types, in order. */
+		get: operations['list_work_types'];
+		put?: never;
+		/** Adds a work type. Needs `servicedesk:configure`. */
+		post: operations['create_work_type'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/work-types/{id}': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		/** Changes a work type; send back the `version` you read. */
+		put: operations['update_work_type'];
+		post?: never;
+		/** Archives a work type; entries keep it. */
+		delete: operations['archive_work_type'];
 		options?: never;
 		head?: never;
 		patch?: never;
@@ -7479,6 +7551,47 @@ export interface components {
 			 */
 			version?: number | null;
 		};
+		TimeEntry: {
+			billable: boolean;
+			/** Format: uuid */
+			id: string;
+			/** Format: int32 */
+			minutes: number;
+			notes: string;
+			/** Format: uuid */
+			ticketId?: string | null;
+			ticketReference?: string | null;
+			ticketTitle?: string | null;
+			/** Format: uuid */
+			userId: string;
+			userName: string;
+			/** Format: int32 */
+			version: number;
+			/** Format: uuid */
+			workTypeId: string;
+			workTypeName: string;
+			/** @description `YYYY-MM-DD`. */
+			workedOn: string;
+		};
+		TimeEntryInput: {
+			/** @description Default: the work type's. */
+			billable?: boolean | null;
+			/**
+			 * Format: int32
+			 * @description 1 to 1440.
+			 */
+			minutes: number;
+			notes?: string | null;
+			/**
+			 * Format: int32
+			 * @description The version you read (updates only).
+			 */
+			version?: number | null;
+			/** Format: uuid */
+			workTypeId: string;
+			/** @description `YYYY-MM-DD` (default today). */
+			workedOn?: string | null;
+		};
 		TimeOff: {
 			decidedBy?: string | null;
 			decisionNote: string;
@@ -7703,6 +7816,28 @@ export interface components {
 			message: string;
 			/** @description A JSON pointer into the spec, e.g. `/paths/~1users/get`. */
 			pointer: string;
+		};
+		WorkType: {
+			archived: boolean;
+			/** @description Entries of this type are billable unless said otherwise. */
+			billable: boolean;
+			/** Format: uuid */
+			id: string;
+			name: string;
+			/** @description Offered on tickets (else only for non-ticket time). */
+			onTickets: boolean;
+			/** Format: int32 */
+			version: number;
+		};
+		WorkTypeInput: {
+			billable?: boolean;
+			name: string;
+			onTickets?: boolean;
+			/**
+			 * Format: int32
+			 * @description The version you read (updates only).
+			 */
+			version?: number | null;
 		};
 		/** @description A workflow with its draft and the draft's problems. */
 		WorkflowDetail: components['schemas']['WorkflowSummary'] & {
@@ -15343,6 +15478,120 @@ export interface operations {
 			};
 		};
 	};
+	ticket_time: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['TimeEntry'][];
+				};
+			};
+		};
+	};
+	log_ticket_time: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['TimeEntryInput'];
+			};
+		};
+		responses: {
+			201: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['TimeEntry'];
+				};
+			};
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	update_time: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['TimeEntryInput'];
+			};
+		};
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['TimeEntry'];
+				};
+			};
+			409: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	delete_time: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			204: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content?: never;
+			};
+		};
+	};
 	list_users: {
 		parameters: {
 			query?: {
@@ -15561,6 +15810,111 @@ export interface operations {
 				content: {
 					'application/problem+json': components['schemas']['ApiError'];
 				};
+			};
+		};
+	};
+	list_work_types: {
+		parameters: {
+			query?: {
+				/** @description Include archived ones. */
+				archived?: boolean;
+			};
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['WorkType'][];
+				};
+			};
+		};
+	};
+	create_work_type: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['WorkTypeInput'];
+			};
+		};
+		responses: {
+			201: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['WorkType'];
+				};
+			};
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	update_work_type: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['WorkTypeInput'];
+			};
+		};
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['WorkType'];
+				};
+			};
+			409: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	archive_work_type: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			204: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content?: never;
 			};
 		};
 	};

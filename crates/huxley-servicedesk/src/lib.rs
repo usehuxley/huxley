@@ -16,6 +16,7 @@ pub mod responses;
 pub mod sla;
 pub mod templates;
 pub mod tickets;
+pub mod time;
 pub mod views;
 
 /// The module's key in the registry.

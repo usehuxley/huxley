@@ -2,6 +2,7 @@ import { error, fail, redirect } from '@sveltejs/kit';
 import { formString } from '#lib/forms.ts';
 import { api } from '#lib/server/api.ts';
 import { problemMessage } from '#lib/server/problems.ts';
+import { parseDuration } from '#lib/tickets/duration.ts';
 import { assignees, fieldErrors } from '#lib/tickets/server.ts';
 import type { Actions, PageServerLoad } from './$types';
 
@@ -19,14 +20,16 @@ export const load: PageServerLoad = async (event) => {
 	if (!ticket.data || !notes.data || !activity.data || !types.data) {
 		error(503, 'Could not load the ticket.');
 	}
-	const [people, contacts, responses, links] = await Promise.all([
+	const [people, contacts, responses, links, time, workTypes] = await Promise.all([
 		assignees(event),
 		client.GET('/api/v1/orgs/{id}/contacts', {
 			params: { path: { id: ticket.data.orgId }, query: { limit: 200 } }
 		}),
 		// Filled in for this ticket and you; none without ticket:write here.
 		client.GET('/api/v1/tickets/{id}/responses', path),
-		client.GET('/api/v1/tickets/{id}/links', path)
+		client.GET('/api/v1/tickets/{id}/links', path),
+		client.GET('/api/v1/tickets/{id}/time', path),
+		client.GET('/api/v1/work-types')
 	]);
 	return {
 		ticket: ticket.data,
@@ -37,7 +40,9 @@ export const load: PageServerLoad = async (event) => {
 		...people,
 		contacts: contacts.data?.items ?? [],
 		responses: responses.data ?? [],
-		links: links.data ?? []
+		links: links.data ?? [],
+		time: time.data ?? [],
+		workTypes: (workTypes.data ?? []).filter((w) => w.onTickets)
 	};
 };
 
@@ -64,6 +69,46 @@ async function patch(
 }
 
 export const actions: Actions = {
+	logTime: async (event) => {
+		const form = await event.request.formData();
+		const minutes = parseDuration(formString(form, 'duration'));
+		if (minutes === null || Number.isNaN(minutes)) {
+			return fail(400, {
+				time: { errors: { minutes: 'A duration, like 30m or 1h 15m.' }, message: 'Not a duration.' }
+			});
+		}
+		const { error: problem, response } = await api(event).POST('/api/v1/tickets/{id}/time', {
+			params: { path: { id: event.params.id } },
+			body: {
+				workTypeId: formString(form, 'workTypeId'),
+				minutes,
+				workedOn: formString(form, 'workedOn') || null,
+				billable: form.get('billable') === 'on',
+				notes: formString(form, 'notes') || null
+			}
+		});
+		if (response.status !== 201) {
+			return fail(response.status, {
+				time: {
+					errors: fieldErrors(problem),
+					message: problemMessage(problem, 'Could not log the time.')
+				}
+			});
+		}
+		return { time: { saved: true } };
+	},
+	deleteTime: async (event) => {
+		const id = formString(await event.request.formData(), 'id');
+		const { error: problem, response } = await api(event).DELETE('/api/v1/time-entries/{id}', {
+			params: { path: { id } }
+		});
+		if (response.status !== 204) {
+			return fail(response.status, {
+				time: { errors: {}, message: problemMessage(problem, 'Could not delete it.') }
+			});
+		}
+		return { time: { saved: true } };
+	},
 	link: async (event) => {
 		const form = await event.request.formData();
 		const { error: problem, response } = await api(event).POST('/api/v1/tickets/{id}/links', {

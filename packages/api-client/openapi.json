@@ -9869,6 +9869,160 @@
 				}
 			}
 		},
+		"/api/v1/tickets/{id}/time": {
+			"get": {
+				"tags": ["servicedesk"],
+				"summary": "Time logged on a ticket, newest first.",
+				"operationId": "ticket_time",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "array",
+									"items": {
+										"$ref": "#/components/schemas/TimeEntry"
+									}
+								}
+							}
+						}
+					}
+				}
+			},
+			"post": {
+				"tags": ["servicedesk"],
+				"summary": "Logs your time on a ticket. Needs `ticket:write` on it.",
+				"operationId": "log_ticket_time",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/TimeEntryInput"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"201": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/TimeEntry"
+								}
+							}
+						}
+					},
+					"422": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/time-entries/{id}": {
+			"put": {
+				"tags": ["servicedesk"],
+				"summary": "Changes one of your time entries; send back the `version` you read.",
+				"operationId": "update_time",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/TimeEntryInput"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/TimeEntry"
+								}
+							}
+						}
+					},
+					"409": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					},
+					"422": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			},
+			"delete": {
+				"tags": ["servicedesk"],
+				"summary": "Deletes one of your time entries.",
+				"operationId": "delete_time",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"responses": {
+					"204": {}
+				}
+			}
+		},
 		"/api/v1/users": {
 			"get": {
 				"tags": ["users"],
@@ -10171,6 +10325,140 @@
 							}
 						}
 					}
+				}
+			}
+		},
+		"/api/v1/work-types": {
+			"get": {
+				"tags": ["servicedesk"],
+				"summary": "Work types, in order.",
+				"operationId": "list_work_types",
+				"parameters": [
+					{
+						"name": "archived",
+						"in": "query",
+						"description": "Include archived ones.",
+						"required": false,
+						"schema": {
+							"type": "boolean"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "array",
+									"items": {
+										"$ref": "#/components/schemas/WorkType"
+									}
+								}
+							}
+						}
+					}
+				}
+			},
+			"post": {
+				"tags": ["servicedesk"],
+				"summary": "Adds a work type. Needs `servicedesk:configure`.",
+				"operationId": "create_work_type",
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/WorkTypeInput"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"201": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/WorkType"
+								}
+							}
+						}
+					},
+					"422": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/work-types/{id}": {
+			"put": {
+				"tags": ["servicedesk"],
+				"summary": "Changes a work type; send back the `version` you read.",
+				"operationId": "update_work_type",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/WorkTypeInput"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/WorkType"
+								}
+							}
+						}
+					},
+					"409": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			},
+			"delete": {
+				"tags": ["servicedesk"],
+				"summary": "Archives a work type; entries keep it.",
+				"operationId": "archive_work_type",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"responses": {
+					"204": {}
 				}
 			}
 		},
@@ -19677,6 +19965,101 @@
 				},
 				"additionalProperties": false
 			},
+			"TimeEntry": {
+				"type": "object",
+				"required": [
+					"id",
+					"userId",
+					"userName",
+					"workTypeId",
+					"workTypeName",
+					"workedOn",
+					"minutes",
+					"billable",
+					"notes",
+					"version"
+				],
+				"properties": {
+					"billable": {
+						"type": "boolean"
+					},
+					"id": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"minutes": {
+						"type": "integer",
+						"format": "int32"
+					},
+					"notes": {
+						"type": "string"
+					},
+					"ticketId": {
+						"type": ["string", "null"],
+						"format": "uuid"
+					},
+					"ticketReference": {
+						"type": ["string", "null"]
+					},
+					"ticketTitle": {
+						"type": ["string", "null"]
+					},
+					"userId": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"userName": {
+						"type": "string"
+					},
+					"version": {
+						"type": "integer",
+						"format": "int32"
+					},
+					"workTypeId": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"workTypeName": {
+						"type": "string"
+					},
+					"workedOn": {
+						"type": "string",
+						"description": "`YYYY-MM-DD`."
+					}
+				}
+			},
+			"TimeEntryInput": {
+				"type": "object",
+				"required": ["workTypeId", "minutes"],
+				"properties": {
+					"billable": {
+						"type": ["boolean", "null"],
+						"description": "Default: the work type's."
+					},
+					"minutes": {
+						"type": "integer",
+						"format": "int32",
+						"description": "1 to 1440."
+					},
+					"notes": {
+						"type": ["string", "null"]
+					},
+					"version": {
+						"type": ["integer", "null"],
+						"format": "int32",
+						"description": "The version you read (updates only)."
+					},
+					"workTypeId": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"workedOn": {
+						"type": ["string", "null"],
+						"description": "`YYYY-MM-DD` (default today)."
+					}
+				},
+				"additionalProperties": false
+			},
 			"TimeOff": {
 				"type": "object",
 				"required": [
@@ -20218,6 +20601,55 @@
 						"description": "A JSON pointer into the spec, e.g. `/paths/~1users/get`."
 					}
 				}
+			},
+			"WorkType": {
+				"type": "object",
+				"required": ["id", "name", "billable", "onTickets", "archived", "version"],
+				"properties": {
+					"archived": {
+						"type": "boolean"
+					},
+					"billable": {
+						"type": "boolean",
+						"description": "Entries of this type are billable unless said otherwise."
+					},
+					"id": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"name": {
+						"type": "string"
+					},
+					"onTickets": {
+						"type": "boolean",
+						"description": "Offered on tickets (else only for non-ticket time)."
+					},
+					"version": {
+						"type": "integer",
+						"format": "int32"
+					}
+				}
+			},
+			"WorkTypeInput": {
+				"type": "object",
+				"required": ["name"],
+				"properties": {
+					"billable": {
+						"type": "boolean"
+					},
+					"name": {
+						"type": "string"
+					},
+					"onTickets": {
+						"type": "boolean"
+					},
+					"version": {
+						"type": ["integer", "null"],
+						"format": "int32",
+						"description": "The version you read (updates only)."
+					}
+				},
+				"additionalProperties": false
 			},
 			"WorkflowDetail": {
 				"allOf": [
