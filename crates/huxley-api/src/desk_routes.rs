@@ -19,6 +19,7 @@ use huxley_servicedesk::tickets::{
     self, Activity, NewNote, NewTicket, Note, StatusChange, Ticket, TicketChanges, TicketFilter,
     TicketPage,
 };
+use huxley_servicedesk::views::{self, TicketView, TicketViewInput};
 use huxley_servicedesk::{DeskError, MODULE};
 use serde::Deserialize;
 use utoipa::IntoParams;
@@ -60,6 +61,11 @@ pub fn routes() -> Router<AppState> {
             axum::routing::delete(remove_link),
         )
         .route("/tickets/{id}/merge", post(merge_ticket))
+        .route("/ticket-views", get(list_views).post(create_view))
+        .route(
+            "/ticket-views/{id}",
+            axum::routing::put(update_view).delete(delete_view),
+        )
         .route("/my-work", get(my_work))
         .route("/tickets", get(list_tickets).post(create_ticket))
         .route("/tickets/{id}", get(get_ticket).patch(update_ticket))
@@ -1040,4 +1046,109 @@ pub async fn merge_ticket(
         })
         .await?,
     ))
+}
+
+/// The module is on and the caller reads tickets somewhere.
+async fn view_user(state: &AppState, authed: &Authed) -> ApiResult<Uuid> {
+    require_module(state, MODULE).await?;
+    if authed
+        .principal
+        .granted_anywhere()
+        .contains(&permissions::TICKET_READ)
+    {
+        Ok(authed.user.auth.user.id)
+    } else {
+        Err(ApiError::forbidden())
+    }
+}
+
+/// Your saved ticket views and the shared ones.
+#[utoipa::path(get, path = "/api/v1/ticket-views", tag = "servicedesk",
+    responses((status = 200, body = Vec<TicketView>)))]
+pub async fn list_views(
+    State(state): State<AppState>,
+    authed: Authed,
+) -> ApiResult<Json<Vec<TicketView>>> {
+    let me = view_user(&state, &authed).await?;
+    Ok(Json(
+        scoped(&state, &OrgScope::System, async |tx| {
+            views::list(tx, me).await
+        })
+        .await?,
+    ))
+}
+
+/// Saves a view of the Tickets list: yours, or `shared` (needs
+/// `servicedesk:configure`).
+#[utoipa::path(post, path = "/api/v1/ticket-views", tag = "servicedesk",
+    request_body = TicketViewInput,
+    responses((status = 201, body = TicketView), (status = 422, body = ApiError, content_type = "application/problem+json")))]
+pub async fn create_view(
+    State(state): State<AppState>,
+    authed: Authed,
+    Json(body): Json<TicketViewInput>,
+) -> ApiResult<(StatusCode, Json<TicketView>)> {
+    let me = view_user(&state, &authed).await?;
+    if body.shared {
+        authed.require_instance(permissions::SERVICEDESK_CONFIGURE)?;
+    }
+    let owner = (!body.shared).then_some(me);
+    let ctx = authed.user.ctx.clone();
+    let view = scoped(&state, &OrgScope::System, async |tx| {
+        views::create(tx, &ctx, owner, &body).await
+    })
+    .await?;
+    Ok((StatusCode::CREATED, Json(view)))
+}
+
+/// Shared views are changed only by service desk configurers.
+async fn may_change_view(state: &AppState, authed: &Authed, me: Uuid, id: Uuid) -> ApiResult<()> {
+    let (view, _) = scoped(state, &OrgScope::System, async |tx| {
+        views::get(tx, me, id).await
+    })
+    .await?;
+    if view.shared {
+        authed.require_instance(permissions::SERVICEDESK_CONFIGURE)?;
+    }
+    Ok(())
+}
+
+/// Renames a view or changes its filters; send back the `version` you read.
+#[utoipa::path(put, path = "/api/v1/ticket-views/{id}", tag = "servicedesk",
+    params(("id" = Uuid, Path)), request_body = TicketViewInput,
+    responses((status = 200, body = TicketView), (status = 409, body = ApiError, content_type = "application/problem+json"),
+              (status = 422, body = ApiError, content_type = "application/problem+json")))]
+pub async fn update_view(
+    State(state): State<AppState>,
+    authed: Authed,
+    Path(id): Path<Uuid>,
+    Json(body): Json<TicketViewInput>,
+) -> ApiResult<Json<TicketView>> {
+    let me = view_user(&state, &authed).await?;
+    may_change_view(&state, &authed, me, id).await?;
+    let ctx = authed.user.ctx.clone();
+    Ok(Json(
+        scoped(&state, &OrgScope::System, async |tx| {
+            views::update(tx, &ctx, me, id, &body).await
+        })
+        .await?,
+    ))
+}
+
+/// Deletes a view.
+#[utoipa::path(delete, path = "/api/v1/ticket-views/{id}", tag = "servicedesk",
+    params(("id" = Uuid, Path)), responses((status = 204)))]
+pub async fn delete_view(
+    State(state): State<AppState>,
+    authed: Authed,
+    Path(id): Path<Uuid>,
+) -> ApiResult<StatusCode> {
+    let me = view_user(&state, &authed).await?;
+    may_change_view(&state, &authed, me, id).await?;
+    let ctx = authed.user.ctx.clone();
+    scoped(&state, &OrgScope::System, async |tx| {
+        views::delete(tx, &ctx, me, id).await
+    })
+    .await?;
+    Ok(StatusCode::NO_CONTENT)
 }

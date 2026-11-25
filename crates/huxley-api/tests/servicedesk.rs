@@ -1359,3 +1359,132 @@ async fn merging_moves_the_conversation_and_closes_the_duplicate() {
         "{status}"
     );
 }
+
+#[tokio::test]
+async fn tickets_filter_by_priority() {
+    let Some(s) = setup().await else { return };
+    let tag = unique("Prio");
+    for (impact, urgency) in [(1, 1), (2, 2), (3, 3)] {
+        s.ticket(&s.owner, json!({ "orgId": s.globex, "title": format!("{tag} {impact}"), "impact": impact, "urgency": urgency }))
+            .await;
+    }
+    let found = s
+        .ok(
+            &s.owner,
+            "GET",
+            &format!(
+                "/api/v1/tickets?search={}&priority=p1,p3",
+                tag.replace(' ', "%20")
+            ),
+            None,
+        )
+        .await;
+    let priorities: Vec<&str> = found["items"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|t| t["priority"].as_str().unwrap())
+        .collect();
+    assert!(
+        !priorities.is_empty() && priorities.iter().all(|p| *p == "p1" || *p == "p3"),
+        "{priorities:?}"
+    );
+    let (status, problem) = s
+        .call(&s.owner, "GET", "/api/v1/tickets?priority=p9", None)
+        .await;
+    assert_eq!(
+        (status, field(&problem)),
+        (StatusCode::UNPROCESSABLE_ENTITY, "/priority".into())
+    );
+}
+
+#[tokio::test]
+async fn saved_views_are_yours_or_shared() {
+    let Some(s) = setup().await else { return };
+    let (_, email) = user(&s.pools, Some(("technician", s.provider))).await;
+    let tech = login(&s.app, &email).await;
+    let name = unique("Urgent");
+    let filters = json!({ "view": "open", "priority": "p1,p2", "queueId": "" });
+    let mine = s
+        .ok(
+            &tech,
+            "POST",
+            "/api/v1/ticket-views",
+            Some(json!({ "name": name, "filters": filters })),
+        )
+        .await;
+    assert_eq!(
+        (mine["shared"].as_bool(), mine["filters"].clone()),
+        (Some(false), json!({ "view": "open", "priority": "p1,p2" }))
+    );
+    // Technicians can't share; configurers can. Others don't see a personal one.
+    let (status, _) = s
+        .call(
+            &tech,
+            "POST",
+            "/api/v1/ticket-views",
+            Some(json!({ "name": "Team", "filters": {}, "shared": true })),
+        )
+        .await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+    let shared = s
+        .ok(&s.owner, "POST", "/api/v1/ticket-views", Some(json!({ "name": unique("Team"), "filters": { "view": "unassigned" }, "shared": true })))
+        .await;
+    let theirs = s.ok(&tech, "GET", "/api/v1/ticket-views", None).await;
+    let ids: Vec<&Value> = theirs
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|v| &v["id"])
+        .collect();
+    assert!(ids.contains(&&mine["id"]) && ids.contains(&&shared["id"]));
+    let owners = s.ok(&s.owner, "GET", "/api/v1/ticket-views", None).await;
+    assert!(
+        !owners
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|v| v["id"] == mine["id"])
+    );
+    // The technician can't change the shared one, but can change theirs.
+    let shared_url = format!("/api/v1/ticket-views/{}", shared["id"].as_str().unwrap());
+    assert_eq!(
+        s.call(&tech, "DELETE", &shared_url, None).await.0,
+        StatusCode::FORBIDDEN
+    );
+    let mine_url = format!("/api/v1/ticket-views/{}", mine["id"].as_str().unwrap());
+    let (status, _) = s
+        .call(
+            &tech,
+            "PUT",
+            &mine_url,
+            Some(json!({ "name": name, "filters": {}, "version": 99 })),
+        )
+        .await;
+    assert_eq!(status, StatusCode::CONFLICT);
+    let renamed = s
+        .ok(&tech, "PUT", &mine_url, Some(json!({ "name": format!("{name} 2"), "filters": { "view": "mine" }, "version": mine["version"] })))
+        .await;
+    assert_eq!(renamed["filters"], json!({ "view": "mine" }));
+    assert_eq!(
+        s.call(&s.owner, "DELETE", &mine_url, None).await.0,
+        StatusCode::NOT_FOUND
+    );
+    assert_eq!(
+        s.call(&tech, "DELETE", &mine_url, None).await.0,
+        StatusCode::NO_CONTENT
+    );
+    for body in [
+        json!({ "name": "Bad", "filters": { "view": "everything" } }),
+        json!({ "name": "Bad", "filters": { "colour": "red" } }),
+    ] {
+        let (status, problem) = s
+            .call(&tech, "POST", "/api/v1/ticket-views", Some(body.clone()))
+            .await;
+        assert_eq!(
+            (status, field(&problem)),
+            (StatusCode::UNPROCESSABLE_ENTITY, "/filters".into()),
+            "{body}"
+        );
+    }
+}

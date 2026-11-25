@@ -8947,6 +8947,138 @@
 				}
 			}
 		},
+		"/api/v1/ticket-views": {
+			"get": {
+				"tags": ["servicedesk"],
+				"summary": "Your saved ticket views and the shared ones.",
+				"operationId": "list_views",
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "array",
+									"items": {
+										"$ref": "#/components/schemas/TicketView"
+									}
+								}
+							}
+						}
+					}
+				}
+			},
+			"post": {
+				"tags": ["servicedesk"],
+				"summary": "Saves a view of the Tickets list: yours, or `shared` (needs\n`servicedesk:configure`).",
+				"operationId": "create_view",
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/TicketViewInput"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"201": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/TicketView"
+								}
+							}
+						}
+					},
+					"422": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/ticket-views/{id}": {
+			"put": {
+				"tags": ["servicedesk"],
+				"summary": "Renames a view or changes its filters; send back the `version` you read.",
+				"operationId": "update_view",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/TicketViewInput"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/TicketView"
+								}
+							}
+						}
+					},
+					"409": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					},
+					"422": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			},
+			"delete": {
+				"tags": ["servicedesk"],
+				"summary": "Deletes a view.",
+				"operationId": "delete_view",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"responses": {
+					"204": {}
+				}
+			}
+		},
 		"/api/v1/tickets": {
 			"get": {
 				"tags": ["servicedesk"],
@@ -8993,6 +9125,15 @@
 						"name": "search",
 						"in": "query",
 						"description": "Matches titles and the ticket number.",
+						"required": false,
+						"schema": {
+							"type": ["string", "null"]
+						}
+					},
+					{
+						"name": "priority",
+						"in": "query",
+						"description": "Only these priorities, comma-separated: e.g. `p1,p2`.",
 						"required": false,
 						"schema": {
 							"type": ["string", "null"]
@@ -19051,6 +19192,65 @@
 						}
 					}
 				}
+			},
+			"TicketView": {
+				"type": "object",
+				"required": ["id", "name", "shared", "filters", "version"],
+				"properties": {
+					"filters": {
+						"type": "object",
+						"description": "`view` (a built-in view: `mine`, `unassigned`, `open`, `resolved`\nor `closed`), `queueId`, `orgId`, `search` and `priority` (e.g.\n`p1,p2`); each optional.",
+						"additionalProperties": {
+							"type": "string"
+						},
+						"propertyNames": {
+							"type": "string"
+						}
+					},
+					"id": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"name": {
+						"type": "string"
+					},
+					"shared": {
+						"type": "boolean",
+						"description": "Shared with everyone (else it's yours)."
+					},
+					"version": {
+						"type": "integer",
+						"format": "int32"
+					}
+				}
+			},
+			"TicketViewInput": {
+				"type": "object",
+				"required": ["name", "filters"],
+				"properties": {
+					"filters": {
+						"type": "object",
+						"additionalProperties": {
+							"type": "string"
+						},
+						"propertyNames": {
+							"type": "string"
+						}
+					},
+					"name": {
+						"type": "string"
+					},
+					"shared": {
+						"type": "boolean",
+						"description": "Shared with everyone (needs `servicedesk:configure`). Fixed once\nmade."
+					},
+					"version": {
+						"type": ["integer", "null"],
+						"format": "int32",
+						"description": "The version you read (updates only)."
+					}
+				},
+				"additionalProperties": false
 			},
 			"TimeOff": {
 				"type": "object",

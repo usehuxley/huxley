@@ -3147,7 +3147,7 @@
     },
     "TicketFind": {
       "additionalProperties": false,
-      "description": "Tickets to find (`core.ticket.find`) among the run's organization and\nthose below it (or `org_id`'s): by `queue_id`, `assignee` (a person's\nid, or `none`), `state` (`open`, the default, `resolved`, `closed` or\n`all`) and `search` (title or number), most urgent first, at most\n`limit` (default 50). Output: `{ tickets, total }`.",
+      "description": "Tickets to find (`core.ticket.find`) among the run's organization and\nthose below it (or `org_id`'s): by `queue_id`, `assignee` (a person's\nid, or `none`), `state` (`open`, the default, `resolved`, `closed` or\n`all`), `search` (title or number) and `priority` (e.g. `p1,p2`), most\nurgent first, at most\n`limit` (default 50). Output: `{ tickets, total }`.",
       "properties": {
         "assignee": true,
         "limit": true,
@@ -3156,6 +3156,9 @@
             "string",
             "null"
           ]
+        },
+        "priority": {
+          "description": "Only these priorities, comma-separated: e.g. `p1,p2`."
         },
         "queue_id": true,
         "search": true,

@@ -1088,7 +1088,8 @@ pub struct TicketGet {
 /// Tickets to find (`core.ticket.find`) among the run's organization and
 /// those below it (or `org_id`'s): by `queue_id`, `assignee` (a person's
 /// id, or `none`), `state` (`open`, the default, `resolved`, `closed` or
-/// `all`) and `search` (title or number), most urgent first, at most
+/// `all`), `search` (title or number) and `priority` (e.g. `p1,p2`), most
+/// urgent first, at most
 /// `limit` (default 50). Output: `{ tickets, total }`.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
@@ -1103,6 +1104,9 @@ pub struct TicketFind {
     pub state: Option<Value>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub search: Option<Value>,
+    /// Only these priorities, comma-separated: e.g. `p1,p2`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub priority: Option<Value>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub limit: Option<Value>,
 }

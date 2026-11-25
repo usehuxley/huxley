@@ -205,6 +205,8 @@ pub struct TicketFilter {
     pub state: Option<String>,
     /// Matches titles and the ticket number.
     pub search: Option<String>,
+    /// Only these priorities, comma-separated: e.g. `p1,p2`.
+    pub priority: Option<String>,
     /// 1 to 200 (default 50).
     pub limit: Option<i64>,
     pub offset: Option<i64>,
@@ -254,11 +256,20 @@ pub async fn list(conn: &mut PgConnection, filter: &TicketFilter) -> DeskResult<
                 .replace('_', "\\_")
         )
     });
+    let priorities: Option<Vec<String>> = match filter.priority.as_deref().map(str::trim) {
+        None | Some("") => None,
+        Some(list) => Some(
+            list.split(',')
+                .map(|p| priority(p.trim().to_lowercase().as_str()))
+                .collect::<DeskResult<_>>()?,
+        ),
+    };
     let filter_sql = "WHERE s.category = ANY($1) \
         AND ($2::uuid IS NULL OR t.org_id = $2) AND ($3::uuid IS NULL OR t.queue_id = $3) \
         AND (NOT $4 OR (t.assignee_user_id IS NULL AND t.assignee_team_id IS NULL)) \
         AND ($5::uuid IS NULL OR t.assignee_user_id = $5) \
-        AND ($6::text IS NULL OR t.title ILIKE $6 OR t.number = $7)";
+        AND ($6::text IS NULL OR t.title ILIKE $6 OR t.number = $7) \
+        AND ($8::text[] IS NULL OR t.priority = ANY($8))";
     let total: i64 = sqlx::query_scalar(sqlx::AssertSqlSafe(format!(
         "SELECT count(*) FROM sd_tickets t JOIN sd_statuses s ON s.id = t.status_id {filter_sql}"
     )))
@@ -269,10 +280,11 @@ pub async fn list(conn: &mut PgConnection, filter: &TicketFilter) -> DeskResult<
     .bind(assignee)
     .bind(&pattern)
     .bind(number)
+    .bind(&priorities)
     .fetch_one(&mut *conn)
     .await?;
     let items = sqlx::query_as(sqlx::AssertSqlSafe(format!(
-        "{SELECT} {filter_sql} ORDER BY t.priority, t.created_at LIMIT $8 OFFSET $9"
+        "{SELECT} {filter_sql} ORDER BY t.priority, t.created_at LIMIT $9 OFFSET $10"
     )))
     .bind(categories)
     .bind(filter.org_id)
@@ -281,6 +293,7 @@ pub async fn list(conn: &mut PgConnection, filter: &TicketFilter) -> DeskResult<
     .bind(assignee)
     .bind(&pattern)
     .bind(number)
+    .bind(&priorities)
     .bind(filter.limit.unwrap_or(50).clamp(1, 200))
     .bind(filter.offset.unwrap_or(0).max(0))
     .fetch_all(conn)
