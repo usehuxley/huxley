@@ -232,6 +232,13 @@ The built-in **Service desk notifications** pack (`huxley/servicedesk-notificati
 
 Install it under **Settings → Packs → Built-in packs** and publish its workflows. They're ordinary workflows, so they can be changed: for example, to also post to a Teams or Slack channel. Each person chooses how they hear about each kind (in the app, by email, or neither) under **Notifications**.
 
+**Chat alerts.** The built-in **Service desk chat alerts** pack (`huxley/servicedesk-chat`) posts **urgent** (P1 and P2) new tickets, and tickets that **missed an SLA target**, to a team channel:
+
+- *Ticket alerts in Slack* posts through the Slack integration to the channel in the organization variable `servicedesk_slack_channel` (e.g. `#service-desk`). The Slack app needs `chat:write` and to be in the channel. If Slack refuses (a wrong channel, say), the run fails and says why.
+- *Ticket alerts in Microsoft Teams* posts a card to a channel's incoming webhook. Make one with the channel's Workflows app (*Post to a channel when a webhook request is received*), and keep its URL as the organization secret `servicedesk_teams_webhook`.
+
+Each does nothing until its variable or secret is set, so install the pack, publish the one you want, and set its channel.
+
 Ticket events carry `actorId` (who made the change; none for the system or a requester) and the assignee's `assigneeUserId` and `assigneeTeamId`. The SLA events carry the assignee too.
 
 ## Email

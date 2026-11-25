@@ -1,0 +1,48 @@
+apiVersion: usehuxley.io/v1
+kind: Workflow
+metadata:
+  key: teams-ticket-alerts
+  name: Ticket alerts in Microsoft Teams
+  description: >-
+    Posts urgent (P1 and P2) new tickets and missed SLA targets to a
+    Microsoft Teams channel, through the channel's incoming webhook: the
+    organization secret servicedesk_teams_webhook (from the channel's
+    Workflows app, "Post to a channel when a webhook request is received").
+    Does nothing until that secret is set.
+spec:
+  triggers:
+    - id: urgent
+      type: event
+      event: ticket.created
+      filter: "{{ event.payload.priority in ['p1', 'p2'] }}"
+    - id: breached
+      type: event
+      event: ticket.sla_breached
+  steps:
+    - id: configured
+      type: if
+      condition: "{{ secrets.servicedesk_teams_webhook is defined }}"
+      then:
+        - id: post
+          type: http.request
+          with:
+            method: POST
+            url: "{{ secrets.servicedesk_teams_webhook }}"
+            body:
+              type: message
+              attachments:
+                - contentType: application/vnd.microsoft.card.adaptive
+                  content:
+                    type: AdaptiveCard
+                    version: "1.4"
+                    body:
+                      - type: TextBlock
+                        weight: Bolder
+                        wrap: true
+                        text: >-
+                          {{ 'Missed SLA' if trigger.type == 'ticket.sla_breached' else 'New ' ~ (inputs.priority | upper) }}:
+                          {{ inputs.reference }}
+                      - type: TextBlock
+                        wrap: true
+                        text: "{{ inputs.title }}"
+          retry: { max_attempts: 3 }
