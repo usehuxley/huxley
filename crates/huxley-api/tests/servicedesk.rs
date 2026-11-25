@@ -2023,3 +2023,61 @@ async fn my_time_covers_tickets_and_the_rest() {
         StatusCode::NO_CONTENT
     );
 }
+
+#[tokio::test]
+async fn presence_shows_who_else_is_on_a_ticket() {
+    let Some(s) = setup().await else { return };
+    let (ada_id, ada_email) = user(&s.pools, Some(("technician", s.acme))).await;
+    let ada = login(&s.app, &ada_email).await;
+    let (_, ben_email) = user(&s.pools, Some(("technician", s.acme))).await;
+    let ben = login(&s.app, &ben_email).await;
+    let t = s
+        .ticket(&s.owner, json!({ "orgId": s.acme, "title": "Who's here" }))
+        .await;
+    let here = format!("{}/presence", url(&t));
+    assert_eq!(s.ok(&ada, "POST", &here, Some(json!({}))).await, json!([]));
+    let seen = s
+        .ok(&ben, "POST", &here, Some(json!({ "typing": true })))
+        .await;
+    assert_eq!(
+        (seen[0]["userId"].clone(), seen[0]["typing"].as_bool()),
+        (json!(ada_id), Some(false))
+    );
+    let seen = s.ok(&ada, "POST", &here, Some(json!({}))).await;
+    assert_eq!(
+        (seen.as_array().unwrap().len(), seen[0]["typing"].as_bool()),
+        (1, Some(true))
+    );
+    // Ben leaves; then Ada is alone.
+    s.ok(&ben, "POST", &here, Some(json!({ "leaving": true })))
+        .await;
+    assert_eq!(s.ok(&ada, "POST", &here, Some(json!({}))).await, json!([]));
+    // Someone not heard from for a while has gone.
+    s.ok(&ben, "POST", &here, Some(json!({}))).await;
+    let mut tx = begin_scoped(&s.pools.app, &OrgScope::System).await.unwrap();
+    sqlx::query(
+        "UPDATE sd_ticket_presence SET seen_at = now() - interval '2 minutes' WHERE ticket_id = $1",
+    )
+    .bind(Uuid::parse_str(t["id"].as_str().unwrap()).unwrap())
+    .execute(&mut *tx)
+    .await
+    .unwrap();
+    tx.commit().await.unwrap();
+    assert_eq!(s.ok(&ada, "POST", &here, Some(json!({}))).await, json!([]));
+    // Not on tickets you can't see.
+    let theirs = s
+        .ticket(&s.owner, json!({ "orgId": s.globex, "title": "Elsewhere" }))
+        .await;
+    let (status, _) = s
+        .call(
+            &ada,
+            "POST",
+            &format!("{}/presence", url(&theirs)),
+            Some(json!({})),
+        )
+        .await;
+    assert!(
+        status == StatusCode::FORBIDDEN || status == StatusCode::NOT_FOUND,
+        "{status}"
+    );
+}

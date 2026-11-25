@@ -11,6 +11,7 @@ pub mod dispatch;
 pub mod links;
 pub mod mail;
 pub mod my_work;
+pub mod presence;
 pub mod queues;
 pub mod responses;
 pub mod sla;

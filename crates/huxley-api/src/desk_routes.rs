@@ -59,6 +59,7 @@ pub fn routes() -> Router<AppState> {
             axum::routing::put(update_response).delete(archive_response),
         )
         .route("/tickets/{id}/responses", get(ticket_responses))
+        .route("/tickets/{id}/presence", post(ticket_presence))
         .route("/tickets/{id}/links", get(list_links).post(add_link))
         .route(
             "/tickets/{id}/links/{other_id}",
@@ -1546,4 +1547,37 @@ pub async fn log_time(
     })
     .await?;
     Ok((StatusCode::CREATED, Json(logged)))
+}
+
+#[derive(Debug, Default, Deserialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct PresenceCheckIn {
+    /// Writing a note or reply right now.
+    #[serde(default)]
+    pub typing: bool,
+    /// Leaving the ticket.
+    #[serde(default)]
+    pub leaving: bool,
+}
+
+/// Says you have the ticket open (and whether you're typing), or that
+/// you've left it; returns who else is there. Pages check in every 15
+/// seconds or so; anyone not heard from in 40 has gone.
+#[utoipa::path(post, path = "/api/v1/tickets/{id}/presence", tag = "servicedesk",
+    params(("id" = Uuid, Path)), request_body = PresenceCheckIn,
+    responses((status = 200, body = Vec<huxley_servicedesk::presence::Viewer>)))]
+pub async fn ticket_presence(
+    State(state): State<AppState>,
+    authed: Authed,
+    Path(id): Path<Uuid>,
+    Json(body): Json<PresenceCheckIn>,
+) -> ApiResult<Json<Vec<huxley_servicedesk::presence::Viewer>>> {
+    ticket_access(&state, &authed, id, permissions::TICKET_READ).await?;
+    let me = authed.user.auth.user.id;
+    Ok(Json(
+        scoped(&state, &OrgScope::System, async |tx| {
+            huxley_servicedesk::presence::check_in(tx, id, me, body.typing, body.leaving).await
+        })
+        .await?,
+    ))
 }
