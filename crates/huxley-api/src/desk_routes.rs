@@ -84,6 +84,7 @@ pub fn routes() -> Router<AppState> {
             axum::routing::put(update_work_type).delete(archive_work_type),
         )
         .route("/tickets/{id}/time", get(ticket_time).post(log_ticket_time))
+        .route("/time-entries", get(my_time).post(log_time))
         .route(
             "/time-entries/{id}",
             axum::routing::put(update_time).delete(delete_time),
@@ -1497,4 +1498,52 @@ pub async fn delete_time(
     })
     .await?;
     Ok(StatusCode::NO_CONTENT)
+}
+
+#[derive(Debug, Deserialize, IntoParams)]
+#[serde(rename_all = "camelCase")]
+pub struct TimeParams {
+    /// `YYYY-MM-DD`.
+    pub from: String,
+    /// `YYYY-MM-DD`, inclusive (at most 62 days after `from`).
+    pub to: String,
+}
+
+/// The module is on and the caller works tickets somewhere: their id.
+async fn time_user(state: &AppState, authed: &Authed) -> ApiResult<Uuid> {
+    response_reader(state, authed).await?;
+    Ok(authed.user.auth.user.id)
+}
+
+/// Your time from `from` to `to`: on tickets and not.
+#[utoipa::path(get, path = "/api/v1/time-entries", tag = "servicedesk", params(TimeParams),
+    responses((status = 200, body = Vec<TimeEntry>), (status = 422, body = ApiError, content_type = "application/problem+json")))]
+pub async fn my_time(
+    State(state): State<AppState>,
+    authed: Authed,
+    Query(params): Query<TimeParams>,
+) -> ApiResult<Json<Vec<TimeEntry>>> {
+    let me = time_user(&state, &authed).await?;
+    Ok(Json(
+        scoped(&state, &OrgScope::System, async |tx| {
+            time_entries::for_person(tx, me, &params.from, &params.to).await
+        })
+        .await?,
+    ))
+}
+
+/// Logs your non-ticket time (admin, training, travel…).
+#[utoipa::path(post, path = "/api/v1/time-entries", tag = "servicedesk", request_body = TimeEntryInput,
+    responses((status = 201, body = TimeEntry), (status = 422, body = ApiError, content_type = "application/problem+json")))]
+pub async fn log_time(
+    State(state): State<AppState>,
+    authed: Authed,
+    Json(body): Json<TimeEntryInput>,
+) -> ApiResult<(StatusCode, Json<TimeEntry>)> {
+    let me = time_user(&state, &authed).await?;
+    let logged = scoped(&state, &OrgScope::System, async |tx| {
+        time_entries::log(tx, me, None, &body).await
+    })
+    .await?;
+    Ok((StatusCode::CREATED, Json(logged)))
 }

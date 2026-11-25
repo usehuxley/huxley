@@ -1,7 +1,18 @@
 <script lang="ts">
 	import { enhance, type SubmitFunction } from '$app/forms';
 	import { resolve } from '$app/paths';
-	import { Clock, Link2, Lock, Mail, Merge, MessageSquare, Pencil, X } from '@lucide/svelte';
+	import {
+		Clock,
+		Link2,
+		Lock,
+		Mail,
+		Merge,
+		MessageSquare,
+		Pencil,
+		Play,
+		Square,
+		X
+	} from '@lucide/svelte';
 	import { Badge, Button, Card, Dialog, Field, Input, Select, toast } from '@usehuxley/ui';
 	import { describe } from '#lib/tickets/activity.ts';
 	import { clockLines } from '#lib/tickets/sla.ts';
@@ -15,6 +26,8 @@
 		priorityOf
 	} from '#lib/tickets/labels.ts';
 	import { formatDuration } from '#lib/tickets/duration.ts';
+	import { clock, timers } from '#lib/time/timer.svelte.ts';
+	import { onMount } from 'svelte';
 	import type { PageProps } from './$types';
 
 	let { data, form }: PageProps = $props();
@@ -54,6 +67,8 @@
 	let merging = $state(false);
 	const today = new Date().toLocaleDateString('en-CA');
 	let workTypeId = $state('');
+	let timeSpent = $state('');
+	onMount(() => timers.init());
 	let billable = $state(true);
 	// The first work type to start with; billable follows the type chosen.
 	$effect(() => {
@@ -489,7 +504,7 @@
 						action="?/logTime"
 						class="mt-3 flex flex-col gap-2 border-t border-border pt-3"
 						data-reset
-						use:enhance={saved('Time logged.')}
+						use:enhance={saved('Time logged.', () => (timeSpent = ''))}
 					>
 						<div class="grid grid-cols-2 gap-2">
 							<Input
@@ -497,6 +512,7 @@
 								aria-label="Time spent"
 								placeholder="e.g. 45m, 1h 30m"
 								required
+								bind:value={timeSpent}
 							/>
 							<Input name="workedOn" type="date" aria-label="Worked on" value={today} />
 						</div>
@@ -518,7 +534,23 @@
 									errorsOf('time').workTypeId}
 							</p>
 						{/if}
-						<Button type="submit" size="sm"><Clock size={14} /> Log time</Button>
+						<div class="flex items-center justify-between gap-2">
+							{#if timers.running(ticket.id)}
+								<Button
+									size="sm"
+									onclick={() => (timeSpent = formatDuration(timers.stop(ticket.id)))}
+									aria-label="Stop the timer"
+								>
+									<Square size={12} />
+									<span class="tabular-nums">{clock(timers.elapsed(ticket.id))}</span>
+								</Button>
+							{:else}
+								<Button size="sm" onclick={() => timers.start(ticket.id)}>
+									<Play size={12} /> Timer
+								</Button>
+							{/if}
+							<Button type="submit" size="sm"><Clock size={14} /> Log time</Button>
+						</div>
 					</form>
 				{/if}
 			</Card>
