@@ -60,6 +60,16 @@ impl ApiError {
         self
     }
 
+    /// The most specific message: a field's error, else the detail, else
+    /// the title.
+    pub fn summary(&self) -> String {
+        self.errors
+            .first()
+            .map(|e| e.message.clone())
+            .or_else(|| self.detail.clone())
+            .unwrap_or_else(|| self.title.clone())
+    }
+
     #[must_use]
     pub fn with_field_error(
         mut self,

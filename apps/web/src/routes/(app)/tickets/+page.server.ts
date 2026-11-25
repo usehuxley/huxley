@@ -3,7 +3,7 @@ import { formString } from '#lib/forms.ts';
 import { VIEWS } from '#lib/tickets/labels.ts';
 import { api } from '#lib/server/api.ts';
 import { problemMessage } from '#lib/server/problems.ts';
-import { fieldErrors } from '#lib/tickets/server.ts';
+import { assignees, fieldErrors } from '#lib/tickets/server.ts';
 import type { Actions, PageServerLoad } from './$types';
 
 const PAGE = 50;
@@ -17,7 +17,8 @@ export const load: PageServerLoad = async (event) => {
 	const search = params.get('q') ?? '';
 	const page = Math.max(1, Number(params.get('page')) || 1);
 	const client = api(event);
-	const [tickets, queues, views] = await Promise.all([
+	const canWrite = (await event.parent()).user.grantedPermissions.includes('ticket:write');
+	const [tickets, queues, views, people, types] = await Promise.all([
 		client.GET('/api/v1/tickets', {
 			params: {
 				query: {
@@ -32,8 +33,15 @@ export const load: PageServerLoad = async (event) => {
 			}
 		}),
 		client.GET('/api/v1/queues'),
-		client.GET('/api/v1/ticket-views')
+		client.GET('/api/v1/ticket-views'),
+		canWrite ? assignees(event) : { people: [], teams: [] },
+		canWrite ? client.GET('/api/v1/servicedesk/types') : null
 	]);
+	// Statuses every type has, for changing many tickets at once.
+	const typeList = types?.data ?? [];
+	const statuses = (typeList[0]?.statuses ?? [])
+		.filter((st) => typeList.every((t) => t.statuses.some((o) => o.key === st.key)))
+		.map((st) => ({ value: st.key, label: st.name }));
 	if (tickets.response.status === 404) error(404, 'The service desk is turned off.');
 	if (!tickets.data) error(503, 'Could not load tickets.');
 	return {
@@ -41,6 +49,8 @@ export const load: PageServerLoad = async (event) => {
 		total: tickets.data.total,
 		queues: queues.data ?? [],
 		views: views.data ?? [],
+		...people,
+		statuses,
 		saved: params.get('saved') ?? '',
 		view,
 		queueId: queueId ?? '',
@@ -53,6 +63,45 @@ export const load: PageServerLoad = async (event) => {
 };
 
 export const actions: Actions = {
+	bulk: async (event) => {
+		const form = await event.request.formData();
+		const ids = form.getAll('ids').map(String);
+		const assignee = formString(form, 'assignee');
+		const priority = formString(form, 'priority');
+		const queue = formString(form, 'queue');
+		const changes = {
+			...(assignee === 'none'
+				? { assigneeUserId: null, assigneeTeamId: null }
+				: assignee.startsWith('user:')
+					? { assigneeUserId: assignee.slice(5) }
+					: assignee.startsWith('team:')
+						? { assigneeTeamId: assignee.slice(5), assigneeUserId: null }
+						: {}),
+			...(priority ? { priority } : {}),
+			...(queue === 'none' ? { queueId: null } : queue ? { queueId: queue } : {})
+		};
+		const {
+			data,
+			error: problem,
+			response
+		} = await api(event).POST('/api/v1/tickets/bulk', {
+			body: { ids, changes, status: formString(form, 'status') || null }
+		});
+		if (!data) {
+			return fail(response.status, {
+				errors: fieldErrors(problem),
+				message: problemMessage(problem, 'Could not change the tickets.')
+			});
+		}
+		const failed = data.filter((r) => !r.ok);
+		return {
+			bulk: {
+				changed: data.length - failed.length,
+				failed: failed.length,
+				reason: failed[0]?.error ?? null
+			}
+		};
+	},
 	saveView: async (event) => {
 		const form = await event.request.formData();
 		const filters = {

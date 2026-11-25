@@ -8,6 +8,8 @@ Turn it on under **Settings → Modules**. A provider organization can turn it o
 
 **Tickets** in the sidebar lists them by view (assigned to you, unassigned, all open, resolved, closed), with search and filters for priority and queue.
 
+**Changing many at once.** Tick tickets on the list (or **Select all**) to change them together: assignee (you, someone, a team, or nobody), priority, queue and status. Each ticket is changed on its own, so one you can't change, or that can't take the status, is reported and the rest still change.
+
 **Saved views.** **Save view** keeps the filters you have now under a name, as a tab after the built-in views. The filters are the view, priority, queue, client and search. A saved view is yours, unless you share it with everyone, which needs `servicedesk:configure` (shared views show a people icon). A view holds filters, not tickets, so each person sees the tickets they're allowed to. A ticket's page shows its conversation: replies, internal notes and every change, oldest first. Its status and properties are alongside.
 
 A ticket belongs to the organization it's for, usually a client, and is visible to the people who can see that organization. Each has:
@@ -300,6 +302,7 @@ Workflows can open, read, find, update and dispatch tickets and add notes, with 
 | `GET /api/v1/tickets` | List tickets. Filter with `orgId`, `queueId`, `assignee` (a person's id, `me` or `none`), `state` (`open`, the default, or `resolved`, `closed` or `all`), `priority` (e.g. `p1,p2`) and `search` (title or number) |
 | `POST /api/v1/tickets` | Create a ticket |
 | `GET /api/v1/tickets/{id}` | Read a ticket |
+| `POST /api/v1/tickets/bulk` | Change up to 100 tickets at once: `ids`, `changes` (`priority`, `queueId`, `assigneeUserId`, `assigneeTeamId`) and `status`. Reports each ticket |
 | `PATCH /api/v1/tickets/{id}` | Edit a ticket. A field you leave out is unchanged. `null` clears the queue, requester or assignee |
 | `POST /api/v1/tickets/{id}/status` | Change the status, with a `resolution` where it's needed |
 | `GET`, `POST /api/v1/tickets/{id}/notes` | Read or add notes |

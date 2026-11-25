@@ -1571,3 +1571,93 @@ async fn search_finds_what_you_can_see() {
         (StatusCode::UNPROCESSABLE_ENTITY, "/q".into())
     );
 }
+
+#[tokio::test]
+async fn bulk_edits_change_each_ticket_they_can() {
+    let Some(s) = setup().await else { return };
+    let (tech_id, email) = user(&s.pools, Some(("technician", s.acme))).await;
+    let tech = login(&s.app, &email).await;
+    let (a, b) = (
+        s.ticket(&s.owner, json!({ "orgId": s.acme, "title": "Bulk A" }))
+            .await,
+        s.ticket(&s.owner, json!({ "orgId": s.acme, "title": "Bulk B" }))
+            .await,
+    );
+    let theirs = s
+        .ticket(&s.owner, json!({ "orgId": s.globex, "title": "Bulk C" }))
+        .await;
+    let results = s
+        .ok(
+            &tech,
+            "POST",
+            "/api/v1/tickets/bulk",
+            Some(json!({
+                "ids": [a["id"], b["id"], theirs["id"], a["id"]],
+                "changes": { "assigneeUserId": tech_id, "priority": "p2" },
+                "status": "in_progress",
+            })),
+        )
+        .await;
+    let outcomes: Vec<(Value, bool)> = results
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|r| (r["id"].clone(), r["ok"].as_bool().unwrap()))
+        .collect();
+    assert_eq!(
+        outcomes,
+        [
+            (a["id"].clone(), true),
+            (b["id"].clone(), true),
+            (theirs["id"].clone(), false)
+        ]
+    );
+    for t in [&a, &b] {
+        let now = s.ok(&s.owner, "GET", &url(t), None).await;
+        assert_eq!(
+            (
+                now["assigneeUserId"].clone(),
+                now["priority"].as_str(),
+                now["statusKey"].as_str()
+            ),
+            (json!(tech_id), Some("p2"), Some("in_progress"))
+        );
+    }
+    let untouched = s.ok(&s.owner, "GET", &url(&theirs), None).await;
+    assert!(untouched["assigneeUserId"].is_null());
+    // A status they can't take is reported for each; clearing works.
+    let results = s
+        .ok(
+            &s.owner,
+            "POST",
+            "/api/v1/tickets/bulk",
+            Some(json!({ "ids": [a["id"]], "status": "resolved" })),
+        )
+        .await;
+    assert_eq!(results[0]["ok"], false);
+    assert!(
+        results[0]["error"].as_str().unwrap().contains("resolution"),
+        "{results}"
+    );
+    s.ok(
+        &s.owner,
+        "POST",
+        "/api/v1/tickets/bulk",
+        Some(json!({ "ids": [b["id"]], "changes": { "assigneeUserId": null } })),
+    )
+    .await;
+    assert!(s.ok(&s.owner, "GET", &url(&b), None).await["assigneeUserId"].is_null());
+    for (body, pointer) in [
+        (json!({ "ids": [], "status": "in_progress" }), "/ids"),
+        (json!({ "ids": [a["id"]] }), "/changes"),
+    ] {
+        let (status, problem) = s
+            .call(&s.owner, "POST", "/api/v1/tickets/bulk", Some(body.clone()))
+            .await;
+        assert_eq!(
+            (status, field(&problem)),
+            (StatusCode::UNPROCESSABLE_ENTITY, pointer.into()),
+            "{body}"
+        );
+    }
+}

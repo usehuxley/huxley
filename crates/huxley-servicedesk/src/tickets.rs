@@ -640,6 +640,48 @@ pub async fn update(
     Ok(after)
 }
 
+/// The same changes for many tickets (bulk edit): each field left out is
+/// unchanged, `null` clears.
+#[derive(Debug, Clone, Default, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[allow(clippy::option_option)] // JSON's three states: missing, null, a value.
+pub struct BulkFields {
+    /// `p1` to `p4`, or `auto` to follow the priority matrix again.
+    #[serde(default)]
+    pub priority: Option<String>,
+    #[serde(default, deserialize_with = "some")]
+    #[schema(value_type = Option<Uuid>, nullable)]
+    pub queue_id: Option<Option<Uuid>>,
+    #[serde(default, deserialize_with = "some")]
+    #[schema(value_type = Option<Uuid>, nullable)]
+    pub assignee_user_id: Option<Option<Uuid>>,
+    #[serde(default, deserialize_with = "some")]
+    #[schema(value_type = Option<Uuid>, nullable)]
+    pub assignee_team_id: Option<Option<Uuid>>,
+}
+
+impl BulkFields {
+    /// Whether anything changes.
+    pub fn is_empty(&self) -> bool {
+        self.priority.is_none()
+            && self.queue_id.is_none()
+            && self.assignee_user_id.is_none()
+            && self.assignee_team_id.is_none()
+    }
+
+    /// These changes to a ticket as it is (`version`).
+    pub fn at(&self, version: i32) -> TicketChanges {
+        TicketChanges {
+            version,
+            priority: self.priority.clone(),
+            queue_id: self.queue_id,
+            assignee_user_id: self.assignee_user_id,
+            assignee_team_id: self.assignee_team_id,
+            ..TicketChanges::default()
+        }
+    }
+}
+
 /// A status change.
 #[derive(Debug, Clone, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]

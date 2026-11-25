@@ -9248,6 +9248,46 @@
 				}
 			}
 		},
+		"/api/v1/tickets/bulk": {
+			"post": {
+				"tags": ["servicedesk"],
+				"summary": "Applies the same changes to many tickets, each on its own: those you\ncan't change, or that can't take a change (a status they can't move to,\nsay), are reported and the rest are changed. Needs `ticket:write` on\neach.",
+				"operationId": "bulk_update",
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/BulkUpdate"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "array",
+									"items": {
+										"$ref": "#/components/schemas/BulkResult"
+									}
+								}
+							}
+						}
+					},
+					"422": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
 		"/api/v1/tickets/{id}": {
 			"get": {
 				"tags": ["servicedesk"],
@@ -12793,6 +12833,76 @@
 						"type": "string"
 					}
 				}
+			},
+			"BulkFields": {
+				"type": "object",
+				"description": "The same changes for many tickets (bulk edit): each field left out is\nunchanged, `null` clears.",
+				"properties": {
+					"assigneeTeamId": {
+						"type": ["string", "null"],
+						"format": "uuid"
+					},
+					"assigneeUserId": {
+						"type": ["string", "null"],
+						"format": "uuid"
+					},
+					"priority": {
+						"type": ["string", "null"],
+						"description": "`p1` to `p4`, or `auto` to follow the priority matrix again."
+					},
+					"queueId": {
+						"type": ["string", "null"],
+						"format": "uuid"
+					}
+				},
+				"additionalProperties": false
+			},
+			"BulkResult": {
+				"type": "object",
+				"required": ["id", "ok"],
+				"properties": {
+					"error": {
+						"type": ["string", "null"],
+						"description": "Why it wasn't changed."
+					},
+					"id": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"ok": {
+						"type": "boolean"
+					}
+				}
+			},
+			"BulkUpdate": {
+				"type": "object",
+				"required": ["ids"],
+				"properties": {
+					"changes": {
+						"oneOf": [
+							{
+								"$ref": "#/components/schemas/BulkFields",
+								"description": "Field changes for all of them."
+							},
+							{
+								"type": "null"
+							}
+						]
+					},
+					"ids": {
+						"type": "array",
+						"items": {
+							"type": "string",
+							"format": "uuid"
+						},
+						"description": "The tickets (at most 100)."
+					},
+					"status": {
+						"type": ["string", "null"],
+						"description": "Then a status for all of them (a status key, e.g. `in_progress`)."
+					}
+				},
+				"additionalProperties": false
 			},
 			"CancelRunResponse": {
 				"type": "object",

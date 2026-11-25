@@ -19,6 +19,38 @@
 
 	let canShare = $derived(data.user.grantedPermissions.includes('servicedesk:configure'));
 	let saving = $state(false);
+	let selected: string[] = $state([]);
+	let allSelected = $derived(
+		data.tickets.length > 0 && data.tickets.every((t) => selected.includes(t.id))
+	);
+	// What was picked is gone once the list changes.
+	$effect(() => {
+		void data.tickets;
+		selected = [];
+	});
+	let bulkAssignees = $derived([
+		{ value: '', label: 'Assignee: keep' },
+		{ value: `user:${data.user.id}`, label: 'Me' },
+		{ value: 'none', label: 'Nobody' },
+		...data.people
+			.filter((p) => p.value !== data.user.id)
+			.map((p) => ({ value: `user:${p.value}`, label: p.label })),
+		...data.teams.map((t) => ({ value: `team:${t.value}`, label: `Team: ${t.label}` }))
+	]);
+	const bulkPriorities = [
+		{ value: '', label: 'Priority: keep' },
+		{ value: 'auto', label: 'From the matrix' },
+		{ value: 'p1', label: 'P1' },
+		{ value: 'p2', label: 'P2' },
+		{ value: 'p3', label: 'P3' },
+		{ value: 'p4', label: 'P4' }
+	];
+	let bulkQueues = $derived([
+		{ value: '', label: 'Queue: keep' },
+		{ value: 'none', label: 'No queue' },
+		...data.queues.map((q) => ({ value: q.id, label: q.name }))
+	]);
+	let bulkStatuses = $derived([{ value: '', label: 'Status: keep' }, ...data.statuses]);
 	let active = $derived(data.views.find((v) => v.id === data.saved));
 	const PRIORITY_FILTERS = [
 		{ value: '', label: 'All priorities' },
@@ -190,6 +222,51 @@
 		</div>
 	</div>
 
+	{#if canWrite && selected.length > 0}
+		<form
+			id="bulk"
+			method="POST"
+			action="?/bulk"
+			aria-label="Change selected tickets"
+			class="flex flex-wrap items-center gap-2 rounded-card border border-accent/40 bg-accent-soft p-3"
+			use:enhance={() =>
+				async ({ result, update }) => {
+					if (result.type === 'success') {
+						const done = (
+							result.data as { bulk?: { changed: number; failed: number; reason: string | null } }
+						).bulk;
+						if (done && done.failed > 0) {
+							toast.push({
+								title: `Changed ${done.changed}; ${done.failed} couldn’t be`,
+								description: done.reason ?? undefined,
+								tone: 'warning'
+							});
+						} else if (done) {
+							toast.push({ title: `Changed ${done.changed} tickets.`, tone: 'success' });
+						}
+					} else if (result.type === 'failure') {
+						const failed = result.data as { message?: string } | undefined;
+						toast.push({ title: failed?.message ?? 'Could not change them.', tone: 'danger' });
+					}
+					await update({ reset: false });
+				}}
+		>
+			<span class="text-sm font-medium text-fg">{selected.length} selected</span>
+			<Select name="assignee" aria-label="Assignee" value="" options={bulkAssignees} />
+			<Select name="priority" aria-label="Set priority" value="" options={bulkPriorities} />
+			{#if data.queues.length > 0}
+				<Select name="queue" aria-label="Set queue" value="" options={bulkQueues} />
+			{/if}
+			{#if data.statuses.length > 0}
+				<Select name="status" aria-label="Set status" value="" options={bulkStatuses} />
+			{/if}
+			<Button type="submit" variant="primary">Apply</Button>
+			<Button variant="ghost" onclick={() => (selected = [])}>Clear</Button>
+		</form>
+	{:else if canWrite}
+		<form id="bulk" method="POST" action="?/bulk" hidden></form>
+	{/if}
+
 	{#if data.tickets.length === 0}
 		<EmptyState
 			title={data.search ? 'No tickets match' : 'No tickets here'}
@@ -206,6 +283,17 @@
 					class="border-b border-border bg-surface-sunken text-xs tracking-wide text-fg-muted uppercase"
 				>
 					<tr>
+						{#if canWrite}
+							<th scope="col" class="w-10 py-2.5 pl-4">
+								<input
+									type="checkbox"
+									aria-label="Select all"
+									checked={allSelected}
+									onchange={(e) =>
+										(selected = e.currentTarget.checked ? data.tickets.map((t) => t.id) : [])}
+								/>
+							</th>
+						{/if}
 						<th scope="col" class="px-4 py-2.5 font-medium">Ticket</th>
 						<th scope="col" class="px-4 py-2.5 font-medium">Client</th>
 						<th scope="col" class="px-4 py-2.5 font-medium">Status</th>
@@ -218,6 +306,18 @@
 					{#each data.tickets as ticket (ticket.id)}
 						{@const priority = priorityOf(ticket.priority)}
 						<tr class="border-b border-border last:border-0 hover:bg-surface-sunken">
+							{#if canWrite}
+								<td class="py-2.5 pl-4">
+									<input
+										type="checkbox"
+										form="bulk"
+										name="ids"
+										value={ticket.id}
+										aria-label={`Select ${ticket.reference}`}
+										bind:group={selected}
+									/>
+								</td>
+							{/if}
 							<td class="max-w-md px-4 py-2.5">
 								<a
 									class="block truncate font-medium text-fg hover:text-accent"
