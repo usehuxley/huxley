@@ -500,6 +500,7 @@ use crate::workforce_routes;
         huxley_servicedesk::tickets::Ticket,
         huxley_servicedesk::tickets::TicketPage,
         huxley_servicedesk::my_work::MyWork,
+        huxley_servicedesk::sla::Holiday,
         huxley_servicedesk::templates::TicketTemplate,
         huxley_servicedesk::templates::TicketTemplateInput,
         huxley_servicedesk::tickets::BulkFields,

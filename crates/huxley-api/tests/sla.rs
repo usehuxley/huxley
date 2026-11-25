@@ -514,3 +514,88 @@ async fn policies_are_checked_and_configured_by_admins() {
         .await;
     assert_eq!(status, StatusCode::FORBIDDEN);
 }
+
+#[tokio::test]
+async fn holidays_stop_the_clock() {
+    let Some(s) = setup().await else { return };
+    let today = jiff::Zoned::now()
+        .with_time_zone(jiff::tz::TimeZone::UTC)
+        .date();
+    // A week of holidays from today, and one far off.
+    let mut holidays: Vec<Value> = (0..7)
+        .map(|d| json!({ "date": today.saturating_add(jiff::Span::new().days(d)).to_string(), "name": "Shutdown" }))
+        .collect();
+    holidays.push(json!({ "date": "2099-12-25", "name": "Far off" }));
+    let all_day = json!([["00:00", "24:00"]]);
+    let policy = s
+        .ok(
+            &s.owner,
+            "POST",
+            "/api/v1/servicedesk/sla-policies",
+            Some(json!({
+            "name": unique("Holidays"), "hoursSource": "policy", "timezone": "UTC",
+            "hours": { "mon": all_day, "tue": all_day, "wed": all_day, "thu": all_day,
+                       "fri": all_day, "sat": all_day, "sun": all_day },
+            "holidays": holidays,
+            "targets": { "p3": { "response": 60 } } })),
+        )
+        .await;
+    assert_eq!(policy["holidays"].as_array().unwrap().len(), 8);
+    s.ok(
+        &s.owner,
+        "PUT",
+        &format!("/api/v1/orgs/{}/sla", s.acme),
+        Some(json!({ "policyId": policy["id"] })),
+    )
+    .await;
+    let t = s
+        .ticket(
+            &s.owner,
+            json!({ "orgId": s.acme, "title": "Over the shutdown" }),
+        )
+        .await;
+    // Due an hour into the first day after the week off.
+    let back = today.saturating_add(jiff::Span::new().days(7));
+    let due = jiff::Timestamp::from_second(when(&t["responseDueAt"]))
+        .unwrap()
+        .to_zoned(jiff::tz::TimeZone::UTC);
+    assert_eq!(
+        (due.date(), due.hour(), due.minute()),
+        (back, 1, 0),
+        "{due}"
+    );
+    // The ticket keeps the holidays within two years; the far one isn't.
+    let mut tx = begin_scoped(&s.pools.app, &OrgScope::System).await.unwrap();
+    let calendar: Value =
+        sqlx::query_scalar("SELECT calendar FROM sd_ticket_sla WHERE ticket_id = $1")
+            .bind(Uuid::parse_str(t["id"].as_str().unwrap()).unwrap())
+            .fetch_one(&mut *tx)
+            .await
+            .unwrap();
+    tx.commit().await.unwrap();
+    let closed = calendar["closed"].as_array().unwrap();
+    assert_eq!(closed.len(), 7, "{calendar}");
+    assert!(!closed.contains(&json!("2099-12-25")));
+    // Dates are checked; duplicates are folded.
+    let (status, problem) = s
+        .call(
+            &s.owner,
+            "POST",
+            "/api/v1/servicedesk/sla-policies",
+            Some(json!({
+            "name": unique("Bad"), "holidays": [{ "date": "25/12/2026" }] })),
+        )
+        .await;
+    assert_eq!(
+        (status, field(&problem)),
+        (StatusCode::UNPROCESSABLE_ENTITY, "/holidays".into())
+    );
+    let folded = s
+        .ok(&s.owner, "POST", "/api/v1/servicedesk/sla-policies", Some(json!({
+            "name": unique("Folded"), "holidays": [{ "date": "2026-12-26" }, { "date": "2026-12-25", "name": "Christmas" }, { "date": "2026-12-26", "name": "Boxing Day" }] })))
+        .await;
+    assert_eq!(
+        folded["holidays"],
+        json!([{ "date": "2026-12-25", "name": "Christmas" }, { "date": "2026-12-26", "name": "Boxing Day" }])
+    );
+}

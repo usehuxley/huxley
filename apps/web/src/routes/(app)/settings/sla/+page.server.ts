@@ -1,3 +1,4 @@
+import { parseHolidays } from '#lib/tickets/holidays.ts';
 import { error, fail } from '@sveltejs/kit';
 import { hoursFromForm } from '#lib/crm/hours.ts';
 import { formString } from '#lib/forms.ts';
@@ -48,6 +49,7 @@ export const actions: Actions = {
 			hoursSource: formString(form, 'hoursSource') || 'client_site',
 			hours: hoursFromForm(form),
 			timezone: formString(form, 'timezone') || null,
+			...(form.has('holidays') ? { holidays: parseHolidays(formString(form, 'holidays')) } : {}),
 			isDefault: form.get('isDefault') === 'on',
 			targets: parsed.targets,
 			...(version ? { version: Number(version) } : {})

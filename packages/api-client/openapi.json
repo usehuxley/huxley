@@ -14950,6 +14950,21 @@
 					}
 				}
 			},
+			"Holiday": {
+				"type": "object",
+				"description": "A day a policy's clocks don't count.",
+				"required": ["date"],
+				"properties": {
+					"date": {
+						"type": "string",
+						"description": "`YYYY-MM-DD`, in the calendar's time zone."
+					},
+					"name": {
+						"type": "string"
+					}
+				},
+				"additionalProperties": false
+			},
 			"ImapSettings": {
 				"type": "object",
 				"description": "Where an IMAP mailbox fetches from.",
@@ -16547,6 +16562,7 @@
 					"description",
 					"hoursSource",
 					"hours",
+					"holidays",
 					"isDefault",
 					"targets",
 					"version"
@@ -16554,6 +16570,13 @@
 				"properties": {
 					"description": {
 						"type": "string"
+					},
+					"holidays": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/Holiday"
+						},
+						"description": "Days its clocks don't count (unless it's around the clock):\n`[{\"date\": \"2026-12-25\", \"name\": \"Christmas Day\"}, …]`, in order."
 					},
 					"hours": {
 						"type": "object",
@@ -16611,6 +16634,13 @@
 				"properties": {
 					"description": {
 						"type": ["string", "null"]
+					},
+					"holidays": {
+						"type": ["array", "null"],
+						"items": {
+							"$ref": "#/components/schemas/Holiday"
+						},
+						"description": "Days its clocks don't count (replaces the list when given)."
 					},
 					"hours": {
 						"type": ["object", "null"],
