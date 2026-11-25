@@ -77,7 +77,10 @@
 			? [{ href: '/people', label: 'People', icon: UsersRound }]
 			: []),
 		{ href: '/assets', label: 'Assets', icon: Boxes, soon: true },
-		{ href: '/knowledge', label: 'Knowledge', icon: BookOpen, soon: true },
+		...(data.user.activeModules.includes('knowledge') &&
+		data.user.grantedPermissions.includes('kb:read')
+			? [{ href: '/knowledge', label: 'Knowledge', icon: BookOpen }]
+			: [{ href: '/knowledge', label: 'Knowledge', icon: BookOpen, soon: true }]),
 		{ href: '/reports', label: 'Reports', icon: ChartColumn, soon: true },
 		...(canSeeSettings ? [{ href: '/settings', label: 'Settings', icon: Settings }] : [])
 	]);

@@ -17,10 +17,11 @@ use tower_http::trace::TraceLayer;
 use crate::{
     ApiError, AppState, ai_routes, approval_routes, assistant_routes, audit_routes, auth_routes,
     connection_routes, crm_routes, csrf, dataset_routes, desk_routes, entity_routes, form_routes,
-    health, hook_routes, integration_routes, mcp, mfa_routes, module_routes, notification_routes,
-    oauth_routes, openapi, org_routes, pack_routes, passkey_routes, public_form_routes,
-    runner_routes, script_routes, search_routes, security_routes, sso_routes, team_routes,
-    template_routes, token_routes, user_routes, variable_routes, workflow_routes, workforce_routes,
+    health, hook_routes, integration_routes, kb_routes, mcp, mfa_routes, module_routes,
+    notification_routes, oauth_routes, openapi, org_routes, pack_routes, passkey_routes,
+    public_form_routes, runner_routes, script_routes, search_routes, security_routes, sso_routes,
+    team_routes, template_routes, token_routes, user_routes, variable_routes, workflow_routes,
+    workforce_routes,
 };
 
 const REQUEST_ID: HeaderName = HeaderName::from_static("x-request-id");
@@ -58,6 +59,7 @@ pub fn router(state: AppState) -> Router {
         .merge(crm_routes::record_routes())
         .merge(desk_routes::routes())
         .nest("/workforce", workforce_routes::routes())
+        .nest("/kb", kb_routes::routes())
         .nest("/search", search_routes::routes())
         .nest("/audit", audit_routes::routes())
         .nest("/modules", module_routes::routes())

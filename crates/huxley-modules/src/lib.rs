@@ -72,10 +72,10 @@ pub const REGISTRY: &[Module] = &[
     Module {
         key: "knowledge",
         name: "Knowledge base",
-        description: "Articles, client documentation, and the credential vault.",
+        description: "Articles with review and revisions, categories, and search.",
         requires: &[],
         phase: 6,
-        released: false,
+        released: true,
     },
     Module {
         key: "contracts",
