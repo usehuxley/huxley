@@ -236,22 +236,29 @@ pub async fn for_person(
     from: &str,
     to: &str,
 ) -> DeskResult<Vec<TimeEntry>> {
+    let (start, end) = (day("from", from)?, day("to", to)?);
+    let span = end.since(start).map_or(-1, |s| s.get_days());
+    if !(0..=62).contains(&span) {
+        return Err(DeskError::invalid(
+            "to",
+            "on or after from, and at most 62 days later",
+        ));
+    }
     Ok(sqlx::query_as(sqlx::AssertSqlSafe(format!(
         "{ENTRIES} WHERE e.user_id = $1 AND e.worked_on BETWEEN $2::date AND $3::date \
           ORDER BY e.worked_on, e.created_at"
     )))
     .bind(user)
-    .bind(date("from", from)?)
-    .bind(date("to", to)?)
+    .bind(start.to_string())
+    .bind(end.to_string())
     .fetch_all(conn)
     .await?)
 }
 
-fn date(field: &str, value: &str) -> DeskResult<String> {
+fn day(field: &str, value: &str) -> DeskResult<jiff::civil::Date> {
     value
         .trim()
         .parse::<jiff::civil::Date>()
-        .map(|d| d.to_string())
         .map_err(|_| DeskError::invalid(field, "a date, as YYYY-MM-DD"))
 }
 

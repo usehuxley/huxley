@@ -3532,6 +3532,24 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
+	'/api/v1/time-entries': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** Your time from `from` to `to`: on tickets and not. */
+		get: operations['my_time'];
+		put?: never;
+		/** Logs your non-ticket time (admin, training, travel…). */
+		post: operations['log_time'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
 	'/api/v1/time-entries/{id}': {
 		parameters: {
 			query?: never;
@@ -15506,6 +15524,69 @@ export interface operations {
 			path: {
 				id: string;
 			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['TimeEntryInput'];
+			};
+		};
+		responses: {
+			201: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['TimeEntry'];
+				};
+			};
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	my_time: {
+		parameters: {
+			query: {
+				/** @description `YYYY-MM-DD`. */
+				from: string;
+				/** @description `YYYY-MM-DD`, inclusive (at most 62 days after `from`). */
+				to: string;
+			};
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['TimeEntry'][];
+				};
+			};
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	log_time: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
 			cookie?: never;
 		};
 		requestBody: {

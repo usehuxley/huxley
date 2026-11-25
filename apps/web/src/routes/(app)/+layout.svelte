@@ -11,6 +11,7 @@
 		ChartColumn,
 		CircleCheck,
 		CircleUserRound,
+		Clock,
 		ClipboardList,
 		Database,
 		FileCode,
@@ -38,7 +39,10 @@
 		{ href: '/', label: 'Home', icon: House },
 		...(data.user.activeModules.includes('servicedesk') &&
 		data.user.grantedPermissions.includes('ticket:read')
-			? [{ href: '/my-work', label: 'My work', icon: ListTodo }]
+			? [
+					{ href: '/my-work', label: 'My work', icon: ListTodo },
+					{ href: '/time', label: 'My time', icon: Clock }
+				]
 			: []),
 		...(data.user.grantedPermissions.includes('workflow:read')
 			? [{ href: '/workflows', label: 'Workflows', icon: Workflow }]
