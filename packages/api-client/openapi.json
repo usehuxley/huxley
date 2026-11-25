@@ -4651,6 +4651,16 @@
 						}
 					},
 					{
+						"name": "orgId",
+						"in": "query",
+						"description": "Only this organization's articles (e.g. a client's documentation).",
+						"required": false,
+						"schema": {
+							"type": ["string", "null"],
+							"format": "uuid"
+						}
+					},
+					{
 						"name": "limit",
 						"in": "query",
 						"description": "Default 50, at most 200.",
@@ -11614,6 +11624,296 @@
 							"application/problem+json": {
 								"schema": {
 									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/vault/items": {
+			"get": {
+				"tags": ["vault"],
+				"summary": "Items you can see, by name (never their secrets).",
+				"operationId": "list_vault_items",
+				"parameters": [
+					{
+						"name": "q",
+						"in": "query",
+						"description": "Words in the name, username, URL or tags.",
+						"required": false,
+						"schema": {
+							"type": ["string", "null"]
+						}
+					},
+					{
+						"name": "orgId",
+						"in": "query",
+						"description": "Only this organization's items.",
+						"required": false,
+						"schema": {
+							"type": ["string", "null"],
+							"format": "uuid"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "array",
+									"items": {
+										"$ref": "#/components/schemas/VaultItem"
+									}
+								}
+							}
+						}
+					}
+				}
+			},
+			"post": {
+				"tags": ["vault"],
+				"summary": "Adds an item at an organization (`vault:manage` there). The secret is\nstored encrypted.",
+				"operationId": "create_vault_item",
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/VaultItemInput"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"201": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/VaultItemView"
+								}
+							}
+						}
+					},
+					"422": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/vault/items/{id}": {
+			"get": {
+				"tags": ["vault"],
+				"summary": "An item (never its secret).",
+				"operationId": "get_vault_item",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/VaultItemView"
+								}
+							}
+						}
+					},
+					"404": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			},
+			"delete": {
+				"tags": ["vault"],
+				"summary": "Deletes an item; who revealed it stays on record.",
+				"operationId": "delete_vault_item",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"responses": {
+					"204": {}
+				}
+			},
+			"patch": {
+				"tags": ["vault"],
+				"summary": "Changes an item; send back the `version` you read. A `secret` replaces\nthe current one; `clearSecret` removes it.",
+				"operationId": "update_vault_item",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/VaultItemChanges"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/VaultItemView"
+								}
+							}
+						}
+					},
+					"409": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					},
+					"422": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/vault/items/{id}/reveal": {
+			"post": {
+				"tags": ["vault"],
+				"summary": "Reveals an item's secret (`vault:reveal`). Each reveal is logged with\nwho, when and the reason, audited, and raised as\n`vault.secret_revealed`. The response isn't cached.",
+				"operationId": "reveal_vault_secret",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/RevealRequest"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/RevealedSecret"
+								}
+							}
+						}
+					},
+					"409": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/vault/items/{id}/reveals": {
+			"get": {
+				"tags": ["vault"],
+				"summary": "Who revealed an item's secret, newest first (`vault:read`).",
+				"operationId": "list_item_reveals",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "array",
+									"items": {
+										"$ref": "#/components/schemas/VaultReveal"
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/vault/reveals": {
+			"get": {
+				"tags": ["vault"],
+				"summary": "Every reveal you can see, newest first, including those of deleted\nitems (`vault:read`).",
+				"operationId": "list_vault_reveals",
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "array",
+									"items": {
+										"$ref": "#/components/schemas/VaultReveal"
+									}
 								}
 							}
 						}
@@ -19766,6 +20066,25 @@
 					}
 				}
 			},
+			"RevealRequest": {
+				"type": "object",
+				"properties": {
+					"reason": {
+						"type": ["string", "null"],
+						"description": "Why: kept with the reveal (e.g. the ticket being worked)."
+					}
+				},
+				"additionalProperties": false
+			},
+			"RevealedSecret": {
+				"type": "object",
+				"required": ["secret"],
+				"properties": {
+					"secret": {
+						"type": "string"
+					}
+				}
+			},
 			"Review": {
 				"type": "object",
 				"description": "What a pack would add, for an admin to approve.",
@@ -22705,6 +23024,207 @@
 				"type": "string",
 				"enum": ["string", "number", "bool", "json", "secret"]
 			},
+			"VaultItem": {
+				"type": "object",
+				"description": "An item as shown: never with its secret.",
+				"required": [
+					"id",
+					"orgId",
+					"orgName",
+					"name",
+					"kind",
+					"username",
+					"url",
+					"notes",
+					"tags",
+					"hasSecret",
+					"updatedAt",
+					"version"
+				],
+				"properties": {
+					"hasSecret": {
+						"type": "boolean",
+						"description": "Whether it holds a secret to reveal."
+					},
+					"id": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"kind": {
+						"type": "string"
+					},
+					"lastRevealedAt": {
+						"type": ["string", "null"],
+						"format": "date-time"
+					},
+					"name": {
+						"type": "string"
+					},
+					"notes": {
+						"type": "string"
+					},
+					"orgId": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"orgName": {
+						"type": "string"
+					},
+					"secretChangedAt": {
+						"type": ["string", "null"],
+						"format": "date-time"
+					},
+					"tags": {
+						"type": "array",
+						"items": {
+							"type": "string"
+						}
+					},
+					"updatedAt": {
+						"type": "string",
+						"format": "date-time"
+					},
+					"updatedByName": {
+						"type": ["string", "null"]
+					},
+					"url": {
+						"type": "string"
+					},
+					"username": {
+						"type": "string"
+					},
+					"version": {
+						"type": "integer",
+						"format": "int32",
+						"description": "For optimistic locking: send it back when changing the item."
+					}
+				}
+			},
+			"VaultItemChanges": {
+				"type": "object",
+				"description": "Changes to an item: what's given changes.",
+				"required": ["version"],
+				"properties": {
+					"clearSecret": {
+						"type": "boolean",
+						"description": "Remove the secret."
+					},
+					"kind": {
+						"type": ["string", "null"]
+					},
+					"name": {
+						"type": ["string", "null"]
+					},
+					"notes": {
+						"type": ["string", "null"]
+					},
+					"secret": {
+						"type": ["string", "null"],
+						"description": "A new secret (leave out to keep the current one)."
+					},
+					"tags": {
+						"type": ["array", "null"],
+						"items": {
+							"type": "string"
+						}
+					},
+					"url": {
+						"type": ["string", "null"]
+					},
+					"username": {
+						"type": ["string", "null"]
+					},
+					"version": {
+						"type": "integer",
+						"format": "int32",
+						"description": "The version you read."
+					}
+				},
+				"additionalProperties": false
+			},
+			"VaultItemInput": {
+				"type": "object",
+				"description": "A new item.",
+				"required": ["orgId", "name"],
+				"properties": {
+					"kind": {
+						"type": ["string", "null"],
+						"description": "`login` (the default), `api_key`, `wifi`, `note` or `other`."
+					},
+					"name": {
+						"type": "string"
+					},
+					"notes": {
+						"type": ["string", "null"],
+						"description": "Not secret: how to use it, who owns it."
+					},
+					"orgId": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"secret": {
+						"type": ["string", "null"],
+						"description": "The password, key or secret note. Stored encrypted."
+					},
+					"tags": {
+						"type": ["array", "null"],
+						"items": {
+							"type": "string"
+						}
+					},
+					"url": {
+						"type": ["string", "null"]
+					},
+					"username": {
+						"type": ["string", "null"]
+					}
+				},
+				"additionalProperties": false
+			},
+			"VaultItemView": {
+				"allOf": [
+					{
+						"$ref": "#/components/schemas/VaultItem"
+					},
+					{
+						"type": "object",
+						"required": ["canReveal", "canManage"],
+						"properties": {
+							"canManage": {
+								"type": "boolean"
+							},
+							"canReveal": {
+								"type": "boolean"
+							}
+						}
+					}
+				],
+				"description": "An item, with what you may do with it."
+			},
+			"VaultReveal": {
+				"type": "object",
+				"description": "A reveal, as logged.",
+				"required": ["itemName", "reason", "revealedAt"],
+				"properties": {
+					"itemId": {
+						"type": ["string", "null"],
+						"format": "uuid"
+					},
+					"itemName": {
+						"type": "string"
+					},
+					"reason": {
+						"type": "string"
+					},
+					"revealedAt": {
+						"type": "string",
+						"format": "date-time"
+					},
+					"userName": {
+						"type": ["string", "null"]
+					}
+				}
+			},
 			"VerifyEmailRequest": {
 				"type": "object",
 				"required": ["token"],
@@ -22988,6 +23508,10 @@
 		{
 			"name": "workforce",
 			"description": "Skills, certifications and what work requires (the workforce module)"
+		},
+		{
+			"name": "vault",
+			"description": "Client passwords, keys and secret notes, with audited reveals (the vault module)"
 		},
 		{
 			"name": "knowledge",

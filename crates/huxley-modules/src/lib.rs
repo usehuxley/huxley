@@ -78,6 +78,14 @@ pub const REGISTRY: &[Module] = &[
         released: true,
     },
     Module {
+        key: "vault",
+        name: "Credential vault",
+        description: "Client passwords, keys and secret notes, encrypted, with every reveal audited.",
+        requires: &[],
+        phase: 6,
+        released: true,
+    },
+    Module {
         key: "contracts",
         name: "Contracts",
         description: "Agreements, warranties, and the product catalog.",

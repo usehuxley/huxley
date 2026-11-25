@@ -49,6 +49,7 @@ mod template_routes;
 pub mod token_routes;
 pub mod user_routes;
 mod variable_routes;
+pub mod vault_routes;
 mod workflow_routes;
 pub mod workforce_routes;
 

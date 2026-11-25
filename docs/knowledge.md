@@ -107,6 +107,6 @@ Each carries the article's `title`, `status`, `visibility`, `revision` and the `
 
 An article read through the API has `bodyHtml` (the text rendered and made safe), `published` (what readers see), and `canWrite` and `canPublish` for you.
 
-## Coming next
+## Client documentation
 
-Client documentation and the credential vault.
+A client's articles are its documentation: how its network, backups and line-of-business apps are set up and run. A client's **Documentation** tab lists them, and **New document** starts an article at that client. They follow the same review flow and permissions as any article, and are seen only by those with access to that client. Keep the client's passwords beside them in the [credential vault](vault.md).

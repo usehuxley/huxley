@@ -27,12 +27,27 @@ export const load: PageServerLoad = async (event) => {
 	if (!org.data || !company.data || !sites.data || !contacts.data) {
 		error(503, 'Could not load the client.');
 	}
+	const { user } = await event.parent();
+	const has = (module: string, permission: string) =>
+		user.activeModules.includes(module) && user.grantedPermissions.includes(permission);
+	const [vault, documents] = await Promise.all([
+		has('vault', 'vault:read')
+			? client.GET('/api/v1/vault/items', { params: { query: { orgId: id } } })
+			: Promise.resolve({ data: undefined }),
+		has('knowledge', 'kb:read')
+			? client.GET('/api/v1/kb/articles', { params: { query: { orgId: id, limit: 200 } } })
+			: Promise.resolve({ data: undefined })
+	]);
 	return {
 		org: org.data,
 		company: company.data,
 		sites: sites.data,
 		contacts: contacts.data,
 		actions,
+		vault: vault.data ?? null,
+		documents: documents.data?.items ?? null,
+		canWriteDocs: user.grantedPermissions.includes('kb:write'),
+		canManageVault: user.grantedPermissions.includes('vault:manage'),
 		search,
 		tab: event.url.searchParams.get('tab') ?? 'overview'
 	};
@@ -67,7 +82,60 @@ function siteBody(form: FormData) {
 	};
 }
 
+/** A vault item from its form. The secret is sent only when typed. */
+function vaultBody(form: FormData) {
+	const secret = formString(form, 'secret');
+	return {
+		name: formString(form, 'name'),
+		kind: formString(form, 'kind') || 'login',
+		username: formString(form, 'username'),
+		url: formString(form, 'url'),
+		notes: formString(form, 'notes'),
+		tags: formString(form, 'tags')
+			.split(',')
+			.map((t) => t.trim())
+			.filter(Boolean),
+		...(secret ? { secret } : {})
+	};
+}
+
 export const actions: Actions = {
+	vaultSave: async (event) => {
+		const form = await event.request.formData();
+		const itemId = formString(form, 'itemId');
+		const body = vaultBody(form);
+		const result = itemId
+			? await api(event).PATCH('/api/v1/vault/items/{id}', {
+					params: { path: { id: itemId } },
+					body: {
+						version: Number(formString(form, 'version')),
+						...body,
+						clearSecret: form.get('clearSecret') === 'on'
+					}
+				})
+			: await api(event).POST('/api/v1/vault/items', { body: { orgId: event.params.id, ...body } });
+		if (!result.data) {
+			return fail(result.response.status, {
+				vault: {
+					errors: fieldErrors(result.error),
+					message: problemMessage(result.error, 'Could not save it.')
+				}
+			});
+		}
+		return { vault: { saved: true } };
+	},
+	vaultDelete: async (event) => {
+		const itemId = formString(await event.request.formData(), 'itemId');
+		const { error: problem, response } = await api(event).DELETE('/api/v1/vault/items/{id}', {
+			params: { path: { id: itemId } }
+		});
+		if (response.status !== 204) {
+			return fail(response.status, {
+				vault: { message: problemMessage(problem, 'Could not delete it.') }
+			});
+		}
+		return { vault: { saved: true } };
+	},
 	company: async (event) => {
 		const form = await event.request.formData();
 		const { error: problem, response } = await api(event).PUT('/api/v1/orgs/{id}/company', {

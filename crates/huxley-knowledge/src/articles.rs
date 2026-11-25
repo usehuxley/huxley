@@ -185,6 +185,8 @@ pub struct Filter {
     pub q: Option<String>,
     pub category_id: Option<Uuid>,
     pub status: Option<String>,
+    /// Only this organization's articles.
+    pub org_id: Option<Uuid>,
     /// Where drafts (and the working copy) may be seen.
     pub drafts: Drafts,
     pub limit: i64,
@@ -228,7 +230,8 @@ pub async fn list(conn: &mut PgConnection, filter: &Filter) -> KbResult<(Vec<Sum
                          ELSE to_tsvector('english', coalesce(r.title, '') || ' ' || coalesce(r.body, '')) @@ {query} END) \
                 OR (CASE WHEN {own} THEN a.title ELSE r.title END) ILIKE '%' || $1 || '%') \
            AND ($2::uuid IS NULL OR a.category_id = $2) \
-           AND ($3::text IS NULL OR (CASE WHEN {own} THEN a.status ELSE 'published' END) = $3)"
+           AND ($3::text IS NULL OR (CASE WHEN {own} THEN a.status ELSE 'published' END) = $3) \
+           AND ($8::uuid IS NULL OR a.org_id = $8)"
     );
     let columns = format!(
         "a.id, a.org_id, o.name AS org_name, a.category_id, c.name AS category_name, \
@@ -256,6 +259,7 @@ pub async fn list(conn: &mut PgConnection, filter: &Filter) -> KbResult<(Vec<Sum
     .bind(filter.limit.clamp(1, 200))
     .bind(filter.offset.max(0))
     .bind(&orgs)
+    .bind(filter.org_id)
     .fetch_all(&mut *conn)
     .await?;
     let total: i64 =
@@ -268,6 +272,7 @@ pub async fn list(conn: &mut PgConnection, filter: &Filter) -> KbResult<(Vec<Sum
             .bind(0_i64)
             .bind(0_i64)
             .bind(&orgs)
+            .bind(filter.org_id)
             .fetch_one(conn)
             .await?;
     Ok((rows, total))
