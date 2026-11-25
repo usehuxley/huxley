@@ -386,7 +386,8 @@ pub enum Step {
     /// module).
     #[serde(rename = "core.ticket.dispatch")]
     TicketDispatch(TicketDispatchStep),
-    /// Fetch new mail from IMAP mailboxes (the `servicedesk` module).
+    /// Fetch new mail from IMAP and Microsoft 365 mailboxes (the `servicedesk`
+    /// module).
     #[serde(rename = "core.mail.fetch")]
     MailFetch(MailFetchStep),
     /// Email a public note to the ticket's requester (the `servicedesk`
@@ -1174,7 +1175,7 @@ pub struct TicketDispatch {
 }
 
 /// Mail to fetch (`core.mail.fetch`): new messages from the enabled IMAP
-/// mailboxes at the run's organization and below, or just `mailbox_id`, up
+/// and Microsoft 365 mailboxes at the run's organization and below, or just `mailbox_id`, up
 /// to `limit` each (default 50). Each new message is kept and announced with
 /// `email.received`. A mailbox that can't be reached is reported (and shown
 /// on it) without failing the step. Output: `{ mailboxes: [{ mailbox_id,

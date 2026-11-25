@@ -6,7 +6,7 @@ info:
     Users, groups, licenses and mail in a Microsoft 365 tenant, through an
     Entra app registration with application permissions (for example
     User.ReadWrite.All, Group.ReadWrite.All, Organization.Read.All,
-    Mail.Send). Set the tenant to the directory (tenant) ID or a verified
+    Mail.Send, and Mail.ReadWrite to fetch a service desk mailbox). Set the tenant to the directory (tenant) ID or a verified
     domain.
 servers:
   - url: https://graph.microsoft.com/v1.0
@@ -30,6 +30,9 @@ components:
     filter: { name: $filter, in: query, description: "OData filter, e.g. startswith(displayName,'A')", schema: { type: string } }
     select: { name: $select, in: query, description: Comma-separated properties to return, schema: { type: string } }
     top: { name: $top, in: query, description: Page size (1-999), schema: { type: integer, minimum: 1, maximum: 999 } }
+    folder: { name: folder, in: path, required: true, description: "A mail folder's ID or well-known name, e.g. inbox", schema: { type: string } }
+    message: { name: message, in: path, required: true, description: The message's ID, schema: { type: string } }
+    orderby: { name: $orderby, in: query, description: "Sort order, e.g. receivedDateTime", schema: { type: string } }
   schemas:
     User:
       type: object
@@ -212,6 +215,54 @@ paths:
                           emailAddress: { type: object, properties: { address: { type: string }, name: { type: string } } }
       responses:
         "202": { description: Accepted }
+  /users/{user}/mailFolders/{folder}/messages:
+    get:
+      operationId: listMailMessages
+      summary: List a mail folder's messages
+      description: Needs Mail.Read (or Mail.ReadWrite to mark them read).
+      tags: [Mail]
+      parameters:
+        - { $ref: "#/components/parameters/user" }
+        - { $ref: "#/components/parameters/folder" }
+        - { $ref: "#/components/parameters/filter" }
+        - { $ref: "#/components/parameters/select" }
+        - { $ref: "#/components/parameters/top" }
+        - { $ref: "#/components/parameters/orderby" }
+      responses:
+        "200":
+          description: The messages
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  value: { type: array, items: { type: object, properties: { id: { type: string }, subject: { type: string }, isRead: { type: boolean } } } }
+                  "@odata.nextLink": { type: string }
+  /users/{user}/messages/{message}/$value:
+    get:
+      operationId: getMailMessageMime
+      summary: Get a message as MIME (the raw email)
+      tags: [Mail]
+      parameters: [{ $ref: "#/components/parameters/user" }, { $ref: "#/components/parameters/message" }]
+      responses:
+        "200": { description: The message, as MIME text, content: { text/plain: { schema: { type: string } } } }
+  /users/{user}/messages/{message}:
+    patch:
+      operationId: updateMailMessage
+      summary: Update a message (for example, mark it read)
+      tags: [Mail]
+      parameters: [{ $ref: "#/components/parameters/user" }, { $ref: "#/components/parameters/message" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                isRead: { type: boolean }
+                categories: { type: array, items: { type: string } }
+      responses:
+        "200": { description: The message, content: { application/json: { schema: { type: object } } } }
   /subscribedSkus:
     get:
       operationId: listSubscribedSkus

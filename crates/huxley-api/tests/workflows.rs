@@ -1581,7 +1581,7 @@ async fn secret_form_answers_are_kept_out_of_the_record() {
         .post(
             &s.owner,
             &format!("/api/v1/forms/{id}/submissions"),
-            json!({ "answers": { "name": "Ada", "pin": "PIN-90210" } }),
+            json!({ "answers": { "name": "Ada", "pin": "PIN-zqxwk" } }),
         )
         .await;
     assert_eq!(status, StatusCode::CREATED, "{submitted}");
@@ -1599,9 +1599,9 @@ async fn secret_form_answers_are_kept_out_of_the_record() {
             .await
             .unwrap();
     assert_eq!(inputs["pin"], "«redacted»");
-    assert!(sealed.is_some_and(|b| !String::from_utf8_lossy(&b).contains("90210")));
+    assert!(sealed.is_some_and(|b| !String::from_utf8_lossy(&b).contains("zqxwk")));
     let (_, shown) = s.get(&s.owner, &format!("/api/v1/runs/{run}")).await;
-    assert!(!shown.to_string().contains("90210"), "{shown}");
+    assert!(!shown.to_string().contains("zqxwk"), "{shown}");
 }
 
 #[tokio::test]

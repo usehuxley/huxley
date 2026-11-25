@@ -249,7 +249,7 @@ A mailbox belongs to an organization, usually your MSP, and has an address. Its 
   - **Ignore the message.**
 - **Strip quoted replies and signatures** (on by default).
 
-**How mail arrives.** There are two ways.
+**How mail arrives.** There are three ways.
 
 **Fetched over IMAP.** For an `imap` mailbox, give the server (`host`, `port`, `security`, `username`, `folder`) and a password. The password is encrypted with your organization's key and is never shown again; leave it out when saving to keep it.
 
@@ -261,6 +261,16 @@ A mailbox belongs to an organization, usually your MSP, and has an address. Its 
   - After that, it takes whatever is new, up to 50 messages per mailbox per run.
 - **Read flags:** fetched messages are marked read.
 - **Errors:** if a mailbox can't be reached (a wrong password, say), its error is kept on the mailbox, and the other mailboxes are still fetched.
+
+**Microsoft 365.** For a `graph` mailbox, Huxley reads the mail through Microsoft Graph, using a Microsoft Graph connection (the built-in Microsoft Graph integration). The connection's app registration needs the **Mail.ReadWrite** application permission.
+
+- **Settings:**
+  - **Connection:** its key, or empty for the one the organization uses.
+  - **Mailbox:** a user or shared mailbox's address, or empty for the mailbox's own address.
+  - **Folder:** empty for the inbox.
+- **Polling:** the *Poll mailboxes* workflow fetches every minute.
+- **What gets fetched:** each run takes the folder's unread messages, oldest first, up to 50 per mailbox per run. Each message is downloaded whole (as MIME, like IMAP), kept, and then marked read in Microsoft 365, so it isn't fetched again.
+- **Errors:** if Graph refuses (a missing permission, say), its error is kept on the mailbox, and the other mailboxes are still fetched.
 
 **Posted to Huxley.** For a `forward` mailbox, mail arrives by being posted to it, the way a mail server's forwarding rule or a mail service's inbound webhook would:
 
@@ -368,4 +378,4 @@ Workflows can open, read, find, update and dispatch tickets and add notes, with 
 
 ## Coming next
 
-Microsoft 365 mailboxes, and sending through a mailbox's own server.
+Sending replies through a mailbox's own server (SMTP) or through Microsoft Graph.
