@@ -98,4 +98,26 @@ test.describe('saved ticket views', () => {
 		await palette.getByRole('combobox').press('Enter');
 		await expect(page.getByRole('heading', { level: 1 })).toHaveText(`Server down ${stamp}`);
 	});
+
+	test('many tickets are assigned and moved at once', async ({ page }) => {
+		const stamp = Date.now().toString(36);
+		const org = await clientWithTickets(stamp);
+		await signIn(page);
+		await page.goto(`/tickets?view=open&org=${org}`);
+		const table = page.getByRole('table', { name: 'Tickets' });
+		await expect(table.getByRole('row')).toHaveCount(3);
+		await page.getByLabel('Select all').check();
+		const bar = page.getByRole('form', { name: 'Change selected tickets' });
+		await expect(bar).toContainText('2 selected');
+		await bar.getByLabel('Assignee').selectOption({ label: 'Me' });
+		await bar.getByLabel('Set status').selectOption({ label: 'In progress' });
+		await bar.getByRole('button', { name: 'Apply' }).click();
+		await expect(page.getByText('Changed 2 tickets.')).toBeVisible();
+		for (const title of [`Server down ${stamp}`, `New mouse ${stamp}`]) {
+			const row = table.getByRole('row').filter({ hasText: title });
+			await expect(row).toContainText('E2E User');
+			await expect(row).toContainText('In progress');
+		}
+		await expect(bar).toBeHidden();
+	});
 });

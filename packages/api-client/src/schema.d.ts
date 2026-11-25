@@ -3303,6 +3303,28 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
+	'/api/v1/tickets/bulk': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/**
+		 * Applies the same changes to many tickets, each on its own: those you
+		 *     can't change, or that can't take a change (a status they can't move to,
+		 *     say), are reported and the rest are changed. Needs `ticket:write` on
+		 *     each.
+		 */
+		post: operations['bulk_update'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
 	'/api/v1/tickets/{id}': {
 		parameters: {
 			query?: never;
@@ -4581,6 +4603,34 @@ export interface components {
 			key: string;
 			name: string;
 			version: string;
+		};
+		/**
+		 * @description The same changes for many tickets (bulk edit): each field left out is
+		 *     unchanged, `null` clears.
+		 */
+		BulkFields: {
+			/** Format: uuid */
+			assigneeTeamId?: string | null;
+			/** Format: uuid */
+			assigneeUserId?: string | null;
+			/** @description `p1` to `p4`, or `auto` to follow the priority matrix again. */
+			priority?: string | null;
+			/** Format: uuid */
+			queueId?: string | null;
+		};
+		BulkResult: {
+			/** @description Why it wasn't changed. */
+			error?: string | null;
+			/** Format: uuid */
+			id: string;
+			ok: boolean;
+		};
+		BulkUpdate: {
+			changes?: components['schemas']['BulkFields'] | null;
+			/** @description The tickets (at most 100). */
+			ids: string[];
+			/** @description Then a status for all of them (a status key, e.g. `in_progress`). */
+			status?: string | null;
 		};
 		CancelRunResponse: {
 			/** @description False if the run had already finished. */
@@ -14735,6 +14785,37 @@ export interface operations {
 				};
 				content: {
 					'application/json': components['schemas']['Ticket'];
+				};
+			};
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	bulk_update: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['BulkUpdate'];
+			};
+		};
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['BulkResult'][];
 				};
 			};
 			422: {

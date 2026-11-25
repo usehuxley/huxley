@@ -68,6 +68,7 @@ pub fn routes() -> Router<AppState> {
         )
         .route("/my-work", get(my_work))
         .route("/tickets", get(list_tickets).post(create_ticket))
+        .route("/tickets/bulk", post(bulk_update))
         .route("/tickets/{id}", get(get_ticket).patch(update_ticket))
         .route("/tickets/{id}/status", post(change_status))
         .route("/tickets/{id}/notes", get(list_notes).post(add_note))
@@ -1151,4 +1152,94 @@ pub async fn delete_view(
     })
     .await?;
     Ok(StatusCode::NO_CONTENT)
+}
+
+/// Most tickets one bulk edit changes.
+const BULK_MAX: usize = 100;
+
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct BulkUpdate {
+    /// The tickets (at most 100).
+    pub ids: Vec<Uuid>,
+    /// Field changes for all of them.
+    #[serde(default)]
+    pub changes: Option<tickets::BulkFields>,
+    /// Then a status for all of them (a status key, e.g. `in_progress`).
+    #[serde(default)]
+    pub status: Option<String>,
+}
+
+#[derive(Debug, serde::Serialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct BulkResult {
+    pub id: Uuid,
+    pub ok: bool,
+    /// Why it wasn't changed.
+    pub error: Option<String>,
+}
+
+/// Applies the same changes to many tickets, each on its own: those you
+/// can't change, or that can't take a change (a status they can't move to,
+/// say), are reported and the rest are changed. Needs `ticket:write` on
+/// each.
+#[utoipa::path(post, path = "/api/v1/tickets/bulk", tag = "servicedesk", request_body = BulkUpdate,
+    responses((status = 200, body = Vec<BulkResult>), (status = 422, body = ApiError, content_type = "application/problem+json")))]
+pub async fn bulk_update(
+    State(state): State<AppState>,
+    authed: Authed,
+    Json(body): Json<BulkUpdate>,
+) -> ApiResult<Json<Vec<BulkResult>>> {
+    require_module(&state, MODULE).await?;
+    let changes = body.changes.unwrap_or_default();
+    let status = body.status.filter(|s| !s.trim().is_empty());
+    if body.ids.is_empty() || body.ids.len() > BULK_MAX {
+        return Err(ApiError::validation().with_field_error("/ids", "1 to 100 tickets"));
+    }
+    if changes.is_empty() && status.is_none() {
+        return Err(ApiError::validation().with_field_error("/changes", "something to change"));
+    }
+    let ctx = authed.user.ctx.clone();
+    let mut results = Vec::with_capacity(body.ids.len());
+    let mut seen = std::collections::BTreeSet::new();
+    for id in body.ids {
+        if !seen.insert(id) {
+            continue;
+        }
+        let outcome: ApiResult<()> = async {
+            let scope = ticket_access(&state, &authed, id, permissions::TICKET_WRITE).await?;
+            scoped(&state, &scope, async |tx| {
+                let mut version = tickets::get(tx, id).await?.version;
+                if !changes.is_empty() {
+                    version = tickets::update(tx, &ctx, id, &changes.at(version))
+                        .await?
+                        .version;
+                }
+                if let Some(status) = &status {
+                    let change = StatusChange {
+                        status: status.clone(),
+                        resolution: None,
+                        version,
+                    };
+                    tickets::change_status(tx, &ctx, id, &change).await?;
+                }
+                Ok(())
+            })
+            .await
+        }
+        .await;
+        results.push(match outcome {
+            Ok(()) => BulkResult {
+                id,
+                ok: true,
+                error: None,
+            },
+            Err(e) => BulkResult {
+                id,
+                ok: false,
+                error: Some(e.summary()),
+            },
+        });
+    }
+    Ok(Json(results))
 }
