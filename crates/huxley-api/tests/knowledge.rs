@@ -47,7 +47,7 @@ async fn setup() -> Option<Setup> {
     // The module is instance-wide: switch it on (other tests may have too).
     let ctx = RequestContext::system(Via::System);
     let mut tx = begin_scoped(&pools.app, &OrgScope::System).await.unwrap();
-    for module in ["crm", "knowledge"] {
+    for module in ["crm", "servicedesk", "knowledge"] {
         huxley_modules::set_enabled(&mut tx, &ctx, module, true, false)
             .await
             .unwrap();
@@ -444,4 +444,72 @@ async fn categories_are_kept_by_publishers_and_previews_are_safe() {
         )
         .await;
     assert_eq!(status, StatusCode::FORBIDDEN);
+}
+
+#[tokio::test]
+async fn articles_are_linked_to_tickets_and_suggested() {
+    let Some(s) = setup().await else { return };
+    let p = people(&s).await;
+    let word = unique("wombatscanner").replace(['-', ' '], "");
+    let fix = published(
+        &s,
+        &p,
+        &format!("Fixing the {word}"),
+        &format!("Restart the {word} service."),
+    )
+    .await;
+    let ticket = s
+        .ok(
+            &p.tech,
+            "POST",
+            "/api/v1/tickets",
+            Some(json!({ "orgId": s.provider, "title": format!("{word} not scanning"), "description": format!("The {word} is stuck") })),
+        )
+        .await;
+    let t = ticket["id"].as_str().unwrap().to_owned();
+    let uri = format!("/api/v1/kb/tickets/{t}/articles");
+
+    // Suggested by its words, before it's linked.
+    let k = s.ok(&p.tech, "GET", &uri, None).await;
+    assert_eq!(k["suggested"][0]["id"], fix.as_str(), "{k}");
+    assert_eq!(
+        (
+            k["linked"].as_array().unwrap().len(),
+            k["canLink"].as_bool()
+        ),
+        (0, Some(true))
+    );
+    // Readers can't link, but see what's linked.
+    let (status, _) = s
+        .call(&p.reader, "POST", &uri, Some(json!({ "articleId": fix })))
+        .await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+    s.ok(&p.tech, "POST", &uri, Some(json!({ "articleId": fix })))
+        .await;
+    let k = s.ok(&p.reader, "GET", &uri, None).await;
+    assert_eq!(
+        (k["linked"][0]["id"].as_str(), k["canLink"].as_bool()),
+        (Some(fix.as_str()), Some(false))
+    );
+    assert_eq!(k["suggested"], json!([]));
+    // The article lists the ticket for writers.
+    let used = s
+        .ok(
+            &p.tech,
+            "GET",
+            &format!("/api/v1/kb/articles/{fix}/tickets"),
+            None,
+        )
+        .await;
+    assert_eq!(used[0]["id"], t.as_str());
+    // A client's technician can't see the MSP's ticket.
+    let (status, _) = s.call(&p.outsider, "GET", &uri, None).await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+    // Unlinked.
+    let (status, _) = s
+        .call(&p.tech, "DELETE", &format!("{uri}/{fix}"), None)
+        .await;
+    assert_eq!(status, StatusCode::NO_CONTENT);
+    let k = s.ok(&p.tech, "GET", &uri, None).await;
+    assert_eq!(k["linked"], json!([]));
 }

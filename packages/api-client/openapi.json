@@ -5109,6 +5109,38 @@
 				}
 			}
 		},
+		"/api/v1/kb/articles/{id}/tickets": {
+			"get": {
+				"tags": ["knowledge"],
+				"summary": "The tickets an article is linked to that you can see (`kb:write` where\nthe article is). Empty when the service desk is off.",
+				"operationId": "list_article_tickets",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "array",
+									"items": {
+										"$ref": "#/components/schemas/KbLinkedTicket"
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		},
 		"/api/v1/kb/categories": {
 			"get": {
 				"tags": ["knowledge"],
@@ -5257,6 +5289,130 @@
 						}
 					},
 					"422": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/kb/tickets/{ticket_id}/articles": {
+			"get": {
+				"tags": ["knowledge"],
+				"summary": "The articles linked to a ticket, and published articles suggested for\nit by its title and description (`ticket:read` on the ticket; what you\nmay read of the knowledge base).",
+				"operationId": "ticket_articles",
+				"parameters": [
+					{
+						"name": "ticket_id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/TicketKnowledge"
+								}
+							}
+						}
+					},
+					"404": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			},
+			"post": {
+				"tags": ["knowledge"],
+				"summary": "Links an article to a ticket (`ticket:write` on the ticket, `kb:read`\nwhere the article is). Linking it again is fine.",
+				"operationId": "link_article",
+				"parameters": [
+					{
+						"name": "ticket_id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/LinkArticle"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"204": {},
+					"404": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					},
+					"409": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/kb/tickets/{ticket_id}/articles/{article_id}": {
+			"delete": {
+				"tags": ["knowledge"],
+				"summary": "Removes an article's link to a ticket (`ticket:write` on the ticket).",
+				"operationId": "unlink_article",
+				"parameters": [
+					{
+						"name": "ticket_id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					},
+					{
+						"name": "article_id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"responses": {
+					"204": {},
+					"404": {
 						"content": {
 							"application/problem+json": {
 								"schema": {
@@ -17032,6 +17188,33 @@
 				},
 				"additionalProperties": false
 			},
+			"KbLinkedTicket": {
+				"type": "object",
+				"description": "A ticket an article is linked to.",
+				"required": ["id", "reference", "title", "orgName", "statusName", "linkedAt"],
+				"properties": {
+					"id": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"linkedAt": {
+						"type": "string",
+						"format": "date-time"
+					},
+					"orgName": {
+						"type": "string"
+					},
+					"reference": {
+						"type": "string"
+					},
+					"statusName": {
+						"type": "string"
+					},
+					"title": {
+						"type": "string"
+					}
+				}
+			},
 			"KbPreviewRequest": {
 				"type": "object",
 				"required": ["body"],
@@ -17105,9 +17288,55 @@
 					}
 				}
 			},
+			"KbTicketArticle": {
+				"type": "object",
+				"description": "An article linked to (or suggested for) a ticket.",
+				"required": ["id", "title", "status", "orgName"],
+				"properties": {
+					"categoryName": {
+						"type": ["string", "null"]
+					},
+					"id": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"linkedAt": {
+						"type": ["string", "null"],
+						"format": "date-time"
+					},
+					"linkedByName": {
+						"type": ["string", "null"],
+						"description": "Who linked it, and when (none for a suggestion)."
+					},
+					"orgName": {
+						"type": "string"
+					},
+					"snippet": {
+						"type": ["string", "null"],
+						"description": "Where a suggestion matched, with the matched words in `<b>`."
+					},
+					"status": {
+						"type": "string"
+					},
+					"title": {
+						"type": "string"
+					}
+				}
+			},
 			"Language": {
 				"type": "string",
 				"enum": ["pwsh", "python", "javascript"]
+			},
+			"LinkArticle": {
+				"type": "object",
+				"required": ["articleId"],
+				"properties": {
+					"articleId": {
+						"type": "string",
+						"format": "uuid"
+					}
+				},
+				"additionalProperties": false
 			},
 			"LinkView": {
 				"type": "object",
@@ -21577,6 +21806,31 @@
 					}
 				},
 				"additionalProperties": false
+			},
+			"TicketKnowledge": {
+				"type": "object",
+				"description": "What the knowledge base has for a ticket.",
+				"required": ["linked", "suggested", "canLink"],
+				"properties": {
+					"canLink": {
+						"type": "boolean",
+						"description": "You may link and unlink articles (`ticket:write` on the ticket)."
+					},
+					"linked": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/KbTicketArticle"
+						},
+						"description": "Articles linked to it."
+					},
+					"suggested": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/KbTicketArticle"
+						},
+						"description": "Published articles matching its title and description."
+					}
+				}
 			},
 			"TicketPage": {
 				"type": "object",

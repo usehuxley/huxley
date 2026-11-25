@@ -17,6 +17,7 @@ use huxley_knowledge::articles::{
     self, Article, ArticleChanges, ArticleInput, Drafts, Filter, Revision, Summary,
 };
 use huxley_knowledge::categories::{self, Category, CategoryInput};
+use huxley_knowledge::links::{self, LinkedTicket, TicketArticle};
 use huxley_knowledge::{KbError, MODULE};
 use serde::{Deserialize, Serialize};
 use utoipa::{IntoParams, ToSchema};
@@ -46,6 +47,15 @@ pub fn routes() -> Router<AppState> {
         .route("/articles/{id}/revisions", get(list_revisions))
         .route("/articles/{id}/revisions/{number}", get(get_revision))
         .route("/preview", post(preview_article))
+        .route("/articles/{id}/tickets", get(list_article_tickets))
+        .route(
+            "/tickets/{ticket_id}/articles",
+            get(ticket_articles).post(link_article),
+        )
+        .route(
+            "/tickets/{ticket_id}/articles/{article_id}",
+            axum::routing::delete(unlink_article),
+        )
 }
 
 fn map(e: KbError) -> ApiError {
@@ -249,21 +259,7 @@ pub async fn list_articles(
     let scope = authed
         .module_scope(&state, permissions::KB_READ, MODULE)
         .await?;
-    let drafts = if authed
-        .principal
-        .granted_anywhere()
-        .contains(&permissions::KB_WRITE)
-    {
-        match authed
-            .module_scope(&state, permissions::KB_WRITE, MODULE)
-            .await?
-        {
-            OrgScope::System => Drafts::All,
-            OrgScope::Orgs(orgs) => Drafts::In(orgs),
-        }
-    } else {
-        Drafts::None
-    };
+    let drafts = drafts_for(&state, &authed).await?;
     let filter = Filter {
         q: params.q,
         category_id: params.category_id,
@@ -275,6 +271,26 @@ pub async fn list_articles(
     let (items, total) =
         scoped(&state, &scope, async |tx| articles::list(tx, &filter).await).await?;
     Ok(Json(ArticlePage { items, total }))
+}
+
+/// Where the caller sees drafts: where they may write.
+async fn drafts_for(state: &AppState, authed: &Authed) -> ApiResult<Drafts> {
+    if !authed
+        .principal
+        .granted_anywhere()
+        .contains(&permissions::KB_WRITE)
+    {
+        return Ok(Drafts::None);
+    }
+    Ok(
+        match authed
+            .module_scope(state, permissions::KB_WRITE, MODULE)
+            .await?
+        {
+            OrgScope::System => Drafts::All,
+            OrgScope::Orgs(orgs) => Drafts::In(orgs),
+        },
+    )
 }
 
 /// An article, with what you may do with it.
@@ -555,4 +571,175 @@ pub async fn preview_article(
     Ok(Json(PreviewResponse {
         html: huxley_knowledge::render(&body.body),
     }))
+}
+
+// ---- Tickets ----
+
+/// A ticket's organization, checked: the knowledge base and the service
+/// desk are on there, and the caller holds `permission` on the ticket.
+async fn ticket_org(
+    state: &AppState,
+    authed: &Authed,
+    ticket: Uuid,
+    permission: &str,
+) -> ApiResult<Uuid> {
+    require_module(state, MODULE).await?;
+    let org = owner(state, "sd_tickets", ticket).await?;
+    require_module_at(state, huxley_servicedesk::MODULE, org).await?;
+    authed.require_at(state, permission, org).await?;
+    Ok(org)
+}
+
+/// What the knowledge base has for a ticket.
+#[derive(Debug, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct TicketKnowledge {
+    /// Articles linked to it.
+    pub linked: Vec<TicketArticle>,
+    /// Published articles matching its title and description.
+    pub suggested: Vec<TicketArticle>,
+    /// You may link and unlink articles (`ticket:write` on the ticket).
+    pub can_link: bool,
+}
+
+/// The articles linked to a ticket, and published articles suggested for
+/// it by its title and description (`ticket:read` on the ticket; what you
+/// may read of the knowledge base).
+#[utoipa::path(get, path = "/api/v1/kb/tickets/{ticket_id}/articles", tag = "knowledge",
+    params(("ticket_id" = Uuid, Path)),
+    responses((status = 200, body = TicketKnowledge), (status = 404, body = ApiError, content_type = "application/problem+json")))]
+pub async fn ticket_articles(
+    State(state): State<AppState>,
+    authed: Authed,
+    Path(ticket_id): Path<Uuid>,
+) -> ApiResult<Json<TicketKnowledge>> {
+    let org = ticket_org(&state, &authed, ticket_id, permissions::TICKET_READ).await?;
+    let can_link = can_at(&state, &authed, permissions::TICKET_WRITE, org).await?;
+    if !authed
+        .principal
+        .granted_anywhere()
+        .contains(&permissions::KB_READ)
+    {
+        return Ok(Json(TicketKnowledge {
+            linked: Vec::new(),
+            suggested: Vec::new(),
+            can_link: false,
+        }));
+    }
+    let text: String = {
+        let mut tx = begin_scoped(&state.db, &OrgScope::System)
+            .await
+            .map_err(db_err)?;
+        let text = sqlx::query_scalar(
+            "SELECT title || E'\\n' || description FROM sd_tickets WHERE id = $1",
+        )
+        .bind(ticket_id)
+        .fetch_one(&mut *tx)
+        .await
+        .map_err(db_err)?;
+        tx.commit().await.map_err(db_err)?;
+        text
+    };
+    let scope = authed
+        .module_scope(&state, permissions::KB_READ, MODULE)
+        .await?;
+    let drafts = drafts_for(&state, &authed).await?;
+    let (linked, suggested) = scoped(&state, &scope, async |tx| {
+        let linked = links::for_ticket(tx, ticket_id, &drafts).await?;
+        let suggested = links::suggest(tx, ticket_id, &text, 5).await?;
+        Ok((linked, suggested))
+    })
+    .await?;
+    Ok(Json(TicketKnowledge {
+        linked,
+        suggested,
+        can_link,
+    }))
+}
+
+#[derive(Debug, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct LinkArticle {
+    pub article_id: Uuid,
+}
+
+/// Links an article to a ticket (`ticket:write` on the ticket, `kb:read`
+/// where the article is). Linking it again is fine.
+#[utoipa::path(post, path = "/api/v1/kb/tickets/{ticket_id}/articles", tag = "knowledge",
+    params(("ticket_id" = Uuid, Path)), request_body = LinkArticle,
+    responses((status = 204), (status = 404, body = ApiError, content_type = "application/problem+json"),
+              (status = 409, body = ApiError, content_type = "application/problem+json")))]
+pub async fn link_article(
+    State(state): State<AppState>,
+    authed: Authed,
+    Path(ticket_id): Path<Uuid>,
+    Json(body): Json<LinkArticle>,
+) -> ApiResult<StatusCode> {
+    ticket_org(&state, &authed, ticket_id, permissions::TICKET_WRITE).await?;
+    let article_org = owner(&state, "kb_articles", body.article_id).await?;
+    let scope = allow(&state, &authed, permissions::KB_READ, article_org).await?;
+    let ctx = authed.user.ctx.clone();
+    scoped(&state, &scope, async |tx| {
+        links::link(tx, &ctx, body.article_id, ticket_id).await
+    })
+    .await?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+/// Removes an article's link to a ticket (`ticket:write` on the ticket).
+#[utoipa::path(delete, path = "/api/v1/kb/tickets/{ticket_id}/articles/{article_id}", tag = "knowledge",
+    params(("ticket_id" = Uuid, Path), ("article_id" = Uuid, Path)),
+    responses((status = 204), (status = 404, body = ApiError, content_type = "application/problem+json")))]
+pub async fn unlink_article(
+    State(state): State<AppState>,
+    authed: Authed,
+    Path((ticket_id, article_id)): Path<(Uuid, Uuid)>,
+) -> ApiResult<StatusCode> {
+    ticket_org(&state, &authed, ticket_id, permissions::TICKET_WRITE).await?;
+    let scope = authed.scope(&state).await?;
+    let ctx = authed.user.ctx.clone();
+    scoped(&state, &scope, async |tx| {
+        links::unlink(tx, &ctx, article_id, ticket_id).await
+    })
+    .await?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+/// The tickets an article is linked to that you can see (`kb:write` where
+/// the article is). Empty when the service desk is off.
+#[utoipa::path(get, path = "/api/v1/kb/articles/{id}/tickets", tag = "knowledge", params(("id" = Uuid, Path)),
+    responses((status = 200, body = Vec<LinkedTicket>)))]
+pub async fn list_article_tickets(
+    State(state): State<AppState>,
+    authed: Authed,
+    Path(id): Path<Uuid>,
+) -> ApiResult<Json<Vec<LinkedTicket>>> {
+    article_access(&state, &authed, id, permissions::KB_WRITE).await?;
+    let on = {
+        let mut tx = begin_scoped(&state.db, &OrgScope::System)
+            .await
+            .map_err(db_err)?;
+        let on = huxley_modules::is_active(&mut tx, huxley_servicedesk::MODULE)
+            .await
+            .map_err(db_err)?;
+        tx.commit().await.map_err(db_err)?;
+        on
+    };
+    if !on
+        || !authed
+            .principal
+            .granted_anywhere()
+            .contains(&permissions::TICKET_READ)
+    {
+        return Ok(Json(Vec::new()));
+    }
+    let scope = authed
+        .module_scope(&state, permissions::TICKET_READ, huxley_servicedesk::MODULE)
+        .await?;
+    Ok(Json(
+        scoped(&state, &scope, async |tx| {
+            links::tickets_for_article(tx, id).await
+        })
+        .await?,
+    ))
 }

@@ -31,6 +31,7 @@
 	import { clock, timers } from '#lib/time/timer.svelte.ts';
 	import { describePresence, type Viewer } from '#lib/tickets/presence.ts';
 	import ActionsCard from '#lib/forms/ActionsCard.svelte';
+	import KnowledgeCard from '#lib/kb/KnowledgeCard.svelte';
 	import { onMount, untrack } from 'svelte';
 	import type { PageProps } from './$types';
 
@@ -408,6 +409,9 @@
 				ticketId={ticket.id}
 				contactId={ticket.requesterId ?? undefined}
 			/>
+			{#if data.knowledge}
+				<KnowledgeCard knowledge={data.knowledge} />
+			{/if}
 			<Card title="Status">
 				<form
 					method="POST"

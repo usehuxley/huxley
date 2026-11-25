@@ -24,6 +24,7 @@ uuid.workspace = true
 [dev-dependencies]
 huxley-db = { workspace = true, features = ["testing"] }
 huxley-orgs.workspace = true
+huxley-servicedesk.workspace = true
 tokio.workspace = true
 
 [lints]
