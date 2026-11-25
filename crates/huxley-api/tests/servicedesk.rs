@@ -1950,3 +1950,76 @@ async fn work_types_are_managed_by_configurers() {
             .any(|t| t["name"] == name.as_str() && t["archived"] == true)
     );
 }
+
+#[tokio::test]
+async fn my_time_covers_tickets_and_the_rest() {
+    let Some(s) = setup().await else { return };
+    let (_, email) = user(&s.pools, Some(("technician", s.acme))).await;
+    let tech = login(&s.app, &email).await;
+    let (_, other_email) = user(&s.pools, Some(("technician", s.acme))).await;
+    let other = login(&s.app, &other_email).await;
+    let t = s
+        .ticket(&s.owner, json!({ "orgId": s.acme, "title": "Week" }))
+        .await;
+    let (remote, training) = (
+        work_type(&s, "Remote support").await,
+        work_type(&s, "Training").await,
+    );
+    let today = jiff::Zoned::now().date();
+    let yesterday = today.yesterday().unwrap().to_string();
+    s.ok(
+        &tech,
+        "POST",
+        &format!("{}/time", url(&t)),
+        Some(json!({ "workTypeId": remote["id"], "minutes": 90 })),
+    )
+    .await;
+    let course = s
+        .ok(&tech, "POST", "/api/v1/time-entries", Some(json!({ "workTypeId": training["id"], "minutes": 120, "workedOn": yesterday, "notes": "Intune course" })))
+        .await;
+    assert_eq!(
+        (course["ticketId"].clone(), course["billable"].as_bool()),
+        (Value::Null, Some(false))
+    );
+    s.ok(
+        &other,
+        "POST",
+        "/api/v1/time-entries",
+        Some(json!({ "workTypeId": training["id"], "minutes": 30 })),
+    )
+    .await;
+    let week = format!("/api/v1/time-entries?from={yesterday}&to={today}");
+    let mine = s.ok(&tech, "GET", &week, None).await;
+    let rows: Vec<(Option<&str>, i64)> = mine
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|e| {
+            (
+                e["ticketReference"].as_str(),
+                e["minutes"].as_i64().unwrap(),
+            )
+        })
+        .collect();
+    assert_eq!(rows, [(None, 120), (t["reference"].as_str(), 90)]);
+    for q in [
+        format!("from={today}&to={yesterday}"),
+        format!("from={yesterday}&to=2099-01-01"),
+        "from=x&to=y".to_owned(),
+    ] {
+        let (status, _) = s
+            .call(&tech, "GET", &format!("/api/v1/time-entries?{q}"), None)
+            .await;
+        assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{q}");
+    }
+    // Their own only.
+    let eurl = format!("/api/v1/time-entries/{}", course["id"].as_str().unwrap());
+    assert_eq!(
+        s.call(&other, "DELETE", &eurl, None).await.0,
+        StatusCode::NOT_FOUND
+    );
+    assert_eq!(
+        s.call(&tech, "DELETE", &eurl, None).await.0,
+        StatusCode::NO_CONTENT
+    );
+}

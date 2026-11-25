@@ -139,6 +139,10 @@ The first public note from a person sets the ticket's **first response** time.
 
 A work type can be archived; its entries keep it.
 
+**My time.** **My time** in the sidebar shows your week, day by day, with the total and how much is billable; the arrows move between weeks. Log time that isn't on a ticket there (admin, a meeting, a course, travel), and delete your entries.
+
+**Timers.** **Start timer** on My time, or **Timer** on a ticket's Time card, counts while you work; stopping it fills in the time spent (whole minutes, rounded up) for you to log. A timer is kept in your browser, so it survives a reload or closing the tab, but not a switch to another browser.
+
 Timesheets, where people submit their week's time and a lead approves it, come with agreements.
 
 ## Linked and merged tickets
@@ -335,6 +339,7 @@ Workflows can open, read, find, update and dispatch tickets and add notes, with 
 | `GET`, `POST /api/v1/ticket-views`, and `PUT`, `DELETE /api/v1/ticket-views/{id}` | Your saved views and the shared ones |
 | `GET`, `POST /api/v1/ticket-templates`, and `PUT`, `DELETE /api/v1/ticket-templates/{id}` | Read and manage ticket templates |
 | `GET /api/v1/tickets/{id}/time`, `POST` the same | A ticket's time; log yours |
+| `GET /api/v1/time-entries?from=…&to=…`, `POST /api/v1/time-entries` | Your time over up to 62 days; log non-ticket time |
 | `PUT`, `DELETE /api/v1/time-entries/{id}` | Change or delete your entry |
 | `GET`, `POST /api/v1/work-types`, and `PUT`, `DELETE /api/v1/work-types/{id}` | Read and manage work types |
 | `GET /api/v1/my-work` | Your tickets (with why they need attention), your teams' unclaimed tickets, and what's unassigned in your queues |
@@ -344,4 +349,4 @@ Workflows can open, read, find, update and dispatch tickets and add notes, with 
 
 ## Coming next
 
-Microsoft 365 mailboxes, sending through a mailbox's own server, a week view of your time with a timer, and a dispatch board.
+Microsoft 365 mailboxes, sending through a mailbox's own server, and a dispatch board.

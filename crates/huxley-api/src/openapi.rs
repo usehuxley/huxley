@@ -182,6 +182,8 @@ use crate::workforce_routes;
         desk_routes::archive_work_type,
         desk_routes::ticket_time,
         desk_routes::log_ticket_time,
+        desk_routes::my_time,
+        desk_routes::log_time,
         desk_routes::update_time,
         desk_routes::delete_time,
         desk_routes::list_ticket_templates,
