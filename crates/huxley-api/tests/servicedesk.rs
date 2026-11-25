@@ -2081,3 +2081,144 @@ async fn presence_shows_who_else_is_on_a_ticket() {
         "{status}"
     );
 }
+
+#[tokio::test]
+async fn appointments_book_people_once_and_show_on_the_board() {
+    let Some(s) = setup().await else { return };
+    let (tech_id, _) = user(&s.pools, Some(("technician", s.provider))).await;
+    let (_, acme_email) = user(&s.pools, Some(("technician", s.acme))).await;
+    let acme_tech = login(&s.app, &acme_email).await;
+    let queue = s
+        .ok(
+            &s.owner,
+            "POST",
+            "/api/v1/queues",
+            Some(json!({ "orgId": s.provider, "name": unique("Field"), "userIds": [tech_id] })),
+        )
+        .await;
+    let (a, g) = (
+        s.ticket(
+            &s.owner,
+            json!({ "orgId": s.acme, "title": "Onsite: printer" }),
+        )
+        .await,
+        s.ticket(
+            &s.owner,
+            json!({ "orgId": s.globex, "title": "Onsite: switch" }),
+        )
+        .await,
+    );
+    let book = |t: &Value| format!("{}/appointments", url(t));
+    let slot = |from: &str, to: &str| json!({ "userId": tech_id, "startsAt": from, "endsAt": to, "notes": "Bring a ladder" });
+    let first = s
+        .ok(
+            &s.owner,
+            "POST",
+            &book(&a),
+            Some(slot("2099-03-02T09:00:00Z", "2099-03-02T11:00:00Z")),
+        )
+        .await;
+    assert_eq!(first["ticketReference"], a["reference"]);
+    // Not twice at once (even on another client's ticket); back to back is fine.
+    let (status, problem) = s
+        .call(
+            &s.owner,
+            "POST",
+            &book(&g),
+            Some(slot("2099-03-02T10:00:00Z", "2099-03-02T12:00:00Z")),
+        )
+        .await;
+    assert_eq!(
+        (status, field(&problem)),
+        (StatusCode::UNPROCESSABLE_ENTITY, "/startsAt".into())
+    );
+    s.ok(
+        &s.owner,
+        "POST",
+        &book(&g),
+        Some(slot("2099-03-02T11:00:00Z", "2099-03-02T12:00:00Z")),
+    )
+    .await;
+    // The board: the queue's member with both bookings; a technician at Acme
+    // sees only Acme's.
+    let board = format!(
+        "/api/v1/dispatch/board?from=2099-03-02&days=7&queueId={}",
+        queue["id"].as_str().unwrap()
+    );
+    let rows = s.ok(&s.owner, "GET", &board, None).await;
+    assert_eq!(rows.as_array().unwrap().len(), 1);
+    assert_eq!(
+        (
+            rows[0]["userId"].clone(),
+            rows[0]["appointments"].as_array().unwrap().len()
+        ),
+        (json!(tech_id), 2)
+    );
+    let theirs = s.ok(&acme_tech, "GET", &board, None).await;
+    let refs: Vec<&Value> = theirs[0]["appointments"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|x| &x["ticketReference"])
+        .collect();
+    assert_eq!(refs, [&a["reference"]]);
+    let (status, _) = s
+        .call(&s.owner, "GET", "/api/v1/dispatch/board?from=soon", None)
+        .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+    // Moved, then cancelled; the ticket's history has both.
+    let aurl = format!("/api/v1/appointments/{}", first["id"].as_str().unwrap());
+    let moved = s
+        .ok(&s.owner, "PUT", &aurl, Some(json!({ "userId": tech_id, "startsAt": "2099-03-04T09:00:00Z", "endsAt": "2099-03-04T10:00:00Z", "version": first["version"] })))
+        .await;
+    assert_eq!(moved["startsAt"], "2099-03-04T09:00:00Z");
+    assert_eq!(
+        s.call(&s.owner, "DELETE", &aurl, None).await.0,
+        StatusCode::NO_CONTENT
+    );
+    let activity = s
+        .ok(&s.owner, "GET", &format!("{}/activity", url(&a)), None)
+        .await;
+    let kinds: Vec<&Value> = activity
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|x| x["kind"] == "appointment")
+        .map(|x| &x["details"])
+        .collect();
+    assert_eq!(kinds.len(), 3, "{kinds:?}");
+}
+
+#[tokio::test]
+async fn appointments_are_checked() {
+    let Some(s) = setup().await else { return };
+    let (tech_id, _) = user(&s.pools, Some(("technician", s.provider))).await;
+    let a = s
+        .ticket(&s.owner, json!({ "orgId": s.acme, "title": "Checks" }))
+        .await;
+    let book = |t: &Value| format!("{}/appointments", url(t));
+    let slot = |from: &str, to: &str| json!({ "userId": tech_id, "startsAt": from, "endsAt": to });
+    for (body, pointer) in [
+        (
+            slot("2099-03-03T11:00:00Z", "2099-03-03T10:00:00Z"),
+            "/endsAt",
+        ),
+        (
+            slot("2099-03-03T09:00:00Z", "2099-03-05T09:00:00Z"),
+            "/endsAt",
+        ),
+        (
+            json!({ "userId": Uuid::now_v7(), "startsAt": "2099-03-03T09:00:00Z", "endsAt": "2099-03-03T10:00:00Z" }),
+            "/userId",
+        ),
+    ] {
+        let (status, problem) = s
+            .call(&s.owner, "POST", &book(&a), Some(body.clone()))
+            .await;
+        assert_eq!(
+            (status, field(&problem)),
+            (StatusCode::UNPROCESSABLE_ENTITY, pointer.into()),
+            "{body}"
+        );
+    }
+}

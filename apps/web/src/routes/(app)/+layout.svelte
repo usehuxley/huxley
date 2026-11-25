@@ -8,6 +8,7 @@
 		BookOpen,
 		Boxes,
 		Building2,
+		CalendarDays,
 		ChartColumn,
 		CircleCheck,
 		CircleUserRound,
@@ -41,7 +42,8 @@
 		data.user.grantedPermissions.includes('ticket:read')
 			? [
 					{ href: '/my-work', label: 'My work', icon: ListTodo },
-					{ href: '/time', label: 'My time', icon: Clock }
+					{ href: '/time', label: 'My time', icon: Clock },
+					{ href: '/dispatch', label: 'Dispatch', icon: CalendarDays }
 				]
 			: []),
 		...(data.user.grantedPermissions.includes('workflow:read')

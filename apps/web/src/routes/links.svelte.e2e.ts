@@ -107,4 +107,28 @@ test.describe('linked and merged tickets', () => {
 		await entries.getByRole('button', { name: /^Delete 1h 15m/ }).click();
 		await expect(page.getByText('None logged.')).toBeVisible();
 	});
+
+	test('an appointment is booked on a ticket and shows on the dispatch board', async ({ page }) => {
+		const stamp = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+		const [ticket] = await tickets(['Onsite visit'], stamp);
+		await signIn(page);
+		await page.goto(`/tickets/${ticket.id}`);
+		await page.getByLabel('Day').fill('2099-03-04');
+		await page.getByLabel('Starts').fill('10:00');
+		await page.getByLabel('How long').fill('1h 30m');
+		await page.getByLabel('Appointment notes').fill(`Bring a ladder ${stamp}`);
+		await page.getByRole('button', { name: 'Book' }).click();
+		await expect(page.getByText('Appointment booked.')).toBeVisible();
+		const booked = page.getByRole('list', { name: 'Appointments' });
+		await expect(booked).toContainText(`Bring a ladder ${stamp}`);
+
+		await page.goto('/dispatch?week=2099-03-02');
+		const board = page.getByRole('table', { name: 'Dispatch board' });
+		const me = board.getByRole('row').filter({ hasText: 'E2E User' });
+		await expect(me.getByRole('link', { name: new RegExp(ticket.reference) })).toBeVisible();
+
+		await page.goto(`/tickets/${ticket.id}`);
+		await booked.getByRole('button', { name: /^Cancel E2E User/ }).click();
+		await expect(page.getByText('None booked.')).toBeVisible();
+	});
 });

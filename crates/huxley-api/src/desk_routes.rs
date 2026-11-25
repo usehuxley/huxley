@@ -9,6 +9,7 @@ use axum::routing::{get, post};
 use axum::{Json, Router};
 use huxley_authz::permissions;
 use huxley_db::{OrgScope, begin_scoped};
+use huxley_servicedesk::appointments::{self, Appointment, AppointmentInput};
 use huxley_servicedesk::config::{self, MatrixCell, TicketType};
 use huxley_servicedesk::links::{self, LinkedTicket, NewLink};
 use huxley_servicedesk::mail::{self, Email, Mailbox, MailboxInput};
@@ -60,6 +61,15 @@ pub fn routes() -> Router<AppState> {
         )
         .route("/tickets/{id}/responses", get(ticket_responses))
         .route("/tickets/{id}/presence", post(ticket_presence))
+        .route(
+            "/tickets/{id}/appointments",
+            get(ticket_appointments).post(book_appointment),
+        )
+        .route(
+            "/appointments/{id}",
+            axum::routing::put(reschedule_appointment).delete(cancel_appointment),
+        )
+        .route("/dispatch/board", get(dispatch_board))
         .route("/tickets/{id}/links", get(list_links).post(add_link))
         .route(
             "/tickets/{id}/links/{other_id}",
@@ -1580,4 +1590,235 @@ pub async fn ticket_presence(
         })
         .await?,
     ))
+}
+
+/// A ticket's appointments, in order.
+#[utoipa::path(get, path = "/api/v1/tickets/{id}/appointments", tag = "servicedesk",
+    params(("id" = Uuid, Path)), responses((status = 200, body = Vec<Appointment>)))]
+pub async fn ticket_appointments(
+    State(state): State<AppState>,
+    authed: Authed,
+    Path(id): Path<Uuid>,
+) -> ApiResult<Json<Vec<Appointment>>> {
+    let scope = ticket_access(&state, &authed, id, permissions::TICKET_READ).await?;
+    Ok(Json(
+        scoped(&state, &scope, async |tx| {
+            appointments::for_ticket(tx, id).await
+        })
+        .await?,
+    ))
+}
+
+/// Books someone on a ticket (nobody is booked twice at once). Needs
+/// `ticket:write` on it.
+#[utoipa::path(post, path = "/api/v1/tickets/{id}/appointments", tag = "servicedesk",
+    params(("id" = Uuid, Path)), request_body = AppointmentInput,
+    responses((status = 201, body = Appointment), (status = 422, body = ApiError, content_type = "application/problem+json")))]
+pub async fn book_appointment(
+    State(state): State<AppState>,
+    authed: Authed,
+    Path(id): Path<Uuid>,
+    Json(body): Json<AppointmentInput>,
+) -> ApiResult<(StatusCode, Json<Appointment>)> {
+    ticket_access(&state, &authed, id, permissions::TICKET_WRITE).await?;
+    let ctx = authed.user.ctx.clone();
+    // A clash may be on another client's ticket: checked in system scope.
+    let booked = scoped(&state, &OrgScope::System, async |tx| {
+        let ticket = tickets::get(tx, id).await?;
+        appointments::book(tx, &ctx, &ticket, &body).await
+    })
+    .await?;
+    Ok((StatusCode::CREATED, Json(booked)))
+}
+
+/// The ticket an appointment is on, if you may change it.
+async fn appointment_access(state: &AppState, authed: &Authed, id: Uuid) -> ApiResult<()> {
+    let found = scoped(state, &OrgScope::System, async |tx| {
+        appointments::get(tx, id).await
+    })
+    .await?;
+    ticket_access(state, authed, found.ticket_id, permissions::TICKET_WRITE).await?;
+    Ok(())
+}
+
+/// Moves an appointment; send back the `version` you read.
+#[utoipa::path(put, path = "/api/v1/appointments/{id}", tag = "servicedesk",
+    params(("id" = Uuid, Path)), request_body = AppointmentInput,
+    responses((status = 200, body = Appointment), (status = 409, body = ApiError, content_type = "application/problem+json"),
+              (status = 422, body = ApiError, content_type = "application/problem+json")))]
+pub async fn reschedule_appointment(
+    State(state): State<AppState>,
+    authed: Authed,
+    Path(id): Path<Uuid>,
+    Json(body): Json<AppointmentInput>,
+) -> ApiResult<Json<Appointment>> {
+    appointment_access(&state, &authed, id).await?;
+    let ctx = authed.user.ctx.clone();
+    Ok(Json(
+        scoped(&state, &OrgScope::System, async |tx| {
+            appointments::reschedule(tx, &ctx, id, &body).await
+        })
+        .await?,
+    ))
+}
+
+/// Cancels an appointment.
+#[utoipa::path(delete, path = "/api/v1/appointments/{id}", tag = "servicedesk",
+    params(("id" = Uuid, Path)), responses((status = 204)))]
+pub async fn cancel_appointment(
+    State(state): State<AppState>,
+    authed: Authed,
+    Path(id): Path<Uuid>,
+) -> ApiResult<StatusCode> {
+    appointment_access(&state, &authed, id).await?;
+    let ctx = authed.user.ctx.clone();
+    scoped(&state, &OrgScope::System, async |tx| {
+        appointments::cancel(tx, &ctx, id).await
+    })
+    .await?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+#[derive(Debug, Deserialize, IntoParams)]
+#[serde(rename_all = "camelCase")]
+pub struct BoardParams {
+    /// The first day, `YYYY-MM-DD` (UTC midnight).
+    pub from: String,
+    /// How many days (1 to 31; default 7).
+    pub days: Option<i64>,
+    /// Only this queue's members.
+    pub queue_id: Option<Uuid>,
+}
+
+/// One person on the dispatch board.
+#[derive(Debug, serde::Serialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct BoardPerson {
+    pub user_id: Uuid,
+    pub name: String,
+    /// Their working hours' time zone and hours (with the workforce
+    /// module), if they have them.
+    pub timezone: Option<String>,
+    #[schema(value_type = Option<std::collections::HashMap<String, Vec<Vec<String>>>>)]
+    pub hours: Option<serde_json::Value>,
+    /// Approved time off overlapping the range: `[{ startsOn, endsOn, kind }]`.
+    #[schema(value_type = Vec<std::collections::HashMap<String, String>>)]
+    pub time_off: Vec<serde_json::Value>,
+    pub appointments: Vec<Appointment>,
+}
+
+/// The dispatch board: people (a queue's members, or everyone in a queue,
+/// and anyone booked), with their appointments, working hours and time off
+/// over some days. Appointments are those on tickets you can read.
+#[utoipa::path(get, path = "/api/v1/dispatch/board", tag = "servicedesk", params(BoardParams),
+    responses((status = 200, body = Vec<BoardPerson>), (status = 422, body = ApiError, content_type = "application/problem+json")))]
+pub async fn dispatch_board(
+    State(state): State<AppState>,
+    authed: Authed,
+    Query(params): Query<BoardParams>,
+) -> ApiResult<Json<Vec<BoardPerson>>> {
+    require_module(&state, MODULE).await?;
+    let scope = authed
+        .module_scope(&state, permissions::TICKET_READ, MODULE)
+        .await?;
+    let from = time::Date::parse(
+        params.from.trim(),
+        time::macros::format_description!("[year]-[month]-[day]"),
+    )
+    .map_err(|_| ApiError::validation().with_field_error("/from", "a date, as YYYY-MM-DD"))?
+    .midnight()
+    .assume_utc();
+    let days = params.days.unwrap_or(7);
+    if !(1..=31).contains(&days) {
+        return Err(ApiError::validation().with_field_error("/days", "1 to 31"));
+    }
+    let to = from + time::Duration::days(days);
+    let booked = scoped(&state, &scope, async |tx| {
+        appointments::between(tx, from, to, None).await
+    })
+    .await?;
+    let workforce = huxley_modules_active(&state, "workforce").await?;
+    let people = board_people(&state, params.queue_id, &booked, workforce, from, to).await?;
+    Ok(Json(
+        people
+            .into_iter()
+            .map(|mut p| {
+                p.appointments = booked
+                    .iter()
+                    .filter(|a| a.user_id == p.user_id)
+                    .cloned()
+                    .collect();
+                p
+            })
+            .collect(),
+    ))
+}
+
+async fn huxley_modules_active(state: &AppState, key: &str) -> ApiResult<bool> {
+    scoped(state, &OrgScope::System, async |tx| {
+        huxley_modules::is_active(tx, key)
+            .await
+            .map_err(huxley_servicedesk::DeskError::Db)
+    })
+    .await
+}
+
+/// The board's rows: who, with hours and time off (system scope).
+async fn board_people(
+    state: &AppState,
+    queue: Option<Uuid>,
+    booked: &[Appointment],
+    workforce: bool,
+    from: time::OffsetDateTime,
+    to: time::OffsetDateTime,
+) -> ApiResult<Vec<BoardPerson>> {
+    let booked_ids: Vec<Uuid> = booked.iter().map(|a| a.user_id).collect();
+    scoped(state, &OrgScope::System, async |tx| {
+        let rows: Vec<(Uuid, String)> = sqlx::query_as(
+            "WITH members AS ( \
+               SELECT m.user_id FROM sd_queue_members m JOIN sd_queues q ON q.id = m.queue_id \
+                WHERE m.user_id IS NOT NULL AND q.archived_at IS NULL AND ($1::uuid IS NULL OR q.id = $1) \
+               UNION \
+               SELECT tm.user_id FROM sd_queue_members m JOIN sd_queues q ON q.id = m.queue_id \
+                 JOIN team_members tm ON tm.team_id = m.team_id \
+                WHERE q.archived_at IS NULL AND ($1::uuid IS NULL OR q.id = $1) \
+               UNION \
+               SELECT unnest($2::uuid[]) WHERE $1::uuid IS NULL) \
+             SELECT u.id, u.display_name FROM members JOIN users u ON u.id = members.user_id \
+              WHERE u.status = 'active' AND u.kind = 'human' ORDER BY lower(u.display_name)",
+        )
+        .bind(queue)
+        .bind(&booked_ids)
+        .fetch_all(&mut *tx)
+        .await?;
+        let mut people = Vec::with_capacity(rows.len());
+        for (user_id, name) in rows {
+            let (mut timezone, mut hours, mut time_off) = (None, None, Vec::new());
+            if workforce {
+                let schedule: Option<(String, serde_json::Value)> =
+                    sqlx::query_as("SELECT timezone, hours FROM wf_schedules WHERE user_id = $1")
+                        .bind(user_id)
+                        .fetch_optional(&mut *tx)
+                        .await?;
+                if let Some((tz, h)) = schedule {
+                    timezone = Some(tz);
+                    hours = Some(h);
+                }
+                time_off = sqlx::query_scalar(
+                    "SELECT json_build_object('startsOn', starts_on::text, 'endsOn', ends_on::text, 'kind', kind) \
+                       FROM wf_time_off WHERE user_id = $1 AND status = 'approved' \
+                        AND starts_on <= ($3::timestamptz)::date AND ends_on >= ($2::timestamptz)::date \
+                      ORDER BY starts_on",
+                )
+                .bind(user_id)
+                .bind(from)
+                .bind(to)
+                .fetch_all(&mut *tx)
+                .await?;
+            }
+            people.push(BoardPerson { user_id, name, timezone, hours, time_off, appointments: Vec::new() });
+        }
+        Ok::<_, huxley_servicedesk::DeskError>(people)
+    })
+    .await
 }

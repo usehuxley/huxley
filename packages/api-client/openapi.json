@@ -163,6 +163,82 @@
 				}
 			}
 		},
+		"/api/v1/appointments/{id}": {
+			"put": {
+				"tags": ["servicedesk"],
+				"summary": "Moves an appointment; send back the `version` you read.",
+				"operationId": "reschedule_appointment",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/AppointmentInput"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Appointment"
+								}
+							}
+						}
+					},
+					"409": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					},
+					"422": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			},
+			"delete": {
+				"tags": ["servicedesk"],
+				"summary": "Cancels an appointment.",
+				"operationId": "cancel_appointment",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"responses": {
+					"204": {}
+				}
+			}
+		},
 		"/api/v1/approvals": {
 			"get": {
 				"tags": ["workflows"],
@@ -3106,6 +3182,67 @@
 						}
 					},
 					"409": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/dispatch/board": {
+			"get": {
+				"tags": ["servicedesk"],
+				"summary": "The dispatch board: people (a queue's members, or everyone in a queue,\nand anyone booked), with their appointments, working hours and time off\nover some days. Appointments are those on tickets you can read.",
+				"operationId": "dispatch_board",
+				"parameters": [
+					{
+						"name": "from",
+						"in": "query",
+						"description": "The first day, `YYYY-MM-DD` (UTC midnight).",
+						"required": true,
+						"schema": {
+							"type": "string"
+						}
+					},
+					{
+						"name": "days",
+						"in": "query",
+						"description": "How many days (1 to 31; default 7).",
+						"required": false,
+						"schema": {
+							"type": ["integer", "null"],
+							"format": "int64"
+						}
+					},
+					{
+						"name": "queueId",
+						"in": "query",
+						"description": "Only this queue's members.",
+						"required": false,
+						"schema": {
+							"type": ["string", "null"],
+							"format": "uuid"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "array",
+									"items": {
+										"$ref": "#/components/schemas/BoardPerson"
+									}
+								}
+							}
+						}
+					},
+					"422": {
 						"content": {
 							"application/problem+json": {
 								"schema": {
@@ -9544,6 +9681,84 @@
 				}
 			}
 		},
+		"/api/v1/tickets/{id}/appointments": {
+			"get": {
+				"tags": ["servicedesk"],
+				"summary": "A ticket's appointments, in order.",
+				"operationId": "ticket_appointments",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "array",
+									"items": {
+										"$ref": "#/components/schemas/Appointment"
+									}
+								}
+							}
+						}
+					}
+				}
+			},
+			"post": {
+				"tags": ["servicedesk"],
+				"summary": "Books someone on a ticket (nobody is booked twice at once). Needs\n`ticket:write` on it.",
+				"operationId": "book_appointment",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/AppointmentInput"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"201": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Appointment"
+								}
+							}
+						}
+					},
+					"422": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
 		"/api/v1/tickets/{id}/links": {
 			"get": {
 				"tags": ["servicedesk"],
@@ -12862,6 +13077,92 @@
 					}
 				}
 			},
+			"Appointment": {
+				"type": "object",
+				"required": [
+					"id",
+					"ticketId",
+					"ticketReference",
+					"ticketTitle",
+					"orgName",
+					"userId",
+					"userName",
+					"startsAt",
+					"endsAt",
+					"notes",
+					"version"
+				],
+				"properties": {
+					"endsAt": {
+						"type": "string",
+						"format": "date-time"
+					},
+					"id": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"notes": {
+						"type": "string"
+					},
+					"orgName": {
+						"type": "string"
+					},
+					"startsAt": {
+						"type": "string",
+						"format": "date-time"
+					},
+					"ticketId": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"ticketReference": {
+						"type": "string"
+					},
+					"ticketTitle": {
+						"type": "string"
+					},
+					"userId": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"userName": {
+						"type": "string"
+					},
+					"version": {
+						"type": "integer",
+						"format": "int32"
+					}
+				}
+			},
+			"AppointmentInput": {
+				"type": "object",
+				"required": ["userId", "startsAt", "endsAt"],
+				"properties": {
+					"endsAt": {
+						"type": "string",
+						"format": "date-time",
+						"description": "After `startsAt`, within 24 hours of it."
+					},
+					"notes": {
+						"type": ["string", "null"]
+					},
+					"startsAt": {
+						"type": "string",
+						"format": "date-time"
+					},
+					"userId": {
+						"type": "string",
+						"format": "uuid",
+						"description": "Who does the work."
+					},
+					"version": {
+						"type": ["integer", "null"],
+						"format": "int32",
+						"description": "The version you read (rescheduling only)."
+					}
+				},
+				"additionalProperties": false
+			},
 			"ApprovalStatus": {
 				"type": "string",
 				"enum": ["pending", "approved", "rejected", "expired"]
@@ -13361,6 +13662,58 @@
 				"type": "string",
 				"description": "What a binding holds, which decides how it's checked and inserted.",
 				"enum": ["text", "url", "recipients", "script"]
+			},
+			"BoardPerson": {
+				"type": "object",
+				"description": "One person on the dispatch board.",
+				"required": ["userId", "name", "timeOff", "appointments"],
+				"properties": {
+					"appointments": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/Appointment"
+						}
+					},
+					"hours": {
+						"type": ["object", "null"],
+						"additionalProperties": {
+							"type": "array",
+							"items": {
+								"type": "array",
+								"items": {
+									"type": "string"
+								}
+							}
+						},
+						"propertyNames": {
+							"type": "string"
+						}
+					},
+					"name": {
+						"type": "string"
+					},
+					"timeOff": {
+						"type": "array",
+						"items": {
+							"type": "object",
+							"additionalProperties": {
+								"type": "string"
+							},
+							"propertyNames": {
+								"type": "string"
+							}
+						},
+						"description": "Approved time off overlapping the range: `[{ startsOn, endsOn, kind }]`."
+					},
+					"timezone": {
+						"type": ["string", "null"],
+						"description": "Their working hours' time zone and hours (with the workforce\nmodule), if they have them."
+					},
+					"userId": {
+						"type": "string",
+						"format": "uuid"
+					}
+				}
 			},
 			"Body": {
 				"type": "object",
