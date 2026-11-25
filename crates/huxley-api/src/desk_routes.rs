@@ -20,6 +20,9 @@ use huxley_servicedesk::tickets::{
     self, Activity, NewNote, NewTicket, Note, StatusChange, Ticket, TicketChanges, TicketFilter,
     TicketPage,
 };
+use huxley_servicedesk::time::{
+    self as time_entries, TimeEntry, TimeEntryInput, WorkType, WorkTypeInput,
+};
 use huxley_servicedesk::views::{self, TicketView, TicketViewInput};
 use huxley_servicedesk::{DeskError, MODULE};
 use serde::Deserialize;
@@ -74,6 +77,16 @@ pub fn routes() -> Router<AppState> {
         .route(
             "/ticket-templates/{id}",
             axum::routing::put(update_ticket_template).delete(archive_ticket_template),
+        )
+        .route("/work-types", get(list_work_types).post(create_work_type))
+        .route(
+            "/work-types/{id}",
+            axum::routing::put(update_work_type).delete(archive_work_type),
+        )
+        .route("/tickets/{id}/time", get(ticket_time).post(log_ticket_time))
+        .route(
+            "/time-entries/{id}",
+            axum::routing::put(update_time).delete(delete_time),
         )
         .route("/my-work", get(my_work))
         .route("/tickets", get(list_tickets).post(create_ticket))
@@ -1323,6 +1336,164 @@ pub async fn archive_ticket_template(
     let ctx = authed.user.ctx.clone();
     scoped(&state, &OrgScope::System, async |tx| {
         templates::archive(tx, &ctx, id).await
+    })
+    .await?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+#[derive(Debug, Deserialize, IntoParams)]
+#[serde(rename_all = "camelCase")]
+pub struct WorkTypeParams {
+    /// Include archived ones.
+    #[serde(default)]
+    pub archived: bool,
+}
+
+/// Work types, in order.
+#[utoipa::path(get, path = "/api/v1/work-types", tag = "servicedesk", params(WorkTypeParams),
+    responses((status = 200, body = Vec<WorkType>)))]
+pub async fn list_work_types(
+    State(state): State<AppState>,
+    authed: Authed,
+    Query(params): Query<WorkTypeParams>,
+) -> ApiResult<Json<Vec<WorkType>>> {
+    response_reader(&state, &authed).await?;
+    Ok(Json(
+        scoped(&state, &OrgScope::System, async |tx| {
+            time_entries::work_types(tx, params.archived).await
+        })
+        .await?,
+    ))
+}
+
+/// Adds a work type. Needs `servicedesk:configure`.
+#[utoipa::path(post, path = "/api/v1/work-types", tag = "servicedesk", request_body = WorkTypeInput,
+    responses((status = 201, body = WorkType), (status = 422, body = ApiError, content_type = "application/problem+json")))]
+pub async fn create_work_type(
+    State(state): State<AppState>,
+    authed: Authed,
+    Json(body): Json<WorkTypeInput>,
+) -> ApiResult<(StatusCode, Json<WorkType>)> {
+    authed.require_instance(permissions::SERVICEDESK_CONFIGURE)?;
+    require_module(&state, MODULE).await?;
+    let ctx = authed.user.ctx.clone();
+    let made = scoped(&state, &OrgScope::System, async |tx| {
+        time_entries::create_work_type(tx, &ctx, &body).await
+    })
+    .await?;
+    Ok((StatusCode::CREATED, Json(made)))
+}
+
+/// Changes a work type; send back the `version` you read.
+#[utoipa::path(put, path = "/api/v1/work-types/{id}", tag = "servicedesk",
+    params(("id" = Uuid, Path)), request_body = WorkTypeInput,
+    responses((status = 200, body = WorkType), (status = 409, body = ApiError, content_type = "application/problem+json")))]
+pub async fn update_work_type(
+    State(state): State<AppState>,
+    authed: Authed,
+    Path(id): Path<Uuid>,
+    Json(body): Json<WorkTypeInput>,
+) -> ApiResult<Json<WorkType>> {
+    authed.require_instance(permissions::SERVICEDESK_CONFIGURE)?;
+    require_module(&state, MODULE).await?;
+    let ctx = authed.user.ctx.clone();
+    Ok(Json(
+        scoped(&state, &OrgScope::System, async |tx| {
+            time_entries::update_work_type(tx, &ctx, id, &body).await
+        })
+        .await?,
+    ))
+}
+
+/// Archives a work type; entries keep it.
+#[utoipa::path(delete, path = "/api/v1/work-types/{id}", tag = "servicedesk",
+    params(("id" = Uuid, Path)), responses((status = 204)))]
+pub async fn archive_work_type(
+    State(state): State<AppState>,
+    authed: Authed,
+    Path(id): Path<Uuid>,
+) -> ApiResult<StatusCode> {
+    authed.require_instance(permissions::SERVICEDESK_CONFIGURE)?;
+    require_module(&state, MODULE).await?;
+    let ctx = authed.user.ctx.clone();
+    scoped(&state, &OrgScope::System, async |tx| {
+        time_entries::archive_work_type(tx, &ctx, id).await
+    })
+    .await?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+/// Time logged on a ticket, newest first.
+#[utoipa::path(get, path = "/api/v1/tickets/{id}/time", tag = "servicedesk",
+    params(("id" = Uuid, Path)), responses((status = 200, body = Vec<TimeEntry>)))]
+pub async fn ticket_time(
+    State(state): State<AppState>,
+    authed: Authed,
+    Path(id): Path<Uuid>,
+) -> ApiResult<Json<Vec<TimeEntry>>> {
+    let scope = ticket_access(&state, &authed, id, permissions::TICKET_READ).await?;
+    Ok(Json(
+        scoped(&state, &scope, async |tx| {
+            time_entries::for_ticket(tx, id).await
+        })
+        .await?,
+    ))
+}
+
+/// Logs your time on a ticket. Needs `ticket:write` on it.
+#[utoipa::path(post, path = "/api/v1/tickets/{id}/time", tag = "servicedesk",
+    params(("id" = Uuid, Path)), request_body = TimeEntryInput,
+    responses((status = 201, body = TimeEntry), (status = 422, body = ApiError, content_type = "application/problem+json")))]
+pub async fn log_ticket_time(
+    State(state): State<AppState>,
+    authed: Authed,
+    Path(id): Path<Uuid>,
+    Json(body): Json<TimeEntryInput>,
+) -> ApiResult<(StatusCode, Json<TimeEntry>)> {
+    let scope = ticket_access(&state, &authed, id, permissions::TICKET_WRITE).await?;
+    let me = authed.user.auth.user.id;
+    let logged = scoped(&state, &scope, async |tx| {
+        let ticket = tickets::get(tx, id).await?;
+        time_entries::log(tx, me, Some(&ticket), &body).await
+    })
+    .await?;
+    Ok((StatusCode::CREATED, Json(logged)))
+}
+
+/// Changes one of your time entries; send back the `version` you read.
+#[utoipa::path(put, path = "/api/v1/time-entries/{id}", tag = "servicedesk",
+    params(("id" = Uuid, Path)), request_body = TimeEntryInput,
+    responses((status = 200, body = TimeEntry), (status = 409, body = ApiError, content_type = "application/problem+json"),
+              (status = 422, body = ApiError, content_type = "application/problem+json")))]
+pub async fn update_time(
+    State(state): State<AppState>,
+    authed: Authed,
+    Path(id): Path<Uuid>,
+    Json(body): Json<TimeEntryInput>,
+) -> ApiResult<Json<TimeEntry>> {
+    require_module(&state, MODULE).await?;
+    let me = authed.user.auth.user.id;
+    // Yours, whichever organization's ticket it's on.
+    Ok(Json(
+        scoped(&state, &OrgScope::System, async |tx| {
+            time_entries::update(tx, me, id, &body).await
+        })
+        .await?,
+    ))
+}
+
+/// Deletes one of your time entries.
+#[utoipa::path(delete, path = "/api/v1/time-entries/{id}", tag = "servicedesk",
+    params(("id" = Uuid, Path)), responses((status = 204)))]
+pub async fn delete_time(
+    State(state): State<AppState>,
+    authed: Authed,
+    Path(id): Path<Uuid>,
+) -> ApiResult<StatusCode> {
+    require_module(&state, MODULE).await?;
+    let me = authed.user.auth.user.id;
+    scoped(&state, &OrgScope::System, async |tx| {
+        time_entries::delete(tx, me, id).await
     })
     .await?;
     Ok(StatusCode::NO_CONTENT)

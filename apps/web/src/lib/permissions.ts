@@ -26,6 +26,12 @@ export const SETTINGS_SECTIONS = [
 		module: 'servicedesk'
 	},
 	{
+		key: 'work-types',
+		label: 'Work types',
+		permission: 'servicedesk:configure',
+		module: 'servicedesk'
+	},
+	{
 		key: 'responses',
 		label: 'Canned responses',
 		permission: 'servicedesk:configure',

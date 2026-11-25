@@ -128,6 +128,19 @@ The first public note from a person sets the ticket's **first response** time.
 
 **History.** Every change appears on the ticket's activity timeline and in the audit log. Changes also emit events that workflows can be triggered by: `ticket.created`, `ticket.updated`, `ticket.status_changed`, `ticket.assigned` and `ticket.note_added`.
 
+## Time
+
+**Logging time.** Log time on a ticket from its **Time** card. Give the time spent (`45m`, `1h 30m`), the day, a work type, whether it's billable, and notes. The card shows each entry and the total. Everyone logs their own time and can delete their own entries. Logging time on a ticket needs `ticket:write` on it.
+
+**Work types.** These say what kind of work the time was, and whether it's billable by default. Set them up under **Settings → Work types** (`servicedesk:configure`). Huxley starts with these:
+
+- **On tickets:** Remote support, Onsite, Project work and Travel.
+- **Non-ticket time:** Admin, Internal meeting and Training.
+
+A work type can be archived; its entries keep it.
+
+Timesheets, where people submit their week's time and a lead approves it, come with agreements.
+
 ## Linked and merged tickets
 
 **Links.** On a ticket's page, **Linked tickets** connects it to another by reference (e.g. T-1042):
@@ -321,6 +334,9 @@ Workflows can open, read, find, update and dispatch tickets and add notes, with 
 | `GET /api/v1/tickets/{id}/responses` | Canned responses filled in for a ticket and you |
 | `GET`, `POST /api/v1/ticket-views`, and `PUT`, `DELETE /api/v1/ticket-views/{id}` | Your saved views and the shared ones |
 | `GET`, `POST /api/v1/ticket-templates`, and `PUT`, `DELETE /api/v1/ticket-templates/{id}` | Read and manage ticket templates |
+| `GET /api/v1/tickets/{id}/time`, `POST` the same | A ticket's time; log yours |
+| `PUT`, `DELETE /api/v1/time-entries/{id}` | Change or delete your entry |
+| `GET`, `POST /api/v1/work-types`, and `PUT`, `DELETE /api/v1/work-types/{id}` | Read and manage work types |
 | `GET /api/v1/my-work` | Your tickets (with why they need attention), your teams' unclaimed tickets, and what's unassigned in your queues |
 | `GET`, `POST /api/v1/queues`, and `GET`, `PUT`, `DELETE /api/v1/queues/{id}` | Read and manage queues, including `dispatch` (`manual`, `round_robin`, `load` or `skills`) |
 | `GET /api/v1/servicedesk/types` | Read ticket types, their statuses and allowed changes |
@@ -328,4 +344,4 @@ Workflows can open, read, find, update and dispatch tickets and add notes, with 
 
 ## Coming next
 
-Microsoft 365 mailboxes, sending through a mailbox's own server, time entries, and a dispatch board.
+Microsoft 365 mailboxes, sending through a mailbox's own server, a week view of your time with a timer, and a dispatch board.

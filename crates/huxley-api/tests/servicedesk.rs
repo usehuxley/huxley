@@ -1766,3 +1766,187 @@ async fn ticket_templates_are_checked_and_managed_by_configurers() {
             .any(|t| t["name"] == name.as_str())
     );
 }
+
+/// A work type by name.
+async fn work_type(s: &Setup, name: &str) -> Value {
+    let types = s.ok(&s.owner, "GET", "/api/v1/work-types", None).await;
+    types
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|t| t["name"] == name)
+        .unwrap()
+        .clone()
+}
+
+#[tokio::test]
+async fn time_is_logged_on_tickets_by_whoever_did_it() {
+    let Some(s) = setup().await else { return };
+    let (tech_id, email) = user(&s.pools, Some(("technician", s.acme))).await;
+    let tech = login(&s.app, &email).await;
+    let t = s
+        .ticket(&s.owner, json!({ "orgId": s.acme, "title": "Time me" }))
+        .await;
+    let time = format!("{}/time", url(&t));
+    let remote = work_type(&s, "Remote support").await;
+    let travel = work_type(&s, "Travel").await;
+    let logged = s
+        .ok(&tech, "POST", &time, Some(json!({ "workTypeId": remote["id"], "minutes": 45, "notes": "Reset the VPN client." })))
+        .await;
+    assert_eq!(
+        (
+            logged["billable"].as_bool(),
+            logged["userId"].clone(),
+            logged["ticketReference"].clone()
+        ),
+        (Some(true), json!(tech_id), t["reference"].clone())
+    );
+    s.ok(
+        &s.owner,
+        "POST",
+        &time,
+        Some(json!({ "workTypeId": travel["id"], "minutes": 30, "workedOn": "2026-11-20" })),
+    )
+    .await;
+    let listed = s.ok(&tech, "GET", &time, None).await;
+    let minutes: i64 = listed
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|e| e["minutes"].as_i64().unwrap())
+        .sum();
+    assert_eq!(minutes, 75);
+    // Checks.
+    let admin = work_type(&s, "Admin").await;
+    for (body, pointer) in [
+        (
+            json!({ "workTypeId": admin["id"], "minutes": 10 }),
+            "/workTypeId",
+        ),
+        (
+            json!({ "workTypeId": Uuid::now_v7(), "minutes": 10 }),
+            "/workTypeId",
+        ),
+        (
+            json!({ "workTypeId": remote["id"], "minutes": 0 }),
+            "/minutes",
+        ),
+        (
+            json!({ "workTypeId": remote["id"], "minutes": 10, "workedOn": "2099-01-01" }),
+            "/workedOn",
+        ),
+        (
+            json!({ "workTypeId": remote["id"], "minutes": 10, "workedOn": "yesterday" }),
+            "/workedOn",
+        ),
+    ] {
+        let (status, problem) = s.call(&tech, "POST", &time, Some(body.clone())).await;
+        assert_eq!(
+            (status, field(&problem)),
+            (StatusCode::UNPROCESSABLE_ENTITY, pointer.into()),
+            "{body}"
+        );
+    }
+    // Yours to change; not someone else's; and not on tickets you can't reach.
+    let eurl = format!("/api/v1/time-entries/{}", logged["id"].as_str().unwrap());
+    let changed = s
+        .ok(&tech, "PUT", &eurl, Some(json!({ "workTypeId": remote["id"], "minutes": 60, "billable": false, "version": logged["version"] })))
+        .await;
+    assert_eq!(
+        (changed["minutes"].as_i64(), changed["billable"].as_bool()),
+        (Some(60), Some(false))
+    );
+    assert_eq!(
+        s.call(&s.owner, "DELETE", &eurl, None).await.0,
+        StatusCode::NOT_FOUND
+    );
+    let elsewhere = s
+        .ticket(&s.owner, json!({ "orgId": s.globex, "title": "Not yours" }))
+        .await;
+    let (status, _) = s
+        .call(
+            &tech,
+            "POST",
+            &format!("{}/time", url(&elsewhere)),
+            Some(json!({ "workTypeId": remote["id"], "minutes": 5 })),
+        )
+        .await;
+    assert!(
+        status == StatusCode::FORBIDDEN || status == StatusCode::NOT_FOUND,
+        "{status}"
+    );
+    assert_eq!(
+        s.call(&tech, "DELETE", &eurl, None).await.0,
+        StatusCode::NO_CONTENT
+    );
+}
+
+#[tokio::test]
+async fn work_types_are_managed_by_configurers() {
+    let Some(s) = setup().await else { return };
+    let (_, email) = user(&s.pools, Some(("technician", s.provider))).await;
+    let tech = login(&s.app, &email).await;
+    let name = unique("Weekend callout");
+    let made = s
+        .ok(
+            &s.owner,
+            "POST",
+            "/api/v1/work-types",
+            Some(json!({ "name": name, "billable": true })),
+        )
+        .await;
+    assert_eq!(made["onTickets"], true);
+    let (status, _) = s
+        .call(
+            &tech,
+            "POST",
+            "/api/v1/work-types",
+            Some(json!({ "name": "x" })),
+        )
+        .await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+    let (status, problem) = s
+        .call(
+            &s.owner,
+            "POST",
+            "/api/v1/work-types",
+            Some(json!({ "name": name })),
+        )
+        .await;
+    assert_eq!(
+        (status, field(&problem)),
+        (StatusCode::UNPROCESSABLE_ENTITY, "/name".into())
+    );
+    let wurl = format!("/api/v1/work-types/{}", made["id"].as_str().unwrap());
+    let changed = s
+        .ok(&s.owner, "PUT", &wurl, Some(json!({ "name": name, "billable": false, "onTickets": false, "version": made["version"] })))
+        .await;
+    assert_eq!(
+        (
+            changed["billable"].as_bool(),
+            changed["onTickets"].as_bool()
+        ),
+        (Some(false), Some(false))
+    );
+    assert_eq!(
+        s.call(&s.owner, "DELETE", &wurl, None).await.0,
+        StatusCode::NO_CONTENT
+    );
+    let active = s.ok(&tech, "GET", "/api/v1/work-types", None).await;
+    assert!(
+        !active
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|t| t["name"] == name.as_str())
+    );
+    let all = s
+        .ok(&tech, "GET", "/api/v1/work-types?archived=true", None)
+        .await;
+    assert!(
+        all.as_array()
+            .unwrap()
+            .iter()
+            .any(|t| t["name"] == name.as_str() && t["archived"] == true)
+    );
+}

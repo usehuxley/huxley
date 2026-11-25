@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { enhance, type SubmitFunction } from '$app/forms';
 	import { resolve } from '$app/paths';
-	import { Link2, Lock, Mail, Merge, MessageSquare, Pencil, X } from '@lucide/svelte';
+	import { Clock, Link2, Lock, Mail, Merge, MessageSquare, Pencil, X } from '@lucide/svelte';
 	import { Badge, Button, Card, Dialog, Field, Input, Select, toast } from '@usehuxley/ui';
 	import { describe } from '#lib/tickets/activity.ts';
 	import { clockLines } from '#lib/tickets/sla.ts';
@@ -14,6 +14,7 @@
 		categoryTone,
 		priorityOf
 	} from '#lib/tickets/labels.ts';
+	import { formatDuration } from '#lib/tickets/duration.ts';
 	import type { PageProps } from './$types';
 
 	let { data, form }: PageProps = $props();
@@ -51,6 +52,17 @@
 	}
 	let editing = $state(false);
 	let merging = $state(false);
+	const today = new Date().toLocaleDateString('en-CA');
+	let workTypeId = $state('');
+	let billable = $state(true);
+	// The first work type to start with; billable follows the type chosen.
+	$effect(() => {
+		if (!data.workTypes.some((w) => w.id === workTypeId)) workTypeId = data.workTypes[0]?.id ?? '';
+	});
+	$effect(() => {
+		const kind = data.workTypes.find((w) => w.id === workTypeId);
+		if (kind) billable = kind.billable;
+	});
 	const LINK_KINDS = [
 		{ value: 'related', label: 'Related' },
 		{ value: 'parent', label: 'Parent' },
@@ -88,7 +100,7 @@
 	);
 
 	function errorsOf(
-		key: 'properties' | 'status' | 'note' | 'edit' | 'link' | 'merge'
+		key: 'properties' | 'status' | 'note' | 'edit' | 'link' | 'merge' | 'time'
 	): Record<string, string> {
 		const part = form?.[key] as { errors?: Record<string, string> } | undefined;
 		return part?.errors ?? {};
@@ -431,6 +443,85 @@
 					{/if}
 				</Card>
 			{/if}
+
+			<Card
+				title="Time"
+				description={data.time.length > 0
+					? `${formatDuration(data.time.reduce((n, e) => n + e.minutes, 0))} logged`
+					: undefined}
+			>
+				{#if data.time.length === 0}
+					<p class="text-sm text-fg-muted">None logged.</p>
+				{:else}
+					<ul class="flex flex-col gap-2" aria-label="Time entries">
+						{#each data.time as entry (entry.id)}
+							<li class="flex items-start justify-between gap-2 text-sm">
+								<div class="min-w-0">
+									<p class="text-fg">
+										{formatDuration(entry.minutes)} · {entry.workTypeName}
+										{#if !entry.billable}<span class="text-xs text-fg-muted">
+												(not billable)
+											</span>{/if}
+									</p>
+									<p class="text-xs text-fg-muted">
+										{entry.userName} · {entry.workedOn}{entry.notes ? ` · ${entry.notes}` : ''}
+									</p>
+								</div>
+								{#if entry.userId === data.user.id}
+									<form method="POST" action="?/deleteTime" use:enhance={saved('Time deleted.')}>
+										<input type="hidden" name="id" value={entry.id} />
+										<button
+											type="submit"
+											class="rounded-control p-1 text-fg-muted hover:bg-surface-sunken hover:text-fg"
+											aria-label={`Delete ${formatDuration(entry.minutes)} on ${entry.workedOn}`}
+										>
+											<X size={14} />
+										</button>
+									</form>
+								{/if}
+							</li>
+						{/each}
+					</ul>
+				{/if}
+				{#if canWrite && data.workTypes.length > 0}
+					<form
+						method="POST"
+						action="?/logTime"
+						class="mt-3 flex flex-col gap-2 border-t border-border pt-3"
+						data-reset
+						use:enhance={saved('Time logged.')}
+					>
+						<div class="grid grid-cols-2 gap-2">
+							<Input
+								name="duration"
+								aria-label="Time spent"
+								placeholder="e.g. 45m, 1h 30m"
+								required
+							/>
+							<Input name="workedOn" type="date" aria-label="Worked on" value={today} />
+						</div>
+						<Select
+							name="workTypeId"
+							aria-label="Work type"
+							bind:value={workTypeId}
+							options={data.workTypes.map((w) => ({ value: w.id, label: w.name }))}
+						/>
+						<Input name="notes" aria-label="Time notes" placeholder="What was done (optional)" />
+						<label class="flex items-center gap-2 text-sm text-fg">
+							<input type="checkbox" name="billable" bind:checked={billable} />
+							Billable
+						</label>
+						{#if errorsOf('time').minutes || errorsOf('time').workedOn || errorsOf('time').workTypeId}
+							<p class="text-sm text-danger">
+								{errorsOf('time').minutes ??
+									errorsOf('time').workedOn ??
+									errorsOf('time').workTypeId}
+							</p>
+						{/if}
+						<Button type="submit" size="sm"><Clock size={14} /> Log time</Button>
+					</form>
+				{/if}
+			</Card>
 
 			<Card title="Linked tickets">
 				{#if data.links.length === 0}
