@@ -7,10 +7,12 @@ import type { Actions, PageServerLoad } from './$types';
 export const load: PageServerLoad = async (event) => {
 	const client = api(event);
 	const path = { params: { path: { id: event.params.id } } };
-	const [asset, impact, types] = await Promise.all([
+	const [asset, impact, types, map, tickets] = await Promise.all([
 		client.GET('/api/v1/assets/{id}', path),
 		client.GET('/api/v1/assets/{id}/impact', path),
-		client.GET('/api/v1/asset-types')
+		client.GET('/api/v1/asset-types'),
+		client.GET('/api/v1/assets/{id}/map', path),
+		client.GET('/api/v1/assets/{id}/tickets', path)
 	]);
 	if (!asset.data) error(asset.response.status === 404 ? 404 : 503, 'Could not load the asset.');
 	// Assets it can relate to: those of its organization (search narrows).
@@ -31,6 +33,8 @@ export const load: PageServerLoad = async (event) => {
 	return {
 		asset: asset.data,
 		impact: impact.data ?? [],
+		map: map.data ?? null,
+		tickets: tickets.data ?? [],
 		type: (types.data ?? []).find((t) => t.id === asset.data.typeId) ?? null,
 		candidates
 	};

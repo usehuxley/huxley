@@ -2063,6 +2063,7 @@ dependencies = [
  "huxley-db",
  "huxley-entity",
  "huxley-orgs",
+ "huxley-servicedesk",
  "serde",
  "serde_json",
  "sqlx",

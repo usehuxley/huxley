@@ -212,3 +212,76 @@ pub async fn impact(
     .fetch_all(conn)
     .await?)
 }
+
+/// An asset on a dependency map.
+#[derive(Debug, Clone, Serialize, ToSchema, sqlx::FromRow)]
+#[serde(rename_all = "camelCase")]
+pub struct MapNode {
+    pub id: Uuid,
+    pub name: String,
+    pub type_key: String,
+    pub type_name: String,
+    pub status: String,
+    /// Steps from the asset the map is of (0: that asset).
+    pub depth: i32,
+}
+
+/// A relationship on a dependency map: `from kind to`.
+#[derive(Debug, Clone, Serialize, ToSchema, sqlx::FromRow)]
+#[serde(rename_all = "camelCase")]
+pub struct MapEdge {
+    pub id: Uuid,
+    pub from_id: Uuid,
+    pub to_id: Uuid,
+    pub kind: String,
+}
+
+/// The neighborhood of an asset, for its dependency map.
+#[derive(Debug, Clone, Serialize, ToSchema)]
+pub struct DependencyMap {
+    pub nodes: Vec<MapNode>,
+    pub edges: Vec<MapEdge>,
+    /// Whether nodes were left out (the map stops at `MAP_LIMIT`).
+    pub truncated: bool,
+}
+
+/// The most assets on a map.
+pub const MAP_LIMIT: i64 = 150;
+
+/// The assets within `depth` relationships of an asset (either way), and
+/// the relationships between them: what the scope can see.
+pub async fn map(conn: &mut PgConnection, id: Uuid, depth: i32) -> CmdbResult<DependencyMap> {
+    assets::get(conn, id).await?;
+    let mut nodes: Vec<MapNode> = sqlx::query_as(
+        "WITH RECURSIVE links AS ( \
+            SELECT from_id AS a, to_id AS b FROM cmdb_relationships \
+            UNION ALL SELECT to_id, from_id FROM cmdb_relationships), \
+         near (id, depth) AS ( \
+            SELECT $1::uuid, 0 \
+            UNION \
+            SELECT l.b, n.depth + 1 FROM near n JOIN links l ON l.a = n.id WHERE n.depth < $2), \
+         nearest AS (SELECT id, min(depth) AS depth FROM near GROUP BY id) \
+         SELECT a.id, a.name, t.key AS type_key, t.name AS type_name, a.status, n.depth \
+           FROM nearest n JOIN assets a ON a.id = n.id JOIN cmdb_asset_types t ON t.id = a.type_id \
+          ORDER BY n.depth, a.name LIMIT $3",
+    )
+    .bind(id)
+    .bind(depth.clamp(1, 4))
+    .bind(MAP_LIMIT + 1)
+    .fetch_all(&mut *conn)
+    .await?;
+    let truncated = nodes.len() > usize::try_from(MAP_LIMIT).unwrap_or(150);
+    nodes.truncate(usize::try_from(MAP_LIMIT).unwrap_or(150));
+    let ids: Vec<Uuid> = nodes.iter().map(|n| n.id).collect();
+    let edges = sqlx::query_as(
+        "SELECT id, from_id, to_id, kind FROM cmdb_relationships WHERE from_id = ANY($1) AND to_id = ANY($1) ORDER BY kind, id",
+    )
+    .bind(&ids)
+    .fetch_all(conn)
+    .await?;
+    Ok(DependencyMap {
+        nodes,
+        edges,
+        truncated,
+    })
+}

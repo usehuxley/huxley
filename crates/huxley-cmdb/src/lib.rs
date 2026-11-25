@@ -6,6 +6,7 @@
 
 pub mod assets;
 pub mod relationships;
+pub mod tickets;
 pub mod types;
 
 /// The module's key in the registry.

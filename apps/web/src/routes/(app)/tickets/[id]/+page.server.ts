@@ -22,25 +22,40 @@ export const load: PageServerLoad = async (event) => {
 		error(503, 'Could not load the ticket.');
 	}
 	const { user } = await event.parent();
-	const [people, contacts, responses, links, time, workTypes, actions, appointments, knowledge] =
-		await Promise.all([
-			assignees(event),
-			client.GET('/api/v1/orgs/{id}/contacts', {
-				params: { path: { id: ticket.data.orgId }, query: { limit: 200 } }
-			}),
-			// Filled in for this ticket and you; none without ticket:write here.
-			client.GET('/api/v1/tickets/{id}/responses', path),
-			client.GET('/api/v1/tickets/{id}/links', path),
-			client.GET('/api/v1/tickets/{id}/time', path),
-			client.GET('/api/v1/work-types'),
-			actionsFor(event, 'ticket', ticket.data.orgId),
-			client.GET('/api/v1/tickets/{id}/appointments', path),
-			user.activeModules.includes('knowledge') && user.grantedPermissions.includes('kb:read')
-				? client.GET('/api/v1/kb/tickets/{ticket_id}/articles', {
-						params: { path: { ticket_id: event.params.id } }
-					})
-				: Promise.resolve({ data: undefined })
-		]);
+	const [
+		people,
+		contacts,
+		responses,
+		links,
+		time,
+		workTypes,
+		actions,
+		appointments,
+		knowledge,
+		assets
+	] = await Promise.all([
+		assignees(event),
+		client.GET('/api/v1/orgs/{id}/contacts', {
+			params: { path: { id: ticket.data.orgId }, query: { limit: 200 } }
+		}),
+		// Filled in for this ticket and you; none without ticket:write here.
+		client.GET('/api/v1/tickets/{id}/responses', path),
+		client.GET('/api/v1/tickets/{id}/links', path),
+		client.GET('/api/v1/tickets/{id}/time', path),
+		client.GET('/api/v1/work-types'),
+		actionsFor(event, 'ticket', ticket.data.orgId),
+		client.GET('/api/v1/tickets/{id}/appointments', path),
+		user.activeModules.includes('knowledge') && user.grantedPermissions.includes('kb:read')
+			? client.GET('/api/v1/kb/tickets/{ticket_id}/articles', {
+					params: { path: { ticket_id: event.params.id } }
+				})
+			: Promise.resolve({ data: undefined }),
+		user.activeModules.includes('cmdb') && user.grantedPermissions.includes('asset:read')
+			? client.GET('/api/v1/tickets/{ticket_id}/assets', {
+					params: { path: { ticket_id: event.params.id } }
+				})
+			: Promise.resolve({ data: undefined })
+	]);
 	return {
 		ticket: ticket.data,
 		notes: notes.data,
@@ -55,7 +70,8 @@ export const load: PageServerLoad = async (event) => {
 		workTypes: (workTypes.data ?? []).filter((w) => w.onTickets),
 		actions,
 		appointments: appointments.data ?? [],
-		knowledge: knowledge.data ?? null
+		knowledge: knowledge.data ?? null,
+		assets: assets.data ?? null
 	};
 };
 
@@ -82,6 +98,35 @@ async function patch(
 }
 
 export const actions: Actions = {
+	linkAsset: async (event) => {
+		const assetId = formString(await event.request.formData(), 'assetId');
+		const { error: problem, response } = await api(event).POST(
+			'/api/v1/tickets/{ticket_id}/assets',
+			{
+				params: { path: { ticket_id: event.params.id } },
+				body: { assetId }
+			}
+		);
+		if (response.status !== 204) {
+			return fail(response.status, {
+				assets: { message: problemMessage(problem, 'Could not link it.') }
+			});
+		}
+		return { assets: { message: 'Asset linked.' } };
+	},
+	unlinkAsset: async (event) => {
+		const assetId = formString(await event.request.formData(), 'assetId');
+		const { error: problem, response } = await api(event).DELETE(
+			'/api/v1/tickets/{ticket_id}/assets/{asset_id}',
+			{ params: { path: { ticket_id: event.params.id, asset_id: assetId } } }
+		);
+		if (response.status !== 204) {
+			return fail(response.status, {
+				assets: { message: problemMessage(problem, 'Could not remove it.') }
+			});
+		}
+		return { assets: { message: 'Asset removed.' } };
+	},
 	linkArticle: async (event) => {
 		const articleId = formString(await event.request.formData(), 'articleId');
 		const { error: problem, response } = await api(event).POST(

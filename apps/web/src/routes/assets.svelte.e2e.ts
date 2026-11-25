@@ -89,6 +89,10 @@ test.describe('assets', () => {
 			`hosts VM ${stamp}`
 		);
 		await expect(page.getByRole('list', { name: 'Impact' })).toContainText(`VM ${stamp}`);
+		// The dependency map shows both.
+		const map = page.getByTestId('dependency-map');
+		await expect(map).toContainText(`VM ${stamp}`);
+		await expect(map).toContainText(`Host ${stamp}`);
 
 		// Retired.
 		await page.getByRole('link', { name: 'Edit' }).click();
@@ -97,5 +101,35 @@ test.describe('assets', () => {
 		await expect(page.getByRole('heading', { level: 1 })).toHaveText(`Host ${stamp}`);
 		await expect(page.getByText('Retired', { exact: true })).toBeVisible();
 		await expect(page.getByLabel('Details')).toContainText('256');
+	});
+
+	test('a ticket links an asset, which lists the ticket', async ({ page }) => {
+		const stamp = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+		const client = await setUp(stamp);
+		const api = await request.newContext({
+			baseURL: apiUrl,
+			extraHTTPHeaders: { 'x-requested-with': 'huxley' }
+		});
+		await api.post('/api/v1/auth/login', { data: { email: ownerEmail, password: ownerPassword } });
+		const ticket = await api.post('/api/v1/tickets', {
+			data: { orgId: client, title: `VM slow ${stamp}` }
+		});
+		const t = (await ticket.json()) as { id: string; reference: string };
+		await api.dispose();
+		await signIn(page);
+		await page.goto(`/tickets/${t.id}`);
+		await expect(page.getByText('No assets linked.')).toBeVisible();
+		await expect(async () => {
+			await page.getByLabel('Find an asset to link').fill(`VM ${stamp}`);
+			await expect(page.getByRole('list', { name: 'Assets found' })).toBeVisible({ timeout: 2000 });
+		}).toPass({ timeout: 15_000 });
+		await page
+			.getByRole('list', { name: 'Assets found' })
+			.getByRole('button', { name: `Link VM ${stamp}` })
+			.click();
+		const linked = page.getByRole('list', { name: 'Ticket assets' });
+		await expect(linked).toContainText(`VM ${stamp}`);
+		await linked.getByRole('link', { name: `VM ${stamp}` }).click();
+		await expect(page.getByRole('list', { name: 'Asset tickets' })).toContainText(t.reference);
 	});
 });

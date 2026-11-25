@@ -47,7 +47,7 @@ async fn setup() -> Option<Setup> {
     // The module is instance-wide: switch it on (other tests may have too).
     let ctx = RequestContext::system(Via::System);
     let mut tx = begin_scoped(&pools.app, &OrgScope::System).await.unwrap();
-    for module in ["crm", "cmdb"] {
+    for module in ["crm", "servicedesk", "cmdb"] {
         huxley_modules::set_enabled(&mut tx, &ctx, module, true, false)
             .await
             .unwrap();
@@ -364,4 +364,82 @@ async fn relationships_drive_impact() {
         )
         .await;
     assert_eq!(impact.as_array().unwrap().len(), 1);
+}
+
+#[tokio::test]
+async fn assets_are_linked_to_tickets_and_mapped() {
+    let Some(s) = setup().await else { return };
+    let p = people(&s).await;
+    let server = type_id(&s, &p.tech, "server").await;
+    let mut ids = Vec::new();
+    for name in ["Host", "VM"] {
+        let a = s
+            .ok(
+                &p.tech,
+                "POST",
+                "/api/v1/assets",
+                Some(json!({ "orgId": s.provider, "typeId": server, "name": name })),
+            )
+            .await;
+        ids.push(a["id"].as_str().unwrap().to_owned());
+    }
+    s.ok(
+        &p.tech,
+        "POST",
+        &format!("/api/v1/assets/{}/relationships", ids[0]),
+        Some(json!({ "kind": "hosts", "toId": ids[1] })),
+    )
+    .await;
+    let map = s
+        .ok(
+            &p.reader,
+            "GET",
+            &format!("/api/v1/assets/{}/map", ids[1]),
+            None,
+        )
+        .await;
+    assert_eq!(
+        (
+            map["nodes"].as_array().unwrap().len(),
+            map["edges"].as_array().unwrap().len()
+        ),
+        (2, 1)
+    );
+
+    let ticket = s
+        .ok(
+            &p.tech,
+            "POST",
+            "/api/v1/tickets",
+            Some(json!({ "orgId": s.provider, "title": "Host is down" })),
+        )
+        .await;
+    let t = ticket["id"].as_str().unwrap().to_owned();
+    let uri = format!("/api/v1/tickets/{t}/assets");
+    let (status, _) = s
+        .call(&p.reader, "POST", &uri, Some(json!({ "assetId": ids[0] })))
+        .await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+    s.ok(&p.tech, "POST", &uri, Some(json!({ "assetId": ids[0] })))
+        .await;
+    let on = s.ok(&p.reader, "GET", &uri, None).await;
+    assert_eq!(
+        (on["linked"][0]["id"].as_str(), on["canLink"].as_bool()),
+        (Some(ids[0].as_str()), Some(false))
+    );
+    let history = s
+        .ok(
+            &p.reader,
+            "GET",
+            &format!("/api/v1/assets/{}/tickets", ids[0]),
+            None,
+        )
+        .await;
+    assert_eq!(history[0]["id"], t.as_str());
+    let (status, _) = s.call(&p.outsider, "GET", &uri, None).await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+    let (status, _) = s
+        .call(&p.tech, "DELETE", &format!("{uri}/{}", ids[0]), None)
+        .await;
+    assert_eq!(status, StatusCode::NO_CONTENT);
 }

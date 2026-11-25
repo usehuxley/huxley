@@ -11,7 +11,8 @@ use axum::routing::{delete, get, post, put};
 use axum::{Json, Router};
 use huxley_authz::permissions;
 use huxley_cmdb::assets::{self, Asset, AssetInput, Filter};
-use huxley_cmdb::relationships::{self, Impacted, Relationship, RelationshipInput};
+use huxley_cmdb::relationships::{self, DependencyMap, Impacted, Relationship, RelationshipInput};
+use huxley_cmdb::tickets::{self, AssetTicket, TicketAsset};
 use huxley_cmdb::types::{self, AssetType, AssetTypeInput};
 use huxley_cmdb::{CmdbError, MODULE};
 use huxley_db::{OrgScope, begin_scoped};
@@ -41,6 +42,16 @@ pub fn routes() -> Router<AppState> {
         .route("/assets/{id}/relationships", post(relate_asset))
         .route("/assets/{id}/impact", get(asset_impact))
         .route("/asset-relationships/{id}", delete(unrelate_asset))
+        .route("/assets/{id}/map", get(asset_map))
+        .route("/assets/{id}/tickets", get(asset_tickets))
+        .route(
+            "/tickets/{ticket_id}/assets",
+            get(ticket_assets).post(link_ticket_asset),
+        )
+        .route(
+            "/tickets/{ticket_id}/assets/{asset_id}",
+            delete(unlink_ticket_asset),
+        )
 }
 
 fn map(e: CmdbError) -> ApiError {
@@ -424,4 +435,179 @@ pub async fn asset_impact(
         })
         .await?,
     ))
+}
+
+#[derive(Debug, Deserialize, IntoParams)]
+pub struct MapParams {
+    /// How many relationships out to show (default 2, at most 4).
+    pub depth: Option<i32>,
+}
+
+/// The assets around this one, either way, and the relationships between
+/// them: its dependency map (at most 150 assets).
+#[utoipa::path(get, path = "/api/v1/assets/{id}/map", tag = "cmdb", params(("id" = Uuid, Path), MapParams),
+    responses((status = 200, body = DependencyMap)))]
+pub async fn asset_map(
+    State(state): State<AppState>,
+    authed: Authed,
+    Path(id): Path<Uuid>,
+    Query(params): Query<MapParams>,
+) -> ApiResult<Json<DependencyMap>> {
+    let scope = asset_access(&state, &authed, id, permissions::ASSET_READ).await?;
+    let depth = params.depth.unwrap_or(2);
+    Ok(Json(
+        scoped(&state, &scope, async |tx| {
+            relationships::map(tx, id, depth).await
+        })
+        .await?,
+    ))
+}
+
+/// Whether the service desk is on, and the caller may read tickets.
+async fn desk_readable(state: &AppState, authed: &Authed) -> ApiResult<bool> {
+    let mut tx = begin_scoped(&state.db, &OrgScope::System)
+        .await
+        .map_err(db_err)?;
+    let on = huxley_modules::is_active(&mut tx, huxley_servicedesk::MODULE)
+        .await
+        .map_err(db_err)?;
+    tx.commit().await.map_err(db_err)?;
+    Ok(on
+        && authed
+            .principal
+            .granted_anywhere()
+            .contains(&permissions::TICKET_READ))
+}
+
+/// The tickets an asset is linked to that you can see, newest first.
+#[utoipa::path(get, path = "/api/v1/assets/{id}/tickets", tag = "cmdb", params(("id" = Uuid, Path)),
+    responses((status = 200, body = Vec<AssetTicket>)))]
+pub async fn asset_tickets(
+    State(state): State<AppState>,
+    authed: Authed,
+    Path(id): Path<Uuid>,
+) -> ApiResult<Json<Vec<AssetTicket>>> {
+    asset_access(&state, &authed, id, permissions::ASSET_READ).await?;
+    if !desk_readable(&state, &authed).await? {
+        return Ok(Json(Vec::new()));
+    }
+    let scope = authed
+        .module_scope(&state, permissions::TICKET_READ, huxley_servicedesk::MODULE)
+        .await?;
+    Ok(Json(
+        scoped(&state, &scope, async |tx| tickets::for_asset(tx, id).await).await?,
+    ))
+}
+
+/// A ticket's organization, checked: assets and the service desk are on
+/// there, and the caller holds `permission` on the ticket.
+async fn ticket_org(
+    state: &AppState,
+    authed: &Authed,
+    ticket: Uuid,
+    permission: &str,
+) -> ApiResult<Uuid> {
+    require_module(state, MODULE).await?;
+    let org = owner(state, "sd_tickets", ticket).await?;
+    require_module_at(state, huxley_servicedesk::MODULE, org).await?;
+    authed.require_at(state, permission, org).await?;
+    Ok(org)
+}
+
+/// The assets on a ticket.
+#[derive(Debug, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct TicketAssets {
+    /// Assets linked to it.
+    pub linked: Vec<TicketAsset>,
+    /// The requester's assets in use, not yet linked: the likely ones.
+    pub requester_assets: Vec<TicketAsset>,
+    /// You may link and unlink assets (`ticket:write` on the ticket).
+    pub can_link: bool,
+}
+
+/// The assets linked to a ticket, and its requester's other assets
+/// (`ticket:read` on the ticket; what you may read of assets).
+#[utoipa::path(get, path = "/api/v1/tickets/{ticket_id}/assets", tag = "cmdb", params(("ticket_id" = Uuid, Path)),
+    responses((status = 200, body = TicketAssets), (status = 404, body = ApiError, content_type = "application/problem+json")))]
+pub async fn ticket_assets(
+    State(state): State<AppState>,
+    authed: Authed,
+    Path(ticket_id): Path<Uuid>,
+) -> ApiResult<Json<TicketAssets>> {
+    let org = ticket_org(&state, &authed, ticket_id, permissions::TICKET_READ).await?;
+    let can_link = can_at(&state, &authed, permissions::TICKET_WRITE, org).await?;
+    if !authed
+        .principal
+        .granted_anywhere()
+        .contains(&permissions::ASSET_READ)
+    {
+        return Ok(Json(TicketAssets {
+            linked: Vec::new(),
+            requester_assets: Vec::new(),
+            can_link: false,
+        }));
+    }
+    let scope = authed
+        .module_scope(&state, permissions::ASSET_READ, MODULE)
+        .await?;
+    let (linked, requester_assets) = scoped(&state, &scope, async |tx| {
+        Ok((
+            tickets::for_ticket(tx, ticket_id).await?,
+            tickets::requester_assets(tx, ticket_id).await?,
+        ))
+    })
+    .await?;
+    Ok(Json(TicketAssets {
+        linked,
+        requester_assets,
+        can_link,
+    }))
+}
+
+#[derive(Debug, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct LinkTicketAsset {
+    pub asset_id: Uuid,
+}
+
+/// Links an asset to a ticket (`ticket:write` on the ticket, `asset:read`
+/// where the asset is). It must be the ticket's client's, or the MSP's.
+#[utoipa::path(post, path = "/api/v1/tickets/{ticket_id}/assets", tag = "cmdb", params(("ticket_id" = Uuid, Path)),
+    request_body = LinkTicketAsset,
+    responses((status = 204), (status = 422, body = ApiError, content_type = "application/problem+json")))]
+pub async fn link_ticket_asset(
+    State(state): State<AppState>,
+    authed: Authed,
+    Path(ticket_id): Path<Uuid>,
+    Json(body): Json<LinkTicketAsset>,
+) -> ApiResult<StatusCode> {
+    ticket_org(&state, &authed, ticket_id, permissions::TICKET_WRITE).await?;
+    asset_access(&state, &authed, body.asset_id, permissions::ASSET_READ).await?;
+    let scope = authed.scope(&state).await?;
+    let ctx = authed.user.ctx.clone();
+    scoped(&state, &scope, async |tx| {
+        tickets::link(tx, &ctx, body.asset_id, ticket_id).await
+    })
+    .await?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+/// Removes an asset from a ticket (`ticket:write` on the ticket).
+#[utoipa::path(delete, path = "/api/v1/tickets/{ticket_id}/assets/{asset_id}", tag = "cmdb",
+    params(("ticket_id" = Uuid, Path), ("asset_id" = Uuid, Path)),
+    responses((status = 204), (status = 404, body = ApiError, content_type = "application/problem+json")))]
+pub async fn unlink_ticket_asset(
+    State(state): State<AppState>,
+    authed: Authed,
+    Path((ticket_id, asset_id)): Path<(Uuid, Uuid)>,
+) -> ApiResult<StatusCode> {
+    ticket_org(&state, &authed, ticket_id, permissions::TICKET_WRITE).await?;
+    let scope = authed.scope(&state).await?;
+    let ctx = authed.user.ctx.clone();
+    scoped(&state, &scope, async |tx| {
+        tickets::unlink(tx, &ctx, asset_id, ticket_id).await
+    })
+    .await?;
+    Ok(StatusCode::NO_CONTENT)
 }
