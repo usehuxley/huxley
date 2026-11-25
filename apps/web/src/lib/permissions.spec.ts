@@ -10,6 +10,13 @@ describe('visibleSections', () => {
 		expect(visibleSections([])).toEqual([]);
 	});
 
+	it('shows asset types to those who configure the CMDB, while it is on', () => {
+		expect(visibleSections(['cmdb:configure']).map((s) => s.key)).toEqual([]);
+		expect(visibleSections(['cmdb:configure'], ['crm', 'cmdb']).map((s) => s.key)).toEqual([
+			'asset-types'
+		]);
+	});
+
 	it('shows module sections only while the module is on', () => {
 		expect(visibleSections(['servicedesk:configure']).map((s) => s.key)).toEqual([]);
 		expect(

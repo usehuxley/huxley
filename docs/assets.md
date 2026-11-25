@@ -18,7 +18,7 @@ Find them under **Assets**, filtered by client, type and status, or on a client'
 
 ### Types
 
-The built-in types are Workstation, Server, Network device, Printer, Mobile device, SaaS tenant, License, Domain, Certificate, Application and Other. With `cmdb:configure` you can add types and change any type's fields through the API (`/api/v1/asset-types`). A field is text, long text, number, yes/no, date, a choice or several, a URL or an email, and may be required. Built-in types can be extended but not removed; your own types can be archived.
+The built-in types are Workstation, Server, Network device, Printer, Mobile device, SaaS tenant, License, Domain, Certificate, Application and Other. With `cmdb:configure` you can add types and change any type's fields under **Settings → Asset types** (or through `/api/v1/asset-types`). Each field gets a stored key from its label when it's added; renaming the label later keeps the key, so existing values stay. Choices take one option a line, or `value | Label` to set the stored value. A field is text, long text, number, yes/no, date, a choice or several, a URL or an email, and may be required. Built-in types can be extended but not removed; your own types can be archived.
 
 ## Relationships and impact
 
@@ -78,4 +78,4 @@ Technicians have `asset:read` and `asset:write`, and read-only users have `asset
 
 ## Coming next
 
-Editing asset types in the app, syncing assets from datasets (RMM, Microsoft 365) by matching rules, and warranty lookups.
+Syncing assets from datasets (RMM, Microsoft 365) by matching rules, and warranty lookups.

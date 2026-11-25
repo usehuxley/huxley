@@ -132,4 +132,47 @@ test.describe('assets', () => {
 		await linked.getByRole('link', { name: `VM ${stamp}` }).click();
 		await expect(page.getByRole('list', { name: 'Asset tickets' })).toContainText(t.reference);
 	});
+
+	test('an asset type is added with its own fields, which new assets ask for', async ({ page }) => {
+		const stamp = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+		const client = await setUp(stamp);
+		await signIn(page);
+		await page.goto('/settings/asset-types');
+		await expect(page.getByRole('list', { name: 'Asset types' })).toContainText('Workstation');
+		await expect(async () => {
+			await page.getByRole('button', { name: 'New type' }).click();
+			await expect(page.getByRole('dialog')).toBeVisible({ timeout: 1000 });
+		}).toPass({ timeout: 15_000 });
+		const dialog = page.getByRole('dialog');
+		await dialog.getByLabel('Name', { exact: true }).fill(`Door controller ${stamp}`);
+		await dialog.getByRole('button', { name: 'Add a field' }).click();
+		await dialog.getByRole('group', { name: 'Field 1' }).getByLabel('Label').fill('Zone');
+		await dialog.getByRole('group', { name: 'Field 1' }).getByLabel('Required').check();
+		await dialog.getByRole('button', { name: 'Add a field' }).click();
+		const mode = dialog.getByRole('group', { name: 'Field 2' });
+		await mode.getByLabel('Label').fill('Mode');
+		await mode.getByLabel('Kind').selectOption('select');
+		await mode.getByLabel('Options').fill('Locked\nUnlocked');
+		await dialog.getByRole('button', { name: 'Save' }).click();
+		await expect(page.getByText('Type saved.')).toBeVisible();
+		await expect(page.getByRole('list', { name: 'Asset types' })).toContainText(
+			`Door controller ${stamp}`
+		);
+
+		// A new asset of that type asks for its fields.
+		await page.goto(`/assets/new?org=${client}`);
+		await expect(async () => {
+			await page
+				.getByLabel('Type', { exact: true })
+				.selectOption({ label: `Door controller ${stamp}` });
+			await expect(page.getByLabel('Zone')).toBeVisible({ timeout: 1000 });
+		}).toPass({ timeout: 15_000 });
+		await page.getByLabel('Name', { exact: true }).fill(`Front door ${stamp}`);
+		await page.getByLabel('Zone').fill('Lobby');
+		await page.getByLabel('Mode', { exact: true }).selectOption({ label: 'Unlocked' });
+		await page.getByRole('button', { name: 'Add asset' }).click();
+		await expect(page.getByRole('heading', { level: 1 })).toHaveText(`Front door ${stamp}`);
+		await expect(page.getByLabel('Details')).toContainText('Lobby');
+		await expect(page.getByLabel('Details')).toContainText('Unlocked');
+	});
 });
