@@ -28,7 +28,7 @@
 	import { formatDuration } from '#lib/tickets/duration.ts';
 	import { clock, timers } from '#lib/time/timer.svelte.ts';
 	import { describePresence, type Viewer } from '#lib/tickets/presence.ts';
-	import { onMount } from 'svelte';
+	import { onMount, untrack } from 'svelte';
 	import type { PageProps } from './$types';
 
 	let { data, form }: PageProps = $props();
@@ -102,7 +102,9 @@
 	}
 	$effect(() => {
 		const url = presenceUrl;
-		void checkIn({ typing });
+		// Only the ticket restarts this: typing mustn't (the cleanup says
+		// goodbye, which would race the next check-in).
+		void checkIn({ typing: untrack(() => typing) });
 		const beat = setInterval(() => void checkIn({ typing }), 15_000);
 		const leave = () =>
 			navigator.sendBeacon(

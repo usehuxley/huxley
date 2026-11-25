@@ -57,13 +57,19 @@ test.describe('ticket presence', () => {
 	test.skip(preset === 'automation', 'the servicedesk module is off in this run');
 
 	test('two people on a ticket see each other, and who is writing', async ({ browser }) => {
-		const stamp = Date.now().toString(36);
+		const stamp = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
 		const [techEmail, ticket] = await setUp(stamp);
 		const owner = await signIn(browser, ownerEmail!, ownerPassword!);
 		await owner.goto(`/tickets/${ticket}`);
 		const tech = await signIn(browser, techEmail, PASSWORD);
 		await tech.goto(`/tickets/${ticket}`);
-		await expect(tech.getByTestId('presence')).toHaveText('E2E User is also viewing');
+		// Each sees the other by their next check-in (reloading checks in now).
+		await expect(async () => {
+			await tech.reload();
+			await expect(tech.getByTestId('presence')).toHaveText('E2E User is also viewing', {
+				timeout: 2000
+			});
+		}).toPass({ timeout: 20_000 });
 
 		// The owner learns of the technician (on the next check-in or reload)…
 		await expect(async () => {
