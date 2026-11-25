@@ -312,7 +312,9 @@
 		<div class="flex justify-between gap-2">
 			<div>
 				{#if editing}
-					<Button type="submit" variant="danger" formaction="?tab=vault&/vaultDelete">Delete</Button>
+					<Button type="submit" variant="danger" formaction="?tab=vault&/vaultDelete">
+						Delete
+					</Button>
 				{/if}
 			</div>
 			<div class="flex gap-2">
