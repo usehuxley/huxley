@@ -4,6 +4,7 @@
 	import { Pencil, X } from '@lucide/svelte';
 	import { Badge, Button, Card, Field, Select, toast } from '@usehuxley/ui';
 	import { KINDS, relationLabel, statusLabel, statusTone } from '#lib/assets/form.ts';
+	import DependencyMap from '#lib/assets/DependencyMap.svelte';
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
@@ -94,6 +95,17 @@
 				{#if a.notes}<p class="mt-4 text-sm whitespace-pre-wrap text-fg">{a.notes}</p>{/if}
 			</Card>
 
+			{#if data.map && data.map.edges.length > 0}
+				<Card
+					title="Dependency map"
+					description="Click an asset to open it. Arrows point at what's depended on."
+				>
+					<DependencyMap map={data.map} centre={a.id} />
+					{#if data.map.truncated}<p class="mt-2 text-xs text-fg-muted">
+							Showing the nearest 150 assets.
+						</p>{/if}
+				</Card>
+			{/if}
 			<Card title="Relationships">
 				{#if a.relationships.length === 0}
 					<p class="text-sm text-fg-muted">None yet.</p>
@@ -155,33 +167,53 @@
 			</Card>
 		</div>
 
-		<Card
-			title="If it goes down"
-			description="What runs on it, depends on it, or is hosted or licensed by it."
-		>
-			{#if data.impact.length === 0}
-				<p class="text-sm text-fg-muted">Nothing depends on it.</p>
-			{:else}
-				<ul class="flex flex-col gap-2 text-sm" aria-label="Impact">
-					{#each data.impact as hit (hit.id)}
-						<li style="padding-left: {(hit.depth - 1) * 0.75}rem">
-							<a
-								class="text-fg hover:underline"
-								href={resolve('/(app)/assets/[id]', { id: hit.id })}
-							>
-								{hit.name}
-							</a>
-							<p class="text-xs text-fg-subtle">
-								{hit.typeName} · {relationLabel(
-									hit.viaKind,
-									hit.viaKind === 'hosts' ? 'in' : 'out'
-								)}
-								{hit.viaName}
-							</p>
-						</li>
-					{/each}
-				</ul>
+		<div class="flex flex-col gap-6">
+			<Card
+				title="If it goes down"
+				description="What runs on it, depends on it, or is hosted or licensed by it."
+			>
+				{#if data.impact.length === 0}
+					<p class="text-sm text-fg-muted">Nothing depends on it.</p>
+				{:else}
+					<ul class="flex flex-col gap-2 text-sm" aria-label="Impact">
+						{#each data.impact as hit (hit.id)}
+							<li style="padding-left: {(hit.depth - 1) * 0.75}rem">
+								<a
+									class="text-fg hover:underline"
+									href={resolve('/(app)/assets/[id]', { id: hit.id })}
+								>
+									{hit.name}
+								</a>
+								<p class="text-xs text-fg-subtle">
+									{hit.typeName} · {relationLabel(
+										hit.viaKind,
+										hit.viaKind === 'hosts' ? 'in' : 'out'
+									)}
+									{hit.viaName}
+								</p>
+							</li>
+						{/each}
+					</ul>
+				{/if}
+			</Card>
+			{#if data.tickets.length > 0}
+				<Card title="Tickets">
+					<ul class="flex flex-col gap-2 text-sm" aria-label="Asset tickets">
+						{#each data.tickets as t (t.id)}
+							<li>
+								<a
+									class="text-fg hover:underline"
+									href={resolve('/(app)/tickets/[id]', { id: t.id })}
+								>
+									<span class="font-mono text-xs text-fg-muted">{t.reference}</span>
+									{t.title}
+								</a>
+								<p class="text-xs text-fg-subtle">{t.statusName}</p>
+							</li>
+						{/each}
+					</ul>
+				</Card>
 			{/if}
-		</Card>
+		</div>
 	</div>
 </div>

@@ -255,6 +255,26 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
+	'/api/v1/assets/{id}/map': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/**
+		 * The assets around this one, either way, and the relationships between
+		 *     them: its dependency map (at most 150 assets).
+		 */
+		get: operations['asset_map'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
 	'/api/v1/assets/{id}/relationships': {
 		parameters: {
 			query?: never;
@@ -269,6 +289,23 @@ export interface paths {
 		 *     `asset:read` where the other is). Relating them again is fine.
 		 */
 		post: operations['relate_asset'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/assets/{id}/tickets': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** The tickets an asset is linked to that you can see, newest first. */
+		get: operations['asset_tickets'];
+		put?: never;
+		post?: never;
 		delete?: never;
 		options?: never;
 		head?: never;
@@ -4090,6 +4127,47 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
+	'/api/v1/tickets/{ticket_id}/assets': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/**
+		 * The assets linked to a ticket, and its requester's other assets
+		 *     (`ticket:read` on the ticket; what you may read of assets).
+		 */
+		get: operations['ticket_assets'];
+		put?: never;
+		/**
+		 * Links an asset to a ticket (`ticket:write` on the ticket, `asset:read`
+		 *     where the asset is). It must be the ticket's client's, or the MSP's.
+		 */
+		post: operations['link_ticket_asset'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/tickets/{ticket_id}/assets/{asset_id}': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		post?: never;
+		/** Removes an asset from a ticket (`ticket:write` on the ticket). */
+		delete: operations['unlink_ticket_asset'];
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
 	'/api/v1/time-entries': {
 		parameters: {
 			query?: never;
@@ -5386,6 +5464,17 @@ export interface components {
 			 */
 			toId: string;
 		};
+		/** @description A ticket an asset is linked to. */
+		AssetTicket: {
+			/** Format: date-time */
+			createdAt: string;
+			/** Format: uuid */
+			id: string;
+			reference: string;
+			statusCategory: string;
+			statusName: string;
+			title: string;
+		};
 		AssetType: {
 			archived: boolean;
 			/**
@@ -6243,6 +6332,13 @@ export interface components {
 			removed: string[];
 			renamed: components['schemas']['Rename'][];
 		};
+		/** @description The neighborhood of an asset, for its dependency map. */
+		DependencyMap: {
+			edges: components['schemas']['MapEdge'][];
+			nodes: components['schemas']['MapNode'][];
+			/** @description Whether nodes were left out (the map stops at `MAP_LIMIT`). */
+			truncated: boolean;
+		};
 		/** @description A problem with a workflow document, and where it is. */
 		DiagnosticView: {
 			message: string;
@@ -6807,6 +6903,10 @@ export interface components {
 			/** Format: uuid */
 			articleId: string;
 		};
+		LinkTicketAsset: {
+			/** Format: uuid */
+			assetId: string;
+		};
 		/** @description A public link as its managers see it (never the token). */
 		LinkView: {
 			/** Format: date-time */
@@ -6935,6 +7035,30 @@ export interface components {
 			 * @description The version you read (updates only).
 			 */
 			version?: number | null;
+		};
+		/** @description A relationship on a dependency map: `from kind to`. */
+		MapEdge: {
+			/** Format: uuid */
+			fromId: string;
+			/** Format: uuid */
+			id: string;
+			kind: string;
+			/** Format: uuid */
+			toId: string;
+		};
+		/** @description An asset on a dependency map. */
+		MapNode: {
+			/**
+			 * Format: int32
+			 * @description Steps from the asset the map is of (0: that asset).
+			 */
+			depth: number;
+			/** Format: uuid */
+			id: string;
+			name: string;
+			status: string;
+			typeKey: string;
+			typeName: string;
 		};
 		/** @description One cell of the priority matrix. */
 		MatrixCell: {
@@ -8672,6 +8796,30 @@ export interface components {
 			/** Format: int32 */
 			version: number;
 		};
+		/** @description An asset as listed on a ticket. */
+		TicketAsset: {
+			contactName?: string | null;
+			/** Format: uuid */
+			id: string;
+			/**
+			 * Format: date-time
+			 * @description When it was linked (none for a suggestion).
+			 */
+			linkedAt?: string | null;
+			name: string;
+			serialNumber: string;
+			status: string;
+			typeName: string;
+		};
+		/** @description The assets on a ticket. */
+		TicketAssets: {
+			/** @description You may link and unlink assets (`ticket:write` on the ticket). */
+			canLink: boolean;
+			/** @description Assets linked to it. */
+			linked: components['schemas']['TicketAsset'][];
+			/** @description The requester's assets in use, not yet linked: the likely ones. */
+			requesterAssets: components['schemas']['TicketAsset'][];
+		};
 		TicketChanges: {
 			/** Format: uuid */
 			assigneeTeamId?: string | null;
@@ -9837,6 +9985,30 @@ export interface operations {
 			};
 		};
 	};
+	asset_map: {
+		parameters: {
+			query?: {
+				/** @description How many relationships out to show (default 2, at most 4). */
+				depth?: number | null;
+			};
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['DependencyMap'];
+				};
+			};
+		};
+	};
 	relate_asset: {
 		parameters: {
 			query?: never;
@@ -9864,6 +10036,27 @@ export interface operations {
 				};
 				content: {
 					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	asset_tickets: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['AssetTicket'][];
 				};
 			};
 		};
@@ -18047,6 +18240,94 @@ export interface operations {
 				};
 			};
 			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	ticket_assets: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				ticket_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['TicketAssets'];
+				};
+			};
+			404: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	link_ticket_asset: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				ticket_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['LinkTicketAsset'];
+			};
+		};
+		responses: {
+			204: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content?: never;
+			};
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	unlink_ticket_asset: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				ticket_id: string;
+				asset_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			204: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content?: never;
+			};
+			404: {
 				headers: {
 					[name: string]: unknown;
 				};

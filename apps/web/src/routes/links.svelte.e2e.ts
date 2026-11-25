@@ -66,7 +66,7 @@ test.describe('linked and merged tickets', () => {
 		await page.getByLabel('Ticket to link').fill(outage.reference);
 		await page.getByLabel('Link as').selectOption('parent');
 		await page.getByRole('button', { name: 'Link', exact: true }).click();
-		await expect(page.getByText('Linked.')).toBeVisible();
+		await expect(page.getByText('Linked.', { exact: true })).toBeVisible();
 		const linked = page.getByRole('list', { name: 'Linked tickets' });
 		await expect(linked).toContainText(`Parent`);
 		await expect(linked).toContainText(outage.reference);

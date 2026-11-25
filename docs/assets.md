@@ -35,6 +35,20 @@ Relate assets with typed relationships, read as *this asset … that one*:
 
 An asset's **If it goes down** card shows the impact: everything that runs on it, depends on it, is hosted by it or is licensed by it, then what depends on those, nearest first, and through which asset. Backups and network links don't carry impact. Retired and disposed assets are left out. Relationships connect assets of the same client, or of a client and your MSP.
 
+### Dependency map
+
+An asset with relationships shows its **dependency map**: the assets up to two relationships away, either way, and how they're related. What depends on something sits to its left, so the arrows point at what's depended on; a host is to the right of what it hosts. Click an asset to open it. A map shows at most 150 assets.
+
+## Assets on tickets
+
+With the service desk on, a ticket's **Assets** card shows what the ticket is about:
+
+- **Linked assets.** Link one to keep it with the ticket; it must be the ticket's client's, or your MSP's.
+- **The requester's:** the assets in use by the ticket's requester, ready to link.
+- **Find an asset to link:** search assets from the ticket.
+
+Linking needs `ticket:write` on the ticket and `asset:read` where the asset is. An asset's page lists its **Tickets**, newest first.
+
 ## Permissions
 
 | Permission | Lets you |
@@ -57,8 +71,11 @@ Technicians have `asset:read` and `asset:write`, and read-only users have `asset
 | `POST /api/v1/assets`, `GET`, `PUT`, `DELETE /api/v1/assets/{id}` | Add (`orgId`, `typeId`, `name`, `attributes`, …), read with relationships, replace (send the `version` you read), delete |
 | `POST /api/v1/assets/{id}/relationships`, `DELETE /api/v1/asset-relationships/{id}` | Relate (`kind`, `toId`), unrelate |
 | `GET /api/v1/assets/{id}/impact?depth=…` | What breaks if it goes down |
+| `GET /api/v1/assets/{id}/map?depth=…` | Its dependency map: `{ nodes, edges, truncated }` |
+| `GET /api/v1/assets/{id}/tickets` | The tickets it's linked to |
+| `GET`, `POST /api/v1/tickets/{id}/assets`, `DELETE …/assets/{assetId}` | A ticket's assets and the requester's; link (`assetId`), unlink |
 | `GET`, `POST /api/v1/asset-types`, `PUT`, `DELETE /api/v1/asset-types/{id}` | Types and their fields |
 
 ## Coming next
 
-Linking assets to tickets, the dependency map, syncing assets from datasets (RMM, Microsoft 365) by matching rules, and warranty lookups.
+Editing asset types in the app, syncing assets from datasets (RMM, Microsoft 365) by matching rules, and warranty lookups.

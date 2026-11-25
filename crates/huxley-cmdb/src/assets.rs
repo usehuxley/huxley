@@ -216,7 +216,8 @@ async fn check(conn: &mut PgConnection, org_id: Uuid, input: &AssetInput) -> Cmd
     }
     if let Some(contact) = input.contact_id {
         let ok: bool = sqlx::query_scalar(
-            "SELECT EXISTS (SELECT 1 FROM crm_contacts WHERE id = $1 AND org_id = $2)",
+            "SELECT EXISTS (SELECT 1 FROM crm_contacts c JOIN crm_contact_companies l ON l.contact_id = c.id \
+              AND l.org_id = $2 WHERE c.id = $1 AND c.archived_at IS NULL)",
         )
         .bind(contact)
         .bind(org_id)
