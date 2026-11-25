@@ -1661,3 +1661,108 @@ async fn bulk_edits_change_each_ticket_they_can() {
         );
     }
 }
+
+#[tokio::test]
+async fn ticket_templates_are_checked_and_managed_by_configurers() {
+    let Some(s) = setup().await else { return };
+    let (_, email) = user(&s.pools, Some(("technician", s.provider))).await;
+    let tech = login(&s.app, &email).await;
+    let queue = s
+        .ok(
+            &s.owner,
+            "POST",
+            "/api/v1/queues",
+            Some(json!({ "orgId": s.provider, "name": unique("Onboarding") })),
+        )
+        .await;
+    let name = unique("New starter");
+    let made = s
+        .ok(&s.owner, "POST", "/api/v1/ticket-templates", Some(json!({
+            "name": name, "typeKey": "service_request", "title": "New starter: ",
+            "description": "Laptop, accounts, licences.", "impact": 3, "urgency": 2, "queueId": queue["id"],
+        })))
+        .await;
+    assert_eq!(
+        (made["typeKey"].as_str(), made["queueName"].clone()),
+        (Some("service_request"), queue["name"].clone())
+    );
+    // Technicians read them; only configurers change them.
+    let listed = s.ok(&tech, "GET", "/api/v1/ticket-templates", None).await;
+    assert!(
+        listed
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|t| t["name"] == name.as_str())
+    );
+    let (status, _) = s
+        .call(
+            &tech,
+            "POST",
+            "/api/v1/ticket-templates",
+            Some(json!({ "name": "x" })),
+        )
+        .await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+    for (body, pointer) in [
+        (json!({ "name": name }), "/name"),
+        (json!({ "name": "Odd type", "typeKey": "nope" }), "/typeKey"),
+        (json!({ "name": "Odd level", "impact": 7 }), "/impact"),
+        (
+            json!({ "name": "Odd queue", "queueId": Uuid::now_v7() }),
+            "/queueId",
+        ),
+    ] {
+        let (status, problem) = s
+            .call(
+                &s.owner,
+                "POST",
+                "/api/v1/ticket-templates",
+                Some(body.clone()),
+            )
+            .await;
+        assert_eq!(
+            (status, field(&problem)),
+            (StatusCode::UNPROCESSABLE_ENTITY, pointer.into()),
+            "{body}"
+        );
+    }
+    let turl = format!("/api/v1/ticket-templates/{}", made["id"].as_str().unwrap());
+    let (status, _) = s
+        .call(
+            &s.owner,
+            "PUT",
+            &turl,
+            Some(json!({ "name": name, "version": 99 })),
+        )
+        .await;
+    assert_eq!(status, StatusCode::CONFLICT);
+    let changed = s
+        .ok(
+            &s.owner,
+            "PUT",
+            &turl,
+            Some(json!({ "name": name, "title": "Leaver: ", "version": made["version"] })),
+        )
+        .await;
+    assert_eq!(
+        (
+            changed["title"].as_str(),
+            changed["typeKey"].as_str(),
+            changed["queueId"].clone()
+        ),
+        (Some("Leaver:"), Some("incident"), Value::Null)
+    );
+    assert_eq!(
+        s.call(&s.owner, "DELETE", &turl, None).await.0,
+        StatusCode::NO_CONTENT
+    );
+    let after = s.ok(&tech, "GET", "/api/v1/ticket-templates", None).await;
+    assert!(
+        !after
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|t| t["name"] == name.as_str())
+    );
+}

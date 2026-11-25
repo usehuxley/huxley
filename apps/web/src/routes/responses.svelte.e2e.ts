@@ -80,4 +80,39 @@ test.describe('canned responses', () => {
 		await expect(page.getByText('Reply added.')).toBeVisible();
 		await expect(page.getByText(/Hi Chidi, your password is reset/)).toBeVisible();
 	});
+
+	test('a template fills in a new ticket', async ({ page }) => {
+		const stamp = Date.now().toString(36);
+		await ticketFrom('Priya', stamp);
+		const name = `New starter ${stamp}`;
+		await signIn(page);
+
+		await page.goto('/settings/templates');
+		await page.getByRole('button', { name: 'New template' }).click();
+		const dialog = page.getByRole('dialog');
+		await dialog.getByLabel('Name').fill(name);
+		await dialog.getByLabel('Type').selectOption({ label: 'Service request' });
+		await dialog.getByLabel('Impact').selectOption({ label: 'Low' });
+		await dialog.getByLabel('Title').fill('New starter: ');
+		await dialog.getByLabel('Description').fill('Laptop, accounts and licences.');
+		await dialog.getByRole('button', { name: 'Save' }).click();
+		await expect(page.getByText('Template saved.')).toBeVisible();
+
+		await page.goto('/tickets/new');
+		// Each choice reloads the form (a choice before the page is ready is
+		// lost: choose until the URL has it).
+		await expect(async () => {
+			await page.getByLabel('Template').selectOption({ label: name });
+			await expect(page).toHaveURL(/template=/, { timeout: 1000 });
+		}).toPass({ timeout: 15_000 });
+		await page.getByLabel('Client').selectOption({ label: `Canned ${stamp}` });
+		// The template survives choosing the client.
+		await expect(page).toHaveURL(/org=.*template=/);
+		await expect(page.getByLabel('Description')).toHaveValue('Laptop, accounts and licences.');
+		await expect(page.getByLabel('Type')).toHaveValue('service_request');
+		await page.getByLabel('Title').fill(`New starter: Priya ${stamp}`);
+		await page.getByRole('button', { name: 'Create ticket' }).click();
+		await expect(page.getByRole('heading', { level: 1 })).toHaveText(`New starter: Priya ${stamp}`);
+		await expect(page.getByText('Service request').first()).toBeVisible();
+	});
 });

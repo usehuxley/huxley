@@ -141,6 +141,12 @@ A ticket has at most one parent, and a ticket can't end up as its own parent. Ea
 - The duplicate is closed, with a note that it was merged, and both tickets' histories say so.
 - Replies to the duplicate's emails, by its subject token or its message ids, go to the ticket it was merged into.
 
+## Ticket templates
+
+A template sets up a common ticket: its type, title, description, impact, urgency and queue. Examples are a new starter, a leaver, or a password reset. Set templates up under **Settings → Ticket templates** (`servicedesk:configure`).
+
+On **New ticket**, choose a template and its fields are filled in. Finish them (the title, say) and create the ticket. **Use** on a template opens New ticket with it chosen.
+
 ## Canned responses
 
 Canned responses are replies and internal notes that technicians use again and again: a password reset, a request for more detail, a hand-off. Set them up under **Settings → Canned responses** (`servicedesk:configure`), each with a name, an optional category, the kind of note it makes, and its text.
@@ -312,6 +318,7 @@ Workflows can open, read, find, update and dispatch tickets and add notes, with 
 | `POST /api/v1/tickets/{id}/merge` | Merge into another ticket (`intoId` or `into`, a reference) |
 | `GET /api/v1/tickets/{id}/responses` | Canned responses filled in for a ticket and you |
 | `GET`, `POST /api/v1/ticket-views`, and `PUT`, `DELETE /api/v1/ticket-views/{id}` | Your saved views and the shared ones |
+| `GET`, `POST /api/v1/ticket-templates`, and `PUT`, `DELETE /api/v1/ticket-templates/{id}` | Read and manage ticket templates |
 | `GET /api/v1/my-work` | Your tickets (with why they need attention), your teams' unclaimed tickets, and what's unassigned in your queues |
 | `GET`, `POST /api/v1/queues`, and `GET`, `PUT`, `DELETE /api/v1/queues/{id}` | Read and manage queues, including `dispatch` (`manual`, `round_robin`, `load` or `skills`) |
 | `GET /api/v1/servicedesk/types` | Read ticket types, their statuses and allowed changes |
@@ -319,4 +326,4 @@ Workflows can open, read, find, update and dispatch tickets and add notes, with 
 
 ## Coming next
 
-Microsoft 365 mailboxes, sending through a mailbox's own server, holidays in business hours, time entries, templates, and a dispatch board.
+Microsoft 365 mailboxes, sending through a mailbox's own server, holidays in business hours, time entries, and a dispatch board.

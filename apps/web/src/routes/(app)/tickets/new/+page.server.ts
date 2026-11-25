@@ -8,7 +8,8 @@ import type { Actions, PageServerLoad } from './$types';
 export const load: PageServerLoad = async (event) => {
 	const client = api(event);
 	const orgId = event.url.searchParams.get('org') ?? '';
-	const [companies, types, queues, people, contacts] = await Promise.all([
+	const templateId = event.url.searchParams.get('template') ?? '';
+	const [companies, types, queues, people, contacts, templates] = await Promise.all([
 		client.GET('/api/v1/companies', { params: { query: { providers: true } } }),
 		client.GET('/api/v1/servicedesk/types'),
 		client.GET('/api/v1/queues'),
@@ -17,7 +18,8 @@ export const load: PageServerLoad = async (event) => {
 			? client.GET('/api/v1/orgs/{id}/contacts', {
 					params: { path: { id: orgId }, query: { limit: 200 } }
 				})
-			: null
+			: null,
+		client.GET('/api/v1/ticket-templates')
 	]);
 	if (types.response.status === 404) error(404, 'The service desk is turned off.');
 	if (!companies.data || !types.data) error(503, 'Could not load the form.');
@@ -27,7 +29,9 @@ export const load: PageServerLoad = async (event) => {
 		queues: queues.data ?? [],
 		...people,
 		contacts: contacts?.data?.items ?? [],
-		orgId
+		orgId,
+		templates: templates.data ?? [],
+		template: (templates.data ?? []).find((t) => t.id === templateId) ?? null
 	};
 };
 

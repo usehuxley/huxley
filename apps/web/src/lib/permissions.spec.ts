@@ -14,6 +14,6 @@ describe('visibleSections', () => {
 		expect(visibleSections(['servicedesk:configure']).map((s) => s.key)).toEqual([]);
 		expect(
 			visibleSections(['servicedesk:configure'], ['crm', 'servicedesk']).map((s) => s.key)
-		).toEqual(['queues', 'sla', 'responses', 'mailboxes']);
+		).toEqual(['queues', 'sla', 'templates', 'responses', 'mailboxes']);
 	});
 });

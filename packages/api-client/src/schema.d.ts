@@ -3246,6 +3246,42 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
+	'/api/v1/ticket-templates': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** Ticket templates. */
+		get: operations['list_ticket_templates'];
+		put?: never;
+		/** Adds a ticket template. Needs `servicedesk:configure`. */
+		post: operations['create_ticket_template'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/ticket-templates/{id}': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		/** Changes a ticket template; send back the `version` you read. */
+		put: operations['update_ticket_template'];
+		post?: never;
+		/** Archives a ticket template. */
+		delete: operations['archive_ticket_template'];
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
 	'/api/v1/ticket-views': {
 		parameters: {
 			query?: never;
@@ -7342,6 +7378,48 @@ export interface components {
 			items: components['schemas']['Ticket'][];
 			/** Format: int64 */
 			total: number;
+		};
+		TicketTemplate: {
+			description: string;
+			/** Format: uuid */
+			id: string;
+			/**
+			 * Format: int32
+			 * @description 1 (high) to 3 (low).
+			 */
+			impact: number;
+			name: string;
+			/** Format: uuid */
+			queueId?: string | null;
+			queueName?: string | null;
+			title: string;
+			/** @description The ticket type's key, e.g. `service_request`. */
+			typeKey: string;
+			/**
+			 * Format: int32
+			 * @description 1 (high) to 3 (low).
+			 */
+			urgency: number;
+			/** Format: int32 */
+			version: number;
+		};
+		TicketTemplateInput: {
+			description?: string | null;
+			/** Format: int32 */
+			impact?: number | null;
+			name: string;
+			/** Format: uuid */
+			queueId?: string | null;
+			title?: string | null;
+			/** @description The ticket type's key (default `incident`). */
+			typeKey?: string | null;
+			/** Format: int32 */
+			urgency?: number | null;
+			/**
+			 * Format: int32
+			 * @description The version you read (updates only).
+			 */
+			version?: number | null;
 		};
 		TicketType: {
 			description: string;
@@ -14620,6 +14698,116 @@ export interface operations {
 				content: {
 					'application/problem+json': components['schemas']['ApiError'];
 				};
+			};
+		};
+	};
+	list_ticket_templates: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['TicketTemplate'][];
+				};
+			};
+		};
+	};
+	create_ticket_template: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['TicketTemplateInput'];
+			};
+		};
+		responses: {
+			201: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['TicketTemplate'];
+				};
+			};
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	update_ticket_template: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['TicketTemplateInput'];
+			};
+		};
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['TicketTemplate'];
+				};
+			};
+			409: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	archive_ticket_template: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			204: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content?: never;
 			};
 		};
 	};
