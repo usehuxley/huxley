@@ -2,7 +2,7 @@
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
 	import { SvelteURLSearchParams } from 'svelte/reactivity';
-	import { BookOpen, Plus, Search, Tags } from '@lucide/svelte';
+	import { BookOpen, Plus, Search, Sparkles, Tags } from '@lucide/svelte';
 	import { Badge, Button, Card, EmptyState, Input, Select } from '@usehuxley/ui';
 	import { STATUS_LABELS, statusTone } from '#lib/kb/form.ts';
 	import type { PageProps } from './$types';
@@ -83,6 +83,15 @@
 			</div>
 		{/if}
 		<Button type="submit"><Search size={16} /> Search</Button>
+		<Button
+			href={data.q
+				? `${resolve('/(app)/knowledge/meaning')}?q=${encodeURIComponent(data.q)}`
+				: resolve('/(app)/knowledge/meaning')}
+			variant="ghost"
+			title="Find articles about the same thing, in other words"
+		>
+			<Sparkles size={16} /> By meaning
+		</Button>
 	</form>
 
 	<Card>

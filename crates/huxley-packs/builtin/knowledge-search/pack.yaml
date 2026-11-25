@@ -1,0 +1,9 @@
+apiVersion: usehuxley.io/v1
+kind: Pack
+key: huxley/knowledge-search
+name: Knowledge search by meaning
+version: 1.0.0
+publisher: Huxley
+description: Embeds published knowledge base articles with your embeddings provider, so they can be searched by meaning and suggested on tickets about the same thing. Needs pgvector in the database.
+contents:
+  workflows: [embed-articles]

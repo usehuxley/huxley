@@ -21,6 +21,7 @@ mod egress;
 mod email;
 mod http;
 mod journal;
+mod kb;
 mod lookup;
 mod notify;
 pub mod oauth;

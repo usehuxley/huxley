@@ -1939,6 +1939,27 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
+	'/api/v1/kb/meaning': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/**
+		 * Searches published articles by meaning: your words are embedded by the
+		 *     organization's embeddings provider (a logged AI call), and the published
+		 *     articles you can read nearest in meaning come back, best first.
+		 */
+		get: operations['search_articles_by_meaning'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
 	'/api/v1/kb/preview': {
 		parameters: {
 			query?: never;
@@ -6280,6 +6301,31 @@ export interface components {
 			statusName: string;
 			title: string;
 		};
+		/** @description A published article found by meaning. */
+		KbMeaningHit: {
+			categoryName?: string | null;
+			/** Format: uuid */
+			id: string;
+			orgName: string;
+			/**
+			 * Format: double
+			 * @description How close in meaning, from 0 to 1 (cosine similarity).
+			 */
+			score: number;
+			/** @description The published title. */
+			title: string;
+		};
+		/** @description Articles found by meaning, or why searching by meaning isn't possible. */
+		KbMeaningSearch: {
+			/**
+			 * @description Whether searching by meaning is set up (pgvector and an embeddings
+			 *     provider).
+			 */
+			available: boolean;
+			hits: components['schemas']['KbMeaningHit'][];
+			/** @description Why there are no results, when something stopped the search. */
+			message?: string | null;
+		};
 		KbPreviewRequest: {
 			/** @description Markdown. */
 			body: string;
@@ -6320,6 +6366,11 @@ export interface components {
 			/** @description Who linked it, and when (none for a suggestion). */
 			linkedByName?: string | null;
 			orgName: string;
+			/**
+			 * Format: double
+			 * @description For a suggestion by meaning: how close, from 0 to 1.
+			 */
+			score?: number | null;
 			/** @description Where a suggestion matched, with the matched words in `<b>`. */
 			snippet?: string | null;
 			status: string;
@@ -8218,7 +8269,10 @@ export interface components {
 			canLink: boolean;
 			/** @description Articles linked to it. */
 			linked: components['schemas']['KbTicketArticle'][];
-			/** @description Published articles matching its title and description. */
+			/**
+			 * @description Published articles about the same thing: by meaning when tickets and
+			 *     articles are embedded (with a `score`), then by its words.
+			 */
 			suggested: components['schemas']['KbTicketArticle'][];
 		};
 		TicketPage: {
@@ -12707,6 +12761,41 @@ export interface operations {
 					[name: string]: unknown;
 				};
 				content?: never;
+			};
+		};
+	};
+	search_articles_by_meaning: {
+		parameters: {
+			query: {
+				/** @description What to look for, in your own words: 2 to 500 characters. */
+				q: string;
+				/**
+				 * @description The organization whose embeddings provider reads the query (you need
+				 *     `ai:use` there).
+				 */
+				orgId: string;
+			};
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['KbMeaningSearch'];
+				};
+			};
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
 			};
 		};
 	};

@@ -1,0 +1,22 @@
+apiVersion: usehuxley.io/v1
+kind: Workflow
+metadata:
+  key: embed-articles
+  name: Embed articles
+  description: >-
+    Every 5 minutes, embeds newly published and republished knowledge base
+    articles here and below with each organization's embeddings provider
+    (Settings → AI), so they can be searched by meaning and suggested on
+    tickets. Up to 200 articles a run. Does nothing without pgvector in the
+    database, or for organizations without an embeddings provider.
+spec:
+  triggers:
+    - type: schedule
+      interval: 5m
+  steps:
+    - id: embed
+      type: core.kb.embed
+  outputs:
+    available: "{{ steps.embed.output.available }}"
+    embedded: "{{ steps.embed.output.embedded }}"
+    errors: "{{ steps.embed.output.errors }}"

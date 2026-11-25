@@ -36,7 +36,7 @@ The API is `POST /api/v1/packs/uploads?orgId=` (the raw file; it returns the rev
 
 ## Built-in packs
 
-Huxley's built-in integrations (Microsoft Graph and Slack) are packs too: `huxley/msgraph` and `huxley/slack`. So are `huxley/servicedesk-email`, the service desk's *Poll mailboxes*, *Email to ticket* and *Email replies* workflows, `huxley/servicedesk-dispatch`, its *Dispatch tickets* workflow, `huxley/servicedesk-notifications`, which tells technicians about assignments, replies and SLAs, `huxley/servicedesk-chat`, which posts urgent tickets and missed SLAs to Slack or Teams, and `huxley/servicedesk-search`, which embeds tickets for searching by meaning. They ship inside the binary, so they're trusted by construction, and the review labels them **Built in**.
+Huxley's built-in integrations (Microsoft Graph and Slack) are packs too: `huxley/msgraph` and `huxley/slack`. So are `huxley/servicedesk-email`, the service desk's *Poll mailboxes*, *Email to ticket* and *Email replies* workflows, `huxley/servicedesk-dispatch`, its *Dispatch tickets* workflow, `huxley/servicedesk-notifications`, which tells technicians about assignments, replies and SLAs, `huxley/servicedesk-chat`, which posts urgent tickets and missed SLAs to Slack or Teams, `huxley/servicedesk-search`, which embeds tickets for searching by meaning, and `huxley/knowledge-search`, which does the same for published articles. They ship inside the binary, so they're trusted by construction, and the review labels them **Built in**.
 
 You can add one from the Integrations catalog, or review it under **Settings → Packs → Built-in packs**. Either way it's recorded as an installed pack, so when a newer Huxley ships a newer version, it arrives as an upgrade you review.
 

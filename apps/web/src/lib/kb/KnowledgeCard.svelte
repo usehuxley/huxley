@@ -95,6 +95,11 @@
 								>
 									{a.title}
 								</a>
+								{#if a.score != null}
+									<p class="text-xs text-fg-muted" title="How close in meaning">
+										About the same thing ({Math.round(a.score * 100)}%)
+									</p>
+								{/if}
 								{#if a.snippet}
 									<!-- eslint-disable svelte/no-at-html-tags -- ts_headline output: escaped text with <b> marks -->
 									<p class="text-xs text-fg-muted [&_b]:font-semibold [&_b]:text-fg">

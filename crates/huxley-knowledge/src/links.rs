@@ -34,6 +34,9 @@ pub struct TicketArticle {
     pub linked_at: Option<OffsetDateTime>,
     /// Where a suggestion matched, with the matched words in `<b>`.
     pub snippet: Option<String>,
+    /// For a suggestion by meaning: how close, from 0 to 1.
+    #[sqlx(default)]
+    pub score: Option<f64>,
 }
 
 /// A ticket an article is linked to.

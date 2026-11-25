@@ -429,6 +429,14 @@
         }
       ]
     },
+    "KbEmbed": {
+      "additionalProperties": false,
+      "description": "Articles to embed (`core.kb.embed`): published knowledge base articles\nat the run's organization and below whose embedding is missing or stale\n(their published title or text changed, they moved organization, or the\nembeddings provider's model changed), up to `limit` (default 200), by\neach organization's embeddings provider. Does nothing when pgvector\nisn't installed. A provider that fails is reported without failing the\nstep. Output: `{ available, embedded, errors: [{ org_id, error }] }`.",
+      "properties": {
+        "limit": true
+      },
+      "type": "object"
+    },
     "MailFetch": {
       "additionalProperties": false,
       "description": "Mail to fetch (`core.mail.fetch`): new messages from the enabled IMAP\nand Microsoft 365 mailboxes at the run's organization and below, or just `mailbox_id`, up\nto `limit` each (default 50). Each new message is kept and announced with\n`email.received`. A mailbox that can't be reached is reported (and shown\non it) without failing the step. Output: `{ mailboxes: [{ mailbox_id,\naddress, fetched, new } | { mailbox_id, address, error }] }`.",
@@ -2873,6 +2881,69 @@
             },
             "with": {
               "$ref": "#/$defs/TicketEmbed",
+              "default": {}
+            }
+          },
+          "required": [
+            "type",
+            "id"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Embed published knowledge base articles for search by meaning (the\n`knowledge` module).",
+          "properties": {
+            "continue_on_error": {
+              "description": "Record the error as the step's output and carry on.",
+              "type": "boolean"
+            },
+            "description": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "id": {
+              "description": "Unique in the workflow: lowercase letters, digits, underscores.\nOther steps read this step's output as `steps.<id>.output`.",
+              "type": "string"
+            },
+            "if": {
+              "description": "Skip the step unless this expression is true.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "name": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "retry": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/RetryPolicy"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "timeout": {
+              "description": "Fail the attempt after this long, e.g. `30s`.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "type": {
+              "const": "core.kb.embed",
+              "type": "string"
+            },
+            "with": {
+              "$ref": "#/$defs/KbEmbed",
               "default": {}
             }
           },
