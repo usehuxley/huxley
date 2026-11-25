@@ -2821,6 +2821,69 @@
         },
         {
           "additionalProperties": false,
+          "description": "Embed tickets for search by meaning (the `servicedesk` module).",
+          "properties": {
+            "continue_on_error": {
+              "description": "Record the error as the step's output and carry on.",
+              "type": "boolean"
+            },
+            "description": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "id": {
+              "description": "Unique in the workflow: lowercase letters, digits, underscores.\nOther steps read this step's output as `steps.<id>.output`.",
+              "type": "string"
+            },
+            "if": {
+              "description": "Skip the step unless this expression is true.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "name": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "retry": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/RetryPolicy"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "timeout": {
+              "description": "Fail the attempt after this long, e.g. `30s`.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "type": {
+              "const": "core.ticket.embed",
+              "type": "string"
+            },
+            "with": {
+              "$ref": "#/$defs/TicketEmbed",
+              "default": {}
+            }
+          },
+          "required": [
+            "type",
+            "id"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
           "description": "Email a public note to the ticket's requester (the `servicedesk`\nmodule).",
           "properties": {
             "continue_on_error": {
@@ -3143,6 +3206,14 @@
       "required": [
         "note_id"
       ],
+      "type": "object"
+    },
+    "TicketEmbed": {
+      "additionalProperties": false,
+      "description": "Tickets to embed (`core.ticket.embed`): those at the run's organization\nand below whose embedding is missing or stale, newest changes first, up\nto `limit` (default 200), by each organization's embeddings provider.\nDoes nothing when pgvector isn't installed (search by meaning is off). A\nprovider that fails is reported without failing the step. Output:\n`{ available, embedded, errors: [{ org_id, error }] }`.",
+      "properties": {
+        "limit": true
+      },
       "type": "object"
     },
     "TicketFind": {

@@ -1126,9 +1126,16 @@ async fn ai_steps_call_the_organizations_provider() {
     }))
     .unwrap();
     let mut tx = begin_scoped(&h.pools.app, &OrgScope::System).await.unwrap();
-    huxley_ai::store::set(&mut tx, &ctx, &crypto, h.org, &input)
-        .await
-        .unwrap();
+    huxley_ai::store::set(
+        &mut tx,
+        &ctx,
+        &crypto,
+        h.org,
+        huxley_ai::store::Use::Chat,
+        &input,
+    )
+    .await
+    .unwrap();
     tx.commit().await.unwrap();
 
     let (id, status, outputs, error) = h

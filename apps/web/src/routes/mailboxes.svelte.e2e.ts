@@ -82,7 +82,7 @@ test.describe('mailboxes', () => {
 
 	test('email in becomes a ticket, and the reply goes back out', async ({ page }) => {
 		test.setTimeout(90_000);
-		const stamp = Date.now().toString(36);
+		const stamp = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
 		const requester = `ada.${stamp}@initech.example`;
 		const mailbox = `help.${stamp}@msp.example`;
 		const api = await owner();

@@ -390,6 +390,9 @@ pub enum Step {
     /// module).
     #[serde(rename = "core.mail.fetch")]
     MailFetch(MailFetchStep),
+    /// Embed tickets for search by meaning (the `servicedesk` module).
+    #[serde(rename = "core.ticket.embed")]
+    TicketEmbed(TicketEmbedStep),
     /// Email a public note to the ticket's requester (the `servicedesk`
     /// module).
     #[serde(rename = "core.ticket.email_reply")]
@@ -693,6 +696,11 @@ step!(MailFetchStep {
     pub fetch: MailFetch,
 });
 
+step!(TicketEmbedStep {
+    #[serde(default, rename = "with")]
+    pub embed: TicketEmbed,
+});
+
 step!(AiPromptStep {
     #[serde(rename = "with")]
     pub ai: AiPrompt,
@@ -760,6 +768,7 @@ impl Step {
             CompanyUpdate,
             TicketFromEmail,
             MailFetch,
+            TicketEmbed,
             TicketEmailReply,
             TicketCreate,
             TicketGet,
@@ -806,6 +815,7 @@ impl Step {
             Self::CompanyUpdate(_) => "core.company.update",
             Self::TicketFromEmail(_) => "core.ticket.from_email",
             Self::MailFetch(_) => "core.mail.fetch",
+            Self::TicketEmbed(_) => "core.ticket.embed",
             Self::TicketCreate(_) => "core.ticket.create",
             Self::TicketGet(_) => "core.ticket.get",
             Self::TicketFind(_) => "core.ticket.find",
@@ -1185,6 +1195,19 @@ pub struct TicketDispatch {
 pub struct MailFetch {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub mailbox_id: Option<Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub limit: Option<Value>,
+}
+
+/// Tickets to embed (`core.ticket.embed`): those at the run's organization
+/// and below whose embedding is missing or stale, newest changes first, up
+/// to `limit` (default 200), by each organization's embeddings provider.
+/// Does nothing when pgvector isn't installed (search by meaning is off). A
+/// provider that fails is reported without failing the step. Output:
+/// `{ available, embedded, errors: [{ org_id, error }] }`.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct TicketEmbed {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub limit: Option<Value>,
 }

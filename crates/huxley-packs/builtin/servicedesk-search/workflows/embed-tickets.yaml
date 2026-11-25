@@ -1,0 +1,22 @@
+apiVersion: usehuxley.io/v1
+kind: Workflow
+metadata:
+  key: embed-tickets
+  name: Embed tickets
+  description: >-
+    Every 5 minutes, embeds new and changed tickets here and below with each
+    organization's embeddings provider (Settings → AI), so they can be
+    searched by meaning. Up to 200 tickets a run: a backlog is worked through
+    over several runs. Does nothing without pgvector in the database, or for
+    organizations without an embeddings provider.
+spec:
+  triggers:
+    - type: schedule
+      interval: 5m
+  steps:
+    - id: embed
+      type: core.ticket.embed
+  outputs:
+    available: "{{ steps.embed.output.available }}"
+    embedded: "{{ steps.embed.output.embedded }}"
+    errors: "{{ steps.embed.output.errors }}"

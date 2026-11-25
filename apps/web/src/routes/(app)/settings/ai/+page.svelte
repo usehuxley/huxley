@@ -1,24 +1,12 @@
 <script lang="ts">
-	import { enhance } from '$app/forms';
-	import { Badge, Button, Card, EmptyState, Field, Input, Select } from '@usehuxley/ui';
-	import { Sparkles } from '@lucide/svelte';
+	import { Badge, Card, Field } from '@usehuxley/ui';
+	import ProviderCard from '#lib/ai/ProviderCard.svelte';
 	import type { PageProps } from './$types';
 
 	let { data, form }: PageProps = $props();
-	let own = $derived(data.provider.own);
-	let effective = $derived(data.provider.effective);
-	let inherited = $derived(effective && effective.orgId !== data.orgId);
 	let orgName = $derived(new Map(data.orgs.map((o) => [o.id, o.name])));
-	const kinds = [
-		{ value: 'anthropic', label: 'Anthropic' },
-		{ value: 'openai', label: 'OpenAI' },
-		{ value: 'azure_openai', label: 'Azure OpenAI' },
-		{ value: 'openai_compatible', label: 'OpenAI-compatible' }
-	];
-	const kindLabel = (k: string) => kinds.find((x) => x.value === k)?.label ?? k;
-	let kind = $derived(own?.kind ?? 'anthropic');
-	let needsUrl = $derived(kind === 'azure_openai' || kind === 'openai_compatible');
-	let budget = $derived(effective?.monthlyTokenBudget);
+	const testFor = (use: 'chat' | 'embeddings') =>
+		form && 'test' in form && form.test && form.use === use ? form.test : null;
 	const when = (v: string) => new Date(v).toLocaleString();
 	const tone = (outcome: string) =>
 		outcome === 'ok' ? 'success' : outcome === 'refused' ? 'warning' : 'danger';
@@ -33,8 +21,8 @@
 		<div>
 			<h2 class="text-xl font-semibold text-fg">AI</h2>
 			<p class="mt-1 text-sm text-fg-muted">
-				Your own AI provider and key, for AI workflow steps. Organizations below use it unless they
-				set their own.
+				Your own AI provider and key, for AI workflow steps, and an embeddings provider for
+				searching by meaning. Organizations below use them unless they set their own.
 			</p>
 		</div>
 		{#if data.orgs.length > 1}
@@ -58,115 +46,25 @@
 		<p class="text-sm text-fg" role="status">{form.message}</p>
 	{/if}
 
-	<Card title="Provider">
-		{#if effective}
-			<div class="mb-4 flex flex-wrap items-center gap-2 text-sm" data-testid="ai-effective">
-				<Badge tone="info">{kindLabel(effective.kind)}</Badge>
-				<span class="font-mono text-xs">{effective.model}</span>
-				{#if inherited}
-					<span class="text-fg-muted">
-						from {orgName.get(effective.orgId) ?? 'an organization above'}
-					</span>
-				{/if}
-				<span class="text-fg-muted">
-					· {data.provider.usedThisMonth.toLocaleString()} tokens this month{budget
-						? ` of ${budget.toLocaleString()}`
-						: ''}
-				</span>
-			</div>
-		{:else}
-			<EmptyState title="No AI provider" description="Set one below to use AI steps in workflows.">
-				{#snippet icon()}<Sparkles size={20} />{/snippet}
-			</EmptyState>
-		{/if}
+	<ProviderCard
+		use="chat"
+		title="AI provider"
+		empty="Set one below to use AI steps in workflows."
+		provider={data.provider}
+		orgId={data.orgId}
+		{orgName}
+		test={testFor('chat')}
+	/>
 
-		<form
-			method="POST"
-			action="?/save"
-			use:enhance={() =>
-				async ({ formElement, update }) => {
-					await update({ reset: false });
-					// The key is never kept on the page once saved.
-					const key = formElement.elements.namedItem('apiKey');
-					if (key instanceof HTMLInputElement) key.value = '';
-				}}
-			class="mt-4 flex flex-col gap-3"
-		>
-			<input type="hidden" name="orgId" value={data.orgId} />
-			<p class="text-sm font-medium text-fg">
-				{own ? "This organization's provider" : 'Set a provider for this organization'}
-			</p>
-			<div class="grid gap-3 sm:grid-cols-2">
-				<Field label="Provider" for="ai-kind">
-					<Select id="ai-kind" name="kind" options={kinds} bind:value={kind} />
-				</Field>
-				<Field
-					label="Model"
-					for="ai-model"
-					hint={kind === 'anthropic' ? 'Default: claude-opus-5-5' : 'Required'}
-				>
-					<Input id="ai-model" name="model" value={own?.model ?? ''} maxlength={200} />
-				</Field>
-				{#if needsUrl}
-					<Field
-						label="Base URL"
-						for="ai-url"
-						hint={kind === 'azure_openai' ? 'https://<resource>.openai.azure.com' : ''}
-					>
-						<Input id="ai-url" name="baseUrl" value={own?.baseUrl ?? ''} required />
-					</Field>
-				{/if}
-				{#if kind === 'azure_openai'}
-					<Field label="Deployment" for="ai-deployment" hint="Default: the model">
-						<Input id="ai-deployment" name="deployment" value={own?.deployment ?? ''} />
-					</Field>
-				{/if}
-				<Field
-					label="API key"
-					for="ai-key"
-					hint={own ? 'Leave empty to keep the current key' : 'Stored encrypted; never shown again'}
-				>
-					<Input id="ai-key" name="apiKey" type="password" autocomplete="off" required={!own} />
-				</Field>
-				<Field label="Monthly token budget" for="ai-budget" hint="Optional: tokens in and out">
-					<Input
-						id="ai-budget"
-						name="budget"
-						type="number"
-						min="1"
-						value={own?.monthlyTokenBudget ?? ''}
-					/>
-				</Field>
-			</div>
-			<div><Button type="submit">Save</Button></div>
-		</form>
-
-		<div class="mt-4 flex flex-wrap gap-2">
-			{#if effective}
-				<form method="POST" action="?/test" use:enhance>
-					<input type="hidden" name="orgId" value={data.orgId} />
-					<Button type="submit" variant="secondary">Test</Button>
-				</form>
-			{/if}
-			{#if own}
-				<form method="POST" action="?/remove" use:enhance>
-					<input type="hidden" name="orgId" value={data.orgId} />
-					<Button type="submit" variant="danger">Remove</Button>
-				</form>
-			{/if}
-		</div>
-		{#if form && 'test' in form && form.test}
-			<p
-				class="mt-3 text-sm {form.test.ok ? 'text-success' : 'text-danger'}"
-				role="status"
-				data-testid="ai-test"
-			>
-				{form.test.ok
-					? `Working: ${form.test.model} said “${form.test.message}”`
-					: form.test.message}
-			</p>
-		{/if}
-	</Card>
+	<ProviderCard
+		use="embeddings"
+		title="Embeddings provider"
+		empty="Set one below to search tickets by meaning. Anthropic has no embeddings, so this is often another vendor."
+		provider={data.embeddings}
+		orgId={data.orgId}
+		{orgName}
+		test={testFor('embeddings')}
+	/>
 
 	<Card title="Recent AI calls">
 		{#if data.calls.length === 0}

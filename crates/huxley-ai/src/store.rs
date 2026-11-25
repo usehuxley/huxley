@@ -17,6 +17,17 @@ use crate::provider::{self, AiError, Completion, Endpoint, ProviderKind, Request
 
 const KEY_PURPOSE: &str = "ai_provider_key";
 
+/// What a provider is for: answering (chat, structured output, tools) or
+/// embeddings. An organization may set one of each.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ToSchema, sqlx::Type)]
+#[serde(rename_all = "snake_case")]
+#[sqlx(type_name = "text", rename_all = "snake_case")]
+#[schema(as = AiProviderUse)]
+pub enum Use {
+    Chat,
+    Embeddings,
+}
+
 #[derive(Debug, thiserror::Error)]
 pub enum StoreError {
     #[error("{1}")]
@@ -72,12 +83,25 @@ pub struct ProviderView {
 const VIEW: &str =
     "id, org_id, kind, model, base_url, deployment, monthly_token_budget, updated_at";
 
-fn check(input: &ProviderInput) -> Result<String, StoreError> {
+fn check(input: &ProviderInput, purpose: Use) -> Result<String, StoreError> {
+    match (purpose, input.kind) {
+        (Use::Chat, ProviderKind::Voyage) => {
+            return Err(invalid("kind", "Voyage AI only makes embeddings"));
+        }
+        (Use::Embeddings, ProviderKind::Anthropic) => {
+            return Err(invalid("kind", "Anthropic doesn't make embeddings"));
+        }
+        _ => {}
+    }
+    let default = match purpose {
+        Use::Chat => input.kind.default_model(),
+        Use::Embeddings => crate::embed::default_model(input.kind),
+    };
     let model = input
         .model
         .clone()
         .filter(|m| !m.trim().is_empty())
-        .or_else(|| input.kind.default_model().map(str::to_owned))
+        .or_else(|| default.map(str::to_owned))
         .ok_or_else(|| invalid("model", "name the model (or the deployment's model)"))?;
     if model.len() > 200 {
         return Err(invalid("model", "at most 200 characters"));
@@ -100,18 +124,20 @@ fn check(input: &ProviderInput) -> Result<String, StoreError> {
     Ok(model)
 }
 
-/// Sets `org_id`'s provider (creating or replacing it).
+/// Sets `org_id`'s provider for `purpose` (creating or replacing it).
 pub async fn set(
     conn: &mut PgConnection,
     ctx: &RequestContext,
     crypto: &Crypto,
     org_id: Uuid,
+    purpose: Use,
     input: &ProviderInput,
 ) -> Result<ProviderView, StoreError> {
-    let model = check(input)?;
+    let model = check(input, purpose)?;
     let existing: Option<Uuid> =
-        sqlx::query_scalar("SELECT id FROM ai_providers WHERE org_id = $1")
+        sqlx::query_scalar("SELECT id FROM ai_providers WHERE org_id = $1 AND purpose = $2")
             .bind(org_id)
+            .bind(purpose)
             .fetch_optional(&mut *conn)
             .await?;
     let id = existing.unwrap_or_else(huxley_core::new_id);
@@ -155,8 +181,8 @@ pub async fn set(
         .await?;
     } else {
         sqlx::query(
-            "INSERT INTO ai_providers (id, org_id, kind, model, base_url, deployment, key_sealed, monthly_token_budget, created_by) \
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)",
+            "INSERT INTO ai_providers (id, org_id, kind, model, base_url, deployment, key_sealed, monthly_token_budget, created_by, purpose) \
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)",
         )
         .bind(id)
         .bind(org_id)
@@ -167,6 +193,7 @@ pub async fn set(
         .bind(sealed.as_deref())
         .bind(input.monthly_token_budget)
         .bind(ctx.actor.id())
+        .bind(purpose)
         .execute(&mut *conn)
         .await?;
     }
@@ -176,21 +203,26 @@ pub async fn set(
         AuditRecord::new("ai.provider_set")
             .org(org_id)
             .target("ai_provider", id)
-            .details(json!({ "kind": input.kind, "model": model, "keyChanged": key.is_some() })),
+            .details(json!({ "kind": input.kind, "model": model, "keyChanged": key.is_some(), "use": purpose })),
     )
     .await
     .map_err(|e| StoreError::Db(sqlx::Error::Protocol(e.to_string())))?;
-    own(conn, org_id).await?.ok_or(StoreError::NotFound)
+    own(conn, org_id, purpose)
+        .await?
+        .ok_or(StoreError::NotFound)
 }
 
-/// Removes `org_id`'s own provider (it falls back to one above, if any).
+/// Removes `org_id`'s own provider for `purpose` (it falls back to one
+/// above, if any).
 pub async fn remove(
     conn: &mut PgConnection,
     ctx: &RequestContext,
     org_id: Uuid,
+    purpose: Use,
 ) -> Result<(), StoreError> {
-    let removed = sqlx::query("DELETE FROM ai_providers WHERE org_id = $1")
+    let removed = sqlx::query("DELETE FROM ai_providers WHERE org_id = $1 AND purpose = $2")
         .bind(org_id)
+        .bind(purpose)
         .execute(&mut *conn)
         .await?;
     if removed.rows_affected() == 0 {
@@ -199,30 +231,36 @@ pub async fn remove(
     audit::record(
         &mut *conn,
         ctx,
-        AuditRecord::new("ai.provider_removed").org(org_id),
+        AuditRecord::new("ai.provider_removed")
+            .org(org_id)
+            .details(json!({ "use": purpose })),
     )
     .await
     .map_err(|e| StoreError::Db(sqlx::Error::Protocol(e.to_string())))?;
     Ok(())
 }
 
-/// `org_id`'s own provider.
+/// `org_id`'s own provider for `purpose`.
 pub async fn own(
     conn: &mut PgConnection,
     org_id: Uuid,
+    purpose: Use,
 ) -> Result<Option<ProviderView>, StoreError> {
     Ok(sqlx::query_as(sqlx::AssertSqlSafe(format!(
-        "SELECT {VIEW} FROM ai_providers WHERE org_id = $1"
+        "SELECT {VIEW} FROM ai_providers WHERE org_id = $1 AND purpose = $2"
     )))
     .bind(org_id)
+    .bind(purpose)
     .fetch_optional(conn)
     .await?)
 }
 
-/// The provider serving `org_id`: its own, or the nearest above it.
+/// The provider serving `org_id` for `purpose`: its own, or the nearest
+/// above it.
 pub async fn effective(
     conn: &mut PgConnection,
     org_id: Uuid,
+    purpose: Use,
 ) -> Result<Option<ProviderView>, StoreError> {
     let columns = VIEW
         .split(", ")
@@ -231,10 +269,11 @@ pub async fn effective(
         .join(", ");
     Ok(sqlx::query_as(sqlx::AssertSqlSafe(format!(
         "SELECT {columns} FROM ai_providers p JOIN organizations o ON o.id = p.org_id \
-          WHERE o.path @> (SELECT path FROM organizations WHERE id = $1) \
+          WHERE o.path @> (SELECT path FROM organizations WHERE id = $1) AND p.purpose = $2 \
           ORDER BY nlevel(o.path) DESC LIMIT 1"
     )))
     .bind(org_id)
+    .bind(purpose)
     .fetch_optional(conn)
     .await?)
 }
@@ -371,14 +410,21 @@ impl Ai {
     async fn prepare(
         &self,
         org_id: Uuid,
+        purpose: Use,
         model: Option<&str>,
     ) -> Result<(ProviderView, Result<(Endpoint, String), AiError>), AiError> {
         let internal = |e: &dyn std::fmt::Display| AiError::Internal(e.to_string());
         let mut tx = begin_scoped(&self.db, &OrgScope::System)
             .await
             .map_err(|e| internal(&e))?;
-        let Some(provider) = effective(&mut tx, org_id).await.map_err(|e| internal(&e))? else {
-            return Err(AiError::NotConfigured);
+        let Some(provider) = effective(&mut tx, org_id, purpose)
+            .await
+            .map_err(|e| internal(&e))?
+        else {
+            return Err(match purpose {
+                Use::Chat => AiError::NotConfigured,
+                Use::Embeddings => AiError::NoEmbeddings,
+            });
         };
         let sealed: Vec<u8> =
             sqlx::query_scalar("SELECT key_sealed FROM ai_providers WHERE id = $1")
@@ -428,7 +474,7 @@ impl Ai {
         model: Option<&str>,
         request: &Request,
     ) -> Result<Completion, AiError> {
-        let (provider, ready) = self.prepare(org_id, model).await?;
+        let (provider, ready) = self.prepare(org_id, Use::Chat, model).await?;
         let result = match ready {
             Ok((endpoint, key)) => provider::complete(&self.http, &endpoint, &key, request).await,
             Err(e) => Err(e),
@@ -455,7 +501,7 @@ impl Ai {
         tools: &[crate::chat::ToolDef],
         on_text: Option<&(dyn Fn(&str) + Send + Sync)>,
     ) -> Result<crate::chat::Turn, AiError> {
-        let (provider, ready) = self.prepare(org_id, None).await?;
+        let (provider, ready) = self.prepare(org_id, Use::Chat, None).await?;
         let result = match (ready, on_text) {
             (Ok((endpoint, key)), None) => {
                 crate::chat::turn(&self.http, &endpoint, &key, system, messages, tools, 0).await
@@ -472,6 +518,32 @@ impl Ai {
             model: &t.model,
             input: t.input_tokens,
             output: t.output_tokens,
+        });
+        self.log(org_id, &provider, purpose, usage).await?;
+        result
+    }
+
+    /// Embeds `inputs` (1 to [`crate::embed::MAX_BATCH`]) with `org_id`'s
+    /// embeddings provider (its own or the nearest above). Logged and
+    /// budgeted like any call.
+    pub async fn embed(
+        &self,
+        org_id: Uuid,
+        purpose: Purpose<'_>,
+        inputs: &[String],
+        input_type: crate::embed::InputType,
+    ) -> Result<crate::embed::Embeddings, AiError> {
+        let (provider, ready) = self.prepare(org_id, Use::Embeddings, None).await?;
+        let result = match ready {
+            Ok((endpoint, key)) => {
+                crate::embed::embed(&self.http, &endpoint, &key, inputs, input_type).await
+            }
+            Err(e) => Err(e),
+        };
+        let usage = result.as_ref().map(|e| Usage {
+            model: &e.model,
+            input: e.tokens,
+            output: 0,
         });
         self.log(org_id, &provider, purpose, usage).await?;
         result

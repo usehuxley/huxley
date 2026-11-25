@@ -28,7 +28,10 @@ export interface paths {
 			path?: never;
 			cookie?: never;
 		};
-		/** An organization's AI provider (never its key), and the one it uses. */
+		/**
+		 * An organization's AI provider, or its embeddings provider (never its
+		 *     key), and the one it uses.
+		 */
 		get: operations['get_ai_provider'];
 		/**
 		 * Sets an organization's AI provider; organizations below without their
@@ -36,7 +39,7 @@ export interface paths {
 		 */
 		put: operations['set_ai_provider'];
 		post?: never;
-		/** Removes an organization's own AI provider. */
+		/** Removes an organization's own AI provider (or embeddings provider). */
 		delete: operations['remove_ai_provider'];
 		options?: never;
 		head?: never;
@@ -54,7 +57,8 @@ export interface paths {
 		put?: never;
 		/**
 		 * Sends a tiny request through the provider the organization uses (it's
-		 *     logged and counts toward the budget).
+		 *     logged and counts toward the budget). For embeddings, one word is
+		 *     embedded and its dimensions reported.
 		 */
 		post: operations['test_ai_provider'];
 		delete?: never;
@@ -2849,6 +2853,28 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
+	'/api/v1/search/tickets': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/**
+		 * Searches tickets by meaning (the `servicedesk` module): your words are
+		 *     embedded by the organization's embeddings provider (a logged AI call),
+		 *     and the tickets you can read nearest in meaning come back, best first.
+		 *     Needs pgvector in the database and an embeddings provider.
+		 */
+		get: operations['search_tickets'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
 	'/api/v1/security/mfa-policy': {
 		parameters: {
 			query?: never;
@@ -4560,6 +4586,12 @@ export interface components {
 			model?: string | null;
 			ok: boolean;
 		};
+		/**
+		 * @description What a provider is for: answering (chat, structured output, tools) or
+		 *     embeddings. An organization may set one of each.
+		 * @enum {string}
+		 */
+		AiProviderUse: 'chat' | 'embeddings';
 		/** @description A provider as shown (never with its key). */
 		AiProviderView: {
 			baseUrl?: string | null;
@@ -5982,6 +6014,31 @@ export interface components {
 			 */
 			mfaSetupRequired: boolean;
 		};
+		/** @description A ticket found by meaning. */
+		MeaningHit: {
+			/** Format: uuid */
+			id: string;
+			orgName: string;
+			reference: string;
+			/**
+			 * Format: double
+			 * @description How close in meaning, from 0 to 1 (cosine similarity).
+			 */
+			score: number;
+			statusName: string;
+			title: string;
+		};
+		/** @description Tickets found by meaning, or why searching by meaning isn't possible. */
+		MeaningSearch: {
+			/**
+			 * @description Whether searching by meaning is set up here (pgvector and an
+			 *     embeddings provider).
+			 */
+			available: boolean;
+			hits: components['schemas']['MeaningHit'][];
+			/** @description Why there are no results, when something stopped the search. */
+			message?: string | null;
+		};
 		MergeInto: {
 			/** @description …or by reference (e.g. `T-1042`). */
 			into?: string | null;
@@ -6594,7 +6651,7 @@ export interface components {
 			trustEmail?: boolean | null;
 		};
 		/** @enum {string} */
-		ProviderKind: 'anthropic' | 'openai' | 'azure_openai' | 'openai_compatible';
+		ProviderKind: 'anthropic' | 'openai' | 'azure_openai' | 'openai_compatible' | 'voyage';
 		/** @description What someone with the link sees. */
 		PublicForm: {
 			description?: string | null;
@@ -7038,6 +7095,7 @@ export interface components {
 			/** Format: uuid */
 			orgId: string;
 			provider: components['schemas']['AiProviderInput'];
+			use?: components['schemas']['AiProviderUse'] | null;
 		};
 		SetCurrentRequest: {
 			/** Format: int32 */
@@ -8156,6 +8214,8 @@ export interface operations {
 		parameters: {
 			query: {
 				orgId: string;
+				/** @description Which provider: `chat` (the default) or `embeddings`. */
+				use?: components['schemas']['AiProviderUse'] | null;
 			};
 			header?: never;
 			path?: never;
@@ -8208,6 +8268,8 @@ export interface operations {
 		parameters: {
 			query: {
 				orgId: string;
+				/** @description Which provider: `chat` (the default) or `embeddings`. */
+				use?: components['schemas']['AiProviderUse'] | null;
 			};
 			header?: never;
 			path?: never;
@@ -8235,6 +8297,8 @@ export interface operations {
 		parameters: {
 			query: {
 				orgId: string;
+				/** @description Which provider: `chat` (the default) or `embeddings`. */
+				use?: components['schemas']['AiProviderUse'] | null;
 			};
 			header?: never;
 			path?: never;
@@ -13968,6 +14032,41 @@ export interface operations {
 				};
 				content: {
 					'application/json': components['schemas']['SearchHit'][];
+				};
+			};
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	search_tickets: {
+		parameters: {
+			query: {
+				/** @description What to look for, in your own words: 2 to 500 characters. */
+				q: string;
+				/**
+				 * @description The organization whose embeddings provider reads the query (you need
+				 *     `ai:use` there).
+				 */
+				orgId: string;
+			};
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['MeaningSearch'];
 				};
 			};
 			422: {

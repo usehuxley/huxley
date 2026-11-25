@@ -216,7 +216,7 @@ pub async fn start(
     let mut tx = huxley_db::begin_scoped(&state.db, &huxley_db::OrgScope::System)
         .await
         .map_err(|e| ApiError::internal(&e))?;
-    let provider = huxley_ai::store::effective(&mut tx, body.org_id)
+    let provider = huxley_ai::store::effective(&mut tx, body.org_id, huxley_ai::store::Use::Chat)
         .await
         .map_err(|e| ApiError::internal(&e))?;
     tx.commit().await.map_err(|e| ApiError::internal(&e))?;

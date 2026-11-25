@@ -13,7 +13,7 @@ use utoipa::ToSchema;
 const ANTHROPIC_VERSION: &str = "2026-10-21";
 /// Server-side refusal fallback (the API reroutes declined requests).
 const ANTHROPIC_FALLBACK_BETA: &str = "server-side-fallback-2026-07-01";
-const AZURE_API_VERSION: &str = "2024-10-21";
+pub(crate) const AZURE_API_VERSION: &str = "2024-10-21";
 /// How long one call may take.
 pub const TIMEOUT: Duration = Duration::from_secs(120);
 
@@ -25,6 +25,8 @@ pub enum ProviderKind {
     Openai,
     AzureOpenai,
     OpenaiCompatible,
+    /// Voyage AI: embeddings only.
+    Voyage,
 }
 
 impl ProviderKind {
@@ -95,6 +97,8 @@ pub enum AiError {
     Invalid(String),
     #[error("no AI provider is set up for this organization (or above it)")]
     NotConfigured,
+    #[error("no embeddings provider is set up for this organization (or above it)")]
+    NoEmbeddings,
     #[error("the AI provider's monthly budget is used up ({used} of {budget} tokens)")]
     OverBudget { used: i64, budget: i64 },
     #[error("{0}")]
@@ -107,10 +111,11 @@ fn name(kind: ProviderKind) -> &'static str {
         ProviderKind::Openai => "OpenAI",
         ProviderKind::AzureOpenai => "Azure OpenAI",
         ProviderKind::OpenaiCompatible => "the AI provider",
+        ProviderKind::Voyage => "Voyage AI",
     }
 }
 
-fn base(endpoint: &Endpoint, default: &str) -> Result<String, AiError> {
+pub(crate) fn base(endpoint: &Endpoint, default: &str) -> Result<String, AiError> {
     let url = endpoint
         .base_url
         .as_deref()
@@ -166,6 +171,7 @@ pub(crate) fn build(endpoint: &Endpoint, key: &str, request: &Request) -> Result
             ];
             Ok(Http { url, headers, body })
         }
+        ProviderKind::Voyage => Err(AiError::Invalid("Voyage AI only makes embeddings".into())),
         kind => {
             let mut messages = Vec::new();
             if let Some(system) = &request.system {

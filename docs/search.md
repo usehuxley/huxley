@@ -16,6 +16,8 @@ Type at least two characters. Huxley shows the best five matches of each kind, c
 
 Search only finds what you're allowed to see: tickets, clients, contacts and workflows in the organizations where you hold the permission. Open tickets rank before resolved ones, and a ticket whose number you typed comes first.
 
+To find tickets by what they're about rather than their words, use [Tickets → By meaning](servicedesk.md#search-by-meaning).
+
 ## API
 
 `GET /api/v1/search?q=…` returns the same results, as `{ kind, id, title, subtitle }` objects.
