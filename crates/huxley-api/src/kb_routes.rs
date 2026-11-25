@@ -235,6 +235,8 @@ pub struct ArticleParams {
     pub category_id: Option<Uuid>,
     /// `draft`, `in_review`, `published` or `archived`.
     pub status: Option<String>,
+    /// Only this organization's articles (e.g. a client's documentation).
+    pub org_id: Option<Uuid>,
     /// Default 50, at most 200.
     pub limit: Option<i64>,
     pub offset: Option<i64>,
@@ -265,6 +267,7 @@ pub async fn list_articles(
         q: params.q,
         category_id: params.category_id,
         status: params.status,
+        org_id: params.org_id,
         drafts,
         limit: params.limit.unwrap_or(50),
         offset: params.offset.unwrap_or(0),

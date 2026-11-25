@@ -1980,6 +1980,7 @@ dependencies = [
  "huxley-templates",
  "huxley-triggers",
  "huxley-variables",
+ "huxley-vault",
  "huxley-workflows",
  "huxley-workforce",
  "jiff 0.2.46",
@@ -2650,6 +2651,25 @@ dependencies = [
  "tokio",
  "utoipa",
  "uuid",
+]
+
+[[package]]
+name = "huxley-vault"
+version = "0.1.0"
+dependencies = [
+ "huxley-core",
+ "huxley-crypto",
+ "huxley-db",
+ "huxley-orgs",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "thiserror 2.0.21",
+ "time",
+ "tokio",
+ "utoipa",
+ "uuid",
+ "zeroize",
 ]
 
 [[package]]

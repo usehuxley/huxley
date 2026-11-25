@@ -4083,6 +4083,107 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
+	'/api/v1/vault/items': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** Items you can see, by name (never their secrets). */
+		get: operations['list_vault_items'];
+		put?: never;
+		/**
+		 * Adds an item at an organization (`vault:manage` there). The secret is
+		 *     stored encrypted.
+		 */
+		post: operations['create_vault_item'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/vault/items/{id}': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** An item (never its secret). */
+		get: operations['get_vault_item'];
+		put?: never;
+		post?: never;
+		/** Deletes an item; who revealed it stays on record. */
+		delete: operations['delete_vault_item'];
+		options?: never;
+		head?: never;
+		/**
+		 * Changes an item; send back the `version` you read. A `secret` replaces
+		 *     the current one; `clearSecret` removes it.
+		 */
+		patch: operations['update_vault_item'];
+		trace?: never;
+	};
+	'/api/v1/vault/items/{id}/reveal': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/**
+		 * Reveals an item's secret (`vault:reveal`). Each reveal is logged with
+		 *     who, when and the reason, audited, and raised as
+		 *     `vault.secret_revealed`. The response isn't cached.
+		 */
+		post: operations['reveal_vault_secret'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/vault/items/{id}/reveals': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** Who revealed an item's secret, newest first (`vault:read`). */
+		get: operations['list_item_reveals'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/vault/reveals': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/**
+		 * Every reveal you can see, newest first, including those of deleted
+		 *     items (`vault:read`).
+		 */
+		get: operations['list_vault_reveals'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
 	'/api/v1/work-types': {
 		parameters: {
 			query?: never;
@@ -7359,6 +7460,13 @@ export interface components {
 			/** @description False if the job wasn't dead (or doesn't exist). */
 			retried: boolean;
 		};
+		RevealRequest: {
+			/** @description Why: kept with the reveal (e.g. the ticket being worked). */
+			reason?: string | null;
+		};
+		RevealedSecret: {
+			secret: string;
+		};
 		/** @description What a pack would add, for an admin to approve. */
 		Review: {
 			description: string;
@@ -8609,6 +8717,82 @@ export interface components {
 		};
 		/** @enum {string} */
 		VariableType: 'string' | 'number' | 'bool' | 'json' | 'secret';
+		/** @description An item as shown: never with its secret. */
+		VaultItem: {
+			/** @description Whether it holds a secret to reveal. */
+			hasSecret: boolean;
+			/** Format: uuid */
+			id: string;
+			kind: string;
+			/** Format: date-time */
+			lastRevealedAt?: string | null;
+			name: string;
+			notes: string;
+			/** Format: uuid */
+			orgId: string;
+			orgName: string;
+			/** Format: date-time */
+			secretChangedAt?: string | null;
+			tags: string[];
+			/** Format: date-time */
+			updatedAt: string;
+			updatedByName?: string | null;
+			url: string;
+			username: string;
+			/**
+			 * Format: int32
+			 * @description For optimistic locking: send it back when changing the item.
+			 */
+			version: number;
+		};
+		/** @description Changes to an item: what's given changes. */
+		VaultItemChanges: {
+			/** @description Remove the secret. */
+			clearSecret?: boolean;
+			kind?: string | null;
+			name?: string | null;
+			notes?: string | null;
+			/** @description A new secret (leave out to keep the current one). */
+			secret?: string | null;
+			tags?: string[] | null;
+			url?: string | null;
+			username?: string | null;
+			/**
+			 * Format: int32
+			 * @description The version you read.
+			 */
+			version: number;
+		};
+		/** @description A new item. */
+		VaultItemInput: {
+			/** @description `login` (the default), `api_key`, `wifi`, `note` or `other`. */
+			kind?: string | null;
+			name: string;
+			/** @description Not secret: how to use it, who owns it. */
+			notes?: string | null;
+			/** Format: uuid */
+			orgId: string;
+			/** @description The password, key or secret note. Stored encrypted. */
+			secret?: string | null;
+			tags?: string[] | null;
+			url?: string | null;
+			username?: string | null;
+		};
+		/** @description An item, with what you may do with it. */
+		VaultItemView: components['schemas']['VaultItem'] & {
+			canManage: boolean;
+			canReveal: boolean;
+		};
+		/** @description A reveal, as logged. */
+		VaultReveal: {
+			/** Format: uuid */
+			itemId?: string | null;
+			itemName: string;
+			reason: string;
+			/** Format: date-time */
+			revealedAt: string;
+			userName?: string | null;
+		};
 		VerifyEmailRequest: {
 			/** @description From the emailed link. */
 			token: string;
@@ -12308,6 +12492,8 @@ export interface operations {
 				categoryId?: string | null;
 				/** @description `draft`, `in_review`, `published` or `archived`. */
 				status?: string | null;
+				/** @description Only this organization's articles (e.g. a client's documentation). */
+				orgId?: string | null;
 				/** @description Default 50, at most 200. */
 				limit?: number | null;
 				offset?: number | null;
@@ -17536,6 +17722,223 @@ export interface operations {
 				};
 				content: {
 					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	list_vault_items: {
+		parameters: {
+			query?: {
+				/** @description Words in the name, username, URL or tags. */
+				q?: string | null;
+				/** @description Only this organization's items. */
+				orgId?: string | null;
+			};
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['VaultItem'][];
+				};
+			};
+		};
+	};
+	create_vault_item: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['VaultItemInput'];
+			};
+		};
+		responses: {
+			201: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['VaultItemView'];
+				};
+			};
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	get_vault_item: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['VaultItemView'];
+				};
+			};
+			404: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	delete_vault_item: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			204: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content?: never;
+			};
+		};
+	};
+	update_vault_item: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['VaultItemChanges'];
+			};
+		};
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['VaultItemView'];
+				};
+			};
+			409: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	reveal_vault_secret: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['RevealRequest'];
+			};
+		};
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['RevealedSecret'];
+				};
+			};
+			409: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	list_item_reveals: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['VaultReveal'][];
+				};
+			};
+		};
+	};
+	list_vault_reveals: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['VaultReveal'][];
 				};
 			};
 		};

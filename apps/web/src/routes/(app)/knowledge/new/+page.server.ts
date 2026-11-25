@@ -17,7 +17,11 @@ export const load: PageServerLoad = async (event) => {
 	if (categories.response.status === 404) error(404, 'The knowledge base is turned off.');
 	const list = orgs.data ?? [];
 	// The current organization first, then the root (the MSP), then the rest.
-	const first = currentOrg?.id ?? list.find((o) => o.parentId === null)?.id;
+	// ?org= (e.g. from a client's Documentation), else the current organization, else the root.
+	const first =
+		event.url.searchParams.get('org') ??
+		currentOrg?.id ??
+		list.find((o) => o.parentId === null)?.id;
 	return {
 		orgs: [...list.filter((o) => o.id === first), ...list.filter((o) => o.id !== first)].map(
 			(o) => ({

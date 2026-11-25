@@ -4,6 +4,7 @@
 	import { resolve } from '$app/paths';
 	import { Globe, MapPin, Phone, Plus, Search, UserPlus } from '@lucide/svelte';
 	import { Badge, Button, Card, Dialog, Field, Input, Select, Tabs, toast } from '@usehuxley/ui';
+	import VaultPanel from '#lib/vault/VaultPanel.svelte';
 	import SiteForm from '#lib/crm/SiteForm.svelte';
 	import { RELATIONSHIPS, STATUSES, hoursSummary, label, statusTone } from '#lib/crm/labels.ts';
 	import type { PageProps } from './$types';
@@ -98,7 +99,11 @@
 		items={[
 			{ value: 'overview', label: 'Overview' },
 			{ value: 'contacts', label: `Contacts (${data.contacts.total})` },
-			{ value: 'sites', label: `Sites (${data.sites.length})` }
+			{ value: 'sites', label: `Sites (${data.sites.length})` },
+			...(data.documents
+				? [{ value: 'documentation', label: `Documentation (${data.documents.length})` }]
+				: []),
+			...(data.vault ? [{ value: 'vault', label: `Passwords (${data.vault.length})` }] : [])
 		]}
 	>
 		{#snippet panel(value)}
@@ -295,6 +300,44 @@
 						</ul>
 					{/if}
 				</div>
+			{/if}
+			{#if value === 'documentation' && data.documents}
+				<Card
+					title="Documentation"
+					description="This client's knowledge base articles: how their systems are set up and run."
+				>
+					{#snippet actions()}
+						{#if data.canWriteDocs}
+							<Button href={`${resolve('/(app)/knowledge/new')}?org=${data.org.id}`}>
+								<Plus size={16} /> New document
+							</Button>
+						{/if}
+					{/snippet}
+					{#if data.documents.length === 0}
+						<p class="text-sm text-fg-muted">No documentation yet.</p>
+					{:else}
+						<ul class="flex flex-col divide-y divide-border" aria-label="Documentation">
+							{#each data.documents as doc (doc.id)}
+								<li class="flex items-center justify-between gap-2 py-2 first:pt-0">
+									<a
+										class="text-fg hover:underline"
+										href={resolve('/(app)/knowledge/[id]', { id: doc.id })}
+									>
+										{doc.title}
+									</a>
+									<span class="text-xs text-fg-subtle">
+										{doc.categoryName ?? ''}{doc.status !== 'published'
+											? ` · ${doc.status === 'in_review' ? 'In review' : doc.status === 'archived' ? 'Archived' : 'Draft'}`
+											: ''}
+									</span>
+								</li>
+							{/each}
+						</ul>
+					{/if}
+				</Card>
+			{/if}
+			{#if value === 'vault' && data.vault}
+				<VaultPanel items={data.vault} canManage={data.canManageVault} />
 			{/if}
 		{/snippet}
 	</Tabs>

@@ -86,6 +86,9 @@ permissions! {
     KB_READ = "kb:read", Org, "Read published knowledge base articles";
     KB_WRITE = "kb:write", Org, "Write knowledge base articles and submit them for review";
     KB_PUBLISH = "kb:publish", Org, "Approve, reject, publish and archive knowledge base articles, and keep their categories";
+    VAULT_READ = "vault:read", Org, "See credential vault items (never their secrets) and who revealed them";
+    VAULT_REVEAL = "vault:reveal", Org, "Reveal credential vault secrets (each reveal is logged and audited)";
+    VAULT_MANAGE = "vault:manage", Org, "Add, change and delete credential vault items and their secrets";
 }
 
 /// Wildcard granting every permission.
