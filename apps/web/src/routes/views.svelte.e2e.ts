@@ -85,4 +85,17 @@ test.describe('saved ticket views', () => {
 		await expect(page).toHaveURL(/\/tickets$/);
 		await expect(tabs.getByRole('link', { name })).toHaveCount(0);
 	});
+
+	test('the command palette finds a ticket and opens it', async ({ page }) => {
+		const stamp = Date.now().toString(36);
+		await clientWithTickets(stamp);
+		await signIn(page);
+		await page.getByRole('button', { name: 'Search or jump to…' }).click();
+		const palette = page.getByRole('dialog');
+		await palette.getByRole('combobox').fill(`Server down ${stamp}`);
+		const hit = palette.getByRole('option', { name: new RegExp(`Server down ${stamp}`) });
+		await expect(hit).toContainText('Ticket');
+		await palette.getByRole('combobox').press('Enter');
+		await expect(page.getByRole('heading', { level: 1 })).toHaveText(`Server down ${stamp}`);
+	});
 });

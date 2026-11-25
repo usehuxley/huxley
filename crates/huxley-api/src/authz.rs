@@ -128,6 +128,17 @@ impl Authed {
         permission: &str,
         module: &str,
     ) -> ApiResult<OrgScope> {
+        self.permission_scope(state, permission, Some(module)).await
+    }
+
+    /// The organizations where the caller holds `permission` (and, given a
+    /// module, where it's active).
+    pub async fn permission_scope(
+        &self,
+        state: &AppState,
+        permission: &str,
+        module: Option<&str>,
+    ) -> ApiResult<OrgScope> {
         let mut tx = begin_scoped(&state.db, &OrgScope::System)
             .await
             .map_err(|e| ApiError::internal(&e))?;
@@ -146,7 +157,7 @@ impl Authed {
                JOIN organizations o ON o.id = s.org_id AND o.parent_id IS NOT NULL \
               WHERE s.module_key = $1 AND NOT s.enabled",
         )
-        .bind(module)
+        .bind(module.unwrap_or(""))
         .fetch_all(&mut *tx)
         .await
         .map_err(|e| ApiError::internal(&e))?;

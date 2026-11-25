@@ -57,7 +57,8 @@ export default defineConfig({
 				text: 'Getting started',
 				items: [
 					{ text: 'Introduction', link: '/' },
-					{ text: 'Your first workflow', link: '/getting-started' }
+					{ text: 'Your first workflow', link: '/getting-started' },
+					{ text: 'Search', link: '/search' }
 				]
 			},
 			{
