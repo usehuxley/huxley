@@ -60,6 +60,7 @@ A vendor's own `429` answers are still handled by a step's `retry` (`on: ["429"]
   4. Make a connection with the scheme **app**: the client ID, the secret, and the **tenant** server variable (the tenant ID or `contoso.onmicrosoft.com`).
 
   **For many client tenants (GDAP):** make **one shared connection at the MSP** with the partner's multi-tenant app, and set its tenant to `{{ vars.m365_tenant }}`. Then give each client organization an `m365_tenant` variable. A run in a client organization gets a token for that client's tenant, and each tenant's token is cached separately (ADR-027). This works for client-credentials connections only.
+- **ConnectWise Automate** (`cwautomate`): list computers, run a command on one, and read commands' status and output. See [ConnectWise Automate](cwautomate.md).
 - **Slack** (`slack`): post a message and list channels, with a bot token (`xoxb-…`) that has `chat:write`. Slack answers 200 even when a call fails, so check `ok` in the output.
 
 ## Updating
@@ -94,6 +95,7 @@ A connection holds credentials for one of an integration's auth schemes. Create 
 | HTTP basic | `username` | `password` |
 | Bearer token | | `token` |
 | OAuth 2.0, OpenID Connect | `client_id`, `scopes` | `client_secret` |
+| Token exchange | what the spec's `x-huxley-token-exchange` names | the fields it marks secret |
 
 **How secrets are handled:**
 - Secrets are encrypted with the organization's data key and never shown again. The API and the page only say which ones are set.
@@ -110,6 +112,27 @@ A connection holds credentials for one of an integration's auth schemes. Create 
   - Tokens are encrypted, kept apart from the credentials you entered, and refreshed before they expire. A rotated refresh token is kept.
   - If the provider revokes the sign-in, the connection goes back to **Needs sign-in**, with the reason shown.
 - **Both:** a connection fetches or refreshes one token at a time, so concurrent workflow steps don't compete for it. Token requests follow the same outbound rules as HTTP steps (`HUXLEY_ENGINE__EGRESS__*`).
+
+**Token exchange:** some APIs, such as ConnectWise Automate's, don't use OAuth. You post a user name and password to a login URL and get a bearer token back. A spec describes that with an `x-huxley-token-exchange` extension on a security scheme:
+
+```yaml
+components:
+  securitySchemes:
+    integrator:
+      type: http
+      scheme: bearer
+      x-huxley-token-exchange:
+        path: /apitoken              # below the base URL, or an absolute https:// URL
+        body: { username: username, password: password }   # JSON field: connection field
+        headers: { clientID: client_id }                   # sent with the login and every call
+        secrets: [password]          # connection fields kept encrypted
+        optional: []                 # connection fields that may be empty (then left out)
+        tokenField: AccessToken      # where the token is in the answer (any case)
+        expiresAtField: ExpirationDate   # or expiresInField: seconds
+        lifetimeSeconds: 3600        # when the answer doesn't say
+```
+
+The connection then asks for exactly the fields named, keeping the secret ones encrypted. It logs in when it needs a token, reuses the token until a minute before it expires, logs in again after that, and sends the token as `Authorization: Bearer …` along with the listed headers. If the login is refused, the step fails with the API's message.
 
 ## Calling actions
 

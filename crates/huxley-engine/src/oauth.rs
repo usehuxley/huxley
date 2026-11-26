@@ -90,6 +90,11 @@ impl Engine {
                 return self.tenant_token(connection_id, org_id).await;
             }
         }
+        self.shared_token(connection_id).await
+    }
+
+    /// The connection's own token (not a per-organization one).
+    async fn shared_token(&self, connection_id: Uuid) -> Result<Option<String>, TokenError> {
         // Fast path: a stored token that's still good.
         let mut tx = begin_scoped(self.db(), &OrgScope::System)
             .await
@@ -131,7 +136,8 @@ impl Engine {
         } = &resolved.auth
         else {
             tx.commit().await?;
-            return Ok(None);
+            // Only client credentials differ per tenant; others share one token.
+            return Box::pin(self.shared_token(connection_id)).await;
         };
         // One request at a time per connection.
         sqlx::query("SELECT 1 FROM connections WHERE id = $1 FOR UPDATE")
@@ -275,6 +281,26 @@ impl Engine {
                     Err(refused) => return Err(TokenError::Failed(refused.message)),
                 }
             }
+            ResolvedAuth::TokenExchange {
+                url,
+                body,
+                headers,
+                token_field,
+                expires_at_field,
+                expires_in_field,
+                lifetime_seconds,
+            } => self
+                .exchange_token(
+                    url,
+                    body,
+                    headers,
+                    token_field,
+                    expires_at_field.as_deref(),
+                    expires_in_field.as_deref(),
+                    *lifetime_seconds,
+                )
+                .await
+                .map_err(|r| TokenError::Failed(r.message))?,
             _ => return Ok(None),
         };
         let token = issued.tokens.access_token.clone();
@@ -359,6 +385,84 @@ impl Engine {
 
     /// POSTs a form to a token endpoint (client credentials in the body,
     /// RFC 6749 §2.3.1) and reads its JSON answer.
+    /// Posts credentials to a token-exchange login and reads the token
+    /// (and its expiry) from the answer. Field names match ignoring case.
+    #[allow(clippy::too_many_arguments)]
+    async fn exchange_token(
+        &self,
+        login_url: &str,
+        body: &serde_json::Map<String, Json>,
+        headers: &[(String, String)],
+        token_field: &str,
+        expires_at_field: Option<&str>,
+        expires_in_field: Option<&str>,
+        lifetime_seconds: i64,
+    ) -> Result<Issued, Refused> {
+        let refused = |message: String| Refused {
+            code: None,
+            message,
+        };
+        let url = url::Url::parse(login_url)
+            .map_err(|_| refused(format!("the login URL {login_url:?} isn't a URL")))?;
+        self.egress
+            .policy
+            .check_url(&url)
+            .map_err(|b| refused(format!("the login URL is blocked: {}", b.0)))?;
+        let mut request = self
+            .egress
+            .client
+            .post(url)
+            .header("accept", "application/json")
+            .json(body)
+            .timeout(TOKEN_TIMEOUT);
+        for (name, value) in headers {
+            request = request.header(name.as_str(), value.as_str());
+        }
+        let response = request.send().await.map_err(|e| {
+            refused(crate::egress::blocked_reason(&e).map_or_else(
+                || format!("the login endpoint couldn't be reached: {e}"),
+                |b| format!("the login URL is blocked: {b}"),
+            ))
+        })?;
+        let status = response.status();
+        let answer: Json = response.json().await.unwrap_or(Json::Null);
+        let field = |name: &str| -> Option<Json> {
+            answer.as_object().and_then(|o| {
+                o.iter()
+                    .find(|(k, _)| k.eq_ignore_ascii_case(name))
+                    .map(|(_, v)| v.clone())
+            })
+        };
+        if !status.is_success() {
+            let detail = ["message", "Message", "error_description", "error"]
+                .iter()
+                .find_map(|k| field(k).and_then(|v| v.as_str().map(str::to_owned)))
+                .unwrap_or_else(|| "no details".into());
+            return Err(refused(format!("the login answered {status}: {detail}")));
+        }
+        let Some(token) = field(token_field).and_then(|v| v.as_str().map(str::to_owned)) else {
+            return Err(refused(format!(
+                "the login's answer has no {token_field:?}"
+            )));
+        };
+        let from_in = expires_in_field.and_then(field).and_then(|v| match v {
+            Json::Number(n) => n.as_i64(),
+            Json::String(s) => s.parse().ok(),
+            _ => None,
+        });
+        let from_at = expires_at_field
+            .and_then(field)
+            .and_then(|v| v.as_str().map(str::to_owned))
+            .and_then(|s| expires_in_from(&s));
+        Ok(Issued {
+            tokens: Tokens {
+                access_token: token,
+                refresh_token: None,
+            },
+            expires_in: Some(from_in.or(from_at).unwrap_or(lifetime_seconds)),
+        })
+    }
+
     async fn token_request(
         &self,
         token_url: &str,
@@ -436,5 +540,35 @@ pub fn token_error(e: &TokenError) -> Json {
             json!({ "kind": "auth", "message": m })
         }
         other => json!({ "kind": "internal", "message": other.to_string() }),
+    }
+}
+
+/// Seconds from now until a date-time an API sent: RFC 3339, or without an
+/// offset (taken as UTC). `None` if it can't be read or is past.
+fn expires_in_from(text: &str) -> Option<i64> {
+    use time::format_description::well_known::Rfc3339;
+    let at = OffsetDateTime::parse(text, &Rfc3339).ok().or_else(|| {
+        let with_z = format!("{}Z", text.trim_end_matches('Z'));
+        OffsetDateTime::parse(&with_z, &Rfc3339).ok()
+    })?;
+    let seconds = (at - OffsetDateTime::now_utc()).whole_seconds();
+    (seconds > 0).then_some(seconds)
+}
+
+#[cfg(test)]
+mod exchange_tests {
+    use super::expires_in_from;
+
+    #[test]
+    fn expiry_dates_are_read_with_or_without_an_offset() {
+        let at = (time::OffsetDateTime::now_utc() + time::Duration::hours(1))
+            .format(&time::format_description::well_known::Rfc3339)
+            .unwrap();
+        let s = expires_in_from(&at).unwrap();
+        assert!((3500..=3600).contains(&s), "{s}");
+        let naive = at.trim_end_matches('Z').to_owned();
+        assert!(expires_in_from(&naive).is_some());
+        assert_eq!(expires_in_from("2001-01-01T00:00:00Z"), None);
+        assert_eq!(expires_in_from("soon"), None);
     }
 }

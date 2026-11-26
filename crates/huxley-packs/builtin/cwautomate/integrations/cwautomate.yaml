@@ -1,0 +1,127 @@
+openapi: 3.0.3
+info:
+  title: ConnectWise Automate
+  version: v1
+  description: >-
+    Computers and commands on a ConnectWise Automate server, through its REST
+    API (v1). Sign in with an integrator login (Automate: System → Integrator
+    Logins), and a ClientID from the ConnectWise developer portal
+    (developer.connectwise.com/ClientID), which Automate 2020 Patch 11 and
+    later require. Set the server to your Automate host, e.g.
+    automate.example.com. Tokens last about an hour and are renewed as needed.
+servers:
+  - url: https://{server}/cwa/api/v1
+    variables:
+      server:
+        default: ""
+        description: Your Automate server's host name, e.g. automate.example.com
+components:
+  securitySchemes:
+    integrator:
+      type: http
+      scheme: bearer
+      description: An integrator login's user name and password, and your ConnectWise ClientID.
+      x-huxley-token-exchange:
+        path: /apitoken
+        body: { username: username, password: password }
+        headers: { clientID: client_id }
+        secrets: [password]
+        tokenField: AccessToken
+        expiresAtField: ExpirationDate
+        lifetimeSeconds: 3600
+  parameters:
+    computerId: { name: computerId, in: path, required: true, description: The computer's ID in Automate, schema: { type: integer } }
+    page: { name: page, in: query, description: The page, from 1, schema: { type: integer, minimum: 1 } }
+    pagesize: { name: pagesize, in: query, description: Results a page (1-1000), schema: { type: integer, minimum: 1, maximum: 1000 } }
+    condition:
+      name: condition
+      in: query
+      description: "A filter, e.g. (Client.Name like '%Acme%') or Type = 'Server'"
+      schema: { type: string }
+    orderby: { name: orderby, in: query, description: "Sort order, e.g. ComputerName asc", schema: { type: string } }
+  schemas:
+    Ref:
+      type: object
+      properties:
+        Id: { type: integer }
+        Name: { type: string }
+    Computer:
+      type: object
+      properties:
+        Id: { type: integer }
+        ComputerName: { type: string }
+        Client: { $ref: "#/components/schemas/Ref" }
+        Location: { $ref: "#/components/schemas/Ref" }
+        Type: { type: string, description: Server or Workstation }
+        Status: { type: string, description: Online or Offline }
+        SerialNumber: { type: string }
+        AssetTag: { type: string }
+        OperatingSystemName: { type: string }
+        DomainName: { type: string }
+        LocalIPAddress: { type: string }
+        MacAddress: { type: string }
+        BIOSManufacturer: { type: string }
+        IsVirtualMachine: { type: boolean }
+        RemoteAgentLastContact: { type: string }
+        Comment: { type: string }
+    CommandResult:
+      type: object
+      properties:
+        Id: { type: integer }
+        Status: { type: string, description: "e.g. Pending, Executing, Success, Failed" }
+        Output: { type: string }
+security: [{ integrator: [] }]
+paths:
+  /computers:
+    get:
+      operationId: listComputers
+      summary: List computers
+      description: One page of computers (an empty page ends the list).
+      tags: [Computers]
+      parameters:
+        - { $ref: "#/components/parameters/page" }
+        - { $ref: "#/components/parameters/pagesize" }
+        - { $ref: "#/components/parameters/condition" }
+        - { $ref: "#/components/parameters/orderby" }
+      responses:
+        "200":
+          description: The computers
+          content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/Computer" } } } }
+  /Computers/{computerId}/CommandExecute:
+    post:
+      operationId: runCommand
+      summary: Run a command on a computer
+      description: >-
+        Queues a command on the computer's agent. Command 2 runs a shell
+        command line, given in Parameters as `cmd.exe!!! /c …` or
+        `powershell.exe!!! -NonInteractive -Command …`. Answers with the
+        command's Id: read its status and output with getCommandResults.
+      tags: [Commands]
+      parameters: [{ $ref: "#/components/parameters/computerId" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [ComputerId, Command, Parameters]
+              properties:
+                ComputerId: { type: integer }
+                Command:
+                  type: object
+                  properties:
+                    Id: { type: integer, description: "2: a shell command line" }
+                Parameters: { type: array, items: { type: string } }
+      responses:
+        "200": { description: The queued command, content: { application/json: { schema: { $ref: "#/components/schemas/CommandResult" } } } }
+    get:
+      operationId: getCommandResults
+      summary: Read commands' status and output
+      tags: [Commands]
+      parameters:
+        - { $ref: "#/components/parameters/computerId" }
+        - { name: ids, in: query, required: true, description: "Command Ids, separated by commas", schema: { type: string } }
+      responses:
+        "200":
+          description: The commands
+          content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/CommandResult" } } } }

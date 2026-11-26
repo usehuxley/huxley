@@ -5828,7 +5828,11 @@ export interface components {
 					discoveryUrl: string;
 					/** @enum {string} */
 					type: 'openIdConnect';
-			  };
+			  }
+			| (components['schemas']['TokenExchange'] & {
+					/** @enum {string} */
+					type: 'tokenExchange';
+			  });
 		/** @description Sign-in methods this server offers, for the sign-in page. */
 		AuthMethodsView: {
 			/** @description Passkeys are configured (`auth.public_url` is set). */
@@ -9217,6 +9221,43 @@ export interface components {
 			note?: string | null;
 			/** @description `YYYY-MM-DD`. */
 			startsOn: string;
+		};
+		/**
+		 * @description How a token-exchange login works: the request, which connection fields
+		 *     fill it, and where the token is in the answer.
+		 */
+		TokenExchange: {
+			/** @description JSON body fields: `{ field in the body: connection field }`. */
+			body?: {
+				[key: string]: string;
+			};
+			/** @description The answer's field holding when the token expires (a date-time). */
+			expiresAtField?: string | null;
+			/** @description The answer's field holding seconds until the token expires. */
+			expiresInField?: string | null;
+			/**
+			 * @description Headers sent with the login and with every call:
+			 *     `{ header: connection field }`.
+			 */
+			headers?: {
+				[key: string]: string;
+			};
+			/**
+			 * Format: int64
+			 * @description How long a token lasts when the answer doesn't say (default 3600).
+			 */
+			lifetimeSeconds?: number | null;
+			/** @description Connection fields that may be left empty (then left out). */
+			optional?: string[];
+			/**
+			 * @description The login URL: a path below the connection's base URL (e.g.
+			 *     `/apitoken`), or an absolute `https://` URL.
+			 */
+			path: string;
+			/** @description Connection fields that are secrets (encrypted, never shown again). */
+			secrets?: string[];
+			/** @description The answer's field holding the token (matched ignoring case). */
+			tokenField: string;
 		};
 		TotpEnrollmentView: {
 			/** @description `otpauth://` URI to show as a QR code. */

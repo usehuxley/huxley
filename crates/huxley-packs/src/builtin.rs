@@ -84,6 +84,19 @@ const SOURCES: &[Source] = &[
         ],
     },
     Source {
+        manifest: include_str!("../builtin/cwautomate/pack.yaml"),
+        files: &[
+            (
+                "integrations/cwautomate.yaml",
+                include_str!("../builtin/cwautomate/integrations/cwautomate.yaml"),
+            ),
+            (
+                "workflows/automate-run-command.yaml",
+                include_str!("../builtin/cwautomate/workflows/automate-run-command.yaml"),
+            ),
+        ],
+    },
+    Source {
         manifest: include_str!("../builtin/msgraph/pack.yaml"),
         files: &[
             (

@@ -29,9 +29,7 @@
 		})),
 		{ value: '', label: 'No authentication' }
 	]);
-	let schemeFields = $derived(
-		fieldsFor(definition.authSchemes.find((s) => s.key === schemeKey)?.type)
-	);
+	let schemeFields = $derived(fieldsFor(definition.authSchemes.find((s) => s.key === schemeKey)));
 	let serverVariables = $derived(definition.servers[0]?.variables ?? []);
 	const statusTone = (status: string) =>
 		status === 'ready' ? 'success' : status === 'needs_auth' ? 'warning' : 'danger';
@@ -74,6 +72,8 @@
 				return 'OAuth 2.0 sign-in (authorization code)';
 			case 'openIdConnect':
 				return 'OpenID Connect';
+			case 'tokenExchange':
+				return `Sign in for a token (${scheme.path})`;
 		}
 	}
 	function when(value: string): string {

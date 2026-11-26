@@ -62,7 +62,8 @@ impl Engine {
                 out.env.push((format!("{name}_USERNAME"), username));
             }
             ResolvedAuth::OAuth2ClientCredentials { .. }
-            | ResolvedAuth::OAuth2AuthorizationCode { .. } => {
+            | ResolvedAuth::OAuth2AuthorizationCode { .. }
+            | ResolvedAuth::TokenExchange { .. } => {
                 match self.connection_token_for(id, Some(org_id)).await {
                     Ok(Some(token)) => secret("_TOKEN", token),
                     Ok(None) => {}

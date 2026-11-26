@@ -60,34 +60,56 @@ pub enum ConnectionStatus {
 }
 
 /// The fields a connection needs for an auth kind: plain settings, and
-/// secrets that are encrypted and never shown again.
+/// secrets that are encrypted and never shown again; and which of them may
+/// be left empty.
 #[derive(Debug)]
 pub struct Fields {
-    pub settings: &'static [&'static str],
-    pub secrets: &'static [&'static str],
+    pub settings: Vec<String>,
+    pub secrets: Vec<String>,
+    pub optional: Vec<String>,
+}
+
+fn names(list: &[&str]) -> Vec<String> {
+    list.iter().map(|s| (*s).to_owned()).collect()
 }
 
 /// What a connection using `kind` must be given.
-pub const fn fields(kind: &AuthKind) -> Fields {
+pub fn fields(kind: &AuthKind) -> Fields {
     match kind {
         AuthKind::ApiKey { .. } => Fields {
-            settings: &[],
-            secrets: &["key"],
+            settings: vec![],
+            secrets: names(&["key"]),
+            optional: vec![],
         },
         AuthKind::Basic => Fields {
-            settings: &["username"],
-            secrets: &["password"],
+            settings: names(&["username"]),
+            secrets: names(&["password"]),
+            optional: vec![],
         },
         AuthKind::Bearer { .. } => Fields {
-            settings: &[],
-            secrets: &["token"],
+            settings: vec![],
+            secrets: names(&["token"]),
+            optional: vec![],
         },
         AuthKind::OAuth2ClientCredentials { .. }
         | AuthKind::OAuth2AuthorizationCode { .. }
         | AuthKind::OpenIdConnect { .. } => Fields {
-            settings: &["client_id", "scopes"],
-            secrets: &["client_secret"],
+            settings: names(&["client_id", "scopes"]),
+            secrets: names(&["client_secret"]),
+            optional: vec![],
         },
+        AuthKind::TokenExchange(t) => {
+            let all = t.fields();
+            Fields {
+                settings: all
+                    .iter()
+                    .filter(|f| !t.secrets.contains(f))
+                    .cloned()
+                    .collect(),
+                secrets: all.into_iter().filter(|f| t.secrets.contains(f)).collect(),
+                optional: t.optional.clone(),
+            }
+        }
     }
 }
 
@@ -232,7 +254,7 @@ fn check(
     }
     let wanted = fields(kind);
     for name in input.settings.keys() {
-        if !wanted.settings.contains(&name.as_str()) {
+        if !wanted.settings.contains(name) {
             return Err(invalid(
                 &format!("settings.{name}"),
                 "not used by this auth scheme",
@@ -240,20 +262,23 @@ fn check(
         }
     }
     for name in input.secrets.keys() {
-        if !wanted.secrets.contains(&name.as_str()) {
+        if !wanted.secrets.contains(name) {
             return Err(invalid(
                 &format!("secrets.{name}"),
                 "not used by this auth scheme",
             ));
         }
     }
-    for name in wanted.secrets {
-        let given = input.secrets.get(*name).is_some_and(|v| !v.is_empty());
+    for name in &wanted.secrets {
+        if wanted.optional.contains(name) {
+            continue;
+        }
+        let given = input.secrets.get(name).is_some_and(|v| !v.is_empty());
         if !given && !stored_secrets.iter().any(|s| s == name) {
             return Err(invalid(&format!("secrets.{name}"), "required"));
         }
     }
-    if wanted.settings.contains(&"username")
+    if wanted.settings.iter().any(|s| s == "username")
         && input
             .settings
             .get("username")
@@ -262,7 +287,7 @@ fn check(
     {
         return Err(invalid("settings.username", "required"));
     }
-    if wanted.settings.contains(&"client_id")
+    if wanted.settings.iter().any(|s| s == "client_id")
         && input
             .settings
             .get("client_id")
@@ -555,6 +580,18 @@ pub enum ResolvedAuth {
         client_id: String,
         client_secret: String,
     },
+    /// A token from posting credentials to a login URL.
+    TokenExchange {
+        url: String,
+        /// The login's JSON body (empty optional fields left out).
+        body: Map<String, Json>,
+        /// Sent with the login and with every call.
+        headers: Vec<(String, String)>,
+        token_field: String,
+        expires_at_field: Option<String>,
+        expires_in_field: Option<String>,
+        lifetime_seconds: i64,
+    },
 }
 
 /// What calling an action through a connection needs.
@@ -732,6 +769,50 @@ async fn with_org_variables(
 
 /// [`resolve`] for a call made for `org_id`: server variables that refer
 /// to organization variables take that organization's values.
+/// A token-exchange login, filled from the connection's fields.
+fn exchange(
+    t: &crate::TokenExchange,
+    base_url: &str,
+    setting: &dyn Fn(&str) -> String,
+    secret: &dyn Fn(&str) -> String,
+) -> ResolvedAuth {
+    let value = |field: &str| {
+        if t.secrets.iter().any(|s| s == field) {
+            secret(field)
+        } else {
+            setting(field)
+        }
+    };
+    let url = if t.path.starts_with("https://") || t.path.starts_with("http://") {
+        t.path.clone()
+    } else {
+        format!("{}{}", base_url.trim_end_matches('/'), t.path)
+    };
+    let mut body = Map::new();
+    for (key, field) in &t.body {
+        let v = value(field);
+        if v.is_empty() && t.optional.iter().any(|o| o == field) {
+            continue;
+        }
+        body.insert(key.clone(), Json::String(v));
+    }
+    let headers = t
+        .headers
+        .iter()
+        .map(|(h, field)| (h.clone(), value(field)))
+        .filter(|(_, v)| !v.is_empty())
+        .collect();
+    ResolvedAuth::TokenExchange {
+        url,
+        body,
+        headers,
+        token_field: t.token_field.clone(),
+        expires_at_field: t.expires_at_field.clone(),
+        expires_in_field: t.expires_in_field.clone(),
+        lifetime_seconds: t.lifetime_seconds.unwrap_or(3600).clamp(60, 86_400),
+    }
+}
+
 pub async fn resolve_for(
     conn: &mut PgConnection,
     crypto: &Crypto,
@@ -807,6 +888,7 @@ pub async fn resolve_for(
                     "OpenID Connect connections aren't supported yet",
                 ));
             }
+            AuthKind::TokenExchange(t) => exchange(t, &base_url, &setting, &secret),
         },
     };
     Ok(Resolved {
