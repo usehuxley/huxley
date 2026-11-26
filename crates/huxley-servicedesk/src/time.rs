@@ -262,6 +262,26 @@ fn day(field: &str, value: &str) -> DeskResult<jiff::civil::Date> {
         .map_err(|_| DeskError::invalid(field, "a date, as YYYY-MM-DD"))
 }
 
+/// Refuses changes to `user`'s time on a day their timesheet is submitted
+/// or approved (a database trigger backs this up).
+async fn unlocked(conn: &mut PgConnection, user: Uuid, worked_on: &str) -> DeskResult<()> {
+    let status: Option<String> = sqlx::query_scalar(
+        "SELECT status FROM wf_timesheets WHERE user_id = $1 AND $2::date BETWEEN period_start AND period_end \
+            AND status IN ('submitted', 'approved')",
+    )
+    .bind(user)
+    .bind(worked_on)
+    .fetch_optional(conn)
+    .await?;
+    match status {
+        Some(status) => Err(DeskError::invalid(
+            "workedOn",
+            format!("the timesheet for {worked_on} is {status}; it has to be reopened first"),
+        )),
+        None => Ok(()),
+    }
+}
+
 struct Checked {
     worked_on: String,
     billable: bool,
@@ -325,6 +345,7 @@ pub async fn log(
     input: &TimeEntryInput,
 ) -> DeskResult<TimeEntry> {
     let c = check(conn, input, ticket.is_some()).await?;
+    unlocked(conn, user, &c.worked_on).await?;
     let id = huxley_core::new_id();
     sqlx::query(
         "INSERT INTO sd_time_entries (id, user_id, org_id, ticket_id, work_type_id, worked_on, minutes, billable, notes) \
@@ -356,6 +377,8 @@ pub async fn update(
         return Err(DeskError::NotFound);
     }
     let c = check(conn, input, before.ticket_id.is_some()).await?;
+    unlocked(conn, user, &before.worked_on).await?;
+    unlocked(conn, user, &c.worked_on).await?;
     let rows = sqlx::query(
         "UPDATE sd_time_entries SET work_type_id = $3, worked_on = $4::date, minutes = $5, billable = $6, \
                 notes = $7, version = version + 1 \
@@ -379,6 +402,11 @@ pub async fn update(
 
 /// Deletes one of `user`'s entries.
 pub async fn delete(conn: &mut PgConnection, user: Uuid, id: Uuid) -> DeskResult<()> {
+    let before = entry(conn, id).await?;
+    if before.user_id != user {
+        return Err(DeskError::NotFound);
+    }
+    unlocked(conn, user, &before.worked_on).await?;
     let rows = sqlx::query("DELETE FROM sd_time_entries WHERE id = $1 AND user_id = $2")
         .bind(id)
         .bind(user)

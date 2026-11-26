@@ -230,6 +230,15 @@
 						"schema": {
 							"type": "string"
 						}
+					},
+					{
+						"name": "approvedOnly",
+						"in": "query",
+						"description": "Only time on approved timesheets (default: the timesheet setting\n\"bill only approved time\").",
+						"required": false,
+						"schema": {
+							"type": "boolean"
+						}
 					}
 				],
 				"responses": {
@@ -11227,7 +11236,6 @@
 		"/api/v1/teams/{id}/members/{user_id}": {
 			"put": {
 				"tags": ["users"],
-				"summary": "Adds a user to a team (idempotent). They get the team's roles at once.",
 				"operationId": "add_team_member",
 				"parameters": [
 					{
@@ -11251,6 +11259,23 @@
 						}
 					}
 				],
+				"requestBody": {
+					"description": "Optional: { lead }",
+					"content": {
+						"application/json": {
+							"schema": {
+								"oneOf": [
+									{
+										"$ref": "#/components/schemas/MemberBody"
+									},
+									{
+										"type": "null"
+									}
+								]
+							}
+						}
+					}
+				},
 				"responses": {
 					"204": {},
 					"404": {
@@ -12816,6 +12841,319 @@
 				],
 				"responses": {
 					"204": {}
+				}
+			}
+		},
+		"/api/v1/timesheets": {
+			"get": {
+				"tags": ["timesheets"],
+				"summary": "Timesheets you review, oldest first (submitted ones by default).",
+				"operationId": "list_timesheets",
+				"parameters": [
+					{
+						"name": "status",
+						"in": "query",
+						"description": "`submitted` (the default), `approved`, `rejected` or `open`.",
+						"required": false,
+						"schema": {
+							"type": "string"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "array",
+									"items": {
+										"$ref": "#/components/schemas/TimesheetSummary"
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/timesheets/mine": {
+			"get": {
+				"tags": ["timesheets"],
+				"summary": "Your timesheet for the period containing a day.",
+				"operationId": "my_timesheet",
+				"parameters": [
+					{
+						"name": "date",
+						"in": "query",
+						"description": "A day in the period (`YYYY-MM-DD`; default today).",
+						"required": false,
+						"schema": {
+							"type": "string"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Timesheet"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/timesheets/payroll.csv": {
+			"get": {
+				"tags": ["timesheets"],
+				"summary": "Approved time (from approved timesheets) and approved time off, as CSV:\nperson, email, date, kind, minutes, billable.",
+				"operationId": "payroll_export",
+				"parameters": [
+					{
+						"name": "from",
+						"in": "query",
+						"description": "`YYYY-MM-DD`.",
+						"required": true,
+						"schema": {
+							"type": "string"
+						}
+					},
+					{
+						"name": "to",
+						"in": "query",
+						"description": "`YYYY-MM-DD`, at most 100 days after `from`.",
+						"required": true,
+						"schema": {
+							"type": "string"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"text/csv": {
+								"schema": {
+									"type": "string"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/timesheets/settings": {
+			"get": {
+				"tags": ["timesheets"],
+				"operationId": "get_timesheet_settings",
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/TimesheetSettings"
+								}
+							}
+						}
+					}
+				}
+			},
+			"put": {
+				"tags": ["timesheets"],
+				"summary": "How periods are cut, and whether billing previews use only approved\ntime.",
+				"operationId": "set_timesheet_settings",
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/TimesheetSettings"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/TimesheetSettings"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/timesheets/submit": {
+			"post": {
+				"tags": ["timesheets"],
+				"summary": "Submits your timesheet for a period, for review.",
+				"operationId": "submit_timesheet",
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/SubmitTimesheetRequest"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Timesheet"
+								}
+							}
+						}
+					},
+					"422": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/timesheets/{id}": {
+			"get": {
+				"tags": ["timesheets"],
+				"summary": "A timesheet: yours, or one you review.",
+				"operationId": "get_timesheet",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Timesheet"
+								}
+							}
+						}
+					},
+					"404": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/timesheets/{id}/decision": {
+			"post": {
+				"tags": ["timesheets"],
+				"summary": "Approves (locking its entries) or rejects a submitted timesheet.",
+				"operationId": "decide_timesheet",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/TimesheetDecision"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Timesheet"
+								}
+							}
+						}
+					},
+					"422": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/timesheets/{id}/reopen": {
+			"post": {
+				"tags": ["timesheets"],
+				"summary": "Reopens a timesheet: a reviewer reopens a submitted or approved one, or\nyou withdraw one you submitted. Its entries can change again.",
+				"operationId": "reopen_timesheet",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/ReopenTimesheet"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Timesheet"
+								}
+							}
+						}
+					},
+					"422": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
 				}
 			}
 		},
@@ -16136,11 +16474,23 @@
 			"AgreementUsage": {
 				"type": "object",
 				"description": "What fell under an agreement between two days, and its totals.",
-				"required": ["from", "to", "entries", "coveredMinutes", "billableMinutes", "currency"],
+				"required": [
+					"approvedOnly",
+					"from",
+					"to",
+					"entries",
+					"coveredMinutes",
+					"billableMinutes",
+					"currency"
+				],
 				"properties": {
 					"amount": {
 						"type": ["string", "null"],
 						"description": "What the billable time comes to (entries without a rate left out)."
+					},
+					"approvedOnly": {
+						"type": "boolean",
+						"description": "Only time on approved timesheets."
 					},
 					"billableMinutes": {
 						"type": "integer",
@@ -21408,6 +21758,16 @@
 					}
 				}
 			},
+			"MemberBody": {
+				"type": "object",
+				"description": "Adds a user to a team (idempotent). They get the team's roles at once.\nWhether a member leads the team (left out: unchanged, or not for a new\nmember).",
+				"properties": {
+					"lead": {
+						"type": ["boolean", "null"]
+					}
+				},
+				"additionalProperties": false
+			},
 			"MergeInto": {
 				"type": "object",
 				"properties": {
@@ -23153,6 +23513,16 @@
 					}
 				}
 			},
+			"ReopenTimesheet": {
+				"type": "object",
+				"properties": {
+					"note": {
+						"type": ["string", "null"],
+						"description": "Needed when a reviewer reopens one: why."
+					}
+				},
+				"additionalProperties": false
+			},
 			"Requirement": {
 				"type": "object",
 				"properties": {
@@ -24804,6 +25174,20 @@
 				},
 				"additionalProperties": false
 			},
+			"SubmitTimesheetRequest": {
+				"type": "object",
+				"required": ["periodStart"],
+				"properties": {
+					"note": {
+						"type": ["string", "null"]
+					},
+					"periodStart": {
+						"type": "string",
+						"description": "The period's first day (`YYYY-MM-DD`)."
+					}
+				},
+				"additionalProperties": false
+			},
 			"Submitted": {
 				"type": "object",
 				"description": "What a submission started.",
@@ -25117,7 +25501,7 @@
 			"TeamMember": {
 				"type": "object",
 				"description": "A member, with enough about the user to display them.",
-				"required": ["userId", "displayName", "email", "kind", "addedAt"],
+				"required": ["userId", "displayName", "email", "kind", "lead", "addedAt"],
 				"properties": {
 					"addedAt": {
 						"type": "string",
@@ -25132,6 +25516,10 @@
 					"kind": {
 						"type": "string",
 						"description": "`human` or `service`."
+					},
+					"lead": {
+						"type": "boolean",
+						"description": "Leads the team: reviews its members' timesheets."
 					},
 					"userId": {
 						"type": "string",
@@ -26009,6 +26397,241 @@
 					}
 				},
 				"additionalProperties": false
+			},
+			"Timesheet": {
+				"type": "object",
+				"description": "A person's timesheet for a period, with its days and entries.",
+				"required": [
+					"userId",
+					"person",
+					"periodStart",
+					"periodEnd",
+					"status",
+					"version",
+					"days",
+					"entries",
+					"totalMinutes",
+					"billableMinutes",
+					"missingNotes",
+					"history"
+				],
+				"properties": {
+					"billableMinutes": {
+						"type": "integer",
+						"format": "int32"
+					},
+					"days": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/TimesheetDay"
+						}
+					},
+					"entries": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/TimesheetEntry"
+						}
+					},
+					"expectedMinutes": {
+						"type": ["integer", "null"],
+						"format": "int32"
+					},
+					"history": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/TimesheetEvent"
+						}
+					},
+					"id": {
+						"type": ["string", "null"],
+						"format": "uuid",
+						"description": "None until someone acts on the period."
+					},
+					"missingNotes": {
+						"type": "integer",
+						"format": "int32",
+						"description": "Entries without notes."
+					},
+					"periodEnd": {
+						"type": "string"
+					},
+					"periodStart": {
+						"type": "string"
+					},
+					"person": {
+						"type": "string"
+					},
+					"status": {
+						"type": "string",
+						"description": "`open`, `submitted`, `approved` or `rejected`."
+					},
+					"totalMinutes": {
+						"type": "integer",
+						"format": "int32"
+					},
+					"userId": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"version": {
+						"type": "integer",
+						"format": "int32"
+					}
+				}
+			},
+			"TimesheetDay": {
+				"type": "object",
+				"required": ["date", "minutes", "billableMinutes"],
+				"properties": {
+					"billableMinutes": {
+						"type": "integer",
+						"format": "int32"
+					},
+					"date": {
+						"type": "string"
+					},
+					"expectedMinutes": {
+						"type": ["integer", "null"],
+						"format": "int32",
+						"description": "From their working schedule (none without one); 0 on time off."
+					},
+					"minutes": {
+						"type": "integer",
+						"format": "int32"
+					},
+					"timeOff": {
+						"type": ["string", "null"],
+						"description": "Approved time off that day: its kind."
+					}
+				}
+			},
+			"TimesheetDecision": {
+				"type": "object",
+				"required": ["approve"],
+				"properties": {
+					"approve": {
+						"type": "boolean"
+					},
+					"note": {
+						"type": ["string", "null"],
+						"description": "Needed to reject: what needs changing."
+					}
+				},
+				"additionalProperties": false
+			},
+			"TimesheetEntry": {
+				"type": "object",
+				"required": ["id", "workedOn", "minutes", "billable", "workTypeName", "notes"],
+				"properties": {
+					"billable": {
+						"type": "boolean"
+					},
+					"id": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"minutes": {
+						"type": "integer",
+						"format": "int32"
+					},
+					"notes": {
+						"type": "string"
+					},
+					"ticketId": {
+						"type": ["string", "null"],
+						"format": "uuid"
+					},
+					"ticketReference": {
+						"type": ["string", "null"]
+					},
+					"workTypeName": {
+						"type": "string"
+					},
+					"workedOn": {
+						"type": "string"
+					}
+				}
+			},
+			"TimesheetEvent": {
+				"type": "object",
+				"required": ["action", "note", "at"],
+				"properties": {
+					"action": {
+						"type": "string"
+					},
+					"at": {
+						"type": "string",
+						"format": "date-time"
+					},
+					"by": {
+						"type": ["string", "null"]
+					},
+					"note": {
+						"type": "string"
+					}
+				}
+			},
+			"TimesheetSettings": {
+				"type": "object",
+				"required": ["periodDays", "anchor", "billApprovedOnly"],
+				"properties": {
+					"anchor": {
+						"type": "string",
+						"description": "`YYYY-MM-DD`: a day periods start on."
+					},
+					"billApprovedOnly": {
+						"type": "boolean",
+						"description": "Billing previews use only time on approved timesheets."
+					},
+					"periodDays": {
+						"type": "integer",
+						"format": "int32",
+						"description": "7 (weekly) or 14 (every two weeks)."
+					}
+				}
+			},
+			"TimesheetSummary": {
+				"type": "object",
+				"description": "A timesheet in a list.",
+				"required": [
+					"id",
+					"userId",
+					"person",
+					"periodStart",
+					"periodEnd",
+					"status",
+					"totalMinutes"
+				],
+				"properties": {
+					"id": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"periodEnd": {
+						"type": "string"
+					},
+					"periodStart": {
+						"type": "string"
+					},
+					"person": {
+						"type": "string"
+					},
+					"status": {
+						"type": "string"
+					},
+					"submittedAt": {
+						"type": ["string", "null"],
+						"format": "date-time"
+					},
+					"totalMinutes": {
+						"type": "integer",
+						"format": "int32"
+					},
+					"userId": {
+						"type": "string",
+						"format": "uuid"
+					}
+				}
 			},
 			"TokenExchange": {
 				"type": "object",
@@ -27082,6 +27705,10 @@
 		{
 			"name": "cmdb",
 			"description": "Assets, their types and relationships, and impact analysis (the cmdb module)"
+		},
+		{
+			"name": "timesheets",
+			"description": "Timesheets: submitting, reviewing and locking a period's time, and the payroll export (the workforce module)"
 		},
 		{
 			"name": "agreements",

@@ -222,7 +222,7 @@ async fn the_explainer_shows_where_each_permission_comes_from() {
     let team = teams::create(&mut tx, &ctx(), &unique("Auditors"), "")
         .await
         .unwrap();
-    teams::add_member(&mut tx, &ctx(), team.id, user.id)
+    teams::add_member(&mut tx, &ctx(), team.id, user.id, None)
         .await
         .unwrap();
     assign_to(

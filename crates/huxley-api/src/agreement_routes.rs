@@ -229,6 +229,10 @@ pub struct UsageParams {
     pub from: Option<String>,
     /// `YYYY-MM-DD` (default: the end of this month).
     pub to: Option<String>,
+    /// Only time on approved timesheets (default: the timesheet setting
+    /// "bill only approved time").
+    #[serde(rename = "approvedOnly")]
+    pub approved_only: Option<bool>,
 }
 
 fn day(field: &str, value: Option<&str>, default: Date) -> ApiResult<Date> {
@@ -267,7 +271,17 @@ pub async fn agreement_usage(
     // Evaluation looks across organizations (agreements above, allowances).
     Ok(Json(
         scoped(&state, &OrgScope::System, async |tx| {
-            coverage::usage(tx, id, from, to).await
+            let approved_only = match params.approved_only {
+                Some(only) => only,
+                None => {
+                    sqlx::query_scalar(
+                        "SELECT bill_approved_only FROM wf_timesheet_settings WHERE id = 1",
+                    )
+                    .fetch_one(&mut *tx)
+                    .await?
+                }
+            };
+            coverage::usage(tx, id, from, to, approved_only).await
         })
         .await?,
     ))

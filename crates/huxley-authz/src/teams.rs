@@ -34,6 +34,8 @@ pub struct TeamMember {
     pub email: String,
     /// `human` or `service`.
     pub kind: String,
+    /// Leads the team: reviews its members' timesheets.
+    pub lead: bool,
     #[serde(with = "time::serde::rfc3339")]
     pub added_at: OffsetDateTime,
 }
@@ -149,7 +151,7 @@ pub async fn delete(conn: &mut PgConnection, ctx: &RequestContext, id: Uuid) -> 
 
 pub async fn members(conn: &mut PgConnection, team_id: Uuid) -> AuthzResult<Vec<TeamMember>> {
     Ok(sqlx::query_as(
-        "SELECT u.id AS user_id, u.display_name, u.email, u.kind::text AS kind, m.added_at \
+        "SELECT u.id AS user_id, u.display_name, u.email, u.kind::text AS kind, m.lead, m.added_at \
            FROM team_members m JOIN users u ON u.id = m.user_id \
           WHERE m.team_id = $1 ORDER BY lower(u.display_name)",
     )
@@ -158,12 +160,14 @@ pub async fn members(conn: &mut PgConnection, team_id: Uuid) -> AuthzResult<Vec<
     .await?)
 }
 
-/// Adds a member. Idempotent.
+/// Adds a member, or (with `lead`) makes or unmakes them a lead.
+/// Idempotent.
 pub async fn add_member(
     conn: &mut PgConnection,
     ctx: &RequestContext,
     team_id: Uuid,
     user_id: Uuid,
+    lead: Option<bool>,
 ) -> AuthzResult<()> {
     get(conn, team_id).await?;
     let exists: Option<(bool,)> = sqlx::query_as("SELECT true FROM users WHERE id = $1")
@@ -173,16 +177,45 @@ pub async fn add_member(
     if exists.is_none() {
         return Err(AuthzError::UserNotFound);
     }
+    let was_lead: Option<bool> =
+        sqlx::query_scalar("SELECT lead FROM team_members WHERE team_id = $1 AND user_id = $2")
+            .bind(team_id)
+            .bind(user_id)
+            .fetch_optional(&mut *conn)
+            .await?;
     let added = sqlx::query(
-        "INSERT INTO team_members (team_id, user_id, added_by) VALUES ($1, $2, $3) \
+        "INSERT INTO team_members (team_id, user_id, added_by, lead) VALUES ($1, $2, $3, COALESCE($4, false)) \
          ON CONFLICT DO NOTHING",
     )
     .bind(team_id)
     .bind(user_id)
     .bind(ctx.actor.id())
+    .bind(lead)
     .execute(&mut *conn)
     .await?
     .rows_affected();
+    if let (Some(was), Some(now)) = (was_lead, lead)
+        && was != now
+    {
+        sqlx::query("UPDATE team_members SET lead = $3 WHERE team_id = $1 AND user_id = $2")
+            .bind(team_id)
+            .bind(user_id)
+            .bind(now)
+            .execute(&mut *conn)
+            .await?;
+        audit::record(
+            &mut *conn,
+            ctx,
+            AuditRecord::new(if now {
+                "team.lead_added"
+            } else {
+                "team.lead_removed"
+            })
+            .target("team", team_id)
+            .details(json!({ "user": user_id })),
+        )
+        .await?;
+    }
     if added > 0 {
         audit::record(
             conn,

@@ -525,6 +525,8 @@ pub async fn for_ticket(
 #[serde(rename_all = "camelCase")]
 #[schema(as = AgreementUsage)]
 pub struct Usage {
+    /// Only time on approved timesheets.
+    pub approved_only: bool,
     #[serde(with = "crate::date")]
     #[schema(value_type = String)]
     pub from: Date,
@@ -542,12 +544,15 @@ pub struct Usage {
 }
 
 /// Entries on tickets at the agreement's organization or below, between
-/// `from` and `to`, that fall under it.
+/// `from` and `to`, that fall under it. With `approved_only`, only time on
+/// approved timesheets (a billing preview that bills only approved time).
+/// Allowances are still drawn down by all covered time, in order.
 pub async fn usage(
     conn: &mut PgConnection,
     agreement_id: Uuid,
     from: Date,
     to: Date,
+    approved_only: bool,
 ) -> ContractsResult<Usage> {
     let (path, currency): (String, String) = sqlx::query_as(
         "SELECT o.path::text, a.currency FROM contract_agreements a JOIN organizations o ON o.id = a.org_id \
@@ -560,11 +565,14 @@ pub async fn usage(
     let ids: Vec<Uuid> = sqlx::query_scalar(
         "SELECT e.id FROM sd_time_entries e JOIN organizations o ON o.id = e.org_id \
           WHERE e.ticket_id IS NOT NULL AND e.worked_on BETWEEN $2 AND $3 AND o.path <@ $1::ltree \
+            AND (NOT $4 OR EXISTS (SELECT 1 FROM wf_timesheets s WHERE s.user_id = e.user_id \
+                   AND s.status = 'approved' AND e.worked_on BETWEEN s.period_start AND s.period_end)) \
           ORDER BY e.worked_on, e.created_at, e.id",
     )
     .bind(&path)
     .bind(from)
     .bind(to)
+    .bind(approved_only)
     .fetch_all(&mut *conn)
     .await?;
     let entries: Vec<Evaluation> = evaluate(conn, &ids)
@@ -574,6 +582,7 @@ pub async fn usage(
         .collect();
     let amounts: Vec<Decimal> = entries.iter().filter_map(|e| e.amount).collect();
     Ok(Usage {
+        approved_only,
         from,
         to,
         covered_minutes: entries.iter().map(|e| e.covered_minutes).sum(),

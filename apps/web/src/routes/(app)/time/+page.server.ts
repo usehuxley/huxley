@@ -14,16 +14,56 @@ export const load: PageServerLoad = async (event) => {
 	const monday = mondayOf(DAY.test(asked) ? asked : isoDay(new Date()));
 	const days = weekDays(monday);
 	const client = api(event);
-	const [entries, workTypes] = await Promise.all([
+	const { user } = await event.parent();
+	const timesheets =
+		user.activeModules.includes('workforce') &&
+		user.grantedPermissions.includes('timesheet:submit');
+	const [entries, workTypes, timesheet] = await Promise.all([
 		client.GET('/api/v1/time-entries', { params: { query: { from: days[0], to: days[6] } } }),
-		client.GET('/api/v1/work-types')
+		client.GET('/api/v1/work-types'),
+		timesheets
+			? client.GET('/api/v1/timesheets/mine', { params: { query: { date: monday } } })
+			: Promise.resolve({ data: undefined })
 	]);
 	if (entries.response.status === 404) error(404, 'The service desk is turned off.');
 	if (!entries.data) error(503, 'Could not load your time.');
-	return { monday, days, entries: entries.data, workTypes: workTypes.data ?? [] };
+	return {
+		monday,
+		days,
+		entries: entries.data,
+		workTypes: workTypes.data ?? [],
+		timesheet: timesheet.data ?? null
+	};
 };
 
 export const actions: Actions = {
+	submitTimesheet: async (event) => {
+		const form = await event.request.formData();
+		const { error: problem, response } = await api(event).POST('/api/v1/timesheets/submit', {
+			body: { periodStart: formString(form, 'periodStart'), note: formString(form, 'note') || null }
+		});
+		if (response.status !== 200) {
+			return fail(response.status, {
+				errors: {},
+				message: problemMessage(problem, 'Could not submit it.')
+			});
+		}
+		return { saved: true };
+	},
+	withdrawTimesheet: async (event) => {
+		const id = formString(await event.request.formData(), 'id');
+		const { error: problem, response } = await api(event).POST('/api/v1/timesheets/{id}/reopen', {
+			params: { path: { id } },
+			body: {}
+		});
+		if (response.status !== 200) {
+			return fail(response.status, {
+				errors: {},
+				message: problemMessage(problem, 'Could not withdraw it.')
+			});
+		}
+		return { saved: true };
+	},
 	log: async (event) => {
 		const form = await event.request.formData();
 		const minutes = parseDuration(formString(form, 'duration'));

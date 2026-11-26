@@ -58,6 +58,35 @@ The event names the person, the certification and its expiry date.
 
 **Where it shows.** The **People** page marks who is away today. Managers also see the requests waiting for them there.
 
+## Timesheets
+
+A **timesheet** is a person's time for a period, weekly from Monday by default. **My time** shows each week's timesheet:
+
+- each day's logged time against the hours their working schedule expects (time off counts as expected-free)
+- entries without notes
+- the timesheet's status and history
+
+**The flow:**
+
+1. **Submit.** At the end of the period, the person submits it with an optional note for their lead. While it's submitted, their time entries on its days can't be added, changed or deleted. They can **withdraw** it to make changes.
+2. **Review.** Their reviewer opens it from **Timesheets** in the sidebar and sees the days, entries and history.
+   - **Approve:** the time stays locked.
+   - **Reject:** needs a comment saying what to change. The time can change again, and they resubmit.
+3. **Reopen.** A reviewer can reopen a submitted or approved timesheet, with a reason. It goes back to open and through review again. Everything is recorded in the timesheet's history and the audit log.
+
+**Who reviews:**
+- The person's **team lead**: a member marked **Lead** on the team's settings page, holding `timesheet:approve`.
+- For people no one leads, anyone with `workforce:manage`.
+- Nobody reviews their own.
+
+**Events:** `timesheet.submitted`, `timesheet.approved`, `timesheet.rejected`, `timesheet.reopened` and `timesheet.withdrawn`, so workflows can notify people.
+
+**Settings** (on **Timesheets**, with `workforce:manage`):
+- **Periods:** weekly, or every two weeks, from a day you choose.
+- **Bill only approved time:** billing previews, an [agreement's usage](agreements.md), then count only time on approved timesheets. Allowances are still used up by all covered time, in order. The usage API also takes `approvedOnly` directly.
+
+**Payroll export:** **Timesheets → Payroll export** downloads a CSV for a date range. It holds approved timesheets' time by person, day and work type, and approved time off as each scheduled day's hours (8 hours on weekdays without a schedule).
+
 ## What work requires
 
 A queue or a ticket type can require:
@@ -78,7 +107,9 @@ Each person's entry lists what they're missing, and why they're unavailable (`aw
 | Permission | Allows | Built-in roles |
 |---|---|---|
 | `workforce:read` | Seeing people's skills and certifications, and requirements | Technician, Read-only |
-| `workforce:manage` | Keeping the catalogs, verifying skills, keeping anyone's records, setting requirements (instance-wide) | Owner, Admin |
+| `workforce:manage` | Keeping the catalogs, verifying skills, keeping anyone's records, setting requirements (instance-wide); reviewing timesheets of people no one leads, timesheet settings, the payroll export | Owner, Admin |
+| `timesheet:submit` | Seeing and submitting your own timesheets | Technician |
+| `timesheet:approve` | Reviewing the timesheets of people in teams you lead | Owner, Admin |
 
 Everyone can keep their own skills and certifications.
 
@@ -96,3 +127,9 @@ Everyone can keep their own skills and certifications.
 | `GET`, `PUT …/people/{userId}/schedule` | Working hours. `null` removes them |
 | `POST …/people/{userId}/time-off`; `GET /api/v1/workforce/time-off` | Request or book time off, and list it (by `userId` and `status`) |
 | `POST /api/v1/workforce/time-off/{id}/decision`, `…/cancel` | Approve or decline it, with `{ approve, note }`; cancel it |
+| `GET /api/v1/timesheets/mine?date=` | Your timesheet for the period containing a day |
+| `POST /api/v1/timesheets/submit` | Submit yours: `{ periodStart, note }` |
+| `GET /api/v1/timesheets?status=`; `GET …/{id}` | Timesheets you review (submitted by default), and one timesheet |
+| `POST …/{id}/decision`; `POST …/{id}/reopen` | Approve or reject (`{ approve, note }`); reopen or withdraw (`{ note }`) |
+| `GET`, `PUT /api/v1/timesheets/settings`; `GET …/payroll.csv?from=&to=` | Settings, and the payroll export |
+| `PUT /api/v1/teams/{id}/members/{userId}` with `{ lead }` | Make a member a team lead, or not |

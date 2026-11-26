@@ -152,19 +152,30 @@ pub async fn remove(
 }
 
 /// Adds a user to a team (idempotent). They get the team's roles at once.
+/// Whether a member leads the team (left out: unchanged, or not for a new
+/// member).
+#[derive(Debug, Deserialize, ToSchema)]
+#[serde(deny_unknown_fields)]
+pub struct MemberBody {
+    pub lead: Option<bool>,
+}
+
 #[utoipa::path(put, path = "/api/v1/teams/{id}/members/{user_id}", operation_id = "add_team_member", tag = "users",
     params(("id" = Uuid, Path, description = "Team id"), ("user_id" = Uuid, Path, description = "User id")),
+    request_body(content = Option<MemberBody>, description = "Optional: { lead }"),
     responses((status = 204), (status = 404, body = ApiError, content_type = "application/problem+json")))]
 pub async fn add_member(
     State(state): State<AppState>,
     authed: Authed,
     Path((id, user_id)): Path<(Uuid, Uuid)>,
+    body: Option<Json<MemberBody>>,
 ) -> ApiResult<StatusCode> {
     authed.require_instance(permissions::TEAM_MANAGE)?;
     let mut tx = begin_scoped(&state.db, &OrgScope::System)
         .await
         .map_err(db_err)?;
-    teams::add_member(&mut tx, &authed.user.ctx, id, user_id)
+    let lead = body.and_then(|b| b.lead);
+    teams::add_member(&mut tx, &authed.user.ctx, id, user_id, lead)
         .await
         .map_err(map_authz)?;
     tx.commit().await.map_err(db_err)?;

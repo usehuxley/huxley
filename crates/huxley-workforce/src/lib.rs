@@ -7,6 +7,7 @@ pub mod availability;
 pub mod catalog;
 pub mod people;
 pub mod requirements;
+pub mod timesheets;
 
 /// The module's key in the registry.
 pub const MODULE: &str = "workforce";
