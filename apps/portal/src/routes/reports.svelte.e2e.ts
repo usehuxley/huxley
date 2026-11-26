@@ -1,7 +1,8 @@
 import { expect, request, test } from '@playwright/test';
 
-// Full-stack with real email: the MSP publishes a dashboard to the portal,
-// and a client admin sees it with their company's numbers. Set
+// Full-stack with real email: a technician submits a dashboard for the
+// portal, the owner approves it, and a client admin sees it with their
+// company's numbers. Set
 // SCREENSHOT_DIR to keep a screenshot.
 // Needs the service-desk preset, MAILPIT_URL and the API's portal URL set
 // to this preview server.
@@ -44,7 +45,27 @@ async function staff() {
 
 const shots = process.env.SCREENSHOT_DIR;
 
-/** A portal dashboard at the MSP, and a client with tickets and an admin (invited): their email. */
+/** A technician at the root, signed in. */
+async function technician(api: Awaited<ReturnType<typeof staff>>, stamp: string, root: string) {
+	const email = `tech-${stamp}@example.com`;
+	const password = 'portal reports passphrase';
+	const created = await api.post('/api/v1/users', {
+		data: { email, displayName: `Tech ${stamp}`, password }
+	});
+	expect(created.status(), await created.text()).toBe(201);
+	const userId = ((await created.json()) as { user: { id: string } }).user.id;
+	const roles = (await (await api.get('/api/v1/roles')).json()) as { id: string; key: string }[];
+	const roleId = roles.find((r) => r.key === 'technician')!.id;
+	await api.post('/api/v1/role-assignments', { data: { userId, roleId, orgId: root } });
+	const tech = await request.newContext({
+		baseURL: apiUrl,
+		extraHTTPHeaders: { 'x-requested-with': 'huxley' }
+	});
+	await tech.post('/api/v1/auth/login', { data: { email, password } });
+	return tech;
+}
+
+/** A dashboard submitted for the portal and approved, and a client with tickets and an admin (invited): their email. */
 async function setUp(stamp: string) {
 	const api = await staff();
 	const orgs = (await (await api.get('/api/v1/orgs')).json()) as {
@@ -53,13 +74,12 @@ async function setUp(stamp: string) {
 	}[];
 	const root = orgs.find((o) => o.parentId === null)!.id;
 	const count = [{ fn: 'count' }];
-	const board = await api.post('/api/v1/dashboards', {
+	const tech = await technician(api, stamp, root);
+	const board = await tech.post('/api/v1/dashboards', {
 		data: {
 			orgId: root,
-			shared: true,
 			dashboard: {
 				name: `Your service ${stamp}`,
-				portal: true,
 				range: 'this_year',
 				widgets: [
 					{
@@ -81,6 +101,17 @@ async function setUp(stamp: string) {
 		}
 	});
 	expect(board.status(), await board.text()).toBe(201);
+	const { id: boardId } = (await board.json()) as { id: string };
+	const submitted = await tech.post(`/api/v1/dashboards/${boardId}/submit`, {
+		data: { portal: true, note: 'For our clients' }
+	});
+	expect(submitted.status(), await submitted.text()).toBe(201);
+	const { id: submissionId } = (await submitted.json()) as { id: string };
+	await tech.dispose();
+	const approved = await api.post(`/api/v1/dashboard-submissions/${submissionId}/approve`, {
+		data: {}
+	});
+	expect(approved.status(), await approved.text()).toBe(200);
 	const client = await api.post('/api/v1/orgs', {
 		data: { parentId: root, kind: 'client', name: `Reports ${stamp}` }
 	});
@@ -119,7 +150,7 @@ test.describe('portal reports', () => {
 		await page.getByRole('button', { name: 'Sign in' }).click();
 		await expect(page.getByRole('heading', { level: 1 })).toHaveText('How can we help, Gil?');
 
-		await page.getByRole('link', { name: 'Reports' }).first().click();
+		await page.getByRole('link', { name: 'Reports', exact: true }).click();
 		await page
 			.getByRole('list', { name: 'Reports' })
 			.getByRole('link', { name: `Your service ${stamp}` })

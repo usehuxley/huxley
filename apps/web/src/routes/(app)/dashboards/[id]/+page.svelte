@@ -3,13 +3,27 @@
 	import { goto, invalidateAll } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
-	import { Copy, Pencil, RefreshCw } from '@lucide/svelte';
+	import { Copy, Pencil, RefreshCw, Send } from '@lucide/svelte';
 	import { Badge, Button, Select } from '@usehuxley/ui';
 	import { Widget } from '@usehuxley/widgets';
 	import { RANGES } from '#lib/dashboards/spec.ts';
+	import PublishDialog from '#lib/dashboards/PublishDialog.svelte';
 	import type { PageProps } from './$types';
 
-	let { data }: PageProps = $props();
+	let { data, form }: PageProps = $props();
+	let publishing = $state(false);
+	let pending = $derived(data.submissions.find((s) => s.status === 'pending'));
+	let latest = $derived(data.submissions[0]);
+	let names = (ids: string[], from: { id: string; name: string }[]) =>
+		ids.map((id) => from.find((o) => o.id === id)?.name ?? 'Unknown').join(', ');
+	let audience = $derived(
+		[
+			names(data.dashboard.audienceTeams, data.audiences.teams),
+			names(data.dashboard.audienceRoles, data.audiences.roles)
+		]
+			.filter(Boolean)
+			.join('; ')
+	);
 
 	function pick(name: 'range' | 'org', value: string) {
 		const url = new URL(page.url.href);
@@ -33,6 +47,9 @@
 				{#if data.dashboard.portal}<Badge tone="info">In the client portal</Badge>{/if}
 			</h1>
 			{#if data.dashboard.description}<p class="text-fg-muted">{data.dashboard.description}</p>{/if}
+			{#if !data.dashboard.builtin && !data.dashboard.ownerUserId && audience}
+				<p class="text-sm text-fg-muted">Shared with {audience}</p>
+			{/if}
 		</div>
 		<div class="flex flex-wrap items-center gap-2">
 			<div class="w-40">
@@ -54,6 +71,9 @@
 			<Button variant="ghost" onclick={() => invalidateAll()} aria-label="Refresh">
 				<RefreshCw size={16} />
 			</Button>
+			{#if data.canSubmit && !pending}
+				<Button onclick={() => (publishing = true)}><Send size={16} /> Publish</Button>
+			{/if}
 			{#if data.canEdit}
 				<Button href={resolve('/(app)/dashboards/[id]/edit', { id: data.dashboard.id })}>
 					<Pencil size={16} /> Edit
@@ -65,6 +85,28 @@
 			{/if}
 		</div>
 	</div>
+	{#if pending}
+		<div
+			class="flex flex-wrap items-center justify-between gap-3 rounded-card border border-border bg-surface-raised p-3"
+			role="status"
+		>
+			<span class="text-sm text-fg">
+				Waiting for approval since {new Date(pending.submittedAt).toLocaleDateString()}. Changes you
+				make now aren't part of this submission.
+			</span>
+			<form method="POST" action="?/withdraw" use:enhance>
+				<input type="hidden" name="submission" value={pending.id} />
+				<Button type="submit" variant="ghost">Withdraw</Button>
+			</form>
+		</div>
+	{:else if latest?.status === 'rejected' && data.dashboard.ownerUserId}
+		<div
+			class="rounded-card border border-border bg-surface-raised p-3 text-sm text-fg"
+			role="status"
+		>
+			<strong>Sent back</strong> by {latest.decidedByName ?? 'a reviewer'}: {latest.comment}
+		</div>
+	{/if}
 	{#if data.dashboard.widgets.length === 0}
 		<p class="text-fg-muted">No widgets yet.</p>
 	{/if}
@@ -80,3 +122,9 @@
 		{/each}
 	</div>
 </div>
+
+<PublishDialog
+	bind:open={publishing}
+	audiences={data.audiences}
+	problem={form && 'publish' in form ? (form.publish as string) : null}
+/>

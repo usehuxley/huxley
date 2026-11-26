@@ -2178,6 +2178,114 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
+	'/api/v1/dashboard-audiences': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** The teams and roles a dashboard can be published to. */
+		get: operations['list_dashboard_audiences'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/dashboard-submissions': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/**
+		 * Submissions waiting for you: pending where you manage dashboards,
+		 *     oldest first.
+		 */
+		get: operations['list_pending_dashboard_submissions'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/dashboard-submissions/{id}': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** One submission: its author's, or for those who manage dashboards there. */
+		get: operations['get_dashboard_submission'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/dashboard-submissions/{id}/approve': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/**
+		 * Approves a submission: the dashboard is shared with the audience asked
+		 *     for, as it was submitted.
+		 */
+		post: operations['approve_dashboard_submission'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/dashboard-submissions/{id}/reject': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/** Rejects a submission with a comment; the dashboard stays personal. */
+		post: operations['reject_dashboard_submission'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/dashboard-submissions/{id}/withdraw': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/** Withdraws your pending submission. */
+		post: operations['withdraw_dashboard_submission'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
 	'/api/v1/dashboards': {
 		parameters: {
 			query?: never;
@@ -2207,6 +2315,67 @@ export interface paths {
 		put: operations['update_dashboard'];
 		post?: never;
 		delete: operations['delete_dashboard'];
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/dashboards/{id}/copy': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/**
+		 * Copies a dashboard you can see (prebuilt, shared or yours) into a new
+		 *     personal one.
+		 */
+		post: operations['copy_dashboard'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/dashboards/{id}/submissions': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/**
+		 * A dashboard's submissions and publications, newest first (its author,
+		 *     or those who manage dashboards there).
+		 */
+		get: operations['list_dashboard_submissions'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/dashboards/{id}/submit': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/**
+		 * Submits your personal dashboard for publishing to an audience (teams,
+		 *     roles, the client portal), as it is now. Someone with
+		 *     `dashboard:manage` there approves or rejects it.
+		 */
+		post: operations['submit_dashboard'];
+		delete?: never;
 		options?: never;
 		head?: never;
 		patch?: never;
@@ -7230,6 +7399,17 @@ export interface components {
 			/** Format: int64 */
 			sizeBytes: number;
 		};
+		/** @description A team or role to publish to. */
+		AudienceOption: {
+			/** Format: uuid */
+			id: string;
+			name: string;
+		};
+		/** @description What a dashboard can be published to. */
+		Audiences: {
+			roles: components['schemas']['AudienceOption'][];
+			teams: components['schemas']['AudienceOption'][];
+		};
 		AuditEventView: {
 			action: string;
 			/** Format: uuid */
@@ -7879,6 +8059,15 @@ export interface components {
 			/** Format: date-time */
 			updatedAt: string;
 		};
+		CopyDashboard: {
+			/** @description Its name (default: "Copy of …"). */
+			name?: string | null;
+			/**
+			 * Format: uuid
+			 * @description Where the copy lives (yours, personal).
+			 */
+			orgId: string;
+		};
 		/** @enum {string} */
 		CoverageOutcome:
 			'non_billable' | 'covered' | 'partly_covered' | 'overage' | 'billable' | 'no_agreement';
@@ -8071,8 +8260,16 @@ export interface components {
 			title: string;
 		};
 		Dashboard: {
+			audienceRoles: string[];
+			/**
+			 * @description Who sees a shared dashboard: members of these teams or holders of
+			 *     these roles (both empty: everyone who can see dashboards there).
+			 */
+			audienceTeams: string[];
 			/** @description Defined in code; copy it to change it. */
 			builtin: boolean;
+			/** Format: uuid */
+			createdBy?: string | null;
 			description?: string | null;
 			/** @description A uuid, or a prebuilt dashboard's key. */
 			id: string;
@@ -8104,6 +8301,43 @@ export interface components {
 			/** Format: int32 */
 			version?: number | null;
 			widgets?: components['schemas']['Widget'][];
+		};
+		/** @description What was submitted. */
+		DashboardSnapshot: {
+			description?: string | null;
+			name: string;
+			range: string;
+			widgets: components['schemas']['Widget'][];
+		};
+		DashboardSubmission: {
+			comment?: string | null;
+			/** Format: uuid */
+			dashboardId: string;
+			/** Format: date-time */
+			decidedAt?: string | null;
+			/** Format: uuid */
+			decidedBy?: string | null;
+			decidedByName?: string | null;
+			/** Format: uuid */
+			id: string;
+			note?: string | null;
+			/**
+			 * Format: int32
+			 * @description The publication's number, once approved.
+			 */
+			number?: number | null;
+			/** Format: uuid */
+			orgId: string;
+			portal: boolean;
+			roles: string[];
+			snapshot: components['schemas']['DashboardSnapshot'];
+			status: components['schemas']['SubmissionStatus'];
+			/** Format: date-time */
+			submittedAt: string;
+			/** Format: uuid */
+			submittedBy?: string | null;
+			submittedByName?: string | null;
+			teams: string[];
 		};
 		Dataset: {
 			columns: components['schemas']['Column'][];
@@ -8148,6 +8382,10 @@ export interface components {
 			/** Format: uuid */
 			runId?: string | null;
 			stepKey?: string | null;
+		};
+		DecideSubmission: {
+			/** @description Required to reject: what to change. */
+			comment?: string | null;
 		};
 		/** @enum {string} */
 		Decision: 'approve' | 'reject';
@@ -10975,6 +11213,8 @@ export interface components {
 		};
 		/** @enum {string} */
 		StepStatus: 'running' | 'waiting' | 'succeeded' | 'failed' | 'skipped' | 'cancelled';
+		/** @enum {string} */
+		SubmissionStatus: 'pending' | 'approved' | 'rejected' | 'withdrawn';
 		SubmissionView: {
 			/** Format: date-time */
 			createdAt: string;
@@ -10988,6 +11228,15 @@ export interface components {
 			runIds: string[];
 			/** Format: uuid */
 			submittedBy?: string | null;
+		};
+		/** @description The audience asked for. */
+		SubmitDashboard: {
+			/** @description For the reviewer. */
+			note?: string | null;
+			/** @description Show it in the client portal too. */
+			portal?: boolean;
+			roles?: string[];
+			teams?: string[];
 		};
 		SubmitRequest: {
 			answers: {
@@ -16600,6 +16849,150 @@ export interface operations {
 			};
 		};
 	};
+	list_dashboard_audiences: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['Audiences'];
+				};
+			};
+		};
+	};
+	list_pending_dashboard_submissions: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['DashboardSubmission'][];
+				};
+			};
+		};
+	};
+	get_dashboard_submission: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['DashboardSubmission'];
+				};
+			};
+		};
+	};
+	approve_dashboard_submission: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['DecideSubmission'];
+			};
+		};
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['DashboardSubmission'];
+				};
+			};
+			409: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	reject_dashboard_submission: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['DecideSubmission'];
+			};
+		};
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['DashboardSubmission'];
+				};
+			};
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	withdraw_dashboard_submission: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			204: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content?: never;
+			};
+		};
+	};
 	list_dashboards: {
 		parameters: {
 			query?: never;
@@ -16720,6 +17113,85 @@ export interface operations {
 					[name: string]: unknown;
 				};
 				content?: never;
+			};
+		};
+	};
+	copy_dashboard: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['CopyDashboard'];
+			};
+		};
+		responses: {
+			201: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['Dashboard'];
+				};
+			};
+		};
+	};
+	list_dashboard_submissions: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['DashboardSubmission'][];
+				};
+			};
+		};
+	};
+	submit_dashboard: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['SubmitDashboard'];
+			};
+		};
+		responses: {
+			201: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['DashboardSubmission'];
+				};
+			};
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
 			};
 		};
 	};

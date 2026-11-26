@@ -1,4 +1,6 @@
 import { error, fail, redirect } from '@sveltejs/kit';
+import { formString } from '#lib/forms.ts';
+import { problemMessage } from '#lib/server/problems.ts';
 import { api } from '#lib/server/api.ts';
 import { answersFor, homeOrg } from '#lib/dashboards/server.ts';
 import { RANGES } from '#lib/dashboards/spec.ts';
@@ -20,7 +22,23 @@ export const load: PageServerLoad = async (event) => {
 	const canEdit =
 		!dashboard.builtin &&
 		(dashboard.ownerUserId === user.id || user.grantedPermissions.includes('dashboard:manage'));
+	// Its author follows its publishing; shared ones name their audience.
+	const mine =
+		!dashboard.builtin && (dashboard.ownerUserId === user.id || dashboard.createdBy === user.id);
+	const [submissions, audiences] = await Promise.all([
+		mine
+			? api(event).GET('/api/v1/dashboards/{id}/submissions', {
+					params: { path: { id: dashboard.id } }
+				})
+			: Promise.resolve({ data: undefined }),
+		mine || dashboard.audienceTeams.length + dashboard.audienceRoles.length > 0
+			? api(event).GET('/api/v1/dashboard-audiences')
+			: Promise.resolve({ data: undefined })
+	]);
 	return {
+		submissions: submissions.data ?? [],
+		audiences: audiences.data ?? { teams: [], roles: [] },
+		canSubmit: dashboard.ownerUserId === user.id,
 		dashboard,
 		range,
 		orgId,
@@ -37,19 +55,41 @@ export const actions: Actions = {
 		});
 		const orgId = await homeOrg(event);
 		if (!dashboard || !orgId) return fail(404, { message: 'Could not copy it.' });
-		const { data, response } = await api(event).POST('/api/v1/dashboards', {
-			body: {
-				orgId,
-				shared: false,
-				dashboard: {
-					name: `${dashboard.name} (copy)`,
-					description: dashboard.description,
-					range: dashboard.range,
-					widgets: dashboard.widgets
-				}
-			}
+		const { data, response } = await api(event).POST('/api/v1/dashboards/{id}/copy', {
+			params: { path: { id: event.params.id } },
+			body: { orgId, name: `${dashboard.name} (copy)` }
 		});
 		if (!data) return fail(response.status, { message: 'Could not copy it.' });
 		redirect(303, `/dashboards/${data.id}/edit`);
+	},
+	submit: async (event) => {
+		const form = await event.request.formData();
+		const {
+			data,
+			error: problem,
+			response
+		} = await api(event).POST('/api/v1/dashboards/{id}/submit', {
+			params: { path: { id: event.params.id } },
+			body: {
+				teams: form.getAll('teams').map(String),
+				roles: form.getAll('roles').map(String),
+				portal: form.get('portal') === 'on',
+				note: formString(form, 'note') || null
+			}
+		});
+		if (!data) {
+			return fail(response.status, { publish: problemMessage(problem, 'Could not submit it.') });
+		}
+		return { submitted: true };
+	},
+	withdraw: async (event) => {
+		const form = await event.request.formData();
+		const id = formString(form, 'submission');
+		const { response } = await api(event).POST('/api/v1/dashboard-submissions/{id}/withdraw', {
+			params: { path: { id } }
+		});
+		if (response.status !== 204)
+			return fail(response.status, { message: 'Could not withdraw it.' });
+		return { withdrawn: true };
 	}
 };

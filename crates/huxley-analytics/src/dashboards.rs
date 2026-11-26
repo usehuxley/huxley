@@ -65,6 +65,11 @@ pub struct Dashboard {
     pub builtin: bool,
     /// Shown in the client portal (shared dashboards only).
     pub portal: bool,
+    /// Who sees a shared dashboard: members of these teams or holders of
+    /// these roles (both empty: everyone who can see dashboards there).
+    pub audience_teams: Vec<Uuid>,
+    pub audience_roles: Vec<Uuid>,
+    pub created_by: Option<Uuid>,
     pub version: i32,
     #[serde(with = "time::serde::rfc3339::option")]
     pub updated_at: Option<OffsetDateTime>,
@@ -168,6 +173,9 @@ struct Row {
     range: String,
     widgets: sqlx::types::Json<Vec<Widget>>,
     portal: bool,
+    audience_teams: Vec<Uuid>,
+    audience_roles: Vec<Uuid>,
+    created_by: Option<Uuid>,
     version: i32,
     updated_at: OffsetDateTime,
 }
@@ -184,38 +192,100 @@ impl From<Row> for Dashboard {
             widgets: r.widgets.0,
             builtin: false,
             portal: r.portal,
+            audience_teams: r.audience_teams,
+            audience_roles: r.audience_roles,
+            created_by: r.created_by,
             version: r.version,
             updated_at: Some(r.updated_at),
         }
     }
 }
 
-const SELECT: &str = "SELECT id, org_id, owner_user_id, name, description, range, widgets, portal, version, updated_at FROM dashboards";
+const COLUMNS: &str = "id, org_id, owner_user_id, name, description, range, widgets, portal, audience_teams, \
+     audience_roles, created_by, version, updated_at";
+const SELECT: &str = "SELECT id, org_id, owner_user_id, name, description, range, widgets, portal, audience_teams, \
+     audience_roles, created_by, version, updated_at FROM dashboards";
 
-/// Shared dashboards in the transaction's scope and `user`'s own, by name.
-pub async fn list(conn: &mut PgConnection, user: Uuid) -> AnalyticsResult<Vec<Dashboard>> {
+/// Who is looking: to show them shared dashboards meant for them.
+#[derive(Debug, Clone, Default)]
+pub struct Viewer {
+    pub user: Uuid,
+    /// Holds `dashboard:manage`: sees every shared dashboard in scope.
+    pub manager: bool,
+    pub teams: Vec<Uuid>,
+    pub roles: Vec<Uuid>,
+}
+
+impl Viewer {
+    /// `user`'s teams and roles (read across organizations).
+    pub async fn load(conn: &mut PgConnection, user: Uuid, manager: bool) -> AnalyticsResult<Self> {
+        let teams = sqlx::query_scalar("SELECT team_id FROM team_members WHERE user_id = $1")
+            .bind(user)
+            .fetch_all(&mut *conn)
+            .await?;
+        let roles =
+            sqlx::query_scalar("SELECT DISTINCT role_id FROM role_assignments WHERE user_id = $1")
+                .bind(user)
+                .fetch_all(&mut *conn)
+                .await?;
+        Ok(Self {
+            user,
+            manager,
+            teams,
+            roles,
+        })
+    }
+}
+
+/// Your own, and shared ones meant for you (`$1` user, `$2` manager, `$3`
+/// teams, `$4` roles).
+const VISIBLE: &str = "(owner_user_id = $1 OR (owner_user_id IS NULL AND ($2 OR created_by = $1 \
+     OR (cardinality(audience_teams) = 0 AND cardinality(audience_roles) = 0) \
+     OR audience_teams && $3 OR audience_roles && $4)))";
+
+/// Shared dashboards in the transaction's scope meant for `viewer`, and
+/// their own, by name.
+pub async fn list(conn: &mut PgConnection, viewer: &Viewer) -> AnalyticsResult<Vec<Dashboard>> {
     let rows: Vec<Row> = sqlx::query_as(sqlx::AssertSqlSafe(format!(
-        "{SELECT} WHERE owner_user_id IS NULL OR owner_user_id = $1 ORDER BY lower(name), id"
+        "{SELECT} WHERE {VISIBLE} ORDER BY lower(name), id"
     )))
-    .bind(user)
+    .bind(viewer.user)
+    .bind(viewer.manager)
+    .bind(&viewer.teams)
+    .bind(&viewer.roles)
     .fetch_all(conn)
     .await?;
     Ok(rows.into_iter().map(Dashboard::from).collect())
 }
 
-/// One stored dashboard, if it's shared or `user`'s.
+/// One stored dashboard, if `viewer` may see it.
 pub async fn get(
     conn: &mut PgConnection,
-    user: Uuid,
+    viewer: &Viewer,
     id: Uuid,
 ) -> AnalyticsResult<Option<Dashboard>> {
     let row: Option<Row> = sqlx::query_as(sqlx::AssertSqlSafe(format!(
-        "{SELECT} WHERE id = $1 AND (owner_user_id IS NULL OR owner_user_id = $2)"
+        "{SELECT} WHERE id = $5 AND {VISIBLE}"
     )))
+    .bind(viewer.user)
+    .bind(viewer.manager)
+    .bind(&viewer.teams)
+    .bind(&viewer.roles)
     .bind(id)
-    .bind(user)
     .fetch_optional(conn)
     .await?;
+    Ok(row.map(Dashboard::from))
+}
+
+/// One stored dashboard, whoever it's for.
+pub(crate) async fn get_any(
+    conn: &mut PgConnection,
+    id: Uuid,
+) -> AnalyticsResult<Option<Dashboard>> {
+    let row: Option<Row> = sqlx::query_as(sqlx::AssertSqlSafe(format!("{SELECT} WHERE id = $1")))
+        .bind(id)
+        .fetch_optional(conn)
+        .await?;
     Ok(row.map(Dashboard::from))
 }
 
@@ -276,11 +346,11 @@ pub async fn update(
     input: &DashboardInput,
 ) -> AnalyticsResult<Option<Dashboard>> {
     let range = check(input)?;
-    let row: Option<Row> = sqlx::query_as(
+    let row: Option<Row> = sqlx::query_as(sqlx::AssertSqlSafe(format!(
         "UPDATE dashboards SET name = $2, description = $3, range = $4, widgets = $5, portal = $7, \
                 version = version + 1, updated_at = now() WHERE id = $1 AND ($6::integer IS NULL OR version = $6) \
-         RETURNING id, org_id, owner_user_id, name, description, range, widgets, portal, version, updated_at",
-    )
+         RETURNING {COLUMNS}",
+    )))
     .bind(id)
     .bind(input.name.trim())
     .bind(input.description.as_deref().map(str::trim).filter(|d| !d.is_empty()))
@@ -386,6 +456,9 @@ fn prebuilt(key: &str, name: &str, description: &str, widgets: Vec<Widget>) -> D
         widgets,
         builtin: true,
         portal: false,
+        audience_teams: Vec::new(),
+        audience_roles: Vec::new(),
+        created_by: None,
         version: 1,
         updated_at: None,
     }
@@ -770,6 +843,20 @@ pub fn builtin() -> Vec<Dashboard> {
 
 /// Sources a dashboard can show in the client portal.
 pub const PORTAL_SOURCES: &[&str] = &["tickets", "time_entries", "assets"];
+
+/// Checks a dashboard can be shown in the client portal: every widget's
+/// source is one the portal shows.
+pub fn check_portal(widgets: &[Widget]) -> AnalyticsResult<()> {
+    for (i, w) in widgets.iter().enumerate() {
+        if !PORTAL_SOURCES.contains(&w.spec.source.as_str()) {
+            return Err(bad(
+                format!("widgets/{i}/spec/source"),
+                format!("the client portal shows only {}", PORTAL_SOURCES.join(", ")),
+            ));
+        }
+    }
+    Ok(())
+}
 
 /// The dashboards shown in a company's portal: published at it or above.
 pub async fn for_portal(conn: &mut PgConnection, org_id: Uuid) -> AnalyticsResult<Vec<Dashboard>> {

@@ -1,0 +1,23 @@
+apiVersion: usehuxley.io/v1
+kind: Workflow
+metadata:
+  key: dashboard-submitted
+  name: Ask administrators to review a dashboard
+  description: >-
+    When someone submits a dashboard for publishing, tells everyone with the
+    Administrator role there (or above), except the author.
+spec:
+  triggers:
+    - type: event
+      event: dashboard.submitted
+  steps:
+    - id: tell
+      type: core.notify
+      with:
+        to: role:admin
+        exclude: ["{{ inputs.submitted_by }}"]
+        title: "\"{{ inputs.name }}\" is waiting for your approval"
+        message: "{{ 'It asks to be shown in the client portal too.' if inputs.portal else 'Review it and approve or send it back.' }}"
+        url: "/dashboards/submissions/{{ inputs.submission_id }}"
+  outputs:
+    sent: "{{ steps.tell.output.sent }}"

@@ -5700,6 +5700,191 @@
 				}
 			}
 		},
+		"/api/v1/dashboard-audiences": {
+			"get": {
+				"tags": ["analytics"],
+				"summary": "The teams and roles a dashboard can be published to.",
+				"operationId": "list_dashboard_audiences",
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Audiences"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/dashboard-submissions": {
+			"get": {
+				"tags": ["analytics"],
+				"summary": "Submissions waiting for you: pending where you manage dashboards,\noldest first.",
+				"operationId": "list_pending_dashboard_submissions",
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "array",
+									"items": {
+										"$ref": "#/components/schemas/DashboardSubmission"
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/dashboard-submissions/{id}": {
+			"get": {
+				"tags": ["analytics"],
+				"summary": "One submission: its author's, or for those who manage dashboards there.",
+				"operationId": "get_dashboard_submission",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/DashboardSubmission"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/dashboard-submissions/{id}/approve": {
+			"post": {
+				"tags": ["analytics"],
+				"summary": "Approves a submission: the dashboard is shared with the audience asked\nfor, as it was submitted.",
+				"operationId": "approve_dashboard_submission",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/DecideSubmission"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/DashboardSubmission"
+								}
+							}
+						}
+					},
+					"409": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/dashboard-submissions/{id}/reject": {
+			"post": {
+				"tags": ["analytics"],
+				"summary": "Rejects a submission with a comment; the dashboard stays personal.",
+				"operationId": "reject_dashboard_submission",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/DecideSubmission"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/DashboardSubmission"
+								}
+							}
+						}
+					},
+					"422": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/dashboard-submissions/{id}/withdraw": {
+			"post": {
+				"tags": ["analytics"],
+				"summary": "Withdraws your pending submission.",
+				"operationId": "withdraw_dashboard_submission",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"responses": {
+					"204": {}
+				}
+			}
+		},
 		"/api/v1/dashboards": {
 			"get": {
 				"tags": ["analytics"],
@@ -5843,6 +6028,124 @@
 				],
 				"responses": {
 					"204": {}
+				}
+			}
+		},
+		"/api/v1/dashboards/{id}/copy": {
+			"post": {
+				"tags": ["analytics"],
+				"summary": "Copies a dashboard you can see (prebuilt, shared or yours) into a new\npersonal one.",
+				"operationId": "copy_dashboard",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string"
+						}
+					}
+				],
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/CopyDashboard"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"201": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Dashboard"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/dashboards/{id}/submissions": {
+			"get": {
+				"tags": ["analytics"],
+				"summary": "A dashboard's submissions and publications, newest first (its author,\nor those who manage dashboards there).",
+				"operationId": "list_dashboard_submissions",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "array",
+									"items": {
+										"$ref": "#/components/schemas/DashboardSubmission"
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/dashboards/{id}/submit": {
+			"post": {
+				"tags": ["analytics"],
+				"summary": "Submits your personal dashboard for publishing to an audience (teams,\nroles, the client portal), as it is now. Someone with\n`dashboard:manage` there approves or rejects it.",
+				"operationId": "submit_dashboard",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/SubmitDashboard"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"201": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/DashboardSubmission"
+								}
+							}
+						}
+					},
+					"422": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
 				}
 			}
 		},
@@ -20105,6 +20408,39 @@
 					}
 				}
 			},
+			"AudienceOption": {
+				"type": "object",
+				"description": "A team or role to publish to.",
+				"required": ["id", "name"],
+				"properties": {
+					"id": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"name": {
+						"type": "string"
+					}
+				}
+			},
+			"Audiences": {
+				"type": "object",
+				"description": "What a dashboard can be published to.",
+				"required": ["teams", "roles"],
+				"properties": {
+					"roles": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/AudienceOption"
+						}
+					},
+					"teams": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/AudienceOption"
+						}
+					}
+				}
+			},
 			"AuditEventView": {
 				"type": "object",
 				"required": ["id", "seq", "occurredAt", "actorType", "via", "action", "details"],
@@ -21710,6 +22046,22 @@
 					}
 				}
 			},
+			"CopyDashboard": {
+				"type": "object",
+				"required": ["orgId"],
+				"properties": {
+					"name": {
+						"type": ["string", "null"],
+						"description": "Its name (default: \"Copy of …\")."
+					},
+					"orgId": {
+						"type": "string",
+						"format": "uuid",
+						"description": "Where the copy lives (yours, personal)."
+					}
+				},
+				"additionalProperties": false
+			},
 			"CoverageOutcome": {
 				"type": "string",
 				"enum": ["non_billable", "covered", "partly_covered", "overage", "billable", "no_agreement"]
@@ -22131,11 +22483,40 @@
 			},
 			"Dashboard": {
 				"type": "object",
-				"required": ["id", "name", "range", "widgets", "builtin", "portal", "version"],
+				"required": [
+					"id",
+					"name",
+					"range",
+					"widgets",
+					"builtin",
+					"portal",
+					"audienceTeams",
+					"audienceRoles",
+					"version"
+				],
 				"properties": {
+					"audienceRoles": {
+						"type": "array",
+						"items": {
+							"type": "string",
+							"format": "uuid"
+						}
+					},
+					"audienceTeams": {
+						"type": "array",
+						"items": {
+							"type": "string",
+							"format": "uuid"
+						},
+						"description": "Who sees a shared dashboard: members of these teams or holders of\nthese roles (both empty: everyone who can see dashboards there)."
+					},
 					"builtin": {
 						"type": "boolean",
 						"description": "Defined in code; copy it to change it."
+					},
+					"createdBy": {
+						"type": ["string", "null"],
+						"format": "uuid"
 					},
 					"description": {
 						"type": ["string", "null"]
@@ -22211,6 +22592,112 @@
 					}
 				},
 				"additionalProperties": false
+			},
+			"DashboardSnapshot": {
+				"type": "object",
+				"description": "What was submitted.",
+				"required": ["name", "range", "widgets"],
+				"properties": {
+					"description": {
+						"type": ["string", "null"]
+					},
+					"name": {
+						"type": "string"
+					},
+					"range": {
+						"type": "string"
+					},
+					"widgets": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/Widget"
+						}
+					}
+				}
+			},
+			"DashboardSubmission": {
+				"type": "object",
+				"required": [
+					"id",
+					"dashboardId",
+					"orgId",
+					"submittedAt",
+					"teams",
+					"roles",
+					"portal",
+					"snapshot",
+					"status"
+				],
+				"properties": {
+					"comment": {
+						"type": ["string", "null"]
+					},
+					"dashboardId": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"decidedAt": {
+						"type": ["string", "null"],
+						"format": "date-time"
+					},
+					"decidedBy": {
+						"type": ["string", "null"],
+						"format": "uuid"
+					},
+					"decidedByName": {
+						"type": ["string", "null"]
+					},
+					"id": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"note": {
+						"type": ["string", "null"]
+					},
+					"number": {
+						"type": ["integer", "null"],
+						"format": "int32",
+						"description": "The publication's number, once approved."
+					},
+					"orgId": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"portal": {
+						"type": "boolean"
+					},
+					"roles": {
+						"type": "array",
+						"items": {
+							"type": "string",
+							"format": "uuid"
+						}
+					},
+					"snapshot": {
+						"$ref": "#/components/schemas/DashboardSnapshot"
+					},
+					"status": {
+						"$ref": "#/components/schemas/SubmissionStatus"
+					},
+					"submittedAt": {
+						"type": "string",
+						"format": "date-time"
+					},
+					"submittedBy": {
+						"type": ["string", "null"],
+						"format": "uuid"
+					},
+					"submittedByName": {
+						"type": ["string", "null"]
+					},
+					"teams": {
+						"type": "array",
+						"items": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				}
 			},
 			"Dataset": {
 				"type": "object",
@@ -22330,6 +22817,16 @@
 						"type": ["string", "null"]
 					}
 				}
+			},
+			"DecideSubmission": {
+				"type": "object",
+				"properties": {
+					"comment": {
+						"type": ["string", "null"],
+						"description": "Required to reject: what to change."
+					}
+				},
+				"additionalProperties": false
 			},
 			"Decision": {
 				"type": "string",
@@ -29125,6 +29622,10 @@
 				"type": "string",
 				"enum": ["running", "waiting", "succeeded", "failed", "skipped", "cancelled"]
 			},
+			"SubmissionStatus": {
+				"type": "string",
+				"enum": ["pending", "approved", "rejected", "withdrawn"]
+			},
 			"SubmissionView": {
 				"type": "object",
 				"required": ["id", "orgId", "data", "runIds", "createdAt"],
@@ -29160,6 +29661,35 @@
 						"format": "uuid"
 					}
 				}
+			},
+			"SubmitDashboard": {
+				"type": "object",
+				"description": "The audience asked for.",
+				"properties": {
+					"note": {
+						"type": ["string", "null"],
+						"description": "For the reviewer."
+					},
+					"portal": {
+						"type": "boolean",
+						"description": "Show it in the client portal too."
+					},
+					"roles": {
+						"type": "array",
+						"items": {
+							"type": "string",
+							"format": "uuid"
+						}
+					},
+					"teams": {
+						"type": "array",
+						"items": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				},
+				"additionalProperties": false
 			},
 			"SubmitRequest": {
 				"type": "object",

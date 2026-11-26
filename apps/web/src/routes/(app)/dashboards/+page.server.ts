@@ -7,7 +7,13 @@ import type { Actions, PageServerLoad } from './$types';
 export const load: PageServerLoad = async (event) => {
 	const { data, response } = await api(event).GET('/api/v1/dashboards');
 	if (!data) error(response.status, 'You can’t see dashboards.');
-	return { dashboards: data };
+	const { user } = await event.parent();
+	const waiting = user.grantedPermissions.includes('dashboard:manage')
+		? ((await api(event).GET('/api/v1/dashboard-submissions')).data ?? []).filter(
+				(s) => s.submittedBy !== user.id
+			)
+		: [];
+	return { dashboards: data, waiting };
 };
 
 export const actions: Actions = {

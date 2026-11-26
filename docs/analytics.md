@@ -80,8 +80,28 @@ The answer has `columns` (key, label, kind) and `rows` (arrays in column order).
   - **Time and utilization**
 
   They're read-only: **Copy to change it** makes a personal copy.
-- **Shared** dashboards live at an organization. People with `dashboard:read` there see them, and `dashboard:manage` changes them. **Personal** dashboards are yours alone; `dashboard:read` is enough to keep them.
+- **Shared** dashboards live at an organization. People with `dashboard:read` there see them (or only the teams and roles it's published to), and `dashboard:manage` changes them. **Personal** dashboards are yours alone; `dashboard:read` is enough to keep them.
 - **Range and organization:** pick a range (it's applied to each widget's source time field, unless the widget ignores the dashboard's range) and an organization (that client and those below it). Everyone sees the numbers their own access allows, so the same dashboard can show different numbers to different people.
 - **Building a widget:** pick the data, a measure ("how many", "total of", "average of"…), a grouping (with a time bucket for dates), an optional split, and conditions. Charts can switch to a table of the same numbers.
 - **The client portal:** a shared dashboard can be shown there, to client admins with their company's numbers. See [Client portal: Reports](portal.md#reports).
-- **API:** `GET`/`POST /api/v1/dashboards`; `GET`/`PUT`/`DELETE /api/v1/dashboards/{id}` (a uuid, or a prebuilt dashboard's key such as `service-desk`). Widgets store query specs, never SQL.
+- **API:** `GET`/`POST /api/v1/dashboards`; `GET`/`PUT`/`DELETE /api/v1/dashboards/{id}` (a uuid, or a prebuilt dashboard's key such as `service-desk`); `POST /api/v1/dashboards/{id}/copy` `{ orgId, name? }`. Widgets store query specs, never SQL.
+
+### Publishing
+
+Anyone with `dashboard:read` can build a personal dashboard and ask for it to be shared (ADR-045):
+
+1. **Submit:** on your dashboard, **Publish** asks who should see it: teams, roles (neither: everyone who sees dashboards there), and the client portal (its widgets must use tickets, time or assets). Add a note for the reviewer. What's submitted is the dashboard as it is then; later changes aren't part of it.
+2. **Review:** people with `dashboard:manage` there find it under **Waiting for your approval** on the Dashboards page. The review page shows it as submitted, with their own numbers. Someone else has to decide your own submission.
+3. **Decide:**
+   - **Approve and publish** shares it, as submitted, with that audience (and the portal), as publication 1, 2, ….
+   - **Send back** needs a comment; it stays personal and you see the comment on it. Change it and submit again.
+
+You can withdraw a pending submission. Events: `dashboard.submitted`, `dashboard.published` and `dashboard.rejected` (with `name`, `submitted_by`, `comment`, `number`). The built-in **Dashboard publishing** pack tells administrators about submissions and authors about decisions.
+
+API:
+- `POST /api/v1/dashboards/{id}/submit` `{ teams, roles, portal, note }`
+- `GET /api/v1/dashboards/{id}/submissions` (history)
+- `GET /api/v1/dashboard-submissions` (pending, for you to decide)
+- `GET /api/v1/dashboard-submissions/{id}`
+- `POST /api/v1/dashboard-submissions/{id}/approve|reject` `{ comment }`, and `/withdraw`
+- `GET /api/v1/dashboard-audiences`: the teams and roles to pick from

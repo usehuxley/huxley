@@ -83,6 +83,19 @@ const SOURCES: &[Source] = &[
         ],
     },
     Source {
+        manifest: include_str!("../builtin/dashboard-publishing/pack.yaml"),
+        files: &[
+            (
+                "workflows/dashboard-submitted.yaml",
+                include_str!("../builtin/dashboard-publishing/workflows/dashboard-submitted.yaml"),
+            ),
+            (
+                "workflows/dashboard-decided.yaml",
+                include_str!("../builtin/dashboard-publishing/workflows/dashboard-decided.yaml"),
+            ),
+        ],
+    },
+    Source {
         manifest: include_str!("../builtin/client-health/pack.yaml"),
         files: &[
             (
