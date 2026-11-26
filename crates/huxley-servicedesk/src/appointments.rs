@@ -12,6 +12,7 @@ use uuid::Uuid;
 
 use crate::tickets::{self, Ticket, record};
 use crate::{DeskError, DeskResult, text};
+use huxley_db::outbox::{self, DomainEvent};
 
 #[derive(Debug, Clone, Serialize, ToSchema, sqlx::FromRow)]
 #[serde(rename_all = "camelCase")]
@@ -177,7 +178,41 @@ pub async fn book(
         json!({ "booked": c.person, "from": when(input.starts_at), "to": when(input.ends_at) }),
     )
     .await?;
-    get(conn, id).await
+    let booked = get(conn, id).await?;
+    announce(conn, "appointment.booked", &booked, ticket.org_id, None).await?;
+    Ok(booked)
+}
+
+/// Raises an appointment event (`appointment.booked`, `.moved` or
+/// `.cancelled`) at the ticket's organization, for workflows such as
+/// writing it to the person's calendar.
+async fn announce(
+    conn: &mut PgConnection,
+    event: &'static str,
+    a: &Appointment,
+    org: Uuid,
+    previous_user: Option<Uuid>,
+) -> DeskResult<()> {
+    let at = |t: OffsetDateTime| {
+        t.format(&time::format_description::well_known::Rfc3339)
+            .unwrap_or_default()
+    };
+    outbox::emit(
+        conn,
+        DomainEvent {
+            event_type: event,
+            org_id: Some(org),
+            subject_type: "appointment",
+            subject_id: a.id,
+            payload: json!({
+                "ticketId": a.ticket_id, "ticketReference": a.ticket_reference, "ticketTitle": a.ticket_title,
+                "userId": a.user_id, "startsAt": at(a.starts_at), "endsAt": at(a.ends_at),
+                "previousUserId": previous_user,
+            }),
+        },
+    )
+    .await?;
+    Ok(())
 }
 
 /// Moves an appointment (send the `version` you read).
@@ -214,7 +249,10 @@ pub async fn reschedule(
         json!({ "moved": c.person, "from": when(input.starts_at), "to": when(input.ends_at) }),
     )
     .await?;
-    get(conn, id).await
+    let moved = get(conn, id).await?;
+    let previous = (before.user_id != moved.user_id).then_some(before.user_id);
+    announce(conn, "appointment.moved", &moved, ticket.org_id, previous).await?;
+    Ok(moved)
 }
 
 /// Cancels an appointment.
@@ -233,5 +271,6 @@ pub async fn cancel(conn: &mut PgConnection, ctx: &RequestContext, id: Uuid) -> 
         json!({ "cancelled": found.user_name, "from": when(found.starts_at) }),
     )
     .await?;
+    announce(conn, "appointment.cancelled", &found, ticket.org_id, None).await?;
     Ok(())
 }

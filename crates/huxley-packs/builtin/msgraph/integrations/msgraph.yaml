@@ -274,6 +274,66 @@ paths:
                               subject: { type: string }
                               start: { $ref: "#/components/schemas/DateTimeTimeZone" }
                               end: { $ref: "#/components/schemas/DateTimeTimeZone" }
+  /users/{user}/events:
+    post:
+      operationId: createEvent
+      summary: Create an event in a user's calendar
+      description: Needs Calendars.ReadWrite.
+      tags: [Calendar]
+      parameters: [{ $ref: "#/components/parameters/user" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                subject: { type: string }
+                body: { type: object, properties: { contentType: { type: string, enum: [text, html] }, content: { type: string } } }
+                start: { $ref: "#/components/schemas/DateTimeTimeZone" }
+                end: { $ref: "#/components/schemas/DateTimeTimeZone" }
+                location: { type: object, properties: { displayName: { type: string } } }
+                showAs: { type: string, enum: [free, tentative, busy, oof, workingElsewhere] }
+                categories: { type: array, items: { type: string } }
+                transactionId: { type: string, description: Makes creating idempotent }
+                isReminderOn: { type: boolean }
+      responses:
+        "201": { description: The event, content: { application/json: { schema: { type: object, properties: { id: { type: string } } } } } }
+  /users/{user}/events/{event}:
+    patch:
+      operationId: updateEvent
+      summary: Change an event in a user's calendar
+      tags: [Calendar]
+      parameters:
+        - { $ref: "#/components/parameters/user" }
+        - { name: event, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                subject: { type: string }
+                body: { type: object, properties: { contentType: { type: string, enum: [text, html] }, content: { type: string } } }
+                start: { $ref: "#/components/schemas/DateTimeTimeZone" }
+                end: { $ref: "#/components/schemas/DateTimeTimeZone" }
+                location: { type: object, properties: { displayName: { type: string } } }
+                showAs: { type: string, enum: [free, tentative, busy, oof, workingElsewhere] }
+                categories: { type: array, items: { type: string } }
+                transactionId: { type: string, description: Makes creating idempotent }
+                isReminderOn: { type: boolean }
+      responses:
+        "200": { description: The event, content: { application/json: { schema: { type: object, properties: { id: { type: string } } } } } }
+    delete:
+      operationId: deleteEvent
+      summary: Delete an event from a user's calendar
+      tags: [Calendar]
+      parameters:
+        - { $ref: "#/components/parameters/user" }
+        - { name: event, in: path, required: true, schema: { type: string } }
+      responses:
+        "204": { description: Deleted }
   /users/{user}/mailFolders/{folder}/messages:
     get:
       operationId: listMailMessages

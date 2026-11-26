@@ -239,7 +239,8 @@ pub async fn plan(
 }
 
 /// Hours each person is busy (or out of office) in their synced calendar,
-/// by day (UTC), within `[from, to)`.
+/// by day (UTC), within `[from, to)`. Appointments Huxley wrote there are
+/// left out: they're counted as appointments already.
 async fn busy_hours(
     conn: &mut PgConnection,
     who: &[Uuid],
@@ -247,8 +248,10 @@ async fn busy_hours(
     to: Date,
 ) -> DeskResult<BTreeMap<(Uuid, Date), f64>> {
     let blocks: Vec<(Uuid, OffsetDateTime, OffsetDateTime)> = sqlx::query_as(
-        "SELECT user_id, starts_at, ends_at FROM wf_busy_blocks \
-          WHERE user_id = ANY($1) AND status IN ('busy', 'oof') AND starts_at < $3::date AND ends_at > $2::date",
+        "SELECT b.user_id, b.starts_at, b.ends_at FROM wf_busy_blocks b \
+          WHERE b.user_id = ANY($1) AND b.status IN ('busy', 'oof') AND b.starts_at < $3::date AND b.ends_at > $2::date \
+            AND NOT EXISTS (SELECT 1 FROM wf_calendar_writes w WHERE w.user_id = b.user_id \
+                             AND w.starts_at = b.starts_at AND w.ends_at = b.ends_at)",
     )
     .bind(who)
     .bind(from)

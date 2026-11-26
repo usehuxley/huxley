@@ -41,7 +41,8 @@ export const actions: Actions = {
 					provider: 'm365',
 					orgId: orgId ?? '',
 					connection: connection ?? '',
-					keepSubjects: form.get('keepSubjects') === 'on'
+					keepSubjects: form.get('keepSubjects') === 'on',
+					writeBack: form.get('writeBack') === 'on'
 				}
 			}
 		);

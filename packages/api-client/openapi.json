@@ -23178,7 +23178,7 @@
 			"CalendarSettings": {
 				"type": "object",
 				"description": "How calendars are reached.",
-				"required": ["provider", "orgId", "connection", "keepSubjects", "updatedAt"],
+				"required": ["provider", "orgId", "connection", "keepSubjects", "writeBack", "updatedAt"],
 				"properties": {
 					"connection": {
 						"type": "string",
@@ -23199,6 +23199,10 @@
 					"updatedAt": {
 						"type": "string",
 						"format": "date-time"
+					},
+					"writeBack": {
+						"type": "boolean",
+						"description": "Appointments are written to people's calendars."
 					}
 				}
 			},
@@ -23218,6 +23222,10 @@
 					},
 					"provider": {
 						"type": "string"
+					},
+					"writeBack": {
+						"type": "boolean",
+						"description": "Write appointments to people's calendars (the connection's app needs\nCalendars.ReadWrite)."
 					}
 				},
 				"additionalProperties": false

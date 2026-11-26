@@ -61,6 +61,10 @@
 					/>
 					Keep event subjects (never private ones)
 				</label>
+				<label class="flex items-center gap-2 text-fg">
+					<input type="checkbox" name="writeBack" checked={data.settings?.writeBack ?? false} />
+					Put booked appointments in people's calendars (needs Calendars.ReadWrite)
+				</label>
 				<div class="flex gap-2">
 					<Button type="submit" variant="primary">Save</Button>
 					{#if data.settings}
