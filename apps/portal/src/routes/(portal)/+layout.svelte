@@ -1,12 +1,12 @@
 <script lang="ts">
+	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
 	import { BookOpen, Boxes, ClipboardList, House, Ticket } from '@lucide/svelte';
 	import { AppShell, Button, type NavItem } from '@usehuxley/ui';
 	import type { LayoutProps } from './$types';
 
-	let { children }: LayoutProps = $props();
+	let { data, children }: LayoutProps = $props();
 
-	// The portal is white-labeled per MSP in Phase 7. Until then it uses Huxley defaults.
 	const nav: NavItem[] = [
 		{ href: '/', label: 'Home', icon: House },
 		{ href: '/tickets', label: 'Tickets', icon: Ticket, soon: true },
@@ -18,7 +18,12 @@
 
 <AppShell brand="Support portal" {nav} currentPath={page.url.pathname}>
 	{#snippet topbar()}
-		<Button href="/login" variant="ghost" size="sm">Sign in</Button>
+		<a href={resolve('/(portal)/profile')} class="text-sm text-fg-muted hover:text-fg">
+			{data.me.name} · {data.me.orgName}
+		</a>
+		<form method="POST" action="/logout">
+			<Button type="submit" variant="ghost" size="sm">Sign out</Button>
+		</form>
 	{/snippet}
 	{@render children()}
 </AppShell>

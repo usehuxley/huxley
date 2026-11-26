@@ -91,6 +91,7 @@ export default defineConfig({
 					{ text: 'Credential vault', link: '/vault' },
 					{ text: 'Product catalog', link: '/catalog' },
 					{ text: 'Agreements', link: '/agreements' },
+					{ text: 'Client portal', link: '/portal' },
 					{ text: 'ConnectWise Automate', link: '/cwautomate' },
 					{ text: 'ImmyBot', link: '/immybot' }
 				]

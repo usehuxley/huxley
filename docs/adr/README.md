@@ -43,3 +43,4 @@ Decisions that shape Huxley. Add a new ADR by copying `0000-template.md` with th
 | [037](0037-sla-clocks.md) | SLAs as per-ticket clocks over a snapshot calendar | Accepted |
 | [038](0038-email-intake.md) | Email intake: mailboxes, stored messages, and email to ticket as a step | Accepted |
 | [039](0039-agreement-coverage.md) | Agreements evaluate time on demand, one agreement per entry | Accepted |
+| [040](0040-portal-realm.md) | The client portal is a separate realm: its own accounts, sessions and API | Accepted |

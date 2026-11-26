@@ -4,6 +4,111 @@
  */
 
 export interface paths {
+	'/api/portal/v1/auth/link': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/**
+		 * Emails a sign-in link to whoever has portal access as this address. The
+		 *     answer is the same whether or not anyone does.
+		 */
+		post: operations['portal_request_link'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/portal/v1/auth/logout': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/** Signs out of the portal. */
+		post: operations['portal_sign_out'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/portal/v1/auth/password': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/** Signs in with an email and password. Sets the portal session cookie. */
+		post: operations['portal_password_sign_in'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/portal/v1/auth/redeem': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/** Signs in with an emailed link (once). Sets the portal session cookie. */
+		post: operations['portal_redeem_link'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/portal/v1/me': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** Who's signed in to the portal, with their company and permissions. */
+		get: operations['portal_me'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/portal/v1/me/password': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		/** Sets your portal password (your other sessions end). */
+		put: operations['portal_set_password'];
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
 	'/api/v1/agreements': {
 		parameters: {
 			query?: never;
@@ -1383,6 +1488,26 @@ export interface paths {
 		 */
 		put: operations['set_contact_companies'];
 		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/contacts/{id}/portal-access': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/**
+		 * Gives a contact portal access with a role, and emails them a sign-in
+		 *     link.
+		 */
+		post: operations['invite_portal_contact'];
 		delete?: never;
 		options?: never;
 		head?: never;
@@ -2815,6 +2940,23 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
+	'/api/v1/orgs/{id}/portal-accounts': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** A company's portal accounts. */
+		get: operations['list_portal_accounts'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
 	'/api/v1/orgs/{id}/settings': {
 		parameters: {
 			query?: never;
@@ -3073,6 +3215,40 @@ export interface paths {
 		get: operations['list_permissions'];
 		put?: never;
 		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/portal-accounts/{id}': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		/** Changes an account's role, or disables (or re-enables) it. */
+		patch: operations['update_portal_account'];
+		trace?: never;
+	};
+	'/api/v1/portal-accounts/{id}/invitation': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/** Emails a new sign-in link to an invited or active account. */
+		post: operations['resend_portal_invitation'];
 		delete?: never;
 		options?: never;
 		head?: never;
@@ -7486,6 +7662,9 @@ export interface components {
 			/** Format: int32 */
 			warnings: number;
 		};
+		InvitePortalContact: {
+			role: components['schemas']['PortalRole'];
+		};
 		/** @description Something that happened to an article. */
 		KbActivity: {
 			actorName?: string | null;
@@ -8427,6 +8606,79 @@ export interface components {
 			/** @description The root: the requirement covers every user. */
 			isRoot: boolean;
 			name: string;
+		};
+		/** @description An account, and whether an email went out. */
+		PortalAccessResult: {
+			account: components['schemas']['PortalAccount'];
+			/**
+			 * @description Whether an invitation was emailed (needs email and the portal's URL
+			 *     set up).
+			 */
+			invitationSent: boolean;
+		};
+		PortalAccount: {
+			/** Format: uuid */
+			contactId: string;
+			/** Format: date-time */
+			createdAt: string;
+			email: string;
+			hasPassword: boolean;
+			/** Format: uuid */
+			id: string;
+			/** Format: date-time */
+			lastSignInAt?: string | null;
+			name: string;
+			/** Format: uuid */
+			orgId: string;
+			role: components['schemas']['PortalRole'];
+			status: components['schemas']['PortalAccountStatus'];
+			/** Format: int32 */
+			version: number;
+		};
+		/** @enum {string} */
+		PortalAccountStatus: 'invited' | 'active' | 'disabled';
+		PortalLinkRequest: {
+			email: string;
+		};
+		PortalLinkResponse: {
+			/** @description Always true: whether an account exists isn't revealed. */
+			sent: boolean;
+		};
+		/** @description The signed-in account, as the portal shows it. */
+		PortalMe: components['schemas']['PortalPrincipal'] & {
+			/** @description Portal permissions, e.g. `portal.ticket:read:company`. */
+			permissions: string[];
+		};
+		PortalPasswordSignIn: {
+			email: string;
+			password: string;
+		};
+		/** @description Who is signed in to the portal. */
+		PortalPrincipal: {
+			/** Format: uuid */
+			accountId: string;
+			/** Format: uuid */
+			contactId: string;
+			email: string;
+			name: string;
+			/**
+			 * Format: uuid
+			 * @description Their company.
+			 */
+			orgId: string;
+			orgName: string;
+			role: components['schemas']['PortalRole'];
+		};
+		PortalRedeemRequest: {
+			token: string;
+		};
+		/**
+		 * @description A portal account's role at its company.
+		 * @enum {string}
+		 */
+		PortalRole: 'client_user' | 'client_approver' | 'client_admin';
+		PortalSetPassword: {
+			password: string;
 		};
 		/** @description A kind with the user's effective channels. */
 		Preference: {
@@ -10060,6 +10312,12 @@ export interface components {
 			 */
 			version: number;
 		};
+		UpdatePortalAccount: {
+			role: components['schemas']['PortalRole'];
+			status: components['schemas']['PortalAccountStatus'];
+			/** Format: int32 */
+			version?: number | null;
+		};
 		/** @description What importing a newer spec would change, without saving anything. */
 		UpdatePreview: {
 			actions: number;
@@ -10431,6 +10689,164 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+	portal_request_link: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['PortalLinkRequest'];
+			};
+		};
+		responses: {
+			202: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['PortalLinkResponse'];
+				};
+			};
+		};
+	};
+	portal_sign_out: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			204: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content?: never;
+			};
+		};
+	};
+	portal_password_sign_in: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['PortalPasswordSignIn'];
+			};
+		};
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['PortalMe'];
+				};
+			};
+			401: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	portal_redeem_link: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['PortalRedeemRequest'];
+			};
+		};
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['PortalMe'];
+				};
+			};
+			401: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	portal_me: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['PortalMe'];
+				};
+			};
+			401: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	portal_set_password: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['PortalSetPassword'];
+			};
+		};
+		responses: {
+			204: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content?: never;
+			};
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
 	list_agreements: {
 		parameters: {
 			query?: {
@@ -13525,6 +13941,47 @@ export interface operations {
 			};
 		};
 	};
+	invite_portal_contact: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['InvitePortalContact'];
+			};
+		};
+		responses: {
+			201: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['PortalAccessResult'];
+				};
+			};
+			409: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
 	list_fields: {
 		parameters: {
 			query: {
@@ -16459,6 +16916,27 @@ export interface operations {
 			};
 		};
 	};
+	list_portal_accounts: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['PortalAccount'][];
+				};
+			};
+		};
+	};
 	list_org_settings: {
 		parameters: {
 			query?: never;
@@ -17001,6 +17479,68 @@ export interface operations {
 				};
 				content: {
 					'application/json': components['schemas']['Permission'][];
+				};
+			};
+		};
+	};
+	update_portal_account: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['UpdatePortalAccount'];
+			};
+		};
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['PortalAccount'];
+				};
+			};
+			409: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	resend_portal_invitation: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['PortalAccessResult'];
+				};
+			};
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
 				};
 			};
 		};

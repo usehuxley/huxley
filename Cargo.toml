@@ -51,6 +51,7 @@ huxley-knowledge = { path = "crates/huxley-knowledge" }
 huxley-vault = { path = "crates/huxley-vault" }
 huxley-cmdb = { path = "crates/huxley-cmdb" }
 huxley-contracts = { path = "crates/huxley-contracts" }
+huxley-portal = { path = "crates/huxley-portal" }
 huxley-orgs = { path = "crates/huxley-orgs" }
 huxley-runners = { path = "crates/huxley-runners" }
 huxley-templates = { path = "crates/huxley-templates" }

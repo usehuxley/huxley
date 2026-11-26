@@ -38,6 +38,8 @@ pub mod org_routes;
 mod pack_routes;
 pub mod packs;
 pub mod passkey_routes;
+pub mod portal_access_routes;
+pub mod portal_routes;
 pub mod problem;
 mod public_form_routes;
 pub mod rate_limit;
@@ -86,6 +88,10 @@ pub struct ApiConfig {
     pub cookie_secure: bool,
     /// Sign-in attempts allowed per client address per minute.
     pub login_attempts_per_minute: u32,
+    /// The client portal's public URL (e.g. `https://support.example.com`),
+    /// for the sign-in links it emails. Without it, portal links aren't
+    /// sent.
+    pub portal_public_url: Option<String>,
 }
 
 impl Default for ApiConfig {
@@ -94,6 +100,7 @@ impl Default for ApiConfig {
             trust_forwarded_for: false,
             cookie_secure: true,
             login_attempts_per_minute: 20,
+            portal_public_url: None,
         }
     }
 }
