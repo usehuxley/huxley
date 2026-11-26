@@ -1,18 +1,17 @@
 <script lang="ts">
-	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
-	import { page } from '$app/state';
 	import { ChevronLeft, ChevronRight, TriangleAlert } from '@lucide/svelte';
 	import { Button, Card, EmptyState, Select } from '@usehuxley/ui';
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
 	const day = 86_400_000;
-	const shift = (weeks: number) => {
+	const base = resolve('/(app)/projects/capacity');
+	// Six weeks earlier or later, keeping the team.
+	const shifted = (weeks: number) => {
 		const first = Date.parse(`${data.plan.weeks[0]}T00:00:00Z`) + weeks * 7 * day;
-		const q = new URLSearchParams(page.url.search);
-		q.set('from', new Date(first).toISOString().slice(0, 10));
-		goto(`?${q}`);
+		const from = new Date(first).toISOString().slice(0, 10);
+		return `${base}?from=${from}${data.team ? `&team=${data.team}` : ''}`;
 	};
 	const label = (d: string) =>
 		new Date(`${d}T00:00:00Z`).toLocaleDateString(undefined, {
@@ -36,28 +35,24 @@
 				their project tasks’ remaining estimates, spread over the tasks’ dates.
 			</p>
 		</div>
-		<div class="flex items-end gap-2">
+		<form method="GET" action={base} class="flex items-end gap-2">
+			<input type="hidden" name="from" value={data.plan.weeks[0]} />
 			<div class="w-48">
 				<Select
 					aria-label="Team"
+					name="team"
 					value={data.team}
 					options={[{ value: '', label: 'Everyone' }, ...data.teams]}
-					onchange={(e) => {
-						const q = new URLSearchParams(page.url.search);
-						const v = (e.currentTarget as HTMLSelectElement).value;
-						if (v) q.set('team', v);
-						else q.delete('team');
-						goto(`?${q}`);
-					}}
 				/>
 			</div>
-			<Button variant="ghost" aria-label="Earlier weeks" onclick={() => shift(-6)}>
+			<Button type="submit" variant="ghost">Show</Button>
+			<Button href={shifted(-6)} variant="ghost" aria-label="Earlier weeks">
 				<ChevronLeft size={16} />
 			</Button>
-			<Button variant="ghost" aria-label="Later weeks" onclick={() => shift(6)}>
+			<Button href={shifted(6)} variant="ghost" aria-label="Later weeks">
 				<ChevronRight size={16} />
 			</Button>
-		</div>
+		</form>
 	</div>
 	{#if data.plan.people.length === 0}
 		<EmptyState

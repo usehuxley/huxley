@@ -150,7 +150,7 @@
 								class="h-9 w-full rounded-control border border-border-strong bg-surface px-2 text-sm text-fg"
 								value={task.skills[0] ? `${task.skills[0].skillId}:${task.skills[0].minLevel}` : ''}
 								onchange={(e) => {
-									const v = (e.currentTarget as HTMLSelectElement).value;
+									const v = e.currentTarget.value;
 									const rest = task.skills.slice(1);
 									task.skills = v
 										? [{ skillId: v.split(':')[0], minLevel: Number(v.split(':')[1]) }, ...rest]
