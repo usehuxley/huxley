@@ -1,0 +1,20 @@
+apiVersion: usehuxley.io/v1
+kind: Workflow
+metadata:
+  key: nps-quarterly
+  name: Ask the net promoter question
+  description: >-
+    On the first day of each quarter at 10:00 (and when run by hand), asks contacts who raised a
+    ticket lately (and weren't asked lately) how likely they are to recommend
+    you. Companies can opt out in their Customer experience settings.
+spec:
+  triggers:
+    - type: schedule
+      cron: "0 10 1 1,4,7,10 *"
+    - type: manual
+  steps:
+    - id: ask
+      type: core.nps.send
+  outputs:
+    asked: "{{ steps.ask.output.asked }}"
+    emailed: "{{ steps.ask.output.emailed }}"

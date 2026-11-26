@@ -556,6 +556,15 @@
       ],
       "type": "object"
     },
+    "NpsSend": {
+      "additionalProperties": false,
+      "description": "A net promoter round (`core.nps.send`): contacts in the run's\norganization and below who raised a ticket lately and weren't asked\nlately (each company's Customer experience settings; companies can opt\nout) are asked how likely they are to recommend you, 0 to 10, by email\nwhen email and the portal's address are set up, and in the portal.\n`campaign` names the round (default: the month, e.g. `2026-11`); `limit`\ncaps how many are asked (default 500). Output: `{ asked, emailed,\ncampaign }`.",
+      "properties": {
+        "campaign": true,
+        "limit": true
+      },
+      "type": "object"
+    },
     "PollOn": {
       "enum": [
         "new",
@@ -3118,6 +3127,69 @@
             "type",
             "id",
             "with"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Ask contacts how likely they are to recommend you (the `cx` module).",
+          "properties": {
+            "continue_on_error": {
+              "description": "Record the error as the step's output and carry on.",
+              "type": "boolean"
+            },
+            "description": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "id": {
+              "description": "Unique in the workflow: lowercase letters, digits, underscores.\nOther steps read this step's output as `steps.<id>.output`.",
+              "type": "string"
+            },
+            "if": {
+              "description": "Skip the step unless this expression is true.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "name": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "retry": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/RetryPolicy"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "timeout": {
+              "description": "Fail the attempt after this long, e.g. `30s`.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "type": {
+              "const": "core.nps.send",
+              "type": "string"
+            },
+            "with": {
+              "$ref": "#/$defs/NpsSend",
+              "default": {}
+            }
+          },
+          "required": [
+            "type",
+            "id"
           ],
           "type": "object"
         },

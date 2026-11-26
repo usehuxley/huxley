@@ -1,0 +1,9 @@
+apiVersion: usehuxley.io/v1
+kind: Pack
+key: huxley/nps
+name: Net promoter surveys
+version: 1.0.0
+publisher: Huxley
+description: Every quarter, asks contacts who raised a ticket lately how likely they are to recommend you (0 to 10), by email and in the client portal, and tells account managers about detractors.
+contents:
+  workflows: [nps-quarterly, nps-detractor]

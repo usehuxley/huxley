@@ -1,4 +1,4 @@
-# Satisfaction surveys
+# Satisfaction and net promoter surveys
 
 The **Customer experience** module asks requesters how it went when their ticket is resolved (ADR-043). Answers show on the ticket, in dashboards, and as events for workflows.
 
@@ -39,8 +39,26 @@ To ask only about some tickets (a queue, a type, after a delay…), edit the **A
 
 `core.csat.survey` with `{ ticket }` asks about a resolved ticket. Its output is `{ sent, skipped, survey, emailed }`, where `skipped` says why it didn't ask: `opted_out`, `no_requester`, `already_asked`, `sampled_out` or `not_resolved`.
 
+## Net promoter surveys
+
+Every so often, ask your clients' people how likely they are to recommend you, from 0 to 10.
+
+- **Answers:** promoters answer 9 or 10, passives 7 or 8, and detractors 0 to 6. The **NPS** is promoters' share minus detractors', from −100 to 100.
+- **Turning it on:** install the built-in **Net promoter surveys** pack and publish its workflows.
+  - **Ask the net promoter question** runs on the first day of each quarter (or by hand).
+  - **Tell account managers about a detractor** notifies administrators when someone answers 0 to 6.
+- **Who's asked:** contacts with an email address who raised a ticket lately (*Ask people who raised a ticket within*, default 180 days), and weren't asked lately (*Ask the same person at most every*, default 90 days), unless their company turned off *Net promoter surveys*. These are Customer experience settings, inherited down the organization tree.
+- **Answering:** by one-click links in the email (the page records the score when they press **Send**), or on the portal's home page. One answer, within 30 days.
+- **Seeing the answers:**
+  - the contact's **Net promoter** card
+  - the prebuilt **Net promoter score** dashboard (the score, the promoter/passive/detractor mix, and the score by client)
+  - the `nps` reporting source: its `nps` field is 100, 0 or −100, so its average is the NPS
+  - the `nps.responded` event, which carries `score`, `category`, `comment`, `channel` and `campaign`
+- **In workflows:** `core.nps.send` asks the contacts of the run's organization and below. It takes an optional `campaign` (default: the month) and `limit` (default 500), and outputs `{ asked, emailed, campaign }`. Save a workflow at one client to ask only its people.
+
 ## API
 
 - `GET /api/v1/tickets/{id}/csat`: a ticket's latest survey (`ticket:read`)
 - Portal: `POST /api/portal/v1/tickets/{id}/rating` `{ rating, comment }`
 - The answer link: `GET`/`POST /api/portal/v1/surveys/{token}`
+- NPS: `GET /api/v1/contacts/{id}/nps` (`crm:read`); portal `GET`/`POST /api/portal/v1/me/nps` `{ score, comment }`; the answer link `GET`/`POST /api/portal/v1/nps/{token}`

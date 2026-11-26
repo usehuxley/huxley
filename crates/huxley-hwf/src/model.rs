@@ -403,6 +403,9 @@ pub enum Step {
     /// Ask a resolved ticket's requester how it went (the `cx` module).
     #[serde(rename = "core.csat.survey")]
     CsatSurvey(CsatSurveyStep),
+    /// Ask contacts how likely they are to recommend you (the `cx` module).
+    #[serde(rename = "core.nps.send")]
+    NpsSend(NpsSendStep),
     /// Run a dataset → asset mapping rule (the `cmdb` module).
     #[serde(rename = "core.asset.sync")]
     AssetSync(AssetSyncStep),
@@ -734,6 +737,11 @@ step!(CsatSurveyStep {
     pub survey: CsatSurvey,
 });
 
+step!(NpsSendStep {
+    #[serde(default, rename = "with")]
+    pub send: NpsSend,
+});
+
 step!(AssetSyncStep {
     #[serde(rename = "with")]
     pub sync: AssetSync,
@@ -815,6 +823,7 @@ impl Step {
             KbEmbed,
             TimesheetCheck,
             CsatSurvey,
+            NpsSend,
             AssetSync,
             AssetWarranty,
             TicketEmailReply,
@@ -867,6 +876,7 @@ impl Step {
             Self::KbEmbed(_) => "core.kb.embed",
             Self::TimesheetCheck(_) => "core.timesheet.check",
             Self::CsatSurvey(_) => "core.csat.survey",
+            Self::NpsSend(_) => "core.nps.send",
             Self::AssetSync(_) => "core.asset.sync",
             Self::AssetWarranty(_) => "core.asset.set_warranty",
             Self::TicketCreate(_) => "core.ticket.create",
@@ -1314,6 +1324,23 @@ pub struct TimesheetCheck {
 pub struct CsatSurvey {
     /// The ticket's id.
     pub ticket: Value,
+}
+
+/// A net promoter round (`core.nps.send`): contacts in the run's
+/// organization and below who raised a ticket lately and weren't asked
+/// lately (each company's Customer experience settings; companies can opt
+/// out) are asked how likely they are to recommend you, 0 to 10, by email
+/// when email and the portal's address are set up, and in the portal.
+/// `campaign` names the round (default: the month, e.g. `2026-11`); `limit`
+/// caps how many are asked (default 500). Output: `{ asked, emailed,
+/// campaign }`.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct NpsSend {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub campaign: Option<Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub limit: Option<Value>,
 }
 
 /// Mapping rules to run (`core.asset.sync`): a dataset's rows become

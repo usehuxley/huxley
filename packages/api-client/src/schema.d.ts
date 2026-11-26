@@ -463,6 +463,24 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
+	'/api/portal/v1/me/nps': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** Your net promoter question waiting for an answer, if any. */
+		get: operations['portal_my_nps'];
+		put?: never;
+		/** Answers your waiting net promoter question. */
+		post: operations['portal_answer_my_nps'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
 	'/api/portal/v1/me/password': {
 		parameters: {
 			query?: never;
@@ -474,6 +492,24 @@ export interface paths {
 		/** Sets your portal password (your other sessions end). */
 		put: operations['portal_set_password'];
 		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/portal/v1/nps/{token}': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** The net promoter question an answer link is for. */
+		get: operations['get_nps_survey'];
+		put?: never;
+		/** Answers a net promoter question from its link (once). */
+		post: operations['answer_nps_survey'];
 		delete?: never;
 		options?: never;
 		head?: never;
@@ -2044,6 +2080,23 @@ export interface paths {
 		 *     after.
 		 */
 		put: operations['set_contact_companies'];
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/contacts/{id}/nps': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** A contact's latest net promoter question and answer. */
+		get: operations['get_contact_nps'];
+		put?: never;
 		post?: never;
 		delete?: never;
 		options?: never;
@@ -9175,6 +9228,35 @@ export interface components {
 			/** Format: int64 */
 			unreadCount: number;
 		};
+		NpsAnswer: {
+			comment?: string | null;
+			/**
+			 * Format: int32
+			 * @description 0 (not at all likely) to 10 (extremely likely).
+			 */
+			score: number;
+		};
+		NpsSurvey: {
+			campaign: string;
+			channel?: string | null;
+			comment?: string | null;
+			/** Format: uuid */
+			contactId: string;
+			emailed: boolean;
+			/** Format: date-time */
+			expiresAt: string;
+			/** Format: uuid */
+			id: string;
+			/** Format: uuid */
+			orgId: string;
+			orgName: string;
+			/** Format: date-time */
+			respondedAt?: string | null;
+			/** Format: int32 */
+			score?: number | null;
+			/** Format: date-time */
+			sentAt: string;
+		};
 		/** @enum {string} */
 		Op:
 			| 'eq'
@@ -9972,6 +10054,16 @@ export interface components {
 				[key: string]: unknown;
 			};
 		};
+		/** @description A net promoter question as its answer link (or the portal) shows it. */
+		PublicNps: {
+			branding: components['schemas']['PortalBranding'];
+			comment?: string | null;
+			/** @description The company asking (the MSP's brand). */
+			company: string;
+			open: boolean;
+			/** Format: int32 */
+			score?: number | null;
+		};
 		PublicSubmission: {
 			answers: {
 				[key: string]: unknown;
@@ -10523,7 +10615,8 @@ export interface components {
 			| 'image'
 			| 'hostname'
 			| 'toggle'
-			| 'percent';
+			| 'percent'
+			| 'days';
 		/** @description A tool call as the user sees it. */
 		ShownCall: {
 			id: string;
@@ -12613,6 +12706,56 @@ export interface operations {
 			};
 		};
 	};
+	portal_my_nps: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['PublicNps'] | null;
+				};
+			};
+		};
+	};
+	portal_answer_my_nps: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['NpsAnswer'];
+			};
+		};
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['PublicNps'];
+				};
+			};
+			404: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
 	portal_set_password: {
 		parameters: {
 			query?: never;
@@ -12633,6 +12776,66 @@ export interface operations {
 				content?: never;
 			};
 			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	get_nps_survey: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				token: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['PublicNps'];
+				};
+			};
+			404: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content?: never;
+			};
+		};
+	};
+	answer_nps_survey: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				token: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['NpsAnswer'];
+			};
+		};
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['PublicNps'];
+				};
+			};
+			409: {
 				headers: {
 					[name: string]: unknown;
 				};
@@ -16129,6 +16332,27 @@ export interface operations {
 				};
 				content: {
 					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	get_contact_nps: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['NpsSurvey'] | null;
 				};
 			};
 		};

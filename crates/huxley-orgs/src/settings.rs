@@ -39,6 +39,8 @@ pub enum SettingKind {
     Toggle,
     /// A whole percentage, 0 to 100.
     Percent,
+    /// A number of days, 1 to 3650.
+    Days,
 }
 
 /// The largest image setting, as a `data:` URL.
@@ -85,6 +87,12 @@ settings! {
         "Ask about this percentage of resolved tickets, at random, so regular requesters aren't asked every time.";
     CSAT_THUMBS = "csat.thumbs", "Customer experience", Toggle, Some("false"), "Thumbs up or down",
         "Ask for a thumbs up or down instead of a rating from 1 to 5.";
+    NPS_ENABLED = "nps.enabled", "Customer experience", Toggle, Some("true"), "Net promoter surveys",
+        "Ask contacts how likely they are to recommend you (with the Net promoter surveys pack). Turn off for a company to opt it out.";
+    NPS_INTERVAL = "nps.interval_days", "Customer experience", Days, Some("90"), "Ask the same person at most every",
+        "Days between net promoter questions to one contact.";
+    NPS_ACTIVE = "nps.active_days", "Customer experience", Days, Some("180"), "Ask people who raised a ticket within",
+        "Only contacts who raised a ticket in this many days are asked.";
     PORTAL_REQUIRE_MFA = "portal.require_mfa", "Portal", Toggle, Some("false"), "Require two-factor sign-in",
         "Contacts who sign in to the portal with a link or password must set up an authenticator app. Signing in with their organization's account is left to their organization.";
     TICKET_PREFIX = "numbering.ticket_prefix", "Numbering", Prefix, Some("T"), "Ticket prefix",
@@ -168,6 +176,7 @@ pub fn validate(kind: SettingKind, raw: &str) -> Result<String, String> {
         }
         SettingKind::Toggle => matches!(value.to_ascii_lowercase().as_str(), "true" | "false"),
         SettingKind::Percent => value.parse::<u8>().is_ok_and(|p| p <= 100),
+        SettingKind::Days => value.parse::<u16>().is_ok_and(|d| (1..=3650).contains(&d)),
         SettingKind::Prefix => {
             (1..=8).contains(&value.len())
                 && value.starts_with(|c: char| c.is_ascii_uppercase())
@@ -189,6 +198,7 @@ pub fn validate(kind: SettingKind, raw: &str) -> Result<String, String> {
             SettingKind::Hostname => "Enter a host name such as support.example.com.",
             SettingKind::Toggle => "Use true or false.",
             SettingKind::Percent => "Enter a whole percentage from 0 to 100.",
+            SettingKind::Days => "Enter a number of days from 1 to 3,650.",
         }
         .into());
     }

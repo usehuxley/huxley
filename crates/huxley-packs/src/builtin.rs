@@ -70,6 +70,19 @@ const SOURCES: &[Source] = &[
         ],
     },
     Source {
+        manifest: include_str!("../builtin/nps/pack.yaml"),
+        files: &[
+            (
+                "workflows/nps-quarterly.yaml",
+                include_str!("../builtin/nps/workflows/nps-quarterly.yaml"),
+            ),
+            (
+                "workflows/nps-detractor.yaml",
+                include_str!("../builtin/nps/workflows/nps-detractor.yaml"),
+            ),
+        ],
+    },
+    Source {
         manifest: include_str!("../builtin/knowledge-search/pack.yaml"),
         files: &[(
             "workflows/embed-articles.yaml",

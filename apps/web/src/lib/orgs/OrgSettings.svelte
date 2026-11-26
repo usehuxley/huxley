@@ -118,6 +118,21 @@
 										]}
 										disabled={!editable}
 									/>
+								{:else if s.kind === 'days'}
+									<span class="flex items-center gap-1">
+										<Input
+											{id}
+											name="value"
+											type="number"
+											min="1"
+											max="3650"
+											step="1"
+											value={s.value ?? ''}
+											disabled={!editable}
+											class="w-24"
+										/>
+										<span class="text-sm text-fg-muted">days</span>
+									</span>
 								{:else if s.kind === 'percent'}
 									<span class="flex items-center gap-1">
 										<Input

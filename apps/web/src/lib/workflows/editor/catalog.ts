@@ -442,6 +442,29 @@ export const STEPS: StepSpec[] = [
 		fields: [{ path: 'with.ticket', label: 'Ticket', kind: 'expression', hint: 'The ticket’s id' }]
 	},
 	{
+		type: 'core.nps.send',
+		label: 'Ask the net promoter question',
+		description:
+			'Ask contacts here and below who raised a ticket lately (and weren’t asked lately) how likely they are to recommend you, by email and in the portal.',
+		group: 'Actions',
+		module: 'cx',
+		template: {},
+		fields: [
+			{
+				path: 'with.campaign',
+				label: 'Round',
+				kind: 'expression',
+				hint: 'Default: the month, e.g. 2026-11'
+			},
+			{
+				path: 'with.limit',
+				label: 'At most',
+				kind: 'expression',
+				hint: 'Contacts a run; default 500'
+			}
+		]
+	},
+	{
 		type: 'core.ticket.email_reply',
 		label: 'Email a reply',
 		description:
