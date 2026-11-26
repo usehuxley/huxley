@@ -230,8 +230,8 @@ async fn dashboards_are_prebuilt_shared_or_personal() {
         .map(|d| d["id"].as_str().unwrap())
         .collect();
     assert_eq!(
-        builtin,
-        ["service-desk", "sla", "utilization", "clients", "time"]
+        builtin.join(","),
+        "service-desk,csat,sla,utilization,clients,time"
     );
     let (status, sd) = call(
         &app,

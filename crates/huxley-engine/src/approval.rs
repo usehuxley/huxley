@@ -483,18 +483,7 @@ impl Engine {
         if emails.is_empty() {
             return Ok(());
         }
-        let domain =
-            huxley_orgs::settings::value(conn, org_id, huxley_orgs::settings::PORTAL_DOMAIN)
-                .await
-                .map_err(|e| EngineError::Document(e.to_string()))?;
-        let base = match domain {
-            Some(d) if d == "localhost" || d.starts_with("localhost:") => {
-                Some(format!("http://{d}"))
-            }
-            Some(d) => Some(format!("https://{d}")),
-            None => self.portal_url.clone(),
-        };
-        let Some(base) = base else {
+        let Some(base) = self.portal_base(conn, org_id).await? else {
             return Ok(());
         };
         let link = format!("{}/approvals/{id}", base.trim_end_matches('/'));

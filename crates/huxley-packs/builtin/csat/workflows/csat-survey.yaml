@@ -1,0 +1,22 @@
+apiVersion: usehuxley.io/v1
+kind: Workflow
+metadata:
+  key: csat-survey
+  name: Ask how it went
+  description: >-
+    When a ticket is resolved, asks its requester to rate it, unless their
+    company opted out (Customer experience settings), sampling leaves it out,
+    or they were asked about it in the last week.
+spec:
+  triggers:
+    - type: event
+      event: ticket.status_changed
+      filter: "{{ event.payload.category == 'resolved' }}"
+  steps:
+    - id: survey
+      type: core.csat.survey
+      with:
+        ticket: "{{ trigger.subject_id }}"
+  outputs:
+    sent: "{{ steps.survey.output.sent }}"
+    skipped: "{{ steps.survey.output.skipped }}"

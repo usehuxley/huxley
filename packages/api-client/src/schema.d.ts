@@ -539,6 +539,24 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
+	'/api/portal/v1/surveys/{token}': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** The survey an answer link is for. */
+		get: operations['get_csat_survey'];
+		put?: never;
+		/** Answers a survey from its link (once). */
+		post: operations['answer_csat_survey'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
 	'/api/portal/v1/tickets': {
 		parameters: {
 			query?: never;
@@ -570,6 +588,23 @@ export interface paths {
 		get: operations['portal_get_ticket'];
 		put?: never;
 		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/portal/v1/tickets/{id}/rating': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/** Rates your resolved ticket (its satisfaction survey, once). */
+		post: operations['portal_rate_ticket'];
 		delete?: never;
 		options?: never;
 		head?: never;
@@ -4953,6 +4988,23 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
+	'/api/v1/tickets/{id}/csat': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** A ticket's latest satisfaction survey, if it has one. */
+		get: operations['get_ticket_csat'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
 	'/api/v1/tickets/{id}/links': {
 		parameters: {
 			query?: never;
@@ -7877,6 +7929,38 @@ export interface components {
 			/** @description Send as `Authorization: Bearer <token>`. Shown only now. */
 			tokenSecret: string;
 		};
+		/** @description A survey and its answer. */
+		CsatSurvey: {
+			/**
+			 * Format: uuid
+			 * @description Who the ticket was assigned to when it was resolved.
+			 */
+			assigneeUserId?: string | null;
+			/** @description `email` or `portal`. */
+			channel?: string | null;
+			comment?: string | null;
+			/** Format: uuid */
+			contactId?: string | null;
+			emailed: boolean;
+			/** Format: date-time */
+			expiresAt: string;
+			/** Format: uuid */
+			id: string;
+			/** Format: uuid */
+			orgId: string;
+			/** Format: int32 */
+			rating?: number | null;
+			reference: string;
+			/** Format: date-time */
+			respondedAt?: string | null;
+			/** @description `five` (1 to 5) or `thumbs` (1 down, 5 up). */
+			scale: string;
+			/** Format: date-time */
+			sentAt: string;
+			/** Format: uuid */
+			ticketId: string;
+			title: string;
+		};
 		Dashboard: {
 			/** @description Defined in code; copy it to change it. */
 			builtin: boolean;
@@ -9655,6 +9739,14 @@ export interface components {
 			orgName: string;
 			role: components['schemas']['PortalRole'];
 		};
+		PortalRating: {
+			comment?: string | null;
+			/**
+			 * Format: int32
+			 * @description 1 to 5 (thumbs: 1 down, 5 up).
+			 */
+			rating: number;
+		};
 		PortalRecoveryCodes: {
 			/** @description Shown once: each signs in once without the app. */
 			recoveryCodes: string[];
@@ -9720,6 +9812,16 @@ export interface components {
 			/** @description Where to send the browser. */
 			url: string;
 		};
+		/** @description A satisfaction survey as its contact sees it. */
+		PortalSurvey: {
+			comment?: string | null;
+			/** @description It can still be answered. */
+			open: boolean;
+			/** Format: int32 */
+			rating?: number | null;
+			/** @description `five` (1 to 5) or `thumbs` (1 down, 5 up). */
+			scale: string;
+		};
 		/** @description A ticket in the portal. */
 		PortalTicket: {
 			/** Format: date-time */
@@ -9744,6 +9846,7 @@ export interface components {
 			/** @description Whether you can reply (it isn't closed). */
 			canReply: boolean;
 			notes: components['schemas']['PortalNote'][];
+			survey?: components['schemas']['PortalSurvey'] | null;
 		};
 		PortalTotpCode: {
 			code: string;
@@ -9873,6 +9976,19 @@ export interface components {
 			answers: {
 				[key: string]: unknown;
 			};
+		};
+		/** @description A survey as its answer link shows it. */
+		PublicSurvey: {
+			branding: components['schemas']['PortalBranding'];
+			comment?: string | null;
+			/** @description It can still be answered. */
+			open: boolean;
+			/** Format: int32 */
+			rating?: number | null;
+			reference: string;
+			/** @description `five` (1 to 5) or `thumbs` (1 down, 5 up). */
+			scale: string;
+			title: string;
 		};
 		PublishRequest: {
 			notes?: string | null;
@@ -10399,7 +10515,15 @@ export interface components {
 		 * @enum {string}
 		 */
 		SettingKind:
-			'text' | 'timezone' | 'color' | 'email' | 'prefix' | 'image' | 'hostname' | 'toggle';
+			| 'text'
+			| 'timezone'
+			| 'color'
+			| 'email'
+			| 'prefix'
+			| 'image'
+			| 'hostname'
+			| 'toggle'
+			| 'percent';
 		/** @description A tool call as the user sees it. */
 		ShownCall: {
 			id: string;
@@ -12645,6 +12769,66 @@ export interface operations {
 			};
 		};
 	};
+	get_csat_survey: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				token: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['PublicSurvey'];
+				};
+			};
+			404: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content?: never;
+			};
+		};
+	};
+	answer_csat_survey: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				token: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['PortalRating'];
+			};
+		};
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['PublicSurvey'];
+				};
+			};
+			409: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
 	portal_list_tickets: {
 		parameters: {
 			query?: {
@@ -12722,6 +12906,39 @@ export interface operations {
 				};
 			};
 			404: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	portal_rate_ticket: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['PortalRating'];
+			};
+		};
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['PortalTicketView'];
+				};
+			};
+			409: {
 				headers: {
 					[name: string]: unknown;
 				};
@@ -22356,6 +22573,27 @@ export interface operations {
 				};
 				content: {
 					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	get_ticket_csat: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['CsatSurvey'] | null;
 				};
 			};
 		};

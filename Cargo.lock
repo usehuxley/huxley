@@ -2006,6 +2006,7 @@ dependencies = [
  "huxley-core",
  "huxley-crm",
  "huxley-crypto",
+ "huxley-cx",
  "huxley-datasets",
  "huxley-db",
  "huxley-email",
@@ -2207,6 +2208,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "huxley-cx"
+version = "0.1.0"
+dependencies = [
+ "huxley-auth",
+ "huxley-core",
+ "huxley-crm",
+ "huxley-db",
+ "huxley-orgs",
+ "huxley-servicedesk",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "thiserror 2.0.21",
+ "time",
+ "tokio",
+ "utoipa",
+ "uuid",
+]
+
+[[package]]
 name = "huxley-datasets"
 version = "0.1.0"
 dependencies = [
@@ -2266,6 +2287,7 @@ dependencies = [
  "huxley-core",
  "huxley-crm",
  "huxley-crypto",
+ "huxley-cx",
  "huxley-datasets",
  "huxley-db",
  "huxley-email",

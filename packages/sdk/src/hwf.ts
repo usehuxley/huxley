@@ -1008,6 +1008,30 @@ export type Step =
 			 * Fail the attempt after this long, e.g. `30s`.
 			 */
 			timeout?: string | null;
+			type: 'core.csat.survey';
+			with: CsatSurvey;
+	  }
+	| {
+			/**
+			 * Record the error as the step's output and carry on.
+			 */
+			continue_on_error?: boolean;
+			description?: string | null;
+			/**
+			 * Unique in the workflow: lowercase letters, digits, underscores.
+			 * Other steps read this step's output as `steps.<id>.output`.
+			 */
+			id: string;
+			/**
+			 * Skip the step unless this expression is true.
+			 */
+			if?: string | null;
+			name?: string | null;
+			retry?: RetryPolicy | null;
+			/**
+			 * Fail the attempt after this long, e.g. `30s`.
+			 */
+			timeout?: string | null;
 			type: 'core.asset.sync';
 			with: AssetSync;
 	  }
@@ -1816,6 +1840,24 @@ export interface TimesheetCheck {
 	check: unknown;
 	date?: unknown;
 	days_late?: unknown;
+}
+/**
+ * A satisfaction survey (`core.csat.survey`) for a resolved ticket: unless
+ * its company opted out, it has no requester, they were asked about it in
+ * the last week, or sampling leaves it out, the requester is asked (by
+ * email with one-click rating links when email and the portal's address
+ * are set up, and in the portal). Output: `{ sent, skipped, survey,
+ * emailed }`, where `skipped` says why not (`opted_out`, `no_requester`,
+ * `already_asked`, `sampled_out`, `not_resolved`).
+ *
+ * This interface was referenced by `HuxleyWorkflowFormatV1`'s JSON-Schema
+ * via the `definition` "CsatSurvey".
+ */
+export interface CsatSurvey {
+	/**
+	 * The ticket's id.
+	 */
+	ticket: unknown;
 }
 /**
  * Mapping rules to run (`core.asset.sync`): a dataset's rows become

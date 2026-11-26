@@ -33,7 +33,8 @@ export const load: PageServerLoad = async (event) => {
 		appointments,
 		knowledge,
 		assets,
-		coverage
+		coverage,
+		csat
 	] = await Promise.all([
 		assignees(event),
 		client.GET('/api/v1/orgs/{id}/contacts', {
@@ -58,6 +59,9 @@ export const load: PageServerLoad = async (event) => {
 			: Promise.resolve({ data: undefined }),
 		user.activeModules.includes('contracts') && user.grantedPermissions.includes('agreement:read')
 			? client.GET('/api/v1/tickets/{id}/time-coverage', path)
+			: Promise.resolve({ data: undefined }),
+		user.activeModules.includes('cx')
+			? client.GET('/api/v1/tickets/{id}/csat', path)
 			: Promise.resolve({ data: undefined })
 	]);
 	return {
@@ -76,7 +80,8 @@ export const load: PageServerLoad = async (event) => {
 		appointments: appointments.data ?? [],
 		knowledge: knowledge.data ?? null,
 		assets: assets.data ?? null,
-		coverage: coverage.data ?? null
+		coverage: coverage.data ?? null,
+		csat: csat.data ?? null
 	};
 };
 

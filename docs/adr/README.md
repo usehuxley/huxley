@@ -46,3 +46,4 @@ Decisions that shape Huxley. Add a new ADR by copying `0000-template.md` with th
 | [040](0040-portal-realm.md) | The client portal is a separate realm: its own accounts, sessions and API | Accepted |
 | [041](0041-semantic-data-layer.md) | A semantic data layer: a catalog of sources and a query spec compiled to SQL | Accepted |
 | [042](0042-hwf-v1-frozen.md) | HWF v1 is frozen; later changes only add | Accepted |
+| [043](0043-csat-surveys.md) | Satisfaction surveys are sent by a workflow step and answered by link or in the portal | Accepted |

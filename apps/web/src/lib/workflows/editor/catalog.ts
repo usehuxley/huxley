@@ -432,6 +432,16 @@ export const STEPS: StepSpec[] = [
 		]
 	},
 	{
+		type: 'core.csat.survey',
+		label: 'Ask how it went',
+		description:
+			'Ask a resolved ticket’s requester to rate it (by email with one-click links, and in the portal), unless their company opted out or sampling leaves it out.',
+		group: 'Actions',
+		module: 'cx',
+		template: { with: { ticket: '{{ trigger.subject_id }}' } },
+		fields: [{ path: 'with.ticket', label: 'Ticket', kind: 'expression', hint: 'The ticket’s id' }]
+	},
+	{
 		type: 'core.ticket.email_reply',
 		label: 'Email a reply',
 		description:

@@ -1,0 +1,9 @@
+apiVersion: usehuxley.io/v1
+kind: Pack
+key: huxley/csat
+name: Satisfaction surveys
+version: 1.0.0
+publisher: Huxley
+description: Asks requesters how it went when their ticket is resolved (by email with one-click ratings, and in the client portal), and tells the technician about a poor rating.
+contents:
+  workflows: [csat-survey, csat-low-rating]

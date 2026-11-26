@@ -82,21 +82,21 @@ test.describe('settings (as the bootstrap owner)', () => {
 		await page.goto('/settings/modules');
 		await expect(page.getByText('No modules on: automation engine only.')).toBeVisible();
 
-		const row = page.getByRole('listitem').filter({ hasText: 'Customer experience' });
+		const row = page.getByRole('listitem').filter({ hasText: 'Change and problem management' });
 		await expect(row.getByText('also turns on Clients and contacts, Service desk')).toBeVisible();
 		await row.getByRole('button', { name: 'Turn on' }).click();
 		await expect(
-			page.getByText('Turned on: Clients and contacts, Service desk, Customer experience')
+			page.getByText('Turned on: Clients and contacts, Service desk, Change and problem management')
 		).toBeVisible();
-		await expect(row.getByText('On: arrives in Phase 8')).toBeVisible();
+		await expect(row.getByText('On: arrives in Phase 9')).toBeVisible();
 
-		// Service desk can't be turned off while Customer experience needs it.
+		// Service desk can't be turned off while Change and problem management needs it.
 		const desk = page.getByRole('listitem').filter({ hasText: 'Tickets, service queues' });
 		await desk.getByRole('button', { name: 'Turn off' }).click();
 		await expect(page.getByText(/other enabled modules depend on it/i)).toBeVisible();
 
 		await row.getByRole('button', { name: 'Turn off' }).click();
-		await expect(page.getByText('Turned off: Customer experience')).toBeVisible();
+		await expect(page.getByText('Turned off: Change and problem management')).toBeVisible();
 
 		// Leave the instance as it was: every module off.
 		await desk.getByRole('button', { name: 'Turn off' }).click();

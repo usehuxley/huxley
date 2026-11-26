@@ -107,7 +107,7 @@ pub const REGISTRY: &[Module] = &[
         description: "CSAT, NPS, and client health scores.",
         requires: &["servicedesk"],
         phase: 8,
-        released: false,
+        released: true,
     },
     Module {
         key: "change",

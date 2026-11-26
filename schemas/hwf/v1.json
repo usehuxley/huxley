@@ -287,6 +287,19 @@
       },
       "type": "object"
     },
+    "CsatSurvey": {
+      "additionalProperties": false,
+      "description": "A satisfaction survey (`core.csat.survey`) for a resolved ticket: unless\nits company opted out, it has no requester, they were asked about it in\nthe last week, or sampling leaves it out, the requester is asked (by\nemail with one-click rating links when email and the portal's address\nare set up, and in the portal). Output: `{ sent, skipped, survey,\nemailed }`, where `skipped` says why not (`opted_out`, `no_requester`,\n`already_asked`, `sampled_out`, `not_resolved`).",
+      "properties": {
+        "ticket": {
+          "description": "The ticket's id."
+        }
+      },
+      "required": [
+        "ticket"
+      ],
+      "type": "object"
+    },
     "DatasetQuery": {
       "additionalProperties": false,
       "description": "Rows to read (`dataset.query`). Output: `{ rows, total }`.",
@@ -3036,6 +3049,69 @@
             },
             "with": {
               "$ref": "#/$defs/TimesheetCheck"
+            }
+          },
+          "required": [
+            "type",
+            "id",
+            "with"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Ask a resolved ticket's requester how it went (the `cx` module).",
+          "properties": {
+            "continue_on_error": {
+              "description": "Record the error as the step's output and carry on.",
+              "type": "boolean"
+            },
+            "description": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "id": {
+              "description": "Unique in the workflow: lowercase letters, digits, underscores.\nOther steps read this step's output as `steps.<id>.output`.",
+              "type": "string"
+            },
+            "if": {
+              "description": "Skip the step unless this expression is true.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "name": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "retry": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/RetryPolicy"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "timeout": {
+              "description": "Fail the attempt after this long, e.g. `30s`.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "type": {
+              "const": "core.csat.survey",
+              "type": "string"
+            },
+            "with": {
+              "$ref": "#/$defs/CsatSurvey"
             }
           },
           "required": [
