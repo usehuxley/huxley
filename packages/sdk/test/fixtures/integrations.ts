@@ -7,12 +7,12 @@ export type ActionOptions = Omit<StepFields<'integration.action'>, 'action' | 'w
 
 /** Run a command (deprecated). `POST /Computers/{id}/CommandExecute`: its inputs. */
 export type CwAutomateRunCommandInput = {
+	id: number | Expression;
 	body: {
 		Command?: 2 | 125 | Expression;
 		Parameters?: Array<string> | Expression;
 	} | Expression;
-	id: number | Expression;
-} | Expression;
+};
 /** Run a command (deprecated). `POST /Computers/{id}/CommandExecute`: what it returns. */
 export type CwAutomateRunCommandOutput = unknown;
 
@@ -28,24 +28,24 @@ export type MsgraphListUsersInput = {
 	$filter?: string;
 	/** How many per page */
 	$top?: number | Expression;
-} | Expression;
+};
 /** List users. `GET /users`: what it returns. */
 export type MsgraphListUsersOutput = {
 	value?: Array<{
+			id: string;
 			accountEnabled?: boolean;
 			displayName?: string | null;
-			id: string;
 		}>;
 };
 
 /** Update user. `PATCH /users/{id}`: its inputs. */
 export type MsgraphUpdateUserInput = {
+	id: string;
 	body: {
 		accountEnabled?: boolean | Expression;
 		usageLocation?: string;
 	} | Expression;
-	id: string;
-} | Expression;
+};
 /** Update user. `PATCH /users/{id}`: what it returns. */
 export type MsgraphUpdateUserOutput = unknown;
 

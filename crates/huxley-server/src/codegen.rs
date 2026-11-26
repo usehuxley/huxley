@@ -179,7 +179,17 @@ fn object(schema: &Json, inputs: bool, depth: usize) -> String {
         .unwrap_or_default();
     let indent = "\t".repeat(depth + 1);
     let mut out = String::from("{\n");
-    for (name, prop) in props {
+    // Required first (as listed), then the rest by name: the same whatever
+    // order the map keeps.
+    let mut names: Vec<&String> = props.keys().collect();
+    names.sort_by_key(|n| {
+        (
+            required.iter().position(|r| r == n).unwrap_or(usize::MAX),
+            (*n).clone(),
+        )
+    });
+    for name in names {
+        let prop = &props[name];
         out.push_str(&doc(
             prop.get("description").and_then(Json::as_str),
             &indent,
@@ -232,9 +242,10 @@ pub fn typescript(actions: &[Json], source: &str) -> String {
                 n += 1;
             }
             used.push(type_name.clone());
+            // The step's `with` is an object; what's in it may be expressions.
             let input = a
                 .get("inputSchema")
-                .map_or("Record<string, unknown>".into(), |s| ts_type(s, true, 0));
+                .map_or("Record<string, unknown>".into(), |s| object(s, true, 0));
             let output = a
                 .get("outputSchema")
                 .map_or("unknown".into(), |s| ts_type(s, false, 0));
