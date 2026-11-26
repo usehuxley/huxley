@@ -11,6 +11,7 @@ use axum::routing::{delete, get, post, put};
 use axum::{Json, Router};
 use huxley_authz::permissions;
 use huxley_cmdb::assets::{self, Asset, AssetInput, Filter};
+use huxley_cmdb::mappings::{self, Mapping, MappingInput, SyncResult};
 use huxley_cmdb::relationships::{self, DependencyMap, Impacted, Relationship, RelationshipInput};
 use huxley_cmdb::tickets::{self, AssetTicket, TicketAsset};
 use huxley_cmdb::types::{self, AssetType, AssetTypeInput};
@@ -43,6 +44,15 @@ pub fn routes() -> Router<AppState> {
         .route("/assets/{id}/impact", get(asset_impact))
         .route("/asset-relationships/{id}", delete(unrelate_asset))
         .route("/assets/{id}/map", get(asset_map))
+        .route(
+            "/asset-mappings",
+            get(list_asset_mappings).post(create_asset_mapping),
+        )
+        .route(
+            "/asset-mappings/{id}",
+            put(update_asset_mapping).delete(delete_asset_mapping),
+        )
+        .route("/asset-mappings/{id}/run", post(run_asset_mapping))
         .route("/assets/{id}/tickets", get(asset_tickets))
         .route(
             "/tickets/{ticket_id}/assets",
@@ -610,4 +620,111 @@ pub async fn unlink_ticket_asset(
     })
     .await?;
     Ok(StatusCode::NO_CONTENT)
+}
+
+// ---- Mappings ----
+
+/// Dataset → asset mapping rules (`cmdb:configure`).
+#[utoipa::path(get, path = "/api/v1/asset-mappings", tag = "cmdb",
+    responses((status = 200, body = Vec<Mapping>)))]
+pub async fn list_asset_mappings(
+    State(state): State<AppState>,
+    authed: Authed,
+) -> ApiResult<Json<Vec<Mapping>>> {
+    configurer(&state, &authed).await?;
+    Ok(Json(
+        scoped(&state, &OrgScope::System, mappings::list).await?,
+    ))
+}
+
+/// Adds a mapping rule: a dataset's rows become assets (`cmdb:configure`).
+#[utoipa::path(post, path = "/api/v1/asset-mappings", tag = "cmdb", request_body = MappingInput,
+    responses((status = 201, body = Mapping), (status = 422, body = ApiError, content_type = "application/problem+json")))]
+pub async fn create_asset_mapping(
+    State(state): State<AppState>,
+    authed: Authed,
+    Json(body): Json<MappingInput>,
+) -> ApiResult<(StatusCode, Json<Mapping>)> {
+    configurer(&state, &authed).await?;
+    let ctx = authed.user.ctx.clone();
+    let m = scoped(&state, &OrgScope::System, async |tx| {
+        mappings::create(tx, &ctx, &body).await
+    })
+    .await?;
+    Ok((StatusCode::CREATED, Json(m)))
+}
+
+/// Changes a mapping rule (`cmdb:configure`); send back the `version` you read.
+#[utoipa::path(put, path = "/api/v1/asset-mappings/{id}", tag = "cmdb", params(("id" = Uuid, Path)),
+    request_body = MappingInput,
+    responses((status = 200, body = Mapping), (status = 409, body = ApiError, content_type = "application/problem+json"),
+              (status = 422, body = ApiError, content_type = "application/problem+json")))]
+pub async fn update_asset_mapping(
+    State(state): State<AppState>,
+    authed: Authed,
+    Path(id): Path<Uuid>,
+    Json(body): Json<MappingInput>,
+) -> ApiResult<Json<Mapping>> {
+    configurer(&state, &authed).await?;
+    let ctx = authed.user.ctx.clone();
+    Ok(Json(
+        scoped(&state, &OrgScope::System, async |tx| {
+            mappings::update(tx, &ctx, id, &body).await
+        })
+        .await?,
+    ))
+}
+
+/// Deletes a mapping rule; the assets it made stay (`cmdb:configure`).
+#[utoipa::path(delete, path = "/api/v1/asset-mappings/{id}", tag = "cmdb", params(("id" = Uuid, Path)),
+    responses((status = 204)))]
+pub async fn delete_asset_mapping(
+    State(state): State<AppState>,
+    authed: Authed,
+    Path(id): Path<Uuid>,
+) -> ApiResult<StatusCode> {
+    configurer(&state, &authed).await?;
+    let ctx = authed.user.ctx.clone();
+    scoped(&state, &OrgScope::System, async |tx| {
+        mappings::delete(tx, &ctx, id).await
+    })
+    .await?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+#[derive(Debug, Deserialize, IntoParams)]
+pub struct RunParams {
+    /// Only show what would happen; nothing is kept.
+    #[serde(default)]
+    pub preview: bool,
+}
+
+/// Runs a mapping rule over its dataset now, or previews it
+/// (`cmdb:configure`).
+#[utoipa::path(post, path = "/api/v1/asset-mappings/{id}/run", tag = "cmdb", params(("id" = Uuid, Path), RunParams),
+    responses((status = 200, body = SyncResult)))]
+pub async fn run_asset_mapping(
+    State(state): State<AppState>,
+    authed: Authed,
+    Path(id): Path<Uuid>,
+    Query(params): Query<RunParams>,
+) -> ApiResult<Json<SyncResult>> {
+    configurer(&state, &authed).await?;
+    let ctx = authed.user.ctx.clone();
+    let mut tx = begin_scoped(&state.db, &OrgScope::System)
+        .await
+        .map_err(db_err)?;
+    let result = mappings::run(&mut tx, &ctx, id, params.preview)
+        .await
+        .map_err(map)?;
+    if params.preview {
+        tx.rollback().await.map_err(db_err)?;
+    } else {
+        let m = mappings::get(&mut tx, id).await.map_err(map)?;
+        mappings::announce(&mut tx, &m, &result)
+            .await
+            .map_err(map)?;
+        tx.commit().await.map_err(db_err)?;
+    }
+    Ok(Json(result))
 }

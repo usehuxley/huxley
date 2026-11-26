@@ -366,6 +366,22 @@ export const STEPS: StepSpec[] = [
 		]
 	},
 	{
+		type: 'core.asset.sync',
+		label: 'Sync assets',
+		description: 'Run a dataset → asset mapping: rows become assets, matched and kept up to date.',
+		group: 'Data',
+		module: 'cmdb',
+		template: { with: { mapping_id: '' } },
+		fields: [
+			{
+				path: 'with.mapping_id',
+				label: 'Mapping',
+				kind: 'expression',
+				hint: 'The mapping rule’s id (Settings → Asset sync)'
+			}
+		]
+	},
+	{
 		type: 'core.kb.embed',
 		label: 'Embed articles',
 		description:

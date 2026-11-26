@@ -38,6 +38,18 @@
 	};
 </script>
 
+{#snippet from(key: string)}
+	{@const source = key ? a.fieldSources[key] : undefined}
+	{#if source && source !== 'manual'}
+		<span
+			class="ml-1 rounded bg-surface-sunken px-1 text-[0.65rem] text-fg-subtle"
+			title="Kept in step with {source}"
+		>
+			{source}
+		</span>
+	{/if}
+{/snippet}
+
 <svelte:head>
 	<title>{a.name} · Assets · Huxley</title>
 </svelte:head>
@@ -75,10 +87,10 @@
 		<div class="flex flex-col gap-6">
 			<Card title="Details">
 				<dl class="grid gap-x-6 gap-y-3 text-sm sm:grid-cols-2" aria-label="Details">
-					{#each [['Serial number', a.serialNumber], ['Hostname', a.hostname], ['Manufacturer', a.manufacturer], ['Model', a.model], ['Site', a.siteName ?? ''], ['Used by', a.contactName ?? ''], ['Purchased on', a.purchasedOn ?? ''], ['Warranty ends on', a.warrantyEndsOn ?? '']] as [label, value] (label)}
+					{#each [['Serial number', a.serialNumber, 'serial_number'], ['Hostname', a.hostname, 'hostname'], ['Manufacturer', a.manufacturer, 'manufacturer'], ['Model', a.model, 'model'], ['Site', a.siteName ?? '', ''], ['Used by', a.contactName ?? '', ''], ['Purchased on', a.purchasedOn ?? '', ''], ['Warranty ends on', a.warrantyEndsOn ?? '', '']] as [label, value, key] (label)}
 						{#if value}
 							<div>
-								<dt class="text-fg-muted">{label}</dt>
+								<dt class="text-fg-muted">{label}{@render from(key)}</dt>
 								<dd class="text-fg">{value}</dd>
 							</div>
 						{/if}
@@ -86,13 +98,23 @@
 					{#each data.type?.fields ?? [] as field (field.key)}
 						{#if a.attributes[field.key] !== undefined}
 							<div>
-								<dt class="text-fg-muted">{field.label}</dt>
+								<dt class="text-fg-muted">
+									{field.label}{@render from(`attributes.${field.key}`)}
+								</dt>
 								<dd class="text-fg">{optionLabel(field.key, a.attributes[field.key])}</dd>
 							</div>
 						{/if}
 					{/each}
 				</dl>
 				{#if a.notes}<p class="mt-4 text-sm whitespace-pre-wrap text-fg">{a.notes}</p>{/if}
+				{#if Object.keys(a.externalIds).length > 0 || a.syncedAt}
+					<p class="mt-4 text-xs text-fg-subtle" data-testid="asset-sync">
+						{#each Object.entries(a.externalIds) as [source, id] (source)}
+							<span class="mr-3">{source}: <span class="font-mono">{String(id)}</span></span>
+						{/each}
+						{#if a.syncedAt}Last synced {new Date(a.syncedAt).toLocaleString()}{/if}
+					</p>
+				{/if}
 			</Card>
 
 			{#if data.map && data.map.edges.length > 0}

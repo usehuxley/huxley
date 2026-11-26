@@ -139,6 +139,62 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
+	'/api/v1/asset-mappings': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** Dataset → asset mapping rules (`cmdb:configure`). */
+		get: operations['list_asset_mappings'];
+		put?: never;
+		/** Adds a mapping rule: a dataset's rows become assets (`cmdb:configure`). */
+		post: operations['create_asset_mapping'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/asset-mappings/{id}': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		/** Changes a mapping rule (`cmdb:configure`); send back the `version` you read. */
+		put: operations['update_asset_mapping'];
+		post?: never;
+		/** Deletes a mapping rule; the assets it made stay (`cmdb:configure`). */
+		delete: operations['delete_asset_mapping'];
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/asset-mappings/{id}/run': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/**
+		 * Runs a mapping rule over its dataset now, or previews it
+		 *     (`cmdb:configure`).
+		 */
+		post: operations['run_asset_mapping'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
 	'/api/v1/asset-relationships/{id}': {
 		parameters: {
 			query?: never;
@@ -5360,6 +5416,13 @@ export interface components {
 			externalIds: {
 				[key: string]: unknown;
 			};
+			/**
+			 * @description Where each field's value came from: `manual`, or a source such as
+			 *     `rmm` (keys: `name`, `serial_number`, …, `attributes.<key>`).
+			 */
+			fieldSources: {
+				[key: string]: string;
+			};
 			hostname: string;
 			/** Format: uuid */
 			id: string;
@@ -5377,6 +5440,11 @@ export interface components {
 			siteId?: string | null;
 			siteName?: string | null;
 			status: string;
+			/**
+			 * Format: date-time
+			 * @description When a mapping last synced it.
+			 */
+			syncedAt?: string | null;
 			/** Format: uuid */
 			typeId: string;
 			typeKey: string;
@@ -5390,6 +5458,20 @@ export interface components {
 			version: number;
 			/** Format: date */
 			warrantyEndsOn?: string | null;
+		};
+		/** @description Which column fills which asset field. */
+		AssetFieldMap: {
+			/** @description Type attributes: `{ attribute key: column }`. */
+			attributes?: {
+				[key: string]: string;
+			};
+			/** @description The asset's id in the source, kept under `externalIds[source]`. */
+			external_id?: string | null;
+			hostname?: string | null;
+			manufacturer?: string | null;
+			model?: string | null;
+			name?: string | null;
+			serial_number?: string | null;
 		};
 		/** @description An asset's fields, for creating it or changing it (all of them). */
 		AssetInput: {
@@ -5438,6 +5520,59 @@ export interface components {
 			/** Format: date */
 			warrantyEndsOn?: string | null;
 		};
+		AssetMapping: {
+			/** @description `manual_wins` or `source_wins`. */
+			conflict: string;
+			createMissing: boolean;
+			/** Format: uuid */
+			datasetId: string;
+			datasetName: string;
+			enabled: boolean;
+			fields: components['schemas']['AssetFieldMap'];
+			/** Format: uuid */
+			id: string;
+			lastResult?: components['schemas']['AssetSyncResult'] | null;
+			/** Format: date-time */
+			lastRunAt?: string | null;
+			matchKeys: components['schemas']['AssetMatchKey'][];
+			name: string;
+			source: string;
+			/** Format: uuid */
+			typeId: string;
+			typeName: string;
+			/** Format: int32 */
+			version: number;
+		};
+		/** @description A rule's settings, to create or change it. */
+		AssetMappingInput: {
+			/** @description `manual_wins` (the default) or `source_wins`. */
+			conflict?: string | null;
+			createMissing?: boolean;
+			/** Format: uuid */
+			datasetId: string;
+			enabled?: boolean;
+			fields: components['schemas']['AssetFieldMap'];
+			matchKeys: components['schemas']['AssetMatchKey'][];
+			name: string;
+			/** @description The source's name, e.g. `rmm`: lowercase letters, digits and `_`. */
+			source: string;
+			/**
+			 * Format: uuid
+			 * @description The type of assets it creates.
+			 */
+			typeId: string;
+			/**
+			 * Format: int32
+			 * @description The version you read (changes only).
+			 */
+			version?: number | null;
+		};
+		/** @description One match key: an asset field and the column holding its value. */
+		AssetMatchKey: {
+			column: string;
+			/** @description `external_id`, `serial_number`, `hostname` or `name`. */
+			field: string;
+		};
 		AssetPage: {
 			items: components['schemas']['Asset'][];
 			/** Format: int64 */
@@ -5463,6 +5598,24 @@ export interface components {
 			 * @description The other asset: this one `kind` it.
 			 */
 			toId: string;
+		};
+		/** @description A row that couldn't be synced, and why. */
+		AssetSyncProblem: {
+			reason: string;
+			/** @description Its position in the dataset (from 1). */
+			row: number;
+		};
+		/** @description What a run did (or would do). */
+		AssetSyncResult: {
+			created: number;
+			/** @description Whether this was a preview (nothing was kept). */
+			preview: boolean;
+			/** @description The first rows skipped, and why. */
+			problems: components['schemas']['AssetSyncProblem'][];
+			rows: number;
+			skipped: number;
+			unchanged: number;
+			updated: number;
 		};
 		/** @description A ticket an asset is linked to. */
 		AssetTicket: {
@@ -9662,6 +9815,140 @@ export interface operations {
 				};
 				content: {
 					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	list_asset_mappings: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['AssetMapping'][];
+				};
+			};
+		};
+	};
+	create_asset_mapping: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['AssetMappingInput'];
+			};
+		};
+		responses: {
+			201: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['AssetMapping'];
+				};
+			};
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	update_asset_mapping: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['AssetMappingInput'];
+			};
+		};
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['AssetMapping'];
+				};
+			};
+			409: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	delete_asset_mapping: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			204: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content?: never;
+			};
+		};
+	};
+	run_asset_mapping: {
+		parameters: {
+			query?: {
+				/** @description Only show what would happen; nothing is kept. */
+				preview?: boolean;
+			};
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['AssetSyncResult'];
 				};
 			};
 		};

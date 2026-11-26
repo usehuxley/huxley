@@ -23,6 +23,7 @@
 		templates: resolve('/(app)/settings/templates'),
 		'work-types': resolve('/(app)/settings/work-types'),
 		'asset-types': resolve('/(app)/settings/asset-types'),
+		'asset-sync': resolve('/(app)/settings/asset-sync'),
 		modules: resolve('/(app)/settings/modules'),
 		jobs: resolve('/(app)/settings/jobs'),
 		runners: resolve('/(app)/settings/runners'),

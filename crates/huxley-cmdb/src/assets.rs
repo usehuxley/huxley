@@ -54,6 +54,13 @@ pub struct Asset {
     /// Ids in other systems, e.g. `{ "rmm": "…" }`.
     #[schema(value_type = std::collections::HashMap<String, serde_json::Value>)]
     pub external_ids: sqlx::types::Json<Map<String, Json>>,
+    /// Where each field's value came from: `manual`, or a source such as
+    /// `rmm` (keys: `name`, `serial_number`, …, `attributes.<key>`).
+    #[schema(value_type = std::collections::HashMap<String, String>)]
+    pub field_sources: sqlx::types::Json<Map<String, Json>>,
+    /// When a mapping last synced it.
+    #[serde(with = "time::serde::rfc3339::option")]
+    pub synced_at: Option<OffsetDateTime>,
     #[serde(with = "time::serde::rfc3339")]
     pub updated_at: OffsetDateTime,
     /// For optimistic locking: send it back when changing the asset.
@@ -63,7 +70,7 @@ pub struct Asset {
 const SELECT: &str = "SELECT a.id, a.org_id, o.name AS org_name, a.type_id, t.key AS type_key, t.name AS type_name, \
     a.name, a.status, a.serial_number, a.hostname, a.manufacturer, a.model, a.site_id, s.name AS site_name, \
     a.contact_id, nullif(btrim(c.first_name || ' ' || c.last_name), '') AS contact_name, a.purchased_on, \
-    a.warranty_ends_on, a.notes, a.attributes, a.custom_fields, a.external_ids, a.updated_at, a.version \
+    a.warranty_ends_on, a.notes, a.attributes, a.custom_fields, a.external_ids, a.field_sources, a.synced_at, a.updated_at, a.version \
     FROM assets a JOIN organizations o ON o.id = a.org_id JOIN cmdb_asset_types t ON t.id = a.type_id \
     LEFT JOIN crm_sites s ON s.id = a.site_id LEFT JOIN crm_contacts c ON c.id = a.contact_id";
 
@@ -174,6 +181,32 @@ pub struct AssetInput {
     pub version: Option<i32>,
 }
 
+/// The fields whose provenance is kept, as `field → value`.
+pub(crate) type Values = Map<String, Json>;
+
+/// An asset's tracked values.
+pub(crate) fn values_of(a: &Asset) -> Values {
+    let mut v = Map::new();
+    v.insert("name".into(), json!(a.name));
+    v.insert("serial_number".into(), json!(a.serial_number));
+    v.insert("hostname".into(), json!(a.hostname));
+    v.insert("manufacturer".into(), json!(a.manufacturer));
+    v.insert("model".into(), json!(a.model));
+    for (k, val) in a.attributes.iter() {
+        v.insert(format!("attributes.{k}"), val.clone());
+    }
+    v
+}
+
+/// `manual` for each value set (non-empty) that differs from `before`.
+fn manual(after: &Values, before: &Values) -> Map<String, Json> {
+    after
+        .iter()
+        .filter(|(k, v)| !(v.is_null() || v.as_str() == Some("")) && before.get(*k) != Some(*v))
+        .map(|(k, _)| (k.clone(), json!("manual")))
+        .collect()
+}
+
 struct Checked {
     name: String,
     status: String,
@@ -184,6 +217,21 @@ struct Checked {
     notes: String,
     attributes: Map<String, Json>,
     type_key: String,
+}
+
+impl Checked {
+    fn values(&self) -> Values {
+        let mut v = Map::new();
+        v.insert("name".into(), json!(self.name));
+        v.insert("serial_number".into(), json!(self.serial));
+        v.insert("hostname".into(), json!(self.hostname));
+        v.insert("manufacturer".into(), json!(self.manufacturer));
+        v.insert("model".into(), json!(self.model));
+        for (k, val) in &self.attributes {
+            v.insert(format!("attributes.{k}"), val.clone());
+        }
+        v
+    }
 }
 
 /// Checks an asset's fields for `org_id`: its type is in use, its site and
@@ -260,7 +308,7 @@ async fn check(conn: &mut PgConnection, org_id: Uuid, input: &AssetInput) -> Cmd
 }
 
 /// Audits and announces a change.
-async fn record(
+pub(crate) async fn record(
     conn: &mut PgConnection,
     ctx: &RequestContext,
     a: &Asset,
@@ -310,8 +358,8 @@ pub async fn create(
     let id = huxley_core::new_id();
     sqlx::query(
         "INSERT INTO assets (id, org_id, type_id, name, status, serial_number, hostname, manufacturer, model, site_id, \
-                contact_id, purchased_on, warranty_ends_on, notes, attributes, external_ids, created_by, updated_by) \
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $17)",
+                contact_id, purchased_on, warranty_ends_on, notes, attributes, external_ids, created_by, updated_by, field_sources) \
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $17, $18)",
     )
     .bind(id)
     .bind(org_id)
@@ -330,6 +378,7 @@ pub async fn create(
     .bind(sqlx::types::Json(&c.attributes))
     .bind(sqlx::types::Json(input.external_ids.clone().unwrap_or_default()))
     .bind(ctx.actor.id())
+    .bind(sqlx::types::Json(manual(&c.values(), &Map::new())))
     .execute(&mut *conn)
     .await?;
     let asset = get(conn, id).await?;
@@ -361,7 +410,7 @@ pub async fn update(
         "UPDATE assets SET type_id = $3, name = $4, status = $5, serial_number = $6, hostname = $7, manufacturer = $8, \
                 model = $9, site_id = $10, contact_id = $11, purchased_on = $12, warranty_ends_on = $13, notes = $14, \
                 attributes = $15, external_ids = COALESCE($16, external_ids), updated_by = $17, updated_at = now(), \
-                version = version + 1 \
+                field_sources = field_sources || $18, version = version + 1 \
           WHERE id = $1 AND version = $2",
     )
     .bind(id)
@@ -381,6 +430,7 @@ pub async fn update(
     .bind(sqlx::types::Json(&c.attributes))
     .bind(input.external_ids.clone().map(sqlx::types::Json))
     .bind(ctx.actor.id())
+    .bind(sqlx::types::Json(manual(&c.values(), &values_of(&before))))
     .execute(&mut *conn)
     .await?
     .rows_affected();

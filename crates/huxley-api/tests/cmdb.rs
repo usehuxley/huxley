@@ -443,3 +443,98 @@ async fn assets_are_linked_to_tickets_and_mapped() {
         .await;
     assert_eq!(status, StatusCode::NO_CONTENT);
 }
+
+#[tokio::test]
+async fn mappings_turn_dataset_rows_into_assets() {
+    let Some(s) = setup().await else { return };
+    let p = people(&s).await;
+    let key = unique("rmm")
+        .to_lowercase()
+        .replace(|c: char| !c.is_ascii_alphanumeric(), "-");
+    let dataset = s
+        .ok(
+            &s.owner,
+            "POST",
+            "/api/v1/datasets",
+            Some(json!({ "orgId": s.provider, "dataset": {
+                "key": key, "name": "RMM devices", "primaryKey": ["device_id"],
+                "columns": [{ "name": "device_id", "type": "text" }, { "name": "hostname", "type": "text" }],
+            } })),
+        )
+        .await;
+    let ds = dataset["id"].as_str().unwrap().to_owned();
+    s.ok(
+        &s.owner,
+        "POST",
+        &format!("/api/v1/datasets/{ds}/rows"),
+        Some(json!({ "orgId": s.provider, "rows": [{ "device_id": "d1", "hostname": "PC-ONE" }, { "device_id": "d2", "hostname": "PC-TWO" }] })),
+    )
+    .await;
+    let ws = type_id(&s, &p.tech, "workstation").await;
+    let rule = json!({
+        "datasetId": ds, "name": "RMM", "source": "rmm", "typeId": ws,
+        "matchKeys": [{ "field": "external_id", "column": "device_id" }],
+        "fields": { "name": "hostname", "hostname": "hostname", "external_id": "device_id" },
+    });
+    // Only those who configure the CMDB keep mappings.
+    let (status, _) = s
+        .call(
+            &p.tech,
+            "POST",
+            "/api/v1/asset-mappings",
+            Some(rule.clone()),
+        )
+        .await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+    let m = s
+        .ok(&s.owner, "POST", "/api/v1/asset-mappings", Some(rule))
+        .await;
+    let id = m["id"].as_str().unwrap().to_owned();
+    // A preview keeps nothing; a run makes the assets, once.
+    let preview = s
+        .ok(
+            &s.owner,
+            "POST",
+            &format!("/api/v1/asset-mappings/{id}/run?preview=true"),
+            None,
+        )
+        .await;
+    assert_eq!(
+        (preview["created"].as_u64(), preview["preview"].as_bool()),
+        (Some(2), Some(true))
+    );
+    let found = s.ok(&p.tech, "GET", "/api/v1/assets?q=PC-ONE", None).await;
+    assert_eq!(found["total"], 0);
+    let run = s
+        .ok(
+            &s.owner,
+            "POST",
+            &format!("/api/v1/asset-mappings/{id}/run"),
+            None,
+        )
+        .await;
+    assert_eq!(run["created"], 2);
+    let again = s
+        .ok(
+            &s.owner,
+            "POST",
+            &format!("/api/v1/asset-mappings/{id}/run"),
+            None,
+        )
+        .await;
+    assert_eq!(
+        (again["created"].as_u64(), again["unchanged"].as_u64()),
+        (Some(0), Some(2))
+    );
+    let found = s.ok(&p.tech, "GET", "/api/v1/assets?q=PC-ONE", None).await;
+    assert_eq!(found["items"][0]["externalIds"]["rmm"], "d1");
+    assert_eq!(found["items"][0]["fieldSources"]["hostname"], "rmm");
+    let listed = s.ok(&s.owner, "GET", "/api/v1/asset-mappings", None).await;
+    assert!(
+        listed
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|m| m["id"] == id.as_str() && m["lastResult"]["unchanged"] == 2)
+    );
+}

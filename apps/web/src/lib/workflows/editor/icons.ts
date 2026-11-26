@@ -1,4 +1,5 @@
 import {
+	Boxes,
 	Bell,
 	Braces,
 	Building2,
@@ -57,6 +58,7 @@ const ICONS: Record<string, typeof Globe> = {
 	'core.mail.fetch': Inbox,
 	'core.ticket.embed': Sparkles,
 	'core.kb.embed': Sparkles,
+	'core.asset.sync': Boxes,
 	'core.ticket.create': TicketPlus,
 	'core.ticket.get': Ticket,
 	'core.ticket.find': TicketCheck,

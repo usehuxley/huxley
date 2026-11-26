@@ -89,6 +89,17 @@
       ],
       "type": "object"
     },
+    "AssetSync": {
+      "additionalProperties": false,
+      "description": "A mapping rule to run (`core.asset.sync`): the dataset's rows become\nassets, matched, updated and created by the rule (`mapping_id`). Run it\nafter the step that fills the dataset. Output: `{ rows, created,\nupdated, unchanged, skipped, problems: [{ row, reason }] }`.",
+      "properties": {
+        "mapping_id": true
+      },
+      "required": [
+        "mapping_id"
+      ],
+      "type": "object"
+    },
     "Backoff": {
       "oneOf": [
         {
@@ -2950,6 +2961,69 @@
           "required": [
             "type",
             "id"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Run a dataset → asset mapping rule (the `cmdb` module).",
+          "properties": {
+            "continue_on_error": {
+              "description": "Record the error as the step's output and carry on.",
+              "type": "boolean"
+            },
+            "description": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "id": {
+              "description": "Unique in the workflow: lowercase letters, digits, underscores.\nOther steps read this step's output as `steps.<id>.output`.",
+              "type": "string"
+            },
+            "if": {
+              "description": "Skip the step unless this expression is true.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "name": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "retry": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/RetryPolicy"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "timeout": {
+              "description": "Fail the attempt after this long, e.g. `30s`.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "type": {
+              "const": "core.asset.sync",
+              "type": "string"
+            },
+            "with": {
+              "$ref": "#/$defs/AssetSync"
+            }
+          },
+          "required": [
+            "type",
+            "id",
+            "with"
           ],
           "type": "object"
         },
