@@ -6,6 +6,7 @@
 
 pub mod accounts;
 pub mod branding;
+pub mod mfa;
 pub mod signin;
 pub mod sso;
 
@@ -29,6 +30,9 @@ pub enum PortalError {
     /// Wrong email or password, or the link is used, expired or unknown.
     #[error("that didn't work")]
     BadCredentials,
+    /// A wrong two-factor code (or the challenge is used up or expired).
+    #[error("that code didn't work")]
+    BadCode,
     /// Too many wrong passwords: try again after this many seconds.
     #[error("too many attempts; try again in {0} seconds")]
     Locked(i64),
@@ -122,6 +126,9 @@ pub struct PortalPrincipal {
     pub role: Role,
     #[serde(skip)]
     pub session_id: Uuid,
+    /// Their company requires two-factor sign-in and they haven't set it
+    /// up: only the setup is open to them.
+    pub mfa_setup_required: bool,
 }
 
 impl PortalPrincipal {

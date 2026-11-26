@@ -1,6 +1,6 @@
 import { fail, redirect } from '@sveltejs/kit';
 import { api } from '#lib/server/api.ts';
-import { adoptSession } from '#lib/server/signin.ts';
+import { adoptSession, toCodeStep } from '#lib/server/signin.ts';
 import { PORTAL_COOKIE, SSO_COOKIE, safeNext } from '#lib/session.ts';
 import type { Actions, PageServerLoad } from './$types';
 
@@ -53,15 +53,16 @@ export const actions: Actions = {
 	},
 	password: async (event) => {
 		const form = await event.request.formData();
-		const { response } = await api(event)
+		const { response, data } = await api(event)
 			.POST('/api/portal/v1/auth/password', {
 				body: { email: text(form, 'email'), password: password(form) }
 			})
-			.catch(() => ({ response: null }));
+			.catch(() => ({ response: null, data: undefined }));
 		if (!response) return fail(503, { message: 'The portal can’t sign you in right now.' });
 		if (response.status === 429) {
 			return fail(429, { message: 'Too many attempts. Wait a while and try again.' });
 		}
+		if (response.status === 202) toCodeStep(event.cookies, data, safeNext(text(form, 'next')));
 		if (
 			response.status !== 200 ||
 			!adoptSession(event.cookies, response.headers.get('set-cookie'))

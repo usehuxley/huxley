@@ -35,6 +35,8 @@ pub enum SettingKind {
     /// A host name, e.g. `support.example.com` (a port allowed for local
     /// use).
     Hostname,
+    /// On or off: `true` or `false`.
+    Toggle,
 }
 
 /// The largest image setting, as a `data:` URL.
@@ -75,6 +77,8 @@ settings! {
         "Shown in the client portal. PNG, JPEG, WebP or SVG, up to 200 KB.";
     PORTAL_DOMAIN = "portal.domain", "Branding", Hostname, None, "Portal domain",
         "The client portal's address for this organization and those below, e.g. support.example.com. Point it at the portal, and sign-in links use it.";
+    PORTAL_REQUIRE_MFA = "portal.require_mfa", "Portal", Toggle, Some("false"), "Require two-factor sign-in",
+        "Contacts who sign in to the portal with a link or password must set up an authenticator app. Signing in with their organization's account is left to their organization.";
     TICKET_PREFIX = "numbering.ticket_prefix", "Numbering", Prefix, Some("T"), "Ticket prefix",
         "Ticket numbers look like T-1042.";
     QUOTE_PREFIX = "numbering.quote_prefix", "Numbering", Prefix, Some("Q"), "Quote prefix",
@@ -154,6 +158,7 @@ pub fn validate(kind: SettingKind, raw: &str) -> Result<String, String> {
                             .all(|c| c.is_ascii_alphanumeric() || c == b'-')
                 })
         }
+        SettingKind::Toggle => matches!(value.to_ascii_lowercase().as_str(), "true" | "false"),
         SettingKind::Prefix => {
             (1..=8).contains(&value.len())
                 && value.starts_with(|c: char| c.is_ascii_uppercase())
@@ -173,11 +178,14 @@ pub fn validate(kind: SettingKind, raw: &str) -> Result<String, String> {
             }
             SettingKind::Image => "Choose a PNG, JPEG, WebP or SVG image up to 200 KB.",
             SettingKind::Hostname => "Enter a host name such as support.example.com.",
+            SettingKind::Toggle => "Use true or false.",
         }
         .into());
     }
     Ok(match kind {
-        SettingKind::Color | SettingKind::Hostname => value.to_ascii_lowercase(),
+        SettingKind::Color | SettingKind::Hostname | SettingKind::Toggle => {
+            value.to_ascii_lowercase()
+        }
         _ => value.to_owned(),
     })
 }

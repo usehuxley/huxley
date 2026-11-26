@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
+	import { resolve } from '$app/paths';
 	import { Button, Card, Field, Input } from '@usehuxley/ui';
 	import type { PageProps } from './$types';
 
@@ -14,6 +15,14 @@
 	<h1 class="text-2xl font-semibold text-fg">Your profile</h1>
 	<Card title={data.me.name}>
 		<p class="text-sm text-fg-muted">{data.me.email} · {data.me.orgName}</p>
+	</Card>
+	<Card
+		title="Two-factor sign-in"
+		description="A code from an authenticator app when you sign in with a link or password."
+	>
+		<a href={resolve('/(portal)/profile/security')} class="text-sm text-accent hover:underline">
+			Manage two-factor sign-in
+		</a>
 	</Card>
 	<Card
 		title="Password"

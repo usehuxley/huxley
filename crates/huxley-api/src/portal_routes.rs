@@ -10,7 +10,8 @@ use axum::{Json, Router};
 use http::request::Parts;
 use huxley_core::RequestContext;
 use huxley_db::{OrgScope, begin_scoped};
-use huxley_portal::signin::{self, NewSession};
+use huxley_portal::mfa;
+use huxley_portal::signin::{self, NewSession, SignedIn};
 use huxley_portal::{PortalError, PortalPrincipal};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
@@ -30,6 +31,12 @@ pub fn routes() -> Router<AppState> {
         .route("/me", get(me))
         .route("/branding", get(branding))
         .route("/me/password", put(set_password))
+        .route("/auth/mfa", post(complete_mfa))
+        .route("/me/mfa", get(mfa_status))
+        .route("/me/mfa/totp", post(begin_totp))
+        .route("/me/mfa/totp/confirm", post(confirm_totp))
+        .route("/me/mfa/totp/disable", post(disable_totp))
+        .route("/me/mfa/recovery-codes", post(regenerate_recovery_codes))
 }
 
 pub(crate) fn map(e: PortalError) -> ApiError {
@@ -48,6 +55,12 @@ pub(crate) fn map(e: PortalError) -> ApiError {
             "That didn't work",
         )
         .with_detail("The email or password is wrong, or the link is used or expired."),
+        PortalError::BadCode => ApiError::new(
+            StatusCode::UNAUTHORIZED,
+            "bad-code",
+            "That code didn't work",
+        )
+        .with_detail("Check the code in your authenticator app, or sign in again."),
         PortalError::Locked(seconds) => {
             ApiError::new(StatusCode::TOO_MANY_REQUESTS, "locked", "Too many attempts")
                 .with_detail(format!("Try again in {seconds} seconds."))
@@ -129,6 +142,14 @@ impl FromRequestParts<AppState> for PortalAuthed {
             .map_err(map)?
             .ok_or_else(unauthorized)?;
         tx.commit().await.map_err(db_err)?;
+        if principal.mfa_setup_required && !setup_allowed(parts.uri.path()) {
+            return Err(ApiError::new(
+                StatusCode::FORBIDDEN,
+                "mfa-setup-required",
+                "Set up two-factor sign-in first",
+            )
+            .with_detail("Your organization requires two-factor sign-in for the portal."));
+        }
         if !huxley_portal_module_on(state, principal.org_id).await? {
             return Err(ApiError::new(
                 StatusCode::FORBIDDEN,
@@ -138,6 +159,12 @@ impl FromRequestParts<AppState> for PortalAuthed {
         }
         Ok(Self { principal, ctx })
     }
+}
+
+/// What a session that must set up two-factor sign-in can still reach.
+fn setup_allowed(path: &str) -> bool {
+    let path = path.trim_end_matches('/');
+    path.ends_with("/me") || path.contains("/me/mfa") || path.ends_with("/auth/logout")
 }
 
 async fn huxley_portal_module_on(state: &AppState, org_id: uuid::Uuid) -> ApiResult<bool> {
@@ -314,7 +341,11 @@ pub struct PortalRedeemRequest {
 /// Signs in with an emailed link (once). Sets the portal session cookie.
 #[utoipa::path(post, path = "/api/portal/v1/auth/redeem", operation_id = "portal_redeem_link", tag = "portal",
     request_body = PortalRedeemRequest,
-    responses((status = 200, body = PortalMe), (status = 401, body = ApiError, content_type = "application/problem+json")))]
+    responses(
+        (status = 200, body = PortalMe),
+        (status = 202, description = "A two-factor code is needed", body = PortalMfaRequired),
+        (status = 401, body = ApiError, content_type = "application/problem+json"),
+    ))]
 pub async fn redeem_link(
     State(state): State<AppState>,
     ClientInfo(ctx): ClientInfo,
@@ -325,7 +356,7 @@ pub async fn redeem_link(
         .await
         .map_err(db_err)?;
     let ip = ip_text(&ctx);
-    let session = signin::redeem(
+    let signed_in = signin::redeem(
         &mut tx,
         &ctx,
         &body.token,
@@ -335,7 +366,25 @@ pub async fn redeem_link(
     .await
     .map_err(map)?;
     tx.commit().await.map_err(db_err)?;
-    Ok(signed_in_response(&state, session))
+    Ok(signed_in_or_challenge(&state, signed_in))
+}
+
+/// A code is needed: finish with `POST /api/portal/v1/auth/mfa`.
+#[derive(Debug, Serialize, ToSchema)]
+pub struct PortalMfaRequired {
+    pub challenge: String,
+}
+
+fn signed_in_or_challenge(state: &AppState, signed_in: SignedIn) -> Response {
+    match signed_in {
+        SignedIn::Session(session) => signed_in_response(state, session),
+        SignedIn::MfaRequired { challenge } => (
+            StatusCode::ACCEPTED,
+            [(header::CACHE_CONTROL, HeaderValue::from_static("no-store"))],
+            Json(PortalMfaRequired { challenge }),
+        )
+            .into_response(),
+    }
 }
 
 #[derive(Debug, Deserialize, ToSchema)]
@@ -348,7 +397,11 @@ pub struct PortalPasswordSignIn {
 /// Signs in with an email and password. Sets the portal session cookie.
 #[utoipa::path(post, path = "/api/portal/v1/auth/password", operation_id = "portal_password_sign_in", tag = "portal",
     request_body = PortalPasswordSignIn,
-    responses((status = 200, body = PortalMe), (status = 401, body = ApiError, content_type = "application/problem+json")))]
+    responses(
+        (status = 200, body = PortalMe),
+        (status = 202, description = "A two-factor code is needed", body = PortalMfaRequired),
+        (status = 401, body = ApiError, content_type = "application/problem+json"),
+    ))]
 pub async fn password_sign_in(
     State(state): State<AppState>,
     ClientInfo(ctx): ClientInfo,
@@ -370,7 +423,169 @@ pub async fn password_sign_in(
     .await;
     // Failed attempts are counted even when signing in fails.
     tx.commit().await.map_err(db_err)?;
+    Ok(signed_in_or_challenge(&state, result.map_err(map)?))
+}
+
+#[derive(Debug, Deserialize, ToSchema)]
+#[serde(deny_unknown_fields)]
+pub struct PortalMfaCode {
+    pub challenge: String,
+    /// From the authenticator app, or a recovery code.
+    pub code: String,
+}
+
+/// Finishes signing in with a two-factor code. Sets the portal session
+/// cookie.
+#[utoipa::path(post, path = "/api/portal/v1/auth/mfa", operation_id = "portal_complete_mfa", tag = "portal",
+    request_body = PortalMfaCode,
+    responses((status = 200, body = PortalMe), (status = 401, body = ApiError, content_type = "application/problem+json")))]
+pub async fn complete_mfa(
+    State(state): State<AppState>,
+    ClientInfo(ctx): ClientInfo,
+    Json(body): Json<PortalMfaCode>,
+) -> ApiResult<Response> {
+    crate::auth_routes::rate_limit(&state, &ctx)?;
+    let mut tx = begin_scoped(&state.db, &OrgScope::System)
+        .await
+        .map_err(db_err)?;
+    let ip = ip_text(&ctx);
+    let result = mfa::complete(
+        &mut tx,
+        &state.crypto,
+        &ctx,
+        &body.challenge,
+        &body.code,
+        ip.as_deref(),
+        ctx.user_agent.as_deref(),
+    )
+    .await;
+    // Wrong codes are counted even when signing in fails.
+    tx.commit().await.map_err(db_err)?;
     Ok(signed_in_response(&state, result.map_err(map)?))
+}
+
+/// Your two-factor sign-in.
+#[utoipa::path(get, path = "/api/portal/v1/me/mfa", operation_id = "portal_mfa_status", tag = "portal",
+    responses((status = 200, body = mfa::Status)))]
+pub async fn mfa_status(
+    State(state): State<AppState>,
+    authed: PortalAuthed,
+) -> ApiResult<Json<mfa::Status>> {
+    let mut tx = begin_scoped(&state.db, &OrgScope::System)
+        .await
+        .map_err(db_err)?;
+    let status = mfa::status(&mut tx, &authed.principal).await.map_err(map)?;
+    tx.commit().await.map_err(db_err)?;
+    Ok(Json(status))
+}
+
+/// Starts setting up an authenticator app.
+#[utoipa::path(post, path = "/api/portal/v1/me/mfa/totp", operation_id = "portal_begin_totp", tag = "portal",
+    responses((status = 200, body = mfa::Enrollment), (status = 409, body = ApiError, content_type = "application/problem+json")))]
+pub async fn begin_totp(
+    State(state): State<AppState>,
+    authed: PortalAuthed,
+) -> ApiResult<Json<mfa::Enrollment>> {
+    let mut tx = begin_scoped(&state.db, &OrgScope::System)
+        .await
+        .map_err(db_err)?;
+    let issuer = huxley_portal::branding::at(&mut tx, authed.principal.org_id)
+        .await
+        .map_err(map)?
+        .name;
+    let enrollment = mfa::begin(
+        &mut tx,
+        &state.crypto,
+        &authed.ctx,
+        &authed.principal,
+        &issuer,
+    )
+    .await
+    .map_err(map)?;
+    tx.commit().await.map_err(db_err)?;
+    Ok(Json(enrollment))
+}
+
+#[derive(Debug, Deserialize, ToSchema)]
+#[serde(deny_unknown_fields)]
+pub struct PortalTotpCode {
+    pub code: String,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct PortalRecoveryCodes {
+    /// Shown once: each signs in once without the app.
+    pub recovery_codes: Vec<String>,
+}
+
+/// Finishes setting up with a code from the app. Returns recovery codes
+/// (shown once) and signs out your other sessions.
+#[utoipa::path(post, path = "/api/portal/v1/me/mfa/totp/confirm", operation_id = "portal_confirm_totp", tag = "portal",
+    request_body = PortalTotpCode,
+    responses((status = 200, body = PortalRecoveryCodes), (status = 422, body = ApiError, content_type = "application/problem+json")))]
+pub async fn confirm_totp(
+    State(state): State<AppState>,
+    authed: PortalAuthed,
+    Json(body): Json<PortalTotpCode>,
+) -> ApiResult<Json<PortalRecoveryCodes>> {
+    let mut tx = begin_scoped(&state.db, &OrgScope::System)
+        .await
+        .map_err(db_err)?;
+    let recovery_codes = mfa::confirm(
+        &mut tx,
+        &state.crypto,
+        &authed.ctx,
+        &authed.principal,
+        &body.code,
+    )
+    .await
+    .map_err(map)?;
+    tx.commit().await.map_err(db_err)?;
+    Ok(Json(PortalRecoveryCodes { recovery_codes }))
+}
+
+/// Turns off two-factor sign-in, with a current code (not while your
+/// organization requires it).
+#[utoipa::path(post, path = "/api/portal/v1/me/mfa/totp/disable", operation_id = "portal_disable_totp", tag = "portal",
+    request_body = PortalTotpCode,
+    responses((status = 204), (status = 422, body = ApiError, content_type = "application/problem+json")))]
+pub async fn disable_totp(
+    State(state): State<AppState>,
+    authed: PortalAuthed,
+    Json(body): Json<PortalTotpCode>,
+) -> ApiResult<StatusCode> {
+    let mut tx = begin_scoped(&state.db, &OrgScope::System)
+        .await
+        .map_err(db_err)?;
+    mfa::disable(
+        &mut tx,
+        &state.crypto,
+        &authed.ctx,
+        &authed.principal,
+        &body.code,
+    )
+    .await
+    .map_err(map)?;
+    tx.commit().await.map_err(db_err)?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+/// Replaces your recovery codes (the old ones stop working).
+#[utoipa::path(post, path = "/api/portal/v1/me/mfa/recovery-codes", operation_id = "portal_regenerate_recovery_codes",
+    tag = "portal", responses((status = 200, body = PortalRecoveryCodes)))]
+pub async fn regenerate_recovery_codes(
+    State(state): State<AppState>,
+    authed: PortalAuthed,
+) -> ApiResult<Json<PortalRecoveryCodes>> {
+    let mut tx = begin_scoped(&state.db, &OrgScope::System)
+        .await
+        .map_err(db_err)?;
+    let recovery_codes = mfa::regenerate_recovery_codes(&mut tx, &authed.ctx, &authed.principal)
+        .await
+        .map_err(map)?;
+    tx.commit().await.map_err(db_err)?;
+    Ok(Json(PortalRecoveryCodes { recovery_codes }))
 }
 
 /// Signs out of the portal.

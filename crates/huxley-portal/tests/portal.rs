@@ -77,6 +77,8 @@ async fn contacts_are_invited_sign_in_and_are_disabled() {
     // Redeemed once: active, signed in.
     let session = signin::redeem(tx, &ctx, &secret, Some("192.0.2.1"), Some("test"))
         .await
+        .unwrap()
+        .session()
         .unwrap();
     assert_eq!(
         (session.principal.org_id, session.principal.role),
@@ -135,6 +137,8 @@ async fn passwords(
         None,
     )
     .await
+    .unwrap()
+    .session()
     .unwrap();
     assert_eq!(by_password.principal.account_id, me.account_id);
     for _ in 0..5 {

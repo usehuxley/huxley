@@ -25,6 +25,7 @@ pub fn routes() -> Router<AppState> {
         .route("/contacts/{id}/portal-access", post(invite_contact))
         .route("/portal-accounts/{id}", patch(update_portal_account))
         .route("/portal-accounts/{id}/invitation", post(resend_invitation))
+        .route("/portal-accounts/{id}/mfa-reset", post(reset_portal_mfa))
 }
 
 fn db_err(e: impl std::fmt::Display) -> ApiError {
@@ -153,6 +154,26 @@ pub async fn update_portal_account(
     )
     .await
     .map_err(map)?;
+    tx.commit().await.map_err(db_err)?;
+    Ok(Json(account))
+}
+
+/// Turns off a contact's two-factor sign-in (a lost phone). Their sessions
+/// end; they set it up again if their company requires it.
+#[utoipa::path(post, path = "/api/v1/portal-accounts/{id}/mfa-reset", operation_id = "reset_portal_mfa",
+    tag = "portal", params(("id" = Uuid, Path)), responses((status = 200, body = PortalAccount)))]
+pub async fn reset_portal_mfa(
+    State(state): State<AppState>,
+    authed: Authed,
+    Path(id): Path<Uuid>,
+) -> ApiResult<Json<PortalAccount>> {
+    let org = org_of(&state, "portal_accounts", id).await?;
+    let scope = allow(&state, &authed, permissions::CRM_MANAGE, org).await?;
+    let mut tx = begin_scoped(&state.db, &scope).await.map_err(db_err)?;
+    huxley_portal::mfa::reset(&mut tx, &authed.user.ctx, id)
+        .await
+        .map_err(map)?;
+    let account = accounts::get(&mut tx, id).await.map_err(map)?;
     tx.commit().await.map_err(db_err)?;
     Ok(Json(account))
 }

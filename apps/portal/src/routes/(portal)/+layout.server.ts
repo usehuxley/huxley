@@ -17,5 +17,9 @@ export const load: LayoutServerLoad = async (event) => {
 		if (me?.response.status === 401) event.cookies.delete(PORTAL_COOKIE, { path: '/' });
 		toLogin();
 	}
+	// Their company requires two-factor sign-in: set it up first.
+	if (me!.data!.mfaSetupRequired && event.url.pathname !== '/profile/security') {
+		redirect(303, '/profile/security');
+	}
 	return { me: me!.data! };
 };

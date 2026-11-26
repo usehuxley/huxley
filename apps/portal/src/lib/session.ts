@@ -7,6 +7,9 @@ export const PORTAL_COOKIE = 'hx_portal_session';
  */
 export const SSO_COOKIE = 'hx_portal_sso';
 
+/** Holds the two-factor challenge between the first factor and the code. */
+export const MFA_COOKIE = 'hx_portal_mfa';
+
 /**
  * The session token and lifetime from the API's `Set-Cookie` header, so the
  * portal can set the same cookie on its own origin.

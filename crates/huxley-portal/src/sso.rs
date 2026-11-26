@@ -466,7 +466,8 @@ pub async fn callback(
     .bind(&identity.subject)
     .execute(&mut *conn)
     .await?;
-    let session = start_session(&mut *conn, account, ip, user_agent).await?;
+    // Their organization's sign-in stands in for two-factor sign-in here.
+    let session = start_session(&mut *conn, account, ip, user_agent, false).await?;
     audit::record(
         &mut *conn,
         ctx,

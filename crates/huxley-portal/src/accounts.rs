@@ -36,6 +36,8 @@ pub struct PortalAccount {
     pub role: Role,
     pub status: Status,
     pub has_password: bool,
+    /// Two-factor sign-in is set up.
+    pub mfa_enabled: bool,
     #[serde(with = "time::serde::rfc3339::option")]
     pub last_sign_in_at: Option<OffsetDateTime>,
     pub version: i32,
@@ -45,7 +47,7 @@ pub struct PortalAccount {
 
 const SELECT: &str = "SELECT a.id, a.contact_id, a.org_id, \
     btrim(c.first_name || ' ' || c.last_name) AS name, a.email, a.role, a.status, \
-    a.password_hash IS NOT NULL AS has_password, a.last_sign_in_at, a.version, a.created_at \
+    a.password_hash IS NOT NULL AS has_password, a.totp_confirmed_at IS NOT NULL AS mfa_enabled, a.last_sign_in_at, a.version, a.created_at \
     FROM portal_accounts a JOIN crm_contacts c ON c.id = a.contact_id";
 
 /// A company's portal accounts, by name.
