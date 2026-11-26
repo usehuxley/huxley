@@ -2014,6 +2014,40 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
+	'/api/v1/dashboards': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** Prebuilt dashboards, then shared ones and your own. */
+		get: operations['list_dashboards'];
+		put?: never;
+		post: operations['create_dashboard'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/dashboards/{id}': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** One dashboard: a uuid, or a prebuilt one's key (e.g. `service-desk`). */
+		get: operations['get_dashboard'];
+		put: operations['update_dashboard'];
+		post?: never;
+		delete: operations['delete_dashboard'];
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
 	'/api/v1/datasets': {
 		parameters: {
 			query?: never;
@@ -7641,6 +7675,16 @@ export interface components {
 			/** Format: uuid */
 			orgId: string;
 		};
+		CreateDashboard: {
+			dashboard: components['schemas']['DashboardInput'];
+			/**
+			 * Format: uuid
+			 * @description Where it lives: shared there (and below), or personal.
+			 */
+			orgId: string;
+			/** @description Share it (needs `dashboard:manage` there); otherwise it's yours. */
+			shared?: boolean;
+		};
 		CreateDatasetRequest: {
 			dataset: components['schemas']['DatasetInput'];
 			/** Format: uuid */
@@ -7756,6 +7800,32 @@ export interface components {
 		CreatedTokenView: components['schemas']['ApiTokenView'] & {
 			/** @description Send as `Authorization: Bearer <token>`. Shown only now. */
 			tokenSecret: string;
+		};
+		Dashboard: {
+			/** @description Defined in code; copy it to change it. */
+			builtin: boolean;
+			description?: string | null;
+			/** @description A uuid, or a prebuilt dashboard's key. */
+			id: string;
+			name: string;
+			/** Format: uuid */
+			orgId?: string | null;
+			/** Format: uuid */
+			ownerUserId?: string | null;
+			range: string;
+			/** Format: date-time */
+			updatedAt?: string | null;
+			/** Format: int32 */
+			version: number;
+			widgets: components['schemas']['Widget'][];
+		};
+		DashboardInput: {
+			description?: string | null;
+			name: string;
+			range?: string | null;
+			/** Format: int32 */
+			version?: number | null;
+			widgets?: components['schemas']['Widget'][];
 		};
 		Dataset: {
 			columns: components['schemas']['Column'][];
@@ -11435,6 +11505,11 @@ export interface components {
 			/** Format: int32 */
 			version: number;
 		};
+		/**
+		 * @description How a widget shows its numbers.
+		 * @enum {string}
+		 */
+		Viz: 'number' | 'table' | 'bar' | 'line' | 'area' | 'pie';
 		/** @description Something the importer skipped or guessed, and where. */
 		Warning: {
 			message: string;
@@ -11470,6 +11545,20 @@ export interface components {
 			reference?: string | null;
 			/** Format: date */
 			startsOn?: string | null;
+		};
+		Widget: {
+			/** @description Ignore the dashboard's range (e.g. "open now"). */
+			fixedRange?: boolean;
+			/** @description Unique within the dashboard. */
+			id: string;
+			spec: components['schemas']['QuerySpec'];
+			title: string;
+			viz: components['schemas']['Viz'];
+			/**
+			 * Format: int32
+			 * @description Grid columns, 1 to 12.
+			 */
+			width?: number;
 		};
 		WorkType: {
 			archived: boolean;
@@ -15698,6 +15787,129 @@ export interface operations {
 				content: {
 					'application/json': components['schemas']['FieldDef'];
 				};
+			};
+		};
+	};
+	list_dashboards: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['Dashboard'][];
+				};
+			};
+		};
+	};
+	create_dashboard: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['CreateDashboard'];
+			};
+		};
+		responses: {
+			201: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['Dashboard'];
+				};
+			};
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	get_dashboard: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['Dashboard'];
+				};
+			};
+		};
+	};
+	update_dashboard: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['DashboardInput'];
+			};
+		};
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['Dashboard'];
+				};
+			};
+			409: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	delete_dashboard: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			204: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content?: never;
 			};
 		};
 	};

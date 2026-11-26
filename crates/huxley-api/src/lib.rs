@@ -19,6 +19,7 @@ mod connection_routes;
 pub mod context;
 pub mod crm_routes;
 pub mod csrf;
+pub mod dashboard_routes;
 mod dataset_routes;
 pub mod desk_routes;
 pub mod entity_routes;

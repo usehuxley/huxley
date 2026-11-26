@@ -1,0 +1,32 @@
+{
+	"name": "@usehuxley/widgets",
+	"version": "0.1.0",
+	"private": true,
+	"license": "MIT",
+	"type": "module",
+	"description": "Huxley's dashboard widgets: numbers, tables and charts drawn from analytics answers, shared by web and portal",
+	"svelte": "./src/index.ts",
+	"exports": {
+		".": {
+			"types": "./src/index.ts",
+			"svelte": "./src/index.ts",
+			"default": "./src/index.ts"
+		},
+		"./widgets.css": "./src/widgets.css"
+	},
+	"scripts": {
+		"check": "svelte-check --tsconfig ./tsconfig.json",
+		"lint": "prettier --check .",
+		"format": "prettier --write ."
+	},
+	"peerDependencies": {
+		"svelte": "^5.50.0"
+	},
+	"devDependencies": {
+		"prettier": "^3.10.1",
+		"prettier-plugin-svelte": "^4.1.1",
+		"svelte": "^5.57.3",
+		"svelte-check": "^4.7.8",
+		"typescript": "^6.0.3"
+	}
+}

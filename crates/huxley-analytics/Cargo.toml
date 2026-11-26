@@ -9,16 +9,17 @@ repository.workspace = true
 publish = false
 
 [dependencies]
+huxley-core.workspace = true
 huxley-db.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 sqlx.workspace = true
 thiserror.workspace = true
+time.workspace = true
 utoipa.workspace = true
 uuid.workspace = true
 
 [dev-dependencies]
-huxley-core.workspace = true
 huxley-db = { workspace = true, features = ["testing"] }
 huxley-orgs.workspace = true
 tokio.workspace = true

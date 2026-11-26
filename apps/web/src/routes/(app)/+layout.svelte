@@ -94,7 +94,9 @@
 		data.user.grantedPermissions.includes('catalog:read')
 			? [{ href: '/catalog', label: 'Catalog', icon: Package }]
 			: []),
-		{ href: '/reports', label: 'Reports', icon: ChartColumn, soon: true },
+		...(data.user.grantedPermissions.includes('dashboard:read')
+			? [{ href: '/dashboards', label: 'Dashboards', icon: ChartColumn }]
+			: []),
 		...(canSeeSettings ? [{ href: '/settings', label: 'Settings', icon: Settings }] : [])
 	]);
 

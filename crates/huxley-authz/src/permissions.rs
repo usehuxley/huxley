@@ -96,6 +96,8 @@ permissions! {
     CATALOG_MANAGE = "catalog:manage", Org, "Add, change and retire products, services and bundles, with their costs and prices";
     AGREEMENT_READ = "agreement:read", Org, "View agreements: what they cover, their rates and lines, and how time falls under them";
     AGREEMENT_MANAGE = "agreement:manage", Org, "Add, change and cancel agreements, their coverage, rates and lines";
+    DASHBOARD_READ = "dashboard:read", Org, "View dashboards and keep personal ones";
+    DASHBOARD_MANAGE = "dashboard:manage", Org, "Add, change and delete shared dashboards";
     TIMESHEET_SUBMIT = "timesheet:submit", Instance, "Submit your own timesheets";
     TIMESHEET_APPROVE = "timesheet:approve", Instance, "Approve, reject and reopen the timesheets of people in teams you lead";
 }
