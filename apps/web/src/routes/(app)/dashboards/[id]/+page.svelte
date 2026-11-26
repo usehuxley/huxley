@@ -4,7 +4,7 @@
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
 	import { Copy, Pencil, RefreshCw } from '@lucide/svelte';
-	import { Button, Select } from '@usehuxley/ui';
+	import { Badge, Button, Select } from '@usehuxley/ui';
 	import { Widget } from '@usehuxley/widgets';
 	import { RANGES } from '#lib/dashboards/spec.ts';
 	import type { PageProps } from './$types';
@@ -28,7 +28,10 @@
 			<a href={resolve('/(app)/dashboards')} class="text-sm text-accent hover:underline">
 				Dashboards
 			</a>
-			<h1 class="mt-1 text-2xl font-semibold text-fg">{data.dashboard.name}</h1>
+			<h1 class="mt-1 flex items-center gap-2 text-2xl font-semibold text-fg">
+				{data.dashboard.name}
+				{#if data.dashboard.portal}<Badge tone="info">In the client portal</Badge>{/if}
+			</h1>
 			{#if data.dashboard.description}<p class="text-fg-muted">{data.dashboard.description}</p>{/if}
 		</div>
 		<div class="flex flex-wrap items-center gap-2">

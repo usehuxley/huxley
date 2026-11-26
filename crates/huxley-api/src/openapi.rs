@@ -248,6 +248,8 @@ use crate::workforce_routes;
         crate::dashboard_routes::delete_dashboard,
         crate::analytics_routes::list_sources,
         crate::analytics_routes::query,
+        crate::portal_dashboard_routes::list_dashboards,
+        crate::portal_dashboard_routes::view_dashboard,
         crate::portal_approval_routes::list_approvals,
         crate::portal_approval_routes::get_approval,
         crate::portal_approval_routes::decide,

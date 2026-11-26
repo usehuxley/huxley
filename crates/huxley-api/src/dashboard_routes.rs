@@ -162,9 +162,20 @@ pub async fn update_dashboard(
 ) -> ApiResult<Json<Dashboard>> {
     let current = changeable(&state, &authed, id).await?;
     let org = current.org_id.ok_or_else(ApiError::not_found)?;
+    let sharing = body.shared == Some(true) && current.owner_user_id.is_some();
+    if sharing {
+        authed
+            .require_at(&state, permissions::DASHBOARD_MANAGE, org)
+            .await?;
+    }
     let mut tx = begin_scoped(&state.db, &OrgScope::Orgs(vec![org]))
         .await
         .map_err(db_err)?;
+    if sharing {
+        dashboards::share(&mut tx, &authed.user.ctx, id)
+            .await
+            .map_err(map)?;
+    }
     let updated = dashboards::update(&mut tx, &authed.user.ctx, id, &body)
         .await
         .map_err(map)?;

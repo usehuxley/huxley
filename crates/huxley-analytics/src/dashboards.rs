@@ -63,6 +63,8 @@ pub struct Dashboard {
     pub widgets: Vec<Widget>,
     /// Defined in code; copy it to change it.
     pub builtin: bool,
+    /// Shown in the client portal (shared dashboards only).
+    pub portal: bool,
     pub version: i32,
     #[serde(with = "time::serde::rfc3339::option")]
     pub updated_at: Option<OffsetDateTime>,
@@ -78,6 +80,13 @@ pub struct DashboardInput {
     pub range: Option<String>,
     #[serde(default)]
     pub widgets: Vec<Widget>,
+    /// Show it in the client portal (a shared dashboard only).
+    #[serde(default)]
+    pub portal: bool,
+    /// Share a personal dashboard with its organization (changing it then
+    /// needs `dashboard:manage`).
+    #[serde(default)]
+    pub shared: Option<bool>,
     #[serde(default)]
     pub version: Option<i32>,
 }
@@ -152,6 +161,7 @@ struct Row {
     description: Option<String>,
     range: String,
     widgets: sqlx::types::Json<Vec<Widget>>,
+    portal: bool,
     version: i32,
     updated_at: OffsetDateTime,
 }
@@ -167,13 +177,14 @@ impl From<Row> for Dashboard {
             range: r.range,
             widgets: r.widgets.0,
             builtin: false,
+            portal: r.portal,
             version: r.version,
             updated_at: Some(r.updated_at),
         }
     }
 }
 
-const SELECT: &str = "SELECT id, org_id, owner_user_id, name, description, range, widgets, version, updated_at FROM dashboards";
+const SELECT: &str = "SELECT id, org_id, owner_user_id, name, description, range, widgets, portal, version, updated_at FROM dashboards";
 
 /// Shared dashboards in the transaction's scope and `user`'s own, by name.
 pub async fn list(conn: &mut PgConnection, user: Uuid) -> AnalyticsResult<Vec<Dashboard>> {
@@ -211,10 +222,16 @@ pub async fn create(
     input: &DashboardInput,
 ) -> AnalyticsResult<Dashboard> {
     let range = check(input)?;
+    if input.portal && owner.is_some() {
+        return Err(bad(
+            "portal",
+            "only a shared dashboard can be shown in the client portal",
+        ));
+    }
     let id = Uuid::now_v7();
     sqlx::query(
-        "INSERT INTO dashboards (id, org_id, owner_user_id, name, description, range, widgets, created_by) \
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)",
+        "INSERT INTO dashboards (id, org_id, owner_user_id, name, description, range, widgets, created_by, portal) \
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)",
     )
     .bind(id)
     .bind(org_id)
@@ -224,6 +241,7 @@ pub async fn create(
     .bind(&range)
     .bind(sqlx::types::Json(&input.widgets))
     .bind(ctx.actor.id())
+    .bind(input.portal)
     .execute(&mut *conn)
     .await?;
     audit::record(
@@ -253,9 +271,9 @@ pub async fn update(
 ) -> AnalyticsResult<Option<Dashboard>> {
     let range = check(input)?;
     let row: Option<Row> = sqlx::query_as(
-        "UPDATE dashboards SET name = $2, description = $3, range = $4, widgets = $5, version = version + 1, \
-                updated_at = now() WHERE id = $1 AND ($6::integer IS NULL OR version = $6) \
-         RETURNING id, org_id, owner_user_id, name, description, range, widgets, version, updated_at",
+        "UPDATE dashboards SET name = $2, description = $3, range = $4, widgets = $5, portal = $7, \
+                version = version + 1, updated_at = now() WHERE id = $1 AND ($6::integer IS NULL OR version = $6) \
+         RETURNING id, org_id, owner_user_id, name, description, range, widgets, portal, version, updated_at",
     )
     .bind(id)
     .bind(input.name.trim())
@@ -263,8 +281,15 @@ pub async fn update(
     .bind(&range)
     .bind(sqlx::types::Json(&input.widgets))
     .bind(input.version)
+    .bind(input.portal)
     .fetch_optional(&mut *conn)
-    .await?;
+    .await
+    .map_err(|e| match &e {
+        sqlx::Error::Database(d) if d.constraint() == Some("dashboards_portal_shared") => {
+            bad("portal", "only a shared dashboard can be shown in the client portal")
+        }
+        _ => AnalyticsError::Db(e),
+    })?;
     if let Some(r) = &row {
         audit::record(
             &mut *conn,
@@ -277,6 +302,29 @@ pub async fn update(
         .map_err(|e| AnalyticsError::Db(sqlx::Error::Protocol(e.to_string())))?;
     }
     Ok(row.map(Dashboard::from))
+}
+
+/// Makes a personal dashboard shared at its organization.
+pub async fn share(conn: &mut PgConnection, ctx: &RequestContext, id: Uuid) -> AnalyticsResult<()> {
+    let org: Option<Uuid> = sqlx::query_scalar(
+        "UPDATE dashboards SET owner_user_id = NULL, updated_at = now() WHERE id = $1 AND owner_user_id IS NOT NULL \
+         RETURNING org_id",
+    )
+    .bind(id)
+    .fetch_optional(&mut *conn)
+    .await?;
+    if let Some(org) = org {
+        audit::record(
+            &mut *conn,
+            ctx,
+            AuditRecord::new("dashboard.shared")
+                .org(org)
+                .target("dashboard", id),
+        )
+        .await
+        .map_err(|e| AnalyticsError::Db(sqlx::Error::Protocol(e.to_string())))?;
+    }
+    Ok(())
 }
 
 pub async fn delete(
@@ -331,6 +379,7 @@ fn prebuilt(key: &str, name: &str, description: &str, widgets: Vec<Widget>) -> D
         range: "last_30_days".into(),
         widgets,
         builtin: true,
+        portal: false,
         version: 1,
         updated_at: None,
     }
@@ -596,6 +645,39 @@ pub fn builtin() -> Vec<Dashboard> {
     ]
 }
 
+/// Sources a dashboard can show in the client portal.
+pub const PORTAL_SOURCES: &[&str] = &["tickets", "time_entries", "assets"];
+
+/// The dashboards shown in a company's portal: published at it or above.
+pub async fn for_portal(conn: &mut PgConnection, org_id: Uuid) -> AnalyticsResult<Vec<Dashboard>> {
+    let rows: Vec<Row> = sqlx::query_as(sqlx::AssertSqlSafe(format!(
+        "{SELECT} WHERE portal AND owner_user_id IS NULL \
+           AND (SELECT path FROM organizations WHERE id = $1) <@ (SELECT path FROM organizations o WHERE o.id = dashboards.org_id) \
+         ORDER BY lower(name), id"
+    )))
+    .bind(org_id)
+    .fetch_all(conn)
+    .await?;
+    Ok(rows.into_iter().map(Dashboard::from).collect())
+}
+
+/// The spec a widget runs for `range`: the range on its source's time
+/// field, unless it fixes its own or already filters that field.
+pub fn with_range(widget: &Widget, range: &str) -> QuerySpec {
+    let mut spec = widget.spec.clone();
+    if let Some(source) = crate::catalog::source(&spec.source)
+        && !widget.fixed_range
+        && !spec.filters.iter().any(|f| f.field == source.time_field)
+    {
+        spec.filters.push(crate::query::Filter {
+            field: source.time_field.to_owned(),
+            op: crate::query::Op::Within,
+            value: json!(range),
+        });
+    }
+    spec
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -608,6 +690,8 @@ mod tests {
                 description: d.description.clone(),
                 range: Some(d.range.clone()),
                 widgets: d.widgets.clone(),
+                portal: false,
+                shared: None,
                 version: None,
             };
             check(&input).unwrap_or_else(|e| panic!("{}: {e}", d.id));

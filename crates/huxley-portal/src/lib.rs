@@ -85,6 +85,8 @@ pub enum Perm {
     Assets,
     /// Invite colleagues and change their portal access.
     ManageContacts,
+    /// See the dashboards published to the portal, with the company's numbers.
+    Dashboards,
 }
 
 impl Role {
@@ -92,7 +94,9 @@ impl Role {
         match perm {
             Perm::TicketsOwn => true,
             Perm::Approve => matches!(self, Self::ClientApprover | Self::ClientAdmin),
-            Perm::TicketsCompany | Perm::Assets | Perm::ManageContacts => self == Self::ClientAdmin,
+            Perm::TicketsCompany | Perm::Assets | Perm::ManageContacts | Perm::Dashboards => {
+                self == Self::ClientAdmin
+            }
         }
     }
 
@@ -104,6 +108,7 @@ impl Role {
             (Perm::Approve, "portal.approval:decide"),
             (Perm::Assets, "portal.asset:read"),
             (Perm::ManageContacts, "portal.contacts:manage"),
+            (Perm::Dashboards, "portal.dashboard:read"),
         ]
         .into_iter()
         .filter(|(p, _)| self.can(*p))
@@ -155,7 +160,8 @@ mod tests {
                 "portal.ticket:read:company",
                 "portal.approval:decide",
                 "portal.asset:read",
-                "portal.contacts:manage"
+                "portal.contacts:manage",
+                "portal.dashboard:read"
             ]
         );
     }
