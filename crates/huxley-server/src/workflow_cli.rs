@@ -146,23 +146,80 @@ pub async fn run(command: WorkflowCommand) -> anyhow::Result<()> {
 
 // ---- files ----
 
-/// The workflow files among `paths` (folders expand to their files).
-fn files(paths: &[PathBuf]) -> anyhow::Result<Vec<PathBuf>> {
+/// A workflow file, and the folder it says the workflow is in: given for
+/// files found in a directory (its subdirectories, from the top; empty:
+/// unfiled), none for files named one by one.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct Found {
+    path: PathBuf,
+    folder: Option<Vec<String>>,
+}
+
+/// The workflow files among `paths`. Directories expand to the files in
+/// them and their subdirectories (not hidden ones, such as `.git`).
+fn found(paths: &[PathBuf]) -> anyhow::Result<Vec<Found>> {
+    fn walk(dir: &Path, folder: &[String], out: &mut Vec<Found>) -> anyhow::Result<()> {
+        let mut entries: Vec<PathBuf> = std::fs::read_dir(dir)
+            .with_context(|| format!("failed to read {}", dir.display()))?
+            .filter_map(Result::ok)
+            .map(|e| e.path())
+            .collect();
+        entries.sort();
+        for path in entries {
+            let name = path
+                .file_name()
+                .and_then(|n| n.to_str())
+                .unwrap_or_default();
+            if path.is_dir() {
+                if !name.starts_with('.') {
+                    let mut inner = folder.to_vec();
+                    inner.push(name.to_owned());
+                    walk(&path, &inner, out)?;
+                }
+            } else if is_workflow_file(&path) {
+                out.push(Found {
+                    path,
+                    folder: Some(folder.to_vec()),
+                });
+            }
+        }
+        Ok(())
+    }
     let mut out = Vec::new();
     for path in paths {
         if path.is_dir() {
-            let mut found: Vec<PathBuf> = std::fs::read_dir(path)?
-                .filter_map(Result::ok)
-                .map(|e| e.path())
-                .filter(|p| p.is_file() && is_workflow_file(p))
-                .collect();
-            found.sort();
-            out.extend(found);
+            walk(path, &[], &mut out)?;
         } else {
-            out.push(path.clone());
+            out.push(Found {
+                path: path.clone(),
+                folder: None,
+            });
         }
     }
     Ok(out)
+}
+
+/// The workflow files among `paths`.
+fn files(paths: &[PathBuf]) -> anyhow::Result<Vec<PathBuf>> {
+    Ok(found(paths)?.into_iter().map(|f| f.path).collect())
+}
+
+/// A folder's name as a directory name: no slashes, and not hidden.
+fn dir_name(name: &str) -> String {
+    let name = name.trim().replace(['/', '\\'], "-");
+    match name.as_str() {
+        "" | "." | ".." => "_".to_owned(),
+        n if n.starts_with('.') => format!("_{}", &n[1..]),
+        _ => name,
+    }
+}
+
+fn show_folder(path: &[String]) -> String {
+    if path.is_empty() {
+        "unfiled".to_owned()
+    } else {
+        path.join("/")
+    }
 }
 
 fn is_test_file(path: &Path) -> bool {
@@ -475,6 +532,52 @@ impl Client {
         Ok(found["id"].as_str().unwrap_or_default().to_owned())
     }
 
+    /// The organization's workflow folders.
+    async fn folders(&self) -> anyhow::Result<Vec<Json>> {
+        let all = self.get("/api/v1/workflow-folders").await?;
+        Ok(all
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter(|f| f["orgId"] == self.org_id.as_str())
+            .cloned()
+            .collect())
+    }
+
+    /// The id of the folder at `path` (none: unfiled), made if it isn't
+    /// there. Names match ignoring case, or as written by `pull`.
+    async fn folder_at(
+        &self,
+        folders: &mut Vec<Json>,
+        path: &[String],
+    ) -> anyhow::Result<Option<String>> {
+        let mut parent: Option<String> = None;
+        for part in path {
+            let existing = folders.iter().find(|f| {
+                f["parentId"].as_str() == parent.as_deref()
+                    && f["name"].as_str().is_some_and(|n| {
+                        n.to_lowercase() == part.to_lowercase() || dir_name(n) == *part
+                    })
+            });
+            let id = if let Some(f) = existing {
+                f["id"].as_str().unwrap_or_default().to_owned()
+            } else {
+                let made = self
+                    .post(
+                        "/api/v1/workflow-folders",
+                        &json!({ "orgId": self.org_id, "folder": { "name": part, "parentId": parent } }),
+                    )
+                    .await?;
+                println!("made folder {}", made["name"].as_str().unwrap_or(part));
+                let id = made["id"].as_str().unwrap_or_default().to_owned();
+                folders.push(made);
+                id
+            };
+            parent = Some(id);
+        }
+        Ok(parent)
+    }
+
     /// The organization's workflows, by key.
     async fn workflows(&self) -> anyhow::Result<BTreeMap<String, Json>> {
         let all = self.get("/api/v1/workflows").await?;
@@ -488,9 +591,44 @@ impl Client {
     }
 }
 
+/// The names from the top down to folder `id` (empty: unfiled), as
+/// directory names.
+fn folder_path(folders: &[Json], id: Option<&str>) -> Vec<String> {
+    let mut path = Vec::new();
+    let mut at = id;
+    while let Some(id) = at {
+        let Some(f) = folders.iter().find(|f| f["id"] == id) else {
+            break;
+        };
+        path.push(dir_name(f["name"].as_str().unwrap_or_default()));
+        at = f["parentId"].as_str();
+        if path.len() > 64 {
+            break;
+        }
+    }
+    path.reverse();
+    path
+}
+
+/// Each key's files among `found`, to catch a workflow in two files.
+fn files_by_key(found: &[Found]) -> BTreeMap<String, Vec<PathBuf>> {
+    let mut out: BTreeMap<String, Vec<PathBuf>> = BTreeMap::new();
+    for f in found {
+        if let Ok(document) = load(&f.path)
+            && let Ok(key) = key_of(&document, &f.path)
+        {
+            out.entry(key).or_default().push(f.path.clone());
+        }
+    }
+    out
+}
+
 async fn pull(client: &Client, dir: &Path, keys: &[String]) -> anyhow::Result<()> {
     std::fs::create_dir_all(dir)?;
     let workflows = client.workflows().await?;
+    let folders = client.folders().await?;
+    // Files already here: a workflow that moved folder leaves its old file.
+    let before = files_by_key(&found(&[dir.to_path_buf()])?);
     for key in keys {
         if !workflows.contains_key(key) {
             bail!("no workflow {key:?} in this organization");
@@ -503,11 +641,23 @@ async fn pull(client: &Client, dir: &Path, keys: &[String]) -> anyhow::Result<()
         }
         let id = summary["id"].as_str().unwrap_or_default();
         let detail = client.get(&format!("/api/v1/workflows/{id}")).await?;
-        let path = dir.join(format!("{key}.yaml"));
+        let mut path = dir.to_path_buf();
+        for part in folder_path(&folders, summary["folderId"].as_str()) {
+            path.push(part);
+        }
+        std::fs::create_dir_all(&path)?;
+        path.push(format!("{key}.yaml"));
         let text = format!("{SCHEMA_COMMENT}\n{}", to_yaml(&detail["draft"])?);
         std::fs::write(&path, text)
             .with_context(|| format!("failed to write {}", path.display()))?;
         println!("pulled {}", path.display());
+        for old in before.get(key).into_iter().flatten() {
+            if *old != path {
+                std::fs::remove_file(old)
+                    .with_context(|| format!("failed to remove {}", old.display()))?;
+                println!("removed {} (it moved)", old.display());
+            }
+        }
         written += 1;
     }
     println!("{written} workflow(s) pulled.");
@@ -516,8 +666,9 @@ async fn pull(client: &Client, dir: &Path, keys: &[String]) -> anyhow::Result<()
 
 async fn diff(client: &Client, paths: &[PathBuf]) -> anyhow::Result<()> {
     let workflows = client.workflows().await?;
+    let folders = client.folders().await?;
     let mut differ = 0;
-    for path in files(paths)? {
+    for Found { path, folder } in found(paths)? {
         let document = load(&path)?;
         let key = key_of(&document, &path)?;
         let local = to_yaml(&document)?;
@@ -526,6 +677,18 @@ async fn diff(client: &Client, paths: &[PathBuf]) -> anyhow::Result<()> {
             differ += 1;
             continue;
         };
+        if let Some(folder) = &folder {
+            let on_server = folder_path(&folders, summary["folderId"].as_str());
+            if *folder != on_server {
+                println!(
+                    "folder {}: the server has it in {}, the files in {}",
+                    path.display(),
+                    show_folder(&on_server),
+                    show_folder(folder)
+                );
+                differ += 1;
+            }
+        }
         let id = summary["id"].as_str().unwrap_or_default();
         let remote = to_yaml(&client.get(&format!("/api/v1/workflows/{id}")).await?["draft"])?;
         if remote == local {
@@ -554,7 +717,13 @@ async fn push(
     notes: Option<&str>,
 ) -> anyhow::Result<()> {
     let workflows = client.workflows().await?;
-    for path in files(paths)? {
+    let mut folders = client.folders().await?;
+    let found = found(paths)?;
+    if let Some((key, twice)) = files_by_key(&found).into_iter().find(|(_, p)| p.len() > 1) {
+        let list: Vec<String> = twice.iter().map(|p| p.display().to_string()).collect();
+        bail!("{key} is in more than one file: {}", list.join(", "));
+    }
+    for Found { path, folder } in found {
         let document = load(&path)?;
         let key = key_of(&document, &path)?;
         let saved = match workflows.get(&key) {
@@ -597,6 +766,9 @@ async fn push(
         for p in &problems {
             println!("  problem: {p}");
         }
+        if let Some(folder) = &folder {
+            file_in(client, &mut folders, &saved, &key, folder).await?;
+        }
         if publish {
             if !problems.is_empty() {
                 bail!("{key} has problems, so it can't be published");
@@ -612,6 +784,35 @@ async fn push(
                 published["version"].as_i64().unwrap_or_default()
             );
         }
+    }
+    Ok(())
+}
+
+/// Moves a pushed workflow into the folder its file is in, if it isn't
+/// there. A move the server refuses (built-in workflows stay in the System
+/// folder) is reported, not fatal.
+async fn file_in(
+    client: &Client,
+    folders: &mut Vec<Json>,
+    saved: &Json,
+    key: &str,
+    folder: &[String],
+) -> anyhow::Result<()> {
+    let current = folder_path(folders, saved["folderId"].as_str());
+    if current == folder {
+        return Ok(());
+    }
+    let target = match client.folder_at(folders, folder).await {
+        Ok(target) => target,
+        Err(e) => {
+            println!("  couldn't make folder {}: {e:#}", show_folder(folder));
+            return Ok(());
+        }
+    };
+    let body = json!({ "workflowIds": [saved["id"]], "folderId": target });
+    match client.post("/api/v1/workflow-folders/move", &body).await {
+        Ok(_) => println!("moved {key} to {}", show_folder(folder)),
+        Err(e) => println!("  left {key} in {}: {e:#}", show_folder(&current)),
     }
     Ok(())
 }
@@ -904,5 +1105,170 @@ mod tests {
         .unwrap();
         assert_eq!(inputs, json!({ "name": "ada", "count": 3, "tags": ["a"] }));
         assert!(run_inputs(&["nonsense".into()], None).is_err());
+    }
+}
+
+/// `pull`, `diff` and `push` against a real API on localhost: folders
+/// become directories and back.
+#[cfg(test)]
+mod folder_tests {
+    use super::*;
+    use huxley_core::{RequestContext, Via};
+    use huxley_db::testing::{ensure_root, isolated};
+    use huxley_db::{OrgScope, begin_scoped};
+
+    /// A server, an owner's token, and the root organization's id.
+    async fn server() -> Option<(huxley_db::testing::IsolatedDb, Connection)> {
+        let db = isolated("cli_folders").await?;
+        let pools = db.pools.clone();
+        let root = ensure_root(&pools).await;
+        let ctx = RequestContext::system(Via::System);
+        let mut tx = begin_scoped(&pools.app, &OrgScope::System).await.unwrap();
+        let user = huxley_auth::create_user(
+            &mut tx,
+            &ctx,
+            "cli@example.com",
+            "CLI",
+            "cli folders passphrase",
+        )
+        .await
+        .unwrap();
+        huxley_authz::grant_root_owner(&mut tx, &ctx, user.id)
+            .await
+            .unwrap();
+        let token = huxley_auth::api_tokens::create(
+            &mut tx,
+            &ctx,
+            &user,
+            "cli",
+            &["*".to_owned()],
+            Some(time::OffsetDateTime::now_utc() + time::Duration::days(1)),
+        )
+        .await
+        .unwrap();
+        tx.commit().await.unwrap();
+        let crypto =
+            || huxley_crypto::Crypto::new(pools.app.clone(), huxley_crypto::testing::key_ring());
+        let auth = huxley_auth::AuthService::new(
+            pools.app.clone(),
+            huxley_auth::AuthConfig::default(),
+            crypto(),
+        );
+        let state = huxley_api::AppState::new(
+            pools.app.clone(),
+            auth,
+            crypto(),
+            huxley_api::ApiConfig::default(),
+        );
+        let app =
+            huxley_api::router(state).into_make_service_with_connect_info::<std::net::SocketAddr>();
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let port = listener.local_addr().unwrap().port();
+        tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+        Some((
+            db,
+            Connection {
+                server: format!("http://127.0.0.1:{port}"),
+                token: token.secret,
+                org: root.to_string(),
+            },
+        ))
+    }
+
+    fn workflow(key: &str) -> Json {
+        json!({
+            "apiVersion": "usehuxley.io/v1", "kind": "Workflow",
+            "metadata": { "key": key, "name": key },
+            "spec": { "steps": [{ "id": "a", "type": "transform", "output": "x" }] },
+        })
+    }
+
+    async fn folder_of(client: &Client, key: &str) -> String {
+        let workflows = client.workflows().await.unwrap();
+        let folders = client.folders().await.unwrap();
+        show_folder(&folder_path(&folders, workflows[key]["folderId"].as_str()))
+    }
+
+    #[tokio::test]
+    async fn folders_are_directories() {
+        let Some((_db, connection)) = server().await else {
+            return;
+        };
+        let client = Client::new(&connection).await.unwrap();
+        for key in ["alpha", "beta"] {
+            client
+                .post(
+                    "/api/v1/workflows",
+                    &json!({ "orgId": client.org_id, "document": workflow(key) }),
+                )
+                .await
+                .unwrap();
+        }
+        let mut folders = client.folders().await.unwrap();
+        let ops = client
+            .folder_at(&mut folders, &["Ops".to_owned()])
+            .await
+            .unwrap();
+        let alpha = client.workflows().await.unwrap()["alpha"]["id"].clone();
+        client
+            .post(
+                "/api/v1/workflow-folders/move",
+                &json!({ "workflowIds": [alpha], "folderId": ops }),
+            )
+            .await
+            .unwrap();
+
+        // Pulled into directories.
+        let dir = std::env::temp_dir().join(format!("huxley-cli-{}", uuid::Uuid::now_v7()));
+        pull(&client, &dir, &[]).await.unwrap();
+        assert!(dir.join("Ops/alpha.yaml").is_file());
+        assert!(dir.join("beta.yaml").is_file());
+        diff(&client, std::slice::from_ref(&dir)).await.unwrap();
+
+        // Moving files moves the workflows (making folders as needed).
+        std::fs::create_dir_all(dir.join("Ops/Daily")).unwrap();
+        std::fs::rename(dir.join("beta.yaml"), dir.join("Ops/Daily/beta.yaml")).unwrap();
+        std::fs::rename(dir.join("Ops/alpha.yaml"), dir.join("alpha.yaml")).unwrap();
+        assert!(diff(&client, std::slice::from_ref(&dir)).await.is_err());
+        push(&client, std::slice::from_ref(&dir), false, None)
+            .await
+            .unwrap();
+        assert_eq!(folder_of(&client, "beta").await, "Ops/Daily");
+        assert_eq!(folder_of(&client, "alpha").await, "unfiled");
+        diff(&client, std::slice::from_ref(&dir)).await.unwrap();
+        // A file named on its own keeps its workflow where it is.
+        push(&client, &[dir.join("alpha.yaml")], false, None)
+            .await
+            .unwrap();
+        assert_eq!(folder_of(&client, "beta").await, "Ops/Daily");
+
+        // Moved on the server: pulling moves the file.
+        let beta = client.workflows().await.unwrap()["beta"]["id"].clone();
+        client
+            .post(
+                "/api/v1/workflow-folders/move",
+                &json!({ "workflowIds": [beta], "folderId": null }),
+            )
+            .await
+            .unwrap();
+        pull(&client, &dir, &[]).await.unwrap();
+        assert!(dir.join("beta.yaml").is_file());
+        assert!(!dir.join("Ops/Daily/beta.yaml").exists());
+
+        // The same workflow in two files is refused.
+        std::fs::copy(dir.join("alpha.yaml"), dir.join("Ops/alpha.yaml")).unwrap();
+        let err = push(&client, std::slice::from_ref(&dir), false, None)
+            .await
+            .unwrap_err();
+        assert!(err.to_string().contains("more than one file"), "{err}");
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn folder_names_make_safe_directories() {
+        assert_eq!(dir_name("Ops / Daily"), "Ops - Daily");
+        assert_eq!(dir_name(".hidden"), "_hidden");
+        assert_eq!(dir_name(".."), "_");
+        assert_eq!(dir_name("System"), "System");
     }
 }
