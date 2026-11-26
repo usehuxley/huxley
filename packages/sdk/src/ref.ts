@@ -14,6 +14,9 @@ const PATH = Symbol('huxley.ref.path');
 /** A reference: any property is a deeper reference. */
 export type Ref = { readonly [key: string]: Ref } & { readonly [PATH]: string } & string;
 
+/** An expression in place of a value: a reference, or `{{ … }}` text. */
+export type Expression = Ref | `{{${string}}}`;
+
 /** Whether a value is a reference. */
 export function isRef(value: unknown): value is Ref {
 	return (
@@ -75,7 +78,7 @@ function render(strings: TemplateStringsArray, values: unknown[], inside: boolea
  * `{{ steps.find.output.people | length }}`. Plain values are inlined as
  * JSON literals.
  */
-export function expr(strings: TemplateStringsArray, ...values: unknown[]): string {
+export function expr(strings: TemplateStringsArray, ...values: unknown[]): `{{${string}}}` {
 	return `{{ ${render(strings, values, true).trim()} }}`;
 }
 

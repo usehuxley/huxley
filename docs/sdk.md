@@ -73,3 +73,34 @@ huxley workflows push dist --publish                 # sync with the server
 ## Examples
 
 [`examples/sdk`](../examples/sdk) has the built-in timesheet reminders pack written with the SDK. A test checks that they compile to exactly the pack's YAML. Copy the folder to start a repository of your own.
+
+## Typed integration actions
+
+`huxley workflows codegen` writes TypeScript for the organization's integration actions: each action's input and output types, and a builder that makes its `integration.action` step.
+
+```sh
+huxley workflows codegen --out integrations.ts   # uses HUXLEY_SERVER, HUXLEY_TOKEN, HUXLEY_ORG
+```
+
+```ts
+import { msgraph } from './integrations.ts';
+import { ref, workflow } from '@usehuxley/sdk';
+
+export default workflow({
+	key: 'disable-user',
+	name: 'Disable a user',
+	steps: [
+		msgraph.updateUser(
+			'disable',
+			{ id: ref.inputs.user, body: { accountEnabled: false } },
+			{ connection: 'tenant', retry: { max_attempts: 3 } }
+		)
+	]
+});
+```
+
+- **Types:** inputs are checked against the action's parameters and body. Values may also be expressions (a reference, or `{{ … }}`). The output types (`MsgraphListUsersOutput`, …) describe what the action returns.
+- **Step options** such as `retry`, `timeout`, `if`, `connection` and `all_pages` go in the third argument.
+- **Commit the file**, and run codegen again when integrations change. The types follow the integration versions the organization uses (its own, or the nearest above it).
+
+`huxley workflows build [src] --out dist` runs the project's `huxley-sdk build`, for pipelines that already use the `huxley` command.

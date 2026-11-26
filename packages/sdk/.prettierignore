@@ -1,2 +1,3 @@
 node_modules
 src/hwf.ts
+test/fixtures/integrations.ts

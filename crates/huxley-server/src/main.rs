@@ -4,6 +4,7 @@
 //! large installs run each role as its own deployment and scale it separately.
 
 mod admin;
+mod codegen;
 mod config;
 mod mcp_cli;
 mod pack_cli;

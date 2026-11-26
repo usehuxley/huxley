@@ -6214,13 +6214,18 @@ export interface components {
 			/** @description What a step's `action` says: `<integration>/<action>`. */
 			action: string;
 			deprecated: boolean;
+			description?: string | null;
 			group?: string | null;
+			/** @description The inputs' JSON Schema (asked for with `schemas`, for code generation). */
+			inputSchema?: Record<string, never> | null;
 			/** @description Input names, required ones first. */
 			inputs: string[];
 			integration: string;
 			integrationName: string;
 			method: string;
 			name: string;
+			/** @description The output's JSON Schema, when known (with `schemas`). */
+			outputSchema?: Record<string, never> | null;
 			path: string;
 			required: string[];
 		};
@@ -16723,6 +16728,11 @@ export interface operations {
 			query: {
 				/** @description The organization a workflow belongs to. */
 				orgId: string;
+				/**
+				 * @description Include each action's input and output JSON Schemas (for
+				 *     `huxley workflows codegen`).
+				 */
+				schemas?: boolean;
 			};
 			header?: never;
 			path?: never;

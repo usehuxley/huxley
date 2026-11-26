@@ -8,7 +8,7 @@ import type { Branch, HuxleyWorkflowFormatV1, Metadata, Settings, Step, Trigger 
 import { isRef, pathOf, refAt, type Ref } from './ref.ts';
 
 export type * from './hwf.ts';
-export { expr, isRef, pathOf, ref, refAt, text, type Ref } from './ref.ts';
+export { expr, isRef, pathOf, ref, refAt, text, type Expression, type Ref } from './ref.ts';
 
 export type Workflow = HuxleyWorkflowFormatV1;
 export type StepType = Step['type'];
