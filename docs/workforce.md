@@ -85,6 +85,13 @@ A **timesheet** is a person's time for a period, weekly from Monday by default. 
 - **Periods:** weekly, or every two weeks, from a day you choose.
 - **Bill only approved time:** billing previews, an [agreement's usage](agreements.md), then count only time on approved timesheets. Allowances are still used up by all covered time, in order. The usage API also takes `approvedOnly` directly.
 
+**Reminders:** the built-in **Timesheet reminders** pack (`huxley/timesheet-reminders`) adds three workflows. Install it at your MSP and publish them. They're ordinary workflows, so you can change their schedules, wording and rules.
+- **Remind people to submit their timesheets:** every weekday at 9:00, it tells people whose last timesheet isn't submitted, or was rejected and not resubmitted. From three days late, it tells their team leads too.
+- **Remind people about days logged short:** every morning, it tells people who logged less yesterday than their working hours expect, unless they were on time off.
+- **Remind people to add notes to their time:** on Fridays, it tells people how many of this period's entries have no notes.
+
+They use the `core.timesheet.check` step: see [the step reference](workflows.md).
+
 **Payroll export:** **Timesheets → Payroll export** downloads a CSV for a date range. It holds approved timesheets' time by person, day and work type, and approved time off as each scheduled day's hours (8 hours on weekdays without a schedule).
 
 ## What work requires

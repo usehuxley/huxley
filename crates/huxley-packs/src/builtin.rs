@@ -84,6 +84,27 @@ const SOURCES: &[Source] = &[
         ],
     },
     Source {
+        manifest: include_str!("../builtin/timesheet-reminders/pack.yaml"),
+        files: &[
+            (
+                "workflows/timesheet-unsubmitted.yaml",
+                include_str!("../builtin/timesheet-reminders/workflows/timesheet-unsubmitted.yaml"),
+            ),
+            (
+                "workflows/timesheet-under-logged.yaml",
+                include_str!(
+                    "../builtin/timesheet-reminders/workflows/timesheet-under-logged.yaml"
+                ),
+            ),
+            (
+                "workflows/timesheet-missing-notes.yaml",
+                include_str!(
+                    "../builtin/timesheet-reminders/workflows/timesheet-missing-notes.yaml"
+                ),
+            ),
+        ],
+    },
+    Source {
         manifest: include_str!("../builtin/immybot/pack.yaml"),
         files: &[
             (
