@@ -618,7 +618,7 @@ export const STEPS: StepSpec[] = [
 				path: 'approvers',
 				label: 'Approvers',
 				kind: 'json',
-				hint: 'user:<id>, team:<id> or role:<key>; the first decision counts'
+				hint: 'user:<id>, team:<id>, role:<key>, contact:<id> or client_approvers (in the portal); the first decision counts'
 			},
 			{
 				path: 'expires',

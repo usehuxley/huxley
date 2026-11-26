@@ -1557,7 +1557,7 @@
           "description": "Park until one of the approvers approves or rejects.",
           "properties": {
             "approvers": {
-              "description": "Who may decide: `user:<id>`, `team:<id>`, `role:<key>` (holders at the\nrun's organization). The first decision counts."
+              "description": "Who may decide: `user:<id>`, `team:<id>`, `role:<key>` (holders at the\nrun's organization), and client contacts in the portal:\n`contact:<id>` or `client_approvers` (the run's company's client\napprovers and admins). The first decision counts."
             },
             "continue_on_error": {
               "description": "Record the error as the step's output and carry on.",

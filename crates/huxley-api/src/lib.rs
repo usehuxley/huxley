@@ -39,6 +39,7 @@ mod pack_routes;
 pub mod packs;
 pub mod passkey_routes;
 pub mod portal_access_routes;
+pub mod portal_approval_routes;
 pub mod portal_catalog_routes;
 pub mod portal_device_routes;
 pub mod portal_kb_routes;
@@ -154,7 +155,8 @@ impl AppState {
         ));
         // Workflows started from the API render callback URLs too.
         let engine = huxley_engine::Engine::new(db.clone(), crypto.clone())
-            .with_public_url(auth.config().public_url.clone());
+            .with_public_url(auth.config().public_url.clone())
+            .with_portal_url(config.portal_public_url.clone());
         Self {
             db,
             sso: SsoService::new(auth.clone(), crypto.clone())

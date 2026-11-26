@@ -94,6 +94,9 @@ pub struct Engine {
     public_url: Option<String>,
     /// Sends `core.email` steps' mail.
     mailer: Option<huxley_email::Mailer>,
+    /// The client portal's address (`http.portal_public_url`), for links in
+    /// mail to contacts when their company has no portal domain.
+    portal_url: Option<String>,
 }
 
 impl Engine {
@@ -112,7 +115,15 @@ impl Engine {
             payloads: payload::Payloads::new(None, &config.payload),
             public_url: None,
             mailer: None,
+            portal_url: None,
         }
+    }
+
+    /// Sets the client portal's address (`http.portal_public_url`).
+    #[must_use]
+    pub fn with_portal_url(mut self, portal_url: Option<String>) -> Self {
+        self.portal_url = portal_url;
+        self
     }
 
     /// Sets the address callback URLs point at (`auth.public_url`).
