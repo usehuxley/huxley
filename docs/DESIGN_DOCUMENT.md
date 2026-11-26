@@ -559,7 +559,7 @@ Guardrails:
 
 - **Leads → Opportunities**: lead capture (forms, email, API), qualification, conversion to opportunity plus company/contact.
 - **Pipeline**: configurable stages with probability, a kanban plus list view, a stage-change history, and win/loss reasons.
-- **Activities and communications**: tasks, calls, meetings, and emails logged against leads, opportunities, and companies. Email logging uses Graph/IMAP sync plus a BCC address. Calendar sync comes later.
+- **Activities and communications**: tasks, calls, meetings, and emails logged against leads, opportunities, and companies. Email logging uses Graph/IMAP sync plus a BCC address. Meetings can be logged from the synced calendars (§8.15).
 - **Forecasting**: weighted pipeline by period, rep, and team, plus commit/best-case categories and quota attainment.
 - **Quoting (CPQ)**:
   - Quote builder from the product catalog and bundles, with distributor pricing lookups via integrations.
@@ -642,9 +642,20 @@ The `workforce` module describes the MSP's people: what they can do, when they'r
 - **Availability:**
   - **Working schedule:** each person has a working schedule (hours per weekday, timezone), which defaults from their team.
   - **Time off:** requested and approved through the approval step.
+  - **Calendar sync:** people's work calendars, so Huxley knows when they're actually busy:
+    - **Sources:**
+      - Microsoft 365 (Graph) and Google Workspace. An admin consents once for the tenant or domain and picks who's synced; a person can also connect their own calendar.
+      - A read-only ICS feed URL for anything else.
+    - **Reading:**
+      - Free/busy blocks (start, end, busy, tentative or out of office) are kept per person, a few weeks back and ahead.
+      - Changes arrive by push (Graph change notifications, Google push channels), with periodic delta sync as the fallback and to catch missed notifications.
+      - Private events are stored as *Busy* only. Titles are kept only where the admin allows it, and are shown only to the person and dispatchers.
+    - **Writing:** dispatched appointments and scheduled project work are written to the person's calendar (an event Huxley owns, linked to the ticket), and updated or removed when the work moves, is reassigned or is cancelled. Writing is opt-in per connection.
+    - **Conflicts:** an appointment overlapping a busy block is flagged when it's booked. A calendar change that newly conflicts with booked work raises `calendar.conflict`, which a workflow can route to the dispatcher.
+    - **Out of office** in the calendar counts as away, alongside time off approved in Huxley.
   - **Uses:**
-    - Dispatch skips people who are away or outside their hours.
-    - Capacity planning (§8.14) uses expected hours.
+    - Dispatch skips people who are away, outside their hours, or busy in their calendar, and only offers slots that are actually free.
+    - Capacity planning (§8.14) uses expected hours, less calendar time that's busy.
     - Timesheets compare logged time against expected time.
 - **Time entries:**
   - Logged on tickets and project tasks (§8.2, §8.14), or as non-ticket time with a work type: *admin*, *internal meeting*, *training*, *travel* or *time off*.

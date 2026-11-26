@@ -246,6 +246,11 @@ This is a long-term project. The plan follows four rules:
   - Project templates with attached workflows.
   - List, board, timeline/Gantt, and calendar views.
   - Resource capacity planning shared with the dispatch calendar, matching task skill requirements to people (§8.15).
+- **Calendar sync** (§8.15), so dispatch, scheduling and capacity planning use when people are actually free:
+  - Microsoft 365 and Google Workspace connections (tenant-wide consent or per person), plus read-only ICS feeds.
+  - Free/busy blocks per person, kept current by push notifications with delta sync as the fallback. Private events are stored as *Busy*.
+  - Dispatched appointments and scheduled project work written back to the person's calendar (opt-in), and kept in step when work moves or is cancelled.
+  - Dispatch, the dispatch calendar and capacity planning treat busy and out-of-office time as unavailable. Booking over a busy block is flagged, and later calendar changes that conflict with booked work raise `calendar.conflict`.
   - Hour/cost budgets vs actuals from time entries, plus budget threshold events.
   - Billing method settings (fixed fee, milestone, T&M, not-to-exceed) for use in Phase 11.
   - Scope change requests with client approval.
@@ -259,6 +264,9 @@ This is a long-term project. The plan follows four rules:
   - shows budget burn from time entries
   - fires a budget threshold event
   - displays milestone status in the client portal
+- A technician's Microsoft 365 meeting:
+  - blocks that time in the dispatch calendar, and dispatch won't book over it
+  - an appointment booked for them appears in their Outlook calendar, and moves when it's rescheduled in Huxley
 
 ---
 
