@@ -1,5 +1,6 @@
 <script lang="ts">
 	import PortalAccessCard from '#lib/portal/PortalAccessCard.svelte';
+	import NpsCard from '#lib/crm/NpsCard.svelte';
 	import ActionsCard from '#lib/forms/ActionsCard.svelte';
 	import { enhance, type SubmitFunction } from '$app/forms';
 	import { resolve } from '$app/paths';
@@ -67,6 +68,8 @@
 	</div>
 
 	<ActionsCard actions={data.actions} orgId={contact.orgId} contactId={contact.id} />
+
+	{#if data.nps}<NpsCard nps={data.nps} />{/if}
 
 	{#if data.portal}
 		<PortalAccessCard

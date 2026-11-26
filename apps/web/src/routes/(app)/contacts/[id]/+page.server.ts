@@ -16,7 +16,7 @@ export const load: PageServerLoad = async (event) => {
 	const { user } = await event.parent();
 	const portalOn =
 		user.activeModules.includes('portal') && user.grantedPermissions.includes('crm:read');
-	const [fields, sites, companies, actions, portalAccounts] = await Promise.all([
+	const [fields, sites, companies, actions, portalAccounts, nps] = await Promise.all([
 		client.GET('/api/v1/entities/{entity_type}/{id}/fields', {
 			params: { path: { entity_type: 'contact', id } }
 		}),
@@ -27,6 +27,9 @@ export const load: PageServerLoad = async (event) => {
 			? client.GET('/api/v1/orgs/{id}/portal-accounts', {
 					params: { path: { id: contact.data.orgId } }
 				})
+			: Promise.resolve({ data: undefined }),
+		user.activeModules.includes('cx')
+			? client.GET('/api/v1/contacts/{id}/nps', { params: { path: { id } } })
 			: Promise.resolve({ data: undefined })
 	]);
 	return {
@@ -35,6 +38,7 @@ export const load: PageServerLoad = async (event) => {
 		sites: sites.data ?? [],
 		companies: companies.data ?? [],
 		actions,
+		nps: nps.data ?? null,
 		portal: portalOn
 			? {
 					account: (portalAccounts.data ?? []).find((a) => a.contactId === id) ?? null,

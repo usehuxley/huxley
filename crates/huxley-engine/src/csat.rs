@@ -158,3 +158,115 @@ impl Engine {
         Ok(json!({ "sent": true, "skipped": null, "survey": survey.id, "emailed": emailed }))
     }
 }
+
+/// The NPS email: a link per score, 0 to 10 (`{url}?score=…`).
+fn nps_email(to: &str, first_name: &str, company: &str, url: &str) -> huxley_email::Email {
+    let esc = huxley_email::escape_html;
+    let greeting = if first_name.is_empty() {
+        "Hello,".to_owned()
+    } else {
+        format!("Hello {first_name},")
+    };
+    let question = "How likely are you to recommend us to a friend or colleague? 0 is not at all, 10 is extremely.";
+    let text = format!(
+        "{greeting}\n\n{question}\n\n{}\n\nOne click answers; you can add a comment on the page it opens.\n",
+        (0..=10)
+            .map(|n| format!("{n}: {url}?score={n}"))
+            .collect::<Vec<_>>()
+            .join("\n")
+    );
+    let mut buttons = String::new();
+    for n in 0..=10 {
+        let _ = write!(
+            buttons,
+            "<a href=\"{}\" style=\"display:inline-block;min-width:28px;margin:0 4px 6px 0;padding:8px 0;text-align:center;\
+             border:1px solid #d0d7de;border-radius:6px;color:#1f2328;text-decoration:none\">{n}</a>",
+            esc(&format!("{url}?score={n}"))
+        );
+    }
+    let html = format!(
+        "<!doctype html><html><body style=\"font-family:system-ui,sans-serif;color:#1f2328;line-height:1.5\">\
+         <p>{}</p><p>{}</p><p>{buttons}</p>\
+         <p style=\"color:#57606a;font-size:13px\">One click answers; you can add a comment on the page it opens.</p>\
+         </body></html>",
+        esc(&greeting),
+        esc(question)
+    );
+    huxley_email::Email {
+        to: to.to_owned(),
+        subject: format!("A quick question from {company}"),
+        text,
+        html,
+        reply: None,
+    }
+}
+
+impl Engine {
+    /// `core.nps.send`: asks contacts under the run's organization how likely
+    /// they are to recommend you (those who raised a ticket lately and
+    /// weren't asked lately; companies can opt out). Output: `{ asked,
+    /// emailed, campaign }`.
+    pub(crate) async fn nps_send(&self, org_id: Uuid, input: &Json) -> Result<Json, Json> {
+        let limit = input["limit"].as_i64().unwrap_or(500).clamp(1, 5000);
+        let campaign = input["campaign"]
+            .as_str()
+            .map(str::trim)
+            .filter(|c| !c.is_empty() && c.len() <= 60)
+            .map_or_else(
+                || {
+                    let today = time::OffsetDateTime::now_utc().date();
+                    format!("{}-{:02}", today.year(), u8::from(today.month()))
+                },
+                str::to_owned,
+            );
+        let mut tx = begin_scoped(self.db(), &OrgScope::System)
+            .await
+            .map_err(internal)?;
+        if !huxley_modules::is_active_at(&mut tx, huxley_cx::MODULE, org_id)
+            .await
+            .map_err(internal)?
+        {
+            return Err(error(
+                "module_disabled",
+                "The customer experience module is turned off",
+            ));
+        }
+        let candidates = huxley_cx::nps::candidates(&mut tx, org_id, limit)
+            .await
+            .map_err(internal)?;
+        let ctx = RequestContext::system(Via::Workflow);
+        let mailer = self.mailer.as_ref().filter(|m| m.enabled());
+        let (mut asked, mut emailed) = (0, 0);
+        for who in &candidates {
+            let (survey, token) = huxley_cx::nps::start(&mut tx, &ctx, who, &campaign)
+                .await
+                .map_err(internal)?;
+            asked += 1;
+            let Some(mailer) = mailer else { continue };
+            let Some(base) = self
+                .portal_base(&mut tx, survey.org_id)
+                .await
+                .map_err(internal)?
+            else {
+                continue;
+            };
+            let company = huxley_orgs::settings::value(
+                &mut tx,
+                survey.org_id,
+                huxley_orgs::settings::BRAND_NAME,
+            )
+            .await
+            .ok()
+            .flatten()
+            .unwrap_or_else(|| "your service desk".to_owned());
+            let url = format!("{}/nps/{token}", base.trim_end_matches('/'));
+            mailer.send_later(nps_email(&who.email, &who.first_name, &company, &url));
+            huxley_cx::nps::mark_emailed(&mut tx, survey.id)
+                .await
+                .map_err(internal)?;
+            emailed += 1;
+        }
+        tx.commit().await.map_err(internal)?;
+        Ok(json!({ "asked": asked, "emailed": emailed, "campaign": campaign }))
+    }
+}

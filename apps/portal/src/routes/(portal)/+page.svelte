@@ -3,9 +3,10 @@
 	import { Plus, Ticket } from '@lucide/svelte';
 	import { Badge, Button, Card, EmptyState } from '@usehuxley/ui';
 	import { statusTone, when } from '#lib/tickets/status.ts';
+	import NpsForm from '#lib/csat/NpsForm.svelte';
 	import type { PageProps } from './$types';
 
-	let { data }: PageProps = $props();
+	let { data, form }: PageProps = $props();
 	let firstName = $derived(data.me.name.split(' ')[0] || data.me.name);
 </script>
 
@@ -33,6 +34,20 @@
 				? 'One request is waiting for your approval.'
 				: `${data.waiting} requests are waiting for your approval.`}
 		</a>
+	{/if}
+
+	{#if form && 'npsAnswered' in form}
+		<p class="rounded-card border border-border bg-surface p-4 text-sm text-fg" role="status">
+			Thanks for letting us know.
+		</p>
+	{:else if data.nps?.open}
+		<Card title="A quick question">
+			<NpsForm
+				action="?/nps"
+				company={data.nps.company}
+				message={form && 'npsMessage' in form ? form.npsMessage : null}
+			/>
+		</Card>
 	{/if}
 
 	<Card title="Your open tickets">

@@ -231,7 +231,7 @@ async fn dashboards_are_prebuilt_shared_or_personal() {
         .collect();
     assert_eq!(
         builtin.join(","),
-        "service-desk,csat,sla,utilization,clients,time"
+        "service-desk,csat,nps,sla,utilization,clients,time"
     );
     let (status, sd) = call(
         &app,

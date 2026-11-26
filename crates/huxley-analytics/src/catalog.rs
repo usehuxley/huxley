@@ -290,11 +290,56 @@ pub const CSAT: Source = Source {
     ]),
 };
 
+pub const NPS: Source = Source {
+    key: Cow::Borrowed("nps"),
+    label: Cow::Borrowed("Net promoter answers"),
+    description: Cow::Borrowed(
+        "Net promoter questions sent to contacts, and their answers (0 to 10).",
+    ),
+    module: Some("cx"),
+    permission: "crm:read",
+    time_field: Cow::Borrowed("sent_at"),
+    from: Cow::Borrowed(
+        "cx_nps n JOIN organizations o ON o.id = n.org_id JOIN crm_contacts c ON c.id = n.contact_id",
+    ),
+    fields: Cow::Borrowed(&[
+        CLIENT,
+        f(
+            "contact",
+            "Contact",
+            Kind::Text,
+            "btrim(c.first_name || ' ' || c.last_name)",
+        ),
+        f("campaign", "Round", Kind::Text, "n.campaign"),
+        f(
+            "answered",
+            "Answered",
+            Kind::Bool,
+            "(n.responded_at IS NOT NULL)",
+        ),
+        f("score", "Score", Kind::Number, "n.score"),
+        f(
+            "category",
+            "Promoter, passive or detractor",
+            Kind::Text,
+            "(CASE WHEN n.score IS NULL THEN NULL WHEN n.score >= 9 THEN 'promoter' WHEN n.score >= 7 THEN 'passive' ELSE 'detractor' END)",
+        ),
+        f(
+            "nps",
+            "NPS",
+            Kind::Number,
+            "(CASE WHEN n.score IS NULL THEN NULL WHEN n.score >= 9 THEN 100 WHEN n.score >= 7 THEN 0 ELSE -100 END)",
+        ),
+        f("sent_at", "Asked", Kind::Time, "n.sent_at"),
+        f("responded_at", "Answered", Kind::Time, "n.responded_at"),
+    ]),
+};
+
 /// Dataset sources' keys: `dataset:<dataset key>`.
 pub const DATASET_PREFIX: &str = "dataset:";
 
 /// Every source, in display order.
-pub const SOURCES: &[Source] = &[TICKETS, TIME_ENTRIES, ASSETS, RUNS, CSAT];
+pub const SOURCES: &[Source] = &[TICKETS, TIME_ENTRIES, ASSETS, RUNS, CSAT, NPS];
 
 pub fn source(key: &str) -> Option<&'static Source> {
     SOURCES.iter().find(|s| s.key == key)

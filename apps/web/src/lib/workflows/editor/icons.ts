@@ -60,6 +60,7 @@ const ICONS: Record<string, typeof Globe> = {
 	'core.ticket.embed': Sparkles,
 	'core.kb.embed': Sparkles,
 	'core.csat.survey': Smile,
+	'core.nps.send': Smile,
 	'core.asset.sync': Boxes,
 	'core.asset.set_warranty': Boxes,
 	'core.ticket.create': TicketPlus,

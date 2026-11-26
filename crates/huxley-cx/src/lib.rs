@@ -1,6 +1,7 @@
 //! Customer experience (design doc §8.9): satisfaction surveys when tickets
 //! are resolved (ADR-043). NPS and client health scores follow.
 
+pub mod nps;
 pub mod surveys;
 
 /// The module's key in the registry.

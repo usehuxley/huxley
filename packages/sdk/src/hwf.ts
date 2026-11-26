@@ -1032,6 +1032,30 @@ export type Step =
 			 * Fail the attempt after this long, e.g. `30s`.
 			 */
 			timeout?: string | null;
+			type: 'core.nps.send';
+			with?: NpsSend;
+	  }
+	| {
+			/**
+			 * Record the error as the step's output and carry on.
+			 */
+			continue_on_error?: boolean;
+			description?: string | null;
+			/**
+			 * Unique in the workflow: lowercase letters, digits, underscores.
+			 * Other steps read this step's output as `steps.<id>.output`.
+			 */
+			id: string;
+			/**
+			 * Skip the step unless this expression is true.
+			 */
+			if?: string | null;
+			name?: string | null;
+			retry?: RetryPolicy | null;
+			/**
+			 * Fail the attempt after this long, e.g. `30s`.
+			 */
+			timeout?: string | null;
 			type: 'core.asset.sync';
 			with: AssetSync;
 	  }
@@ -1860,6 +1884,20 @@ export interface CsatSurvey {
 	ticket: unknown;
 }
 /**
+ * A net promoter round (`core.nps.send`): contacts in the run's
+ * organization and below who raised a ticket lately and weren't asked
+ * lately (each company's Customer experience settings; companies can opt
+ * out) are asked how likely they are to recommend you, 0 to 10, by email
+ * when email and the portal's address are set up, and in the portal.
+ * `campaign` names the round (default: the month, e.g. `2026-11`); `limit`
+ * caps how many are asked (default 500). Output: `{ asked, emailed,
+ * campaign }`.
+ */
+export interface NpsSend {
+	campaign?: unknown;
+	limit?: unknown;
+}
+/**
  * Mapping rules to run (`core.asset.sync`): a dataset's rows become
  * assets, matched, updated and created by the rule. Give `mapping_id` for
  * one rule, or `dataset` (a dataset's key) for every rule on it that's on.
@@ -2022,6 +2060,23 @@ export interface KbEmbed1 {
 export interface MailFetch1 {
 	limit?: unknown;
 	mailbox_id?: unknown;
+}
+/**
+ * A net promoter round (`core.nps.send`): contacts in the run's
+ * organization and below who raised a ticket lately and weren't asked
+ * lately (each company's Customer experience settings; companies can opt
+ * out) are asked how likely they are to recommend you, 0 to 10, by email
+ * when email and the portal's address are set up, and in the portal.
+ * `campaign` names the round (default: the month, e.g. `2026-11`); `limit`
+ * caps how many are asked (default 500). Output: `{ asked, emailed,
+ * campaign }`.
+ *
+ * This interface was referenced by `HuxleyWorkflowFormatV1`'s JSON-Schema
+ * via the `definition` "NpsSend".
+ */
+export interface NpsSend1 {
+	campaign?: unknown;
+	limit?: unknown;
 }
 /**
  * Tickets to embed (`core.ticket.embed`): those at the run's organization

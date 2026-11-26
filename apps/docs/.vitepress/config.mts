@@ -93,7 +93,7 @@ export default defineConfig({
 					{ text: 'Product catalog', link: '/catalog' },
 					{ text: 'Agreements', link: '/agreements' },
 					{ text: 'Client portal', link: '/portal' },
-					{ text: 'Satisfaction surveys', link: '/csat' },
+					{ text: 'Satisfaction and NPS', link: '/csat' },
 					{ text: 'Reporting data', link: '/analytics' },
 					{ text: 'ConnectWise Automate', link: '/cwautomate' },
 					{ text: 'ImmyBot', link: '/immybot' }

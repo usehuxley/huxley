@@ -1,0 +1,24 @@
+apiVersion: usehuxley.io/v1
+kind: Workflow
+metadata:
+  key: nps-detractor
+  name: Tell account managers about a detractor
+  description: >-
+    When a contact answers 0 to 6, tells everyone with the Administrator role
+    at their company (or above), with their comment, so someone follows up.
+spec:
+  triggers:
+    - type: event
+      event: nps.responded
+      filter: "{{ event.payload.category == 'detractor' }}"
+  steps:
+    - id: tell
+      type: core.notify
+      with:
+        to: role:admin
+        kind: ticket.replied
+        title: "A contact answered {{ inputs.score }} out of 10 to the net promoter question"
+        message: "{{ inputs.comment or 'No comment.' }}"
+        url: "/contacts/{{ trigger.subject_id }}"
+  outputs:
+    sent: "{{ steps.tell.output.sent }}"

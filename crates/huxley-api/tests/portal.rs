@@ -1351,3 +1351,136 @@ async fn answers_by_link_and_settings(s: &Setup, ada_contact: &str) {
     assert_eq!(status, StatusCode::OK, "{score}");
     assert_eq!(score["rows"], json!([[50.0, 2]]), "{score}");
 }
+
+#[tokio::test]
+async fn contacts_answer_the_net_promoter_question() {
+    let Some(db) = isolated("portal_nps").await else {
+        return;
+    };
+    let s = setup(&db.pools).await;
+    let ctx = RequestContext::system(Via::System);
+    let (ada, ada_contact) = s.portal_user(s.acme, "Ada", "client_user").await;
+    let bea = s.contact(s.acme, "Bea", "bea@acme.example").await;
+    s.contact(s.acme, "Cal", "cal@acme.example").await; // raised nothing: not asked
+    s.resolved_ticket(&ada_contact, "Printer").await;
+    s.resolved_ticket(&bea, "VPN").await;
+
+    let mut tx = begin_scoped(&s.pools.app, &OrgScope::System).await.unwrap();
+    let who = huxley_cx::nps::candidates(&mut tx, s.root, 100)
+        .await
+        .unwrap();
+    let mut names: Vec<Uuid> = who.iter().map(|c| c.contact_id).collect();
+    names.sort();
+    let mut expected: Vec<Uuid> = [&ada_contact, &bea]
+        .iter()
+        .map(|c| c.parse().unwrap())
+        .collect();
+    expected.sort();
+    assert_eq!(names, expected);
+    let mut tokens = std::collections::HashMap::new();
+    for c in &who {
+        let (_, token) = huxley_cx::nps::start(&mut tx, &ctx, c, "2026-11")
+            .await
+            .unwrap();
+        tokens.insert(c.contact_id, token);
+    }
+    // Asked lately: not again.
+    assert!(
+        huxley_cx::nps::candidates(&mut tx, s.root, 100)
+            .await
+            .unwrap()
+            .is_empty()
+    );
+    tx.commit().await.unwrap();
+
+    // Ada answers in the portal.
+    let (_, mine, _) = s
+        .call(&ada, "GET", "/api/portal/v1/me/nps", Value::Null)
+        .await;
+    assert_eq!(mine["open"], true, "{mine}");
+    assert_eq!(
+        s.call(
+            &ada,
+            "POST",
+            "/api/portal/v1/me/nps",
+            json!({ "score": 11 })
+        )
+        .await
+        .0,
+        StatusCode::UNPROCESSABLE_ENTITY
+    );
+    let (status, answered, _) = s
+        .call(
+            &ada,
+            "POST",
+            "/api/portal/v1/me/nps",
+            json!({ "score": 3, "comment": "Slow" }),
+        )
+        .await;
+    assert_eq!(
+        (status, &answered["score"]),
+        (StatusCode::OK, &json!(3)),
+        "{answered}"
+    );
+    let (_, none, _) = s
+        .call(&ada, "GET", "/api/portal/v1/me/nps", Value::Null)
+        .await;
+    assert_eq!(none, Value::Null);
+
+    // Bea answers from the email's link, once.
+    let link = format!(
+        "/api/portal/v1/nps/{}",
+        tokens[&bea.parse::<Uuid>().unwrap()]
+    );
+    let (_, shown, _) = s.call("", "GET", &link, Value::Null).await;
+    assert_eq!(shown["open"], true, "{shown}");
+    assert_eq!(
+        s.call("", "POST", &link, json!({ "score": 10 })).await.0,
+        StatusCode::OK
+    );
+    assert_eq!(
+        s.call("", "POST", &link, json!({ "score": 0 })).await.0,
+        StatusCode::CONFLICT
+    );
+    let (_, staff_view, _) = s
+        .call(
+            &s.staff,
+            "GET",
+            &format!("/api/v1/contacts/{bea}/nps"),
+            Value::Null,
+        )
+        .await;
+    assert_eq!(
+        (&staff_view["score"], &staff_view["channel"]),
+        (&json!(10), &json!("email"))
+    );
+
+    nps_score_and_opt_out(&s).await;
+}
+
+/// One detractor and one promoter make an NPS of 0; a company that opts out
+/// isn't asked.
+async fn nps_score_and_opt_out(s: &Setup) {
+    let ctx = RequestContext::system(Via::System);
+    // One detractor and one promoter: an NPS of 0.
+    let (_, score, _) = s
+        .call(&s.staff, "POST", "/api/v1/analytics/query", json!({ "source": "nps",
+            "measures": [{ "fn": "avg", "field": "nps" }], "filters": [{ "field": "answered", "op": "eq", "value": true }] }))
+        .await;
+    assert_eq!(score["rows"], json!([[0.0]]), "{score}");
+    // A company that opts out isn't asked.
+    let mut tx = begin_scoped(&s.pools.app, &OrgScope::System).await.unwrap();
+    huxley_orgs::settings::set(&mut tx, &ctx, s.globex, "nps.enabled", "false", false)
+        .await
+        .unwrap();
+    tx.commit().await.unwrap();
+    s.contact(s.globex, "Gil", "gil@globex.example").await;
+    let mut tx = begin_scoped(&s.pools.app, &OrgScope::System).await.unwrap();
+    assert!(
+        huxley_cx::nps::candidates(&mut tx, s.globex, 100)
+            .await
+            .unwrap()
+            .is_empty()
+    );
+    tx.commit().await.unwrap();
+}

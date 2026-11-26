@@ -31,4 +31,5 @@ CSAT (design doc §8.9) asks requesters how it went when a ticket is resolved. I
 
 - Surveys depend on the pack being installed and its workflows published, like other service desk automation. A fresh MSP installs it with the module.
 - Answers are tied to the survey, not the person who opened the link: whoever has the link can answer, once.
-- NPS campaigns and client health (§8.9) build on the same module.
+- **NPS** follows the same pattern: `core.nps.send` and the **Net promoter surveys** pack, links that record on **Send**, a home-page question in the portal, and an `nps` source whose average is the score.
+- Client health (§8.9) builds on the same module.
