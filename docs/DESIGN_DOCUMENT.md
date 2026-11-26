@@ -81,7 +81,7 @@ The core idea: **every module is built on the engine.** Mailbox polling, SLA esc
 | Canvas | **SvelteFlow** (`@xyflow/svelte`) | Workflow canvas (edges derived from the document, ADR-034) and CMDB dependency maps |
 | UI kit | Tailwind CSS 4, `bits-ui` / `shadcn-svelte`, Lucide icons | |
 | Data fetching | TanStack Query (Svelte), generated typed API client | |
-| Code editing | CodeMirror 6 (Jinja, YAML, PowerShell, Python, JS modes) | |
+| Code editing | CodeMirror 6 (Jinja, YAML, PowerShell, Python, JS/TS, JSON, Markdown) | One shared editor component everywhere code is edited; Monaco ruled out as too heavy (§6.7) |
 | Charts | Apache ECharts or LayerChart | For the widget/dashboard builder |
 | Script runners | Container images with PowerShell 7, Python 3, Node.js | Isolated from the core (§6.9) |
 | Packaging | Docker (multi-arch), Docker Compose, Helm chart | |
@@ -353,6 +353,26 @@ ui:
    - Huxley exposes an **MCP server** (§10.2) with tools like `list_integrations`, `describe_action`, `create_workflow_draft`, `update_workflow_draft`, `validate_workflow`, `test_run`, and `get_run`. Any MCP client (Claude Desktop, Claude Code, IDEs) using the user's own AI key can build and debug workflows.
    - The built-in **AI assistant** uses the same tools, with the provider key configured by the org.
    - AI-created changes always land as **drafts**. Publishing requires a human with permission, and every change is attributed in the audit log as `actor=user, via=mcp`.
+
+
+**The in-app code editor.** Everywhere Huxley takes code, it uses one shared editor component built on **CodeMirror 6**, never a plain text box. Monaco was ruled out as too heavy. CodeMirror is modular (only the languages in use are loaded, on demand), MIT-licensed, works with screen readers and on phones, and supports completion, linting and themes through extensions.
+- **Where:**
+  - script source and parameters
+  - expression fields in the step panel and the workflow's YAML code view
+  - ticket and email templates, canned responses
+  - form and dataset JSON Schemas, integration overlays
+  - pack manifests
+- **Languages:** PowerShell, Python, JavaScript/TypeScript, YAML, JSON, Markdown, and Jinja (HWF expressions, including Jinja inside YAML strings).
+- **Smarter than a text box:**
+  - Syntax highlighting, bracket matching, auto-indent, search and replace, multiple cursors, code folding.
+  - **Context-aware completion:**
+    - in expressions: `inputs.*`, `steps.<id>.output.*` (from the steps before this one and their output schemas), `vars.*`, `trigger.*`, organization variables, and the expression filters and functions
+    - in scripts: the declared parameters, plus each language's keywords
+    - in workflow YAML: step types and fields from the published HWF JSON Schema
+  - **Inline diagnostics** from the same server-side validators the API uses (HWF validation, expression parsing, JSON Schema), debounced as you type. The editor and the API never disagree.
+  - Hover documentation for steps, filters and functions. An expression preview evaluates against the last test run's data.
+- **Fits the app:** colours come from the design tokens (light and dark). Read-only and diff modes are used for version history and pack upgrade previews. Escape then Tab leaves the editor, so the keyboard isn't trapped.
+- **Size:** the editor loads only on pages that need it, and each language loads when first used. Pages without code don't pay for it.
 
 ### 6.8 Forms
 

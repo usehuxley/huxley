@@ -246,6 +246,12 @@ This is a long-term project. The plan follows four rules:
   - Project templates with attached workflows.
   - List, board, timeline/Gantt, and calendar views.
   - Resource capacity planning shared with the dispatch calendar, matching task skill requirements to people (§8.15).
+- **Code editor** (§6.7): one shared CodeMirror 6 component in `@usehuxley/ui` replaces the plain text boxes wherever code is edited:
+  - **Where:** script source and parameters, step expression fields, the workflow YAML view, templates and canned responses, JSON Schemas (forms, datasets), integration overlays.
+  - **Languages:** PowerShell, Python, JavaScript/TypeScript, YAML, JSON, Markdown and Jinja, each loaded on first use.
+  - **Completion:** expression completion from the workflow's context (`inputs`, earlier steps' outputs, `vars`, `trigger`, organization variables, filters and functions), script parameters, and HWF step types and fields from the JSON Schema.
+  - **Diagnostics:** inline, from the server's own validators (HWF, expressions, JSON Schema), with hover docs and an expression preview against the last test run.
+  - **Fits the app:** themed from the design tokens (light and dark), read-only and diff modes for version history and pack upgrades, and keyboard-escapable.
 - **Calendar sync** (§8.15), so dispatch, scheduling and capacity planning use when people are actually free:
   - Microsoft 365 and Google Workspace connections (tenant-wide consent or per person), plus read-only ICS feeds.
   - Free/busy blocks per person, kept current by push notifications with delta sync as the fallback. Private events are stored as *Busy*.
@@ -264,6 +270,10 @@ This is a long-term project. The plan follows four rules:
   - shows budget burn from time entries
   - fires a budget threshold event
   - displays milestone status in the client portal
+- Editing a script or an expression uses the code editor:
+  - PowerShell highlighting and parameter completion in a script
+  - completion of an earlier step's output fields in a step's expression
+  - an invalid expression flagged inline, with the same message the API gives
 - A technician's Microsoft 365 meeting:
   - blocks that time in the dispatch calendar, and dispatch won't book over it
   - an appointment booked for them appears in their Outlook calendar, and moves when it's rescheduled in Huxley
