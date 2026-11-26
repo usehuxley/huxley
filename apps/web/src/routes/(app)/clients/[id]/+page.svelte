@@ -2,7 +2,7 @@
 	import ActionsCard from '#lib/forms/ActionsCard.svelte';
 	import { enhance, type SubmitFunction } from '$app/forms';
 	import { resolve } from '$app/paths';
-	import { Globe, MapPin, Phone, Plus, Search, UserPlus } from '@lucide/svelte';
+	import { Globe, MapPin, Phone, Plus, Search, Sparkles, UserPlus } from '@lucide/svelte';
 	import { Badge, Button, Card, Dialog, Field, Input, Select, Tabs, toast } from '@usehuxley/ui';
 	import VaultPanel from '#lib/vault/VaultPanel.svelte';
 	import AgreementsPanel from '#lib/agreements/AgreementsPanel.svelte';
@@ -79,6 +79,11 @@
 			<h1 class="text-2xl font-semibold text-fg">{data.org.name}</h1>
 			<Badge tone={statusTone(company.status)}>{label(STATUSES, company.status)}</Badge>
 			<Badge>{label(RELATIONSHIPS, company.relationship)}</Badge>
+			{#if data.user.grantedPermissions.includes('ai:use')}
+				<Button href="{resolve('/(app)/assistant')}?client={data.org.id}" variant="ghost">
+					<Sparkles size={16} /> Ask the assistant
+				</Button>
+			{/if}
 		</div>
 		<p class="mt-2 flex flex-wrap gap-x-5 gap-y-1 text-sm text-fg-muted">
 			{#if company.website}

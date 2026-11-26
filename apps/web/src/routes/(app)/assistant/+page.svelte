@@ -108,9 +108,15 @@
 				return;
 			}
 			const text = formString(formData, 'text').trim();
-			void stream(action, { id, orgId: formString(formData, 'orgId'), text }, text).then((ok) => {
-				if (ok) formElement.reset();
-			});
+			const contextId = formString(formData, 'contextId');
+			const context = contextId
+				? { kind: formString(formData, 'contextKind'), id: contextId }
+				: null;
+			void stream(action, { id, orgId: formString(formData, 'orgId'), text, context }, text).then(
+				(ok) => {
+					if (ok) formElement.reset();
+				}
+			);
 		};
 </script>
 
@@ -292,6 +298,13 @@
 				class="flex flex-col gap-2"
 			>
 				<input type="hidden" name="orgId" value={data.orgId} />
+				{#if data.context}
+					<input type="hidden" name="contextKind" value={data.context.kind} />
+					<input type="hidden" name="contextId" value={data.context.id} />
+					<p class="text-sm text-fg-muted" role="note">
+						About the {data.context.kind}: <strong class="text-fg">{data.context.label}</strong>
+					</p>
+				{/if}
 				<label for="start" class="sr-only">Message</label>
 				<textarea
 					id="start"

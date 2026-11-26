@@ -506,3 +506,151 @@ async fn approved_actions_run_as_the_person_and_conversations_stay_theirs() {
     let (status, _) = s.call(&s.owner, "DELETE", &uri, None).await;
     assert_eq!(status, StatusCode::NO_CONTENT);
 }
+
+/// What a model was given: its system prompt and tool names.
+type Seen = std::sync::Arc<std::sync::Mutex<Option<(String, Vec<String>)>>>;
+
+/// Acts like a model asked from a ticket: notes what it was given, asks to
+/// add an internal note to `ticket`, then sums up the result.
+async fn ticket_model(ticket: String, seen: Seen) -> String {
+    let app = axum::Router::new().route(
+        "/v1/messages",
+        axum::routing::post(move |axum::Json(body): axum::Json<Value>| {
+            let (ticket, seen) = (ticket.clone(), seen.clone());
+            async move {
+                let messages = body["messages"].as_array().unwrap();
+                let tools: Vec<String> =
+                    body["tools"].as_array().unwrap().iter().map(|t| t["name"].as_str().unwrap().to_owned()).collect();
+                let system = body["system"].as_str().map_or_else(|| body["system"].to_string(), str::to_owned);
+                *seen.lock().unwrap() = Some((system, tools));
+                let content = if messages.last().unwrap()["content"].is_array() {
+                    json!([{ "type": "text", "text": "Noted on the ticket." }])
+                } else {
+                    json!([{ "type": "tool_use", "id": "call-note", "name": "add_ticket_note",
+                             "input": { "id": ticket, "body": "Called the user back.", "kind": "internal" } }])
+                };
+                let stop = if content[0]["type"] == "tool_use" { "tool_use" } else { "end_turn" };
+                axum::Json(json!({ "model": body["model"], "stop_reason": stop, "content": content,
+                                   "usage": { "input_tokens": 50, "output_tokens": 10 } }))
+                .into_response()
+            }
+        }),
+    );
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let url = format!("http://127.0.0.1:{}", listener.local_addr().unwrap().port());
+    tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+    url
+}
+
+#[tokio::test]
+async fn opened_from_a_ticket_the_assistant_knows_it_and_has_desk_tools() {
+    let Some(s) = setup().await else { return };
+    let ctx = RequestContext::system(Via::System);
+    let mut tx = begin_scoped(&s.pools.app, &OrgScope::System).await.unwrap();
+    for module in ["crm", "servicedesk"] {
+        huxley_modules::set_enabled(&mut tx, &ctx, module, true, false)
+            .await
+            .unwrap();
+    }
+    tx.commit().await.unwrap();
+    let (status, ticket) = s
+        .call(
+            &s.owner,
+            "POST",
+            "/api/v1/tickets",
+            Some(json!({ "orgId": s.org, "title": "Printer jams" })),
+        )
+        .await;
+    assert_eq!(status, StatusCode::CREATED, "{ticket}");
+    let id = ticket["id"].as_str().unwrap().to_owned();
+    let seen: Seen = std::sync::Arc::default();
+    let url = ticket_model(id.clone(), seen.clone()).await;
+    let provider = json!({ "kind": "anthropic", "baseUrl": url, "apiKey": "sk-ant-test" });
+    s.call(
+        &s.owner,
+        "PUT",
+        "/api/v1/ai/provider",
+        Some(json!({ "orgId": s.org, "provider": provider })),
+    )
+    .await;
+
+    let (status, convo) = s
+        .call(
+            &s.owner,
+            "POST",
+            "/api/v1/assistant/conversations",
+            Some(json!({ "orgId": s.org, "text": "Note that I called them", "context": { "kind": "ticket", "id": id } })),
+        )
+        .await;
+    assert_eq!(status, StatusCode::CREATED, "{convo}");
+    let (system, tools) = seen.lock().unwrap().clone().unwrap();
+    assert!(
+        system.contains(&format!(
+            "{} “Printer jams”",
+            ticket["reference"].as_str().unwrap()
+        )),
+        "{system}"
+    );
+    assert!(system.contains("get_ticket"), "{system}");
+    for tool in [
+        "find_tickets",
+        "get_ticket_notes",
+        "add_ticket_note",
+        "list_contacts",
+    ] {
+        assert!(tools.iter().any(|t| t == tool), "{tool}: {tools:?}");
+    }
+    assert!(
+        !tools.iter().any(|t| t == "find_assets"),
+        "cmdb is off: {tools:?}"
+    );
+    // Adding a note changes something: it waits for the person.
+    assert_eq!(convo["pending"][0]["name"], "add_ticket_note", "{convo}");
+    let decide = format!(
+        "/api/v1/assistant/conversations/{}/decisions",
+        convo["id"].as_str().unwrap()
+    );
+    let (status, done) = s
+        .call(
+            &s.owner,
+            "POST",
+            &decide,
+            Some(json!({ "decisions": { "call-note": true } })),
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK, "{done}");
+    let (_, notes) = s
+        .call(
+            &s.owner,
+            "GET",
+            &format!("/api/v1/tickets/{id}/notes"),
+            None,
+        )
+        .await;
+    let note = notes
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|n| n["body"] == "Called the user back.")
+        .unwrap();
+    assert_eq!(note["kind"], "internal");
+    assert!(
+        note["authorUserId"].is_string(),
+        "written as the person: {note}"
+    );
+
+    unreadable_context_is_refused(&s).await;
+}
+
+/// Context the person can't read (or that doesn't exist) is refused.
+async fn unreadable_context_is_refused(s: &Setup) {
+    let (status, _) = s
+        .call(
+            &s.owner,
+            "POST",
+            "/api/v1/assistant/conversations",
+            Some(json!({ "orgId": s.org, "text": "x", "context": { "kind": "ticket", "id": Uuid::now_v7() } })),
+        )
+        .await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+}

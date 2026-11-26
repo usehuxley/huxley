@@ -52,6 +52,14 @@ Over stdio, for clients that start servers as local commands:
 | `get_run`, `list_runs` | runs, with each step's inputs, outputs and errors |
 | `list_scripts`, `list_forms`, `list_datasets`, `query_dataset` | scripts, forms and data |
 
+These groups appear while their module is on:
+
+| Group | Tools |
+|---|---|
+| Service desk | `find_tickets`, `get_ticket`, `get_ticket_notes`, `recommend_assignees`, `similar_tickets`, `add_ticket_note` (internal by default), `update_ticket` (priority, queue, assignee) |
+| Clients (CRM) | `list_contacts`, `get_client_health` |
+| Assets (CMDB) | `find_assets`, `get_asset` |
+
 Documents can be YAML text or JSON objects.
 
 ## Your workflows as tools

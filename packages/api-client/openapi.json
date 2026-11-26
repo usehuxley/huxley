@@ -22665,6 +22665,22 @@
 				},
 				"additionalProperties": false
 			},
+			"ContextRef": {
+				"type": "object",
+				"description": "A ticket or client a conversation is about.",
+				"required": ["kind", "id"],
+				"properties": {
+					"id": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"kind": {
+						"type": "string",
+						"description": "`ticket` or `client`."
+					}
+				},
+				"additionalProperties": false
+			},
 			"Conversation": {
 				"type": "object",
 				"required": ["id", "orgId", "title", "messages", "pending"],
@@ -30381,6 +30397,17 @@
 				"type": "object",
 				"required": ["orgId", "text"],
 				"properties": {
+					"context": {
+						"oneOf": [
+							{
+								"$ref": "#/components/schemas/ContextRef",
+								"description": "What it's about, when opened from a ticket or a client."
+							},
+							{
+								"type": "null"
+							}
+						]
+					},
 					"orgId": {
 						"type": "string",
 						"format": "uuid",

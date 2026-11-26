@@ -7,6 +7,7 @@ interface StreamRequest {
 	orgId?: string;
 	text?: string;
 	decisions?: Record<string, boolean>;
+	context?: { kind: string; id: string } | null;
 }
 
 /** The API path and body for an action. */
@@ -14,7 +15,14 @@ function target(request: StreamRequest): [string, unknown] {
 	const id = encodeURIComponent(request.id ?? '');
 	switch (request.action) {
 		case 'start':
-			return ['/api/v1/assistant/conversations', { orgId: request.orgId, text: request.text }];
+			return [
+				'/api/v1/assistant/conversations',
+				{
+					orgId: request.orgId,
+					text: request.text,
+					...(request.context?.id ? { context: request.context } : {})
+				}
+			];
 		case 'say':
 			return [`/api/v1/assistant/conversations/${id}/messages`, { text: request.text }];
 		case 'decide':

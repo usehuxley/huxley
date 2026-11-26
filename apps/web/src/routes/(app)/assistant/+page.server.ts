@@ -12,6 +12,19 @@ export const load: PageServerLoad = async (event) => {
 		client.GET('/api/v1/orgs')
 	]);
 	const id = event.url.searchParams.get('c');
+	// Opened from a ticket or a client: what a new conversation is about.
+	const ticketId = event.url.searchParams.get('ticket');
+	const clientId = event.url.searchParams.get('client');
+	let context: { kind: 'ticket' | 'client'; id: string; label: string } | null = null;
+	if (ticketId) {
+		const { data } = await client.GET('/api/v1/tickets/{id}', {
+			params: { path: { id: ticketId } }
+		});
+		if (data) context = { kind: 'ticket', id: data.id, label: `${data.reference} · ${data.title}` };
+	} else if (clientId) {
+		const { data } = await client.GET('/api/v1/orgs/{id}', { params: { path: { id: clientId } } });
+		if (data) context = { kind: 'client', id: data.id, label: data.name };
+	}
 	const conversation = id
 		? ((await client.GET('/api/v1/assistant/conversations/{id}', { params: { path: { id } } }))
 				.data ?? null)
@@ -19,6 +32,7 @@ export const load: PageServerLoad = async (event) => {
 	return {
 		conversations: list.data ?? [],
 		conversation,
+		context,
 		orgId: currentOrg?.id ?? orgs.data?.[0]?.id ?? ''
 	};
 };
@@ -31,7 +45,15 @@ export const actions: Actions = {
 			error: problem,
 			response
 		} = await api(event).POST('/api/v1/assistant/conversations', {
-			body: { orgId: formString(form, 'orgId'), text: formString(form, 'text') }
+			body: {
+				orgId: formString(form, 'orgId'),
+				text: formString(form, 'text'),
+				...(formString(form, 'contextId')
+					? {
+							context: { kind: formString(form, 'contextKind'), id: formString(form, 'contextId') }
+						}
+					: {})
+			}
 		});
 		if (!data) {
 			return fail(response.status, {

@@ -8381,6 +8381,13 @@ export interface components {
 			templates?: string[];
 			workflows?: string[];
 		};
+		/** @description A ticket or client a conversation is about. */
+		ContextRef: {
+			/** Format: uuid */
+			id: string;
+			/** @description `ticket` or `client`. */
+			kind: string;
+		};
 		Conversation: {
 			/** Format: uuid */
 			id: string;
@@ -11574,6 +11581,7 @@ export interface components {
 			state: string;
 		};
 		StartConversation: {
+			context?: components['schemas']['ContextRef'] | null;
 			/**
 			 * Format: uuid
 			 * @description The organization it works in (whose AI provider it uses).
