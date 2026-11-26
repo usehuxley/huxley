@@ -28,6 +28,7 @@ pub fn routes() -> Router<AppState> {
         .route("/auth/password", post(password_sign_in))
         .route("/auth/logout", post(sign_out))
         .route("/me", get(me))
+        .route("/branding", get(branding))
         .route("/me/password", put(set_password))
 }
 
@@ -161,6 +162,9 @@ pub struct PortalMe {
     pub principal: PortalPrincipal,
     /// Portal permissions, e.g. `portal.ticket:read:company`.
     pub permissions: Vec<&'static str>,
+    /// How the portal looks for their company.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub branding: Option<huxley_portal::branding::Branding>,
 }
 
 impl From<PortalPrincipal> for PortalMe {
@@ -169,6 +173,7 @@ impl From<PortalPrincipal> for PortalMe {
         Self {
             principal,
             permissions,
+            branding: None,
         }
     }
 }
@@ -220,8 +225,8 @@ pub async fn request_link(
         .await
         .map_err(map)?;
     tx.commit().await.map_err(db_err)?;
-    if let Some((_, address, secret)) = found {
-        send_link(&state, &address, &secret, false);
+    if let Some((account, address, secret)) = found {
+        send_link(&state, account, &address, &secret, false).await;
     }
     Ok((
         StatusCode::ACCEPTED,
@@ -229,10 +234,33 @@ pub async fn request_link(
     ))
 }
 
-/// Emails a portal sign-in link, when email and the portal's URL are set.
+/// The portal's URL for an account: its company's portal domain (set at
+/// the MSP or the client), else `portal_public_url`.
+async fn portal_url_for(state: &AppState, account: uuid::Uuid) -> Option<String> {
+    let mut tx = begin_scoped(&state.db, &OrgScope::System).await.ok()?;
+    let org: uuid::Uuid = sqlx::query_scalar("SELECT org_id FROM portal_accounts WHERE id = $1")
+        .bind(account)
+        .fetch_optional(&mut *tx)
+        .await
+        .ok()??;
+    let domain = huxley_portal::branding::base_url(&mut tx, org)
+        .await
+        .ok()
+        .flatten();
+    tx.commit().await.ok()?;
+    domain.or_else(|| state.config.portal_public_url.clone())
+}
+
+/// Emails a portal sign-in link, when email and a portal URL are set up.
 /// Returns whether it was sent.
-pub(crate) fn send_link(state: &AppState, to: &str, secret: &str, invitation: bool) -> bool {
-    let Some(base) = state.config.portal_public_url.as_deref() else {
+pub(crate) async fn send_link(
+    state: &AppState,
+    account: uuid::Uuid,
+    to: &str,
+    secret: &str,
+    invitation: bool,
+) -> bool {
+    let Some(base) = portal_url_for(state, account).await else {
         return false;
     };
     let mailer = state.auth.mailer();
@@ -372,8 +400,53 @@ impl axum::extract::OptionalFromRequestParts<AppState> for PortalAuthed {
 /// Who's signed in to the portal, with their company and permissions.
 #[utoipa::path(get, path = "/api/portal/v1/me", operation_id = "portal_me", tag = "portal",
     responses((status = 200, body = PortalMe), (status = 401, body = ApiError, content_type = "application/problem+json")))]
-pub async fn me(authed: PortalAuthed) -> Json<PortalMe> {
-    Json(PortalMe::from(authed.principal))
+pub async fn me(State(state): State<AppState>, authed: PortalAuthed) -> ApiResult<Json<PortalMe>> {
+    let mut tx = begin_scoped(&state.db, &OrgScope::System)
+        .await
+        .map_err(db_err)?;
+    let branding = huxley_portal::branding::at(&mut tx, authed.principal.org_id)
+        .await
+        .map_err(map)?;
+    tx.commit().await.map_err(db_err)?;
+    let mut me = PortalMe::from(authed.principal);
+    me.branding = Some(branding);
+    Ok(Json(me))
+}
+
+#[derive(Debug, Deserialize, utoipa::IntoParams)]
+#[into_params(parameter_in = Query)]
+pub struct BrandingParams {
+    /// The portal's host name, e.g. `support.example.com`.
+    pub host: Option<String>,
+}
+
+/// How the portal looks before anyone signs in: the branding of the
+/// organization whose portal domain this is (else the MSP's).
+#[utoipa::path(get, path = "/api/portal/v1/branding", operation_id = "portal_branding", tag = "portal",
+    params(BrandingParams), responses((status = 200, body = huxley_portal::branding::Branding)))]
+pub async fn branding(
+    State(state): State<AppState>,
+    axum::extract::Query(params): axum::extract::Query<BrandingParams>,
+) -> ApiResult<Json<huxley_portal::branding::Branding>> {
+    let mut tx = begin_scoped(&state.db, &OrgScope::System)
+        .await
+        .map_err(db_err)?;
+    let org = huxley_portal::branding::org_for_host(&mut tx, params.host.as_deref())
+        .await
+        .map_err(map)?;
+    let branding = match org {
+        Some(org) => huxley_portal::branding::at(&mut tx, org)
+            .await
+            .map_err(map)?,
+        None => huxley_portal::branding::Branding {
+            name: "Support portal".into(),
+            accent_color: "#4f46e5".into(),
+            logo: None,
+            support_email: None,
+        },
+    };
+    tx.commit().await.map_err(db_err)?;
+    Ok(Json(branding))
 }
 
 #[derive(Debug, Deserialize, ToSchema)]

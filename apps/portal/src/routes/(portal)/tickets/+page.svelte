@@ -12,7 +12,7 @@
 </script>
 
 <svelte:head>
-	<title>Tickets · Support portal</title>
+	<title>Tickets · {data.me.branding?.name ?? 'Support portal'}</title>
 </svelte:head>
 
 <div class="mx-auto flex max-w-4xl flex-col gap-6">

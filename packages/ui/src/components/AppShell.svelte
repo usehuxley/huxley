@@ -18,6 +18,8 @@
 	type Props = {
 		/** Product or tenant name shown at the top of the sidebar. */
 		brand: string;
+		/** A logo (URL or `data:` URL) shown instead of the initial mark. */
+		logo?: string | null;
 		nav: NavItem[];
 		/** Current pathname, used to highlight the active nav item. */
 		currentPath: string;
@@ -28,7 +30,7 @@
 		children: Snippet;
 	};
 
-	let { brand, nav, currentPath, onSearch, topbar, children }: Props = $props();
+	let { brand, logo = null, nav, currentPath, onSearch, topbar, children }: Props = $props();
 
 	let mobileOpen = $state(false);
 
@@ -46,12 +48,16 @@
 	>
 		<div class="flex h-14 items-center justify-between px-4">
 			<a href="/" class="flex items-center gap-2 font-semibold text-fg">
-				<span
-					class="flex size-7 items-center justify-center rounded-control bg-accent text-sm font-bold text-accent-fg"
-					aria-hidden="true"
-				>
-					H
-				</span>
+				{#if logo}
+					<img src={logo} alt="" class="h-7 max-w-24 object-contain" />
+				{:else}
+					<span
+						class="flex size-7 items-center justify-center rounded-control bg-accent text-sm font-bold text-accent-fg"
+						aria-hidden="true"
+					>
+						{brand.trim().charAt(0).toUpperCase() || 'H'}
+					</span>
+				{/if}
 				{brand}
 			</a>
 			<button

@@ -2,13 +2,33 @@
 
 The **client portal** (the `portal` module) is a separate site where your clients' contacts sign in to see and raise their support requests. It runs as its own app (`portal`, at `HUXLEY_PORTAL_DOMAIN` in the compose stack) with its own sign-in, sessions and API, kept apart from staff accounts (ADR-040).
 
-Contacts can sign in, see their tickets, raise new ones and reply. The service catalog, help articles, devices and approvals follow, along with your branding and your clients' own sign-in providers.
+Contacts can sign in, see their tickets, raise new ones and reply, in your branding. The service catalog, help articles, devices and approvals follow, along with your clients' own sign-in providers.
 
 ## Setting it up
 
 1. Turn on **Client portal** under **Settings → Modules**. The service desk preset has it on.
 2. Make sure **email** works (`HUXLEY_EMAIL__SMTP_URL`), since sign-in links go by email.
 3. Tell the API where the portal is with `HUXLEY_HTTP__PORTAL_PUBLIC_URL`, for example `https://support.example.com`. The compose stack sets it from `HUXLEY_PORTAL_DOMAIN`. Without it, links aren't emailed.
+
+## Branding and domains
+
+The portal wears your brand. Set it under **Settings → Organizations → (your MSP) → Settings → Branding**:
+
+- **Brand name:** shown on the sign-in page, in the sidebar and in page titles. It defaults to the organization's name.
+- **Accent color:** buttons, links and highlights. Text on it switches between white and near-black to stay readable.
+- **Logo:** a PNG, JPEG, WebP or SVG up to 200 KB, shown on the sign-in page and in the sidebar.
+- **Support email:** where contacts are told to write.
+
+Like every setting, these apply to the organization and everything below it, so **a client can have its own branding** by setting any of them on the client. Lock a setting at the MSP to stop clients changing it.
+
+**Which branding shows:**
+- Before signing in, the portal shows the branding of the organization whose **portal domain** matches the address it's opened at. Without a match, it shows your MSP's.
+- After signing in, it shows the branding of the contact's company, with the client's own settings over the MSP's.
+
+**Portal domain:**
+- Each organization can have its own portal address, such as `support.contoso.com`, and a domain belongs to one organization only.
+- Sign-in links for its contacts, and those of organizations below it, use that address. Without one, they use `HUXLEY_HTTP__PORTAL_PUBLIC_URL`.
+- Point the domain's DNS at your server. The compose stack's Caddy serves `HUXLEY_PORTAL_DOMAIN` with its own certificate, so add a site block for each extra domain, reverse-proxied to `portal:3000` like the first.
 
 ## Giving contacts access
 
@@ -52,6 +72,7 @@ Contacts can sign in, see their tickets, raise new ones and reply. The service c
   - `POST /api/v1/portal-accounts/{id}/invitation` (a new sign-in link)
 - The portal's own API, with portal sessions only:
   - `POST /api/portal/v1/auth/link`, `…/auth/redeem`, `…/auth/password`, `…/auth/logout`
+  - `GET /api/portal/v1/branding?host=` (before signing in; also in `/me` after)
   - `GET /api/portal/v1/me`
   - `GET`, `POST /api/portal/v1/tickets` (`status=open|closed`, `scope=mine|company`, `q`); `GET …/tickets/{id}`; `POST …/tickets/{id}/replies`
   - `PUT /api/portal/v1/me/password`

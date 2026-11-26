@@ -111,7 +111,7 @@ pub async fn invite_contact(
         .map_err(map)?;
     let secret = signin::issue_link(&mut tx, account.id).await.map_err(map)?;
     tx.commit().await.map_err(db_err)?;
-    let invitation_sent = send_link(&state, &account.email, &secret, true);
+    let invitation_sent = send_link(&state, account.id, &account.email, &secret, true).await;
     Ok((
         StatusCode::CREATED,
         Json(PortalAccessResult {
@@ -179,10 +179,12 @@ pub async fn resend_invitation(
     tx.commit().await.map_err(db_err)?;
     let invitation_sent = send_link(
         &state,
+        account.id,
         &account.email,
         &secret,
         account.status == Status::Invited,
-    );
+    )
+    .await;
     Ok(Json(PortalAccessResult {
         account,
         invitation_sent,

@@ -3,11 +3,11 @@
 	import { Button, Card, Field, Input } from '@usehuxley/ui';
 	import type { PageProps } from './$types';
 
-	let { form }: PageProps = $props();
+	let { data, form }: PageProps = $props();
 </script>
 
 <svelte:head>
-	<title>Raise a ticket · Support portal</title>
+	<title>Raise a ticket · {data.me.branding?.name ?? 'Support portal'}</title>
 </svelte:head>
 
 <div class="mx-auto flex max-w-2xl flex-col gap-6">

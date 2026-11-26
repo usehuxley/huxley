@@ -10,13 +10,13 @@
 </script>
 
 <svelte:head>
-	<title>Sign in · Support portal</title>
+	<title>Sign in · {data.branding.name}</title>
 </svelte:head>
 
 <main class="flex min-h-screen items-center justify-center bg-bg px-4">
 	<div class="w-full max-w-sm">
 		<div class="mb-8 text-center">
-			<h1 class="text-xl font-semibold text-fg">Sign in to your support portal</h1>
+			<h1 class="text-xl font-semibold text-fg">Sign in to {data.branding.name}</h1>
 			<p class="mt-1 text-sm text-fg-muted">
 				{withPassword ? 'With your email and password.' : 'We’ll email you a secure sign-in link.'}
 			</p>

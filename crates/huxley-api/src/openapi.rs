@@ -246,6 +246,7 @@ use crate::workforce_routes;
         crate::portal_routes::password_sign_in,
         crate::portal_routes::sign_out,
         crate::portal_routes::me,
+        crate::portal_routes::branding,
         crate::portal_routes::set_password,
         crate::portal_access_routes::list_portal_accounts,
         crate::portal_access_routes::invite_contact,

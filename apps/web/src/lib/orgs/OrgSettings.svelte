@@ -22,6 +22,25 @@
 		(z) => ({ value: z, label: z })
 	);
 
+	// Images are sent as data URLs, read from the chosen file.
+	let images: Record<string, string> = $state({});
+	let imageErrors: Record<string, string> = $state({});
+	function pickImage(key: string, event: Event) {
+		const file = (event.currentTarget as HTMLInputElement).files?.[0];
+		if (!file) return;
+		if (file.size > 200 * 1024) {
+			imageErrors = { ...imageErrors, [key]: 'That image is over 200 KB.' };
+			return;
+		}
+		const reader = new FileReader();
+		reader.onload = () => {
+			if (typeof reader.result !== 'string') return;
+			images = { ...images, [key]: reader.result };
+			imageErrors = { ...imageErrors, [key]: '' };
+		};
+		reader.readAsDataURL(file);
+	}
+
 	function origin(s: Setting): string {
 		if (s.lockedBy) return `Locked by ${s.lockedBy.name}`;
 		if (s.source?.id === orgId) return s.local?.locked ? 'Set here and locked below' : 'Set here';
@@ -71,6 +90,32 @@
 										value={s.value ?? '#4f46e5'}
 										disabled={!editable}
 										class="h-9 w-14 rounded-control border border-border bg-surface"
+									/>
+								{:else if s.kind === 'image'}
+									{@const shown = images[s.key] ?? s.value}
+									{#if shown}<img src={shown} alt="" class="h-9 max-w-32 object-contain" />{/if}
+									<input type="hidden" name="value" value={images[s.key] ?? s.value ?? ''} />
+									{#if editable}
+										<input
+											{id}
+											type="file"
+											accept="image/png,image/jpeg,image/webp,image/svg+xml"
+											class="max-w-56 text-sm text-fg-muted"
+											onchange={(e) => pickImage(s.key, e)}
+										/>
+									{/if}
+									{#if imageErrors[s.key]}<span class="text-sm text-danger">
+											{imageErrors[s.key]}
+										</span>{/if}
+								{:else if s.kind === 'hostname'}
+									<Input
+										{id}
+										name="value"
+										value={s.value ?? ''}
+										placeholder="support.example.com"
+										maxlength={253}
+										disabled={!editable}
+										class="w-56"
 									/>
 								{:else}
 									<Input

@@ -12,6 +12,7 @@ publish = false
 huxley-auth.workspace = true
 huxley-core.workspace = true
 huxley-db.workspace = true
+huxley-orgs.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 sqlx.workspace = true
