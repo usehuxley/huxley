@@ -196,7 +196,12 @@ Things to know:
 
 - **Exit codes:** `validate` and `diff` exit 1 when there are problems or differences, so they work as CI checks. `run` exits 1 if the run fails.
 - **Pulled files** use the same key order as the YAML tab in the editor (other keys sorted), so they diff cleanly. They start with a `yaml-language-server` comment pointing at the HWF schema, so editors autocomplete them.
-- **Matching:** files are matched to workflows by `metadata.key`.
+- **Matching:** files are matched to workflows by `metadata.key`. The same key in two files is an error.
+- **Folders are directories.**
+  - `pull` writes each workflow into its [folder](#folders)'s directory (`workflows/System/…`, `workflows/Ops/Daily/…`), and unfiled ones at the top. When a workflow has moved, its old file is removed.
+  - Given a directory, `push` files each workflow by where its file is, making folders as needed (top level: unfiled), and `diff` reports folders that differ. A file named on its own keeps its workflow where it is.
+  - Built-in workflows stay in the System folder whatever their file's directory: `push` says so and carries on.
+  - `validate`, `diff` and `push` look in subdirectories, but not hidden ones such as `.git`.
 - **Permissions:** `push` needs `workflow:write`, and `--publish` also needs `workflow:publish`. Use a token scoped to what CI needs.
 - **Inputs:** `-i name=value` parses the value as JSON when it can (`-i count=3`, `-i 'tags=["a"]'`), and `--inputs-file` takes a JSON object.
 

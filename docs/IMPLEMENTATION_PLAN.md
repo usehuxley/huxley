@@ -195,7 +195,7 @@ This is a long-term project. The plan follows four rules:
   - **Other packs:** a third-party pack's workflows go into a folder named after the pack, created if needed, which can then be renamed, moved or deleted like any folder.
   - **The Workflows list** shows the folder tree beside the list, with counts. Search and status filters cover every folder. Moving workflows works one at a time or in bulk.
   - **API:** `/api/v1/workflow-folders`, a workflow's `folderId`, and a `folderId` filter on the workflow list. (Done.)
-  - **Workflows as code** keep the folder path: `pull` writes into folders, `push` files workflows by their folder. (Next.)
+  - **Workflows as code** keep the folder path: `pull` writes into folders, `push` files workflows by their folder. (Done.)
 
 **Exit criteria:** assets sync from an RMM, map into CIs with relationships, and render in the dependency map. Time entries on tickets correctly evaluate as covered or billable under an agreement. A technician's weekly timesheet is submitted, rejected with a comment, corrected, approved and locked, and only its approved time reaches a billing preview.
 
