@@ -5,7 +5,7 @@ import { problemMessage } from '#lib/server/problems.ts';
 import { assignees } from '#lib/tickets/server.ts';
 import type { Actions, PageServerLoad } from './$types';
 
-const VIEWS = ['list', 'board', 'timeline'] as const;
+const VIEWS = ['list', 'board', 'timeline', 'calendar'] as const;
 const isView = (v: string | null): v is (typeof VIEWS)[number] =>
 	(VIEWS as readonly string[]).includes(v ?? '');
 
@@ -37,6 +37,7 @@ export const load: PageServerLoad = async (event) => {
 		people: people.people,
 		agreements,
 		view: isView(asked) ? asked : 'list',
+		month: event.url.searchParams.get('month'),
 		suggestions,
 		canWrite,
 		canManage

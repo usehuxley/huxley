@@ -4,6 +4,7 @@
 	import { Badge, Button, Card, Field, Input, Select } from '@usehuxley/ui';
 	import { BILLING, HEALTH, STATUSES, label } from '#lib/projects/labels.ts';
 	import Board from '#lib/projects/Board.svelte';
+	import MonthCalendar from '#lib/projects/MonthCalendar.svelte';
 	import ScopeChanges from '#lib/projects/ScopeChanges.svelte';
 	import StatusReports from '#lib/projects/StatusReports.svelte';
 	import Timeline from '#lib/projects/Timeline.svelte';
@@ -139,7 +140,7 @@
 	</div>
 
 	<nav class="flex gap-1 border-b border-border" aria-label="Views">
-		{#each [['list', 'List'], ['board', 'Board'], ['timeline', 'Timeline']] as [key, name] (key)}
+		{#each [['list', 'List'], ['board', 'Board'], ['timeline', 'Timeline'], ['calendar', 'Calendar']] as [key, name] (key)}
 			<a
 				href="{resolve('/(app)/projects/[id]', { id: p.id })}?view={key}"
 				aria-current={data.view === key ? 'page' : undefined}
@@ -153,6 +154,8 @@
 	</nav>
 	{#if data.view === 'board'}
 		<Board tasks={p.tasks} />
+	{:else if data.view === 'calendar'}
+		<Card><MonthCalendar project={p} month={data.month} /></Card>
 	{:else if data.view === 'timeline'}
 		<Card><Timeline project={p} /></Card>
 	{/if}
