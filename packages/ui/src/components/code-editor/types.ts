@@ -48,4 +48,6 @@ export type CodeEditorOptions = {
 	/** Checks the text (debounced); problems are underlined. */
 	lint?: (text: string) => CodeDiagnostic[] | Promise<CodeDiagnostic[]>;
 	onChange: (value: string) => void;
+	/** The page's CSP nonce for style elements, if it has one. */
+	cspNonce?: string;
 };

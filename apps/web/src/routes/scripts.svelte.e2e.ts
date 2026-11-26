@@ -41,6 +41,12 @@ test.describe('scripts', () => {
 
 	test('the code editor highlights PowerShell and completes parameters', async ({ browser }) => {
 		const page = await signIn(browser);
+		// Nothing the page does breaks its Content Security Policy (the
+		// editor's styles carry the page's nonce).
+		const blocked: string[] = [];
+		page.on('console', (m) => {
+			if (m.text().includes('Content Security Policy')) blocked.push(m.text());
+		});
 		await page.getByRole('link', { name: 'Scripts' }).click();
 		await page.getByLabel('Name').fill(`Pinger ${Date.now().toString(36)}`);
 		await page.getByLabel('Language').selectOption('pwsh');
@@ -55,8 +61,11 @@ test.describe('scripts', () => {
 		await page.keyboard.press('Enter');
 		await page.keyboard.type('$Na');
 		const options = page.getByRole('listbox');
-		await expect(options.getByRole('option', { name: /\$name/i })).toBeVisible();
-		await page.keyboard.press('Enter');
+		const option = options.getByRole('option', { name: /\$name/i });
+		await expect(option).toBeVisible();
+		// Clicked: Enter right as the list opens is ignored (CodeMirror waits a
+		// moment, so a fast typist's Enter isn't swallowed).
+		await option.click();
 		// "$Na" became the parameter, on the line after the greeting.
 		await expect(source).toContainText('"$name');
 		// Broken parameters JSON is flagged as you type.
@@ -65,6 +74,7 @@ test.describe('scripts', () => {
 		await page.keyboard.press('ControlOrMeta+End');
 		await page.keyboard.type(',');
 		await expect(page.locator('#parameters .cm-lintRange-error')).toHaveCount(1);
+		expect(blocked).toEqual([]);
 	});
 
 	test('an admin enrols a script runner', async ({ browser }) => {
