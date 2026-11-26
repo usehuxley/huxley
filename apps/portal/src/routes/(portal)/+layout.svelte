@@ -8,7 +8,8 @@
 		CircleCheck,
 		ClipboardList,
 		House,
-		Ticket
+		Ticket,
+		UsersRound
 	} from '@lucide/svelte';
 	import { AppShell, Button, type NavItem } from '@usehuxley/ui';
 	import { accentStyle, DEFAULT_BRANDING } from '#lib/branding.ts';
@@ -26,14 +27,17 @@
 			{ href: '/assets', label: 'Devices', icon: Boxes, module: 'cmdb' },
 			{ href: '/knowledge', label: 'Help articles', icon: BookOpen, module: 'knowledge' },
 			{ href: '/approvals', label: 'Approvals', icon: CircleCheck, module: 'approvals' },
+			{ href: '/people', label: 'People', icon: UsersRound, module: 'people' },
 			{ href: '/dashboards', label: 'Reports', icon: ChartColumn, module: 'dashboards' }
 		]
 			.filter((item) =>
 				item.module === 'approvals'
 					? data.me.permissions.includes('portal.approval:decide')
-					: item.module === 'dashboards'
-						? data.me.permissions.includes('portal.dashboard:read')
-						: item.module === null || data.me.modules.includes(item.module)
+					: item.module === 'people'
+						? data.me.permissions.includes('portal.contacts:manage')
+						: item.module === 'dashboards'
+							? data.me.permissions.includes('portal.dashboard:read')
+							: item.module === null || data.me.modules.includes(item.module)
 			)
 			.map((item) => ({ href: item.href, label: item.label, icon: item.icon }))
 	);

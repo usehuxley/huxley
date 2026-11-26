@@ -201,3 +201,36 @@ pub async fn update(
     .await?;
     get(conn, id).await
 }
+
+/// A contact of a company as its client admins see them in the portal.
+#[derive(Debug, Clone, Serialize, ToSchema, sqlx::FromRow)]
+#[serde(rename_all = "camelCase")]
+#[schema(as = PortalPerson)]
+pub struct Person {
+    pub contact_id: Uuid,
+    pub name: String,
+    pub email: Option<String>,
+    pub job_title: Option<String>,
+    /// Their portal account, if they have one.
+    pub account_id: Option<Uuid>,
+    pub role: Option<Role>,
+    pub status: Option<Status>,
+    #[serde(with = "time::serde::rfc3339::option")]
+    pub last_sign_in_at: Option<OffsetDateTime>,
+    pub version: Option<i32>,
+}
+
+/// A company's contacts (not archived), with their portal access, by name.
+pub async fn people(conn: &mut PgConnection, org_id: Uuid) -> PortalResult<Vec<Person>> {
+    Ok(sqlx::query_as(
+        "SELECT c.id AS contact_id, btrim(c.first_name || ' ' || c.last_name) AS name, c.email, \
+                (SELECT cc.job_title FROM crm_contact_companies cc WHERE cc.contact_id = c.id AND cc.org_id = c.org_id) AS job_title, \
+                a.id AS account_id, a.role, a.status, a.last_sign_in_at, a.version \
+           FROM crm_contacts c LEFT JOIN portal_accounts a ON a.contact_id = c.id \
+          WHERE c.org_id = $1 AND c.archived_at IS NULL \
+          ORDER BY lower(c.first_name || ' ' || c.last_name), c.id",
+    )
+    .bind(org_id)
+    .fetch_all(conn)
+    .await?)
+}

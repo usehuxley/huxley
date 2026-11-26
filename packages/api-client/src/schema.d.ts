@@ -480,6 +480,48 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
+	'/api/portal/v1/people': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** Your company's people, with their portal access. */
+		get: operations['portal_people'];
+		put?: never;
+		/**
+		 * Adds a colleague as a contact of your company, optionally with portal
+		 *     access.
+		 */
+		post: operations['portal_add_person'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/portal/v1/people/{contact}/access': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/**
+		 * Gives a colleague portal access (or re-invites them) and emails an
+		 *     invitation.
+		 */
+		post: operations['portal_give_access'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		/** Changes a colleague's role, or ends (or restores) their access. */
+		patch: operations['portal_change_access'];
+		trace?: never;
+	};
 	'/api/portal/v1/requests': {
 		parameters: {
 			query?: never;
@@ -9417,6 +9459,12 @@ export interface components {
 			name: string;
 			supportEmail?: string | null;
 		};
+		PortalChangeAccess: {
+			role: components['schemas']['PortalRole'];
+			status: components['schemas']['PortalAccountStatus'];
+			/** Format: int32 */
+			version?: number | null;
+		};
 		PortalDashboardView: {
 			dashboard: components['schemas']['Dashboard'];
 			range: string;
@@ -9459,6 +9507,9 @@ export interface components {
 			ui: {
 				[key: string]: unknown;
 			};
+		};
+		PortalGiveAccess: {
+			role: components['schemas']['PortalRole'];
 		};
 		PortalIdentityProvider: {
 			clientId: string;
@@ -9534,6 +9585,12 @@ export interface components {
 			/** @description Their company requires it. */
 			required: boolean;
 		};
+		PortalNewPerson: {
+			email: string;
+			firstName: string;
+			lastName?: string;
+			role?: components['schemas']['PortalRole'] | null;
+		};
 		/** @description A public note in the portal. */
 		PortalNote: {
 			/** @description Who wrote it: a contact, or someone at the service desk. */
@@ -9551,6 +9608,31 @@ export interface components {
 		PortalPasswordSignIn: {
 			email: string;
 			password: string;
+		};
+		/** @description A contact of a company as its client admins see them in the portal. */
+		PortalPerson: {
+			/**
+			 * Format: uuid
+			 * @description Their portal account, if they have one.
+			 */
+			accountId?: string | null;
+			/** Format: uuid */
+			contactId: string;
+			email?: string | null;
+			jobTitle?: string | null;
+			/** Format: date-time */
+			lastSignInAt?: string | null;
+			name: string;
+			role?: components['schemas']['PortalRole'] | null;
+			status?: components['schemas']['PortalAccountStatus'] | null;
+			/** Format: int32 */
+			version?: number | null;
+		};
+		PortalPersonResult: {
+			/** Format: uuid */
+			contactId: string;
+			/** @description An invitation was emailed. */
+			invitationSent: boolean;
 		};
 		/** @description Who is signed in to the portal. */
 		PortalPrincipal: {
@@ -12427,6 +12509,114 @@ export interface operations {
 				content?: never;
 			};
 			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	portal_people: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['PortalPerson'][];
+				};
+			};
+		};
+	};
+	portal_add_person: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['PortalNewPerson'];
+			};
+		};
+		responses: {
+			201: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['PortalPersonResult'];
+				};
+			};
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	portal_give_access: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				contact: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['PortalGiveAccess'];
+			};
+		};
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['PortalPersonResult'];
+				};
+			};
+		};
+	};
+	portal_change_access: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				contact: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['PortalChangeAccess'];
+			};
+		};
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['PortalPerson'];
+				};
+			};
+			409: {
 				headers: {
 					[name: string]: unknown;
 				};

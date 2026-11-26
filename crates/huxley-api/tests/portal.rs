@@ -1017,3 +1017,142 @@ async fn client_admins_see_published_dashboards_with_their_numbers() {
         StatusCode::FORBIDDEN
     );
 }
+
+#[tokio::test]
+async fn client_admins_manage_their_colleagues_access() {
+    let Some(db) = isolated("portal_people").await else {
+        return;
+    };
+    let s = setup(&db.pools).await;
+    let (bea, bea_contact) = s.portal_user(s.acme, "Bea", "client_admin").await;
+    let cy = s.contact(s.acme, "Cy", "cy@acme.example").await;
+    let gil = s.contact(s.globex, "Gil", "gil@globex.example").await;
+
+    let (_, people, _) = s
+        .call(&bea, "GET", "/api/portal/v1/people", Value::Null)
+        .await;
+    let names: Vec<&str> = people
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|p| p["name"].as_str().unwrap())
+        .collect();
+    assert_eq!(names, ["Bea Client", "Cy Client"]);
+    assert_eq!(people[1]["accountId"], Value::Null);
+
+    // Add a colleague with access; give Cy access; Globex's people aren't hers.
+    let (status, dee, _) = s
+        .call(&bea, "POST", "/api/portal/v1/people", json!({ "firstName": "Dee", "lastName": "New", "email": "dee@acme.example", "role": "client_user" }))
+        .await;
+    assert_eq!(status, StatusCode::CREATED, "{dee}");
+    let (status, _, _) = s
+        .call(
+            &bea,
+            "POST",
+            "/api/portal/v1/people",
+            json!({ "firstName": "Dee", "email": "DEE@acme.example" }),
+        )
+        .await;
+    assert_eq!(status, StatusCode::CONFLICT);
+    let access = |c: &str| format!("/api/portal/v1/people/{c}/access");
+    let (status, _, _) = s
+        .call(
+            &bea,
+            "POST",
+            &access(&cy),
+            json!({ "role": "client_approver" }),
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(
+        s.call(
+            &bea,
+            "POST",
+            &access(&gil),
+            json!({ "role": "client_user" })
+        )
+        .await
+        .0,
+        StatusCode::NOT_FOUND
+    );
+
+    let (_, people, _) = s
+        .call(&bea, "GET", "/api/portal/v1/people", Value::Null)
+        .await;
+    let cy_row = people
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|p| p["name"] == "Cy Client")
+        .unwrap()
+        .clone();
+    assert_eq!(
+        (&cy_row["role"], &cy_row["status"]),
+        (&json!("client_approver"), &json!("invited"))
+    );
+    let dee_row = people
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|p| p["name"] == "Dee New")
+        .unwrap()
+        .clone();
+    assert_eq!(dee_row["role"], "client_user");
+
+    changes_and_limits(&s, &bea, &bea_contact, &cy, &cy_row, &dee).await;
+}
+
+/// A client admin changes a colleague's role, ends another's access, never
+/// changes her own; client users don't manage people.
+async fn changes_and_limits(
+    s: &Setup,
+    bea: &str,
+    bea_contact: &str,
+    cy: &str,
+    cy_row: &Value,
+    dee: &Value,
+) {
+    let access = |c: &str| format!("/api/portal/v1/people/{c}/access");
+    // Change Cy's role, then end Dee's access; never her own.
+    let (status, changed, _) = s
+        .call(
+            bea,
+            "PATCH",
+            &access(cy),
+            json!({ "role": "client_admin", "status": "invited", "version": cy_row["version"] }),
+        )
+        .await;
+    assert_eq!(
+        (status, &changed["role"]),
+        (StatusCode::OK, &json!("client_admin")),
+        "{changed}"
+    );
+    let dee_contact = dee["contactId"].as_str().unwrap();
+    let (_, ended, _) = s
+        .call(
+            bea,
+            "PATCH",
+            &access(dee_contact),
+            json!({ "role": "client_user", "status": "disabled" }),
+        )
+        .await;
+    assert_eq!(ended["status"], "disabled");
+    let (status, _, _) = s
+        .call(
+            bea,
+            "PATCH",
+            &access(bea_contact),
+            json!({ "role": "client_user", "status": "active" }),
+        )
+        .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+
+    // Client users don't manage people.
+    let (ada, _) = s.portal_user(s.acme, "Ada", "client_user").await;
+    assert_eq!(
+        s.call(&ada, "GET", "/api/portal/v1/people", Value::Null)
+            .await
+            .0,
+        StatusCode::FORBIDDEN
+    );
+}

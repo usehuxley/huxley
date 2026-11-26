@@ -38,6 +38,15 @@ Like every setting, these apply to the organization and everything below it, so 
 - **Who can:** seeing who has access needs `crm:read` at the client. Inviting and changing access needs `crm:manage`.
 - **Records:** changes are audited (`portal.account_invited`, `portal.account_updated`).
 
+## People
+
+Client admins manage their own organization's portal access under **People**: no ticket to the service desk needed.
+
+- **The list** shows their company's contacts, and who can sign in (invited, has access, or no longer has access).
+- **Add someone** creates a contact at their company and, if they ask, gives them access with a role. An invitation is emailed.
+- **Give access** to a colleague who's already a contact, or **change** what they can do. **Remove access** signs them out everywhere. **Restore access** brings it back.
+- **Limits:** only their own company's contacts, and never their own access (another admin, or the service desk, changes that). Staff see and change the same accounts on the contact's page.
+
 ## Portal roles
 
 | Role | What they can do |
@@ -150,6 +159,7 @@ Contacts can sign in with their company's own accounts, such as the client's Mic
   - `GET`, `POST /api/portal/v1/tickets` (`status=open|closed`, `scope=mine|company`, `q`); `GET …/tickets/{id}`; `POST …/tickets/{id}/replies`
   - `PUT /api/portal/v1/me/password`
   - `GET /api/portal/v1/articles` (`q`, `category`), `GET …/articles/{id}`
+  - `GET`/`POST /api/portal/v1/people`; `POST`/`PATCH …/people/{contact}/access` (client admins)
   - `GET /api/portal/v1/dashboards`, `GET …/dashboards/{id}?range=` (client admins)
   - `GET /api/portal/v1/approvals`, `GET …/approvals/{id}`, `POST …/approvals/{id}/decision` `{ approve, comment }`
   - `GET /api/portal/v1/devices` (`q`), `GET …/devices/{id}`; `POST …/tickets` takes an optional `assetId`

@@ -848,6 +848,147 @@
 				}
 			}
 		},
+		"/api/portal/v1/people": {
+			"get": {
+				"tags": ["portal"],
+				"summary": "Your company's people, with their portal access.",
+				"operationId": "portal_people",
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "array",
+									"items": {
+										"$ref": "#/components/schemas/PortalPerson"
+									}
+								}
+							}
+						}
+					}
+				}
+			},
+			"post": {
+				"tags": ["portal"],
+				"summary": "Adds a colleague as a contact of your company, optionally with portal\naccess.",
+				"operationId": "portal_add_person",
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/PortalNewPerson"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"201": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/PortalPersonResult"
+								}
+							}
+						}
+					},
+					"422": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/portal/v1/people/{contact}/access": {
+			"post": {
+				"tags": ["portal"],
+				"summary": "Gives a colleague portal access (or re-invites them) and emails an\ninvitation.",
+				"operationId": "portal_give_access",
+				"parameters": [
+					{
+						"name": "contact",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/PortalGiveAccess"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/PortalPersonResult"
+								}
+							}
+						}
+					}
+				}
+			},
+			"patch": {
+				"tags": ["portal"],
+				"summary": "Changes a colleague's role, or ends (or restores) their access.",
+				"operationId": "portal_change_access",
+				"parameters": [
+					{
+						"name": "contact",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/PortalChangeAccess"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/PortalPerson"
+								}
+							}
+						}
+					},
+					"409": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
 		"/api/portal/v1/requests": {
 			"get": {
 				"tags": ["portal"],
@@ -25133,6 +25274,23 @@
 					}
 				}
 			},
+			"PortalChangeAccess": {
+				"type": "object",
+				"required": ["role", "status"],
+				"properties": {
+					"role": {
+						"$ref": "#/components/schemas/PortalRole"
+					},
+					"status": {
+						"$ref": "#/components/schemas/PortalAccountStatus"
+					},
+					"version": {
+						"type": ["integer", "null"],
+						"format": "int32"
+					}
+				},
+				"additionalProperties": false
+			},
 			"PortalDashboardView": {
 				"type": "object",
 				"required": ["dashboard", "range", "results"],
@@ -25255,6 +25413,16 @@
 						}
 					}
 				}
+			},
+			"PortalGiveAccess": {
+				"type": "object",
+				"required": ["role"],
+				"properties": {
+					"role": {
+						"$ref": "#/components/schemas/PortalRole"
+					}
+				},
+				"additionalProperties": false
 			},
 			"PortalIdentityProvider": {
 				"type": "object",
@@ -25478,6 +25646,33 @@
 					}
 				}
 			},
+			"PortalNewPerson": {
+				"type": "object",
+				"required": ["firstName", "email"],
+				"properties": {
+					"email": {
+						"type": "string"
+					},
+					"firstName": {
+						"type": "string"
+					},
+					"lastName": {
+						"type": "string"
+					},
+					"role": {
+						"oneOf": [
+							{
+								"$ref": "#/components/schemas/PortalRole",
+								"description": "Give them portal access with this role (and email an invitation)."
+							},
+							{
+								"type": "null"
+							}
+						]
+					}
+				},
+				"additionalProperties": false
+			},
 			"PortalNote": {
 				"type": "object",
 				"description": "A public note in the portal.",
@@ -25520,6 +25715,73 @@
 					}
 				},
 				"additionalProperties": false
+			},
+			"PortalPerson": {
+				"type": "object",
+				"description": "A contact of a company as its client admins see them in the portal.",
+				"required": ["contactId", "name"],
+				"properties": {
+					"accountId": {
+						"type": ["string", "null"],
+						"format": "uuid",
+						"description": "Their portal account, if they have one."
+					},
+					"contactId": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"email": {
+						"type": ["string", "null"]
+					},
+					"jobTitle": {
+						"type": ["string", "null"]
+					},
+					"lastSignInAt": {
+						"type": ["string", "null"],
+						"format": "date-time"
+					},
+					"name": {
+						"type": "string"
+					},
+					"role": {
+						"oneOf": [
+							{
+								"$ref": "#/components/schemas/PortalRole"
+							},
+							{
+								"type": "null"
+							}
+						]
+					},
+					"status": {
+						"oneOf": [
+							{
+								"$ref": "#/components/schemas/PortalAccountStatus"
+							},
+							{
+								"type": "null"
+							}
+						]
+					},
+					"version": {
+						"type": ["integer", "null"],
+						"format": "int32"
+					}
+				}
+			},
+			"PortalPersonResult": {
+				"type": "object",
+				"required": ["contactId", "invitationSent"],
+				"properties": {
+					"contactId": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"invitationSent": {
+						"type": "boolean",
+						"description": "An invitation was emailed."
+					}
+				}
 			},
 			"PortalPrincipal": {
 				"type": "object",
