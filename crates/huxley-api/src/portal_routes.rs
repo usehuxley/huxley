@@ -206,7 +206,17 @@ pub struct PortalMe {
     /// How the portal looks for their company.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub branding: Option<huxley_portal::branding::Branding>,
+    /// The portal's parts that are on for their company: `servicedesk`
+    /// (tickets), `knowledge` (help articles), `cmdb` (devices).
+    pub modules: Vec<&'static str>,
 }
+
+/// Modules with a part in the portal.
+const PORTAL_MODULES: &[&str] = &[
+    huxley_servicedesk::MODULE,
+    huxley_knowledge::MODULE,
+    huxley_cmdb::MODULE,
+];
 
 impl From<PortalPrincipal> for PortalMe {
     fn from(principal: PortalPrincipal) -> Self {
@@ -215,6 +225,7 @@ impl From<PortalPrincipal> for PortalMe {
             principal,
             permissions,
             branding: None,
+            modules: Vec::new(),
         }
     }
 }
@@ -636,9 +647,19 @@ pub async fn me(State(state): State<AppState>, authed: PortalAuthed) -> ApiResul
     let branding = huxley_portal::branding::at(&mut tx, authed.principal.org_id)
         .await
         .map_err(map)?;
+    let mut modules = Vec::new();
+    for module in PORTAL_MODULES {
+        if huxley_modules::is_active_at(&mut tx, module, authed.principal.org_id)
+            .await
+            .map_err(db_err)?
+        {
+            modules.push(*module);
+        }
+    }
     tx.commit().await.map_err(db_err)?;
     let mut me = PortalMe::from(authed.principal);
     me.branding = Some(branding);
+    me.modules = modules;
     Ok(Json(me))
 }
 

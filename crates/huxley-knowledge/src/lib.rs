@@ -10,6 +10,7 @@ pub mod categories;
 pub mod embeddings;
 pub mod links;
 mod markdown;
+pub mod portal;
 
 pub use markdown::render;
 

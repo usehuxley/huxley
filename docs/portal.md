@@ -74,6 +74,14 @@ Like every setting, these apply to the organization and everything below it, so 
 - **No lookups:** forms that look choices up through an integration can't be offered in the portal.
 - **Following up:** contacts see **Your requests** with a status: *Received* (no workflow to run), *In progress*, *Done*, or *Being looked at* (a run failed or was cancelled; check the run history).
 
+## Help articles
+
+**Help articles** in the portal shows knowledge base articles meant for clients: published, with the visibility **Clients** or **Public**. Contacts see those of their company and of the organizations above it, so an MSP's articles reach every client, and a client's own documentation reaches only that client.
+
+- **Only the published revision** shows. Drafts, reviews and history stay with staff.
+- **Search** matches titles and text, best match first, and categories with articles are listed for browsing.
+- **The knowledge module** must be on for the company. The portal's navigation shows only the parts that are on (tickets, help articles).
+
 ## Two-factor sign-in
 
 Contacts can add a code from an authenticator app (Microsoft Authenticator, Google Authenticator, 1Password and others) to signing in with a link or password: **Profile**, **Manage two-factor sign-in**.
@@ -112,5 +120,6 @@ Contacts can sign in with their company's own accounts, such as the client's Mic
   - `GET /api/portal/v1/me`
   - `GET`, `POST /api/portal/v1/tickets` (`status=open|closed`, `scope=mine|company`, `q`); `GET …/tickets/{id}`; `POST …/tickets/{id}/replies`
   - `PUT /api/portal/v1/me/password`
+  - `GET /api/portal/v1/articles` (`q`, `category`), `GET …/articles/{id}`
   - `GET /api/portal/v1/catalog`, `GET …/catalog/{id}`, `POST …/catalog/{id}/requests` `{ answers }`; `GET …/requests`
   - Two-factor: `…/auth/link` redemption and `…/auth/password` answer `202 { challenge }` when a code is needed; finish with `POST …/auth/mfa` `{ challenge, code }`. `GET …/me/mfa`; `POST …/me/mfa/totp` (start), `…/totp/confirm` `{ code }` (returns recovery codes), `…/totp/disable` `{ code }`, `…/recovery-codes`

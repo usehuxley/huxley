@@ -4,6 +4,39 @@
  */
 
 export interface paths {
+	'/api/portal/v1/articles': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** Help articles: searched, or newest first; with their categories. */
+		get: operations['portal_articles'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/portal/v1/articles/{id}': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get: operations['portal_article'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
 	'/api/portal/v1/auth/link': {
 		parameters: {
 			query?: never;
@@ -9002,6 +9035,38 @@ export interface components {
 		};
 		/** @enum {string} */
 		PortalAccountStatus: 'invited' | 'active' | 'disabled';
+		PortalArticle: {
+			/** @description Rendered from markdown, safe to show. */
+			bodyHtml: string;
+			category?: string | null;
+			/** Format: uuid */
+			id: string;
+			/** Format: date-time */
+			publishedAt?: string | null;
+			title: string;
+		};
+		/** @description A category with articles for the company's contacts. */
+		PortalArticleCategory: {
+			/** Format: int64 */
+			articles: number;
+			/** Format: uuid */
+			id: string;
+			name: string;
+		};
+		PortalArticleSummary: {
+			category?: string | null;
+			/** Format: uuid */
+			id: string;
+			/** Format: date-time */
+			publishedAt?: string | null;
+			/** @description Where a search matched, with the matched words in `<b>`. */
+			snippet?: string | null;
+			title: string;
+		};
+		PortalArticles: {
+			articles: components['schemas']['PortalArticleSummary'][];
+			categories: components['schemas']['PortalArticleCategory'][];
+		};
 		PortalBranding: {
 			/** @description `#rrggbb`. */
 			accentColor: string;
@@ -9071,6 +9136,11 @@ export interface components {
 		/** @description The signed-in account, as the portal shows it. */
 		PortalMe: components['schemas']['PortalPrincipal'] & {
 			branding?: components['schemas']['PortalBranding'] | null;
+			/**
+			 * @description The portal's parts that are on for their company: `servicedesk`
+			 *     (tickets), `knowledge` (help articles), `cmdb` (devices).
+			 */
+			modules: string[];
 			/** @description Portal permissions, e.g. `portal.ticket:read:company`. */
 			permissions: string[];
 		};
@@ -11246,6 +11316,50 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+	portal_articles: {
+		parameters: {
+			query?: {
+				/** @description Words to search for. */
+				q?: string;
+				category?: string;
+			};
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['PortalArticles'];
+				};
+			};
+		};
+	};
+	portal_article: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['PortalArticle'];
+				};
+			};
+		};
+	};
 	portal_request_link: {
 		parameters: {
 			query?: never;
