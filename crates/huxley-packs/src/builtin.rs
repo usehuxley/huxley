@@ -84,6 +84,27 @@ const SOURCES: &[Source] = &[
         ],
     },
     Source {
+        manifest: include_str!("../builtin/immybot/pack.yaml"),
+        files: &[
+            (
+                "integrations/immybot.yaml",
+                include_str!("../builtin/immybot/integrations/immybot.yaml"),
+            ),
+            (
+                "workflows/immybot-run-maintenance.yaml",
+                include_str!("../builtin/immybot/workflows/immybot-run-maintenance.yaml"),
+            ),
+            (
+                "workflows/immybot-sync-computers.yaml",
+                include_str!("../builtin/immybot/workflows/immybot-sync-computers.yaml"),
+            ),
+            (
+                "datasets/immybot-computers.json",
+                include_str!("../builtin/immybot/datasets/immybot-computers.json"),
+            ),
+        ],
+    },
+    Source {
         manifest: include_str!("../builtin/cwautomate/pack.yaml"),
         files: &[
             (

@@ -859,15 +859,30 @@ pub async fn resolve_for(
             },
             AuthKind::OAuth2ClientCredentials { token_url, scopes } => {
                 let token_url = &fill_auth_url(token_url, definition, &view)?;
+                // The spec's scopes may name server variables too, such as an
+                // instance in `https://{instance}.example.com/.default`.
                 let chosen: Vec<String> = view.settings["scopes"].as_array().map_or_else(
-                    || scopes.clone(),
-                    |a| {
-                        a.iter()
-                            .filter_map(Json::as_str)
-                            .map(str::to_owned)
-                            .collect()
+                    || {
+                        scopes
+                            .iter()
+                            .map(|scope| {
+                                if scope.contains('{') {
+                                    fill_auth_url(scope, definition, &view)
+                                } else {
+                                    Ok(scope.clone())
+                                }
+                            })
+                            .collect::<ConnectionResult<Vec<_>>>()
                     },
-                );
+                    |a| {
+                        Ok({
+                            a.iter()
+                                .filter_map(Json::as_str)
+                                .map(str::to_owned)
+                                .collect()
+                        })
+                    },
+                )?;
                 ResolvedAuth::OAuth2ClientCredentials {
                     token_url: token_url.clone(),
                     client_id: setting("client_id"),

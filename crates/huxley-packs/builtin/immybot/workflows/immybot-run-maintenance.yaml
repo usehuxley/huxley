@@ -1,0 +1,115 @@
+apiVersion: usehuxley.io/v1
+kind: Workflow
+metadata:
+  key: immybot-run-maintenance
+  name: Run ImmyBot maintenance on a computer
+  description: >-
+    Starts an ImmyBot maintenance session on a computer (a full run of what's
+    deployed to it, or just detection or inventory), waits up to 30 minutes
+    for it to finish, and, given a ticket, adds the outcome and the last log
+    lines to the ticket as an internal note. Uses the connection named
+    immybot.
+spec:
+  inputs:
+    type: object
+    required: [computer_id]
+    properties:
+      computer_id: { type: integer, title: ImmyBot computer ID }
+      mode:
+        type: string
+        title: What to run
+        enum: [full, detection, inventory]
+        default: full
+      windows_updates: { type: boolean, title: Also install Windows updates, default: false }
+      reboot:
+        type: string
+        title: Reboots
+        enum: [Suppress, Prompt, Normal, Force]
+        default: Suppress
+      ticket_id: { type: string, title: Ticket (to add the outcome to) }
+  steps:
+    - id: start
+      type: integration.action
+      action: immybot/runMaintenance
+      connection: immybot
+      with:
+        body:
+          computers: [{ computerId: "{{ inputs.computer_id | int }}" }]
+          detectionOnly: "{{ (inputs.mode | default('full')) == 'detection' }}"
+          inventoryOnly: "{{ (inputs.mode | default('full')) == 'inventory' }}"
+          fullMaintenance: "{{ inputs.windows_updates | default(false) }}"
+          rebootPreference: "{{ inputs.reboot | default('Suppress') }}"
+    - id: begin
+      type: set_var
+      vars:
+        session: >-
+          {{ ((steps.start.output.sessionsStarted or []) + (steps.start.output.sessionsAlreadyInProgress or []))
+             | map(attribute='sessionId') | first | default(0) }}
+        already: "{{ (steps.start.output.sessionsStarted or []) | length == 0 }}"
+        done: false
+        status: Created
+    - id: no_session
+      type: if
+      condition: "{{ not run.vars.session }}"
+      then:
+        - id: refused
+          type: fail
+          message: ImmyBot didn't start a session for this computer.
+    # Check every 15 seconds, for up to 30 minutes.
+    - id: poll
+      type: foreach
+      items: "{{ range(120) | list }}"
+      steps:
+        - id: unfinished
+          type: if
+          condition: "{{ not run.vars.done }}"
+          then:
+            - id: pause
+              type: wait
+              duration: 15s
+            - id: check
+              type: integration.action
+              action: immybot/getSession
+              connection: immybot
+              with:
+                sessionId: "{{ run.vars.session }}"
+            - id: note
+              type: set_var
+              vars:
+                status: "{{ steps.check.output.sessionStatus | default('Running') }}"
+                done: >-
+                  {{ (steps.check.output.sessionStatus | default('Running')) not in
+                     ['Running', 'Created', 'Pending', 'Postponed', 'PendingConnectivity',
+                      'PendingPreflight', 'PendingEphemeralAgentConnection'] }}
+    - id: logs
+      type: integration.action
+      action: immybot/getSessionLogs
+      connection: immybot
+      continue_on_error: true
+      with:
+        sessionId: "{{ run.vars.session }}"
+    - id: on_ticket
+      type: if
+      condition: "{{ inputs.ticket_id is defined and inputs.ticket_id }}"
+      then:
+        - id: add_note
+          type: core.ticket.note
+          with:
+            ticket_id: "{{ inputs.ticket_id }}"
+            kind: internal
+            body: |-
+              ImmyBot {{ inputs.mode | default('full') }} maintenance on computer {{ inputs.computer_id }} (session {{ run.vars.session }}{{ ', already running' if run.vars.already else '' }}): {{ run.vars.status if run.vars.done else 'still ' ~ run.vars.status ~ ' after 30 minutes' }}
+              {% for line in ((steps.logs.output or []) | map(attribute='message') | select | list)[-15:] %}
+              {{ line }}
+              {%- endfor %}
+    - id: unfinished_in_time
+      type: if
+      condition: "{{ not run.vars.done }}"
+      then:
+        - id: timed_out
+          type: fail
+          message: The session didn't finish within 30 minutes; ImmyBot is still running it.
+  outputs:
+    session_id: "{{ run.vars.session }}"
+    status: "{{ run.vars.status }}"
+    passed: "{{ run.vars.status in ['Passed', 'PartialPassed'] }}"

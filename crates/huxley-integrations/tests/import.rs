@@ -242,3 +242,24 @@ fn token_exchange_schemes_are_imported_and_ask_for_their_fields() {
         imported.warnings
     );
 }
+
+#[test]
+fn the_immybot_spec_imports_cleanly() {
+    let spec = include_str!("../../huxley-packs/builtin/immybot/integrations/immybot.yaml");
+    let imported = import(spec).unwrap();
+    assert!(imported.warnings.is_empty(), "{:?}", imported.warnings);
+    let scheme = &imported.definition.auth_schemes[0];
+    let AuthKind::OAuth2ClientCredentials { token_url, scopes } = &scheme.kind else {
+        panic!("{:?}", scheme.kind)
+    };
+    assert!(token_url.contains("{tenant}"));
+    assert_eq!(scopes, &["https://{instance}.immy.bot/.default"]);
+    for key in [
+        "listComputers",
+        "runMaintenance",
+        "getSession",
+        "getSessionLogs",
+    ] {
+        action(&imported, key);
+    }
+}
