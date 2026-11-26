@@ -5,6 +5,7 @@
 
 pub mod catalog;
 pub mod dashboards;
+pub mod datasets;
 pub mod query;
 
 use std::collections::HashMap;
@@ -87,7 +88,7 @@ impl Cache {
     }
 }
 
-fn cache_key(spec: &QuerySpec, scope: &Scope) -> String {
+fn cache_key(spec: &QuerySpec, scope: &Scope, source: &Source) -> String {
     let scope = match scope {
         Scope::All => "*".to_owned(),
         Scope::Orgs(orgs) => {
@@ -96,9 +97,13 @@ fn cache_key(spec: &QuerySpec, scope: &Scope) -> String {
             ids.join(",")
         }
     };
+    // A dataset's columns can change: they're part of the key.
+    let shape: Vec<&str> = source.fields.iter().map(|f| &*f.sql).collect();
     format!(
-        "{scope}|{}",
-        serde_json::to_string(spec).unwrap_or_default()
+        "{scope}|{}|{}|{}",
+        serde_json::to_string(spec).unwrap_or_default(),
+        source.from,
+        shape.join(",")
     )
 }
 
@@ -109,8 +114,22 @@ pub async fn run(
     spec: &QuerySpec,
     scope: &Scope,
 ) -> AnalyticsResult<Answer> {
-    let compiled = compile(spec, scope)?;
-    let key = cache_key(spec, scope);
+    let source = catalog::source(&spec.source).ok_or_else(|| {
+        AnalyticsError::Invalid("source".into(), format!("{:?} isn't a source", spec.source))
+    })?;
+    run_for(pool, cache, source, spec, scope).await
+}
+
+/// Runs a query over `source` (a catalog source, or a dataset's).
+pub async fn run_for(
+    pool: &PgPool,
+    cache: &Cache,
+    source: &Source,
+    spec: &QuerySpec,
+    scope: &Scope,
+) -> AnalyticsResult<Answer> {
+    let compiled = query::compile_for(source, spec, scope)?;
+    let key = cache_key(spec, scope, source);
     if let Some(answer) = cache.get(&key) {
         return Ok(answer);
     }

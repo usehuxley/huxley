@@ -2,8 +2,13 @@
 //! one kind of record: its `FROM` (always joining the owning organization
 //! as `o`), the module and permission that govern it, and its fields.
 
+use std::borrow::Cow;
+
 use serde::Serialize;
 use utoipa::ToSchema;
+
+/// Text that's usually written in the catalog, or made for a dataset.
+pub type Text = Cow<'static, str>;
 
 /// What a field holds, which decides the operators, measures and time
 /// buckets it allows.
@@ -23,60 +28,76 @@ pub enum Kind {
 #[serde(rename_all = "camelCase")]
 #[schema(as = AnalyticsField)]
 pub struct Field {
-    pub key: &'static str,
-    pub label: &'static str,
+    #[schema(value_type = String)]
+    pub key: Text,
+    #[schema(value_type = String)]
+    pub label: Text,
     pub kind: Kind,
     #[serde(skip)]
-    pub sql: &'static str,
+    pub sql: Text,
 }
 
 #[derive(Debug, Clone, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 #[schema(as = AnalyticsSource)]
 pub struct Source {
-    pub key: &'static str,
-    pub label: &'static str,
-    pub description: &'static str,
+    #[schema(value_type = String)]
+    pub key: Text,
+    #[schema(value_type = String)]
+    pub label: Text,
+    #[schema(value_type = String)]
+    pub description: Text,
     /// The module it belongs to, if any.
     pub module: Option<&'static str>,
     /// The permission that reads it.
     pub permission: &'static str,
     /// The time field most queries bucket by.
-    pub time_field: &'static str,
-    pub fields: &'static [Field],
+    #[schema(value_type = String)]
+    pub time_field: Text,
+    #[schema(value_type = Vec<Field>)]
+    pub fields: Cow<'static, [Field]>,
     #[serde(skip)]
-    pub from: &'static str,
+    pub from: Text,
 }
 
 impl Source {
     pub fn field(&self, key: &str) -> Option<&Field> {
         self.fields.iter().find(|f| f.key == key)
     }
+
+    /// Whether it's a dataset's (made at run time, not in the catalog).
+    pub fn is_dataset(key: &str) -> bool {
+        key.starts_with(DATASET_PREFIX)
+    }
 }
 
 const fn f(key: &'static str, label: &'static str, kind: Kind, sql: &'static str) -> Field {
     Field {
-        key,
-        label,
+        key: Cow::Borrowed(key),
+        label: Cow::Borrowed(label),
         kind,
-        sql,
+        sql: Cow::Borrowed(sql),
     }
 }
 
 const CLIENT: Field = f("client", "Client", Kind::Text, "o.name");
 
 pub const TICKETS: Source = Source {
-    key: "tickets",
-    label: "Tickets",
-    description: "Service desk tickets, with their status, queue, assignee and SLA outcome.",
+    key: Cow::Borrowed("tickets"),
+    label: Cow::Borrowed("Tickets"),
+    description: Cow::Borrowed(
+        "Service desk tickets, with their status, queue, assignee and SLA outcome.",
+    ),
     module: Some("servicedesk"),
     permission: "ticket:read",
-    time_field: "created_at",
-    from: "sd_tickets t JOIN organizations o ON o.id = t.org_id \
+    time_field: Cow::Borrowed("created_at"),
+    from: Cow::Borrowed(
+        "sd_tickets t JOIN organizations o ON o.id = t.org_id \
         LEFT JOIN sd_statuses s ON s.id = t.status_id LEFT JOIN sd_queues q ON q.id = t.queue_id \
         LEFT JOIN sd_ticket_types ty ON ty.id = t.type_id LEFT JOIN users au ON au.id = t.assignee_user_id \
         LEFT JOIN teams tm ON tm.id = t.assignee_team_id LEFT JOIN sd_ticket_sla sla ON sla.ticket_id = t.id",
-    fields: &[
+    ),
+    fields: Cow::Borrowed(&[
         CLIENT,
         f("status", "Status", Kind::Text, "s.name"),
         f(
@@ -130,19 +151,23 @@ pub const TICKETS: Source = Source {
             Kind::Bool,
             "sla.resolution_met",
         ),
-    ],
+    ]),
 };
 
 pub const TIME_ENTRIES: Source = Source {
-    key: "time_entries",
-    label: "Time entries",
-    description: "Time logged on tickets: who, for which client, what kind of work, and whether it's billable.",
+    key: Cow::Borrowed("time_entries"),
+    label: Cow::Borrowed("Time entries"),
+    description: Cow::Borrowed(
+        "Time logged on tickets: who, for which client, what kind of work, and whether it's billable.",
+    ),
     module: Some("servicedesk"),
     permission: "ticket:read",
-    time_field: "worked_on",
-    from: "sd_time_entries e JOIN organizations o ON o.id = e.org_id LEFT JOIN users u ON u.id = e.user_id \
+    time_field: Cow::Borrowed("worked_on"),
+    from: Cow::Borrowed(
+        "sd_time_entries e JOIN organizations o ON o.id = e.org_id LEFT JOIN users u ON u.id = e.user_id \
         LEFT JOIN sd_work_types w ON w.id = e.work_type_id LEFT JOIN sd_tickets t ON t.id = e.ticket_id",
-    fields: &[
+    ),
+    fields: Cow::Borrowed(&[
         CLIENT,
         f("technician", "Technician", Kind::Text, "u.display_name"),
         f("work_type", "Work type", Kind::Text, "w.name"),
@@ -156,19 +181,23 @@ pub const TIME_ENTRIES: Source = Source {
             Kind::Text,
             "(t.number_prefix || '-' || t.number)",
         ),
-    ],
+    ]),
 };
 
 pub const ASSETS: Source = Source {
-    key: "assets",
-    label: "Assets",
-    description: "Configuration items: devices and other assets, with their type, status and warranty.",
+    key: Cow::Borrowed("assets"),
+    label: Cow::Borrowed("Assets"),
+    description: Cow::Borrowed(
+        "Configuration items: devices and other assets, with their type, status and warranty.",
+    ),
     module: Some("cmdb"),
     permission: "asset:read",
-    time_field: "created_at",
-    from: "assets a JOIN organizations o ON o.id = a.org_id LEFT JOIN cmdb_asset_types ty ON ty.id = a.type_id \
+    time_field: Cow::Borrowed("created_at"),
+    from: Cow::Borrowed(
+        "assets a JOIN organizations o ON o.id = a.org_id LEFT JOIN cmdb_asset_types ty ON ty.id = a.type_id \
         LEFT JOIN crm_sites si ON si.id = a.site_id",
-    fields: &[
+    ),
+    fields: Cow::Borrowed(&[
         CLIENT,
         f("type", "Type", Kind::Text, "ty.name"),
         f("status", "Status", Kind::Text, "a.status"),
@@ -194,18 +223,22 @@ pub const ASSETS: Source = Source {
             "(a.warranty_ends_on >= current_date)",
         ),
         f("created_at", "Added", Kind::Time, "a.created_at"),
-    ],
+    ]),
 };
 
 pub const RUNS: Source = Source {
-    key: "runs",
-    label: "Workflow runs",
-    description: "Workflow runs: which workflow, how it was triggered, how it ended and how long it took.",
+    key: Cow::Borrowed("runs"),
+    label: Cow::Borrowed("Workflow runs"),
+    description: Cow::Borrowed(
+        "Workflow runs: which workflow, how it was triggered, how it ended and how long it took.",
+    ),
     module: None,
     permission: "workflow:read",
-    time_field: "created_at",
-    from: "runs r JOIN organizations o ON o.id = r.org_id LEFT JOIN workflows wf ON wf.id = r.workflow_id",
-    fields: &[
+    time_field: Cow::Borrowed("created_at"),
+    from: Cow::Borrowed(
+        "runs r JOIN organizations o ON o.id = r.org_id LEFT JOIN workflows wf ON wf.id = r.workflow_id",
+    ),
+    fields: Cow::Borrowed(&[
         f("organization", "Organization", Kind::Text, "o.name"),
         f("workflow", "Workflow", Kind::Text, "wf.name"),
         f("status", "Status", Kind::Text, "r.status::text"),
@@ -218,8 +251,11 @@ pub const RUNS: Source = Source {
             Kind::Number,
             "(extract(epoch FROM r.finished_at - r.started_at))",
         ),
-    ],
+    ]),
 };
+
+/// Dataset sources' keys: `dataset:<dataset key>`.
+pub const DATASET_PREFIX: &str = "dataset:";
 
 /// Every source, in display order.
 pub const SOURCES: &[Source] = &[TICKETS, TIME_ENTRIES, ASSETS, RUNS];

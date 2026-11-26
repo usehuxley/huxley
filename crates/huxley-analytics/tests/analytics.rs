@@ -35,7 +35,7 @@ async fn every_field_of_every_source_compiles_and_runs() {
     };
     let cache = Cache::default();
     for source in SOURCES {
-        for field in source.fields {
+        for field in source.fields.iter() {
             let mut dimension = json!({ "field": field.key });
             if matches!(
                 field.kind,

@@ -7,7 +7,7 @@ use axum::http::StatusCode;
 use axum::routing::{get, post};
 use axum::{Json, Router};
 use huxley_analytics::{Answer, QuerySpec, Scope, Source};
-use huxley_db::OrgScope;
+use huxley_db::{OrgScope, begin_scoped};
 use serde::Serialize;
 use utoipa::ToSchema;
 
@@ -40,6 +40,26 @@ pub(crate) async fn scope_for(
     }
 }
 
+/// The organizations where the caller can read datasets.
+async fn dataset_scope(state: &AppState, authed: &Authed) -> ApiResult<Scope> {
+    match authed
+        .permission_scope(state, huxley_analytics::datasets::PERMISSION, None)
+        .await?
+    {
+        OrgScope::System => Ok(Scope::All),
+        OrgScope::Orgs(orgs) if orgs.is_empty() => Err(ApiError::new(
+            StatusCode::FORBIDDEN,
+            "forbidden",
+            "You can't see datasets",
+        )),
+        OrgScope::Orgs(orgs) => Ok(Scope::Orgs(orgs)),
+    }
+}
+
+fn db_err(e: impl std::fmt::Display) -> ApiError {
+    ApiError::internal(&e)
+}
+
 #[derive(Debug, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct AnalyticsCatalog {
@@ -60,6 +80,17 @@ pub async fn list_sources(
         if scope_for(&state, &authed, source).await.is_ok() {
             sources.push(source.clone());
         }
+    }
+    if let Ok(scope) = dataset_scope(&state, &authed).await {
+        let mut tx = begin_scoped(&state.db, &OrgScope::System)
+            .await
+            .map_err(db_err)?;
+        sources.extend(
+            huxley_analytics::datasets::sources(&mut tx, &scope)
+                .await
+                .map_err(map)?,
+        );
+        tx.commit().await.map_err(db_err)?;
     }
     Ok(Json(AnalyticsCatalog {
         sources,
@@ -97,12 +128,24 @@ pub async fn query(
     authed: Authed,
     Json(spec): Json<QuerySpec>,
 ) -> ApiResult<Json<Answer>> {
-    let source = huxley_analytics::catalog::source(&spec.source).ok_or_else(|| {
-        ApiError::validation().with_field_error("/source", "there's no such source")
-    })?;
-    let scope = scope_for(&state, &authed, source).await?;
+    let no_source = || ApiError::validation().with_field_error("/source", "there's no such source");
+    let (source, scope) = if huxley_analytics::Source::is_dataset(&spec.source) {
+        let scope = dataset_scope(&state, &authed).await?;
+        let mut tx = begin_scoped(&state.db, &OrgScope::System)
+            .await
+            .map_err(db_err)?;
+        let found = huxley_analytics::datasets::source(&mut tx, &scope, &spec.source)
+            .await
+            .map_err(map)?;
+        tx.commit().await.map_err(db_err)?;
+        (found.ok_or_else(no_source)?, scope)
+    } else {
+        let source = huxley_analytics::catalog::source(&spec.source).ok_or_else(no_source)?;
+        let scope = scope_for(&state, &authed, source).await?;
+        (source.clone(), scope)
+    };
     let pool = state.read_db.as_ref().unwrap_or(&state.db);
-    let answer = huxley_analytics::run(pool, &state.analytics, &spec, &scope)
+    let answer = huxley_analytics::run_for(pool, &state.analytics, &source, &spec, &scope)
         .await
         .map_err(map)?;
     Ok(Json(answer))

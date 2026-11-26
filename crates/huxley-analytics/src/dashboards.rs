@@ -127,7 +127,13 @@ pub fn check(input: &DashboardInput) -> AnalyticsResult<String> {
         if !(1..=12).contains(&w.width) {
             return Err(bad(format!("{at}/width"), "1 to 12 columns"));
         }
-        compile(&w.spec, &Scope::All).map_err(|e| match e {
+        // Datasets' specs are checked when they run (their columns live in the database).
+        let checked = if crate::catalog::Source::is_dataset(&w.spec.source) {
+            Ok(())
+        } else {
+            compile(&w.spec, &Scope::All).map(|_| ())
+        };
+        checked.map_err(|e| match e {
             AnalyticsError::Invalid(field, message) => bad(format!("{at}/spec/{field}"), message),
             other => other,
         })?;
@@ -670,7 +676,7 @@ pub fn with_range(widget: &Widget, range: &str) -> QuerySpec {
         && !spec.filters.iter().any(|f| f.field == source.time_field)
     {
         spec.filters.push(crate::query::Filter {
-            field: source.time_field.to_owned(),
+            field: source.time_field.to_string(),
             op: crate::query::Op::Within,
             value: json!(range),
         });

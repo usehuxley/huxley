@@ -357,3 +357,117 @@ async fn edits_and_refusals(app: &axum::Router, owner: &str, shared_uri: &str, w
         StatusCode::NO_CONTENT
     );
 }
+
+#[tokio::test]
+async fn datasets_are_sources_too() {
+    let Some(db) = isolated("analytics_datasets").await else {
+        return;
+    };
+    let pools = db.pools.clone();
+    let app = app_for(&pools);
+    let root = ensure_root(&pools).await;
+    let acme = org(&pools, root, huxley_orgs::OrgKind::Client, "Acme").await;
+    let globex = org(&pools, root, huxley_orgs::OrgKind::Client, "Globex").await;
+    let owner = login(&app, &user(&pools, None).await.1).await;
+    let (status, ds) = call(&app, &owner, "POST", "/api/v1/datasets", json!({ "orgId": root, "dataset": {
+        "key": "computers", "name": "Computers",
+        "columns": [{ "name": "hostname", "type": "text" }, { "name": "ram_gb", "type": "number" },
+                    { "name": "last_seen", "type": "timestamp" }, { "name": "raw", "type": "json" }],
+    } })).await;
+    assert_eq!(status, StatusCode::CREATED, "{ds}");
+    let rows = format!("/api/v1/datasets/{}/rows", ds["id"].as_str().unwrap());
+    for (org, ram) in [(acme, [8, 16]), (globex, [32, 32])] {
+        let (status, written) = call(
+            &app,
+            &owner,
+            "POST",
+            &rows,
+            json!({ "orgId": org, "rows": [
+            { "hostname": "a", "ram_gb": ram[0], "last_seen": "2026-11-20T10:00:00Z" },
+            { "hostname": "b", "ram_gb": ram[1], "last_seen": "2026-11-21T10:00:00Z" },
+        ] }),
+        )
+        .await;
+        assert!(status.is_success(), "{written}");
+    }
+
+    // A read-only user at Acme sees the dataset as a source, and Acme's rows only.
+    let reader = login(&app, &user(&pools, Some(("read_only", acme))).await.1).await;
+    let (_, catalog) = call(
+        &app,
+        &reader,
+        "GET",
+        "/api/v1/analytics/sources",
+        Value::Null,
+    )
+    .await;
+    let computers = catalog["sources"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|s| s["key"] == "dataset:computers")
+        .unwrap()
+        .clone();
+    let fields: Vec<&str> = computers["fields"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|f| f["key"].as_str().unwrap())
+        .collect();
+    assert_eq!(
+        fields,
+        [
+            "_organization",
+            "hostname",
+            "ram_gb",
+            "last_seen",
+            "_synced_at"
+        ]
+    );
+    assert_eq!(computers["timeField"], "last_seen");
+    let by_org = json!({ "source": "dataset:computers", "measures": [{ "fn": "sum", "field": "ram_gb" }, { "fn": "count" }],
+                         "dimensions": [{ "field": "_organization" }] });
+    let (status, answer) = call(
+        &app,
+        &reader,
+        "POST",
+        "/api/v1/analytics/query",
+        by_org.clone(),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{answer}");
+    assert_eq!(answer["rows"][0][1], 24.0, "{answer}");
+    assert_eq!(answer["rows"].as_array().unwrap().len(), 1);
+    // The owner sees both.
+    let (_, answer) = call(&app, &owner, "POST", "/api/v1/analytics/query", by_org).await;
+    assert_eq!(answer["rows"].as_array().unwrap().len(), 2, "{answer}");
+    refusals(&app, &owner).await;
+}
+
+/// Unknown datasets and columns are refused.
+async fn refusals(app: &axum::Router, owner: &str) {
+    let (status, _) = call(
+        app,
+        owner,
+        "POST",
+        "/api/v1/analytics/query",
+        json!({ "source": "dataset:nope", "measures": [{ "fn": "count" }] }),
+    )
+    .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+    let (status, problem) = call(
+        app,
+        owner,
+        "POST",
+        "/api/v1/analytics/query",
+        json!({ "source": "dataset:computers", "dimensions": [{ "field": "raw" }] }),
+    )
+    .await;
+    assert_eq!(
+        (status, &problem["errors"][0]["pointer"]),
+        (
+            StatusCode::UNPROCESSABLE_ENTITY,
+            &json!("/dimensions/0/field")
+        )
+    );
+}
