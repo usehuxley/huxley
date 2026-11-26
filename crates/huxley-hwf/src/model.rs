@@ -441,6 +441,9 @@ pub enum Step {
     /// Record a change's approval decision (the `servicedesk` module).
     #[serde(rename = "core.change.decide")]
     ChangeDecide(ChangeDecideStep),
+    /// Record a project scope change's decision (the `projects` module).
+    #[serde(rename = "core.project.scope.decide")]
+    ScopeDecide(ScopeDecideStep),
     /// Run a dataset → asset mapping rule (the `cmdb` module).
     #[serde(rename = "core.asset.sync")]
     AssetSync(AssetSyncStep),
@@ -832,6 +835,11 @@ step!(ChangeDecideStep {
     pub decide: ChangeDecide,
 });
 
+step!(ScopeDecideStep {
+    #[serde(rename = "with")]
+    pub decide: ScopeDecide,
+});
+
 step!(AssetSyncStep {
     #[serde(rename = "with")]
     pub sync: AssetSync,
@@ -925,6 +933,7 @@ impl Step {
             TimeSuggest,
             ReportSend,
             ChangeDecide,
+            ScopeDecide,
             AssetSync,
             AssetWarranty,
             TicketEmailReply,
@@ -989,6 +998,7 @@ impl Step {
             Self::TimeSuggest(_) => "core.time.suggest",
             Self::ReportSend(_) => "core.report.send",
             Self::ChangeDecide(_) => "core.change.decide",
+            Self::ScopeDecide(_) => "core.project.scope.decide",
             Self::AssetSync(_) => "core.asset.sync",
             Self::AssetWarranty(_) => "core.asset.set_warranty",
             Self::TicketCreate(_) => "core.ticket.create",
@@ -1630,6 +1640,23 @@ pub struct ReportSend {
 #[serde(deny_unknown_fields)]
 pub struct ChangeDecide {
     pub ticket_id: Value,
+    pub decision: Value,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub by: Option<Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub comment: Option<Value>,
+}
+
+/// A project scope change's decision to record
+/// (`core.project.scope.decide`): `scope_change_id` (submitted, on a
+/// project in the run's organization or below), `decision` (`approved` or
+/// `rejected`, or a boolean), `by` and a `comment`. An approved change's
+/// hours are added to the budget. Raises `project.scope_change_approved`
+/// or `project.scope_change_rejected`. Output: the scope change.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct ScopeDecide {
+    pub scope_change_id: Value,
     pub decision: Value,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub by: Option<Value>,

@@ -27,6 +27,12 @@ pub struct TemplateTask {
     pub depends_on: Vec<String>,
     #[serde(default)]
     pub client_visible: bool,
+    /// Starts this many days after the project does.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub start_offset_days: Option<i32>,
+    /// Due this many days after it starts.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub duration_days: Option<i32>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema)]
@@ -111,6 +117,12 @@ impl Structure {
                     .is_some_and(|h| !(0.0..=10_000.0).contains(&h))
                 {
                     return Err(bad(format!("{at}/estimateHours"), "0 to 10,000"));
+                }
+                if t.start_offset_days
+                    .is_some_and(|d| !(0..=3650).contains(&d))
+                    || t.duration_days.is_some_and(|d| !(0..=3650).contains(&d))
+                {
+                    return Err(bad(format!("{at}/startOffsetDays"), "0 to 3,650 days"));
                 }
                 keys.push(&t.key);
             }
@@ -334,6 +346,8 @@ mod tests {
             estimate_hours: Some(2.0),
             depends_on: deps.iter().map(|d| (*d).to_owned()).collect(),
             client_visible: false,
+            start_offset_days: None,
+            duration_days: None,
         }
     }
 

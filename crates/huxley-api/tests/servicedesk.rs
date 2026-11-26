@@ -3428,3 +3428,152 @@ async fn project_budget(s: &Setup, project: &Value, audit: &Value, ada: &str) {
         ["Deploy the agents"]
     );
 }
+
+#[tokio::test]
+async fn scope_changes_are_submitted_decided_and_grow_the_budget() {
+    let Some(s) = setup().await else { return };
+    let template = onboarding_template(&s).await;
+    let project = s
+        .ok(
+            &s.owner,
+            "POST",
+            "/api/v1/projects",
+            Some(json!({ "orgId": s.acme, "name": "Acme scope", "startOn": "2026-12-01", "templateId": template["id"] })),
+        )
+        .await;
+    let url = format!("/api/v1/projects/{}", project["id"].as_str().unwrap());
+    // Task dates: a due date before the start is refused.
+    let task = project["tasks"][0]["ticketId"].as_str().unwrap();
+    let (status, _) = s
+        .call(
+            &s.owner,
+            "PATCH",
+            &format!("{url}/tasks/{task}"),
+            Some(json!({ "startOn": "2026-12-05", "dueOn": "2026-12-04" })),
+        )
+        .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+    let dated = s
+        .ok(
+            &s.owner,
+            "PATCH",
+            &format!("{url}/tasks/{task}"),
+            Some(json!({ "startOn": "2026-12-02", "dueOn": "2026-12-04" })),
+        )
+        .await;
+    assert_eq!(
+        (&dated["tasks"][0]["startOn"], &dated["tasks"][0]["dueOn"]),
+        (&json!("2026-12-02"), &json!("2026-12-04"))
+    );
+
+    let change = s
+        .ok(
+            &s.owner,
+            "POST",
+            &format!("{url}/scope-changes"),
+            Some(json!({ "title": "Add a second site", "hours": 6, "amount": 900 })),
+        )
+        .await;
+    assert_eq!(
+        (&change["number"], &change["state"]),
+        (&json!(1), &json!("draft"))
+    );
+    let at = format!("{url}/scope-changes/{}", change["id"].as_str().unwrap());
+    let submitted = s.ok(&s.owner, "POST", &format!("{at}/submit"), None).await;
+    assert_eq!(submitted["state"], "submitted");
+    let event: Value = sqlx::query_scalar(
+        "SELECT payload FROM events_outbox WHERE event_type = 'project.scope_change_submitted' AND subject_id = $1",
+    )
+    .bind(Uuid::parse_str(project["id"].as_str().unwrap()).unwrap())
+    .fetch_one(&s.pools.owner)
+    .await
+    .unwrap();
+    assert_eq!(
+        (&event["title"], &event["hours"], &event["templateId"]),
+        (&json!("Add a second site"), &json!(6.0), &template["id"])
+    );
+    // Submitted changes aren't edited.
+    let (status, _) = s
+        .call(
+            &s.owner,
+            "PUT",
+            &at,
+            Some(json!({ "title": "Sneaky", "hours": 60 })),
+        )
+        .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+
+    let ctx = RequestContext::system(Via::Workflow);
+    let mut tx = begin_scoped(&s.pools.app, &OrgScope::System).await.unwrap();
+    let id = Uuid::parse_str(change["id"].as_str().unwrap()).unwrap();
+    huxley_servicedesk::project_scope::decide(
+        &mut tx,
+        &ctx,
+        id,
+        true,
+        "Cleo (client)",
+        Some("Fine"),
+    )
+    .await
+    .unwrap();
+    tx.commit().await.unwrap();
+    let now = s.ok(&s.owner, "GET", &url, None).await;
+    assert_eq!(now["budgetHours"], json!(16.0), "10 + 6");
+    assert_eq!(
+        (
+            &now["scopeChanges"][0]["state"],
+            &now["scopeChanges"][0]["decidedBy"]
+        ),
+        (&json!("approved"), &json!("Cleo (client)"))
+    );
+    let mut tx = begin_scoped(&s.pools.app, &OrgScope::System).await.unwrap();
+    let portal = huxley_servicedesk::projects::for_portal(&mut tx, s.acme)
+        .await
+        .unwrap();
+    tx.commit().await.unwrap();
+    let mine = portal.iter().find(|p| p.name == "Acme scope").unwrap();
+    assert_eq!(mine.scope_changes.len(), 1);
+
+    template_workflow_is_listed(&s, &template).await;
+}
+
+/// A workflow filtered on a template is one of its workflows.
+async fn template_workflow_is_listed(s: &Setup, template: &Value) {
+    let tid = template["id"].as_str().unwrap();
+    let wf = s
+        .ok(
+            &s.owner,
+            "POST",
+            "/api/v1/workflows",
+            Some(json!({ "orgId": s.provider, "document": {
+                "apiVersion": "usehuxley.io/v1", "kind": "Workflow",
+                "metadata": { "key": unique("kickoff").replace(' ', "-").to_lowercase(), "name": "Kickoff" },
+                "spec": {
+                    "triggers": [{ "type": "event", "event": "project.created",
+                                   "filter": format!("{{{{ event.payload.templateId == '{tid}' }}}}") }],
+                    "steps": [{ "id": "hi", "type": "transform", "output": "hi" }]
+                }
+            } })),
+        )
+        .await;
+    s.ok(
+        &s.owner,
+        "POST",
+        &format!("/api/v1/workflows/{}/publish", wf["id"].as_str().unwrap()),
+        Some(json!({})),
+    )
+    .await;
+    let listed = s
+        .ok(
+            &s.owner,
+            "GET",
+            &format!("/api/v1/project-templates/{tid}/workflows"),
+            None,
+        )
+        .await;
+    assert_eq!(listed.as_array().unwrap().len(), 1, "{listed}");
+    assert_eq!(
+        (&listed[0]["name"], &listed[0]["event"]),
+        (&json!("Kickoff"), &json!("project.created"))
+    );
+}

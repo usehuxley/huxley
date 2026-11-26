@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
+	import { untrack } from 'svelte';
 	import { resolve } from '$app/paths';
 	import { Button, Card, Field, Input, Select } from '@usehuxley/ui';
 	import { BILLING } from '#lib/projects/labels.ts';
@@ -7,6 +8,8 @@
 
 	let { data, form }: PageProps = $props();
 	let templateId = $state('');
+	let orgId = $state(untrack(() => data.companies[0]?.value ?? ''));
+	let agreements = $derived(data.agreements.filter((a) => a.orgId === orgId));
 	let template = $derived(data.templates.find((t) => t.id === templateId));
 	const today = new Date().toISOString().slice(0, 10);
 </script>
@@ -22,7 +25,7 @@
 		<form method="POST" class="flex flex-col gap-4" use:enhance>
 			<div class="grid gap-3 sm:grid-cols-2">
 				<Field label="Client" for="pj-org">
-					<Select id="pj-org" name="orgId" options={data.companies} />
+					<Select id="pj-org" name="orgId" bind:value={orgId} options={data.companies} />
 				</Field>
 				<Field label="Name" for="pj-name"><Input id="pj-name" name="name" required /></Field>
 				<Field label="Starts" for="pj-start">
@@ -57,6 +60,16 @@
 						id="pj-billing"
 						name="billingMethod"
 						options={BILLING.map((b) => ({ value: b.value, label: b.label }))}
+					/>
+				</Field>
+				<Field label="Agreement" for="pj-agreement">
+					<Select
+						id="pj-agreement"
+						name="agreementId"
+						options={[
+							{ value: '', label: 'None' },
+							...agreements.map((a) => ({ value: a.value, label: a.label }))
+						]}
 					/>
 				</Field>
 			</div>

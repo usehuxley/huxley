@@ -6,12 +6,16 @@ import { problemMessage } from '#lib/server/problems.ts';
 import type { Actions, PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async (event) => {
-	if (event.params.id === 'new') return { template: null };
-	const { data } = await api(event).GET('/api/v1/project-templates/{id}', {
-		params: { path: { id: event.params.id } }
-	});
-	if (!data) error(404, 'There’s no such template.');
-	return { template: data };
+	if (event.params.id === 'new') return { template: null, workflows: [] };
+	const client = api(event);
+	const [template, workflows] = await Promise.all([
+		client.GET('/api/v1/project-templates/{id}', { params: { path: { id: event.params.id } } }),
+		client.GET('/api/v1/project-templates/{id}/workflows', {
+			params: { path: { id: event.params.id } }
+		})
+	]);
+	if (!template.data) error(404, 'There’s no such template.');
+	return { template: template.data, workflows: workflows.data ?? [] };
 };
 
 export const actions: Actions = {
@@ -43,6 +47,52 @@ export const actions: Actions = {
 			});
 		}
 		redirect(303, '/settings/project-templates');
+	},
+	// A draft workflow on this template's new projects, to fill in.
+	workflow: async (event) => {
+		const client = api(event);
+		const { data: template } = await client.GET('/api/v1/project-templates/{id}', {
+			params: { path: { id: event.params.id } }
+		});
+		if (!template) error(404, 'There’s no such template.');
+		const slug =
+			template.name
+				.toLowerCase()
+				.replace(/[^a-z0-9]+/g, '-')
+				.replace(/^-|-$/g, '')
+				.slice(0, 40) || 'project';
+		const {
+			data,
+			error: problem,
+			response
+		} = await client.POST('/api/v1/workflows', {
+			body: {
+				orgId: template.orgId,
+				document: {
+					apiVersion: 'usehuxley.io/v1',
+					kind: 'Workflow',
+					metadata: {
+						key: `${slug}-kickoff-${Date.now().toString(36)}`,
+						name: `${template.name}: kickoff`
+					},
+					spec: {
+						triggers: [
+							{
+								type: 'event',
+								event: 'project.created',
+								filter: `{{ event.payload.templateId == '${template.id}' }}`
+							}
+						],
+						steps: [{ id: 'project', type: 'transform', output: '{{ inputs }}' }]
+					}
+				} as never
+			}
+		});
+		if (!data)
+			return fail(response.status, {
+				message: problemMessage(problem, 'Could not create the workflow.')
+			});
+		redirect(303, `/workflows/${data.id}`);
 	},
 	remove: async (event) => {
 		await api(event).DELETE('/api/v1/project-templates/{id}', {
