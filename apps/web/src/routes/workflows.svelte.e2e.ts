@@ -149,7 +149,10 @@ test.describe('workflows', () => {
 		// Move one workflow into it.
 		await page.getByRole('button', { name: 'Move workflows' }).click();
 		await page.getByLabel(`Choose Folder test north ${stamp}`, { exact: true }).check();
-		await page.getByLabel('Move to').selectOption({ label: `Ops ${stamp}` });
+		// Labelled with its organization when folders span more than one.
+		const moveTo = page.getByLabel('Move to');
+		const ops = await moveTo.locator('option', { hasText: `Ops ${stamp}` }).getAttribute('value');
+		await moveTo.selectOption(ops);
 		await page.getByRole('button', { name: 'Move', exact: true }).click();
 		await expect(page.getByText('Workflow moved.')).toBeVisible();
 
