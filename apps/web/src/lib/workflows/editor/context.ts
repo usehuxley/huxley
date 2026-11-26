@@ -28,6 +28,15 @@ export interface EditorContext {
 	actions: ActionChoice[];
 	/** Evaluates an expression against the workflow's latest run, if offered. */
 	preview?: (expression: unknown) => Promise<PreviewResult>;
+	/** The server's problems with a document (not saved), if offered. */
+	check?: (document: unknown) => Promise<Problem[]>;
+}
+
+/** A problem the server found: where (a path like `spec.steps[0].with.x`)
+ * and what. */
+export interface Problem {
+	path: string;
+	message: string;
 }
 
 /** What an expression gave against a run. */

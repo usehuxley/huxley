@@ -20,6 +20,15 @@
 		});
 		return (await response.json()) as { value?: unknown; error?: string | null };
 	}
+	async function checkDocument(document: unknown) {
+		const response = await fetch(resolve('/(app)/workflows/[id]/check', { id: workflow.id }), {
+			method: 'POST',
+			headers: { 'content-type': 'application/json' },
+			body: JSON.stringify({ document })
+		});
+		if (!response.ok) return [];
+		return ((await response.json()) as { problems: { path: string; message: string }[] }).problems;
+	}
 	let canRun = $derived(granted.includes('workflow:run'));
 	let archived = $derived(workflow.status === 'archived');
 	let canAssignRunAs = $derived(canPublish && granted.includes('service_account:manage'));
@@ -122,6 +131,7 @@
 						<input type="hidden" name="document" value={JSON.stringify(visualDocument ?? {})} />
 						<VisualEditor
 							preview={canWrite ? previewExpression : undefined}
+							check={canWrite ? checkDocument : undefined}
 							draft={workflow.draft}
 							diagnostics={workflow.diagnostics}
 							readonly={!canWrite || archived}

@@ -6,7 +6,7 @@
 	import StepPanel from './StepPanel.svelte';
 	import type { Path } from './catalog.ts';
 	import { ownerOf } from './problems.ts';
-	import type { ActionChoice, EditorContext, PreviewResult } from './context.ts';
+	import type { ActionChoice, EditorContext, PreviewResult, Problem } from './context.ts';
 
 	let {
 		draft,
@@ -16,13 +16,16 @@
 		document = $bindable(),
 		actions = [],
 		modules = [],
-		preview
+		preview,
+		check
 	}: {
 		draft: Record<string, unknown>;
 		actions?: ActionChoice[];
 		/** Active feature modules (their steps are offered). */
 		modules?: string[];
 		preview?: (expression: unknown) => Promise<PreviewResult>;
+		/** The server's problems with a document (not saved). */
+		check?: (document: unknown) => Promise<Problem[]>;
 		diagnostics: { path: string; message: string }[];
 		readonly?: boolean;
 		dirty?: boolean;
@@ -74,6 +77,9 @@
 		},
 		get preview() {
 			return preview;
+		},
+		get check() {
+			return check;
 		},
 		get actions() {
 			return actions;

@@ -41,6 +41,7 @@ The **Visual** tab shows the workflow as a flow chart, from **Start** at the top
 - **If the run fails:** these steps sit in their own column.
 - **Adding steps:** select **+** on any connection, choose a step type, and it's inserted there.
 - **Editing steps:** select a step to edit it in the panel beside the canvas.
+- **Expressions:** expression and JSON fields are code editors. Inside `{{ }}` they complete what the step can read (its inputs, the steps that have run by then and their outputs, loop items, run variables, filters and functions). A problem in the field, such as a syntax error or a step that hasn't run yet, is underlined as you type, with the same message publishing would give.
 - **Problems:** shown as a badge on the step they belong to.
 
 Connections follow from the order and nesting of the steps, so the canvas can't build a workflow the format doesn't allow. Scroll or drag to move around, zoom with the controls, and use the minimap for large workflows. The arrows in the corner switch the flow between **top to bottom** and **left to right**; your browser remembers the choice. The **YAML** tab edits the same draft.

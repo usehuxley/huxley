@@ -23,6 +23,17 @@
 		words?: CodeCompletion[];
 		jinja?: JinjaScope;
 		lint?: (text: string) => CodeDiagnostic[] | Promise<CodeDiagnostic[]>;
+		/** Completes with the page's own logic (see `complete` in the setup). */
+		complete?: (
+			text: string,
+			pos: number
+		) => { from: number; to?: number; options: CodeCompletion[] } | null;
+		/** One or a few lines with no gutters, e.g. an expression field. */
+		compact?: boolean;
+		/** Called on every edit. */
+		onchange?: (value: string) => void;
+		/** Called when the editor loses focus. */
+		onblur?: () => void;
 		class?: string;
 	};
 	let {
@@ -37,6 +48,10 @@
 		words,
 		jinja,
 		lint,
+		complete,
+		compact = false,
+		onchange,
+		onblur,
 		class: className = ''
 	}: Props = $props();
 
@@ -58,7 +73,13 @@
 				words: words ? () => words ?? [] : undefined,
 				jinja,
 				lint,
-				onChange: (text) => (value = text)
+				complete: complete ? (text, pos) => complete?.(text, pos) ?? null : undefined,
+				compact,
+				onBlur: () => onblur?.(),
+				onChange: (text) => {
+					value = text;
+					onchange?.(text);
+				}
 			});
 			if (cancelled) made.destroy();
 			else editor = made;
@@ -80,7 +101,13 @@
 	});
 </script>
 
-<div class="code-editor {className}" style="--lines: {lines}" {id} data-language={language}>
+<div
+	class="code-editor {className}"
+	style="--lines: {lines}"
+	{id}
+	data-language={language}
+	data-compact={compact ? '' : undefined}
+>
 	{#if editor}
 		{#if name}<input type="hidden" {name} {value} />{/if}
 	{:else}
@@ -107,5 +134,11 @@
 		max-height: calc(var(--lines) * 1.55em + 1rem);
 		min-height: 4.5em;
 		overflow: auto;
+	}
+	.code-editor[data-compact] :global(.cm-scroller) {
+		min-height: 0;
+	}
+	.code-editor[data-compact] :global(.cm-content) {
+		padding: 0.25rem 0.25rem;
 	}
 </style>
