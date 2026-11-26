@@ -196,6 +196,20 @@ test.describe('projects', () => {
 			200
 		);
 
+		// The client's approver, there before anything asks for approval
+		// (approvers are worked out when the approval step runs).
+		const email = `cleo-${stamp}@example.com`;
+		const contact = await json<{ id: string }>(
+			owner.post(`/api/v1/orgs/${client.id}/contacts`, {
+				data: { firstName: 'Cleo', lastName: stamp, email }
+			})
+		);
+		await json(
+			owner.post(`/api/v1/contacts/${contact.id}/portal-access`, {
+				data: { role: 'client_approver' }
+			})
+		);
+
 		// A scope change goes to the client's approvers (the pack, at the client).
 		const review = await json<{ uploadId: string; version: string }>(
 			owner.post(`/api/v1/packs/builtin/huxley/project-scope-approvals?orgId=${client.id}`)
@@ -225,17 +239,6 @@ test.describe('projects', () => {
 		);
 
 		// The client's approver sees the milestones in the portal.
-		const email = `cleo-${stamp}@example.com`;
-		const contact = await json<{ id: string }>(
-			owner.post(`/api/v1/orgs/${client.id}/contacts`, {
-				data: { firstName: 'Cleo', lastName: stamp, email }
-			})
-		);
-		await json(
-			owner.post(`/api/v1/contacts/${contact.id}/portal-access`, {
-				data: { role: 'client_approver' }
-			})
-		);
 		const link = new URL(await linkIn(email));
 		await page.goto(link.pathname + link.search);
 		await page.getByRole('button', { name: 'Sign in' }).click();
