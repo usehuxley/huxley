@@ -399,6 +399,11 @@
       ],
       "type": "object"
     },
+    "HealthCompute": {
+      "additionalProperties": false,
+      "description": "Client health for today (`core.health.compute`): each client company in\nthe run's organization and below gets a score, 0 to 100, from weighted\nfactors (satisfaction, NPS, SLA misses, reopened tickets, ticket volume,\nrenewals), with the reasons; those that dropped 10 points or more from\na week before emit `client.health_declining`. It takes nothing. Output:\n`{ companies, declining: [{ org_id, name, score, previous, reasons }] }`.",
+      "type": "object"
+    },
     "HmacAlgorithm": {
       "enum": [
         "sha256",
@@ -3184,6 +3189,69 @@
             },
             "with": {
               "$ref": "#/$defs/NpsSend",
+              "default": {}
+            }
+          },
+          "required": [
+            "type",
+            "id"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Score client companies' health for today (the `cx` module).",
+          "properties": {
+            "continue_on_error": {
+              "description": "Record the error as the step's output and carry on.",
+              "type": "boolean"
+            },
+            "description": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "id": {
+              "description": "Unique in the workflow: lowercase letters, digits, underscores.\nOther steps read this step's output as `steps.<id>.output`.",
+              "type": "string"
+            },
+            "if": {
+              "description": "Skip the step unless this expression is true.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "name": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "retry": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/RetryPolicy"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "timeout": {
+              "description": "Fail the attempt after this long, e.g. `30s`.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "type": {
+              "const": "core.health.compute",
+              "type": "string"
+            },
+            "with": {
+              "$ref": "#/$defs/HealthCompute",
               "default": {}
             }
           },

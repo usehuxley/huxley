@@ -1,0 +1,9 @@
+apiVersion: usehuxley.io/v1
+kind: Pack
+key: huxley/client-health
+name: Client health
+version: 1.0.0
+publisher: Huxley
+description: Scores each client's health every morning (satisfaction, NPS, SLA misses, reopened tickets, ticket volume, renewals) and tells account managers when a client is declining, with the reasons.
+contents:
+  workflows: [health-daily, health-declining]

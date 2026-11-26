@@ -394,6 +394,7 @@ impl<'a> Walker<'a> {
             | Step::TimesheetCheck(_)
             | Step::CsatSurvey(_)
             | Step::NpsSend(_)
+            | Step::HealthCompute(_)
             | Step::AssetSync(_)
             | Step::AssetWarranty(_)
             | Step::TicketEmailReply(_)
@@ -850,6 +851,7 @@ fn with_block(step: &Step) -> Json {
         Step::TimesheetCheck(s) => serde_json::to_value(&s.check),
         Step::CsatSurvey(s) => serde_json::to_value(&s.survey),
         Step::NpsSend(s) => serde_json::to_value(&s.send),
+        Step::HealthCompute(s) => serde_json::to_value(&s.compute),
         Step::AssetSync(s) => serde_json::to_value(&s.sync),
         Step::AssetWarranty(s) => serde_json::to_value(&s.warranty),
         Step::TicketEmailReply(s) => serde_json::to_value(&s.reply),

@@ -7,6 +7,7 @@
 	import VaultPanel from '#lib/vault/VaultPanel.svelte';
 	import AgreementsPanel from '#lib/agreements/AgreementsPanel.svelte';
 	import PortalPanel from '#lib/portal/PortalPanel.svelte';
+	import HealthCard from '#lib/crm/HealthCard.svelte';
 	import SiteForm from '#lib/crm/SiteForm.svelte';
 	import { RELATIONSHIPS, STATUSES, hoursSummary, label, statusTone } from '#lib/crm/labels.ts';
 	import type { PageProps } from './$types';
@@ -115,6 +116,7 @@
 	>
 		{#snippet panel(value)}
 			{#if value === 'overview'}
+				{#if data.health}<HealthCard health={data.health} />{/if}
 				<ActionsCard actions={data.actions} orgId={data.org.id} />
 				<Card title="Company details">
 					<form

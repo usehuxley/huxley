@@ -1484,3 +1484,125 @@ async fn nps_score_and_opt_out(s: &Setup) {
     );
     tx.commit().await.unwrap();
 }
+
+#[tokio::test]
+async fn client_health_is_scored_with_reasons_and_declines_are_flagged() {
+    let Some(db) = isolated("client_health").await else {
+        return;
+    };
+    let s = setup(&db.pools).await;
+    let ctx = RequestContext::system(Via::System);
+    let (_, ada) = s.portal_user(s.acme, "Ada", "client_user").await;
+    // Six tickets; three missed an SLA target. Four happy survey answers.
+    let mut tickets = Vec::new();
+    for i in 0..6 {
+        tickets.push(s.resolved_ticket(&ada, &format!("T{i}")).await);
+    }
+    for (i, t) in tickets.iter().enumerate() {
+        sqlx::query(
+            "INSERT INTO sd_ticket_sla (ticket_id, org_id, policy_name, calendar, targets, resolution_breached_at) \
+             VALUES ($1, $2, 'Test', '{\"kind\": \"always\"}', '{}', CASE WHEN $3 THEN now() END) \
+             ON CONFLICT (ticket_id) DO UPDATE SET resolution_breached_at = CASE WHEN $3 THEN now() END",
+        )
+        .bind(t)
+        .bind(s.acme)
+        .bind(i < 3)
+        .execute(&s.pools.owner)
+        .await
+        .unwrap();
+    }
+    for t in &tickets[..4] {
+        let huxley_cx::surveys::Started::Survey { survey, .. } = s.survey(*t).await else {
+            panic!("not sent")
+        };
+        let mut tx = begin_scoped(&s.pools.app, &OrgScope::System).await.unwrap();
+        huxley_cx::surveys::respond(&mut tx, &ctx, &survey, 5, None, "portal")
+            .await
+            .unwrap();
+        tx.commit().await.unwrap();
+    }
+    let today = time::OffsetDateTime::now_utc().date();
+    // A week ago it was doing fine.
+    sqlx::query("INSERT INTO cx_health (org_id, computed_on, score, factors, reasons) VALUES ($1, $2, 95, '[]', '[]')")
+        .bind(s.acme)
+        .bind(today - time::Duration::days(7))
+        .execute(&s.pools.owner)
+        .await
+        .unwrap();
+    let mut tx = begin_scoped(&s.pools.app, &OrgScope::System).await.unwrap();
+    let (scored, declining) = huxley_cx::health::compute(&mut tx, &ctx, s.root, today)
+        .await
+        .unwrap();
+    tx.commit().await.unwrap();
+    assert!(scored >= 2, "{scored}");
+    // CSAT 100 (weight 3), SLA 0 (half missed, weight 3), none reopened 100 (weight 2): 63.
+    assert_eq!(declining.len(), 1, "{declining:?}");
+    assert_eq!(
+        (
+            declining[0].org_id,
+            declining[0].score,
+            declining[0].previous
+        ),
+        (s.acme, 63, 95)
+    );
+    assert!(
+        declining[0].reasons[0].starts_with("SLA targets met: 50% of 6 tickets"),
+        "{:?}",
+        declining[0].reasons
+    );
+
+    let (_, health, _) = s
+        .call(
+            &s.staff,
+            "GET",
+            &format!("/api/v1/orgs/{}/health", s.acme),
+            Value::Null,
+        )
+        .await;
+    assert_eq!(health["score"], 63, "{health}");
+    assert_eq!(health["history"].as_array().unwrap().len(), 2);
+    assert_eq!(
+        health["computedOn"],
+        json!(format!(
+            "{:04}-{:02}-{:02}",
+            today.year(),
+            u8::from(today.month()),
+            today.day()
+        ))
+    );
+    health_model(&s, today).await;
+}
+
+/// Weights change the score; unknown factors are refused.
+async fn health_model(s: &Setup, today: time::Date) {
+    let ctx = RequestContext::system(Via::System);
+    let model = format!("/api/v1/orgs/{}/health-model", s.root);
+    let (_, current, _) = s.call(&s.staff, "GET", &model, Value::Null).await;
+    assert_eq!(current["weights"]["sla"], 3);
+    let (status, _, _) = s
+        .call(&s.staff, "PUT", &model, json!({ "weights": { "luck": 5 } }))
+        .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+    let (status, set, _) = s
+        .call(&s.staff, "PUT", &model, json!({ "weights": { "sla": 0 } }))
+        .await;
+    assert_eq!(
+        (status, &set["weights"]["sla"]),
+        (StatusCode::OK, &json!(0)),
+        "{set}"
+    );
+    let mut tx = begin_scoped(&s.pools.app, &OrgScope::System).await.unwrap();
+    huxley_cx::health::compute(&mut tx, &ctx, s.root, today)
+        .await
+        .unwrap();
+    tx.commit().await.unwrap();
+    let (_, health, _) = s
+        .call(
+            &s.staff,
+            "GET",
+            &format!("/api/v1/orgs/{}/health", s.acme),
+            Value::Null,
+        )
+        .await;
+    assert_eq!(health["score"], 100, "{health}");
+}

@@ -3524,6 +3524,47 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
+	'/api/v1/orgs/{id}/health': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/**
+		 * A client company's health: its latest score, factors and reasons, and
+		 *     its scores over the last 90 days. `null` before it's first scored.
+		 */
+		get: operations['get_client_health'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/orgs/{id}/health-model': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/**
+		 * The weights this organization's clients are scored with (set here or
+		 *     above, else the defaults).
+		 */
+		get: operations['get_health_model'];
+		/** Sets the weights for this organization's clients (and those below). */
+		put: operations['set_health_model'];
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
 	'/api/v1/orgs/{id}/modules': {
 		parameters: {
 			query?: never;
@@ -7304,6 +7345,9 @@ export interface components {
 			redirectTo?: string | null;
 			scopes: components['schemas']['ScopeView'][];
 		};
+		BTreeMap: {
+			[key: string]: number;
+		};
 		Binding: {
 			default?: string | null;
 			help?: string | null;
@@ -7574,6 +7618,18 @@ export interface components {
 		Choice: {
 			label: string;
 			value: string;
+		};
+		ClientHealth: {
+			/** Format: date */
+			computedOn: string;
+			factors: components['schemas']['HealthFactor'][];
+			/** @description Scores over the last 90 days, oldest first. */
+			history: components['schemas']['HealthPoint'][];
+			/** Format: uuid */
+			orgId: string;
+			reasons: string[];
+			/** Format: int32 */
+			score?: number | null;
 		};
 		Column: {
 			/** @description Lowercase letters, digits and underscores, starting with a letter. */
@@ -8415,6 +8471,31 @@ export interface components {
 			 *     the mailbox's address).
 			 */
 			user?: string | null;
+		};
+		HealthFactor: {
+			/** @description What it's based on, e.g. "12% of 40 tickets missed an SLA target". */
+			detail: string;
+			key: string;
+			label: string;
+			/**
+			 * Format: double
+			 * @description 0 to 100; none without enough data.
+			 */
+			score?: number | null;
+		};
+		HealthModel: {
+			/**
+			 * @description Each factor's weight, 0 (off) to 10: `csat`, `nps`, `sla`,
+			 *     `reopens`, `volume`, `renewal`.
+			 */
+			weights: components['schemas']['BTreeMap'];
+		};
+		/** @description A day's score. */
+		HealthPoint: {
+			/** Format: date */
+			day: string;
+			/** Format: int32 */
+			score?: number | null;
 		};
 		HealthStatus: {
 			/** @description Always `ok` when the response is 200. */
@@ -19356,6 +19437,81 @@ export interface operations {
 				};
 				content: {
 					'application/json': components['schemas']['Contact'];
+				};
+			};
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	get_client_health: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ClientHealth'] | null;
+				};
+			};
+		};
+	};
+	get_health_model: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['HealthModel'];
+				};
+			};
+		};
+	};
+	set_health_model: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['HealthModel'];
+			};
+		};
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['HealthModel'];
 				};
 			};
 			422: {

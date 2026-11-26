@@ -60,6 +60,9 @@ export const load: PageServerLoad = async (event) => {
 				: Promise.resolve({ data: undefined })
 		]);
 	const showPortal = has('portal', 'crm:read');
+	const health = has('cx', 'crm:read')
+		? await client.GET('/api/v1/orgs/{id}/health', { params: { path: { id } } })
+		: { data: undefined };
 	const [portalAccounts, portalProviders] = await Promise.all([
 		showPortal
 			? client.GET('/api/v1/orgs/{id}/portal-accounts', { params: { path: { id } } })
@@ -98,6 +101,7 @@ export const load: PageServerLoad = async (event) => {
 				}
 			: null,
 		agreements: agreements.data ?? null,
+		health: health.data ?? null,
 		agreementUsage: usage,
 		workTypes: workTypes.data ?? [],
 		assetTypes: (assetTypes.data ?? []).filter((t) => !t.archived),
