@@ -36,7 +36,35 @@ test.describe('scripts', () => {
 		await expect(versions).toContainText('simpler');
 		await versions.getByRole('link', { name: 'Version 1' }).click();
 		await expect(page.getByLabel('Version 1 source')).toContainText('json.load');
-		await expect(page.getByLabel('Script source')).toHaveValue('print("version two")\n');
+		await expect(page.getByLabel('Script source')).toContainText('print("version two")');
+	});
+
+	test('the code editor highlights PowerShell and completes parameters', async ({ browser }) => {
+		const page = await signIn(browser);
+		await page.getByRole('link', { name: 'Scripts' }).click();
+		await page.getByLabel('Name').fill(`Pinger ${Date.now().toString(36)}`);
+		await page.getByLabel('Language').selectOption('pwsh');
+		await page.getByRole('button', { name: 'Create' }).click();
+		const source = page.locator('[data-language="powershell"] .cm-content');
+		await expect(source).toBeVisible();
+		// Highlighted: keywords and variables get their own spans.
+		await expect(source.locator('span').first()).toBeVisible();
+		// The new script's parameter, offered while typing.
+		await source.click();
+		await page.keyboard.press('ControlOrMeta+End');
+		await page.keyboard.press('Enter');
+		await page.keyboard.type('$Na');
+		const options = page.getByRole('listbox');
+		await expect(options.getByRole('option', { name: /\$name/i })).toBeVisible();
+		await page.keyboard.press('Enter');
+		// "$Na" became the parameter, on the line after the greeting.
+		await expect(source).toContainText('"$name');
+		// Broken parameters JSON is flagged as you type.
+		const params = page.locator('#parameters .cm-content');
+		await params.click();
+		await page.keyboard.press('ControlOrMeta+End');
+		await page.keyboard.type(',');
+		await expect(page.locator('#parameters .cm-lintRange-error')).toHaveCount(1);
 	});
 
 	test('an admin enrols a script runner', async ({ browser }) => {

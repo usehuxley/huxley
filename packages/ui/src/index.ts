@@ -26,3 +26,11 @@ export {
 	type ShowIf
 } from './form/fields';
 export { default as ArticleBody } from './components/ArticleBody.svelte';
+
+export { default as CodeEditor } from './components/CodeEditor.svelte';
+export type {
+	CodeCompletion,
+	CodeDiagnostic,
+	CodeLanguage,
+	JinjaScope
+} from './components/code-editor/types.ts';

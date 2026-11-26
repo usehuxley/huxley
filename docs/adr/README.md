@@ -60,3 +60,4 @@ Decisions that shape Huxley. Add a new ADR by copying `0000-template.md` with th
 | [054](0054-change-management.md) | Changes extend change tickets; approval is a workflow | Accepted |
 | [055](0055-problem-management.md) | Problems extend problem tickets; incidents link to them | Accepted |
 | [056](0056-projects.md) | Project tasks are tickets; budgets burn from time on them | Accepted |
+| [060](0060-code-editor.md) | One CodeMirror 6 editor, loaded on demand | Accepted |

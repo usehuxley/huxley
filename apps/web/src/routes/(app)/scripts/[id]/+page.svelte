@@ -2,7 +2,8 @@
 	import { enhance } from '$app/forms';
 	import { resolve } from '$app/paths';
 	import { ArrowLeft } from '@lucide/svelte';
-	import { Button, Card, Field, Input, FormRenderer } from '@usehuxley/ui';
+	import { Button, Card, CodeEditor, Field, Input, FormRenderer } from '@usehuxley/ui';
+	import { editorLanguage, lintParameters, scriptWords } from '#lib/scripts/editor.ts';
 	import type { PageProps } from './$types';
 
 	let { data, form }: PageProps = $props();
@@ -52,9 +53,12 @@
 
 	{#if data.old}
 		<Card title="Version {data.old.version} (read-only)">
-			<pre
-				class="max-h-96 overflow-auto rounded-control bg-surface-sunken p-3 font-mono text-xs text-fg"
-				aria-label="Version {data.old.version} source">{data.old.source}</pre>
+			<CodeEditor
+				label="Version {data.old.version} source"
+				language={editorLanguage(script.language)}
+				value={data.old.source}
+				readonly
+			/>
 			<a
 				href={resolve('/(app)/scripts/[id]', { id: script.id })}
 				class="mt-2 inline-block text-sm text-accent hover:underline"
@@ -69,25 +73,26 @@
 			<Card title="Source">
 				<form method="POST" action="?/save" use:enhance class="flex flex-col gap-3">
 					<input type="hidden" name="baseVersion" value={script.currentVersion} />
-					<textarea
+					<CodeEditor
 						name="source"
-						aria-label="Script source"
-						rows="22"
-						spellcheck="false"
+						label="Script source"
+						language={editorLanguage(script.language)}
+						lines={24}
 						readonly={!canManage}
-						class="rounded-control border border-border bg-surface p-3 font-mono text-xs text-fg"
-						bind:value={source}></textarea>
-					<label for="parameters" class="text-sm font-medium text-fg">
-						Parameters (JSON Schema)
-					</label>
-					<textarea
+						words={scriptWords(script.language, previewSchema)}
+						bind:value={source}
+					/>
+					<p class="text-sm font-medium text-fg">Parameters (JSON Schema)</p>
+					<CodeEditor
 						id="parameters"
 						name="parameters"
-						rows="8"
-						spellcheck="false"
+						label="Parameters (JSON Schema)"
+						language="json"
+						lines={10}
 						readonly={!canManage}
-						class="rounded-control border border-border bg-surface p-3 font-mono text-xs text-fg"
-						bind:value={parametersText}></textarea>
+						lint={lintParameters}
+						bind:value={parametersText}
+					/>
 					{#if canManage}
 						<Field label="What changed" for="notes">
 							<Input id="notes" name="notes" maxlength={2000} />
