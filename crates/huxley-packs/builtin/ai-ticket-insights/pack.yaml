@@ -1,0 +1,9 @@
+apiVersion: usehuxley.io/v1
+kind: Pack
+key: huxley/ai-ticket-insights
+name: AI ticket insights
+version: 1.0.0
+publisher: Huxley
+description: Keeps a short AI summary on each ticket, with the people, devices, applications and errors it mentions and a suggested next step, refreshed as the conversation grows or when someone asks.
+contents:
+  workflows: [summarize-ticket]

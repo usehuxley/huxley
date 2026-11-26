@@ -248,3 +248,29 @@ impl Engine {
         Ok(out)
     }
 }
+
+impl Engine {
+    /// `core.ticket.insight`: records a ticket's AI summary, entities and
+    /// next step (a ticket in the run's organization or below). Output: the
+    /// insight.
+    pub(crate) async fn ticket_insight(&self, org_id: Uuid, input: &Json) -> Result<Json, Json> {
+        self.require_desk(org_id).await?;
+        let ticket =
+            id(input, "ticket_id")?.ok_or_else(|| error("input", "ticket_id is required"))?;
+        let subtree = self.subtree(org_id).await?;
+        let mut tx = begin_scoped(self.db(), &OrgScope::Orgs(subtree))
+            .await
+            .map_err(internal)?;
+        let saved = huxley_servicedesk::insights::record(
+            &mut tx,
+            ticket,
+            text(input, "summary"),
+            &input["entities"],
+            input["next_step"].as_str(),
+        )
+        .await
+        .map_err(desk_error)?;
+        tx.commit().await.map_err(internal)?;
+        Ok(json!(saved))
+    }
+}

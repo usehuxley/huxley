@@ -1,0 +1,60 @@
+apiVersion: usehuxley.io/v1
+kind: Workflow
+metadata:
+  key: summarize-ticket
+  name: Summarize tickets with AI
+  description: >-
+    When a ticket gets a note or reply, or someone presses Refresh on its
+    insight, asks the AI provider for a short summary, the people, devices,
+    applications and errors it mentions, and a next step, and shows them on
+    the ticket.
+spec:
+  triggers:
+    - id: noted
+      type: event
+      event: ticket.note_added
+    - id: asked
+      type: event
+      event: ticket.insight_requested
+  steps:
+    - id: ticket
+      type: core.ticket.get
+      with:
+        ticket_id: "{{ trigger.subject_id }}"
+        notes: true
+    - id: judge
+      type: ai.extract
+      with:
+        text: >-
+          {{ (steps.ticket.output.ticket.title ~ '\n\n' ~ (steps.ticket.output.ticket.description or '') ~ '\n\n'
+              ~ (steps.ticket.output.notes[-20:] | map(attribute='body') | join('\n---\n')))[:12000] }}
+        instructions: >-
+          You help IT technicians catch up on a service desk ticket: its title,
+          description, then its notes and replies, oldest first. Summarize it in
+          at most 60 words: the problem, what's been tried, and where it stands.
+          List the people, devices (names or asset tags), applications and error
+          messages it mentions, each short. Suggest the single most useful next
+          step in at most 20 words. Never include passwords or secrets.
+        schema:
+          type: object
+          properties:
+            summary: { type: string }
+            people: { type: array, items: { type: string } }
+            devices: { type: array, items: { type: string } }
+            applications: { type: array, items: { type: string } }
+            errors: { type: array, items: { type: string } }
+            next_step: { type: string }
+          required: [summary, people, devices, applications, errors, next_step]
+    - id: record
+      type: core.ticket.insight
+      with:
+        ticket_id: "{{ trigger.subject_id }}"
+        summary: "{{ steps.judge.output.summary }}"
+        entities:
+          people: "{{ steps.judge.output.people }}"
+          devices: "{{ steps.judge.output.devices }}"
+          applications: "{{ steps.judge.output.applications }}"
+          errors: "{{ steps.judge.output.errors }}"
+        next_step: "{{ steps.judge.output.next_step }}"
+  outputs:
+    summary: "{{ steps.judge.output.summary }}"

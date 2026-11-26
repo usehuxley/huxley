@@ -68,6 +68,7 @@ const ICONS: Record<string, typeof Globe> = {
 	'core.triage.apply': ListChecks,
 	'core.dispatch.recommend': ListChecks,
 	'core.workforce.insights': ListChecks,
+	'core.ticket.insight': ListChecks,
 	'core.asset.sync': Boxes,
 	'core.asset.set_warranty': Boxes,
 	'core.ticket.create': TicketPlus,

@@ -1200,6 +1200,30 @@ export type Step =
 			 * Fail the attempt after this long, e.g. `30s`.
 			 */
 			timeout?: string | null;
+			type: 'core.ticket.insight';
+			with: TicketInsight;
+	  }
+	| {
+			/**
+			 * Record the error as the step's output and carry on.
+			 */
+			continue_on_error?: boolean;
+			description?: string | null;
+			/**
+			 * Unique in the workflow: lowercase letters, digits, underscores.
+			 * Other steps read this step's output as `steps.<id>.output`.
+			 */
+			id: string;
+			/**
+			 * Skip the step unless this expression is true.
+			 */
+			if?: string | null;
+			name?: string | null;
+			retry?: RetryPolicy | null;
+			/**
+			 * Fail the attempt after this long, e.g. `30s`.
+			 */
+			timeout?: string | null;
 			type: 'core.asset.sync';
 			with: AssetSync;
 	  }
@@ -2132,6 +2156,21 @@ export interface DispatchRecommend {
  */
 export interface WorkforceInsights {
 	days?: unknown;
+}
+/**
+ * A ticket's insight to record (`core.ticket.insight`), shown on the
+ * ticket: a `summary`, the `entities` it mentions (`{ people, devices,
+ * applications, errors }`, lists of names) and a `next_step`. Again
+ * replaces it. Output: the insight.
+ *
+ * This interface was referenced by `HuxleyWorkflowFormatV1`'s JSON-Schema
+ * via the `definition` "TicketInsight".
+ */
+export interface TicketInsight {
+	entities?: unknown;
+	next_step?: unknown;
+	summary: unknown;
+	ticket_id: unknown;
 }
 /**
  * Mapping rules to run (`core.asset.sync`): a dataset's rows become

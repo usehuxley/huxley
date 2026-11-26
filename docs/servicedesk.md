@@ -445,6 +445,20 @@ The built-in **AI triage** pack (`huxley/ai-triage`) suggests a queue and priori
   - `GET`/`POST /api/v1/triage/evaluations`, `GET /api/v1/triage/evaluations/{id}`
   - `GET /api/v1/triage/agreement?orgId=…` (`ticket:read`)
 
+## Ticket insights
+
+A ticket's **Insight** card helps whoever picks it up (ADR-050):
+
+- **Summary, entities and next step:** with the built-in **AI ticket insights** pack (and an [AI provider](ai.md)), each new note or reply refreshes a summary of at most 60 words. The card also shows the people, devices, applications and errors the ticket mentions, and a suggested next step. **Refresh** asks for a new one now. Summaries are only shown to staff.
+- **Similar tickets:** the nearest tickets in meaning to this one, from its own embedding (the [search by meaning](#search-by-meaning) pack's), among those you can read. This needs no AI call. Before the ticket is embedded, the card leaves them out.
+
+Knowledge articles and Actions suggested for the ticket appear in their own cards.
+
+API (`ticket:read`):
+- `GET /api/v1/tickets/{id}/insight`
+- `POST /api/v1/tickets/{id}/insight/refresh` (raises `ticket.insight_requested`)
+- `GET /api/v1/tickets/{id}/similar?limit=…`
+
 ## Coming next
 
 Sending replies through Microsoft Graph.

@@ -465,6 +465,32 @@ export const STEPS: StepSpec[] = [
 		]
 	},
 	{
+		type: 'core.ticket.insight',
+		label: 'Record ticket insight',
+		description:
+			'Show a summary, the people, devices, applications and errors a ticket mentions, and a next step on the ticket.',
+		group: 'Actions',
+		module: 'servicedesk',
+		template: {
+			with: {
+				ticket_id: '{{ trigger.subject_id }}',
+				summary: '{{ steps.judge.output.summary }}',
+				next_step: '{{ steps.judge.output.next_step }}'
+			}
+		},
+		fields: [
+			{ path: 'with.ticket_id', label: 'Ticket', kind: 'expression' },
+			{ path: 'with.summary', label: 'Summary', kind: 'expression' },
+			{
+				path: 'with.entities',
+				label: 'Entities',
+				kind: 'json',
+				hint: '{ people, devices, applications, errors }'
+			},
+			{ path: 'with.next_step', label: 'Next step', kind: 'expression' }
+		]
+	},
+	{
 		type: 'core.workforce.insights',
 		label: 'Find skill gaps',
 		description:

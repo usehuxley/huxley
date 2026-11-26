@@ -35,6 +35,7 @@
 	import TicketAssetsCard from '#lib/assets/TicketAssetsCard.svelte';
 	import CsatCard from '#lib/tickets/CsatCard.svelte';
 	import SentimentCard from '#lib/tickets/SentimentCard.svelte';
+	import InsightCard from '#lib/tickets/InsightCard.svelte';
 	import { OUTCOME } from '#lib/agreements/coverage.ts';
 	import { onMount, untrack } from 'svelte';
 	import type { PageProps } from './$types';
@@ -414,6 +415,7 @@
 				ticketId={ticket.id}
 				contactId={ticket.requesterId ?? undefined}
 			/>
+			<InsightCard insight={data.insight} similar={data.similar} />
 			{#if canWrite && data.recommendations.length > 0 && ticket.statusCategory !== 'resolved' && ticket.statusCategory !== 'closed'}
 				<Card title="Who should take it">
 					<ul class="flex flex-col gap-3" aria-label="Recommended people">

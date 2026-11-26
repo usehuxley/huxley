@@ -3606,6 +3606,69 @@
         },
         {
           "additionalProperties": false,
+          "description": "Record a ticket's AI summary, entities and next step (the\n`servicedesk` module).",
+          "properties": {
+            "continue_on_error": {
+              "description": "Record the error as the step's output and carry on.",
+              "type": "boolean"
+            },
+            "description": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "id": {
+              "description": "Unique in the workflow: lowercase letters, digits, underscores.\nOther steps read this step's output as `steps.<id>.output`.",
+              "type": "string"
+            },
+            "if": {
+              "description": "Skip the step unless this expression is true.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "name": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "retry": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/RetryPolicy"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "timeout": {
+              "description": "Fail the attempt after this long, e.g. `30s`.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "type": {
+              "const": "core.ticket.insight",
+              "type": "string"
+            },
+            "with": {
+              "$ref": "#/$defs/TicketInsight"
+            }
+          },
+          "required": [
+            "type",
+            "id",
+            "with"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
           "description": "Run a dataset → asset mapping rule (the `cmdb` module).",
           "properties": {
             "continue_on_error": {
@@ -4107,6 +4170,21 @@
       },
       "required": [
         "ticket_id"
+      ],
+      "type": "object"
+    },
+    "TicketInsight": {
+      "additionalProperties": false,
+      "description": "A ticket's insight to record (`core.ticket.insight`), shown on the\nticket: a `summary`, the `entities` it mentions (`{ people, devices,\napplications, errors }`, lists of names) and a `next_step`. Again\nreplaces it. Output: the insight.",
+      "properties": {
+        "entities": true,
+        "next_step": true,
+        "summary": true,
+        "ticket_id": true
+      },
+      "required": [
+        "ticket_id",
+        "summary"
       ],
       "type": "object"
     },

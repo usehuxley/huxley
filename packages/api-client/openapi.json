@@ -14579,6 +14579,63 @@
 				}
 			}
 		},
+		"/api/v1/tickets/{id}/insight": {
+			"get": {
+				"tags": ["servicedesk"],
+				"summary": "The ticket's AI summary, entities and next step (the AI ticket insights\npack writes it); `null` before there's one.",
+				"operationId": "get_ticket_insight",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"oneOf": [
+										{
+											"$ref": "#/components/schemas/TicketInsight"
+										},
+										{
+											"type": "null"
+										}
+									]
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/tickets/{id}/insight/refresh": {
+			"post": {
+				"tags": ["servicedesk"],
+				"summary": "Asks for a fresh insight: raises `ticket.insight_requested`, which the\nAI ticket insights pack answers.",
+				"operationId": "refresh_ticket_insight",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"responses": {
+					"202": {}
+				}
+			}
+		},
 		"/api/v1/tickets/{id}/links": {
 			"get": {
 				"tags": ["servicedesk"],
@@ -14956,6 +15013,45 @@
 									"items": {
 										"$ref": "#/components/schemas/SentimentEntry"
 									}
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/tickets/{id}/similar": {
+			"get": {
+				"tags": ["servicedesk"],
+				"summary": "Tickets nearest in meaning to this one (by its own embedding: no AI\ncall), among those you can read.",
+				"operationId": "similar_tickets",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					},
+					{
+						"name": "limit",
+						"in": "query",
+						"description": "How many (default 5, at most 20).",
+						"required": false,
+						"schema": {
+							"type": "integer",
+							"minimum": 0
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/SimilarTickets"
 								}
 							}
 						}
@@ -29671,6 +29767,26 @@
 					}
 				}
 			},
+			"SimilarTickets": {
+				"type": "object",
+				"required": ["available", "tickets"],
+				"properties": {
+					"available": {
+						"type": "boolean",
+						"description": "Whether similar tickets can be found (pgvector, and the ticket is\nembedded)."
+					},
+					"message": {
+						"type": ["string", "null"],
+						"description": "Why not, when not."
+					},
+					"tickets": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/MeaningHit"
+						}
+					}
+				}
+			},
 			"Site": {
 				"type": "object",
 				"required": [
@@ -31081,6 +31197,30 @@
 					}
 				},
 				"additionalProperties": false
+			},
+			"TicketInsight": {
+				"type": "object",
+				"required": ["ticketId", "summary", "entities", "at"],
+				"properties": {
+					"at": {
+						"type": "string",
+						"format": "date-time"
+					},
+					"entities": {
+						"type": "object",
+						"description": "`{ people, devices, applications, errors }`, each a list of names."
+					},
+					"nextStep": {
+						"type": ["string", "null"]
+					},
+					"summary": {
+						"type": "string"
+					},
+					"ticketId": {
+						"type": "string",
+						"format": "uuid"
+					}
+				}
 			},
 			"TicketKnowledge": {
 				"type": "object",

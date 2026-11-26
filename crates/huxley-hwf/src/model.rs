@@ -424,6 +424,10 @@ pub enum Step {
     /// Skill gaps now (the `workforce` module).
     #[serde(rename = "core.workforce.insights")]
     WorkforceInsights(WorkforceInsightsStep),
+    /// Record a ticket's AI summary, entities and next step (the
+    /// `servicedesk` module).
+    #[serde(rename = "core.ticket.insight")]
+    TicketInsight(TicketInsightStep),
     /// Run a dataset → asset mapping rule (the `cmdb` module).
     #[serde(rename = "core.asset.sync")]
     AssetSync(AssetSyncStep),
@@ -790,6 +794,11 @@ step!(WorkforceInsightsStep {
     pub insights: WorkforceInsights,
 });
 
+step!(TicketInsightStep {
+    #[serde(rename = "with")]
+    pub insight: TicketInsight,
+});
+
 step!(AssetSyncStep {
     #[serde(rename = "with")]
     pub sync: AssetSync,
@@ -878,6 +887,7 @@ impl Step {
             TriageApply,
             DispatchRecommend,
             WorkforceInsights,
+            TicketInsight,
             AssetSync,
             AssetWarranty,
             TicketEmailReply,
@@ -937,6 +947,7 @@ impl Step {
             Self::TriageApply(_) => "core.triage.apply",
             Self::DispatchRecommend(_) => "core.dispatch.recommend",
             Self::WorkforceInsights(_) => "core.workforce.insights",
+            Self::TicketInsight(_) => "core.ticket.insight",
             Self::AssetSync(_) => "core.asset.sync",
             Self::AssetWarranty(_) => "core.asset.set_warranty",
             Self::TicketCreate(_) => "core.ticket.create",
@@ -1497,6 +1508,21 @@ pub struct DispatchRecommend {
 pub struct WorkforceInsights {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub days: Option<Value>,
+}
+
+/// A ticket's insight to record (`core.ticket.insight`), shown on the
+/// ticket: a `summary`, the `entities` it mentions (`{ people, devices,
+/// applications, errors }`, lists of names) and a `next_step`. Again
+/// replaces it. Output: the insight.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct TicketInsight {
+    pub ticket_id: Value,
+    pub summary: Value,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub entities: Option<Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub next_step: Option<Value>,
 }
 
 /// Mapping rules to run (`core.asset.sync`): a dataset's rows become

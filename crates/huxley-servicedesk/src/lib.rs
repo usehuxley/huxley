@@ -10,6 +10,7 @@ pub mod appointments;
 pub mod config;
 pub mod dispatch;
 pub mod embeddings;
+pub mod insights;
 pub mod links;
 pub mod mail;
 pub mod my_work;
