@@ -1,0 +1,78 @@
+apiVersion: usehuxley.io/v1
+kind: Workflow
+metadata:
+  key: immybot-sync-computers
+  name: Sync ImmyBot computers
+  description: >-
+    Every hour, reads every computer from ImmyBot into the ImmyBot computers
+    dataset, replacing what was there (so computers removed from ImmyBot
+    drop out). Then runs the asset mappings on that dataset, so assets stay
+    up to date (skipped if Assets are off). Uses the connection named
+    immybot; run it at your MSP.
+spec:
+  triggers:
+    - type: schedule
+      interval: 1h
+  inputs:
+    type: object
+    properties:
+      pagesize: { type: integer, title: Computers a page, default: 500, minimum: 1, maximum: 1000 }
+  steps:
+    - id: begin
+      type: set_var
+      vars: { done: false, written: 0 }
+    # Up to 200 pages; stops when it has them all, or at an empty page.
+    - id: pages
+      type: foreach
+      items: "{{ range(200) | list }}"
+      as: page
+      steps:
+        - id: more
+          type: if
+          condition: "{{ not run.vars.done }}"
+          then:
+            - id: fetch
+              type: integration.action
+              action: immybot/listComputers
+              connection: immybot
+              with:
+                skip: "{{ page * (inputs.pagesize | default(500)) }}"
+                take: "{{ inputs.pagesize | default(500) }}"
+            - id: save
+              type: dataset.upsert
+              with:
+                dataset: immybot-computers
+                rows: "{{ steps.fetch.output.results or [] }}"
+                replace: "{{ page == 0 }}"
+                map:
+                  id: id
+                  name: computerName
+                  tenant_id: tenantId
+                  tenant_name: tenantName
+                  online: isOnline
+                  onboarding: onboardingStatus
+                  os: operatingSystem
+                  manufacturer: manufacturer
+                  model: model
+                  serial: serialNumber
+                  domain: domain
+                  ip: internalIpAddress
+                  last_user: lastLoggedOnUser
+                  primary_user_email: primaryUserEmail
+                  pending_reboot: hasPendingReboot
+                  os_end_of_life: isOperatingSystemEndOfLife
+            - id: count
+              type: set_var
+              vars:
+                written: "{{ run.vars.written + ((steps.fetch.output.results or []) | length) }}"
+                done: >-
+                  {{ ((steps.fetch.output.results or []) | length) == 0
+                     or run.vars.written + ((steps.fetch.output.results or []) | length) >= (steps.fetch.output.count | default(0)) }}
+    - id: assets
+      type: core.asset.sync
+      continue_on_error: true
+      with:
+        dataset: immybot-computers
+  outputs:
+    computers: "{{ run.vars.written }}"
+    assets: "{{ steps.assets.output }}"

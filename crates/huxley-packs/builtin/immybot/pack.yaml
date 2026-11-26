@@ -1,0 +1,11 @@
+apiVersion: usehuxley.io/v1
+kind: Pack
+key: huxley/immybot
+name: ImmyBot
+version: 1.0.0
+publisher: Huxley
+description: "ImmyBot: sync computers into a dataset (for asset sync), and run maintenance on a computer with the outcome added to a ticket."
+contents:
+  integrations: [immybot]
+  workflows: [immybot-run-maintenance, immybot-sync-computers]
+  datasets: [immybot-computers]

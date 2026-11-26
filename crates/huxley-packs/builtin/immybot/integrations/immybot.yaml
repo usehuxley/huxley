@@ -1,0 +1,245 @@
+openapi: 3.0.3
+info:
+  title: ImmyBot
+  version: v1
+  description: >-
+    Tenants, computers and maintenance sessions in ImmyBot. Sign in with an
+    Entra ID app registration (client ID and secret) that's been added to
+    ImmyBot as a person and user with admin rights. Set the instance to your
+    ImmyBot subdomain (acme for acme.immy.bot) and the tenant to your Entra
+    tenant's ID or primary domain. This covers the operations the pack uses;
+    import your instance's full spec (https://<instance>.immy.bot/swagger)
+    for the rest.
+servers:
+  - url: https://{instance}.immy.bot
+    variables:
+      instance:
+        default: ""
+        description: Your ImmyBot subdomain, e.g. acme for acme.immy.bot
+      tenant:
+        default: ""
+        description: Your Entra tenant's ID or primary domain, e.g. contoso.onmicrosoft.com
+components:
+  securitySchemes:
+    entra:
+      type: oauth2
+      description: An Entra app registration added to ImmyBot as a person and user with admin rights.
+      flows:
+        clientCredentials:
+          tokenUrl: https://login.microsoftonline.com/{tenant}/oauth2/v2.0/token
+          scopes:
+            https://{instance}.immy.bot/.default: ImmyBot's API, as the app's ImmyBot user
+  parameters:
+    computerId: { name: computerId, in: path, required: true, description: The computer's ID in ImmyBot, schema: { type: integer } }
+    sessionId: { name: sessionId, in: path, required: true, description: The maintenance session's ID, schema: { type: integer } }
+  schemas:
+    SessionStatus:
+      type: string
+      description: >-
+        Passed, Running, Failed, Created, Cancelled, Postponed, Pending,
+        PartialPassed, PendingConnectivity, Missed, PendingPreflight,
+        PendingEphemeralAgentConnection, Expired, …
+    Tenant:
+      type: object
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        slug: { type: string }
+        parentTenantId: { type: integer, nullable: true }
+        ownerTenantId: { type: integer, nullable: true }
+        active: { type: boolean }
+        isMsp: { type: boolean }
+    ComputerListItem:
+      type: object
+      properties:
+        id: { type: integer }
+        computerName: { type: string }
+        tenantId: { type: integer }
+        tenantName: { type: string }
+        isOnline: { type: boolean }
+        onboardingStatus: { type: string, description: NeedsOnboarding, Onboarding or Onboarded }
+        operatingSystem: { type: string }
+        manufacturer: { type: string }
+        model: { type: string }
+        serialNumber: { type: string }
+        domain: { type: string }
+        internalIpAddress: { type: string }
+        externalIpAddress: { type: string }
+        lastLoggedOnUser: { type: string }
+        primaryUserEmail: { type: string }
+        hasPendingReboot: { type: boolean }
+        isOperatingSystemEndOfLife: { type: boolean }
+        excludeFromMaintenance: { type: boolean }
+        licensed: { type: boolean }
+        activeSessionId: { type: integer, nullable: true }
+        activeSessionStatus: { $ref: "#/components/schemas/SessionStatus" }
+    ComputerPage:
+      type: object
+      properties:
+        count: { type: integer, description: How many computers match, in all }
+        results: { type: array, items: { $ref: "#/components/schemas/ComputerListItem" } }
+    StartedSession:
+      type: object
+      properties:
+        computerId: { type: integer, nullable: true }
+        tenantId: { type: integer, nullable: true }
+        personId: { type: integer, nullable: true }
+        sessionId: { type: integer }
+    Session:
+      type: object
+      properties:
+        id: { type: integer }
+        computerId: { type: integer, nullable: true }
+        computerName: { type: string, nullable: true }
+        tenantId: { type: integer, nullable: true }
+        tenantName: { type: string, nullable: true }
+        sessionStatus: { $ref: "#/components/schemas/SessionStatus" }
+        fullMaintenance: { type: boolean }
+        createdDateUTC: { type: string, format: date-time }
+        updatedDateUTC: { type: string, format: date-time }
+        duration: { type: string, nullable: true }
+    SessionLog:
+      type: object
+      properties:
+        id: { type: integer }
+        message: { type: string, nullable: true }
+        time: { type: string, format: date-time }
+        sessionLogType: { type: string }
+security: [{ entra: [] }]
+paths:
+  /api/v1/tenants:
+    get:
+      operationId: listTenants
+      summary: List tenants
+      tags: [Tenants]
+      responses:
+        "200":
+          description: The tenants
+          content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/Tenant" } } } }
+  /api/v1/computers/paged:
+    get:
+      operationId: listComputers
+      summary: List computers, a page at a time
+      description: A page of computers (skip and take), with how many match in all.
+      tags: [Computers]
+      parameters:
+        - { name: filter, in: query, description: Words to match, schema: { type: string } }
+        - { name: tenantId, in: query, description: Only this tenant's computers, schema: { type: integer } }
+        - { name: skip, in: query, description: How many to skip, schema: { type: integer, minimum: 0 } }
+        - { name: take, in: query, description: How many to return (default 50), schema: { type: integer, minimum: 1, maximum: 1000 } }
+        - { name: sort, in: query, description: A field to sort by, e.g. computerName, schema: { type: string } }
+        - { name: sortDesc, in: query, schema: { type: boolean } }
+        - { name: includeOffline, in: query, description: Include offline computers (default true), schema: { type: boolean } }
+      responses:
+        "200":
+          description: The page
+          content: { application/json: { schema: { $ref: "#/components/schemas/ComputerPage" } } }
+  /api/v1/computers/{computerId}:
+    get:
+      operationId: getComputer
+      summary: Get a computer
+      tags: [Computers]
+      parameters: [{ $ref: "#/components/parameters/computerId" }]
+      responses:
+        "200":
+          description: The computer
+          content: { application/json: { schema: { type: object, additionalProperties: true } } }
+  /api/v1/computers/{computerId}/status:
+    get:
+      operationId: isComputerOnline
+      summary: Whether a computer is online
+      tags: [Computers]
+      parameters: [{ $ref: "#/components/parameters/computerId" }]
+      responses:
+        "200":
+          description: true when it's online
+          content: { application/json: { schema: { type: boolean } } }
+  /api/v1/computers/{computerId}/reinventory:
+    post:
+      operationId: reinventoryComputer
+      summary: Take a fresh inventory of a computer
+      tags: [Computers]
+      parameters: [{ $ref: "#/components/parameters/computerId" }]
+      responses:
+        "200":
+          description: Started
+          content: { application/json: { schema: { type: object, additionalProperties: true } } }
+  /api/v1/run-immy-service:
+    post:
+      operationId: runMaintenance
+      summary: Start maintenance sessions
+      description: >-
+        Starts a maintenance session on each computer (or every computer of
+        each tenant). Without maintenanceItems, it's a full run of what's
+        deployed to them. Answers with the sessions it started, and those
+        already running.
+      tags: [Maintenance]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                computers:
+                  type: array
+                  items: { type: object, required: [computerId], properties: { computerId: { type: integer } } }
+                tenants:
+                  type: array
+                  items: { type: object, required: [tenantId], properties: { tenantId: { type: integer } } }
+                fullMaintenance: { type: boolean, description: Also install Windows updates }
+                detectionOnly: { type: boolean, description: Only work out what would change }
+                inventoryOnly: { type: boolean, description: Only take inventory }
+                rebootPreference: { type: string, enum: [Normal, Suppress, Prompt, Force], description: Default Suppress }
+                offlineBehavior: { type: string, enum: [Skip, ApplyOnConnect], description: Default Skip }
+                autoConsentToReboots: { type: boolean }
+                cacheOnly: { type: boolean, description: Download installers without running them }
+      responses:
+        "200":
+          description: The sessions
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  sessionsStarted: { type: array, items: { $ref: "#/components/schemas/StartedSession" } }
+                  sessionsAlreadyInProgress: { type: array, items: { $ref: "#/components/schemas/StartedSession" } }
+  /api/v1/maintenance-sessions/{sessionId}:
+    get:
+      operationId: getSession
+      summary: Get a maintenance session
+      tags: [Maintenance]
+      parameters: [{ $ref: "#/components/parameters/sessionId" }]
+      responses:
+        "200":
+          description: The session
+          content: { application/json: { schema: { $ref: "#/components/schemas/Session" } } }
+  /api/v1/maintenance-sessions/{sessionId}/logs:
+    get:
+      operationId: getSessionLogs
+      summary: A maintenance session's logs
+      tags: [Maintenance]
+      parameters: [{ $ref: "#/components/parameters/sessionId" }]
+      responses:
+        "200":
+          description: The logs
+          content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/SessionLog" } } } }
+  /api/v1/maintenance-sessions/{sessionId}/cancel:
+    get:
+      operationId: cancelSession
+      summary: Cancel a maintenance session
+      tags: [Maintenance]
+      parameters: [{ $ref: "#/components/parameters/sessionId" }]
+      responses:
+        "200": { description: Cancelled }
+  /api/v1/maintenance-actions/latest-for-computer/{computerId}:
+    get:
+      operationId: latestActionsForComputer
+      summary: The latest maintenance actions on a computer
+      description: What maintenance last did (or found) for each item deployed to the computer.
+      tags: [Maintenance]
+      parameters: [{ $ref: "#/components/parameters/computerId" }]
+      responses:
+        "200":
+          description: The actions
+          content: { application/json: { schema: { type: array, items: { type: object, additionalProperties: true } } } }

@@ -61,6 +61,7 @@ A vendor's own `429` answers are still handled by a step's `retry` (`on: ["429"]
 
   **For many client tenants (GDAP):** make **one shared connection at the MSP** with the partner's multi-tenant app, and set its tenant to `{{ vars.m365_tenant }}`. Then give each client organization an `m365_tenant` variable. A run in a client organization gets a token for that client's tenant, and each tenant's token is cached separately (ADR-027). This works for client-credentials connections only.
 - **ConnectWise Automate** (`cwautomate`): list computers, run a command on one, and read commands' status and output. See [ConnectWise Automate](cwautomate.md).
+- **ImmyBot** (`immybot`): tenants, computers, and maintenance sessions (start, follow, logs, cancel). See [ImmyBot](immybot.md).
 - **Slack** (`slack`): post a message and list channels, with a bot token (`xoxb-…`) that has `chat:write`. Slack answers 200 even when a call fails, so check `ok` in the output.
 
 ## Updating
@@ -102,7 +103,7 @@ A connection holds credentials for one of an integration's auth schemes. Create 
 - When you change a connection, secrets you leave out keep their stored value. Switching to a different auth scheme clears them all.
 - The audit log records which secrets changed, never their values.
 
-**Base URL:** a connection uses the spec's first server URL, with its `{variables}` filled from the connection's server variables. If the spec has no servers, or you want another region or a sandbox, give a base URL to override it. Auth URLs can use server variables too, such as a tenant in `https://login.microsoftonline.com/{tenant}/oauth2/v2.0/token`. There, values may only contain letters, digits, dots, hyphens and underscores, so they can't change where the URL points.
+**Base URL:** a connection uses the spec's first server URL, with its `{variables}` filled from the connection's server variables. If the spec has no servers, or you want another region or a sandbox, give a base URL to override it. Auth URLs and the spec's OAuth scopes can use server variables too, such as a tenant in `https://login.microsoftonline.com/{tenant}/oauth2/v2.0/token`, or an instance in the scope `https://{instance}.immy.bot/.default`. Scopes you type into a connection are used as they are. There, values may only contain letters, digits, dots, hyphens and underscores, so they can't change where the URL points.
 
 **OAuth 2.0:**
 
