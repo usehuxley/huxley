@@ -243,6 +243,8 @@ impl Engine {
             Step::NpsSend(_) => self.nps_send(org_id, input).await.into(),
             Step::HealthCompute(_) => self.health_compute(org_id).await.into(),
             Step::SentimentRecord(_) => self.sentiment_record(org_id, input).await.into(),
+            Step::TriageOptions(_) => self.triage_options(org_id, input).await.into(),
+            Step::TriageApply(_) => self.triage_apply(org_id, input).await.into(),
             Step::AssetSync(_) => self.sync_assets(org_id, input).await.into(),
             Step::AssetWarranty(_) => self.set_warranty(org_id, input).await.into(),
             Step::MailFetch(_)

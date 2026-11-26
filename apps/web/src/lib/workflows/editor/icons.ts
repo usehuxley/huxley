@@ -1,4 +1,5 @@
 import {
+	ListChecks,
 	Boxes,
 	Bell,
 	Braces,
@@ -63,6 +64,8 @@ const ICONS: Record<string, typeof Globe> = {
 	'core.nps.send': Smile,
 	'core.health.compute': Smile,
 	'core.sentiment.record': Smile,
+	'core.triage.options': ListChecks,
+	'core.triage.apply': ListChecks,
 	'core.asset.sync': Boxes,
 	'core.asset.set_warranty': Boxes,
 	'core.ticket.create': TicketPlus,

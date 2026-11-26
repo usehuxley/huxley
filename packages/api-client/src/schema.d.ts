@@ -5679,6 +5679,135 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
+	'/api/v1/triage/agreement': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/**
+		 * How often live suggestions matched where resolved tickets ended up
+		 *     (the last 90 days, the organization and below).
+		 */
+		get: operations['get_triage_agreement'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/triage/evaluations': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** The organization's evaluations, newest first (at most 20). */
+		get: operations['list_triage_evaluations'];
+		put?: never;
+		/**
+		 * Runs the AI triage workflow over every sample: each run records its
+		 *     answer in the evaluation. Read it back for the score as runs finish.
+		 */
+		post: operations['start_triage_evaluation'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/triage/evaluations/{id}': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** An evaluation: accuracy against the target, and the misses. */
+		get: operations['get_triage_evaluation'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/triage/options': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** The queues samples can name (at the organization or above). */
+		get: operations['triage_options'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/triage/samples': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** The organization's labeled samples, newest first. */
+		get: operations['list_triage_samples'];
+		put?: never;
+		/** Adds a labeled sample by hand: text and the right queue, priority or both. */
+		post: operations['add_triage_sample'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/triage/samples/from-tickets': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/**
+		 * Adds recently resolved tickets (with a queue) as samples, labeled with
+		 *     where they ended up.
+		 */
+		post: operations['add_triage_samples_from_tickets'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/triage/samples/{id}': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		post?: never;
+		delete: operations['delete_triage_sample'];
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
 	'/api/v1/users': {
 		parameters: {
 			query?: never;
@@ -6695,6 +6824,14 @@ export interface components {
 		AddBuiltInRequest: {
 			/** Format: uuid */
 			orgId: string;
+		};
+		AddSample: components['schemas']['TriageSampleInput'] & {
+			/** Format: uuid */
+			orgId: string;
+		};
+		Added: {
+			/** Format: int64 */
+			added: number;
 		};
 		AffectedStep: {
 			action: string;
@@ -8696,6 +8833,15 @@ export interface components {
 				[key: string]: unknown;
 			};
 		};
+		FromTickets: {
+			/**
+			 * Format: int64
+			 * @description How many (default 50).
+			 */
+			limit?: number | null;
+			/** Format: uuid */
+			orgId: string;
+		};
 		/** @description One grant that gives a permission. */
 		GrantSource: {
 			/** @description The grant reaches sub-organizations. */
@@ -9626,6 +9772,10 @@ export interface components {
 			enabledHere: boolean;
 			narrowedBy?: components['schemas']['NarrowedBy'] | null;
 		};
+		OrgParamBody: {
+			/** Format: uuid */
+			orgId: string;
+		};
 		OrgRef: {
 			/** Format: uuid */
 			id: string;
@@ -10504,6 +10654,12 @@ export interface components {
 			 * @description The version you read (updates only).
 			 */
 			version?: number | null;
+		};
+		QueueOption: {
+			description: string;
+			/** Format: uuid */
+			id: string;
+			name: string;
 		};
 		QueueWork: {
 			name: string;
@@ -11955,6 +12111,99 @@ export interface components {
 			otpauthUri: string;
 			/** @description Base32 secret, for entering into the app by hand. */
 			secret: string;
+		};
+		/** @description How often the AI's suggestions matched where tickets ended up. */
+		TriageAgreement: {
+			/**
+			 * Format: int64
+			 * @description Suggestions applied to tickets.
+			 */
+			applied: number;
+			priority: components['schemas']['TriageScore'];
+			queue: components['schemas']['TriageScore'];
+			/**
+			 * Format: int64
+			 * @description Resolved tickets with a suggestion, in the last 90 days.
+			 */
+			tickets: number;
+		};
+		TriageEvaluation: {
+			/**
+			 * Format: double
+			 * @description Queue accuracy in percent (failed runs count as wrong).
+			 */
+			accuracy?: number | null;
+			/** Format: int64 */
+			answered: number;
+			/** Format: int64 */
+			failed: number;
+			/** Format: uuid */
+			id: string;
+			misses: components['schemas']['TriageMiss'][];
+			/** Format: uuid */
+			orgId: string;
+			/** @description Met the target (once nothing is pending). */
+			passed?: boolean | null;
+			/**
+			 * Format: int64
+			 * @description Still running.
+			 */
+			pending: number;
+			priority: components['schemas']['TriageScore'];
+			/** @description Samples with a right queue, and how many the workflow got. */
+			queue: components['schemas']['TriageScore'];
+			/** Format: date-time */
+			startedAt: string;
+			/** Format: int32 */
+			target: number;
+			/** Format: int64 */
+			total: number;
+			/** Format: uuid */
+			workflowId?: string | null;
+			/** Format: int32 */
+			workflowVersion?: number | null;
+		};
+		TriageMiss: {
+			expectedPriority?: string | null;
+			expectedQueue?: string | null;
+			/** @description The run failed instead of answering. */
+			failed: boolean;
+			/** Format: int32 */
+			position: number;
+			priority?: string | null;
+			queue?: string | null;
+			reason?: string | null;
+			/** Format: uuid */
+			runId?: string | null;
+			text: string;
+		};
+		TriageSample: {
+			/** Format: date-time */
+			createdAt: string;
+			/** Format: uuid */
+			id: string;
+			/** Format: uuid */
+			orgId: string;
+			priority?: string | null;
+			/** Format: uuid */
+			queueId?: string | null;
+			queueName?: string | null;
+			text: string;
+			/** Format: uuid */
+			ticketId?: string | null;
+		};
+		TriageSampleInput: {
+			priority?: string | null;
+			/** Format: uuid */
+			queueId?: string | null;
+			text: string;
+		};
+		/** @description Correct out of how many. */
+		TriageScore: {
+			/** Format: int64 */
+			correct: number;
+			/** Format: int64 */
+			of: number;
 		};
 		/** @description A trigger as the app shows it. */
 		TriggerView: {
@@ -24270,6 +24519,215 @@ export interface operations {
 				content: {
 					'application/problem+json': components['schemas']['ApiError'];
 				};
+			};
+		};
+	};
+	get_triage_agreement: {
+		parameters: {
+			query: {
+				orgId: string;
+			};
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['TriageAgreement'];
+				};
+			};
+		};
+	};
+	list_triage_evaluations: {
+		parameters: {
+			query: {
+				orgId: string;
+			};
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['TriageEvaluation'][];
+				};
+			};
+		};
+	};
+	start_triage_evaluation: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['OrgParamBody'];
+			};
+		};
+		responses: {
+			201: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['TriageEvaluation'];
+				};
+			};
+			409: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	get_triage_evaluation: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['TriageEvaluation'];
+				};
+			};
+		};
+	};
+	triage_options: {
+		parameters: {
+			query: {
+				orgId: string;
+			};
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['QueueOption'][];
+				};
+			};
+		};
+	};
+	list_triage_samples: {
+		parameters: {
+			query: {
+				orgId: string;
+			};
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['TriageSample'][];
+				};
+			};
+		};
+	};
+	add_triage_sample: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['AddSample'];
+			};
+		};
+		responses: {
+			201: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['Added'];
+				};
+			};
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	add_triage_samples_from_tickets: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['FromTickets'];
+			};
+		};
+		responses: {
+			201: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['Added'];
+				};
+			};
+		};
+	};
+	delete_triage_sample: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			204: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content?: never;
 			};
 		};
 	};

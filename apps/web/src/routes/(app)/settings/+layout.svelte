@@ -17,6 +17,7 @@
 		fields: resolve('/(app)/settings/fields'),
 		queues: resolve('/(app)/settings/queues'),
 		sla: resolve('/(app)/settings/sla'),
+		triage: resolve('/(app)/settings/triage'),
 		mailboxes: resolve('/(app)/settings/mailboxes'),
 		skills: resolve('/(app)/settings/skills'),
 		responses: resolve('/(app)/settings/responses'),

@@ -93,6 +93,8 @@ settings! {
         "Days between net promoter questions to one contact.";
     NPS_ACTIVE = "nps.active_days", "Customer experience", Days, Some("180"), "Ask people who raised a ticket within",
         "Only contacts who raised a ticket in this many days are asked.";
+    TRIAGE_TARGET = "triage.accuracy_target", "Service desk", Percent, Some("80"), "AI triage accuracy target",
+        "The share of labeled samples the AI triage pack must route to the right queue for an evaluation to pass.";
     PORTAL_REQUIRE_MFA = "portal.require_mfa", "Portal", Toggle, Some("false"), "Require two-factor sign-in",
         "Contacts who sign in to the portal with a link or password must set up an authenticator app. Signing in with their organization's account is left to their organization.";
     TICKET_PREFIX = "numbering.ticket_prefix", "Numbering", Prefix, Some("T"), "Ticket prefix",

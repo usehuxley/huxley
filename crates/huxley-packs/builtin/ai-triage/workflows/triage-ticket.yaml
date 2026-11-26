@@ -1,0 +1,66 @@
+apiVersion: usehuxley.io/v1
+kind: Workflow
+metadata:
+  key: triage-ticket
+  name: Triage new tickets with AI
+  description: >-
+    When a client raises a ticket (by email or in the portal), asks the AI
+    provider which queue and priority fit, from your queues and their
+    descriptions, and applies them while no one has worked the ticket.
+    Accuracy evaluations run it by hand on labeled samples: then it records
+    the answer instead of changing a ticket.
+spec:
+  triggers:
+    - id: raised
+      type: event
+      event: ticket.created
+      filter: "{{ event.payload.actorId is none }}"
+    - id: evaluate
+      type: manual
+  inputs:
+    type: object
+    properties:
+      text: { type: string, title: Text to triage }
+      evaluation_id: { type: string, title: Evaluation }
+      sample_id: { type: string, title: Sample }
+  steps:
+    - id: ticket
+      type: core.ticket.get
+      if: "{{ trigger.subject_id is defined }}"
+      with:
+        ticket_id: "{{ trigger.subject_id }}"
+    - id: options
+      type: core.triage.options
+      with:
+        ticket_id: "{{ trigger.subject_id if trigger.subject_id is defined else '' }}"
+    - id: judge
+      type: ai.extract
+      with:
+        text: >-
+          {{ steps.ticket.output.ticket.title ~ '\n\n' ~ (steps.ticket.output.ticket.description or '')
+             if trigger.subject_id is defined else inputs.text }}
+        instructions: >-
+          You triage tickets for an IT service desk. Pick the queue that should
+          handle this ticket and its priority, using these descriptions. Give a
+          reason of at most 15 words.
+
+          {{ steps.options.output.guide }}
+        schema:
+          type: object
+          properties:
+            queue: { type: string, enum: "{{ steps.options.output.queue_names }}" }
+            priority: { type: string, enum: [p1, p2, p3, p4] }
+            reason: { type: string }
+          required: [queue, priority, reason]
+    - id: record
+      type: core.triage.apply
+      with:
+        ticket_id: "{{ trigger.subject_id if trigger.subject_id is defined else '' }}"
+        evaluation_id: "{{ inputs.evaluation_id if inputs.evaluation_id is defined else '' }}"
+        sample_id: "{{ inputs.sample_id if inputs.sample_id is defined else '' }}"
+        queue: "{{ steps.judge.output.queue }}"
+        priority: "{{ steps.judge.output.priority }}"
+        reason: "{{ steps.judge.output.reason }}"
+  outputs:
+    queue: "{{ steps.judge.output.queue }}"
+    priority: "{{ steps.judge.output.priority }}"

@@ -15677,6 +15677,278 @@
 				}
 			}
 		},
+		"/api/v1/triage/agreement": {
+			"get": {
+				"tags": ["servicedesk"],
+				"summary": "How often live suggestions matched where resolved tickets ended up\n(the last 90 days, the organization and below).",
+				"operationId": "get_triage_agreement",
+				"parameters": [
+					{
+						"name": "orgId",
+						"in": "query",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/TriageAgreement"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/triage/evaluations": {
+			"get": {
+				"tags": ["servicedesk"],
+				"summary": "The organization's evaluations, newest first (at most 20).",
+				"operationId": "list_triage_evaluations",
+				"parameters": [
+					{
+						"name": "orgId",
+						"in": "query",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "array",
+									"items": {
+										"$ref": "#/components/schemas/TriageEvaluation"
+									}
+								}
+							}
+						}
+					}
+				}
+			},
+			"post": {
+				"tags": ["servicedesk"],
+				"summary": "Runs the AI triage workflow over every sample: each run records its\nanswer in the evaluation. Read it back for the score as runs finish.",
+				"operationId": "start_triage_evaluation",
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/OrgParamBody"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"201": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/TriageEvaluation"
+								}
+							}
+						}
+					},
+					"409": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/triage/evaluations/{id}": {
+			"get": {
+				"tags": ["servicedesk"],
+				"summary": "An evaluation: accuracy against the target, and the misses.",
+				"operationId": "get_triage_evaluation",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/TriageEvaluation"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/triage/options": {
+			"get": {
+				"tags": ["servicedesk"],
+				"summary": "The queues samples can name (at the organization or above).",
+				"operationId": "triage_options",
+				"parameters": [
+					{
+						"name": "orgId",
+						"in": "query",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "array",
+									"items": {
+										"$ref": "#/components/schemas/QueueOption"
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/triage/samples": {
+			"get": {
+				"tags": ["servicedesk"],
+				"summary": "The organization's labeled samples, newest first.",
+				"operationId": "list_triage_samples",
+				"parameters": [
+					{
+						"name": "orgId",
+						"in": "query",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "array",
+									"items": {
+										"$ref": "#/components/schemas/TriageSample"
+									}
+								}
+							}
+						}
+					}
+				}
+			},
+			"post": {
+				"tags": ["servicedesk"],
+				"summary": "Adds a labeled sample by hand: text and the right queue, priority or both.",
+				"operationId": "add_triage_sample",
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/AddSample"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"201": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Added"
+								}
+							}
+						}
+					},
+					"422": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/triage/samples/from-tickets": {
+			"post": {
+				"tags": ["servicedesk"],
+				"summary": "Adds recently resolved tickets (with a queue) as samples, labeled with\nwhere they ended up.",
+				"operationId": "add_triage_samples_from_tickets",
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/FromTickets"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"201": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Added"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/triage/samples/{id}": {
+			"delete": {
+				"tags": ["servicedesk"],
+				"operationId": "delete_triage_sample",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"responses": {
+					"204": {}
+				}
+			}
+		},
 		"/api/v1/users": {
 			"get": {
 				"tags": ["users"],
@@ -18631,6 +18903,34 @@
 					}
 				},
 				"additionalProperties": false
+			},
+			"AddSample": {
+				"allOf": [
+					{
+						"$ref": "#/components/schemas/TriageSampleInput"
+					},
+					{
+						"type": "object",
+						"required": ["orgId"],
+						"properties": {
+							"orgId": {
+								"type": "string",
+								"format": "uuid"
+							}
+						}
+					}
+				]
+			},
+			"Added": {
+				"type": "object",
+				"required": ["added"],
+				"properties": {
+					"added": {
+						"type": "integer",
+						"format": "int64",
+						"minimum": 0
+					}
+				}
 			},
 			"AffectedStep": {
 				"type": "object",
@@ -23576,6 +23876,22 @@
 				},
 				"additionalProperties": false
 			},
+			"FromTickets": {
+				"type": "object",
+				"required": ["orgId"],
+				"properties": {
+					"limit": {
+						"type": ["integer", "null"],
+						"format": "int64",
+						"description": "How many (default 50)."
+					},
+					"orgId": {
+						"type": "string",
+						"format": "uuid"
+					}
+				},
+				"additionalProperties": false
+			},
 			"GrantSource": {
 				"type": "object",
 				"description": "One grant that gives a permission.",
@@ -25662,6 +25978,17 @@
 					}
 				],
 				"description": "A module's state at one organization."
+			},
+			"OrgParamBody": {
+				"type": "object",
+				"required": ["orgId"],
+				"properties": {
+					"orgId": {
+						"type": "string",
+						"format": "uuid"
+					}
+				},
+				"additionalProperties": false
 			},
 			"OrgRef": {
 				"type": "object",
@@ -27909,6 +28236,22 @@
 					}
 				},
 				"additionalProperties": false
+			},
+			"QueueOption": {
+				"type": "object",
+				"required": ["id", "name", "description"],
+				"properties": {
+					"description": {
+						"type": "string"
+					},
+					"id": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"name": {
+						"type": "string"
+					}
+				}
 			},
 			"QueueWork": {
 				"type": "object",
@@ -31319,6 +31662,213 @@
 					"secret": {
 						"type": "string",
 						"description": "Base32 secret, for entering into the app by hand."
+					}
+				}
+			},
+			"TriageAgreement": {
+				"type": "object",
+				"description": "How often the AI's suggestions matched where tickets ended up.",
+				"required": ["tickets", "queue", "priority", "applied"],
+				"properties": {
+					"applied": {
+						"type": "integer",
+						"format": "int64",
+						"description": "Suggestions applied to tickets."
+					},
+					"priority": {
+						"$ref": "#/components/schemas/TriageScore"
+					},
+					"queue": {
+						"$ref": "#/components/schemas/TriageScore"
+					},
+					"tickets": {
+						"type": "integer",
+						"format": "int64",
+						"description": "Resolved tickets with a suggestion, in the last 90 days."
+					}
+				}
+			},
+			"TriageEvaluation": {
+				"type": "object",
+				"required": [
+					"id",
+					"orgId",
+					"startedAt",
+					"total",
+					"answered",
+					"failed",
+					"pending",
+					"queue",
+					"priority",
+					"target",
+					"misses"
+				],
+				"properties": {
+					"accuracy": {
+						"type": ["number", "null"],
+						"format": "double",
+						"description": "Queue accuracy in percent (failed runs count as wrong)."
+					},
+					"answered": {
+						"type": "integer",
+						"format": "int64"
+					},
+					"failed": {
+						"type": "integer",
+						"format": "int64"
+					},
+					"id": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"misses": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/TriageMiss"
+						}
+					},
+					"orgId": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"passed": {
+						"type": ["boolean", "null"],
+						"description": "Met the target (once nothing is pending)."
+					},
+					"pending": {
+						"type": "integer",
+						"format": "int64",
+						"description": "Still running."
+					},
+					"priority": {
+						"$ref": "#/components/schemas/TriageScore"
+					},
+					"queue": {
+						"$ref": "#/components/schemas/TriageScore",
+						"description": "Samples with a right queue, and how many the workflow got."
+					},
+					"startedAt": {
+						"type": "string",
+						"format": "date-time"
+					},
+					"target": {
+						"type": "integer",
+						"format": "int32"
+					},
+					"total": {
+						"type": "integer",
+						"format": "int64"
+					},
+					"workflowId": {
+						"type": ["string", "null"],
+						"format": "uuid"
+					},
+					"workflowVersion": {
+						"type": ["integer", "null"],
+						"format": "int32"
+					}
+				}
+			},
+			"TriageMiss": {
+				"type": "object",
+				"required": ["position", "text", "failed"],
+				"properties": {
+					"expectedPriority": {
+						"type": ["string", "null"]
+					},
+					"expectedQueue": {
+						"type": ["string", "null"]
+					},
+					"failed": {
+						"type": "boolean",
+						"description": "The run failed instead of answering."
+					},
+					"position": {
+						"type": "integer",
+						"format": "int32"
+					},
+					"priority": {
+						"type": ["string", "null"]
+					},
+					"queue": {
+						"type": ["string", "null"]
+					},
+					"reason": {
+						"type": ["string", "null"]
+					},
+					"runId": {
+						"type": ["string", "null"],
+						"format": "uuid"
+					},
+					"text": {
+						"type": "string"
+					}
+				}
+			},
+			"TriageSample": {
+				"type": "object",
+				"required": ["id", "orgId", "text", "createdAt"],
+				"properties": {
+					"createdAt": {
+						"type": "string",
+						"format": "date-time"
+					},
+					"id": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"orgId": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"priority": {
+						"type": ["string", "null"]
+					},
+					"queueId": {
+						"type": ["string", "null"],
+						"format": "uuid"
+					},
+					"queueName": {
+						"type": ["string", "null"]
+					},
+					"text": {
+						"type": "string"
+					},
+					"ticketId": {
+						"type": ["string", "null"],
+						"format": "uuid"
+					}
+				}
+			},
+			"TriageSampleInput": {
+				"type": "object",
+				"required": ["text"],
+				"properties": {
+					"priority": {
+						"type": ["string", "null"]
+					},
+					"queueId": {
+						"type": ["string", "null"],
+						"format": "uuid"
+					},
+					"text": {
+						"type": "string"
+					}
+				},
+				"additionalProperties": false
+			},
+			"TriageScore": {
+				"type": "object",
+				"description": "Correct out of how many.",
+				"required": ["correct", "of"],
+				"properties": {
+					"correct": {
+						"type": "integer",
+						"format": "int64"
+					},
+					"of": {
+						"type": "integer",
+						"format": "int64"
 					}
 				}
 			},

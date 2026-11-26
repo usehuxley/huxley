@@ -404,6 +404,22 @@ How it works:
 - **Searching:** your words are embedded by the embeddings provider of the organization you've picked in the switcher, and compared with the tickets that provider's model embedded. A search is an AI call: it's logged and counts toward the budget, and it needs `ai:use` there as well as `ticket:read`.
 - **What you see:** only tickets you may read, the nearest 20.
 
+## AI triage
+
+The built-in **AI triage** pack (`huxley/ai-triage`) suggests a queue and priority for each ticket a client raises, by email or in the portal, using your [AI provider](ai.md) and your queues (ADR-047).
+
+- **Set up:** install it, publish *Triage new tickets with AI*, and give your queues descriptions. The AI reads them to choose.
+- **What it does:** it picks a queue (or none) and a priority, with a one-line reason. While no one has changed the ticket, it applies them: the queue only if the ticket has none. Afterwards suggestions are only recorded.
+- **Settings → AI triage:**
+  - **On live tickets:** how often suggestions matched where resolved tickets ended up (90 days).
+  - **Labeled samples:** examples with the right queue and priority. Add them by hand, or **Add recently resolved tickets** to take tickets as people left them.
+  - **Run evaluation:** runs the workflow, as published, on every sample and scores it. You see queue and priority accuracy against the **AI triage accuracy target** (an organization setting, 80% by default), and each miss with the AI's reason or the failed run. Change the prompt or the model, publish, and run it again to compare.
+- **API** (`servicedesk:configure`):
+  - `GET /api/v1/triage/options?orgId=…`
+  - `GET`/`POST /api/v1/triage/samples`, `POST /api/v1/triage/samples/from-tickets`, `DELETE /api/v1/triage/samples/{id}`
+  - `GET`/`POST /api/v1/triage/evaluations`, `GET /api/v1/triage/evaluations/{id}`
+  - `GET /api/v1/triage/agreement?orgId=…` (`ticket:read`)
+
 ## Coming next
 
 Sending replies through Microsoft Graph.

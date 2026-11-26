@@ -36,6 +36,7 @@ use crate::{ApiError, ApiResult, AppState};
 
 pub fn routes() -> Router<AppState> {
     Router::new()
+        .merge(crate::triage_routes::routes())
         .route("/servicedesk/types", get(list_types))
         .route("/servicedesk/priority-matrix", get(priority_matrix))
         .route(

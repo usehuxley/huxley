@@ -396,6 +396,8 @@ impl<'a> Walker<'a> {
             | Step::NpsSend(_)
             | Step::HealthCompute(_)
             | Step::SentimentRecord(_)
+            | Step::TriageOptions(_)
+            | Step::TriageApply(_)
             | Step::AssetSync(_)
             | Step::AssetWarranty(_)
             | Step::TicketEmailReply(_)
@@ -854,6 +856,8 @@ fn with_block(step: &Step) -> Json {
         Step::NpsSend(s) => serde_json::to_value(&s.send),
         Step::HealthCompute(s) => serde_json::to_value(&s.compute),
         Step::SentimentRecord(s) => serde_json::to_value(&s.record),
+        Step::TriageOptions(s) => serde_json::to_value(&s.options),
+        Step::TriageApply(s) => serde_json::to_value(&s.apply),
         Step::AssetSync(s) => serde_json::to_value(&s.sync),
         Step::AssetWarranty(s) => serde_json::to_value(&s.warranty),
         Step::TicketEmailReply(s) => serde_json::to_value(&s.reply),

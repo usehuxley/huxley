@@ -2236,3 +2236,292 @@ async fn appointments_are_checked() {
         );
     }
 }
+
+/// Two queues at the provider: `(hardware, network)` as `(id, name)`.
+async fn triage_queues(s: &Setup) -> ((String, String), (String, String)) {
+    let mut out = Vec::new();
+    for name in ["Hardware", "Network"] {
+        let name = unique(name);
+        let q = s
+            .ok(
+                &s.owner,
+                "POST",
+                "/api/v1/queues",
+                Some(json!({ "orgId": s.provider, "name": name })),
+            )
+            .await;
+        out.push((q["id"].as_str().unwrap().to_owned(), name));
+    }
+    let network = out.pop().unwrap();
+    (out.pop().unwrap(), network)
+}
+
+#[tokio::test]
+async fn ai_triage_applies_until_someone_works_the_ticket() {
+    let Some(s) = setup().await else { return };
+    let ((hw, hw_name), _) = triage_queues(&s).await;
+    let ctx = RequestContext::system(Via::Workflow);
+    let raised = s
+        .ticket(&s.owner, json!({ "orgId": s.acme, "title": "Laptop dead" }))
+        .await;
+    let worked = s
+        .ticket(&s.owner, json!({ "orgId": s.acme, "title": "Printer jam" }))
+        .await;
+    let raised_id = Uuid::parse_str(raised["id"].as_str().unwrap()).unwrap();
+    let worked_id = Uuid::parse_str(worked["id"].as_str().unwrap()).unwrap();
+    // As if a client raised it: no person has changed it.
+    exec(
+        &s.pools,
+        "UPDATE sd_ticket_activity SET actor_id = NULL WHERE ticket_id = $1",
+        &[raised_id],
+    )
+    .await;
+    let mut tx = begin_scoped(&s.pools.app, &OrgScope::System).await.unwrap();
+    let applied = huxley_servicedesk::triage::apply(
+        &mut tx,
+        &ctx,
+        raised_id,
+        &hw_name.to_uppercase(),
+        "p2",
+        "A dead laptop",
+    )
+    .await
+    .unwrap();
+    let skipped =
+        huxley_servicedesk::triage::apply(&mut tx, &ctx, worked_id, &hw_name, "p1", "Jammed")
+            .await
+            .unwrap();
+    assert!(
+        huxley_servicedesk::triage::apply(&mut tx, &ctx, worked_id, "Plumbing", "p1", "x")
+            .await
+            .is_err()
+    );
+    tx.commit().await.unwrap();
+    assert!(applied.applied && !skipped.applied);
+    let after = s.ok(&s.owner, "GET", &url(&raised), None).await;
+    assert_eq!(
+        (&after["queueId"], &after["priority"]),
+        (&json!(hw), &json!("p2")),
+        "{after}"
+    );
+    let untouched = s.ok(&s.owner, "GET", &url(&worked), None).await;
+    assert_eq!(untouched["queueId"], Value::Null);
+
+    // Agreement once resolved: the applied one matches, the other doesn't.
+    exec(
+        &s.pools,
+        "UPDATE sd_tickets SET resolved_at = now() WHERE id = ANY(ARRAY[$1, $2])",
+        &[raised_id, worked_id],
+    )
+    .await;
+    let agreement = s
+        .ok(
+            &s.owner,
+            "GET",
+            &format!("/api/v1/triage/agreement?orgId={}", s.acme),
+            None,
+        )
+        .await;
+    assert_eq!(agreement["tickets"], 2, "{agreement}");
+    assert_eq!(
+        (&agreement["queue"]["correct"], &agreement["queue"]["of"]),
+        (&json!(1), &json!(2))
+    );
+    assert_eq!(agreement["applied"], 1);
+}
+
+#[tokio::test]
+async fn ai_triage_accuracy_is_measured_on_labeled_samples() {
+    let Some(s) = setup().await else { return };
+    let ((hw, hw_name), (nw, nw_name)) = triage_queues(&s).await;
+    let samples = "/api/v1/triage/samples";
+    for (text, queue, priority) in [
+        ("My laptop won't turn on", &hw, "p2"),
+        ("Need a second monitor", &hw, "p3"),
+        ("The whole office is offline", &nw, "p1"),
+        ("Can I get guest Wi-Fi?", &nw, "p4"),
+    ] {
+        s.ok(&s.owner, "POST", samples, Some(json!({ "orgId": s.provider, "text": text, "queueId": queue, "priority": priority })))
+            .await;
+    }
+    let (status, _) = s
+        .call(
+            &s.owner,
+            "POST",
+            samples,
+            Some(json!({ "orgId": s.provider, "text": "No label" })),
+        )
+        .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+    // A resolved ticket becomes a sample, labeled with where it ended up.
+    let done = s
+        .ticket(
+            &s.owner,
+            json!({ "orgId": s.acme, "title": "Keyboard broken", "queueId": hw, "priority": "p2" }),
+        )
+        .await;
+    exec(
+        &s.pools,
+        "UPDATE sd_tickets SET resolved_at = now() WHERE id = $1",
+        &[Uuid::parse_str(done["id"].as_str().unwrap()).unwrap()],
+    )
+    .await;
+    let added = s
+        .ok(
+            &s.owner,
+            "POST",
+            "/api/v1/triage/samples/from-tickets",
+            Some(json!({ "orgId": s.provider })),
+        )
+        .await;
+    assert_eq!(added["added"], 1);
+    let listed = s
+        .ok(
+            &s.owner,
+            "GET",
+            &format!("{samples}?orgId={}", s.provider),
+            None,
+        )
+        .await;
+    assert_eq!(listed.as_array().unwrap().len(), 5);
+
+    let evaluations = "/api/v1/triage/evaluations";
+    let (status, _) = s
+        .call(
+            &s.owner,
+            "POST",
+            evaluations,
+            Some(json!({ "orgId": s.provider })),
+        )
+        .await;
+    assert_eq!(status, StatusCode::CONFLICT, "the pack isn't installed yet");
+    install_triage(&s).await;
+    let started = s
+        .ok(
+            &s.owner,
+            "POST",
+            evaluations,
+            Some(json!({ "orgId": s.provider })),
+        )
+        .await;
+    assert_eq!(
+        (&started["total"], &started["pending"], &started["target"]),
+        (&json!(5), &json!(5), &json!(80))
+    );
+    answer_samples(&s, started["id"].as_str().unwrap(), &hw_name, &nw_name).await;
+}
+
+/// Installs and publishes the built-in AI triage pack at the provider.
+async fn install_triage(s: &Setup) {
+    let review = s
+        .ok(
+            &s.owner,
+            "POST",
+            &format!(
+                "/api/v1/packs/builtin/huxley/ai-triage?orgId={}",
+                s.provider
+            ),
+            None,
+        )
+        .await;
+    let installed = s
+        .ok(
+            &s.owner,
+            "POST",
+            &format!(
+                "/api/v1/packs/uploads/{}/install",
+                review["uploadId"].as_str().unwrap()
+            ),
+            Some(json!({ "orgId": s.provider, "version": review["version"] })),
+        )
+        .await;
+    for id in installed["items"]["workflows"]
+        .as_object()
+        .unwrap()
+        .values()
+    {
+        s.ok(
+            &s.owner,
+            "POST",
+            &format!("/api/v1/workflows/{}/publish", id.as_str().unwrap()),
+            Some(json!({})),
+        )
+        .await;
+    }
+}
+
+/// Answers as the workflow would: right, right queue but wrong priority,
+/// wrong queue, right; the last run fails. 3 of 5 queues: under the target.
+async fn answer_samples(s: &Setup, evaluation: &str, hw: &str, nw: &str) {
+    let evaluation_id = Uuid::parse_str(evaluation).unwrap();
+    let rows: Vec<(Uuid, Option<Uuid>)> =
+        sqlx::query_as("SELECT sample_id, run_id FROM sd_triage_results WHERE evaluation_id = $1 ORDER BY position")
+            .bind(evaluation_id)
+            .fetch_all(&s.pools.owner)
+            .await
+            .unwrap();
+    assert!(
+        rows.iter().all(|(_, run)| run.is_some()),
+        "a run per sample"
+    );
+    let mut tx = begin_scoped(&s.pools.app, &OrgScope::System).await.unwrap();
+    for ((sample, _), (queue, priority)) in
+        rows.iter()
+            .zip([(hw, "p2"), (hw, "p2"), (hw, "p1"), (nw, "p4")])
+    {
+        huxley_servicedesk::triage::answer(
+            &mut tx,
+            evaluation_id,
+            *sample,
+            queue,
+            priority,
+            "because",
+        )
+        .await
+        .unwrap();
+    }
+    tx.commit().await.unwrap();
+    exec(
+        &s.pools,
+        "UPDATE runs SET status = 'failed' WHERE id = $1",
+        &[rows[4].1.unwrap()],
+    )
+    .await;
+    let e = s
+        .ok(
+            &s.owner,
+            "GET",
+            &format!("/api/v1/triage/evaluations/{evaluation}"),
+            None,
+        )
+        .await;
+    assert_eq!(
+        (&e["answered"], &e["failed"], &e["pending"]),
+        (&json!(4), &json!(1), &json!(0)),
+        "{e}"
+    );
+    assert_eq!(
+        (&e["queue"]["correct"], &e["queue"]["of"], &e["accuracy"]),
+        (&json!(3), &json!(5), &json!(60.0))
+    );
+    assert_eq!(
+        (&e["priority"]["correct"], &e["passed"]),
+        (&json!(3), &json!(false))
+    );
+    let misses: Vec<(i64, bool)> = e["misses"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|m| (m["position"].as_i64().unwrap(), m["failed"] == true))
+        .collect();
+    assert_eq!(misses, [(1, false), (2, false), (4, true)]);
+    let listed = s
+        .ok(
+            &s.owner,
+            "GET",
+            &format!("/api/v1/triage/evaluations?orgId={}", s.provider),
+            None,
+        )
+        .await;
+    assert_eq!(listed[0]["id"], json!(evaluation));
+}

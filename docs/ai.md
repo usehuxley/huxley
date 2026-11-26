@@ -63,6 +63,7 @@ How the steps behave:
 Built-in packs that use these steps:
 
 - **AI sentiment** judges the tone of client messages for [client health](health.md#sentiment).
+- **AI triage** suggests a queue and priority for new tickets, with an accuracy evaluation on labeled samples ([AI triage](servicedesk.md#ai-triage)).
 
 ## Embeddings provider
 
