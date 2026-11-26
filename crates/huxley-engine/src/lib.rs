@@ -37,6 +37,7 @@ pub mod script;
 mod script_credentials;
 mod step;
 mod tickets;
+mod timesheets;
 mod walk;
 mod worker;
 

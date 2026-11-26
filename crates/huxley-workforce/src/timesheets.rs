@@ -689,6 +689,186 @@ pub async fn payroll(
     Ok(rows)
 }
 
+/// Someone to remind (`core.timesheet.check`).
+#[derive(Debug, Clone, Serialize, sqlx::FromRow)]
+pub struct Reminder {
+    pub user_id: Uuid,
+    pub person: String,
+    pub email: String,
+    pub period_start: String,
+    pub period_end: String,
+    /// The timesheet's status (`open` if none was started).
+    pub status: String,
+    pub logged_minutes: i32,
+    pub expected_minutes: Option<i32>,
+    pub missing_notes: i32,
+    /// Days since the period ended (unsubmitted only).
+    pub days_late: i32,
+    /// Who reviews them: their team leads.
+    #[sqlx(skip)]
+    pub leads: Vec<Uuid>,
+    /// `user:<id>`, for `core.notify`.
+    #[sqlx(skip)]
+    pub recipient: String,
+    /// Their leads as `user:<id>`, for `core.notify`.
+    #[sqlx(skip)]
+    pub lead_recipients: Vec<String>,
+}
+
+/// People who log time: active people with a working schedule, or who
+/// logged time in the last 60 days.
+const WORKERS: &str = "SELECT u.id FROM users u WHERE u.status = 'active' AND u.kind = 'human' \
+    AND (EXISTS (SELECT 1 FROM wf_schedules s WHERE s.user_id = u.id) \
+      OR EXISTS (SELECT 1 FROM sd_time_entries e WHERE e.user_id = u.id AND e.worked_on > $3::date - 60))";
+
+/// The last period that ended at least `days_late` days before `today`.
+fn last_ended(period_days: i32, anchor: Date, today: Date, days_late: i64) -> (Date, Date) {
+    let pivot = today - Duration::days(days_late.max(0));
+    let (start, end) = period_of(period_days, anchor, pivot);
+    if end <= pivot {
+        (start, end)
+    } else {
+        (
+            start - Duration::days(i64::from(period_days)),
+            start - Duration::days(1),
+        )
+    }
+}
+
+async fn unsubmitted(
+    conn: &mut PgConnection,
+    (start, end): (Date, Date),
+    today: Date,
+) -> WorkforceResult<Vec<Reminder>> {
+    Ok(sqlx::query_as(sqlx::AssertSqlSafe(format!(
+        "SELECT u.id AS user_id, u.display_name AS person, u.email, \
+                to_char($1::date, 'YYYY-MM-DD') AS period_start, to_char($2::date, 'YYYY-MM-DD') AS period_end, \
+                COALESCE(t.status, 'open') AS status, \
+                COALESCE((SELECT sum(minutes) FROM sd_time_entries e \
+                           WHERE e.user_id = u.id AND e.worked_on BETWEEN $1 AND $2), 0)::int AS logged_minutes, \
+                NULL::int AS expected_minutes, 0 AS missing_notes, ($3::date - $2::date)::int AS days_late \
+           FROM users u LEFT JOIN wf_timesheets t ON t.user_id = u.id AND t.period_start = $1 \
+          WHERE u.id IN ({WORKERS}) AND COALESCE(t.status, 'open') IN ('open', 'rejected') \
+          ORDER BY u.display_name"
+    )))
+    .bind(start)
+    .bind(end)
+    .bind(today)
+    .fetch_all(conn)
+    .await?)
+}
+
+async fn under_logged(
+    conn: &mut PgConnection,
+    day: Date,
+    (start, end): (Date, Date),
+) -> WorkforceResult<Vec<Reminder>> {
+    let rows: Vec<(Uuid, String, String, Json, i32)> = sqlx::query_as(
+        "SELECT u.id, u.display_name, u.email, s.hours, \
+                COALESCE((SELECT sum(minutes) FROM sd_time_entries e \
+                           WHERE e.user_id = u.id AND e.worked_on = $1), 0)::int \
+           FROM users u JOIN wf_schedules s ON s.user_id = u.id \
+          WHERE u.status = 'active' AND u.kind = 'human' \
+            AND NOT EXISTS (SELECT 1 FROM wf_time_off o WHERE o.user_id = u.id \
+                             AND o.status = 'approved' AND $1 BETWEEN o.starts_on AND o.ends_on) \
+          ORDER BY u.display_name",
+    )
+    .bind(day)
+    .fetch_all(conn)
+    .await?;
+    Ok(rows
+        .into_iter()
+        .filter_map(|(user_id, person, email, hours, logged)| {
+            let expected = scheduled_minutes(&hours, weekday_key(day));
+            (logged < expected).then(|| Reminder {
+                user_id,
+                person,
+                email,
+                period_start: ymd(start),
+                period_end: ymd(end),
+                status: "open".into(),
+                logged_minutes: logged,
+                expected_minutes: Some(expected),
+                missing_notes: 0,
+                days_late: 0,
+                leads: Vec::new(),
+                recipient: String::new(),
+                lead_recipients: Vec::new(),
+            })
+        })
+        .collect())
+}
+
+async fn missing_notes(
+    conn: &mut PgConnection,
+    (start, end): (Date, Date),
+) -> WorkforceResult<Vec<Reminder>> {
+    Ok(sqlx::query_as(
+        "SELECT u.id AS user_id, u.display_name AS person, u.email, \
+                to_char($1::date, 'YYYY-MM-DD') AS period_start, to_char($2::date, 'YYYY-MM-DD') AS period_end, \
+                COALESCE(t.status, 'open') AS status, sum(e.minutes)::int AS logged_minutes, \
+                NULL::int AS expected_minutes, count(*)::int AS missing_notes, 0 AS days_late \
+           FROM sd_time_entries e JOIN users u ON u.id = e.user_id \
+           LEFT JOIN wf_timesheets t ON t.user_id = u.id AND t.period_start = $1 \
+          WHERE e.worked_on BETWEEN $1 AND $2 AND btrim(e.notes) = '' AND u.status = 'active' \
+          GROUP BY u.id, u.display_name, u.email, t.status ORDER BY u.display_name",
+    )
+    .bind(start)
+    .bind(end)
+    .fetch_all(conn)
+    .await?)
+}
+
+/// Finds whom to remind (system scope). `check` is `unsubmitted`,
+/// `under_logged` or `missing_notes`; see the step's documentation.
+pub async fn reminders(
+    conn: &mut PgConnection,
+    check: &str,
+    days_late: i64,
+    date: Option<Date>,
+    today: Date,
+) -> WorkforceResult<Vec<Reminder>> {
+    let (period_days, anchor): (i32, Date) =
+        sqlx::query_as("SELECT period_days, anchor FROM wf_timesheet_settings WHERE id = 1")
+            .fetch_one(&mut *conn)
+            .await?;
+    let mut found = match check {
+        "unsubmitted" => {
+            let period = last_ended(period_days, anchor, today, days_late);
+            unsubmitted(&mut *conn, period, today).await?
+        }
+        "under_logged" => {
+            let day = date.unwrap_or(today - Duration::days(1));
+            under_logged(&mut *conn, day, period_of(period_days, anchor, day)).await?
+        }
+        "missing_notes" => {
+            missing_notes(
+                &mut *conn,
+                period_of(period_days, anchor, date.unwrap_or(today)),
+            )
+            .await?
+        }
+        _ => {
+            return Err(WorkforceError::invalid(
+                "check",
+                "unsubmitted, under_logged or missing_notes",
+            ));
+        }
+    };
+    for r in &mut found {
+        r.leads = sqlx::query_scalar(
+            "SELECT DISTINCT l.user_id FROM team_members l JOIN team_members m ON m.team_id = l.team_id \
+              WHERE m.user_id = $1 AND l.lead AND l.user_id <> $1",
+        )
+        .bind(r.user_id)
+        .fetch_all(&mut *conn)
+        .await?;
+        r.recipient = format!("user:{}", r.user_id);
+        r.lead_recipients = r.leads.iter().map(|l| format!("user:{l}")).collect();
+    }
+    Ok(found)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -713,6 +893,26 @@ mod tests {
         let (start, end) = period_of(14, monday, date!(2026 - 11 - 26));
         assert_eq!((end - start).whole_days(), 13);
         assert!(start <= date!(2026 - 11 - 26) && date!(2026 - 11 - 26) <= end);
+    }
+
+    #[test]
+    fn the_last_ended_period() {
+        let monday = date!(2024 - 01 - 01);
+        // Thursday 26 Nov: last week (16-22 Nov) ended 4 days ago.
+        assert_eq!(
+            last_ended(7, monday, date!(2026 - 11 - 26), 1),
+            (date!(2026 - 11 - 16), date!(2026 - 11 - 22))
+        );
+        // Monday 23 Nov with a day's grace: last week ended yesterday.
+        assert_eq!(
+            last_ended(7, monday, date!(2026 - 11 - 23), 1),
+            (date!(2026 - 11 - 16), date!(2026 - 11 - 22))
+        );
+        // ...but not with two.
+        assert_eq!(
+            last_ended(7, monday, date!(2026 - 11 - 23), 2),
+            (date!(2026 - 11 - 09), date!(2026 - 11 - 15))
+        );
     }
 
     #[test]
