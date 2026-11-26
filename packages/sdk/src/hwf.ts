@@ -1152,6 +1152,30 @@ export type Step =
 			 * Fail the attempt after this long, e.g. `30s`.
 			 */
 			timeout?: string | null;
+			type: 'core.dispatch.recommend';
+			with: DispatchRecommend;
+	  }
+	| {
+			/**
+			 * Record the error as the step's output and carry on.
+			 */
+			continue_on_error?: boolean;
+			description?: string | null;
+			/**
+			 * Unique in the workflow: lowercase letters, digits, underscores.
+			 * Other steps read this step's output as `steps.<id>.output`.
+			 */
+			id: string;
+			/**
+			 * Skip the step unless this expression is true.
+			 */
+			if?: string | null;
+			name?: string | null;
+			retry?: RetryPolicy | null;
+			/**
+			 * Fail the attempt after this long, e.g. `30s`.
+			 */
+			timeout?: string | null;
 			type: 'core.asset.sync';
 			with: AssetSync;
 	  }
@@ -2050,6 +2074,22 @@ export interface TriageApply {
 	reason?: unknown;
 	sample_id?: unknown;
 	ticket_id?: unknown;
+}
+/**
+ * Who should take a ticket (`core.dispatch.recommend`), in the run's
+ * organization or below: its queue's members (or those who may work
+ * tickets there), ranked by required skills and certifications,
+ * availability, open load, history in the queue and familiarity with the
+ * client, at most `limit` (default 5). Output: `{ recommendations: [{
+ * userId, name, score, qualified, available, reasons, cautions, … }], top
+ * }`.
+ *
+ * This interface was referenced by `HuxleyWorkflowFormatV1`'s JSON-Schema
+ * via the `definition` "DispatchRecommend".
+ */
+export interface DispatchRecommend {
+	limit?: unknown;
+	ticket_id: unknown;
 }
 /**
  * Mapping rules to run (`core.asset.sync`): a dataset's rows become

@@ -96,7 +96,7 @@ They use the `core.timesheet.check` step: see [the step reference](workflows.md)
 
 ## What work requires
 
-A queue or a ticket type can require:
+A queue, a ticket type or a single ticket can require:
 
 - **Skills at a minimum level.** These are weighed: someone at *working* level in a skill that needs *proficient* meets two-thirds of that requirement.
 - **Certifications.** These are hard requirements: the certification must be held and unexpired.
@@ -108,6 +108,8 @@ A queue or a ticket type can require:
 3. Then by how well their skills meet the required levels.
 
 Each person's entry lists what they're missing, and why they're unavailable (`away` or `off_hours`).
+
+**A ticket's own needs:** `PUT /api/v1/workforce/requirements/ticket/{ticketId}` sets what one ticket needs, on top of its queue's and type's. It needs `ticket:write` on the ticket. A skill asked for twice counts at the higher level. Dispatch and [recommendations](servicedesk.md#who-should-take-it) weigh them.
 
 ## Permissions
 

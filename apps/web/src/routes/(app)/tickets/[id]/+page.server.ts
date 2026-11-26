@@ -35,7 +35,8 @@ export const load: PageServerLoad = async (event) => {
 		assets,
 		coverage,
 		csat,
-		sentiment
+		sentiment,
+		recommendations
 	] = await Promise.all([
 		assignees(event),
 		client.GET('/api/v1/orgs/{id}/contacts', {
@@ -66,6 +67,11 @@ export const load: PageServerLoad = async (event) => {
 			: Promise.resolve({ data: undefined }),
 		user.activeModules.includes('cx')
 			? client.GET('/api/v1/tickets/{id}/sentiment', path)
+			: Promise.resolve({ data: undefined }),
+		user.grantedPermissions.includes('ticket:write')
+			? client.GET('/api/v1/tickets/{id}/recommendations', {
+					params: { path: { id: event.params.id }, query: { limit: 3 } }
+				})
 			: Promise.resolve({ data: undefined })
 	]);
 	return {
@@ -86,7 +92,8 @@ export const load: PageServerLoad = async (event) => {
 		assets: assets.data ?? null,
 		coverage: coverage.data ?? null,
 		csat: csat.data ?? null,
-		sentiment: sentiment.data ?? []
+		sentiment: sentiment.data ?? [],
+		recommendations: recommendations.data ?? []
 	};
 };
 

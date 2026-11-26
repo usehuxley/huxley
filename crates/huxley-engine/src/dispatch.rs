@@ -69,7 +69,12 @@ async fn rank(
             .map_err(internal)?;
         let ids: Vec<Uuid> = people.iter().map(|c| c.user_id).collect();
         let now = time::OffsetDateTime::now_utc().unix_timestamp();
-        for fit in requirements::fit(tx, Some(queue), Some(type_id), Some(&ids), Some(now))
+        let work = requirements::Work {
+            queue: Some(queue),
+            ticket_type: Some(type_id),
+            ticket: Some(ticket),
+        };
+        for fit in requirements::fit(tx, work, Some(&ids), Some(now))
             .await
             .map_err(internal)?
         {
@@ -191,5 +196,49 @@ impl Engine {
             Some(choice),
             &considered,
         ))
+    }
+}
+
+impl Engine {
+    /// `core.dispatch.recommend`: who should take a ticket (in the run's
+    /// organization or below), best first, with reasons. Output: `{
+    /// recommendations, top }`.
+    pub(crate) async fn recommend_assignees(
+        &self,
+        org_id: Uuid,
+        input: &Json,
+    ) -> Result<Json, Json> {
+        self.require_desk(org_id).await?;
+        let ticket: Uuid = input["ticket_id"]
+            .as_str()
+            .and_then(|s| s.trim().parse().ok())
+            .ok_or_else(|| error("input", "ticket_id is required"))?;
+        let limit = input["limit"]
+            .as_u64()
+            .map_or(5, |n| usize::try_from(n).unwrap_or(5))
+            .clamp(1, 20);
+        let subtree = self.subtree(org_id).await?;
+        let mut tx = begin_scoped(self.db(), &OrgScope::Orgs(subtree))
+            .await
+            .map_err(internal)?;
+        let at: Option<Uuid> = sqlx::query_scalar("SELECT org_id FROM sd_tickets WHERE id = $1")
+            .bind(ticket)
+            .fetch_optional(&mut *tx)
+            .await
+            .map_err(internal)?;
+        let at = at.ok_or_else(|| error("not_found", "No such ticket here"))?;
+        tx.commit().await.map_err(internal)?;
+        let mut tx = begin_scoped(self.db(), &OrgScope::System)
+            .await
+            .map_err(internal)?;
+        let workforce = huxley_modules::is_active_at(&mut tx, huxley_workforce::MODULE, at)
+            .await
+            .map_err(internal)?;
+        let now = time::OffsetDateTime::now_utc().unix_timestamp();
+        let all = huxley_workforce::recommend::for_ticket(&mut tx, ticket, now, workforce, limit)
+            .await
+            .map_err(internal)?;
+        tx.commit().await.map_err(internal)?;
+        Ok(json!({ "recommendations": all, "top": all.first() }))
     }
 }

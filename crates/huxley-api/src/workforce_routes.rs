@@ -400,9 +400,9 @@ pub async fn remove_held(
     ))
 }
 
-/// What a queue or ticket type requires.
+/// What a queue, ticket type or ticket requires.
 #[utoipa::path(get, path = "/api/v1/workforce/requirements/{target_type}/{target_id}", tag = "workforce",
-    params(("target_type" = String, Path, description = "`queue` or `ticket_type`"), ("target_id" = Uuid, Path)),
+    params(("target_type" = String, Path, description = "`queue`, `ticket_type` or `ticket`"), ("target_id" = Uuid, Path)),
     responses((status = 200, body = Vec<Requirement>)))]
 pub async fn get_requirements(
     State(state): State<AppState>,
@@ -418,8 +418,9 @@ pub async fn get_requirements(
     ))
 }
 
-/// Replaces what a queue or ticket type requires: skills at a minimum
-/// level, and certifications (hard requirements). Needs `workforce:manage`.
+/// Replaces what a queue, ticket type or ticket requires: skills at a
+/// minimum level, and certifications (hard requirements). Needs
+/// `workforce:manage`, or for a ticket `ticket:write` where it is.
 #[utoipa::path(put, path = "/api/v1/workforce/requirements/{target_type}/{target_id}", tag = "workforce",
     params(("target_type" = String, Path), ("target_id" = Uuid, Path)), request_body = Vec<Requirement>,
     responses((status = 200, body = Vec<Requirement>), (status = 422, body = ApiError, content_type = "application/problem+json")))]
@@ -429,7 +430,15 @@ pub async fn set_requirements(
     Path((target_type, target_id)): Path<(String, Uuid)>,
     Json(body): Json<Vec<Requirement>>,
 ) -> ApiResult<Json<Vec<Requirement>>> {
-    manager(&state, &authed).await?;
+    if target_type == "ticket" {
+        require_module(&state, MODULE).await?;
+        let org = crate::recommend_routes::ticket_org(&state, target_id).await?;
+        authed
+            .require_at(&state, permissions::TICKET_WRITE, org)
+            .await?;
+    } else {
+        manager(&state, &authed).await?;
+    }
     let ctx = authed.user.ctx.clone();
     Ok(Json(
         system(&state, async |tx| {
@@ -466,7 +475,12 @@ pub async fn fit(
     };
     Ok(Json(
         system(&state, async |tx| {
-            requirements::fit(tx, params.queue_id, params.ticket_type_id, None, Some(at)).await
+            let work = requirements::Work {
+                queue: params.queue_id,
+                ticket_type: params.ticket_type_id,
+                ticket: None,
+            };
+            requirements::fit(tx, work, None, Some(at)).await
         })
         .await?,
     ))

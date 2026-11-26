@@ -465,6 +465,19 @@ export const STEPS: StepSpec[] = [
 		]
 	},
 	{
+		type: 'core.dispatch.recommend',
+		label: 'Recommend who takes it',
+		description:
+			'Rank who should take a ticket by skills, certifications, availability, load, history and familiarity with the client, with reasons.',
+		group: 'Data',
+		module: 'servicedesk',
+		template: { with: { ticket_id: '{{ trigger.subject_id }}' } },
+		fields: [
+			{ path: 'with.ticket_id', label: 'Ticket', kind: 'expression' },
+			{ path: 'with.limit', label: 'At most', kind: 'expression', hint: 'Default 5' }
+		]
+	},
+	{
 		type: 'core.triage.options',
 		label: 'Triage options',
 		description:

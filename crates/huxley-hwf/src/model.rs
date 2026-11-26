@@ -418,6 +418,9 @@ pub enum Step {
     /// Record (and apply) a triage answer (the `servicedesk` module).
     #[serde(rename = "core.triage.apply")]
     TriageApply(TriageApplyStep),
+    /// Who should take a ticket, with reasons (the `servicedesk` module).
+    #[serde(rename = "core.dispatch.recommend")]
+    DispatchRecommend(DispatchRecommendStep),
     /// Run a dataset → asset mapping rule (the `cmdb` module).
     #[serde(rename = "core.asset.sync")]
     AssetSync(AssetSyncStep),
@@ -774,6 +777,11 @@ step!(TriageApplyStep {
     pub apply: TriageApply,
 });
 
+step!(DispatchRecommendStep {
+    #[serde(rename = "with")]
+    pub recommend: DispatchRecommend,
+});
+
 step!(AssetSyncStep {
     #[serde(rename = "with")]
     pub sync: AssetSync,
@@ -860,6 +868,7 @@ impl Step {
             SentimentRecord,
             TriageOptions,
             TriageApply,
+            DispatchRecommend,
             AssetSync,
             AssetWarranty,
             TicketEmailReply,
@@ -917,6 +926,7 @@ impl Step {
             Self::SentimentRecord(_) => "core.sentiment.record",
             Self::TriageOptions(_) => "core.triage.options",
             Self::TriageApply(_) => "core.triage.apply",
+            Self::DispatchRecommend(_) => "core.dispatch.recommend",
             Self::AssetSync(_) => "core.asset.sync",
             Self::AssetWarranty(_) => "core.asset.set_warranty",
             Self::TicketCreate(_) => "core.ticket.create",
@@ -1443,6 +1453,21 @@ pub struct TriageApply {
     pub priority: Value,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub reason: Option<Value>,
+}
+
+/// Who should take a ticket (`core.dispatch.recommend`), in the run's
+/// organization or below: its queue's members (or those who may work
+/// tickets there), ranked by required skills and certifications,
+/// availability, open load, history in the queue and familiarity with the
+/// client, at most `limit` (default 5). Output: `{ recommendations: [{
+/// userId, name, score, qualified, available, reasons, cautions, … }], top
+/// }`.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct DispatchRecommend {
+    pub ticket_id: Value,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub limit: Option<Value>,
 }
 
 /// Mapping rules to run (`core.asset.sync`): a dataset's rows become

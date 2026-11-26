@@ -171,6 +171,8 @@ impl Engine {
         .await
     }
 
+    // A flat dispatch table: one arm per step type.
+    #[allow(clippy::too_many_lines)]
     async fn execute(
         &self,
         step: &Step,
@@ -245,6 +247,7 @@ impl Engine {
             Step::SentimentRecord(_) => self.sentiment_record(org_id, input).await.into(),
             Step::TriageOptions(_) => self.triage_options(org_id, input).await.into(),
             Step::TriageApply(_) => self.triage_apply(org_id, input).await.into(),
+            Step::DispatchRecommend(_) => self.recommend_assignees(org_id, input).await.into(),
             Step::AssetSync(_) => self.sync_assets(org_id, input).await.into(),
             Step::AssetWarranty(_) => self.set_warranty(org_id, input).await.into(),
             Step::MailFetch(_)

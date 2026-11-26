@@ -14857,6 +14857,48 @@
 				}
 			}
 		},
+		"/api/v1/tickets/{id}/recommendations": {
+			"get": {
+				"tags": ["servicedesk"],
+				"summary": "Who should take the ticket, best first: required skills and\ncertifications (its queue's, type's and its own), availability, open\nload, history in its queue, and familiarity with the client, each with\nreasons and cautions.",
+				"operationId": "recommend_assignees",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					},
+					{
+						"name": "limit",
+						"in": "query",
+						"description": "How many (default 5, at most 20).",
+						"required": false,
+						"schema": {
+							"type": "integer",
+							"minimum": 0
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "array",
+									"items": {
+										"$ref": "#/components/schemas/Recommendation"
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		},
 		"/api/v1/tickets/{id}/responses": {
 			"get": {
 				"tags": ["servicedesk"],
@@ -18144,13 +18186,13 @@
 		"/api/v1/workforce/requirements/{target_type}/{target_id}": {
 			"get": {
 				"tags": ["workforce"],
-				"summary": "What a queue or ticket type requires.",
+				"summary": "What a queue, ticket type or ticket requires.",
 				"operationId": "get_requirements",
 				"parameters": [
 					{
 						"name": "target_type",
 						"in": "path",
-						"description": "`queue` or `ticket_type`",
+						"description": "`queue`, `ticket_type` or `ticket`",
 						"required": true,
 						"schema": {
 							"type": "string"
@@ -18183,7 +18225,7 @@
 			},
 			"put": {
 				"tags": ["workforce"],
-				"summary": "Replaces what a queue or ticket type requires: skills at a minimum\nlevel, and certifications (hard requirements). Needs `workforce:manage`.",
+				"summary": "Replaces what a queue, ticket type or ticket requires: skills at a\nminimum level, and certifications (hard requirements). Needs\n`workforce:manage`, or for a ticket `ticket:write` where it is.",
 				"operationId": "set_requirements",
 				"parameters": [
 					{
@@ -28323,6 +28365,75 @@
 				"properties": {
 					"received": {
 						"type": "boolean"
+					}
+				}
+			},
+			"Recommendation": {
+				"type": "object",
+				"required": [
+					"userId",
+					"name",
+					"score",
+					"qualified",
+					"available",
+					"openTickets",
+					"queueResolved",
+					"clientTickets",
+					"assigned",
+					"reasons",
+					"cautions"
+				],
+				"properties": {
+					"assigned": {
+						"type": "boolean",
+						"description": "Assigned the ticket now."
+					},
+					"available": {
+						"type": "boolean"
+					},
+					"cautions": {
+						"type": "array",
+						"items": {
+							"type": "string"
+						},
+						"description": "What counts against them."
+					},
+					"clientTickets": {
+						"type": "integer",
+						"format": "int64",
+						"description": "The client's tickets they worked in the last 180 days."
+					},
+					"name": {
+						"type": "string"
+					},
+					"openTickets": {
+						"type": "integer",
+						"format": "int64"
+					},
+					"qualified": {
+						"type": "boolean",
+						"description": "Holds every required certification."
+					},
+					"queueResolved": {
+						"type": "integer",
+						"format": "int64",
+						"description": "Tickets in this queue they resolved in the last 90 days."
+					},
+					"reasons": {
+						"type": "array",
+						"items": {
+							"type": "string"
+						},
+						"description": "Why they rank where they do."
+					},
+					"score": {
+						"type": "integer",
+						"format": "int32",
+						"description": "0 to 100."
+					},
+					"userId": {
+						"type": "string",
+						"format": "uuid"
 					}
 				}
 			},
