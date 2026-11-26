@@ -127,6 +127,7 @@ The server reads, in increasing precedence: built-in defaults, `huxley.toml`, th
 | Variable | Default | Purpose |
 |---|---|---|
 | `HUXLEY_DATABASE__URL` | (required) | PostgreSQL connection URL |
+| `HUXLEY_DATABASE__READ_URL` | (unset) | A read replica for reporting queries (dashboards and the analytics API). Unset: they use the primary. |
 | `HUXLEY_CRYPTO__KEK` | (required unless a key service is set) | Key-encryption key for secrets at rest: 32 random bytes, base64 (`huxley admin generate-kek`). Back it up: without it, encrypted data is unrecoverable. |
 | `HUXLEY_CRYPTO__VAULT__ADDRESS` | (unset) | Keep the KEK in Vault or OpenBao Transit instead (see above) |
 | `HUXLEY_CRYPTO__AZURE_KEY_VAULT__VAULT_URL` | (unset) | Keep the KEK in Azure Key Vault instead (see above) |

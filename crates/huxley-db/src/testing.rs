@@ -44,6 +44,7 @@ async fn migrated(url: String) -> TestPools {
         max_connections: 4,
         acquire_timeout_secs: 10,
         statement_timeout_ms: 10_000,
+        read_url: None,
     };
     let owner = connect_owner(&config).expect("valid test database URL");
     migrate(&owner).await.expect("migrations apply");

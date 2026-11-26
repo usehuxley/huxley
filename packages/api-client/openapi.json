@@ -1425,6 +1425,70 @@
 				}
 			}
 		},
+		"/api/v1/analytics/query": {
+			"post": {
+				"tags": ["analytics"],
+				"summary": "Runs a query: measures by dimensions over a source, filtered. Numbers\ncover only the organizations where you can read the source. Results are\nreused for up to a minute.",
+				"operationId": "run_analytics_query",
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/QuerySpec"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/AnalyticsResult"
+								}
+							}
+						}
+					},
+					"403": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					},
+					"422": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/analytics/sources": {
+			"get": {
+				"tags": ["analytics"],
+				"summary": "The data sources you can query, with their fields.",
+				"operationId": "list_analytics_sources",
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/AnalyticsCatalog"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
 		"/api/v1/appointments/{id}": {
 			"put": {
 				"tags": ["servicedesk"],
@@ -17463,6 +17527,11 @@
 					}
 				}
 			},
+			"Aggregate": {
+				"type": "string",
+				"description": "What to aggregate.",
+				"enum": ["count", "count_distinct", "sum", "avg", "min", "max"]
+			},
 			"Agreement": {
 				"type": "object",
 				"required": [
@@ -18024,6 +18093,118 @@
 					"updatedAt": {
 						"type": "string",
 						"format": "date-time"
+					}
+				}
+			},
+			"AnalyticsCatalog": {
+				"type": "object",
+				"required": ["sources", "ranges"],
+				"properties": {
+					"ranges": {
+						"type": "array",
+						"items": {
+							"type": "string"
+						},
+						"description": "What `within` filters accept, e.g. `last_30_days`."
+					},
+					"sources": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/AnalyticsSource"
+						}
+					}
+				}
+			},
+			"AnalyticsColumn": {
+				"type": "object",
+				"description": "A result column.",
+				"required": ["key", "label", "kind"],
+				"properties": {
+					"key": {
+						"type": "string"
+					},
+					"kind": {
+						"$ref": "#/components/schemas/Kind"
+					},
+					"label": {
+						"type": "string"
+					}
+				}
+			},
+			"AnalyticsField": {
+				"type": "object",
+				"required": ["key", "label", "kind"],
+				"properties": {
+					"key": {
+						"type": "string"
+					},
+					"kind": {
+						"$ref": "#/components/schemas/Kind"
+					},
+					"label": {
+						"type": "string"
+					}
+				}
+			},
+			"AnalyticsResult": {
+				"type": "object",
+				"description": "A query's answer.",
+				"required": ["columns", "rows", "truncated", "cached"],
+				"properties": {
+					"cached": {
+						"type": "boolean",
+						"description": "Served from the cache (at most a minute old)."
+					},
+					"columns": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/AnalyticsColumn"
+						}
+					},
+					"rows": {
+						"type": "array",
+						"items": {
+							"type": "array",
+							"items": {}
+						},
+						"description": "One array per row, in column order."
+					},
+					"truncated": {
+						"type": "boolean",
+						"description": "More rows matched than the limit."
+					}
+				}
+			},
+			"AnalyticsSource": {
+				"type": "object",
+				"required": ["key", "label", "description", "permission", "timeField", "fields"],
+				"properties": {
+					"description": {
+						"type": "string"
+					},
+					"fields": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/AnalyticsField"
+						}
+					},
+					"key": {
+						"type": "string"
+					},
+					"label": {
+						"type": "string"
+					},
+					"module": {
+						"type": ["string", "null"],
+						"description": "The module it belongs to, if any."
+					},
+					"permission": {
+						"type": "string",
+						"description": "The permission that reads it."
+					},
+					"timeField": {
+						"type": "string",
+						"description": "The time field most queries bucket by."
 					}
 				}
 			},
@@ -21274,6 +21455,30 @@
 					}
 				}
 			},
+			"Dimension": {
+				"type": "object",
+				"required": ["field"],
+				"properties": {
+					"field": {
+						"type": "string"
+					},
+					"granularity": {
+						"oneOf": [
+							{
+								"$ref": "#/components/schemas/Granularity"
+							},
+							{
+								"type": "null"
+							}
+						]
+					}
+				},
+				"additionalProperties": false
+			},
+			"Direction": {
+				"type": "string",
+				"enum": ["asc", "desc"]
+			},
 			"Email": {
 				"type": "object",
 				"description": "A received message, as kept.",
@@ -21625,6 +21830,22 @@
 				],
 				"description": "A field that applies to an entity, with its value (null when unset)."
 			},
+			"Filter": {
+				"type": "object",
+				"required": ["field", "op"],
+				"properties": {
+					"field": {
+						"type": "string"
+					},
+					"op": {
+						"$ref": "#/components/schemas/Op"
+					},
+					"value": {
+						"$ref": "#/components/schemas/Value"
+					}
+				},
+				"additionalProperties": false
+			},
 			"FinishRegistrationRequest": {
 				"type": "object",
 				"required": ["ceremony", "name", "credential"],
@@ -21821,6 +22042,11 @@
 						"description": "Set when the grant comes through a team."
 					}
 				}
+			},
+			"Granularity": {
+				"type": "string",
+				"description": "A time bucket for a date or time dimension.",
+				"enum": ["hour", "day", "week", "month", "quarter", "year"]
 			},
 			"GraphSettings": {
 				"type": "object",
@@ -22582,6 +22808,11 @@
 					}
 				}
 			},
+			"Kind": {
+				"type": "string",
+				"description": "What a field holds, which decides the operators, measures and time\nbuckets it allows.",
+				"enum": ["text", "number", "bool", "date", "time"]
+			},
 			"Language": {
 				"type": "string",
 				"enum": ["pwsh", "python", "javascript"]
@@ -23124,6 +23355,20 @@
 						"description": "Why there are no results, when something stopped the search."
 					}
 				}
+			},
+			"Measure": {
+				"type": "object",
+				"required": ["fn"],
+				"properties": {
+					"field": {
+						"type": ["string", "null"],
+						"description": "The field (not for `count`)."
+					},
+					"fn": {
+						"$ref": "#/components/schemas/Aggregate"
+					}
+				},
+				"additionalProperties": false
 			},
 			"MemberBody": {
 				"type": "object",
@@ -23676,6 +23921,24 @@
 						"format": "int64"
 					}
 				}
+			},
+			"Op": {
+				"type": "string",
+				"enum": [
+					"eq",
+					"neq",
+					"in",
+					"not_in",
+					"gt",
+					"gte",
+					"lt",
+					"lte",
+					"between",
+					"contains",
+					"is_null",
+					"not_null",
+					"within"
+				]
 			},
 			"OrgKind": {
 				"type": "string",
@@ -25550,6 +25813,56 @@
 				},
 				"additionalProperties": false
 			},
+			"QuerySpec": {
+				"type": "object",
+				"description": "A query: what to count or add up, by what, for which records.",
+				"required": ["source"],
+				"properties": {
+					"dimensions": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/Dimension"
+						}
+					},
+					"filters": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/Filter"
+						}
+					},
+					"limit": {
+						"type": ["integer", "null"],
+						"format": "int32",
+						"description": "Rows to return (default 100, at most 1,000).",
+						"minimum": 0
+					},
+					"measures": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/Measure"
+						}
+					},
+					"orgId": {
+						"type": ["string", "null"],
+						"format": "uuid",
+						"description": "Only this organization and those below it."
+					},
+					"sort": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/Sort"
+						}
+					},
+					"source": {
+						"type": "string"
+					},
+					"timezone": {
+						"type": ["string", "null"],
+						"description": "For time buckets and named ranges (default `UTC`)."
+					}
+				},
+				"additionalProperties": false
+			},
 			"Queue": {
 				"type": "object",
 				"required": [
@@ -27148,6 +27461,20 @@
 					"username": {
 						"type": ["string", "null"],
 						"description": "Default: the IMAP username."
+					}
+				},
+				"additionalProperties": false
+			},
+			"Sort": {
+				"type": "object",
+				"required": ["by"],
+				"properties": {
+					"by": {
+						"type": "string",
+						"description": "A column's key: a dimension's field, or a measure's key (`count`,\n`sum_hours`…)."
+					},
+					"dir": {
+						"$ref": "#/components/schemas/Direction"
 					}
 				},
 				"additionalProperties": false
@@ -29989,6 +30316,10 @@
 		{
 			"name": "cmdb",
 			"description": "Assets, their types and relationships, and impact analysis (the cmdb module)"
+		},
+		{
+			"name": "analytics",
+			"description": "The semantic data layer: data sources and structured queries over them (ADR-041)"
 		},
 		{
 			"name": "portal",

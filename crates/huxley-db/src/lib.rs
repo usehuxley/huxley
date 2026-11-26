@@ -41,6 +41,10 @@ pub struct DatabaseConfig {
     /// Per-statement timeout applied to every connection.
     #[serde(default = "default_statement_timeout_ms")]
     pub statement_timeout_ms: u64,
+    /// A read replica for reporting queries (`HUXLEY_DATABASE__READ_URL`).
+    /// Without it they use the primary.
+    #[serde(default)]
+    pub read_url: Option<SecretString>,
 }
 
 fn default_max_connections() -> u32 {
@@ -90,6 +94,20 @@ pub fn connect(config: &DatabaseConfig) -> Result<PgPool, DbError> {
             })
         })
         .connect_lazy_with(options(config)?))
+}
+
+/// The read replica's pool, when `read_url` is set: like [`connect`], for
+/// read-only reporting queries.
+pub fn connect_read(config: &DatabaseConfig) -> Result<Option<PgPool>, DbError> {
+    let Some(url) = &config.read_url else {
+        return Ok(None);
+    };
+    let replica = DatabaseConfig {
+        url: url.clone(),
+        read_url: None,
+        ..config.clone()
+    };
+    connect(&replica).map(Some)
 }
 
 /// Creates a pool that connects as the configured user without switching role.
