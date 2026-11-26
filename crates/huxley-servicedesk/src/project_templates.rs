@@ -33,6 +33,17 @@ pub struct TemplateTask {
     /// Due this many days after it starts.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub duration_days: Option<i32>,
+    /// Skills it needs, which become the task's requirements.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub skills: Vec<TemplateSkill>,
+}
+
+/// A skill a template task needs, at a level (1 learning … 4 expert).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct TemplateSkill {
+    pub skill_id: Uuid,
+    pub min_level: i16,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema)]
@@ -123,6 +134,12 @@ impl Structure {
                     || t.duration_days.is_some_and(|d| !(0..=3650).contains(&d))
                 {
                     return Err(bad(format!("{at}/startOffsetDays"), "0 to 3,650 days"));
+                }
+                if t.skills.len() > 20 || t.skills.iter().any(|s| !(1..=4).contains(&s.min_level)) {
+                    return Err(bad(
+                        format!("{at}/skills"),
+                        "up to 20 skills, levels 1 to 4",
+                    ));
                 }
                 keys.push(&t.key);
             }
@@ -348,6 +365,7 @@ mod tests {
             client_visible: false,
             start_offset_days: None,
             duration_days: None,
+            skills: Vec::new(),
         }
     }
 

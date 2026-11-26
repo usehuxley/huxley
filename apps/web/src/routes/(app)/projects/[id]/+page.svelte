@@ -189,6 +189,30 @@
 										</span>
 										<Badge>{t.statusName}</Badge>
 									</span>
+									{#if data.suggestions[t.ticketId]}
+										<div
+											class="flex w-full flex-wrap items-center gap-2 text-xs"
+											aria-label="Who could take {t.reference}"
+										>
+											<span class="text-fg-muted">Could take it:</span>
+											{#each data.suggestions[t.ticketId] as s (s.userId)}
+												<form method="POST" action="?/assign" use:enhance>
+													<input type="hidden" name="ticket" value={t.ticketId} />
+													<input type="hidden" name="userId" value={s.userId} />
+													<Button
+														type="submit"
+														size="sm"
+														variant="ghost"
+														aria-label="Assign {t.reference} to {s.name}"
+													>
+														{s.name} · {s.skillMatch}% skills{s.freeHours !== null
+															? ` · ${s.freeHours} h free`
+															: ''}
+													</Button>
+												</form>
+											{/each}
+										</div>
+									{/if}
 									{#if data.canWrite}
 										<details class="w-full">
 											<summary class="cursor-pointer text-xs text-fg-muted">

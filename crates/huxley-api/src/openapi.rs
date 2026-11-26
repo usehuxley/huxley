@@ -298,6 +298,7 @@ use crate::workforce_routes;
         crate::project_routes::submit_scope_change,
         crate::project_routes::withdraw_scope_change,
         crate::project_routes::template_workflows,
+        crate::project_routes::capacity,
         crate::workforce_routes::insights,
         crate::csat_routes::get_health_model,
         crate::csat_routes::set_health_model,

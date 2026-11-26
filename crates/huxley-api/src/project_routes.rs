@@ -30,6 +30,7 @@ pub const MODULE: &str = "projects";
 pub fn routes() -> Router<AppState> {
     Router::new()
         .route("/projects", get(list).post(create))
+        .route("/projects/capacity", get(capacity))
         .route("/projects/{id}", get(detail).patch(update))
         .route("/projects/{id}/tasks", post(add_task))
         .route("/projects/{id}/tasks/{ticket}", patch(update_task))
@@ -479,4 +480,41 @@ pub async fn template_workflows(
     .map_err(db_err)?;
     tx.commit().await.map_err(db_err)?;
     Ok(Json(found))
+}
+
+#[derive(Debug, Deserialize, IntoParams)]
+#[into_params(parameter_in = Query)]
+#[serde(rename_all = "camelCase")]
+pub struct CapacityParams {
+    /// A day in the first week (`YYYY-MM-DD`; default this week).
+    pub from: Option<String>,
+    /// How many weeks (default 6, at most 26).
+    pub weeks: Option<u8>,
+    /// One team's members.
+    pub team_id: Option<Uuid>,
+}
+
+/// Each person's hours a week against what's booked: appointments and the
+/// remaining estimates of their project tasks, spread over the tasks'
+/// dates. Over-booked weeks are flagged.
+#[utoipa::path(get, path = "/api/v1/projects/capacity", operation_id = "project_capacity", tag = "projects",
+    params(CapacityParams), responses((status = 200, body = huxley_servicedesk::capacity::Capacity)))]
+pub async fn capacity(
+    State(state): State<AppState>,
+    authed: Authed,
+    Query(p): Query<CapacityParams>,
+) -> ApiResult<Json<huxley_servicedesk::capacity::Capacity>> {
+    let scope = authed
+        .permission_scope(&state, permissions::PROJECT_READ, Some(MODULE))
+        .await?;
+    let from = match p.from.as_deref().filter(|s| !s.is_empty()) {
+        Some(d) => projects::parse_date(d, "from").map_err(map)?,
+        None => time::OffsetDateTime::now_utc().date(),
+    };
+    let mut tx = begin_scoped(&state.db, &scope).await.map_err(db_err)?;
+    let plan = huxley_servicedesk::capacity::plan(&mut tx, from, p.weeks.unwrap_or(6), p.team_id)
+        .await
+        .map_err(map)?;
+    tx.commit().await.map_err(db_err)?;
+    Ok(Json(plan))
 }

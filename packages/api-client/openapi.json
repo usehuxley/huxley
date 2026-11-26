@@ -11643,6 +11643,56 @@
 				}
 			}
 		},
+		"/api/v1/projects/capacity": {
+			"get": {
+				"tags": ["projects"],
+				"summary": "Each person's hours a week against what's booked: appointments and the\nremaining estimates of their project tasks, spread over the tasks'\ndates. Over-booked weeks are flagged.",
+				"operationId": "project_capacity",
+				"parameters": [
+					{
+						"name": "from",
+						"in": "query",
+						"description": "A day in the first week (`YYYY-MM-DD`; default this week).",
+						"required": false,
+						"schema": {
+							"type": "string"
+						}
+					},
+					{
+						"name": "weeks",
+						"in": "query",
+						"description": "How many weeks (default 6, at most 26).",
+						"required": false,
+						"schema": {
+							"type": "integer",
+							"format": "int32",
+							"minimum": 0
+						}
+					},
+					{
+						"name": "teamId",
+						"in": "query",
+						"description": "One team's members.",
+						"required": false,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Capacity"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
 		"/api/v1/projects/{id}": {
 			"get": {
 				"tags": ["projects"],
@@ -19085,6 +19135,16 @@
 						}
 					},
 					{
+						"name": "ticketId",
+						"in": "query",
+						"description": "A ticket (or project task) with requirements of its own.",
+						"required": false,
+						"schema": {
+							"type": ["string", "null"],
+							"format": "uuid"
+						}
+					},
+					{
 						"name": "at",
 						"in": "query",
 						"description": "When to check availability (RFC 3339; default now).",
@@ -22839,6 +22899,25 @@
 					}
 				},
 				"additionalProperties": false
+			},
+			"Capacity": {
+				"type": "object",
+				"required": ["weeks", "people"],
+				"properties": {
+					"people": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/PersonCapacity"
+						}
+					},
+					"weeks": {
+						"type": "array",
+						"items": {
+							"type": "string"
+						},
+						"description": "Each week's Monday, `YYYY-MM-DD`."
+					}
+				}
 			},
 			"CatalogBilling": {
 				"type": "string",
@@ -28342,6 +28421,35 @@
 					}
 				}
 			},
+			"PersonCapacity": {
+				"type": "object",
+				"required": ["userId", "name", "weeks", "unscheduledHours", "openTasks"],
+				"properties": {
+					"name": {
+						"type": "string"
+					},
+					"openTasks": {
+						"type": "integer",
+						"format": "int64",
+						"description": "Open project tasks assigned to them."
+					},
+					"unscheduledHours": {
+						"type": "number",
+						"format": "double",
+						"description": "Remaining estimates of open tasks without dates."
+					},
+					"userId": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"weeks": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/PersonWeek"
+						}
+					}
+				}
+			},
 			"PersonCertification": {
 				"type": "object",
 				"required": [
@@ -28460,6 +28568,34 @@
 					"userId": {
 						"type": "string",
 						"format": "uuid"
+					}
+				}
+			},
+			"PersonWeek": {
+				"type": "object",
+				"required": ["capacityHours", "appointmentHours", "projectHours", "bookedHours", "over"],
+				"properties": {
+					"appointmentHours": {
+						"type": "number",
+						"format": "double"
+					},
+					"bookedHours": {
+						"type": "number",
+						"format": "double"
+					},
+					"capacityHours": {
+						"type": "number",
+						"format": "double",
+						"description": "Hours they work that week (schedule, less approved time off)."
+					},
+					"over": {
+						"type": "boolean",
+						"description": "Booked beyond capacity."
+					},
+					"projectHours": {
+						"type": "number",
+						"format": "double",
+						"description": "Remaining estimates of their project tasks falling that week."
 					}
 				}
 			},
@@ -33420,6 +33556,22 @@
 				},
 				"additionalProperties": false
 			},
+			"TemplateSkill": {
+				"type": "object",
+				"description": "A skill a template task needs, at a level (1 learning … 4 expert).",
+				"required": ["skillId", "minLevel"],
+				"properties": {
+					"minLevel": {
+						"type": "integer",
+						"format": "int32"
+					},
+					"skillId": {
+						"type": "string",
+						"format": "uuid"
+					}
+				},
+				"additionalProperties": false
+			},
 			"TemplateTask": {
 				"type": "object",
 				"required": ["key", "title"],
@@ -33449,6 +33601,13 @@
 					"key": {
 						"type": "string",
 						"description": "Unique in the template: what `dependsOn` and assignments name."
+					},
+					"skills": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/TemplateSkill"
+						},
+						"description": "Skills it needs, which become the task's requirements."
 					},
 					"startOffsetDays": {
 						"type": ["integer", "null"],

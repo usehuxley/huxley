@@ -481,6 +481,8 @@ pub async fn insights(
 pub struct FitParams {
     pub queue_id: Option<Uuid>,
     pub ticket_type_id: Option<Uuid>,
+    /// A ticket (or project task) with requirements of its own.
+    pub ticket_id: Option<Uuid>,
     /// When to check availability (RFC 3339; default now).
     pub at: Option<String>,
 }
@@ -506,7 +508,7 @@ pub async fn fit(
             let work = requirements::Work {
                 queue: params.queue_id,
                 ticket_type: params.ticket_type_id,
-                ticket: None,
+                ticket: params.ticket_id,
             };
             requirements::fit(tx, work, None, Some(at)).await
         })

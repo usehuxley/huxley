@@ -701,6 +701,18 @@ async fn lay_out(
             },
         )
         .await?;
+        for s in &t.skills {
+            sqlx::query(
+                "INSERT INTO wf_requirements (id, target_type, target_id, skill_id, min_level) \
+                 SELECT $1, 'ticket', $2, id, $4 FROM wf_skills WHERE id = $3 ON CONFLICT DO NOTHING",
+            )
+            .bind(Uuid::now_v7())
+            .bind(ticket)
+            .bind(s.skill_id)
+            .bind(s.min_level)
+            .execute(&mut *conn)
+            .await?;
+        }
         made.insert(t.key.as_str(), ticket);
     }
     for (_, t) in structure.tasks().filter(|(_, t)| !t.depends_on.is_empty()) {

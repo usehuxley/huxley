@@ -4350,6 +4350,27 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
+	'/api/v1/projects/capacity': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/**
+		 * Each person's hours a week against what's booked: appointments and the
+		 *     remaining estimates of their project tasks, spread over the tasks'
+		 *     dates. Over-booked weeks are flagged.
+		 */
+		get: operations['project_capacity'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
 	'/api/v1/projects/{id}': {
 		parameters: {
 			query?: never;
@@ -8440,6 +8461,11 @@ export interface components {
 			 */
 			version?: number | null;
 		};
+		Capacity: {
+			people: components['schemas']['PersonCapacity'][];
+			/** @description Each week's Monday, `YYYY-MM-DD`. */
+			weeks: string[];
+		};
 		/**
 		 * @description How often it's charged.
 		 * @enum {string}
@@ -10773,6 +10799,22 @@ export interface components {
 			/** Format: uuid */
 			userId: string;
 		};
+		PersonCapacity: {
+			name: string;
+			/**
+			 * Format: int64
+			 * @description Open project tasks assigned to them.
+			 */
+			openTasks: number;
+			/**
+			 * Format: double
+			 * @description Remaining estimates of open tasks without dates.
+			 */
+			unscheduledHours: number;
+			/** Format: uuid */
+			userId: string;
+			weeks: components['schemas']['PersonWeek'][];
+		};
 		PersonCertification: {
 			/** Format: uuid */
 			certificationId: string;
@@ -10824,6 +10866,24 @@ export interface components {
 			skills: number;
 			/** Format: uuid */
 			userId: string;
+		};
+		PersonWeek: {
+			/** Format: double */
+			appointmentHours: number;
+			/** Format: double */
+			bookedHours: number;
+			/**
+			 * Format: double
+			 * @description Hours they work that week (schedule, less approved time off).
+			 */
+			capacityHours: number;
+			/** @description Booked beyond capacity. */
+			over: boolean;
+			/**
+			 * Format: double
+			 * @description Remaining estimates of their project tasks falling that week.
+			 */
+			projectHours: number;
 		};
 		Policy: {
 			description: string;
@@ -12790,6 +12850,13 @@ export interface components {
 			name: string;
 			tasks?: components['schemas']['TemplateTask'][];
 		};
+		/** @description A skill a template task needs, at a level (1 learning … 4 expert). */
+		TemplateSkill: {
+			/** Format: int32 */
+			minLevel: number;
+			/** Format: uuid */
+			skillId: string;
+		};
 		TemplateTask: {
 			clientVisible?: boolean;
 			/** @description Keys of tasks that must be done first. */
@@ -12804,6 +12871,8 @@ export interface components {
 			estimateHours?: number | null;
 			/** @description Unique in the template: what `dependsOn` and assignments name. */
 			key: string;
+			/** @description Skills it needs, which become the task's requirements. */
+			skills?: components['schemas']['TemplateSkill'][];
 			/**
 			 * Format: int32
 			 * @description Starts this many days after the project does.
@@ -22733,6 +22802,32 @@ export interface operations {
 			};
 		};
 	};
+	project_capacity: {
+		parameters: {
+			query?: {
+				/** @description A day in the first week (`YYYY-MM-DD`; default this week). */
+				from?: string;
+				/** @description How many weeks (default 6, at most 26). */
+				weeks?: number;
+				/** @description One team's members. */
+				teamId?: string;
+			};
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['Capacity'];
+				};
+			};
+		};
+	};
 	get_project: {
 		parameters: {
 			query?: never;
@@ -28266,6 +28361,8 @@ export interface operations {
 			query?: {
 				queueId?: string | null;
 				ticketTypeId?: string | null;
+				/** @description A ticket (or project task) with requirements of its own. */
+				ticketId?: string | null;
 				/** @description When to check availability (RFC 3339; default now). */
 				at?: string | null;
 			};

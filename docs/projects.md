@@ -36,6 +36,18 @@ The project's page shows:
 
 Each budget threshold (50, 75, 90 and 100% by default) raises `project.budget_threshold` once, when time logged on a task first reaches it. If the burn drops back under a threshold (time deleted, or a bigger budget), that threshold can fire again.
 
+## Capacity and who does what
+
+**Projects → Capacity** shows, for each person and week:
+
+- the hours they work: their schedule, less approved time off, or 40 hours a week without a schedule
+- what's booked: appointments, plus the remaining estimates of their open project tasks spread over each task's dates
+- weeks booked beyond capacity, flagged
+
+Tasks without dates are counted as **undated**. Filter by team, and page through the weeks.
+
+Template tasks can **need a skill** at a level, which becomes the task's requirement. For each unassigned task, the project page suggests up to three people who are qualified and available, with their skill match and free hours this week. Assign one with a click.
+
 ## Scope changes
 
 When the work grows (or shrinks), draft a **scope change** on the project: what changes, the hours it adds (negative to remove) and optionally its price. **Submit** sends it for approval, and you can **withdraw** it until it's decided.
