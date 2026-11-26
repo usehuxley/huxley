@@ -7,6 +7,7 @@
 pub mod accounts;
 pub mod branding;
 pub mod signin;
+pub mod sso;
 
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
@@ -31,6 +32,10 @@ pub enum PortalError {
     /// Too many wrong passwords: try again after this many seconds.
     #[error("too many attempts; try again in {0} seconds")]
     Locked(i64),
+    /// Signing in with an identity provider failed (a short reason, e.g.
+    /// `no_account`, `domain`, `provider`).
+    #[error("sign-in failed: {0}")]
+    SignIn(&'static str),
     #[error(transparent)]
     Db(#[from] huxley_db::DbError),
     #[error(transparent)]

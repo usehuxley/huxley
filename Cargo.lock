@@ -2494,17 +2494,25 @@ dependencies = [
 name = "huxley-portal"
 version = "0.1.0"
 dependencies = [
+ "axum",
+ "base64 0.23.1",
+ "chrono",
  "huxley-auth",
  "huxley-core",
  "huxley-crm",
+ "huxley-crypto",
  "huxley-db",
  "huxley-orgs",
+ "huxley-sso",
+ "openidconnect",
  "serde",
  "serde_json",
+ "sha2 0.11.1",
  "sqlx",
  "thiserror 2.0.21",
  "time",
  "tokio",
+ "url",
  "utoipa",
  "uuid",
 ]

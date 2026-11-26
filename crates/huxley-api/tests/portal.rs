@@ -603,3 +603,50 @@ async fn the_portal_wears_the_msps_brand_and_a_clients_own() {
         (&json!("Contoso Support"), &json!("#aa0000"))
     );
 }
+
+#[tokio::test]
+async fn identity_providers_are_kept_by_staff_and_only_return_to_this_portal() {
+    let Some(db) = isolated("portal_idp").await else {
+        return;
+    };
+    let s = setup(&db.pools).await;
+    let (status, provider, _) = s
+        .call(
+            &s.staff,
+            "POST",
+            &format!("/api/v1/orgs/{}/portal-identity-providers", s.acme),
+            json!({
+                "name": "Acme (Microsoft)", "issuerUrl": "https://login.microsoftonline.com/acme-tenant/v2.0",
+                "clientId": "app-1", "clientSecret": "shh", "emailDomains": ["acme.example"],
+            }),
+        )
+        .await;
+    assert_eq!(status, StatusCode::CREATED, "{provider}");
+    assert_eq!(provider["hasSecret"], true);
+    assert!(
+        !provider.to_string().contains("shh"),
+        "the secret is write-only"
+    );
+
+    // No provider for a domain: use a link.
+    let start = |email: &str, redirect: &str| json!({ "email": email, "redirect": redirect });
+    let (status, _, _) = s
+        .call(
+            "",
+            "POST",
+            "/api/portal/v1/auth/sso/start",
+            start("ada@elsewhere.example", "x"),
+        )
+        .await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+    // Codes only ever come back to this portal's callback page.
+    let (status, _, _) = s
+        .call(
+            "",
+            "POST",
+            "/api/portal/v1/auth/sso/start",
+            start("ada@acme.example", "https://evil.example/auth/sso/callback"),
+        )
+        .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+}

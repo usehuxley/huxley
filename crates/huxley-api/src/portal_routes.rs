@@ -52,6 +52,20 @@ pub(crate) fn map(e: PortalError) -> ApiError {
             ApiError::new(StatusCode::TOO_MANY_REQUESTS, "locked", "Too many attempts")
                 .with_detail(format!("Try again in {seconds} seconds."))
         }
+        PortalError::SignIn(reason) => ApiError::new(
+            StatusCode::UNAUTHORIZED,
+            "sso-failed",
+            "Signing in with your organization didn't work",
+        )
+        .with_detail(match reason {
+            "no_account" => {
+                "You don't have access to this portal yet. Ask your IT contact or the service desk."
+                    .to_owned()
+            }
+            "domain" => "That account's email address isn't one this sign-in is for.".to_owned(),
+            "state" => "The sign-in took too long or was already used. Try again.".to_owned(),
+            other => format!("Try again, or use a sign-in link instead ({other})."),
+        }),
         PortalError::Db(e) => ApiError::internal(&e),
         PortalError::Sqlx(e) => ApiError::internal(&e),
     }
@@ -178,7 +192,7 @@ impl From<PortalPrincipal> for PortalMe {
     }
 }
 
-fn signed_in(state: &AppState, session: NewSession) -> Response {
+pub(crate) fn signed_in_response(state: &AppState, session: NewSession) -> Response {
     (
         [
             (
@@ -321,7 +335,7 @@ pub async fn redeem_link(
     .await
     .map_err(map)?;
     tx.commit().await.map_err(db_err)?;
-    Ok(signed_in(&state, session))
+    Ok(signed_in_response(&state, session))
 }
 
 #[derive(Debug, Deserialize, ToSchema)]
@@ -356,7 +370,7 @@ pub async fn password_sign_in(
     .await;
     // Failed attempts are counted even when signing in fails.
     tx.commit().await.map_err(db_err)?;
-    Ok(signed_in(&state, result.map_err(map)?))
+    Ok(signed_in_response(&state, result.map_err(map)?))
 }
 
 /// Signs out of the portal.

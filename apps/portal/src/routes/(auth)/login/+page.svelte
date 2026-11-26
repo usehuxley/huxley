@@ -18,7 +18,9 @@
 		<div class="mb-8 text-center">
 			<h1 class="text-xl font-semibold text-fg">Sign in to {data.branding.name}</h1>
 			<p class="mt-1 text-sm text-fg-muted">
-				{withPassword ? 'With your email and password.' : 'We’ll email you a secure sign-in link.'}
+				{withPassword
+					? 'With your email and password.'
+					: 'With your organization’s account, or a link we email you.'}
 			</p>
 		</div>
 
@@ -50,7 +52,7 @@
 					<Field label="Work email" for="email">
 						<Input id="email" name="email" type="email" autocomplete="email" required />
 					</Field>
-					<Button type="submit" variant="primary" block>Email me a sign-in link</Button>
+					<Button type="submit" variant="primary" block>Continue</Button>
 				</form>
 			{/if}
 			{#if message}<p class="mt-3 text-sm text-danger" role="alert">{message}</p>{/if}
@@ -61,7 +63,7 @@
 						class="text-accent hover:underline"
 						onclick={() => (withPassword = !withPassword)}
 					>
-						{withPassword ? 'Email me a link instead' : 'Sign in with a password'}
+						{withPassword ? 'Continue with your email instead' : 'Sign in with a password'}
 					</button>
 				</p>
 			{/if}

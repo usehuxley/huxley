@@ -6,6 +6,7 @@
 	import { Badge, Button, Card, Dialog, Field, Input, Select, Tabs, toast } from '@usehuxley/ui';
 	import VaultPanel from '#lib/vault/VaultPanel.svelte';
 	import AgreementsPanel from '#lib/agreements/AgreementsPanel.svelte';
+	import PortalPanel from '#lib/portal/PortalPanel.svelte';
 	import SiteForm from '#lib/crm/SiteForm.svelte';
 	import { RELATIONSHIPS, STATUSES, hoursSummary, label, statusTone } from '#lib/crm/labels.ts';
 	import type { PageProps } from './$types';
@@ -108,7 +109,8 @@
 			...(data.vault ? [{ value: 'vault', label: `Passwords (${data.vault.length})` }] : []),
 			...(data.agreements
 				? [{ value: 'agreements', label: `Agreements (${data.agreements.length})` }]
-				: [])
+				: []),
+			...(data.portal ? [{ value: 'portal', label: 'Portal' }] : [])
 		]}
 	>
 		{#snippet panel(value)}
@@ -373,6 +375,13 @@
 						</ul>
 					{/if}
 				</Card>
+			{/if}
+			{#if value === 'portal' && data.portal}
+				<PortalPanel
+					accounts={data.portal.accounts}
+					providers={data.portal.providers}
+					canManage={data.portal.canManage}
+				/>
 			{/if}
 			{#if value === 'agreements' && data.agreements}
 				<AgreementsPanel

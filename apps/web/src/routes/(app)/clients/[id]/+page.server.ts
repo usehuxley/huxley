@@ -59,6 +59,15 @@ export const load: PageServerLoad = async (event) => {
 				? client.GET('/api/v1/servicedesk/sla-policies')
 				: Promise.resolve({ data: undefined })
 		]);
+	const showPortal = has('portal', 'crm:read');
+	const [portalAccounts, portalProviders] = await Promise.all([
+		showPortal
+			? client.GET('/api/v1/orgs/{id}/portal-accounts', { params: { path: { id } } })
+			: Promise.resolve({ data: undefined }),
+		showPortal
+			? client.GET('/api/v1/orgs/{id}/portal-identity-providers', { params: { path: { id } } })
+			: Promise.resolve({ data: undefined })
+	]);
 	// This month's usage of each active agreement.
 	const usage = Object.fromEntries(
 		await Promise.all(
@@ -81,6 +90,13 @@ export const load: PageServerLoad = async (event) => {
 		vault: vault.data ?? null,
 		documents: documents.data?.items ?? null,
 		assets: assets.data?.items ?? null,
+		portal: showPortal
+			? {
+					accounts: portalAccounts.data ?? [],
+					providers: portalProviders.data ?? [],
+					canManage: user.grantedPermissions.includes('crm:manage')
+				}
+			: null,
 		agreements: agreements.data ?? null,
 		agreementUsage: usage,
 		workTypes: workTypes.data ?? [],
@@ -142,7 +158,47 @@ function vaultBody(form: FormData) {
 	};
 }
 
+type ProviderInput = components['schemas']['PortalIdentityProviderInput'];
+
 export const actions: Actions = {
+	providerSave: async (event) => {
+		const form = await event.request.formData();
+		const providerId = formString(form, 'providerId');
+		let body: ProviderInput;
+		try {
+			body = JSON.parse(formString(form, 'provider')) as ProviderInput;
+		} catch {
+			return fail(400, { portal: { message: 'The provider could not be read.' } });
+		}
+		const result = providerId
+			? await api(event).PUT('/api/v1/portal-identity-providers/{id}', {
+					params: { path: { id: providerId } },
+					body
+				})
+			: await api(event).POST('/api/v1/orgs/{id}/portal-identity-providers', {
+					params: { path: { id: event.params.id } },
+					body
+				});
+		if (!result.data) {
+			return fail(result.response.status, {
+				portal: { message: problemMessage(result.error, 'Could not save the provider.') }
+			});
+		}
+		return { portal: { done: 'Sign-in provider saved.' } };
+	},
+	providerDelete: async (event) => {
+		const providerId = formString(await event.request.formData(), 'providerId');
+		const { error: problem, response } = await api(event).DELETE(
+			'/api/v1/portal-identity-providers/{id}',
+			{ params: { path: { id: providerId } } }
+		);
+		if (response.status !== 204) {
+			return fail(response.status, {
+				portal: { message: problemMessage(problem, 'Could not delete it.') }
+			});
+		}
+		return { portal: { done: 'Sign-in provider deleted.' } };
+	},
 	agreementSave: async (event) => {
 		const form = await event.request.formData();
 		const agreementId = formString(form, 'agreementId');

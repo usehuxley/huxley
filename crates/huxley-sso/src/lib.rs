@@ -22,7 +22,8 @@ use huxley_auth::AuthError;
 use huxley_crypto::CryptoError;
 use huxley_db::DbError;
 
-pub use login::{SignIn, SsoService, StartedSignIn};
+pub use login::{Authorization, SignIn, SsoService, StartedSignIn, VerifiedIdentity};
+pub use openidconnect::RedirectUrl;
 pub use providers::{MfaTrust, Preset, Provider, ProviderButton, ProviderInput, RoleMapping};
 
 #[derive(Debug, thiserror::Error)]

@@ -57,6 +57,27 @@ pub struct SsoService {
     metadata: Arc<Mutex<HashMap<String, (Instant, CoreProviderMetadata)>>>,
 }
 
+/// A sign-in redirect and what to keep until its callback.
+#[derive(Debug, Clone)]
+pub struct Authorization {
+    pub url: String,
+    /// The state token (for a cookie binding the sign-in to the browser).
+    pub state: String,
+    pub state_hash: Vec<u8>,
+    pub nonce: String,
+    pub pkce_verifier: String,
+}
+
+/// Who a provider says signed in, after the ID token was verified.
+#[derive(Debug, Clone)]
+pub struct VerifiedIdentity {
+    pub subject: String,
+    pub email: Option<String>,
+    pub email_verified: Option<bool>,
+    pub name: Option<String>,
+    pub amr: Vec<String>,
+}
+
 /// What the ID token told us, after verification.
 struct Claims {
     subject: String,
@@ -148,28 +169,15 @@ impl SsoService {
         let mut tx = begin_scoped(self.auth.db(), &OrgScope::System).await?;
         let provider = providers::get_enabled_by_key(&mut tx, key).await?;
         tx.commit().await?;
-        let metadata = self.metadata(&provider.issuer_url).await?;
-        let client = CoreClient::from_provider_metadata(
-            metadata,
-            ClientId::new(provider.client_id.clone()),
-            None,
-        )
-        .set_redirect_uri(redirect);
-
-        let state = huxley_auth::token::generate(STATE_PREFIX);
-        let (pkce_challenge, pkce_verifier) = PkceCodeChallenge::new_random_sha256();
-        let state_secret = state.secret.clone();
-        let mut request = client
-            .authorize_url(
-                CoreAuthenticationFlow::AuthorizationCode,
-                move || CsrfToken::new(state_secret),
-                Nonce::new_random,
+        let auth = self
+            .authorize(
+                &provider.issuer_url,
+                &provider.client_id,
+                &provider.scopes,
+                redirect,
+                STATE_PREFIX,
             )
-            .set_pkce_challenge(pkce_challenge);
-        for scope in provider.scopes.iter().filter(|s| *s != "openid") {
-            request = request.add_scope(Scope::new(scope.clone()));
-        }
-        let (url, _, nonce) = request.url();
+            .await?;
 
         let mut tx = begin_scoped(self.auth.db(), &OrgScope::System).await?;
         sqlx::query("DELETE FROM oidc_login_states WHERE expires_at < now() - interval '1 hour'")
@@ -180,18 +188,56 @@ impl SsoService {
              VALUES ($1, $2, $3, $4, $5, $6, $7)",
         )
         .bind(huxley_core::new_id())
-        .bind(&state.hash)
+        .bind(&auth.state_hash)
         .bind(provider.id)
-        .bind(nonce.secret())
-        .bind(pkce_verifier.secret())
+        .bind(&auth.nonce)
+        .bind(&auth.pkce_verifier)
         .bind(next)
         .bind(OffsetDateTime::now_utc() + STATE_TTL)
         .execute(&mut *tx)
         .await?;
         tx.commit().await?;
         Ok(StartedSignIn {
-            authorization_url: url.to_string(),
+            authorization_url: auth.url,
+            state: auth.state,
+        })
+    }
+
+    /// Builds a sign-in redirect to the provider at `issuer` (discovered and
+    /// cached): a state token with `state_prefix`, a nonce and a PKCE
+    /// verifier for the caller to keep until the callback.
+    pub async fn authorize(
+        &self,
+        issuer: &str,
+        client_id: &str,
+        scopes: &[String],
+        redirect: RedirectUrl,
+        state_prefix: &str,
+    ) -> SsoResult<Authorization> {
+        let metadata = self.metadata(issuer).await?;
+        let client =
+            CoreClient::from_provider_metadata(metadata, ClientId::new(client_id.to_owned()), None)
+                .set_redirect_uri(redirect);
+        let state = huxley_auth::token::generate(state_prefix);
+        let (pkce_challenge, pkce_verifier) = PkceCodeChallenge::new_random_sha256();
+        let state_secret = state.secret.clone();
+        let mut request = client
+            .authorize_url(
+                CoreAuthenticationFlow::AuthorizationCode,
+                move || CsrfToken::new(state_secret),
+                Nonce::new_random,
+            )
+            .set_pkce_challenge(pkce_challenge);
+        for scope in scopes.iter().filter(|s| *s != "openid") {
+            request = request.add_scope(Scope::new(scope.clone()));
+        }
+        let (url, _, nonce) = request.url();
+        Ok(Authorization {
+            url: url.to_string(),
             state: state.secret,
+            state_hash: state.hash,
+            nonce: nonce.secret().clone(),
+            pkce_verifier: pkce_verifier.secret().clone(),
         })
     }
 
@@ -340,11 +386,67 @@ impl SsoService {
         nonce: &str,
         verifier: String,
     ) -> SsoResult<Claims> {
-        let metadata = self.metadata(&provider.issuer_url).await?;
         let secret = self.client_secret(provider).await?;
+        self.exchange(
+            &provider.issuer_url,
+            &provider.client_id,
+            secret,
+            redirect,
+            code,
+            nonce,
+            verifier,
+        )
+        .await
+    }
+
+    /// Exchanges an authorization code with the provider at `issuer` and
+    /// verifies the ID token (signature, issuer, audience, expiry, nonce).
+    #[allow(clippy::too_many_arguments)]
+    pub async fn verify_code(
+        &self,
+        issuer: &str,
+        client_id: &str,
+        client_secret: Option<String>,
+        redirect: RedirectUrl,
+        code: &str,
+        nonce: &str,
+        verifier: String,
+    ) -> SsoResult<VerifiedIdentity> {
+        let claims = self
+            .exchange(
+                issuer,
+                client_id,
+                client_secret.map(ClientSecret::new),
+                redirect,
+                code,
+                nonce,
+                verifier,
+            )
+            .await?;
+        Ok(VerifiedIdentity {
+            subject: claims.subject,
+            email: claims.email,
+            email_verified: claims.email_verified,
+            name: claims.name,
+            amr: claims.amr,
+        })
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    async fn exchange(
+        &self,
+        issuer: &str,
+        client_id: &str,
+        secret: Option<ClientSecret>,
+        redirect: RedirectUrl,
+        code: &str,
+        nonce: &str,
+        verifier: String,
+    ) -> SsoResult<Claims> {
+        let metadata = self.metadata(issuer).await?;
         let client = CoreClient::from_provider_metadata(
             metadata,
-            ClientId::new(provider.client_id.clone()),
+            ClientId::new(client_id.to_owned()),
             secret,
         )
         .set_redirect_uri(redirect);
