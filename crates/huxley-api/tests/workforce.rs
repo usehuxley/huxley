@@ -9,7 +9,7 @@ use huxley_api::{ApiConfig, AppState, router};
 use huxley_auth::{AuthConfig, AuthService};
 use huxley_core::{RequestContext, Via};
 use huxley_crypto::Crypto;
-use huxley_db::testing::{TestPools, ensure_root, pools, unique};
+use huxley_db::testing::{TestPools, ensure_root, isolated, pools, unique};
 use huxley_db::{OrgScope, begin_scoped};
 use serde_json::{Value, json};
 use tower::ServiceExt as _;
@@ -36,7 +36,10 @@ async fn org(pools: &TestPools, parent: Uuid, kind: huxley_orgs::OrgKind, name: 
 }
 
 async fn setup() -> Option<Setup> {
-    let pools = pools().await?;
+    Some(setup_with(pools().await?).await)
+}
+
+async fn setup_with(pools: TestPools) -> Setup {
     let crypto = || Crypto::new(pools.app.clone(), huxley_crypto::testing::key_ring());
     let auth = AuthService::new(pools.app.clone(), AuthConfig::default(), crypto());
     let config = ApiConfig {
@@ -56,12 +59,12 @@ async fn setup() -> Option<Setup> {
     tx.commit().await.unwrap();
     let provider = org(&pools, root, huxley_orgs::OrgKind::Provider, "Wf MSP").await;
     let owner = login(&app, &user(&pools, None).await.1).await;
-    Some(Setup {
+    Setup {
         pools,
         app,
         provider,
         owner,
-    })
+    }
 }
 
 /// A user, optionally with a built-in role at an organization.
@@ -877,4 +880,95 @@ async fn fit_puts_available_people_first() {
         )
         .await;
     assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+}
+
+#[tokio::test]
+async fn skill_gaps_show_thin_coverage_unqualified_work_and_expiring_certifications() {
+    // Insights look at everything: a database of its own.
+    let Some(db) = isolated("skill_gaps").await else {
+        return;
+    };
+    let s = setup_with(db.pools.clone()).await;
+    let cert = s
+        .ok(
+            &s.owner,
+            "POST",
+            "/api/v1/workforce/certifications",
+            Some(json!({ "vendor": "Cisco", "name": "CCNA" })),
+        )
+        .await;
+    let (ada, ada_email) = user(&s.pools, Some(("technician", s.provider))).await;
+    let (bob, _) = user(&s.pools, Some(("technician", s.provider))).await;
+    for (id, name) in [(ada, "Ada"), (bob, "Bob")] {
+        sqlx::query("UPDATE users SET display_name = $2 WHERE id = $1")
+            .bind(id)
+            .bind(name)
+            .execute(&s.pools.owner)
+            .await
+            .unwrap();
+    }
+    let queue = s
+        .ok(
+            &s.owner,
+            "POST",
+            "/api/v1/queues",
+            Some(json!({ "orgId": s.provider, "name": "Network", "userIds": [ada, bob] })),
+        )
+        .await;
+    let qid = queue["id"].as_str().unwrap();
+    s.ok(
+        &s.owner,
+        "PUT",
+        &format!("/api/v1/workforce/requirements/queue/{qid}"),
+        Some(json!([{ "certificationId": cert["id"] }])),
+    )
+    .await;
+    let soon = (time::OffsetDateTime::now_utc() + time::Duration::days(20))
+        .date()
+        .to_string();
+    s.ok(
+        &s.owner,
+        "POST",
+        &format!("/api/v1/workforce/people/{ada}/certifications"),
+        Some(json!({ "certificationId": cert["id"], "earnedOn": "2024-01-01", "expiresOn": soon })),
+    )
+    .await;
+    // Bob resolved one of the queue's tickets without the certification.
+    let ticket = s
+        .ok(&s.owner, "POST", "/api/v1/tickets", Some(json!({ "orgId": s.provider, "title": "Router", "queueId": qid, "assigneeUserId": bob })))
+        .await;
+    sqlx::query("UPDATE sd_tickets SET resolved_at = now() WHERE id = $1")
+        .bind(Uuid::parse_str(ticket["id"].as_str().unwrap()).unwrap())
+        .execute(&s.pools.owner)
+        .await
+        .unwrap();
+
+    let tech = login(&s.app, &ada_email).await;
+    assert_eq!(
+        s.call(&tech, "GET", "/api/v1/workforce/insights", None)
+            .await
+            .0,
+        StatusCode::FORBIDDEN
+    );
+    let found = s
+        .ok(&s.owner, "GET", "/api/v1/workforce/insights", None)
+        .await;
+    assert_eq!(found["coverage"][0]["qualified"], json!(["Ada"]), "{found}");
+    assert_eq!(found["coverage"][0]["pool"], 2);
+    assert_eq!(
+        (
+            &found["unqualified"][0]["tickets"],
+            &found["unqualified"][0]["people"]
+        ),
+        (&json!(1), &json!(["Bob"]))
+    );
+    assert_eq!(found["expiring"][0]["uncovers"], json!(["Network"]));
+    assert_eq!(
+        found["summary"],
+        json!([
+            format!("Ada's Cisco CCNA expires {soon}: nobody else is qualified for Network"),
+            "Only Ada meets everything Network requires",
+            "1 recent ticket was worked without Cisco CCNA (by Bob)",
+        ])
+    );
 }

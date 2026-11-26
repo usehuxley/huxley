@@ -111,6 +111,22 @@ Each person's entry lists what they're missing, and why they're unavailable (`aw
 
 **A ticket's own needs:** `PUT /api/v1/workforce/requirements/ticket/{ticketId}` sets what one ticket needs, on top of its queue's and type's. It needs `ticket:write` on the ticket. A skill asked for twice counts at the higher level. Dispatch and [recommendations](servicedesk.md#who-should-take-it) weigh them.
 
+## Skill gaps
+
+**People → Skill gaps** (`workforce:manage`) shows where your team is thin (ADR-049):
+
+- **What to act on:** a line per finding, most serious first:
+  1. work nobody is qualified for
+  2. certifications expiring soon that would leave work with nobody qualified
+  3. work only one person can do
+  4. recent tickets worked without their requirements
+  5. other certifications expiring in 60 days
+- **Who can do the work:** each queue and ticket type with requirements, and who meets all of them, out of its members (or everyone).
+- **Work done without its requirements:** of the last 200 tickets resolved in 90 days, which requirements their assignees didn't meet, and who.
+- **Certifications expiring in 60 days,** with the work nobody else is qualified for.
+
+The built-in **Skill gaps** pack sends administrators this summary every Monday when there's anything in it. The `core.workforce.insights` step (with `days`) gives workflows the same findings. `GET /api/v1/workforce/insights?days=…` returns them too.
+
 ## Permissions
 
 | Permission | Allows | Built-in roles |

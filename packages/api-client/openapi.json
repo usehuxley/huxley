@@ -17754,6 +17754,36 @@
 				}
 			}
 		},
+		"/api/v1/workforce/insights": {
+			"get": {
+				"tags": ["workforce"],
+				"summary": "Skill gaps: who meets each queue's and ticket type's requirements,\nrecent work done without them, and certifications about to expire with\nwhat they'd leave uncovered. Needs `workforce:manage`.",
+				"operationId": "skill_gap_insights",
+				"parameters": [
+					{
+						"name": "days",
+						"in": "query",
+						"description": "Certifications expiring within this many days (default 60).",
+						"required": false,
+						"schema": {
+							"type": "integer",
+							"format": "int32"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/SkillGapInsights"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
 		"/api/v1/workforce/matrix": {
 			"get": {
 				"tags": ["workforce"],
@@ -23519,6 +23549,32 @@
 					},
 					"label": {
 						"type": "string"
+					}
+				}
+			},
+			"ExpiringCertification": {
+				"type": "object",
+				"required": ["userId", "person", "certification", "expiresOn", "uncovers"],
+				"properties": {
+					"certification": {
+						"type": "string"
+					},
+					"expiresOn": {
+						"type": "string"
+					},
+					"person": {
+						"type": "string"
+					},
+					"uncovers": {
+						"type": "array",
+						"items": {
+							"type": "string"
+						},
+						"description": "Work nobody else is qualified for."
+					},
+					"userId": {
+						"type": "string",
+						"format": "uuid"
 					}
 				}
 			},
@@ -29798,6 +29854,73 @@
 					}
 				}
 			},
+			"SkillCoverage": {
+				"type": "object",
+				"required": ["targetType", "targetId", "name", "requirements", "qualified", "pool"],
+				"properties": {
+					"name": {
+						"type": "string"
+					},
+					"pool": {
+						"type": "integer",
+						"description": "Everyone who could be asked (its members, for a queue).",
+						"minimum": 0
+					},
+					"qualified": {
+						"type": "array",
+						"items": {
+							"type": "string"
+						},
+						"description": "Who meets every requirement."
+					},
+					"requirements": {
+						"type": "array",
+						"items": {
+							"type": "string"
+						},
+						"description": "What it requires, by name."
+					},
+					"targetId": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"targetType": {
+						"type": "string",
+						"description": "`queue` or `ticket_type`."
+					}
+				}
+			},
+			"SkillGapInsights": {
+				"type": "object",
+				"required": ["coverage", "unqualified", "expiring", "summary"],
+				"properties": {
+					"coverage": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/SkillCoverage"
+						}
+					},
+					"expiring": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/ExpiringCertification"
+						}
+					},
+					"summary": {
+						"type": "array",
+						"items": {
+							"type": "string"
+						},
+						"description": "The findings worth acting on, most serious first, in a line each."
+					},
+					"unqualified": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/UnqualifiedWork"
+						}
+					}
+				}
+			},
 			"SkillInput": {
 				"type": "object",
 				"required": ["name"],
@@ -32074,6 +32197,27 @@
 					}
 				],
 				"description": "Who vouches for a pack."
+			},
+			"UnqualifiedWork": {
+				"type": "object",
+				"required": ["requirement", "tickets", "people"],
+				"properties": {
+					"people": {
+						"type": "array",
+						"items": {
+							"type": "string"
+						}
+					},
+					"requirement": {
+						"type": "string",
+						"description": "The requirement that wasn't met."
+					},
+					"tickets": {
+						"type": "integer",
+						"format": "int64",
+						"description": "Resolved tickets (of the last 200, 90 days) worked without it."
+					}
+				}
 			},
 			"UnreadCount": {
 				"type": "object",

@@ -153,5 +153,18 @@ test.describe('workforce', () => {
 		await dialog.getByLabel(`Microsoft ${cert}`).check();
 		await dialog.getByRole('button', { name: 'Save' }).click();
 		await expect(queue.getByText(`Requires Microsoft ${cert}, ${skill} (level 3)`)).toBeVisible();
+
+		// Skill gaps show who can do it.
+		await page.goto('/people');
+		await page
+			.getByRole('navigation', { name: 'People views' })
+			.getByRole('link', { name: 'Skill gaps' })
+			.click();
+		await expect(page.getByRole('heading', { name: 'What to act on' })).toBeVisible();
+		const covered = page
+			.getByRole('table', { name: 'Coverage' })
+			.getByRole('row', { name: new RegExp(`Endpoints ${stamp}`) });
+		await expect(covered).toContainText(`Microsoft ${cert}`);
+		await expect(covered).toContainText(skill);
 	});
 });

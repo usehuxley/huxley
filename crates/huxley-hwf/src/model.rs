@@ -421,6 +421,9 @@ pub enum Step {
     /// Who should take a ticket, with reasons (the `servicedesk` module).
     #[serde(rename = "core.dispatch.recommend")]
     DispatchRecommend(DispatchRecommendStep),
+    /// Skill gaps now (the `workforce` module).
+    #[serde(rename = "core.workforce.insights")]
+    WorkforceInsights(WorkforceInsightsStep),
     /// Run a dataset → asset mapping rule (the `cmdb` module).
     #[serde(rename = "core.asset.sync")]
     AssetSync(AssetSyncStep),
@@ -782,6 +785,11 @@ step!(DispatchRecommendStep {
     pub recommend: DispatchRecommend,
 });
 
+step!(WorkforceInsightsStep {
+    #[serde(default, rename = "with")]
+    pub insights: WorkforceInsights,
+});
+
 step!(AssetSyncStep {
     #[serde(rename = "with")]
     pub sync: AssetSync,
@@ -869,6 +877,7 @@ impl Step {
             TriageOptions,
             TriageApply,
             DispatchRecommend,
+            WorkforceInsights,
             AssetSync,
             AssetWarranty,
             TicketEmailReply,
@@ -927,6 +936,7 @@ impl Step {
             Self::TriageOptions(_) => "core.triage.options",
             Self::TriageApply(_) => "core.triage.apply",
             Self::DispatchRecommend(_) => "core.dispatch.recommend",
+            Self::WorkforceInsights(_) => "core.workforce.insights",
             Self::AssetSync(_) => "core.asset.sync",
             Self::AssetWarranty(_) => "core.asset.set_warranty",
             Self::TicketCreate(_) => "core.ticket.create",
@@ -1474,6 +1484,19 @@ pub struct DispatchRecommend {
     pub ticket_id: Value,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub limit: Option<Value>,
+}
+
+/// Skill gaps now (`core.workforce.insights`): who meets each queue's and
+/// ticket type's requirements, recent tickets worked without them, and
+/// certifications expiring within `days` (default 60) with the work only
+/// their holder is qualified for. Output: `{ coverage, unqualified,
+/// expiring, summary }` (`summary`: a line per finding, most serious
+/// first).
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct WorkforceInsights {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub days: Option<Value>,
 }
 
 /// Mapping rules to run (`core.asset.sync`): a dataset's rows become

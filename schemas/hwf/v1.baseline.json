@@ -3543,6 +3543,69 @@
         },
         {
           "additionalProperties": false,
+          "description": "Skill gaps now (the `workforce` module).",
+          "properties": {
+            "continue_on_error": {
+              "description": "Record the error as the step's output and carry on.",
+              "type": "boolean"
+            },
+            "description": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "id": {
+              "description": "Unique in the workflow: lowercase letters, digits, underscores.\nOther steps read this step's output as `steps.<id>.output`.",
+              "type": "string"
+            },
+            "if": {
+              "description": "Skip the step unless this expression is true.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "name": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "retry": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/RetryPolicy"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "timeout": {
+              "description": "Fail the attempt after this long, e.g. `30s`.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "type": {
+              "const": "core.workforce.insights",
+              "type": "string"
+            },
+            "with": {
+              "$ref": "#/$defs/WorkforceInsights",
+              "default": {}
+            }
+          },
+          "required": [
+            "type",
+            "id"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
           "description": "Run a dataset → asset mapping rule (the `cmdb` module).",
           "properties": {
             "continue_on_error": {
@@ -4475,6 +4538,14 @@
           "type": "string"
         }
       ]
+    },
+    "WorkforceInsights": {
+      "additionalProperties": false,
+      "description": "Skill gaps now (`core.workforce.insights`): who meets each queue's and\nticket type's requirements, recent tickets worked without them, and\ncertifications expiring within `days` (default 60) with the work only\ntheir holder is qualified for. Output: `{ coverage, unqualified,\nexpiring, summary }` (`summary`: a line per finding, most serious\nfirst).",
+      "properties": {
+        "days": true
+      },
+      "type": "object"
     }
   },
   "$id": "https://usehuxley.io/schemas/hwf/v1.json",
