@@ -36,7 +36,8 @@ import {
 	highlightActiveLineGutter,
 	keymap,
 	lineNumbers,
-	placeholder as placeholderText
+	placeholder as placeholderText,
+	tooltips
 } from '@codemirror/view';
 import { tags as t } from '@lezer/highlight';
 import type { CodeCompletion, CodeEditorOptions, CodeLanguage } from './types';
@@ -232,6 +233,9 @@ export async function create(parent: HTMLElement, options: CodeEditorOptions): P
 		highlightSelectionMatches(),
 		syntaxHighlighting(highlight),
 		theme,
+		// Completion lists and lint messages on the page itself, so a card or
+		// panel that clips its overflow can't cut them off.
+		tooltips({ parent: document.body }),
 		EditorView.lineWrapping,
 		EditorView.contentAttributes.of({ 'aria-label': options.label }),
 		// Tab indents; Escape then Tab leaves the editor (CodeMirror's own rule).
@@ -262,6 +266,9 @@ export async function create(parent: HTMLElement, options: CodeEditorOptions): P
 		})
 	];
 	if (options.placeholder) extensions.push(placeholderText(options.placeholder));
+	// CodeMirror adds its styles as a <style> tag, which a strict CSP allows
+	// only with the page's nonce.
+	if (options.cspNonce) extensions.push(EditorView.cspNonce.of(options.cspNonce));
 	// Each language's own completion, plus the given words alongside it.
 	extensions.push(autocompletion());
 	const words = options.words;

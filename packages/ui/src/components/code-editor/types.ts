@@ -58,4 +58,6 @@ export type CodeEditorOptions = {
 	/** Every change; `byPerson` is false for changes the page made. */
 	onChange: (value: string, byPerson: boolean) => void;
 	onBlur?: () => void;
+	/** The page's CSP nonce for style elements, if it has one. */
+	cspNonce?: string;
 };

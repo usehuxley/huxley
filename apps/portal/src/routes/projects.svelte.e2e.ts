@@ -19,8 +19,9 @@ async function linkIn(to: string): Promise<string> {
 		for (let i = 0; i < 50; i++) {
 			const search = await api.get(`/api/v1/search?query=${encodeURIComponent(`to:"${to}"`)}`);
 			const { messages } = (await search.json()) as { messages: { ID: string }[] };
-			if (messages.length > 0) {
-				const message = (await (await api.get(`/api/v1/message/${messages[0].ID}`)).json()) as {
+			// Any of their messages: approval requests arrive too.
+			for (const { ID } of messages) {
+				const message = (await (await api.get(`/api/v1/message/${ID}`)).json()) as {
 					Text: string;
 				};
 				const match = message.Text.match(/https?:\/\/\S+\/auth\/link\?token=\S+/);

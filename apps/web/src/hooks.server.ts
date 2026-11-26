@@ -1,4 +1,5 @@
 import type { Handle } from '@sveltejs/kit/hooks';
+import { STYLE_NONCE_PLACEHOLDER, styleNonce, withStyleNonce } from '#lib/server/csp.ts';
 
 /**
  * Security headers for every response. The Content Security Policy is set by
@@ -14,7 +15,13 @@ const SECURITY_HEADERS: Record<string, string> = {
 };
 
 export const handle: Handle = async ({ event, resolve }) => {
-	const response = await resolve(event);
+	// A nonce for the code editor's style tags (see lib/server/csp.ts).
+	const nonce = styleNonce();
+	const response = await resolve(event, {
+		transformPageChunk: ({ html }) => html.replace(STYLE_NONCE_PLACEHOLDER, nonce)
+	});
+	const policy = response.headers.get('content-security-policy');
+	if (policy) response.headers.set('content-security-policy', withStyleNonce(policy, nonce));
 	for (const [name, value] of Object.entries(SECURITY_HEADERS)) {
 		if (!response.headers.has(name)) response.headers.set(name, value);
 	}

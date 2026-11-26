@@ -33,6 +33,11 @@ Scripts, expressions, workflow YAML and JSON Schemas were edited in plain text b
 - **Whose change:** the page's own updates (loading a saved version, say) are tagged, and `onchange` fires only for the person's edits, so pages can track unsaved changes.
 - **Non-breaking spaces:** browsers put them into editable text where a typed space would collapse (beside an auto-closed `}}`, say), and an expression with one doesn't parse. Typed and pasted ones become ordinary spaces.
 - **Theme:** colours come from the design tokens. Syntax colours are new tokens (`--hx-code-*`), each readable on its surface in light and dark.
+- **Content Security Policy:**
+  - CodeMirror adds its styles as `<style>` tags, which the web app's `style-src 'self'` blocks. Blocked, the editor still showed text, but its completion lists were parked off-screen.
+  - SvelteKit only puts a style nonce in the policy when it renders inline styles of its own, so the server hook adds one per response (`'nonce-…'` in `style-src`) and hands it to the page in a meta tag. The editor gives it to CodeMirror (`EditorView.cspNonce`).
+  - Only tags carrying it are allowed: no `'unsafe-inline'` for style elements.
+- **Tooltips** (completion lists, lint messages) render on the page body, so a card or panel that clips its overflow can't cut them off.
 - **Keyboard:** Tab indents. Escape then Tab leaves the editor (CodeMirror's rule), so the keyboard is never trapped.
 - **Height:** the height limit sits on CodeMirror's scroller, not its outer element. The outer element is a flex column, so limiting it alone let the gutters spill over the controls below.
 

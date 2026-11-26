@@ -56,6 +56,15 @@
 	}: Props = $props();
 
 	let host: HTMLDivElement;
+
+	/** The page's nonce for style elements (a meta tag the server fills in;
+	 * an unfilled placeholder means there's none). */
+	function styleNonce(): string | undefined {
+		const value = document.querySelector<HTMLMetaElement>(
+			'meta[name="huxley-style-nonce"]'
+		)?.content;
+		return value && !value.startsWith('%') ? value : undefined;
+	}
 	let editor: Controller | undefined = $state();
 
 	onMount(() => {
@@ -75,6 +84,7 @@
 				lint,
 				complete: complete ? (text, pos) => complete?.(text, pos) ?? null : undefined,
 				compact,
+				cspNonce: styleNonce(),
 				onBlur: () => onblur?.(),
 				onChange: (text, byPerson) => {
 					value = text;
@@ -127,15 +137,16 @@
 			class="w-full rounded-control border border-border-strong bg-surface p-3 font-mono text-xs text-fg"
 			bind:value></textarea>
 	{/if}
-	<div bind:this={host} class:hidden={!editor}></div>
+	<!-- Never display:none: CodeMirror measures itself (and decides whether
+	     it's on screen, for its tooltips) as it's created. -->
+	<div bind:this={host}></div>
 </div>
 
 <style>
 	/* The scroller, not the editor, carries the height: the editor is a
-	   flex column, so limiting it alone lets the gutters spill out. */
-	.code-editor :global(.cm-editor) {
-		overflow: hidden;
-	}
+	   flex column, so limiting it alone lets the gutters spill out. (No
+	   overflow clipping on the editor: CodeMirror reads that as the cursor
+	   being out of view and hides its tooltips.) */
 	.code-editor :global(.cm-scroller) {
 		max-height: calc(var(--lines) * 1.55em + 1rem);
 		min-height: 4.5em;
