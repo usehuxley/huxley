@@ -3,6 +3,7 @@
 
 pub mod health;
 pub mod nps;
+pub mod sentiment;
 pub mod surveys;
 
 /// The module's key in the registry.

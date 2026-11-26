@@ -465,6 +465,32 @@ export const STEPS: StepSpec[] = [
 		]
 	},
 	{
+		type: 'core.sentiment.record',
+		label: 'Record sentiment',
+		description:
+			'Store how a client message sounds, -2 (very negative) to 2 (very positive), with a reason: it feeds client health.',
+		group: 'Data',
+		module: 'cx',
+		template: {
+			with: {
+				ticket_id: '{{ trigger.subject_id }}',
+				score: '{{ steps.judge.output.score }}',
+				reason: '{{ steps.judge.output.reason }}'
+			}
+		},
+		fields: [
+			{ path: 'with.ticket_id', label: 'Ticket', kind: 'expression' },
+			{
+				path: 'with.note_id',
+				label: 'Message',
+				kind: 'expression',
+				hint: 'A note id; leave empty for the ticket’s description'
+			},
+			{ path: 'with.score', label: 'Score', kind: 'expression', hint: '-2 (very negative) to 2' },
+			{ path: 'with.reason', label: 'Reason', kind: 'expression' }
+		]
+	},
+	{
 		type: 'core.health.compute',
 		label: 'Score client health',
 		description:

@@ -1,0 +1,23 @@
+apiVersion: usehuxley.io/v1
+kind: Workflow
+metadata:
+  key: sentiment-declining
+  name: Tell account managers when a client's tone turns negative
+  description: >-
+    When a client's messages over the last 30 days are clearly more negative
+    than the 60 days before (found by the daily client health score), tells
+    everyone with the Administrator role there (or above), with examples.
+spec:
+  triggers:
+    - type: event
+      event: client.sentiment_declining
+  steps:
+    - id: tell
+      type: core.notify
+      with:
+        to: role:admin
+        title: "{{ inputs.name }}'s messages are turning negative ({{ inputs.previous }} → {{ inputs.recent }})"
+        message: "{{ inputs.explanations | join('; ') if inputs.explanations else 'No single message stands out.' }}"
+        url: "/clients/{{ trigger.subject_id }}"
+  outputs:
+    sent: "{{ steps.tell.output.sent }}"

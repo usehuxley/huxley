@@ -350,11 +350,37 @@ pub const HEALTH: Source = Source {
     ]),
 };
 
+pub const SENTIMENT: Source = Source {
+    key: Cow::Borrowed("sentiment"),
+    label: Cow::Borrowed("Client sentiment"),
+    description: Cow::Borrowed(
+        "The tone of each judged client message, -2 (very negative) to 2 (very positive).",
+    ),
+    module: Some("cx"),
+    permission: "ticket:read",
+    time_field: Cow::Borrowed("at"),
+    from: Cow::Borrowed("cx_sentiment s JOIN organizations o ON o.id = s.org_id"),
+    fields: Cow::Borrowed(&[
+        CLIENT,
+        f("score", "Sentiment", Kind::Number, "s.score"),
+        f("at", "Judged at", Kind::Time, "s.at"),
+    ]),
+};
+
 /// Dataset sources' keys: `dataset:<dataset key>`.
 pub const DATASET_PREFIX: &str = "dataset:";
 
 /// Every source, in display order.
-pub const SOURCES: &[Source] = &[TICKETS, TIME_ENTRIES, ASSETS, RUNS, CSAT, NPS, HEALTH];
+pub const SOURCES: &[Source] = &[
+    TICKETS,
+    TIME_ENTRIES,
+    ASSETS,
+    RUNS,
+    CSAT,
+    NPS,
+    HEALTH,
+    SENTIMENT,
+];
 
 pub fn source(key: &str) -> Option<&'static Source> {
     SOURCES.iter().find(|s| s.key == key)

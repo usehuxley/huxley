@@ -250,6 +250,7 @@ use crate::workforce_routes;
         crate::csat_routes::answer_my_nps,
         crate::csat_routes::contact_nps,
         crate::csat_routes::org_health,
+        crate::csat_routes::ticket_sentiment,
         crate::csat_routes::get_health_model,
         crate::csat_routes::set_health_model,
         crate::portal_ticket_routes::rate_ticket,

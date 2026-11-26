@@ -5385,6 +5385,23 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
+	'/api/v1/tickets/{id}/sentiment': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** A ticket's judged client messages (the AI sentiment pack), oldest first. */
+		get: operations['get_ticket_sentiment'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
 	'/api/v1/tickets/{id}/status': {
 		parameters: {
 			query?: never;
@@ -10837,6 +10854,21 @@ export interface components {
 		SelectOption: {
 			label: string;
 			value: string;
+		};
+		SentimentEntry: {
+			/** Format: date-time */
+			at: string;
+			/** Format: uuid */
+			id: string;
+			/** Format: uuid */
+			noteId?: string | null;
+			/** Format: uuid */
+			orgId: string;
+			reason: string;
+			/** Format: int32 */
+			score: number;
+			/** Format: uuid */
+			ticketId: string;
 		};
 		/** @description A base URL, possibly with `{variables}` that connections fill in. */
 		Server: {
@@ -23653,6 +23685,27 @@ export interface operations {
 				};
 				content: {
 					'application/json': components['schemas']['CannedResponse'][];
+				};
+			};
+		};
+	};
+	get_ticket_sentiment: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['SentimentEntry'][];
 				};
 			};
 		};

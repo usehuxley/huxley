@@ -1080,6 +1080,30 @@ export type Step =
 			 * Fail the attempt after this long, e.g. `30s`.
 			 */
 			timeout?: string | null;
+			type: 'core.sentiment.record';
+			with: SentimentRecord;
+	  }
+	| {
+			/**
+			 * Record the error as the step's output and carry on.
+			 */
+			continue_on_error?: boolean;
+			description?: string | null;
+			/**
+			 * Unique in the workflow: lowercase letters, digits, underscores.
+			 * Other steps read this step's output as `steps.<id>.output`.
+			 */
+			id: string;
+			/**
+			 * Skip the step unless this expression is true.
+			 */
+			if?: string | null;
+			name?: string | null;
+			retry?: RetryPolicy | null;
+			/**
+			 * Fail the attempt after this long, e.g. `30s`.
+			 */
+			timeout?: string | null;
 			type: 'core.asset.sync';
 			with: AssetSync;
 	  }
@@ -1925,11 +1949,30 @@ export interface NpsSend {
  * Client health for today (`core.health.compute`): each client company in
  * the run's organization and below gets a score, 0 to 100, from weighted
  * factors (satisfaction, NPS, SLA misses, reopened tickets, ticket volume,
- * renewals), with the reasons; those that dropped 10 points or more from
- * a week before emit `client.health_declining`. It takes nothing. Output:
- * `{ companies, declining: [{ org_id, name, score, previous, reasons }] }`.
+ * renewals, sentiment), with the reasons; those that dropped 10 points or
+ * more from a week before emit `client.health_declining`, and those whose
+ * messages turned negative emit `client.sentiment_declining` (at most
+ * weekly). It takes nothing. Output: `{ companies, declining: [{ org_id,
+ * name, score, previous, reasons }], sentiment_falling: [{ org_id, name,
+ * recent, previous, explanations }] }`.
  */
 export interface HealthCompute {}
+/**
+ * A client message's sentiment to record (`core.sentiment.record`): the
+ * ticket (in the run's organization or below), the note judged (none: the
+ * ticket's description), `score` from -2 (very negative) to 2 (very
+ * positive), and a one-line `reason`. Again for the same message replaces
+ * it. Output: `{ id, org_id, ticket_id, score }`.
+ *
+ * This interface was referenced by `HuxleyWorkflowFormatV1`'s JSON-Schema
+ * via the `definition` "SentimentRecord".
+ */
+export interface SentimentRecord {
+	note_id?: unknown;
+	reason: unknown;
+	score: unknown;
+	ticket_id: unknown;
+}
 /**
  * Mapping rules to run (`core.asset.sync`): a dataset's rows become
  * assets, matched, updated and created by the rule. Give `mapping_id` for
@@ -2068,9 +2111,12 @@ export interface CompanyRef1 {
  * Client health for today (`core.health.compute`): each client company in
  * the run's organization and below gets a score, 0 to 100, from weighted
  * factors (satisfaction, NPS, SLA misses, reopened tickets, ticket volume,
- * renewals), with the reasons; those that dropped 10 points or more from
- * a week before emit `client.health_declining`. It takes nothing. Output:
- * `{ companies, declining: [{ org_id, name, score, previous, reasons }] }`.
+ * renewals, sentiment), with the reasons; those that dropped 10 points or
+ * more from a week before emit `client.health_declining`, and those whose
+ * messages turned negative emit `client.sentiment_declining` (at most
+ * weekly). It takes nothing. Output: `{ companies, declining: [{ org_id,
+ * name, score, previous, reasons }], sentiment_falling: [{ org_id, name,
+ * recent, previous, explanations }] }`.
  *
  * This interface was referenced by `HuxleyWorkflowFormatV1`'s JSON-Schema
  * via the `definition` "HealthCompute".

@@ -35,6 +35,7 @@ pub fn portal_routes() -> Router<AppState> {
 pub fn staff_routes() -> Router<AppState> {
     Router::new()
         .route("/tickets/{id}/csat", get(ticket_csat))
+        .route("/tickets/{id}/sentiment", get(ticket_sentiment))
         .route("/contacts/{id}/nps", get(contact_nps))
         .route("/orgs/{id}/health", get(org_health))
         .route(
@@ -402,4 +403,35 @@ pub async fn set_health_model(
         .map_err(cx_error)?;
     tx.commit().await.map_err(db_err)?;
     Ok(Json(HealthModel { weights }))
+}
+
+/// A ticket's judged client messages (the AI sentiment pack), oldest first.
+#[utoipa::path(get, path = "/api/v1/tickets/{id}/sentiment", operation_id = "get_ticket_sentiment", tag = "servicedesk",
+    params(("id" = Uuid, Path)), responses((status = 200, body = Vec<huxley_cx::sentiment::Entry>)))]
+pub async fn ticket_sentiment(
+    State(state): State<AppState>,
+    authed: Authed,
+    Path(id): Path<Uuid>,
+) -> ApiResult<Json<Vec<huxley_cx::sentiment::Entry>>> {
+    let mut tx = begin_scoped(&state.db, &OrgScope::System)
+        .await
+        .map_err(db_err)?;
+    let org: Uuid = sqlx::query_scalar("SELECT org_id FROM sd_tickets WHERE id = $1")
+        .bind(id)
+        .fetch_optional(&mut *tx)
+        .await
+        .map_err(db_err)?
+        .ok_or_else(ApiError::not_found)?;
+    tx.commit().await.map_err(db_err)?;
+    authed
+        .require_at(&state, permissions::TICKET_READ, org)
+        .await?;
+    let mut tx = begin_scoped(&state.db, &OrgScope::System)
+        .await
+        .map_err(db_err)?;
+    let all = huxley_cx::sentiment::for_ticket(&mut tx, id)
+        .await
+        .map_err(cx_error)?;
+    tx.commit().await.map_err(db_err)?;
+    Ok(Json(all))
 }

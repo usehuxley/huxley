@@ -62,6 +62,7 @@ const ICONS: Record<string, typeof Globe> = {
 	'core.csat.survey': Smile,
 	'core.nps.send': Smile,
 	'core.health.compute': Smile,
+	'core.sentiment.record': Smile,
 	'core.asset.sync': Boxes,
 	'core.asset.set_warranty': Boxes,
 	'core.ticket.create': TicketPlus,

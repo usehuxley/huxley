@@ -34,7 +34,8 @@ export const load: PageServerLoad = async (event) => {
 		knowledge,
 		assets,
 		coverage,
-		csat
+		csat,
+		sentiment
 	] = await Promise.all([
 		assignees(event),
 		client.GET('/api/v1/orgs/{id}/contacts', {
@@ -62,6 +63,9 @@ export const load: PageServerLoad = async (event) => {
 			: Promise.resolve({ data: undefined }),
 		user.activeModules.includes('cx')
 			? client.GET('/api/v1/tickets/{id}/csat', path)
+			: Promise.resolve({ data: undefined }),
+		user.activeModules.includes('cx')
+			? client.GET('/api/v1/tickets/{id}/sentiment', path)
 			: Promise.resolve({ data: undefined })
 	]);
 	return {
@@ -81,7 +85,8 @@ export const load: PageServerLoad = async (event) => {
 		knowledge: knowledge.data ?? null,
 		assets: assets.data ?? null,
 		coverage: coverage.data ?? null,
-		csat: csat.data ?? null
+		csat: csat.data ?? null,
+		sentiment: sentiment.data ?? []
 	};
 };
 

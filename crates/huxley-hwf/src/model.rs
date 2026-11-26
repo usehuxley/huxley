@@ -409,6 +409,9 @@ pub enum Step {
     /// Score client companies' health for today (the `cx` module).
     #[serde(rename = "core.health.compute")]
     HealthCompute(HealthComputeStep),
+    /// Record a client message's sentiment (the `cx` module).
+    #[serde(rename = "core.sentiment.record")]
+    SentimentRecord(SentimentRecordStep),
     /// Run a dataset → asset mapping rule (the `cmdb` module).
     #[serde(rename = "core.asset.sync")]
     AssetSync(AssetSyncStep),
@@ -750,6 +753,11 @@ step!(HealthComputeStep {
     pub compute: HealthCompute,
 });
 
+step!(SentimentRecordStep {
+    #[serde(rename = "with")]
+    pub record: SentimentRecord,
+});
+
 step!(AssetSyncStep {
     #[serde(rename = "with")]
     pub sync: AssetSync,
@@ -833,6 +841,7 @@ impl Step {
             CsatSurvey,
             NpsSend,
             HealthCompute,
+            SentimentRecord,
             AssetSync,
             AssetWarranty,
             TicketEmailReply,
@@ -887,6 +896,7 @@ impl Step {
             Self::CsatSurvey(_) => "core.csat.survey",
             Self::NpsSend(_) => "core.nps.send",
             Self::HealthCompute(_) => "core.health.compute",
+            Self::SentimentRecord(_) => "core.sentiment.record",
             Self::AssetSync(_) => "core.asset.sync",
             Self::AssetWarranty(_) => "core.asset.set_warranty",
             Self::TicketCreate(_) => "core.ticket.create",
@@ -1356,12 +1366,30 @@ pub struct NpsSend {
 /// Client health for today (`core.health.compute`): each client company in
 /// the run's organization and below gets a score, 0 to 100, from weighted
 /// factors (satisfaction, NPS, SLA misses, reopened tickets, ticket volume,
-/// renewals), with the reasons; those that dropped 10 points or more from
-/// a week before emit `client.health_declining`. It takes nothing. Output:
-/// `{ companies, declining: [{ org_id, name, score, previous, reasons }] }`.
+/// renewals, sentiment), with the reasons; those that dropped 10 points or
+/// more from a week before emit `client.health_declining`, and those whose
+/// messages turned negative emit `client.sentiment_declining` (at most
+/// weekly). It takes nothing. Output: `{ companies, declining: [{ org_id,
+/// name, score, previous, reasons }], sentiment_falling: [{ org_id, name,
+/// recent, previous, explanations }] }`.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct HealthCompute {}
+
+/// A client message's sentiment to record (`core.sentiment.record`): the
+/// ticket (in the run's organization or below), the note judged (none: the
+/// ticket's description), `score` from -2 (very negative) to 2 (very
+/// positive), and a one-line `reason`. Again for the same message replaces
+/// it. Output: `{ id, org_id, ticket_id, score }`.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct SentimentRecord {
+    pub ticket_id: Value,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub note_id: Option<Value>,
+    pub score: Value,
+    pub reason: Value,
+}
 
 /// Mapping rules to run (`core.asset.sync`): a dataset's rows become
 /// assets, matched, updated and created by the rule. Give `mapping_id` for

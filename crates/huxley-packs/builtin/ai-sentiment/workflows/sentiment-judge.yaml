@@ -1,0 +1,56 @@
+apiVersion: usehuxley.io/v1
+kind: Workflow
+metadata:
+  key: sentiment-judge
+  name: Judge the tone of client messages
+  description: >-
+    When a client raises a ticket or replies (by email or in the portal),
+    asks the AI provider how the message sounds, -2 (very negative) to 2
+    (very positive), with a one-line reason, and records it.
+spec:
+  triggers:
+    - id: reply
+      type: event
+      event: ticket.note_added
+      filter: >-
+        {{ event.payload.change.kind == 'public'
+           and (event.payload.change.email is defined or event.payload.change.portal is defined) }}
+    - id: raised
+      type: event
+      event: ticket.created
+      filter: "{{ event.payload.actorId is none }}"
+  steps:
+    - id: ticket
+      type: core.ticket.get
+      with:
+        ticket_id: "{{ trigger.subject_id }}"
+        notes: true
+    - id: judge
+      type: ai.extract
+      with:
+        text: >-
+          {{ (steps.ticket.output.notes | selectattr('id', 'equalto', inputs.change.note) | first).body
+             if inputs.change is defined and inputs.change.note is defined
+             else steps.ticket.output.ticket.title ~ '\n\n' ~ (steps.ticket.output.ticket.description or '') }}
+        instructions: >-
+          You read a message a client sent to their IT provider's service desk.
+          Rate how the client feels: -2 very negative (angry, threatening to leave),
+          -1 negative (frustrated, disappointed), 0 neutral (a plain request),
+          1 positive, 2 very positive (thankful, delighted). Judge the client's
+          feelings, not how serious the technical problem is. Give a reason of at
+          most 15 words, without quoting personal details.
+        schema:
+          type: object
+          properties:
+            score: { type: integer, enum: [-2, -1, 0, 1, 2] }
+            reason: { type: string }
+          required: [score, reason]
+    - id: record
+      type: core.sentiment.record
+      with:
+        ticket_id: "{{ trigger.subject_id }}"
+        note_id: "{{ inputs.change.note if inputs.change is defined and inputs.change.note is defined else '' }}"
+        score: "{{ steps.judge.output.score }}"
+        reason: "{{ steps.judge.output.reason }}"
+  outputs:
+    score: "{{ steps.judge.output.score }}"

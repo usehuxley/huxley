@@ -8,6 +8,7 @@
 	const FACTORS: [string, string][] = [
 		['csat', 'Satisfaction surveys'],
 		['nps', 'Net promoter score'],
+		['sentiment', 'Client sentiment'],
 		['sla', 'SLA targets met'],
 		['reopens', 'Tickets staying resolved'],
 		['volume', 'Ticket volume'],
