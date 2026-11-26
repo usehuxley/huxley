@@ -220,6 +220,15 @@ pub struct ActionOption {
     pub inputs: Vec<String>,
     pub required: Vec<String>,
     pub deprecated: bool,
+    pub description: Option<String>,
+    /// The inputs' JSON Schema (asked for with `schemas`, for code generation).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(value_type = Option<Object>)]
+    pub input_schema: Option<Json>,
+    /// The output's JSON Schema, when known (with `schemas`).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(value_type = Option<Object>)]
+    pub output_schema: Option<Json>,
 }
 
 /// The actions workflows in `org_id` can call: those of the nearest
@@ -274,6 +283,9 @@ pub async fn available_actions(
                 inputs,
                 required,
                 deprecated: action.deprecated,
+                description: action.description,
+                input_schema: Some(action.input_schema),
+                output_schema: action.output_schema,
             });
         }
     }

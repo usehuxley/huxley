@@ -1,0 +1,3986 @@
+{
+  "$defs": {
+    "AiClassify": {
+      "additionalProperties": false,
+      "description": "Picking a label (`ai.classify`). Output: `{ label, model }`.",
+      "properties": {
+        "instructions": {
+          "description": "What the labels mean, or how to choose.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "labels": {
+          "description": "The labels to choose from (a list, or an expression giving one)."
+        },
+        "model": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "text": {
+          "description": "What to classify.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "text",
+        "labels"
+      ],
+      "type": "object"
+    },
+    "AiExtract": {
+      "additionalProperties": false,
+      "description": "Pulling out data (`ai.extract`). Output: the data, as the schema says.",
+      "properties": {
+        "instructions": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "model": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "schema": {
+          "description": "A JSON Schema (an object) of what to extract."
+        },
+        "text": {
+          "description": "What to extract from.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "text",
+        "schema"
+      ],
+      "type": "object"
+    },
+    "AiPrompt": {
+      "additionalProperties": false,
+      "description": "A prompt (`ai.prompt`). Output: `{ text, model }`.",
+      "properties": {
+        "max_tokens": true,
+        "model": {
+          "description": "Another model than the provider's (e.g. a faster one).",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "prompt": {
+          "type": "string"
+        },
+        "system": {
+          "description": "Instructions for the model.",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "prompt"
+      ],
+      "type": "object"
+    },
+    "AssetSync": {
+      "additionalProperties": false,
+      "description": "Mapping rules to run (`core.asset.sync`): a dataset's rows become\nassets, matched, updated and created by the rule. Give `mapping_id` for\none rule, or `dataset` (a dataset's key) for every rule on it that's on.\nRun it after the step that fills the dataset. Output: `{ rows, created,\nupdated, unchanged, skipped, problems: [{ row, reason }] }`, summed over\nthe rules, plus `mappings` (how many ran) given `dataset`.",
+      "properties": {
+        "dataset": true,
+        "mapping_id": true
+      },
+      "type": "object"
+    },
+    "AssetWarranty": {
+      "additionalProperties": false,
+      "description": "A warranty to record (`core.asset.set_warranty`) for an asset at the\nrun's organization or below, as found by a lookup (`source`, e.g.\n`dell`): added, or updated if the lookup recorded one with the same\n`reference`. Dates are `YYYY-MM-DD`; `kind` is `manufacturer` (the\ndefault), `extended`, `support` or `other`. Output: the warranty.",
+      "properties": {
+        "asset_id": true,
+        "ends_on": true,
+        "kind": true,
+        "notes": true,
+        "provider": true,
+        "reference": true,
+        "source": true,
+        "starts_on": true
+      },
+      "required": [
+        "asset_id",
+        "source",
+        "ends_on"
+      ],
+      "type": "object"
+    },
+    "Backoff": {
+      "oneOf": [
+        {
+          "enum": [
+            "fixed",
+            "exponential"
+          ],
+          "type": "string"
+        },
+        {
+          "const": "jitter",
+          "description": "Exponential with full jitter.",
+          "type": "string"
+        }
+      ]
+    },
+    "BodyType": {
+      "oneOf": [
+        {
+          "enum": [
+            "json"
+          ],
+          "type": "string"
+        },
+        {
+          "const": "form",
+          "description": "`application/x-www-form-urlencoded` from an object.",
+          "type": "string"
+        },
+        {
+          "const": "text",
+          "description": "A string, sent as is.",
+          "type": "string"
+        }
+      ]
+    },
+    "Branch": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "description": "Unique within the step.",
+          "type": "string"
+        },
+        "steps": {
+          "items": {
+            "$ref": "#/$defs/Step"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "id",
+        "steps"
+      ],
+      "type": "object"
+    },
+    "CallbackSend": {
+      "additionalProperties": false,
+      "description": "How a `wait_for_callback` step hands its URL over: an integration action\nor a plain HTTP request (set one).",
+      "properties": {
+        "action": {
+          "description": "`<integration key>/<action key>`, as in `integration.action`.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "connection": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "request": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HttpRequest"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Or an HTTP request, as in `http.request`."
+        },
+        "with": {
+          "description": "The action's inputs."
+        }
+      },
+      "type": "object"
+    },
+    "CompanyRef": {
+      "additionalProperties": false,
+      "description": "Which organization (`core.company.get`): `org_id`, default the run's.\nOutput: `{ company, sites }`.",
+      "properties": {
+        "org_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "CompanyUpdate": {
+      "additionalProperties": false,
+      "description": "Company details to change (`core.company.update`); fields left out stay\nas they are. Output: `{ company }`.",
+      "properties": {
+        "notes": true,
+        "org_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "phone": true,
+        "relationship": {
+          "description": "`client`, `vendor`, `partner` or `prospect`."
+        },
+        "status": {
+          "description": "`active`, `inactive`, `onboarding` or `offboarding`."
+        },
+        "website": true
+      },
+      "type": "object"
+    },
+    "ContactFind": {
+      "additionalProperties": false,
+      "description": "Contacts to find (`core.contact.find`): by `email`, by `external_id`\n(e.g. `{ entra: \"<object id>\" }`), or both. Among the run's organization\nand those below it, or `org_id` and those below it. Output:\n`{ contacts, total }`.",
+      "properties": {
+        "email": true,
+        "external_id": {
+          "description": "One external id: `{ <system>: <id> }`."
+        },
+        "org_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "ContactUpsert": {
+      "additionalProperties": false,
+      "description": "A contact to create or update (`core.contact.upsert`). It's matched by\n`match` (`email`, the default, or an external id's system, e.g.\n`entra`) among the contacts of `org_id` (default: the run's\norganization); a match is updated with the fields given, otherwise a\ncontact is created there. Output: `{ contact, created }`.",
+      "properties": {
+        "email": true,
+        "external_ids": {
+          "description": "Identities elsewhere, merged into the contact's: `{ entra: \"…\" }`."
+        },
+        "first_name": true,
+        "job_title": {
+          "description": "At the contact's primary company."
+        },
+        "last_name": true,
+        "match": {
+          "description": "What identifies the contact: `email` or an external id's system."
+        },
+        "mobile": true,
+        "org_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "phone": true
+      },
+      "type": "object"
+    },
+    "DatasetQuery": {
+      "additionalProperties": false,
+      "description": "Rows to read (`dataset.query`). Output: `{ rows, total }`.",
+      "properties": {
+        "dataset": {
+          "description": "The dataset's key: the run's organization's, or the nearest above.",
+          "type": "string"
+        },
+        "filters": {
+          "description": "Column values rows must equal."
+        },
+        "limit": {
+          "description": "At most this many rows (default 100, at most 1000)."
+        },
+        "order_by": {
+          "description": "A column to sort by; `-name` sorts descending.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "org_id": {
+          "description": "Only this organization's rows (it must be the run's or below it).",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "dataset"
+      ],
+      "type": "object"
+    },
+    "DatasetUpsert": {
+      "additionalProperties": false,
+      "description": "Rows to write (`dataset.upsert`). Output: `{ written }`.",
+      "properties": {
+        "dataset": {
+          "type": "string"
+        },
+        "map": {
+          "description": "Build each row from an item of `rows`: column name → dot path into\nthe item (e.g. `upn: userPrincipalName`, `city: address.city`)."
+        },
+        "org_id": {
+          "description": "The organization the rows belong to (default: the run's).",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "replace": {
+          "description": "Replace all of that organization's rows (a full refresh)."
+        },
+        "rows": {
+          "description": "A list of rows (objects of column values), usually an expression."
+        }
+      },
+      "required": [
+        "dataset",
+        "rows"
+      ],
+      "type": "object"
+    },
+    "DocumentKind": {
+      "enum": [
+        "Workflow"
+      ],
+      "type": "string"
+    },
+    "EmailMessage": {
+      "additionalProperties": false,
+      "description": "An email to send (`core.email`).",
+      "properties": {
+        "html": {
+          "description": "An HTML body, sent alongside the text.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "subject": {
+          "type": "string"
+        },
+        "text": {
+          "description": "The plain-text body.",
+          "type": "string"
+        },
+        "to": {
+          "description": "An address or a list of them (at most 20); each gets their own copy."
+        }
+      },
+      "required": [
+        "to",
+        "subject",
+        "text"
+      ],
+      "type": "object"
+    },
+    "HmacAlgorithm": {
+      "enum": [
+        "sha256",
+        "sha512",
+        "sha1"
+      ],
+      "type": "string"
+    },
+    "HttpMethod": {
+      "enum": [
+        "GET",
+        "POST",
+        "PUT",
+        "PATCH",
+        "DELETE",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "type": "string"
+    },
+    "HttpRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "allow_error_status": {
+          "description": "Treat 4xx/5xx responses as success (they fail the step by default).",
+          "type": "boolean"
+        },
+        "body": {
+          "description": "Sent as JSON, unless `body_type` says otherwise."
+        },
+        "body_type": {
+          "$ref": "#/$defs/BodyType",
+          "default": "json"
+        },
+        "headers": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "type": "object"
+        },
+        "method": {
+          "$ref": "#/$defs/HttpMethod",
+          "default": "GET"
+        },
+        "query": {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        "url": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "url"
+      ],
+      "type": "object"
+    },
+    "Join": {
+      "description": "When a `parallel` step finishes.",
+      "oneOf": [
+        {
+          "const": "all",
+          "description": "When every branch has finished (default). Any failure fails the step.",
+          "type": "string"
+        },
+        {
+          "const": "any",
+          "description": "When the first branch succeeds; the others are cancelled.",
+          "type": "string"
+        }
+      ]
+    },
+    "KbEmbed": {
+      "additionalProperties": false,
+      "description": "Articles to embed (`core.kb.embed`): published knowledge base articles\nat the run's organization and below whose embedding is missing or stale\n(their published title or text changed, they moved organization, or the\nembeddings provider's model changed), up to `limit` (default 200), by\neach organization's embeddings provider. Does nothing when pgvector\nisn't installed. A provider that fails is reported without failing the\nstep. Output: `{ available, embedded, errors: [{ org_id, error }] }`.",
+      "properties": {
+        "limit": true
+      },
+      "type": "object"
+    },
+    "MailFetch": {
+      "additionalProperties": false,
+      "description": "Mail to fetch (`core.mail.fetch`): new messages from the enabled IMAP\nand Microsoft 365 mailboxes at the run's organization and below, or just `mailbox_id`, up\nto `limit` each (default 50). Each new message is kept and announced with\n`email.received`. A mailbox that can't be reached is reported (and shown\non it) without failing the step. Output: `{ mailboxes: [{ mailbox_id,\naddress, fetched, new } | { mailbox_id, address, error }] }`.",
+      "properties": {
+        "limit": true,
+        "mailbox_id": true
+      },
+      "type": "object"
+    },
+    "Metadata": {
+      "additionalProperties": false,
+      "properties": {
+        "description": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "key": {
+          "description": "Stable identifier, unique per owning organization: lowercase letters,\ndigits and hyphens.",
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "tags": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "key",
+        "name"
+      ],
+      "type": "object"
+    },
+    "Notification": {
+      "additionalProperties": false,
+      "properties": {
+        "exclude": {
+          "description": "People not to notify (user ids), e.g. whoever made the change."
+        },
+        "kind": {
+          "description": "The kind of notification, for people's channel preferences:\n`workflow.notification` (the default), `ticket.assigned`,\n`ticket.replied` or `ticket.sla`.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "message": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "title": {
+          "type": "string"
+        },
+        "to": {
+          "description": "Who: `user:<id>`, `team:<id>`, `role:<key>`, or a list of those."
+        },
+        "url": {
+          "description": "A link in the app.",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "to",
+        "title"
+      ],
+      "type": "object"
+    },
+    "PollOn": {
+      "enum": [
+        "new",
+        "new_or_changed"
+      ],
+      "type": "string"
+    },
+    "RetryPolicy": {
+      "additionalProperties": false,
+      "properties": {
+        "backoff": {
+          "$ref": "#/$defs/Backoff",
+          "default": "exponential"
+        },
+        "delay": {
+          "description": "Delay before the first retry (default `1s`).",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "max_attempts": {
+          "description": "Attempts in total, including the first (2 to 20).",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "max_delay": {
+          "description": "Longest delay between attempts (default `5m`).",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "on": {
+          "description": "Which failures to retry: HTTP statuses (`429`), classes (`5xx`), or\n`timeout` / `network`. Empty retries every failure.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "max_attempts"
+      ],
+      "type": "object"
+    },
+    "Settings": {
+      "additionalProperties": false,
+      "properties": {
+        "concurrency": {
+          "description": "At most this many runs of this workflow at once per organization.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "timeout": {
+          "description": "Fail the run if it takes longer than this, e.g. `1h`.",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "Spec": {
+      "additionalProperties": false,
+      "properties": {
+        "inputs": {
+          "description": "A JSON Schema (type `object`) for the run's inputs. It also drives the\ngenerated form for manual runs."
+        },
+        "on_error": {
+          "description": "Steps run when the run fails and nothing caught the error. `error` is\nin scope.",
+          "items": {
+            "$ref": "#/$defs/Step"
+          },
+          "type": "array"
+        },
+        "outputs": {
+          "additionalProperties": true,
+          "description": "The run's outputs, usually expressions over step outputs.",
+          "type": [
+            "object",
+            "null"
+          ]
+        },
+        "settings": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Settings"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "steps": {
+          "items": {
+            "$ref": "#/$defs/Step"
+          },
+          "type": "array"
+        },
+        "triggers": {
+          "items": {
+            "$ref": "#/$defs/Trigger"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "steps"
+      ],
+      "type": "object"
+    },
+    "Step": {
+      "description": "A step: the fields every step has, plus its type's own.\n\nControl-flow steps (`if`, `switch`, `foreach`, `parallel`, `try`) contain\nnested step lists; there are no free-form edges (ADR-020).",
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "description": "Evaluate an expression into a value.",
+          "properties": {
+            "continue_on_error": {
+              "description": "Record the error as the step's output and carry on.",
+              "type": "boolean"
+            },
+            "description": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "id": {
+              "description": "Unique in the workflow: lowercase letters, digits, underscores.\nOther steps read this step's output as `steps.<id>.output`.",
+              "type": "string"
+            },
+            "if": {
+              "description": "Skip the step unless this expression is true.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "name": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "output": {
+              "description": "Any JSON value; strings may be expressions."
+            },
+            "retry": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/RetryPolicy"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "timeout": {
+              "description": "Fail the attempt after this long, e.g. `30s`.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "type": {
+              "const": "transform",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "id",
+            "output"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Set run-scoped variables (`run.vars`).",
+          "properties": {
+            "continue_on_error": {
+              "description": "Record the error as the step's output and carry on.",
+              "type": "boolean"
+            },
+            "description": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "id": {
+              "description": "Unique in the workflow: lowercase letters, digits, underscores.\nOther steps read this step's output as `steps.<id>.output`.",
+              "type": "string"
+            },
+            "if": {
+              "description": "Skip the step unless this expression is true.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "name": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "retry": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/RetryPolicy"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "timeout": {
+              "description": "Fail the attempt after this long, e.g. `30s`.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "type": {
+              "const": "set_var",
+              "type": "string"
+            },
+            "vars": {
+              "additionalProperties": true,
+              "type": "object"
+            }
+          },
+          "required": [
+            "type",
+            "id",
+            "vars"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Make an HTTP request.",
+          "properties": {
+            "continue_on_error": {
+              "description": "Record the error as the step's output and carry on.",
+              "type": "boolean"
+            },
+            "description": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "id": {
+              "description": "Unique in the workflow: lowercase letters, digits, underscores.\nOther steps read this step's output as `steps.<id>.output`.",
+              "type": "string"
+            },
+            "if": {
+              "description": "Skip the step unless this expression is true.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "name": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "retry": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/RetryPolicy"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "timeout": {
+              "description": "Fail the attempt after this long, e.g. `30s`.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "type": {
+              "const": "http.request",
+              "type": "string"
+            },
+            "with": {
+              "$ref": "#/$defs/HttpRequest"
+            }
+          },
+          "required": [
+            "type",
+            "id",
+            "with"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Call an action of an imported integration through a connection.",
+          "properties": {
+            "action": {
+              "description": "`<integration key>/<action key>`, e.g. `tickets-api/createTicket`.",
+              "type": "string"
+            },
+            "all_pages": {
+              "description": "Follow every page (the action's pagination, set in the integration's\noverlay): the output is `{items, pages, truncated}`.",
+              "type": "boolean"
+            },
+            "connection": {
+              "description": "A connection key. Default: the nearest connection to the\nintegration that the run's organization can use.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "continue_on_error": {
+              "description": "Record the error as the step's output and carry on.",
+              "type": "boolean"
+            },
+            "description": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "id": {
+              "description": "Unique in the workflow: lowercase letters, digits, underscores.\nOther steps read this step's output as `steps.<id>.output`.",
+              "type": "string"
+            },
+            "if": {
+              "description": "Skip the step unless this expression is true.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "max_pages": {
+              "description": "The most pages followed with `all_pages` (default 20, at most 100).",
+              "format": "uint32",
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "name": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "retry": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/RetryPolicy"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "timeout": {
+              "description": "Fail the attempt after this long, e.g. `30s`.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "type": {
+              "const": "integration.action",
+              "type": "string"
+            },
+            "with": {
+              "description": "The action's inputs: its parameters by name, and `body`."
+            }
+          },
+          "required": [
+            "type",
+            "id",
+            "action"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Run `then` or `else` depending on a condition.",
+          "properties": {
+            "condition": {
+              "type": "string"
+            },
+            "continue_on_error": {
+              "description": "Record the error as the step's output and carry on.",
+              "type": "boolean"
+            },
+            "description": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "else": {
+              "items": {
+                "$ref": "#/$defs/Step"
+              },
+              "type": "array"
+            },
+            "id": {
+              "description": "Unique in the workflow: lowercase letters, digits, underscores.\nOther steps read this step's output as `steps.<id>.output`.",
+              "type": "string"
+            },
+            "if": {
+              "description": "Skip the step unless this expression is true.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "name": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "retry": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/RetryPolicy"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "then": {
+              "default": [],
+              "items": {
+                "$ref": "#/$defs/Step"
+              },
+              "type": "array"
+            },
+            "timeout": {
+              "description": "Fail the attempt after this long, e.g. `30s`.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "type": {
+              "const": "if",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "id",
+            "condition"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Run the first case whose `when` equals `value`.",
+          "properties": {
+            "cases": {
+              "items": {
+                "$ref": "#/$defs/SwitchCase"
+              },
+              "type": "array"
+            },
+            "continue_on_error": {
+              "description": "Record the error as the step's output and carry on.",
+              "type": "boolean"
+            },
+            "default": {
+              "items": {
+                "$ref": "#/$defs/Step"
+              },
+              "type": "array"
+            },
+            "description": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "id": {
+              "description": "Unique in the workflow: lowercase letters, digits, underscores.\nOther steps read this step's output as `steps.<id>.output`.",
+              "type": "string"
+            },
+            "if": {
+              "description": "Skip the step unless this expression is true.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "name": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "retry": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/RetryPolicy"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "timeout": {
+              "description": "Fail the attempt after this long, e.g. `30s`.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "type": {
+              "const": "switch",
+              "type": "string"
+            },
+            "value": {
+              "description": "The expression to match.",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "id",
+            "value",
+            "cases"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Run steps for each item of a list.",
+          "properties": {
+            "as": {
+              "description": "The loop variable's name (default `item`); `loop.index` is also set.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "concurrency": {
+              "description": "How many items run at once (default 1, at most 50).",
+              "format": "uint32",
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "continue_on_error": {
+              "description": "Record the error as the step's output and carry on.",
+              "type": "boolean"
+            },
+            "description": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "id": {
+              "description": "Unique in the workflow: lowercase letters, digits, underscores.\nOther steps read this step's output as `steps.<id>.output`.",
+              "type": "string"
+            },
+            "if": {
+              "description": "Skip the step unless this expression is true.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "items": {
+              "description": "An expression that evaluates to a list.",
+              "type": "string"
+            },
+            "name": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "retry": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/RetryPolicy"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "steps": {
+              "items": {
+                "$ref": "#/$defs/Step"
+              },
+              "type": "array"
+            },
+            "timeout": {
+              "description": "Fail the attempt after this long, e.g. `30s`.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "type": {
+              "const": "foreach",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "id",
+            "items",
+            "steps"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Run branches at the same time.",
+          "properties": {
+            "branches": {
+              "items": {
+                "$ref": "#/$defs/Branch"
+              },
+              "type": "array"
+            },
+            "continue_on_error": {
+              "description": "Record the error as the step's output and carry on.",
+              "type": "boolean"
+            },
+            "description": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "id": {
+              "description": "Unique in the workflow: lowercase letters, digits, underscores.\nOther steps read this step's output as `steps.<id>.output`.",
+              "type": "string"
+            },
+            "if": {
+              "description": "Skip the step unless this expression is true.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "join": {
+              "$ref": "#/$defs/Join",
+              "default": "all"
+            },
+            "name": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "retry": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/RetryPolicy"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "timeout": {
+              "description": "Fail the attempt after this long, e.g. `30s`.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "type": {
+              "const": "parallel",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "id",
+            "branches"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Handle errors from a block of steps.",
+          "properties": {
+            "catch": {
+              "description": "Run if a step in `steps` fails; `error` is in scope.",
+              "items": {
+                "$ref": "#/$defs/Step"
+              },
+              "type": "array"
+            },
+            "continue_on_error": {
+              "description": "Record the error as the step's output and carry on.",
+              "type": "boolean"
+            },
+            "description": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "finally": {
+              "description": "Run afterwards either way.",
+              "items": {
+                "$ref": "#/$defs/Step"
+              },
+              "type": "array"
+            },
+            "id": {
+              "description": "Unique in the workflow: lowercase letters, digits, underscores.\nOther steps read this step's output as `steps.<id>.output`.",
+              "type": "string"
+            },
+            "if": {
+              "description": "Skip the step unless this expression is true.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "name": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "retry": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/RetryPolicy"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "steps": {
+              "items": {
+                "$ref": "#/$defs/Step"
+              },
+              "type": "array"
+            },
+            "timeout": {
+              "description": "Fail the attempt after this long, e.g. `30s`.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "type": {
+              "const": "try",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "id",
+            "steps"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Pause for a duration or until a time.",
+          "properties": {
+            "continue_on_error": {
+              "description": "Record the error as the step's output and carry on.",
+              "type": "boolean"
+            },
+            "description": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "duration": {
+              "description": "e.g. `10m`. Set this or `until`.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "id": {
+              "description": "Unique in the workflow: lowercase letters, digits, underscores.\nOther steps read this step's output as `steps.<id>.output`.",
+              "type": "string"
+            },
+            "if": {
+              "description": "Skip the step unless this expression is true.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "name": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "retry": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/RetryPolicy"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "timeout": {
+              "description": "Fail the attempt after this long, e.g. `30s`.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "type": {
+              "const": "wait",
+              "type": "string"
+            },
+            "until": {
+              "description": "An RFC 3339 timestamp, usually an expression. Set this or `duration`.",
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "required": [
+            "type",
+            "id"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Run another workflow.",
+          "properties": {
+            "continue_on_error": {
+              "description": "Record the error as the step's output and carry on.",
+              "type": "boolean"
+            },
+            "description": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "id": {
+              "description": "Unique in the workflow: lowercase letters, digits, underscores.\nOther steps read this step's output as `steps.<id>.output`.",
+              "type": "string"
+            },
+            "if": {
+              "description": "Skip the step unless this expression is true.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "name": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "retry": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/RetryPolicy"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "timeout": {
+              "description": "Fail the attempt after this long, e.g. `30s`.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "type": {
+              "const": "subworkflow",
+              "type": "string"
+            },
+            "wait": {
+              "description": "Wait for it and use its outputs (default), or start it and carry on.",
+              "type": "boolean"
+            },
+            "with": {
+              "description": "Its inputs."
+            },
+            "workflow": {
+              "description": "The other workflow's key.",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "id",
+            "workflow"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Park until an external system calls a single-use URL.",
+          "properties": {
+            "continue_on_error": {
+              "description": "Record the error as the step's output and carry on.",
+              "type": "boolean"
+            },
+            "description": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "expires": {
+              "description": "How long the URL works, e.g. `2h` (default `24h`). After that the\nstep fails with `kind: timeout`.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "id": {
+              "description": "Unique in the workflow: lowercase letters, digits, underscores.\nOther steps read this step's output as `steps.<id>.output`.",
+              "type": "string"
+            },
+            "if": {
+              "description": "Skip the step unless this expression is true.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "name": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "retry": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/RetryPolicy"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "send": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/CallbackSend"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Tells the other system where to call back, once the URL exists:\n`callback.url` is in scope here."
+            },
+            "timeout": {
+              "description": "Fail the attempt after this long, e.g. `30s`.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "type": {
+              "const": "wait_for_callback",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "id"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Park until one of the approvers approves or rejects.",
+          "properties": {
+            "approvers": {
+              "description": "Who may decide: `user:<id>`, `team:<id>`, `role:<key>` (holders at the\nrun's organization), and client contacts in the portal:\n`contact:<id>` or `client_approvers` (the run's company's client\napprovers and admins). The first decision counts."
+            },
+            "continue_on_error": {
+              "description": "Record the error as the step's output and carry on.",
+              "type": "boolean"
+            },
+            "description": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "expires": {
+              "description": "How long approvers have, e.g. `3d` (default `7d`). After that the\nstep fails with `kind: timeout`.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "id": {
+              "description": "Unique in the workflow: lowercase letters, digits, underscores.\nOther steps read this step's output as `steps.<id>.output`.",
+              "type": "string"
+            },
+            "if": {
+              "description": "Skip the step unless this expression is true.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "message": {
+              "description": "More detail for approvers.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "name": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "retry": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/RetryPolicy"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "timeout": {
+              "description": "Fail the attempt after this long, e.g. `30s`.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "title": {
+              "description": "What's being decided; shown to approvers.",
+              "type": "string"
+            },
+            "type": {
+              "const": "approval",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "id",
+            "title",
+            "approvers"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Run a library script in a sandboxed runner.",
+          "properties": {
+            "connections": {
+              "additionalProperties": {
+                "type": "string"
+              },
+              "description": "Connections whose credentials the script gets as environment\nvariables: `NAME: <integration>` or `NAME: <integration>/<connection>`\ngives `NAME_URL` and `NAME_TOKEN` (OAuth 2.0, bearer), `NAME_KEY`\n(API key) or `NAME_USERNAME` and `NAME_PASSWORD` (basic), fetched\nwhen the script starts and scrubbed from its output and logs.",
+              "type": "object"
+            },
+            "continue_on_error": {
+              "description": "Record the error as the step's output and carry on.",
+              "type": "boolean"
+            },
+            "description": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "env": {
+              "additionalProperties": true,
+              "description": "Environment variables for the script (names in upper case), e.g.\nfrom variables or secrets. Secret values are scrubbed from its\noutput and logs.",
+              "type": "object"
+            },
+            "id": {
+              "description": "Unique in the workflow: lowercase letters, digits, underscores.\nOther steps read this step's output as `steps.<id>.output`.",
+              "type": "string"
+            },
+            "if": {
+              "description": "Skip the step unless this expression is true.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "name": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "retry": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/RetryPolicy"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "script": {
+              "description": "The library script's key (this organization's or the nearest one\nabove that has it).",
+              "type": "string"
+            },
+            "timeout": {
+              "description": "Fail the attempt after this long, e.g. `30s`.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "type": {
+              "const": "script",
+              "type": "string"
+            },
+            "with": {
+              "description": "Its parameters."
+            }
+          },
+          "required": [
+            "type",
+            "id",
+            "script"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "End the run successfully.",
+          "properties": {
+            "continue_on_error": {
+              "description": "Record the error as the step's output and carry on.",
+              "type": "boolean"
+            },
+            "description": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "id": {
+              "description": "Unique in the workflow: lowercase letters, digits, underscores.\nOther steps read this step's output as `steps.<id>.output`.",
+              "type": "string"
+            },
+            "if": {
+              "description": "Skip the step unless this expression is true.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "name": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "outputs": {
+              "additionalProperties": true,
+              "type": [
+                "object",
+                "null"
+              ]
+            },
+            "retry": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/RetryPolicy"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "timeout": {
+              "description": "Fail the attempt after this long, e.g. `30s`.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "type": {
+              "const": "return",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "id"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "End the run with an error.",
+          "properties": {
+            "code": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "continue_on_error": {
+              "description": "Record the error as the step's output and carry on.",
+              "type": "boolean"
+            },
+            "description": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "id": {
+              "description": "Unique in the workflow: lowercase letters, digits, underscores.\nOther steps read this step's output as `steps.<id>.output`.",
+              "type": "string"
+            },
+            "if": {
+              "description": "Skip the step unless this expression is true.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "message": {
+              "type": "string"
+            },
+            "name": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "retry": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/RetryPolicy"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "timeout": {
+              "description": "Fail the attempt after this long, e.g. `30s`.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "type": {
+              "const": "fail",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "id",
+            "message"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Send a notification to people.",
+          "properties": {
+            "continue_on_error": {
+              "description": "Record the error as the step's output and carry on.",
+              "type": "boolean"
+            },
+            "description": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "id": {
+              "description": "Unique in the workflow: lowercase letters, digits, underscores.\nOther steps read this step's output as `steps.<id>.output`.",
+              "type": "string"
+            },
+            "if": {
+              "description": "Skip the step unless this expression is true.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "name": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "retry": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/RetryPolicy"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "timeout": {
+              "description": "Fail the attempt after this long, e.g. `30s`.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "type": {
+              "const": "core.notify",
+              "type": "string"
+            },
+            "with": {
+              "$ref": "#/$defs/Notification"
+            }
+          },
+          "required": [
+            "type",
+            "id",
+            "with"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Send an email to any address, through the instance's mail server.",
+          "properties": {
+            "continue_on_error": {
+              "description": "Record the error as the step's output and carry on.",
+              "type": "boolean"
+            },
+            "description": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "id": {
+              "description": "Unique in the workflow: lowercase letters, digits, underscores.\nOther steps read this step's output as `steps.<id>.output`.",
+              "type": "string"
+            },
+            "if": {
+              "description": "Skip the step unless this expression is true.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "name": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "retry": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/RetryPolicy"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "timeout": {
+              "description": "Fail the attempt after this long, e.g. `30s`.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "type": {
+              "const": "core.email",
+              "type": "string"
+            },
+            "with": {
+              "$ref": "#/$defs/EmailMessage"
+            }
+          },
+          "required": [
+            "type",
+            "id",
+            "with"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Read rows of a dataset (the run's organization's and those below).",
+          "properties": {
+            "continue_on_error": {
+              "description": "Record the error as the step's output and carry on.",
+              "type": "boolean"
+            },
+            "description": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "id": {
+              "description": "Unique in the workflow: lowercase letters, digits, underscores.\nOther steps read this step's output as `steps.<id>.output`.",
+              "type": "string"
+            },
+            "if": {
+              "description": "Skip the step unless this expression is true.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "name": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "retry": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/RetryPolicy"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "timeout": {
+              "description": "Fail the attempt after this long, e.g. `30s`.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "type": {
+              "const": "dataset.query",
+              "type": "string"
+            },
+            "with": {
+              "$ref": "#/$defs/DatasetQuery"
+            }
+          },
+          "required": [
+            "type",
+            "id",
+            "with"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Write rows to a dataset.",
+          "properties": {
+            "continue_on_error": {
+              "description": "Record the error as the step's output and carry on.",
+              "type": "boolean"
+            },
+            "description": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "id": {
+              "description": "Unique in the workflow: lowercase letters, digits, underscores.\nOther steps read this step's output as `steps.<id>.output`.",
+              "type": "string"
+            },
+            "if": {
+              "description": "Skip the step unless this expression is true.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "name": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "retry": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/RetryPolicy"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "timeout": {
+              "description": "Fail the attempt after this long, e.g. `30s`.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "type": {
+              "const": "dataset.upsert",
+              "type": "string"
+            },
+            "with": {
+              "$ref": "#/$defs/DatasetUpsert"
+            }
+          },
+          "required": [
+            "type",
+            "id",
+            "with"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Find contacts by email or external id (the `crm` module).",
+          "properties": {
+            "continue_on_error": {
+              "description": "Record the error as the step's output and carry on.",
+              "type": "boolean"
+            },
+            "description": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "id": {
+              "description": "Unique in the workflow: lowercase letters, digits, underscores.\nOther steps read this step's output as `steps.<id>.output`.",
+              "type": "string"
+            },
+            "if": {
+              "description": "Skip the step unless this expression is true.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "name": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "retry": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/RetryPolicy"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "timeout": {
+              "description": "Fail the attempt after this long, e.g. `30s`.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "type": {
+              "const": "core.contact.find",
+              "type": "string"
+            },
+            "with": {
+              "$ref": "#/$defs/ContactFind"
+            }
+          },
+          "required": [
+            "type",
+            "id",
+            "with"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Create a contact, or update the one with the same email or external\nid (the `crm` module).",
+          "properties": {
+            "continue_on_error": {
+              "description": "Record the error as the step's output and carry on.",
+              "type": "boolean"
+            },
+            "description": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "id": {
+              "description": "Unique in the workflow: lowercase letters, digits, underscores.\nOther steps read this step's output as `steps.<id>.output`.",
+              "type": "string"
+            },
+            "if": {
+              "description": "Skip the step unless this expression is true.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "name": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "retry": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/RetryPolicy"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "timeout": {
+              "description": "Fail the attempt after this long, e.g. `30s`.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "type": {
+              "const": "core.contact.upsert",
+              "type": "string"
+            },
+            "with": {
+              "$ref": "#/$defs/ContactUpsert"
+            }
+          },
+          "required": [
+            "type",
+            "id",
+            "with"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Read an organization's company details and sites (the `crm` module).",
+          "properties": {
+            "continue_on_error": {
+              "description": "Record the error as the step's output and carry on.",
+              "type": "boolean"
+            },
+            "description": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "id": {
+              "description": "Unique in the workflow: lowercase letters, digits, underscores.\nOther steps read this step's output as `steps.<id>.output`.",
+              "type": "string"
+            },
+            "if": {
+              "description": "Skip the step unless this expression is true.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "name": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "retry": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/RetryPolicy"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "timeout": {
+              "description": "Fail the attempt after this long, e.g. `30s`.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "type": {
+              "const": "core.company.get",
+              "type": "string"
+            },
+            "with": {
+              "$ref": "#/$defs/CompanyRef",
+              "default": {}
+            }
+          },
+          "required": [
+            "type",
+            "id"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Change an organization's company details (the `crm` module).",
+          "properties": {
+            "continue_on_error": {
+              "description": "Record the error as the step's output and carry on.",
+              "type": "boolean"
+            },
+            "description": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "id": {
+              "description": "Unique in the workflow: lowercase letters, digits, underscores.\nOther steps read this step's output as `steps.<id>.output`.",
+              "type": "string"
+            },
+            "if": {
+              "description": "Skip the step unless this expression is true.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "name": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "retry": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/RetryPolicy"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "timeout": {
+              "description": "Fail the attempt after this long, e.g. `30s`.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "type": {
+              "const": "core.company.update",
+              "type": "string"
+            },
+            "with": {
+              "$ref": "#/$defs/CompanyUpdate"
+            }
+          },
+          "required": [
+            "type",
+            "id",
+            "with"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Turn a received email into ticket work: a new ticket, or a reply on\nthe ticket it belongs to (the `servicedesk` module).",
+          "properties": {
+            "continue_on_error": {
+              "description": "Record the error as the step's output and carry on.",
+              "type": "boolean"
+            },
+            "description": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "id": {
+              "description": "Unique in the workflow: lowercase letters, digits, underscores.\nOther steps read this step's output as `steps.<id>.output`.",
+              "type": "string"
+            },
+            "if": {
+              "description": "Skip the step unless this expression is true.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "name": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "retry": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/RetryPolicy"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "timeout": {
+              "description": "Fail the attempt after this long, e.g. `30s`.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "type": {
+              "const": "core.ticket.from_email",
+              "type": "string"
+            },
+            "with": {
+              "$ref": "#/$defs/TicketFromEmail"
+            }
+          },
+          "required": [
+            "type",
+            "id",
+            "with"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Open a ticket (the `servicedesk` module).",
+          "properties": {
+            "continue_on_error": {
+              "description": "Record the error as the step's output and carry on.",
+              "type": "boolean"
+            },
+            "description": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "id": {
+              "description": "Unique in the workflow: lowercase letters, digits, underscores.\nOther steps read this step's output as `steps.<id>.output`.",
+              "type": "string"
+            },
+            "if": {
+              "description": "Skip the step unless this expression is true.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "name": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "retry": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/RetryPolicy"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "timeout": {
+              "description": "Fail the attempt after this long, e.g. `30s`.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "type": {
+              "const": "core.ticket.create",
+              "type": "string"
+            },
+            "with": {
+              "$ref": "#/$defs/TicketCreate"
+            }
+          },
+          "required": [
+            "type",
+            "id",
+            "with"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Read a ticket, and optionally its notes (the `servicedesk` module).",
+          "properties": {
+            "continue_on_error": {
+              "description": "Record the error as the step's output and carry on.",
+              "type": "boolean"
+            },
+            "description": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "id": {
+              "description": "Unique in the workflow: lowercase letters, digits, underscores.\nOther steps read this step's output as `steps.<id>.output`.",
+              "type": "string"
+            },
+            "if": {
+              "description": "Skip the step unless this expression is true.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "name": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "retry": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/RetryPolicy"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "timeout": {
+              "description": "Fail the attempt after this long, e.g. `30s`.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "type": {
+              "const": "core.ticket.get",
+              "type": "string"
+            },
+            "with": {
+              "$ref": "#/$defs/TicketGet"
+            }
+          },
+          "required": [
+            "type",
+            "id",
+            "with"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Find tickets (the `servicedesk` module).",
+          "properties": {
+            "continue_on_error": {
+              "description": "Record the error as the step's output and carry on.",
+              "type": "boolean"
+            },
+            "description": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "id": {
+              "description": "Unique in the workflow: lowercase letters, digits, underscores.\nOther steps read this step's output as `steps.<id>.output`.",
+              "type": "string"
+            },
+            "if": {
+              "description": "Skip the step unless this expression is true.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "name": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "retry": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/RetryPolicy"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "timeout": {
+              "description": "Fail the attempt after this long, e.g. `30s`.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "type": {
+              "const": "core.ticket.find",
+              "type": "string"
+            },
+            "with": {
+              "$ref": "#/$defs/TicketFind"
+            }
+          },
+          "required": [
+            "type",
+            "id",
+            "with"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Change a ticket's fields or status (the `servicedesk` module).",
+          "properties": {
+            "continue_on_error": {
+              "description": "Record the error as the step's output and carry on.",
+              "type": "boolean"
+            },
+            "description": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "id": {
+              "description": "Unique in the workflow: lowercase letters, digits, underscores.\nOther steps read this step's output as `steps.<id>.output`.",
+              "type": "string"
+            },
+            "if": {
+              "description": "Skip the step unless this expression is true.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "name": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "retry": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/RetryPolicy"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "timeout": {
+              "description": "Fail the attempt after this long, e.g. `30s`.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "type": {
+              "const": "core.ticket.update",
+              "type": "string"
+            },
+            "with": {
+              "$ref": "#/$defs/TicketUpdate"
+            }
+          },
+          "required": [
+            "type",
+            "id",
+            "with"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Add a note to a ticket (the `servicedesk` module).",
+          "properties": {
+            "continue_on_error": {
+              "description": "Record the error as the step's output and carry on.",
+              "type": "boolean"
+            },
+            "description": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "id": {
+              "description": "Unique in the workflow: lowercase letters, digits, underscores.\nOther steps read this step's output as `steps.<id>.output`.",
+              "type": "string"
+            },
+            "if": {
+              "description": "Skip the step unless this expression is true.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "name": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "retry": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/RetryPolicy"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "timeout": {
+              "description": "Fail the attempt after this long, e.g. `30s`.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "type": {
+              "const": "core.ticket.note",
+              "type": "string"
+            },
+            "with": {
+              "$ref": "#/$defs/TicketNote"
+            }
+          },
+          "required": [
+            "type",
+            "id",
+            "with"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Assign a ticket by its queue's dispatch strategy (the `servicedesk`\nmodule).",
+          "properties": {
+            "continue_on_error": {
+              "description": "Record the error as the step's output and carry on.",
+              "type": "boolean"
+            },
+            "description": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "id": {
+              "description": "Unique in the workflow: lowercase letters, digits, underscores.\nOther steps read this step's output as `steps.<id>.output`.",
+              "type": "string"
+            },
+            "if": {
+              "description": "Skip the step unless this expression is true.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "name": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "retry": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/RetryPolicy"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "timeout": {
+              "description": "Fail the attempt after this long, e.g. `30s`.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "type": {
+              "const": "core.ticket.dispatch",
+              "type": "string"
+            },
+            "with": {
+              "$ref": "#/$defs/TicketDispatch"
+            }
+          },
+          "required": [
+            "type",
+            "id",
+            "with"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Fetch new mail from IMAP and Microsoft 365 mailboxes (the `servicedesk`\nmodule).",
+          "properties": {
+            "continue_on_error": {
+              "description": "Record the error as the step's output and carry on.",
+              "type": "boolean"
+            },
+            "description": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "id": {
+              "description": "Unique in the workflow: lowercase letters, digits, underscores.\nOther steps read this step's output as `steps.<id>.output`.",
+              "type": "string"
+            },
+            "if": {
+              "description": "Skip the step unless this expression is true.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "name": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "retry": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/RetryPolicy"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "timeout": {
+              "description": "Fail the attempt after this long, e.g. `30s`.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "type": {
+              "const": "core.mail.fetch",
+              "type": "string"
+            },
+            "with": {
+              "$ref": "#/$defs/MailFetch",
+              "default": {}
+            }
+          },
+          "required": [
+            "type",
+            "id"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Embed tickets for search by meaning (the `servicedesk` module).",
+          "properties": {
+            "continue_on_error": {
+              "description": "Record the error as the step's output and carry on.",
+              "type": "boolean"
+            },
+            "description": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "id": {
+              "description": "Unique in the workflow: lowercase letters, digits, underscores.\nOther steps read this step's output as `steps.<id>.output`.",
+              "type": "string"
+            },
+            "if": {
+              "description": "Skip the step unless this expression is true.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "name": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "retry": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/RetryPolicy"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "timeout": {
+              "description": "Fail the attempt after this long, e.g. `30s`.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "type": {
+              "const": "core.ticket.embed",
+              "type": "string"
+            },
+            "with": {
+              "$ref": "#/$defs/TicketEmbed",
+              "default": {}
+            }
+          },
+          "required": [
+            "type",
+            "id"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Embed published knowledge base articles for search by meaning (the\n`knowledge` module).",
+          "properties": {
+            "continue_on_error": {
+              "description": "Record the error as the step's output and carry on.",
+              "type": "boolean"
+            },
+            "description": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "id": {
+              "description": "Unique in the workflow: lowercase letters, digits, underscores.\nOther steps read this step's output as `steps.<id>.output`.",
+              "type": "string"
+            },
+            "if": {
+              "description": "Skip the step unless this expression is true.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "name": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "retry": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/RetryPolicy"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "timeout": {
+              "description": "Fail the attempt after this long, e.g. `30s`.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "type": {
+              "const": "core.kb.embed",
+              "type": "string"
+            },
+            "with": {
+              "$ref": "#/$defs/KbEmbed",
+              "default": {}
+            }
+          },
+          "required": [
+            "type",
+            "id"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Find timesheets to remind people about (the `workforce` module).",
+          "properties": {
+            "continue_on_error": {
+              "description": "Record the error as the step's output and carry on.",
+              "type": "boolean"
+            },
+            "description": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "id": {
+              "description": "Unique in the workflow: lowercase letters, digits, underscores.\nOther steps read this step's output as `steps.<id>.output`.",
+              "type": "string"
+            },
+            "if": {
+              "description": "Skip the step unless this expression is true.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "name": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "retry": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/RetryPolicy"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "timeout": {
+              "description": "Fail the attempt after this long, e.g. `30s`.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "type": {
+              "const": "core.timesheet.check",
+              "type": "string"
+            },
+            "with": {
+              "$ref": "#/$defs/TimesheetCheck"
+            }
+          },
+          "required": [
+            "type",
+            "id",
+            "with"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Run a dataset → asset mapping rule (the `cmdb` module).",
+          "properties": {
+            "continue_on_error": {
+              "description": "Record the error as the step's output and carry on.",
+              "type": "boolean"
+            },
+            "description": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "id": {
+              "description": "Unique in the workflow: lowercase letters, digits, underscores.\nOther steps read this step's output as `steps.<id>.output`.",
+              "type": "string"
+            },
+            "if": {
+              "description": "Skip the step unless this expression is true.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "name": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "retry": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/RetryPolicy"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "timeout": {
+              "description": "Fail the attempt after this long, e.g. `30s`.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "type": {
+              "const": "core.asset.sync",
+              "type": "string"
+            },
+            "with": {
+              "$ref": "#/$defs/AssetSync"
+            }
+          },
+          "required": [
+            "type",
+            "id",
+            "with"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Record a warranty a lookup found (the `cmdb` module).",
+          "properties": {
+            "continue_on_error": {
+              "description": "Record the error as the step's output and carry on.",
+              "type": "boolean"
+            },
+            "description": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "id": {
+              "description": "Unique in the workflow: lowercase letters, digits, underscores.\nOther steps read this step's output as `steps.<id>.output`.",
+              "type": "string"
+            },
+            "if": {
+              "description": "Skip the step unless this expression is true.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "name": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "retry": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/RetryPolicy"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "timeout": {
+              "description": "Fail the attempt after this long, e.g. `30s`.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "type": {
+              "const": "core.asset.set_warranty",
+              "type": "string"
+            },
+            "with": {
+              "$ref": "#/$defs/AssetWarranty"
+            }
+          },
+          "required": [
+            "type",
+            "id",
+            "with"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Email a public note to the ticket's requester (the `servicedesk`\nmodule).",
+          "properties": {
+            "continue_on_error": {
+              "description": "Record the error as the step's output and carry on.",
+              "type": "boolean"
+            },
+            "description": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "id": {
+              "description": "Unique in the workflow: lowercase letters, digits, underscores.\nOther steps read this step's output as `steps.<id>.output`.",
+              "type": "string"
+            },
+            "if": {
+              "description": "Skip the step unless this expression is true.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "name": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "retry": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/RetryPolicy"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "timeout": {
+              "description": "Fail the attempt after this long, e.g. `30s`.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "type": {
+              "const": "core.ticket.email_reply",
+              "type": "string"
+            },
+            "with": {
+              "$ref": "#/$defs/TicketEmailReply"
+            }
+          },
+          "required": [
+            "type",
+            "id",
+            "with"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Ask the organization's AI provider; the answer is text.",
+          "properties": {
+            "continue_on_error": {
+              "description": "Record the error as the step's output and carry on.",
+              "type": "boolean"
+            },
+            "description": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "id": {
+              "description": "Unique in the workflow: lowercase letters, digits, underscores.\nOther steps read this step's output as `steps.<id>.output`.",
+              "type": "string"
+            },
+            "if": {
+              "description": "Skip the step unless this expression is true.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "name": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "retry": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/RetryPolicy"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "timeout": {
+              "description": "Fail the attempt after this long, e.g. `30s`.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "type": {
+              "const": "ai.prompt",
+              "type": "string"
+            },
+            "with": {
+              "$ref": "#/$defs/AiPrompt"
+            }
+          },
+          "required": [
+            "type",
+            "id",
+            "with"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Have the AI pick one of a list of labels for some text.",
+          "properties": {
+            "continue_on_error": {
+              "description": "Record the error as the step's output and carry on.",
+              "type": "boolean"
+            },
+            "description": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "id": {
+              "description": "Unique in the workflow: lowercase letters, digits, underscores.\nOther steps read this step's output as `steps.<id>.output`.",
+              "type": "string"
+            },
+            "if": {
+              "description": "Skip the step unless this expression is true.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "name": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "retry": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/RetryPolicy"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "timeout": {
+              "description": "Fail the attempt after this long, e.g. `30s`.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "type": {
+              "const": "ai.classify",
+              "type": "string"
+            },
+            "with": {
+              "$ref": "#/$defs/AiClassify"
+            }
+          },
+          "required": [
+            "type",
+            "id",
+            "with"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Have the AI pull structured data (a JSON Schema) out of some text.",
+          "properties": {
+            "continue_on_error": {
+              "description": "Record the error as the step's output and carry on.",
+              "type": "boolean"
+            },
+            "description": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "id": {
+              "description": "Unique in the workflow: lowercase letters, digits, underscores.\nOther steps read this step's output as `steps.<id>.output`.",
+              "type": "string"
+            },
+            "if": {
+              "description": "Skip the step unless this expression is true.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "name": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "retry": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/RetryPolicy"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "timeout": {
+              "description": "Fail the attempt after this long, e.g. `30s`.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "type": {
+              "const": "ai.extract",
+              "type": "string"
+            },
+            "with": {
+              "$ref": "#/$defs/AiExtract"
+            }
+          },
+          "required": [
+            "type",
+            "id",
+            "with"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "SwitchCase": {
+      "additionalProperties": false,
+      "properties": {
+        "steps": {
+          "items": {
+            "$ref": "#/$defs/Step"
+          },
+          "type": "array"
+        },
+        "when": {
+          "description": "Compared for equality with the switch's `value`."
+        }
+      },
+      "required": [
+        "when",
+        "steps"
+      ],
+      "type": "object"
+    },
+    "TicketCreate": {
+      "additionalProperties": false,
+      "description": "A ticket to open (`core.ticket.create`): at `org_id` (default: the run's\norganization), with `title` and optionally `description`, `type` (a\nticket type's key, default `incident`), `impact` and `urgency` (1 high …\n3 low), `priority` (`p1`…`p4`, instead of the matrix), `queue_id`,\n`requester_id` (a contact there), `assignee_user_id`,\n`assignee_team_id` and `source` (default `workflow`). The SLA applies as\nusual. Output: `{ ticket }`.",
+      "properties": {
+        "assignee_team_id": true,
+        "assignee_user_id": true,
+        "description": true,
+        "impact": true,
+        "org_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "priority": true,
+        "queue_id": true,
+        "requester_id": true,
+        "source": true,
+        "title": true,
+        "type": true,
+        "urgency": true
+      },
+      "required": [
+        "title"
+      ],
+      "type": "object"
+    },
+    "TicketDispatch": {
+      "additionalProperties": false,
+      "description": "A ticket to assign (`core.ticket.dispatch`) by its queue's strategy\n(`round_robin`, `load` or `skills`), or `strategy` to use another. With\nthe `workforce` module on, people missing a required certification, away\nor outside their hours are skipped. A ticket that's already assigned is\nleft alone unless `reassign` is true. Output: `{ assigned, assignee,\nstrategy, reason, considered }`; `reason` says why nobody was chosen\n(`assigned`, `no_queue`, `manual`, `nobody_available`).",
+      "properties": {
+        "reassign": true,
+        "strategy": true,
+        "ticket_id": true
+      },
+      "required": [
+        "ticket_id"
+      ],
+      "type": "object"
+    },
+    "TicketEmailReply": {
+      "additionalProperties": false,
+      "description": "A public note to email to its ticket's requester\n(`core.ticket.email_reply`), from the mailbox the ticket's mail came to\n(else the nearest one at its organization or above). The subject carries\nthe ticket's `[HX#…]` token and the message continues the email thread,\nso the requester's answer comes back to the ticket. Notes that aren't\nfor the requester (internal, written by them, already sent) are skipped.\nOutput: `{ sent: true, to, message_id }` or `{ sent: false, reason }`.",
+      "properties": {
+        "note_id": {
+          "description": "The note's id (from `ticket.note_added`)."
+        }
+      },
+      "required": [
+        "note_id"
+      ],
+      "type": "object"
+    },
+    "TicketEmbed": {
+      "additionalProperties": false,
+      "description": "Tickets to embed (`core.ticket.embed`): those at the run's organization\nand below whose embedding is missing or stale, newest changes first, up\nto `limit` (default 200), by each organization's embeddings provider.\nDoes nothing when pgvector isn't installed (search by meaning is off). A\nprovider that fails is reported without failing the step. Output:\n`{ available, embedded, errors: [{ org_id, error }] }`.",
+      "properties": {
+        "limit": true
+      },
+      "type": "object"
+    },
+    "TicketFind": {
+      "additionalProperties": false,
+      "description": "Tickets to find (`core.ticket.find`) among the run's organization and\nthose below it (or `org_id`'s): by `queue_id`, `assignee` (a person's\nid, or `none`), `state` (`open`, the default, `resolved`, `closed` or\n`all`), `search` (title or number) and `priority` (e.g. `p1,p2`), most\nurgent first, at most\n`limit` (default 50). Output: `{ tickets, total }`.",
+      "properties": {
+        "assignee": true,
+        "limit": true,
+        "org_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "priority": {
+          "description": "Only these priorities, comma-separated: e.g. `p1,p2`."
+        },
+        "queue_id": true,
+        "search": true,
+        "state": true
+      },
+      "type": "object"
+    },
+    "TicketFromEmail": {
+      "additionalProperties": false,
+      "description": "A received email to turn into ticket work (`core.ticket.from_email`):\nskipped if it's automatic mail or a loop, added as a reply to the ticket\nit belongs to (by its `[HX#…]` subject token or the messages it answers;\na resolved ticket reopens), or opened as a new ticket for its sender, per\nits mailbox's rules. Its attachments go on the ticket. Output:\n`{ outcome, detail, ticket_id, created }`; `outcome` is `ticket_created`,\n`note_added`, `ticket_reopened`, `ignored_automatic`, `ignored_loop` or\n`ignored_unknown_sender`. Running it again for the same email changes\nnothing.",
+      "properties": {
+        "email_id": {
+          "description": "The email's id (from `email.received`)."
+        }
+      },
+      "required": [
+        "email_id"
+      ],
+      "type": "object"
+    },
+    "TicketGet": {
+      "additionalProperties": false,
+      "description": "A ticket to read (`core.ticket.get`), with its notes if `notes` is\ntrue. Output: `{ ticket, notes }`.",
+      "properties": {
+        "notes": true,
+        "ticket_id": true
+      },
+      "required": [
+        "ticket_id"
+      ],
+      "type": "object"
+    },
+    "TicketNote": {
+      "additionalProperties": false,
+      "description": "A note to add (`core.ticket.note`): `body`, and `kind`: `internal` (the\ndefault), `public` or `resolution`. Output: `{ note }`.",
+      "properties": {
+        "body": true,
+        "kind": true,
+        "ticket_id": true
+      },
+      "required": [
+        "ticket_id",
+        "body"
+      ],
+      "type": "object"
+    },
+    "TicketUpdate": {
+      "additionalProperties": false,
+      "description": "Changes to a ticket (`core.ticket.update`): any of `title`,\n`description`, `impact`, `urgency`, `priority` (or `auto`), and\n`queue_id`, `requester_id`, `assignee_user_id`, `assignee_team_id`\n(`null` clears); then `status` (a status's key), with `resolution` where\nthe status needs one. Applied to the ticket as it is now. Output:\n`{ ticket }`.",
+      "properties": {
+        "assignee_team_id": true,
+        "assignee_user_id": true,
+        "description": true,
+        "impact": true,
+        "priority": true,
+        "queue_id": true,
+        "requester_id": true,
+        "resolution": true,
+        "status": true,
+        "ticket_id": true,
+        "title": true,
+        "urgency": true
+      },
+      "required": [
+        "ticket_id"
+      ],
+      "type": "object"
+    },
+    "TimesheetCheck": {
+      "additionalProperties": false,
+      "description": "What to look for in timesheets (`core.timesheet.check`), for reminders:\n\n- `unsubmitted`: the last period that ended at least `days_late` days ago\n  (default 1), for people who log time or have a working schedule,\n  whose timesheet for it is open or rejected.\n- `under_logged`: a day (`date`, `YYYY-MM-DD`; default yesterday) people\n  logged less than their schedule expects, not on time off.\n- `missing_notes`: entries without notes in the current period.\n\nOutput: `{ check, people: [{ user_id, person, email, period_start,\nperiod_end, status, logged_minutes, expected_minutes, missing_notes,\ndays_late, leads: [user ids], recipient, lead_recipients }] }`, where\n`recipient` and `lead_recipients` are ready for `core.notify`'s `to`.",
+      "properties": {
+        "check": true,
+        "date": true,
+        "days_late": true
+      },
+      "required": [
+        "check"
+      ],
+      "type": "object"
+    },
+    "Trigger": {
+      "description": "What starts a run.",
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "description": "From the app, the API or the CLI.",
+          "properties": {
+            "id": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "type": {
+              "const": "manual",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "On a cron schedule or at an interval.",
+          "properties": {
+            "cron": {
+              "description": "Five-field cron expression. Set this or `interval`.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "id": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "inputs": {
+              "description": "Inputs for each scheduled run."
+            },
+            "interval": {
+              "description": "e.g. `15m`. Set this or `cron`.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "timezone": {
+              "description": "IANA time zone for `cron`; defaults to the organization's.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "type": {
+              "const": "schedule",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "An HTTP request to the workflow's webhook URL.",
+          "properties": {
+            "auth": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/WebhookAuth"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "id": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "response": {
+              "$ref": "#/$defs/WebhookResponse",
+              "default": "async"
+            },
+            "timeout": {
+              "description": "How long a `sync` webhook waits for the run, e.g. `30s` (at most 5m).",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "type": {
+              "const": "webhook",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "A domain event, such as `ticket.created`.",
+          "properties": {
+            "event": {
+              "description": "e.g. `ticket.created`.",
+              "type": "string"
+            },
+            "filter": {
+              "description": "Start a run only when this expression is true. `event` is in scope.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "id": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "type": {
+              "const": "event",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "event"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "New (or changed) items from an integration's list action, checked at\nan interval.",
+          "properties": {
+            "action": {
+              "description": "The list action: `<integration key>/<action key>`.",
+              "type": "string"
+            },
+            "connection": {
+              "description": "A connection key; default: the nearest one, as for action steps.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "id": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "interval": {
+              "description": "How often to check, e.g. `5m` (at least `1m`).",
+              "type": "string"
+            },
+            "item_id": {
+              "description": "The field that identifies an item (dotted path; default `id`).",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "items": {
+              "description": "Where the list is in the response, as a dotted path (e.g. `value`);\nby default the response is the list.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "on": {
+              "$ref": "#/$defs/PollOn",
+              "default": "new",
+              "description": "Start runs for new items only (default), or for changed ones too."
+            },
+            "type": {
+              "const": "poll",
+              "type": "string"
+            },
+            "with": {
+              "description": "The action's inputs, passed as they are (not expressions)."
+            }
+          },
+          "required": [
+            "type",
+            "action",
+            "interval"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "A form submission.",
+          "properties": {
+            "form": {
+              "description": "The form's key.",
+              "type": "string"
+            },
+            "id": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "type": {
+              "const": "form",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "form"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Exposed as a tool to MCP clients and the assistant.",
+          "properties": {
+            "description": {
+              "description": "What the tool does, for the model. Defaults to the workflow's description.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "id": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "type": {
+              "const": "mcp_tool",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "WebhookAuth": {
+      "description": "How webhook callers prove who they are. Secrets are expressions, usually\na secret organization variable: `{{ vars.webhook_secret }}`.",
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "description": "An HMAC of the body in a header.",
+          "properties": {
+            "algorithm": {
+              "$ref": "#/$defs/HmacAlgorithm",
+              "default": "sha256"
+            },
+            "header": {
+              "default": "X-Signature",
+              "type": "string"
+            },
+            "prefix": {
+              "description": "Text before the hex digest, e.g. `sha256=`.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "secret": {
+              "type": "string"
+            },
+            "timestamp_header": {
+              "description": "A signed timestamp header; requests older than 5 minutes are refused.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "type": {
+              "const": "hmac",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "secret"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "`Authorization: Bearer <token>`.",
+          "properties": {
+            "token": {
+              "type": "string"
+            },
+            "type": {
+              "const": "bearer",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "token"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "HTTP basic authentication.",
+          "properties": {
+            "password": {
+              "type": "string"
+            },
+            "type": {
+              "const": "basic",
+              "type": "string"
+            },
+            "username": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "username",
+            "password"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "WebhookResponse": {
+      "oneOf": [
+        {
+          "const": "async",
+          "description": "`202 Accepted` with the run id, immediately.",
+          "type": "string"
+        },
+        {
+          "const": "sync",
+          "description": "Wait for the run and respond with its outputs.",
+          "type": "string"
+        }
+      ]
+    }
+  },
+  "$id": "https://usehuxley.io/schemas/hwf/v1.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "A workflow document.",
+  "properties": {
+    "apiVersion": {
+      "description": "Always `usehuxley.io/v1`.",
+      "type": "string"
+    },
+    "kind": {
+      "$ref": "#/$defs/DocumentKind"
+    },
+    "metadata": {
+      "$ref": "#/$defs/Metadata"
+    },
+    "spec": {
+      "$ref": "#/$defs/Spec"
+    },
+    "ui": {
+      "description": "Canvas layout (node positions, notes). Ignored by the engine, so code\nedits and canvas edits don't conflict."
+    }
+  },
+  "required": [
+    "apiVersion",
+    "kind",
+    "metadata",
+    "spec"
+  ],
+  "title": "Huxley Workflow Format v1",
+  "type": "object"
+}

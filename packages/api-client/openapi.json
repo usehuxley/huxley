@@ -6852,6 +6852,15 @@
 							"type": "string",
 							"format": "uuid"
 						}
+					},
+					{
+						"name": "schemas",
+						"in": "query",
+						"description": "Include each action's input and output JSON Schemas (for\n`huxley workflows codegen`).",
+						"required": false,
+						"schema": {
+							"type": "boolean"
+						}
 					}
 				],
 				"responses": {
@@ -17594,8 +17603,15 @@
 					"deprecated": {
 						"type": "boolean"
 					},
+					"description": {
+						"type": ["string", "null"]
+					},
 					"group": {
 						"type": ["string", "null"]
+					},
+					"inputSchema": {
+						"type": ["object", "null"],
+						"description": "The inputs' JSON Schema (asked for with `schemas`, for code generation)."
 					},
 					"inputs": {
 						"type": "array",
@@ -17615,6 +17631,10 @@
 					},
 					"name": {
 						"type": "string"
+					},
+					"outputSchema": {
+						"type": ["object", "null"],
+						"description": "The output's JSON Schema, when known (with `schemas`)."
 					},
 					"path": {
 						"type": "string"

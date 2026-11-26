@@ -176,7 +176,7 @@ All are granted per organization and inherited by the organizations below. Techn
 
 ## Workflows as code
 
-`huxley workflows` keeps workflows in files (HWF YAML or JSON), for example in a Git repository, and syncs them with a Huxley server (design doc §6.7).
+`huxley workflows` keeps workflows in files (HWF YAML or JSON), for example in a Git repository, and syncs them with a Huxley server (design doc §6.7). To write them in TypeScript, see the [TypeScript SDK](sdk.md).
 
 ```sh
 export HUXLEY_SERVER=https://huxley.example.com

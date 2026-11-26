@@ -1,0 +1,67 @@
+# Build workflows written with @usehuxley/sdk and publish them to Huxley.
+# Copy to .github/workflows/huxley.yml. Repository settings:
+#   secret   HUXLEY_TOKEN   an API token scoped to workflow:read, workflow:write, workflow:publish
+#   variable HUXLEY_SERVER  e.g. https://huxley.example.com
+#   variable HUXLEY_ORG     the organization's name or id
+# Pull requests are built, validated, tested and diffed; pushes to main publish.
+name: Huxley workflows
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+env:
+  HUXLEY_SERVER: ${{ vars.HUXLEY_SERVER }}
+  HUXLEY_ORG: ${{ vars.HUXLEY_ORG }}
+  HUXLEY_TOKEN: ${{ secrets.HUXLEY_TOKEN }}
+  # Pin the version that matches your server.
+  HUXLEY_IMAGE: ghcr.io/usehuxley/huxley:latest
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+      - run: npm ci
+      # Type-check against the integration types (`huxley workflows codegen`, committed).
+      - run: npm run check
+      - name: Build
+        run: npx huxley-sdk build . --out dist
+      - name: Validate
+        run: docker run --rm -v "$PWD:/repo" -w /repo "$HUXLEY_IMAGE" workflows validate dist/
+      - name: Test
+        run: >-
+          docker run --rm -v "$PWD:/repo" -w /repo -e HUXLEY_SERVER -e HUXLEY_ORG -e HUXLEY_TOKEN
+          "$HUXLEY_IMAGE" workflows test dist/
+      - name: What would change
+        if: github.event_name == 'pull_request'
+        run: >-
+          docker run --rm -v "$PWD:/repo" -w /repo -e HUXLEY_SERVER -e HUXLEY_ORG -e HUXLEY_TOKEN
+          "$HUXLEY_IMAGE" workflows diff dist/ || true
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: workflows
+          path: dist/
+
+  publish:
+    if: github.event_name == 'push'
+    needs: check
+    runs-on: ubuntu-latest
+    concurrency: huxley-publish
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: workflows
+          path: dist/
+      - name: Publish
+        run: >-
+          docker run --rm -v "$PWD:/repo" -w /repo -e HUXLEY_SERVER -e HUXLEY_ORG -e HUXLEY_TOKEN
+          "$HUXLEY_IMAGE" workflows push dist/ --publish --notes "${GITHUB_SHA::12}: $(git log -1 --format=%s)"

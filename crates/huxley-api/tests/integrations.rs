@@ -500,6 +500,18 @@ async fn workflows_see_the_actions_of_the_nearest_integrations() {
     let keys: Vec<&str> = mine.iter().map(|a| a["action"].as_str().unwrap()).collect();
     assert_eq!(keys, vec!["widgets/listWidgets", "widgets/listWidgets_2"]);
     assert_eq!(mine[1]["required"], json!(["id"]));
+    assert!(
+        mine[1].get("inputSchema").is_none(),
+        "schemas only when asked for"
+    );
+    let (_, with_schemas) = call(&app, "GET", &format!("{uri}&schemas=true"), &owner, None).await;
+    let mine_with = ours(&with_schemas);
+    assert_eq!(
+        mine_with[1]["inputSchema"]["required"],
+        json!(["id"]),
+        "{}",
+        mine_with[1]
+    );
 
     // The client's own "widgets" wins over the MSP's.
     import(client, SPEC_V2).await;

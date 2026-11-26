@@ -95,6 +95,30 @@ pub enum WorkflowCommand {
         #[arg(long)]
         no_wait: bool,
     },
+    /// Write TypeScript for the organization's integration actions, for
+    /// `@usehuxley/sdk`: their input and output types, and a typed builder
+    /// per action.
+    Codegen {
+        #[command(flatten)]
+        server: Connection,
+        /// Where to write it.
+        #[arg(long, default_value = "integrations.ts")]
+        out: PathBuf,
+    },
+    /// Compile TypeScript workflows (`*.workflow.ts`, `*.form.ts`) to HWF
+    /// JSON with the project's `@usehuxley/sdk` (`huxley-sdk build`, via
+    /// npx). Needs Node 24.
+    Build {
+        /// The folder of sources.
+        #[arg(default_value = ".")]
+        src: PathBuf,
+        /// Where to write the workflows.
+        #[arg(long, default_value = "dist")]
+        out: PathBuf,
+        /// Where to write forms (left out without it).
+        #[arg(long)]
+        forms: Option<PathBuf>,
+    },
 }
 
 pub async fn run(command: WorkflowCommand) -> anyhow::Result<()> {
@@ -141,7 +165,56 @@ pub async fn run(command: WorkflowCommand) -> anyhow::Result<()> {
             let inputs = run_inputs(&inputs, inputs_file.as_deref())?;
             start(&Client::new(&server).await?, &key, inputs, draft, no_wait).await
         }
+        WorkflowCommand::Codegen { server, out } => {
+            codegen(&Client::new(&server).await?, &server, &out).await
+        }
+        WorkflowCommand::Build { src, out, forms } => build(&src, &out, forms.as_deref()),
     }
+}
+
+/// Writes the TypeScript for the organization's integration actions.
+async fn codegen(client: &Client, server: &Connection, out: &Path) -> anyhow::Result<()> {
+    let actions = client
+        .get(&format!(
+            "/api/v1/integrations/actions?orgId={}&schemas=true",
+            client.org_id
+        ))
+        .await?;
+    let actions = actions.as_array().cloned().unwrap_or_default();
+    let source = format!("{} ({})", client.base, server.org);
+    std::fs::write(out, crate::codegen::typescript(&actions, &source))
+        .with_context(|| format!("writing {}", out.display()))?;
+    let integrations: std::collections::BTreeSet<&str> = actions
+        .iter()
+        .filter_map(|a| a["integration"].as_str())
+        .collect();
+    println!(
+        "wrote {}: {} actions of {} integrations",
+        out.display(),
+        actions.len(),
+        integrations.len()
+    );
+    Ok(())
+}
+
+/// Runs the project's `huxley-sdk build`.
+fn build(src: &Path, out: &Path, forms: Option<&Path>) -> anyhow::Result<()> {
+    let mut command = std::process::Command::new("npx");
+    command
+        .args(["--no-install", "huxley-sdk", "build"])
+        .arg(src)
+        .arg("--out")
+        .arg(out);
+    if let Some(forms) = forms {
+        command.arg("--forms").arg(forms);
+    }
+    let status = command.status().context(
+        "couldn't run npx: install Node 24 and `npm install @usehuxley/sdk` in the project",
+    )?;
+    if !status.success() {
+        bail!("huxley-sdk build failed");
+    }
+    Ok(())
 }
 
 // ---- files ----

@@ -1,0 +1,82 @@
+[
+	{
+		"action": "msgraph/list_users",
+		"integration": "msgraph",
+		"integrationName": "Microsoft Graph",
+		"name": "List users",
+		"method": "GET",
+		"path": "/users",
+		"deprecated": false,
+		"description": "Users in the tenant, a page at a time.",
+		"inputSchema": {
+			"type": "object",
+			"properties": {
+				"$top": { "type": "integer", "description": "How many per page" },
+				"$filter": { "type": "string" }
+			}
+		},
+		"outputSchema": {
+			"type": "object",
+			"properties": {
+				"value": {
+					"type": "array",
+					"items": {
+						"type": "object",
+						"required": ["id"],
+						"properties": {
+							"id": { "type": "string" },
+							"displayName": { "type": ["string", "null"] },
+							"accountEnabled": { "type": "boolean" }
+						}
+					}
+				}
+			}
+		}
+	},
+	{
+		"action": "msgraph/update_user",
+		"integration": "msgraph",
+		"integrationName": "Microsoft Graph",
+		"name": "Update user",
+		"method": "PATCH",
+		"path": "/users/{id}",
+		"deprecated": false,
+		"inputSchema": {
+			"type": "object",
+			"required": ["id", "body"],
+			"properties": {
+				"id": { "type": "string" },
+				"body": {
+					"type": "object",
+					"properties": {
+						"accountEnabled": { "type": "boolean" },
+						"usageLocation": { "type": "string" }
+					}
+				}
+			}
+		}
+	},
+	{
+		"action": "cw-automate/run_command",
+		"integration": "cw-automate",
+		"integrationName": "ConnectWise Automate",
+		"name": "Run a command",
+		"method": "POST",
+		"path": "/Computers/{id}/CommandExecute",
+		"deprecated": true,
+		"inputSchema": {
+			"type": "object",
+			"required": ["id", "body"],
+			"properties": {
+				"id": { "type": "integer" },
+				"body": {
+					"type": "object",
+					"properties": {
+						"Command": { "enum": [2, 125] },
+						"Parameters": { "type": "array", "items": { "type": "string" } }
+					}
+				}
+			}
+		}
+	}
+]

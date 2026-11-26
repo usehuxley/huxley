@@ -1,0 +1,16 @@
+{
+	"name": "huxley-sdk-examples",
+	"private": true,
+	"type": "module",
+	"description": "Workflows written with @usehuxley/sdk: the built-in timesheet reminders, as a starting point",
+	"scripts": {
+		"build": "huxley-sdk build . --out dist",
+		"check": "tsc --noEmit"
+	},
+	"dependencies": {
+		"@usehuxley/sdk": "workspace:*"
+	},
+	"devDependencies": {
+		"typescript": "^6.0.3"
+	}
+}

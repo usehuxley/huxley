@@ -45,3 +45,4 @@ Decisions that shape Huxley. Add a new ADR by copying `0000-template.md` with th
 | [039](0039-agreement-coverage.md) | Agreements evaluate time on demand, one agreement per entry | Accepted |
 | [040](0040-portal-realm.md) | The client portal is a separate realm: its own accounts, sessions and API | Accepted |
 | [041](0041-semantic-data-layer.md) | A semantic data layer: a catalog of sources and a query spec compiled to SQL | Accepted |
+| [042](0042-hwf-v1-frozen.md) | HWF v1 is frozen; later changes only add | Accepted |

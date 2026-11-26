@@ -377,6 +377,10 @@ pub async fn versions(
 pub struct ActionsQuery {
     /// The organization a workflow belongs to.
     pub org_id: Uuid,
+    /// Include each action's input and output JSON Schemas (for
+    /// `huxley workflows codegen`).
+    #[serde(default)]
+    pub schemas: bool,
 }
 
 /// The actions workflows in an organization can call: those of the
@@ -396,9 +400,15 @@ pub async fn actions(
     let mut tx = begin_scoped(&state.db, &OrgScope::System)
         .await
         .map_err(db_err)?;
-    let options = huxley_integrations::usage::available_actions(&mut tx, query.org_id)
+    let mut options = huxley_integrations::usage::available_actions(&mut tx, query.org_id)
         .await
         .map_err(db_err)?;
+    if !query.schemas {
+        for o in &mut options {
+            o.input_schema = None;
+            o.output_schema = None;
+        }
+    }
     tx.commit().await.map_err(db_err)?;
     Ok(Json(options))
 }
