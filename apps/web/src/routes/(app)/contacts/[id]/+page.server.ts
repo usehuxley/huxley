@@ -13,20 +13,34 @@ export const load: PageServerLoad = async (event) => {
 	const contact = await client.GET('/api/v1/contacts/{id}', { params: { path: { id } } });
 	if (contact.response.status === 404) error(404, 'Contact not found.');
 	if (!contact.data) error(503, 'Could not load the contact.');
-	const [fields, sites, companies, actions] = await Promise.all([
+	const { user } = await event.parent();
+	const portalOn =
+		user.activeModules.includes('portal') && user.grantedPermissions.includes('crm:read');
+	const [fields, sites, companies, actions, portalAccounts] = await Promise.all([
 		client.GET('/api/v1/entities/{entity_type}/{id}/fields', {
 			params: { path: { entity_type: 'contact', id } }
 		}),
 		client.GET('/api/v1/orgs/{id}/sites', { params: { path: { id: contact.data.orgId } } }),
 		client.GET('/api/v1/companies', { params: { query: { providers: true } } }),
-		actionsFor(event, 'contact', contact.data.orgId)
+		actionsFor(event, 'contact', contact.data.orgId),
+		portalOn
+			? client.GET('/api/v1/orgs/{id}/portal-accounts', {
+					params: { path: { id: contact.data.orgId } }
+				})
+			: Promise.resolve({ data: undefined })
 	]);
 	return {
 		contact: contact.data,
 		fields: fields.data ?? [],
 		sites: sites.data ?? [],
 		companies: companies.data ?? [],
-		actions
+		actions,
+		portal: portalOn
+			? {
+					account: (portalAccounts.data ?? []).find((a) => a.contactId === id) ?? null,
+					canManage: user.grantedPermissions.includes('crm:manage')
+				}
+			: null
 	};
 };
 
@@ -38,7 +52,85 @@ function fieldErrors(problem: unknown): Record<string, string> {
 	return errors;
 }
 
+type PortalRole = 'client_user' | 'client_approver' | 'client_admin';
+type PortalStatus = 'invited' | 'active' | 'disabled';
+const ROLES: PortalRole[] = ['client_user', 'client_approver', 'client_admin'];
+const STATUSES: PortalStatus[] = ['invited', 'active', 'disabled'];
+
 export const actions: Actions = {
+	portalInvite: async (event) => {
+		const form = await event.request.formData();
+		const role = formString(form, 'role') as PortalRole;
+		if (!ROLES.includes(role)) return fail(400, { portal: { message: 'Choose a role.' } });
+		const {
+			data,
+			error: problem,
+			response
+		} = await api(event).POST('/api/v1/contacts/{id}/portal-access', {
+			params: { path: { id: event.params.id } },
+			body: { role }
+		});
+		if (!data) {
+			return fail(response.status, {
+				portal: { message: problemMessage(problem, 'Could not invite them.') }
+			});
+		}
+		return {
+			portal: {
+				done: data.invitationSent
+					? 'Invited: a sign-in link is on its way to them.'
+					: 'They have portal access. No email was sent: email or the portal’s address isn’t set up.'
+			}
+		};
+	},
+	portalUpdate: async (event) => {
+		const form = await event.request.formData();
+		const role = formString(form, 'role') as PortalRole;
+		const status = formString(form, 'status') as PortalStatus;
+		if (!ROLES.includes(role) || !STATUSES.includes(status)) {
+			return fail(400, { portal: { message: 'Choose a role.' } });
+		}
+		const {
+			data,
+			error: problem,
+			response
+		} = await api(event).PATCH('/api/v1/portal-accounts/{id}', {
+			params: { path: { id: formString(form, 'accountId') } },
+			body: { role, status, version: Number(formString(form, 'version')) || null }
+		});
+		if (!data) {
+			return fail(response.status, {
+				portal: { message: problemMessage(problem, 'Could not change it.') }
+			});
+		}
+		return {
+			portal: {
+				done: data.status === 'disabled' ? 'Portal access disabled.' : 'Portal access saved.'
+			}
+		};
+	},
+	portalResend: async (event) => {
+		const form = await event.request.formData();
+		const {
+			data,
+			error: problem,
+			response
+		} = await api(event).POST('/api/v1/portal-accounts/{id}/invitation', {
+			params: { path: { id: formString(form, 'accountId') } }
+		});
+		if (!data) {
+			return fail(response.status, {
+				portal: { message: problemMessage(problem, 'Could not send it.') }
+			});
+		}
+		return {
+			portal: {
+				done: data.invitationSent
+					? 'A new sign-in link is on its way.'
+					: 'No email was sent: email or the portal’s address isn’t set up.'
+			}
+		};
+	},
 	details: async (event) => {
 		const form = await event.request.formData();
 		const { error: problem, response } = await api(event).PUT('/api/v1/contacts/{id}', {

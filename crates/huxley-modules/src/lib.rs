@@ -96,10 +96,10 @@ pub const REGISTRY: &[Module] = &[
     Module {
         key: "portal",
         name: "Client portal",
-        description: "A branded portal for client contacts.",
+        description: "A portal where client contacts sign in to see and raise their support requests.",
         requires: &["crm"],
         phase: 7,
-        released: false,
+        released: true,
     },
     Module {
         key: "cx",

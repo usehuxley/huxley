@@ -2003,6 +2003,7 @@ dependencies = [
  "huxley-notify",
  "huxley-orgs",
  "huxley-packs",
+ "huxley-portal",
  "huxley-runners",
  "huxley-scripts",
  "huxley-servicedesk",
@@ -2487,6 +2488,25 @@ dependencies = [
  "thiserror 2.0.21",
  "utoipa",
  "zip",
+]
+
+[[package]]
+name = "huxley-portal"
+version = "0.1.0"
+dependencies = [
+ "huxley-auth",
+ "huxley-core",
+ "huxley-crm",
+ "huxley-db",
+ "huxley-orgs",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "thiserror 2.0.21",
+ "time",
+ "tokio",
+ "utoipa",
+ "uuid",
 ]
 
 [[package]]

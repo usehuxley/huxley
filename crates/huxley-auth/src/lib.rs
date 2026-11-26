@@ -502,6 +502,11 @@ impl AuthService {
         self
     }
 
+    /// The mailer (disabled unless email is set up).
+    pub fn mailer(&self) -> &huxley_email::Mailer {
+        &self.mailer
+    }
+
     pub fn config(&self) -> &AuthConfig {
         &self.config
     }

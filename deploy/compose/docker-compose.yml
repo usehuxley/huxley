@@ -22,6 +22,8 @@ x-huxley-env: &huxley-env
   HUXLEY_HTTP__TRUST_FORWARDED_FOR: "true"
   # Passkeys are bound to the staff app's host name.
   HUXLEY_AUTH__PUBLIC_URL: https://${HUXLEY_DOMAIN:-localhost}
+  # Where the client portal lives, for the sign-in links it emails.
+  HUXLEY_HTTP__PORTAL_PUBLIC_URL: https://${HUXLEY_PORTAL_DOMAIN:-portal.localhost}
   HUXLEY_EMAIL__SMTP_URL: ${HUXLEY_SMTP_URL:-}
   HUXLEY_EMAIL__FROM: ${HUXLEY_EMAIL_FROM:-Huxley <huxley@example.com>}
   # The script runner gateway (mutual TLS), reached by runners inside this

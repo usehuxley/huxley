@@ -1,0 +1,30 @@
+[package]
+name = "huxley-portal"
+description = "The client portal's realm for Huxley: contacts' accounts, sessions and sign-in (ADR-040)"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[dependencies]
+huxley-auth.workspace = true
+huxley-core.workspace = true
+huxley-db.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sqlx.workspace = true
+thiserror.workspace = true
+time.workspace = true
+utoipa.workspace = true
+uuid.workspace = true
+
+[dev-dependencies]
+huxley-db = { workspace = true, features = ["testing"] }
+huxley-orgs.workspace = true
+huxley-crm.workspace = true
+tokio.workspace = true
+
+[lints]
+workspace = true

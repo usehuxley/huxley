@@ -1,4 +1,5 @@
 <script lang="ts">
+	import PortalAccessCard from '#lib/portal/PortalAccessCard.svelte';
 	import ActionsCard from '#lib/forms/ActionsCard.svelte';
 	import { enhance, type SubmitFunction } from '$app/forms';
 	import { resolve } from '$app/paths';
@@ -66,6 +67,14 @@
 	</div>
 
 	<ActionsCard actions={data.actions} orgId={contact.orgId} contactId={contact.id} />
+
+	{#if data.portal}
+		<PortalAccessCard
+			account={data.portal.account}
+			hasEmail={!!data.contact.email}
+			canManage={data.portal.canManage}
+		/>
+	{/if}
 
 	<Card title="Details">
 		<form

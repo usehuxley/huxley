@@ -61,6 +61,7 @@ pub fn router(state: AppState) -> Router {
         .merge(cmdb_routes::routes())
         .nest("/catalog/products", crate::catalog_routes::routes())
         .merge(crate::agreement_routes::routes())
+        .merge(crate::portal_access_routes::routes())
         .nest("/workforce", workforce_routes::routes())
         .nest("/timesheets", crate::timesheet_routes::routes())
         .nest("/kb", kb_routes::routes())
@@ -118,6 +119,11 @@ pub fn router(state: AppState) -> Router {
         .route("/healthz", get(health::healthz))
         .route("/readyz", get(health::readyz))
         .nest("/api/v1", api_v1)
+        // The client portal's own API: portal sessions only (ADR-040).
+        .nest(
+            "/api/portal/v1",
+            crate::portal_routes::routes().layer(middleware::from_fn(csrf::require_header)),
+        )
         .fallback(not_found)
         .layer(stack);
 
