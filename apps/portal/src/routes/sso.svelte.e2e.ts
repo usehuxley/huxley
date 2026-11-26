@@ -98,7 +98,12 @@ function mockProvider(person: { sub: string; email: string; name: string }) {
 					ok(issuer);
 				})
 			),
-		stop: () => new Promise((ok) => server.close(ok))
+		// The API keeps connections alive; close them so stopping doesn't wait.
+		stop: () =>
+			new Promise((ok) => {
+				server.close(ok);
+				server.closeAllConnections();
+			})
 	};
 }
 
