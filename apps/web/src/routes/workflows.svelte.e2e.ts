@@ -276,8 +276,7 @@ test.describe('workflows', () => {
 		await page.keyboard.press('ControlOrMeta+a');
 		await page.keyboard.press('Delete');
 		await page.keyboard.type('{{ inputs.na');
-		await expect(page.getByRole('option', { name: /inputs\.name/ })).toBeVisible();
-		await page.keyboard.press('Enter');
+		await page.getByRole('option', { name: /inputs\.name/ }).click();
 		await expect(condition).toHaveText('{{ inputs.name}}');
 		await page.keyboard.type(" == 'Ada' ");
 		await expect(condition).toHaveText("{{ inputs.name == 'Ada' }}");
@@ -293,8 +292,7 @@ test.describe('workflows', () => {
 		await page.keyboard.press('ControlOrMeta+a');
 		await page.keyboard.press('Delete');
 		await page.keyboard.type('{{ steps.gr');
-		await expect(page.getByRole('option', { name: /steps\.greet\.output/ })).toBeVisible();
-		await page.keyboard.press('Enter');
+		await page.getByRole('option', { name: /steps\.greet\.output/ }).click();
 		// A broken expression is flagged inline, with the server's message.
 		await page.keyboard.type(' | ');
 		const problem = settings.locator('.cm-lintRange-error');
