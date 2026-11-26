@@ -7,6 +7,7 @@
 /// Business time, now shared from `huxley-core`.
 pub use huxley_core::calendar;
 pub mod appointments;
+pub mod capacity;
 pub mod changes;
 pub mod config;
 pub mod dispatch;
@@ -18,6 +19,8 @@ pub mod my_work;
 pub mod portal;
 pub mod presence;
 pub mod problems;
+pub mod project_scope;
+pub mod project_status;
 pub mod project_templates;
 pub mod projects;
 pub mod queues;

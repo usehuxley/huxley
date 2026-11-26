@@ -323,4 +323,112 @@ impl Engine {
         tx.commit().await.map_err(internal)?;
         Ok(json!(change))
     }
+
+    /// `core.project.scope.decide`: records the decision on a submitted
+    /// scope change (on a project in the run's organization or below).
+    /// Output: the scope change.
+    pub(crate) async fn scope_decide(&self, org_id: Uuid, input: &Json) -> Result<Json, Json> {
+        self.require_projects(org_id).await?;
+        let change = id(input, "scope_change_id")?
+            .ok_or_else(|| error("input", "scope_change_id is required"))?;
+        let approved = match &input["decision"] {
+            Json::Bool(b) => *b,
+            Json::String(s) if s == "approved" => true,
+            Json::String(s) if s == "rejected" => false,
+            _ => return Err(error("input", "decision is approved or rejected")),
+        };
+        let by = input["by"]
+            .as_str()
+            .filter(|s| !s.trim().is_empty())
+            .unwrap_or("Scope approvals");
+        let subtree = self.subtree(org_id).await?;
+        let mut tx = begin_scoped(self.db(), &OrgScope::Orgs(subtree))
+            .await
+            .map_err(internal)?;
+        let ctx = RequestContext::system(Via::Workflow);
+        let decided = huxley_servicedesk::project_scope::decide(
+            &mut tx,
+            &ctx,
+            change,
+            approved,
+            by,
+            input["comment"].as_str(),
+        )
+        .await
+        .map_err(desk_error)?;
+        tx.commit().await.map_err(internal)?;
+        Ok(json!(decided))
+    }
+
+    /// The projects module, on at the run's organization.
+    async fn require_projects(&self, org_id: Uuid) -> Result<(), Json> {
+        self.require_desk(org_id).await?;
+        let mut tx = begin_scoped(self.db(), &OrgScope::System)
+            .await
+            .map_err(internal)?;
+        let on = huxley_modules::is_active_at(&mut tx, "projects", org_id)
+            .await
+            .map_err(internal)?;
+        tx.commit().await.map_err(internal)?;
+        if on {
+            Ok(())
+        } else {
+            Err(error("module_disabled", "Projects are turned off"))
+        }
+    }
+
+    /// `core.project.status`: what happened on one project, or on every
+    /// active one in the run's organization and below.
+    pub(crate) async fn project_status(&self, org_id: Uuid, input: &Json) -> Result<Json, Json> {
+        self.require_projects(org_id).await?;
+        let project = id(input, "project_id")?;
+        let days = input["days"].as_i64().unwrap_or(7);
+        let subtree = self.subtree(org_id).await?;
+        let mut tx = begin_scoped(self.db(), &OrgScope::Orgs(subtree))
+            .await
+            .map_err(internal)?;
+        let facts = huxley_servicedesk::project_status::active_facts(&mut tx, project, days)
+            .await
+            .map_err(desk_error)?;
+        tx.commit().await.map_err(internal)?;
+        if project.is_some() && facts.is_empty() {
+            return Err(error("not_found", "There's no such project here"));
+        }
+        Ok(json!({ "projects": facts }))
+    }
+
+    /// `core.project.report`: saves a status report on a project.
+    pub(crate) async fn project_report(&self, org_id: Uuid, input: &Json) -> Result<Json, Json> {
+        self.require_projects(org_id).await?;
+        let project =
+            id(input, "project_id")?.ok_or_else(|| error("input", "project_id is required"))?;
+        let text = |k: &str| {
+            input[k]
+                .as_str()
+                .filter(|s| !s.trim().is_empty())
+                .map(str::to_owned)
+        };
+        let report = huxley_servicedesk::project_status::NewStatusReport {
+            body: text("body").ok_or_else(|| error("input", "body is required"))?,
+            client_visible: match &input["client_visible"] {
+                Json::Bool(b) => *b,
+                Json::String(s) => s == "true",
+                _ => false,
+            },
+            period_start: text("period_start"),
+            period_end: text("period_end"),
+        };
+        let author = text("author").unwrap_or_else(|| "AI status reports".into());
+        let subtree = self.subtree(org_id).await?;
+        let mut tx = begin_scoped(self.db(), &OrgScope::Orgs(subtree))
+            .await
+            .map_err(internal)?;
+        let ctx = RequestContext::system(Via::Workflow);
+        let saved =
+            huxley_servicedesk::project_status::save(&mut tx, &ctx, project, &report, &author)
+                .await
+                .map_err(desk_error)?;
+        tx.commit().await.map_err(internal)?;
+        Ok(json!(saved))
+    }
 }

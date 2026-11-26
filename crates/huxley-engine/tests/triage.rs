@@ -18,6 +18,9 @@ const TRIAGE: &str =
 const DOCUMENT: &str = include_str!(
     "../../huxley-packs/builtin/ai-auto-documentation/workflows/document-resolution.yaml"
 );
+const STATUS: &str = include_str!(
+    "../../huxley-packs/builtin/project-status-reports/workflows/weekly-status-reports.yaml"
+);
 const SUMMARIZE: &str =
     include_str!("../../huxley-packs/builtin/ai-ticket-insights/workflows/summarize-ticket.yaml");
 
@@ -45,6 +48,11 @@ async fn mock_anthropic() -> u16 {
                     "article_title": "VPN fails after the client certificate expires",
                     "article_body": "## Symptoms\nThe VPN won't connect.\n\n## Fix\nRenew the certificate.",
                     "minutes": 45,
+                })
+            } else if props["highlights"].is_object() {
+                json!({
+                    "summary": "The firewall was swapped on schedule.",
+                    "highlights": ["Firewall swapped"], "risks": [], "next_steps": ["Cut over the VPN"],
                 })
             } else if props["summary"].is_object() {
                 json!({
@@ -404,4 +412,67 @@ async fn a_report_is_emailed_as_a_spreadsheet() {
     let attached = &sent[0].attachments[0];
     assert_eq!(attached.filename, "service-desk-overview.xlsx");
     assert_eq!(&attached.bytes[..2], b"PK");
+}
+
+#[tokio::test]
+async fn active_projects_get_a_drafted_status_report() {
+    let Some(db) = isolated("status_reports").await else {
+        return;
+    };
+    let pools = &db.pools;
+    let (provider, _, _, ticket) = world(pools).await;
+    let ctx = RequestContext::system(Via::System);
+    let mut tx = begin_scoped(&pools.app, &OrgScope::System).await.unwrap();
+    huxley_modules::set_enabled(&mut tx, &ctx, "projects", true, false)
+        .await
+        .unwrap();
+    let client: Uuid = sqlx::query_scalar("SELECT org_id FROM sd_tickets WHERE id = $1")
+        .bind(ticket)
+        .fetch_one(&mut *tx)
+        .await
+        .unwrap();
+    let project = huxley_servicedesk::projects::create(
+        &mut tx,
+        &ctx,
+        &huxley_servicedesk::projects::NewProject {
+            org_id: client,
+            name: "Firewall swap".into(),
+            start_on: "2026-11-01".into(),
+            budget_hours: Some(10.0),
+            ..Default::default()
+        },
+    )
+    .await
+    .unwrap();
+    sqlx::query("UPDATE prj_projects SET status = 'active' WHERE id = $1")
+        .bind(project.id)
+        .execute(&mut *tx)
+        .await
+        .unwrap();
+    tx.commit().await.unwrap();
+
+    let engine = engine_with_ai(pools, provider).await;
+    let (status, error) = run_pack(&engine, pools, provider, project.id, STATUS, "manual").await;
+    assert_eq!(status, RunStatus::Succeeded, "{error:?}");
+    let (body, visible, author): (String, bool, String) = sqlx::query_as(
+        "SELECT body, client_visible, author FROM prj_status_reports WHERE project_id = $1",
+    )
+    .bind(project.id)
+    .fetch_one(&pools.owner)
+    .await
+    .unwrap();
+    assert!(
+        body.starts_with("The firewall was swapped on schedule."),
+        "{body}"
+    );
+    assert!(
+        body.contains("**Highlights**\n\n- Firewall swapped"),
+        "{body}"
+    );
+    assert!(!body.contains("Risks"), "no risks, no section: {body}");
+    assert!(
+        body.contains("**Next steps**\n\n- Cut over the VPN"),
+        "{body}"
+    );
+    assert_eq!((visible, author.as_str()), (false, "AI status reports"));
 }

@@ -1,0 +1,9 @@
+apiVersion: usehuxley.io/v1
+kind: Pack
+key: huxley/project-scope-approvals
+name: Project scope approvals
+version: 1.0.0
+publisher: Huxley
+description: Sends each submitted project scope change to the client's approvers in the portal and records their decision; an approved change's hours are added to the project's budget.
+contents:
+  workflows: [approve-scope-change]

@@ -11543,6 +11543,38 @@
 				}
 			}
 		},
+		"/api/v1/project-templates/{id}/workflows": {
+			"get": {
+				"tags": ["projects"],
+				"summary": "Workflows for this template's projects: those with a `project.*` event\ntrigger whose filter names the template's id (e.g.\n`{{ event.payload.templateId == '<id>' }}`).",
+				"operationId": "project_template_workflows",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "array",
+									"items": {
+										"$ref": "#/components/schemas/TemplateWorkflow"
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		},
 		"/api/v1/projects": {
 			"get": {
 				"tags": ["projects"],
@@ -11604,6 +11636,56 @@
 							"application/problem+json": {
 								"schema": {
 									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/projects/capacity": {
+			"get": {
+				"tags": ["projects"],
+				"summary": "Each person's hours a week against what's booked: appointments and the\nremaining estimates of their project tasks, spread over the tasks'\ndates. Over-booked weeks are flagged.",
+				"operationId": "project_capacity",
+				"parameters": [
+					{
+						"name": "from",
+						"in": "query",
+						"description": "A day in the first week (`YYYY-MM-DD`; default this week).",
+						"required": false,
+						"schema": {
+							"type": "string"
+						}
+					},
+					{
+						"name": "weeks",
+						"in": "query",
+						"description": "How many weeks (default 6, at most 26).",
+						"required": false,
+						"schema": {
+							"type": "integer",
+							"format": "int32",
+							"minimum": 0
+						}
+					},
+					{
+						"name": "teamId",
+						"in": "query",
+						"description": "One team's members.",
+						"required": false,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Capacity"
 								}
 							}
 						}
@@ -11734,6 +11816,292 @@
 				}
 			}
 		},
+		"/api/v1/projects/{id}/scope-changes": {
+			"post": {
+				"tags": ["projects"],
+				"summary": "Drafts a scope change: work added (or removed), in hours and\noptionally priced.",
+				"operationId": "create_scope_change",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/ScopeChangeInput"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"201": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ScopeChange"
+								}
+							}
+						}
+					},
+					"422": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/projects/{id}/scope-changes/{change}": {
+			"put": {
+				"tags": ["projects"],
+				"summary": "Changes a draft scope change.",
+				"operationId": "update_scope_change",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					},
+					{
+						"name": "change",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/ScopeChangeInput"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ScopeChange"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/projects/{id}/scope-changes/{change}/submit": {
+			"post": {
+				"tags": ["projects"],
+				"summary": "Submits a draft for the client's approval (raising\n`project.scope_change_submitted`).",
+				"operationId": "submit_scope_change",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					},
+					{
+						"name": "change",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ScopeChange"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/projects/{id}/scope-changes/{change}/withdraw": {
+			"post": {
+				"tags": ["projects"],
+				"summary": "Withdraws a draft or submitted scope change.",
+				"operationId": "withdraw_scope_change",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					},
+					{
+						"name": "change",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ScopeChange"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/projects/{id}/status-reports": {
+			"post": {
+				"tags": ["projects"],
+				"summary": "Writes a status report on a project (by you).",
+				"operationId": "create_project_report",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/NewStatusReport"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"201": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/StatusReport"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/projects/{id}/status-reports/{report}": {
+			"delete": {
+				"tags": ["projects"],
+				"operationId": "delete_project_report",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					},
+					{
+						"name": "report",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"responses": {
+					"204": {}
+				}
+			},
+			"patch": {
+				"tags": ["projects"],
+				"summary": "Shares a status report with the client in the portal, or stops.",
+				"operationId": "share_project_report",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					},
+					{
+						"name": "report",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/ReportSharing"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/StatusReport"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
 		"/api/v1/projects/{id}/tasks": {
 			"post": {
 				"tags": ["projects"],
@@ -11762,6 +12130,54 @@
 				},
 				"responses": {
 					"201": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Project"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/projects/{id}/tasks/{ticket}": {
+			"patch": {
+				"tags": ["projects"],
+				"summary": "Changes a task's phase, estimate, dates, dependencies or client\nvisibility.",
+				"operationId": "update_project_task",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					},
+					{
+						"name": "ticket",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/TaskChanges"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"200": {
 						"content": {
 							"application/json": {
 								"schema": {
@@ -18833,6 +19249,16 @@
 						}
 					},
 					{
+						"name": "ticketId",
+						"in": "query",
+						"description": "A ticket (or project task) with requirements of its own.",
+						"required": false,
+						"schema": {
+							"type": ["string", "null"],
+							"format": "uuid"
+						}
+					},
+					{
 						"name": "at",
 						"in": "query",
 						"description": "When to check availability (RFC 3339; default now).",
@@ -22587,6 +23013,25 @@
 					}
 				},
 				"additionalProperties": false
+			},
+			"Capacity": {
+				"type": "object",
+				"required": ["weeks", "people"],
+				"properties": {
+					"people": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/PersonCapacity"
+						}
+					},
+					"weeks": {
+						"type": "array",
+						"items": {
+							"type": "string"
+						},
+						"description": "Each week's Monday, `YYYY-MM-DD`."
+					}
+				}
 			},
 			"CatalogBilling": {
 				"type": "string",
@@ -27298,6 +27743,11 @@
 				"type": "object",
 				"required": ["orgId", "name", "startOn"],
 				"properties": {
+					"agreementId": {
+						"type": ["string", "null"],
+						"format": "uuid",
+						"description": "The client's agreement it bills against."
+					},
 					"assignees": {
 						"type": "object",
 						"description": "A template task's key → who's assigned it.",
@@ -27384,6 +27834,26 @@
 				},
 				"additionalProperties": false
 			},
+			"NewStatusReport": {
+				"type": "object",
+				"required": ["body"],
+				"properties": {
+					"body": {
+						"type": "string"
+					},
+					"clientVisible": {
+						"type": "boolean"
+					},
+					"periodEnd": {
+						"type": ["string", "null"]
+					},
+					"periodStart": {
+						"type": ["string", "null"],
+						"description": "`YYYY-MM-DD`."
+					}
+				},
+				"additionalProperties": false
+			},
 			"NewTask": {
 				"type": "object",
 				"required": ["title"],
@@ -27405,6 +27875,9 @@
 					"description": {
 						"type": "string"
 					},
+					"dueOn": {
+						"type": ["string", "null"]
+					},
 					"estimateHours": {
 						"type": ["number", "null"],
 						"format": "double"
@@ -27412,6 +27885,10 @@
 					"phaseId": {
 						"type": ["string", "null"],
 						"format": "uuid"
+					},
+					"startOn": {
+						"type": ["string", "null"],
+						"description": "`YYYY-MM-DD`."
 					},
 					"title": {
 						"type": "string"
@@ -28078,6 +28555,35 @@
 					}
 				}
 			},
+			"PersonCapacity": {
+				"type": "object",
+				"required": ["userId", "name", "weeks", "unscheduledHours", "openTasks"],
+				"properties": {
+					"name": {
+						"type": "string"
+					},
+					"openTasks": {
+						"type": "integer",
+						"format": "int64",
+						"description": "Open project tasks assigned to them."
+					},
+					"unscheduledHours": {
+						"type": "number",
+						"format": "double",
+						"description": "Remaining estimates of open tasks without dates."
+					},
+					"userId": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"weeks": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/PersonWeek"
+						}
+					}
+				}
+			},
 			"PersonCertification": {
 				"type": "object",
 				"required": [
@@ -28196,6 +28702,34 @@
 					"userId": {
 						"type": "string",
 						"format": "uuid"
+					}
+				}
+			},
+			"PersonWeek": {
+				"type": "object",
+				"required": ["capacityHours", "appointmentHours", "projectHours", "bookedHours", "over"],
+				"properties": {
+					"appointmentHours": {
+						"type": "number",
+						"format": "double"
+					},
+					"bookedHours": {
+						"type": "number",
+						"format": "double"
+					},
+					"capacityHours": {
+						"type": "number",
+						"format": "double",
+						"description": "Hours they work that week (schedule, less approved time off)."
+					},
+					"over": {
+						"type": "boolean",
+						"description": "Booked beyond capacity."
+					},
+					"projectHours": {
+						"type": "number",
+						"format": "double",
+						"description": "Remaining estimates of their project tasks falling that week."
 					}
 				}
 			},
@@ -29141,7 +29675,8 @@
 					"startOn",
 					"progress",
 					"milestones",
-					"tasks"
+					"tasks",
+					"scopeChanges"
 				],
 				"properties": {
 					"description": {
@@ -29154,6 +29689,17 @@
 						"type": "string",
 						"format": "uuid"
 					},
+					"latestReport": {
+						"oneOf": [
+							{
+								"$ref": "#/components/schemas/StatusReport",
+								"description": "The latest status report shared with the client."
+							},
+							{
+								"type": "null"
+							}
+						]
+					},
 					"milestones": {
 						"type": "array",
 						"items": {
@@ -29165,6 +29711,13 @@
 					},
 					"progress": {
 						"$ref": "#/components/schemas/Progress"
+					},
+					"scopeChanges": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/ScopeChange"
+						},
+						"description": "Scope changes sent to the client (not drafts or withdrawn ones)."
 					},
 					"startOn": {
 						"type": "string"
@@ -29682,9 +30235,18 @@
 					"phases",
 					"milestones",
 					"tasks",
+					"scopeChanges",
+					"statusReports",
 					"version"
 				],
 				"properties": {
+					"agreementId": {
+						"type": ["string", "null"],
+						"format": "uuid"
+					},
+					"agreementName": {
+						"type": ["string", "null"]
+					},
 					"billingMethod": {
 						"type": "string"
 					},
@@ -29745,11 +30307,24 @@
 					"progress": {
 						"$ref": "#/components/schemas/Progress"
 					},
+					"scopeChanges": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/ScopeChange"
+						}
+					},
 					"startOn": {
 						"type": "string"
 					},
 					"status": {
 						"type": "string"
+					},
+					"statusReports": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/StatusReport"
+						},
+						"description": "The latest status reports, newest first."
 					},
 					"tasks": {
 						"type": "array",
@@ -29790,12 +30365,20 @@
 				"type": "object",
 				"required": ["version"],
 				"properties": {
+					"agreementId": {
+						"type": ["string", "null"],
+						"format": "uuid"
+					},
 					"billingMethod": {
 						"type": ["string", "null"]
 					},
 					"budgetHours": {
 						"type": ["number", "null"],
 						"format": "double"
+					},
+					"clearAgreement": {
+						"type": "boolean",
+						"description": "Unlink the agreement."
 					},
 					"description": {
 						"type": ["string", "null"]
@@ -29886,6 +30469,9 @@
 							"format": "uuid"
 						}
 					},
+					"dueOn": {
+						"type": ["string", "null"]
+					},
 					"estimateHours": {
 						"type": ["number", "null"],
 						"format": "double"
@@ -29896,6 +30482,9 @@
 					},
 					"reference": {
 						"type": "string"
+					},
+					"startOn": {
+						"type": ["string", "null"]
 					},
 					"statusCategory": {
 						"type": "string"
@@ -30679,6 +31268,16 @@
 				},
 				"additionalProperties": false
 			},
+			"ReportSharing": {
+				"type": "object",
+				"required": ["clientVisible"],
+				"properties": {
+					"clientVisible": {
+						"type": "boolean"
+					}
+				},
+				"additionalProperties": false
+			},
 			"Requirement": {
 				"type": "object",
 				"properties": {
@@ -31318,6 +31917,98 @@
 					"timezone": {
 						"type": "string",
 						"description": "An IANA time zone, e.g. `Europe/London`."
+					}
+				},
+				"additionalProperties": false
+			},
+			"ScopeChange": {
+				"type": "object",
+				"required": [
+					"id",
+					"projectId",
+					"number",
+					"title",
+					"description",
+					"hours",
+					"state",
+					"version"
+				],
+				"properties": {
+					"amount": {
+						"type": ["number", "null"],
+						"format": "double",
+						"description": "What it costs the client, if priced."
+					},
+					"comment": {
+						"type": ["string", "null"]
+					},
+					"decidedAt": {
+						"type": ["string", "null"],
+						"format": "date-time"
+					},
+					"decidedBy": {
+						"type": ["string", "null"]
+					},
+					"description": {
+						"type": "string"
+					},
+					"hours": {
+						"type": "number",
+						"format": "double",
+						"description": "Hours it adds to the budget (negative: removes)."
+					},
+					"id": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"number": {
+						"type": "integer",
+						"format": "int32",
+						"description": "Numbered within the project."
+					},
+					"projectId": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"state": {
+						"type": "string",
+						"description": "`draft`, `submitted`, `approved`, `rejected` or `withdrawn`."
+					},
+					"submittedAt": {
+						"type": ["string", "null"],
+						"format": "date-time"
+					},
+					"title": {
+						"type": "string"
+					},
+					"version": {
+						"type": "integer",
+						"format": "int32"
+					}
+				}
+			},
+			"ScopeChangeInput": {
+				"type": "object",
+				"required": ["title"],
+				"properties": {
+					"amount": {
+						"type": ["number", "null"],
+						"format": "double"
+					},
+					"description": {
+						"type": "string"
+					},
+					"hours": {
+						"type": "number",
+						"format": "double"
+					},
+					"title": {
+						"type": "string"
+					},
+					"version": {
+						"type": ["integer", "null"],
+						"format": "int32",
+						"description": "When changing one: the version you read."
 					}
 				},
 				"additionalProperties": false
@@ -32413,6 +33104,43 @@
 				},
 				"additionalProperties": false
 			},
+			"StatusReport": {
+				"type": "object",
+				"required": ["id", "projectId", "body", "health", "clientVisible", "author", "createdAt"],
+				"properties": {
+					"author": {
+						"type": "string"
+					},
+					"body": {
+						"type": "string",
+						"description": "Markdown."
+					},
+					"clientVisible": {
+						"type": "boolean"
+					},
+					"createdAt": {
+						"type": "string",
+						"format": "date-time"
+					},
+					"health": {
+						"type": "string"
+					},
+					"id": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"periodEnd": {
+						"type": ["string", "null"]
+					},
+					"periodStart": {
+						"type": ["string", "null"]
+					},
+					"projectId": {
+						"type": "string",
+						"format": "uuid"
+					}
+				}
+			},
 			"StepRunView": {
 				"type": "object",
 				"description": "The latest attempt of a step.",
@@ -32788,6 +33516,37 @@
 					}
 				}
 			},
+			"TaskChanges": {
+				"type": "object",
+				"description": "Changes to a task's place in its project (send what changes; an empty\ndate clears it).",
+				"properties": {
+					"clientVisible": {
+						"type": ["boolean", "null"]
+					},
+					"dependsOn": {
+						"type": ["array", "null"],
+						"items": {
+							"type": "string",
+							"format": "uuid"
+						}
+					},
+					"dueOn": {
+						"type": ["string", "null"]
+					},
+					"estimateHours": {
+						"type": ["number", "null"],
+						"format": "double"
+					},
+					"phaseId": {
+						"type": ["string", "null"],
+						"format": "uuid"
+					},
+					"startOn": {
+						"type": ["string", "null"]
+					}
+				},
+				"additionalProperties": false
+			},
 			"TaskStatus": {
 				"type": "string",
 				"enum": ["queued", "running", "succeeded", "failed"]
@@ -32997,6 +33756,22 @@
 				},
 				"additionalProperties": false
 			},
+			"TemplateSkill": {
+				"type": "object",
+				"description": "A skill a template task needs, at a level (1 learning … 4 expert).",
+				"required": ["skillId", "minLevel"],
+				"properties": {
+					"minLevel": {
+						"type": "integer",
+						"format": "int32"
+					},
+					"skillId": {
+						"type": "string",
+						"format": "uuid"
+					}
+				},
+				"additionalProperties": false
+			},
 			"TemplateTask": {
 				"type": "object",
 				"required": ["key", "title"],
@@ -33014,6 +33789,11 @@
 					"description": {
 						"type": "string"
 					},
+					"durationDays": {
+						"type": ["integer", "null"],
+						"format": "int32",
+						"description": "Due this many days after it starts."
+					},
 					"estimateHours": {
 						"type": ["number", "null"],
 						"format": "double"
@@ -33022,11 +33802,44 @@
 						"type": "string",
 						"description": "Unique in the template: what `dependsOn` and assignments name."
 					},
+					"skills": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/TemplateSkill"
+						},
+						"description": "Skills it needs, which become the task's requirements."
+					},
+					"startOffsetDays": {
+						"type": ["integer", "null"],
+						"format": "int32",
+						"description": "Starts this many days after the project does."
+					},
 					"title": {
 						"type": "string"
 					}
 				},
 				"additionalProperties": false
+			},
+			"TemplateWorkflow": {
+				"type": "object",
+				"description": "A workflow that runs for one template's projects.",
+				"required": ["id", "name", "status", "event"],
+				"properties": {
+					"event": {
+						"type": "string",
+						"description": "The project event it runs on."
+					},
+					"id": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"name": {
+						"type": "string"
+					},
+					"status": {
+						"type": "string"
+					}
+				}
 			},
 			"TestCaseRequest": {
 				"type": "object",

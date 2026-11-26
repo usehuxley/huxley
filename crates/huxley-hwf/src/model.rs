@@ -441,6 +441,15 @@ pub enum Step {
     /// Record a change's approval decision (the `servicedesk` module).
     #[serde(rename = "core.change.decide")]
     ChangeDecide(ChangeDecideStep),
+    /// Record a project scope change's decision (the `projects` module).
+    #[serde(rename = "core.project.scope.decide")]
+    ScopeDecide(ScopeDecideStep),
+    /// Gather what happened on projects, for a status report.
+    #[serde(rename = "core.project.status")]
+    ProjectStatus(ProjectStatusStep),
+    /// Save a project status report.
+    #[serde(rename = "core.project.report")]
+    ProjectReport(ProjectReportStep),
     /// Run a dataset → asset mapping rule (the `cmdb` module).
     #[serde(rename = "core.asset.sync")]
     AssetSync(AssetSyncStep),
@@ -832,6 +841,21 @@ step!(ChangeDecideStep {
     pub decide: ChangeDecide,
 });
 
+step!(ScopeDecideStep {
+    #[serde(rename = "with")]
+    pub decide: ScopeDecide,
+});
+
+step!(ProjectStatusStep {
+    #[serde(rename = "with", default, skip_serializing_if = "Option::is_none")]
+    pub status: Option<ProjectStatus>,
+});
+
+step!(ProjectReportStep {
+    #[serde(rename = "with")]
+    pub report: ProjectReport,
+});
+
 step!(AssetSyncStep {
     #[serde(rename = "with")]
     pub sync: AssetSync,
@@ -925,6 +949,9 @@ impl Step {
             TimeSuggest,
             ReportSend,
             ChangeDecide,
+            ScopeDecide,
+            ProjectStatus,
+            ProjectReport,
             AssetSync,
             AssetWarranty,
             TicketEmailReply,
@@ -989,6 +1016,9 @@ impl Step {
             Self::TimeSuggest(_) => "core.time.suggest",
             Self::ReportSend(_) => "core.report.send",
             Self::ChangeDecide(_) => "core.change.decide",
+            Self::ScopeDecide(_) => "core.project.scope.decide",
+            Self::ProjectStatus(_) => "core.project.status",
+            Self::ProjectReport(_) => "core.project.report",
             Self::AssetSync(_) => "core.asset.sync",
             Self::AssetWarranty(_) => "core.asset.set_warranty",
             Self::TicketCreate(_) => "core.ticket.create",
@@ -1635,6 +1665,60 @@ pub struct ChangeDecide {
     pub by: Option<Value>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub comment: Option<Value>,
+}
+
+/// A project scope change's decision to record
+/// (`core.project.scope.decide`): `scope_change_id` (submitted, on a
+/// project in the run's organization or below), `decision` (`approved` or
+/// `rejected`, or a boolean), `by` and a `comment`. An approved change's
+/// hours are added to the budget. Raises `project.scope_change_approved`
+/// or `project.scope_change_rejected`. Output: the scope change.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct ScopeDecide {
+    pub scope_change_id: Value,
+    pub decision: Value,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub by: Option<Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub comment: Option<Value>,
+}
+
+/// What to gather for status reports (`core.project.status`): one
+/// `project_id`, or every active project in the run's organization and
+/// below; over the last `days` (default 7). Output: `{ projects: [{
+/// project_id, name, client, status, period_start, period_end, health,
+/// health_reasons, budget_hours, used_hours, burn_percent,
+/// hours_in_period, tasks_done, tasks_total, completed, waiting, overdue,
+/// milestones_reached, milestones_upcoming, scope_changes_pending,
+/// manager_recipient }] }`.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct ProjectStatus {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub project_id: Option<Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub days: Option<Value>,
+}
+
+/// A status report to save (`core.project.report`): `project_id` (in the
+/// run's organization or below), `body` (Markdown), `client_visible`
+/// (shown in the portal; default false), `period_start` and `period_end`
+/// (`YYYY-MM-DD`), `author` (default "AI status reports"). Raises
+/// `project.status_report`. Output: the report.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct ProjectReport {
+    pub project_id: Value,
+    pub body: Value,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub client_visible: Option<Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub period_start: Option<Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub period_end: Option<Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub author: Option<Value>,
 }
 
 /// Mapping rules to run (`core.asset.sync`): a dataset's rows become

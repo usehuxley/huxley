@@ -26,6 +26,7 @@ export {
 	type ShowIf
 } from './form/fields';
 export { default as ArticleBody } from './components/ArticleBody.svelte';
+export { default as ReportBody } from './components/ReportBody.svelte';
 
 export { default as CodeEditor } from './components/CodeEditor.svelte';
 export type {

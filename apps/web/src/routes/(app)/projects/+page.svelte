@@ -16,11 +16,14 @@
 			<h1 class="text-2xl font-semibold text-fg">Projects</h1>
 			<p class="mt-1 text-fg-muted">Client projects: their tasks, milestones and budget.</p>
 		</div>
-		{#if data.canManage}
-			<Button href={resolve('/(app)/projects/new')} variant="primary">
-				<Plus size={16} /> New project
-			</Button>
-		{/if}
+		<div class="flex gap-2">
+			<Button href={resolve('/(app)/projects/capacity')} variant="ghost">Capacity</Button>
+			{#if data.canManage}
+				<Button href={resolve('/(app)/projects/new')} variant="primary">
+					<Plus size={16} /> New project
+				</Button>
+			{/if}
+		</div>
 	</div>
 	{#if data.projects.length === 0}
 		<EmptyState title="No projects yet" description="Start one from a template, or from scratch." />

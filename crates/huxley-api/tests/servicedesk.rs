@@ -3428,3 +3428,300 @@ async fn project_budget(s: &Setup, project: &Value, audit: &Value, ada: &str) {
         ["Deploy the agents"]
     );
 }
+
+#[tokio::test]
+async fn scope_changes_are_submitted_decided_and_grow_the_budget() {
+    let Some(s) = setup().await else { return };
+    let template = onboarding_template(&s).await;
+    let project = s
+        .ok(
+            &s.owner,
+            "POST",
+            "/api/v1/projects",
+            Some(json!({ "orgId": s.acme, "name": "Acme scope", "startOn": "2026-12-01", "templateId": template["id"] })),
+        )
+        .await;
+    let url = format!("/api/v1/projects/{}", project["id"].as_str().unwrap());
+    // Task dates: a due date before the start is refused.
+    let task = project["tasks"][0]["ticketId"].as_str().unwrap();
+    let (status, _) = s
+        .call(
+            &s.owner,
+            "PATCH",
+            &format!("{url}/tasks/{task}"),
+            Some(json!({ "startOn": "2026-12-05", "dueOn": "2026-12-04" })),
+        )
+        .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+    let dated = s
+        .ok(
+            &s.owner,
+            "PATCH",
+            &format!("{url}/tasks/{task}"),
+            Some(json!({ "startOn": "2026-12-02", "dueOn": "2026-12-04" })),
+        )
+        .await;
+    assert_eq!(
+        (&dated["tasks"][0]["startOn"], &dated["tasks"][0]["dueOn"]),
+        (&json!("2026-12-02"), &json!("2026-12-04"))
+    );
+
+    let change = s
+        .ok(
+            &s.owner,
+            "POST",
+            &format!("{url}/scope-changes"),
+            Some(json!({ "title": "Add a second site", "hours": 6, "amount": 900 })),
+        )
+        .await;
+    assert_eq!(
+        (&change["number"], &change["state"]),
+        (&json!(1), &json!("draft"))
+    );
+    let at = format!("{url}/scope-changes/{}", change["id"].as_str().unwrap());
+    let submitted = s.ok(&s.owner, "POST", &format!("{at}/submit"), None).await;
+    assert_eq!(submitted["state"], "submitted");
+    let event: Value = sqlx::query_scalar(
+        "SELECT payload FROM events_outbox WHERE event_type = 'project.scope_change_submitted' AND subject_id = $1",
+    )
+    .bind(Uuid::parse_str(project["id"].as_str().unwrap()).unwrap())
+    .fetch_one(&s.pools.owner)
+    .await
+    .unwrap();
+    assert_eq!(
+        (&event["title"], &event["hours"], &event["templateId"]),
+        (&json!("Add a second site"), &json!(6.0), &template["id"])
+    );
+    // Submitted changes aren't edited.
+    let (status, _) = s
+        .call(
+            &s.owner,
+            "PUT",
+            &at,
+            Some(json!({ "title": "Sneaky", "hours": 60 })),
+        )
+        .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+
+    let ctx = RequestContext::system(Via::Workflow);
+    let mut tx = begin_scoped(&s.pools.app, &OrgScope::System).await.unwrap();
+    let id = Uuid::parse_str(change["id"].as_str().unwrap()).unwrap();
+    huxley_servicedesk::project_scope::decide(
+        &mut tx,
+        &ctx,
+        id,
+        true,
+        "Cleo (client)",
+        Some("Fine"),
+    )
+    .await
+    .unwrap();
+    tx.commit().await.unwrap();
+    let now = s.ok(&s.owner, "GET", &url, None).await;
+    assert_eq!(now["budgetHours"], json!(16.0), "10 + 6");
+    assert_eq!(
+        (
+            &now["scopeChanges"][0]["state"],
+            &now["scopeChanges"][0]["decidedBy"]
+        ),
+        (&json!("approved"), &json!("Cleo (client)"))
+    );
+    let mut tx = begin_scoped(&s.pools.app, &OrgScope::System).await.unwrap();
+    let portal = huxley_servicedesk::projects::for_portal(&mut tx, s.acme)
+        .await
+        .unwrap();
+    tx.commit().await.unwrap();
+    let mine = portal.iter().find(|p| p.name == "Acme scope").unwrap();
+    assert_eq!(mine.scope_changes.len(), 1);
+
+    template_workflow_is_listed(&s, &template).await;
+}
+
+/// A workflow filtered on a template is one of its workflows.
+async fn template_workflow_is_listed(s: &Setup, template: &Value) {
+    let tid = template["id"].as_str().unwrap();
+    let wf = s
+        .ok(
+            &s.owner,
+            "POST",
+            "/api/v1/workflows",
+            Some(json!({ "orgId": s.provider, "document": {
+                "apiVersion": "usehuxley.io/v1", "kind": "Workflow",
+                "metadata": { "key": unique("kickoff").replace(' ', "-").to_lowercase(), "name": "Kickoff" },
+                "spec": {
+                    "triggers": [{ "type": "event", "event": "project.created",
+                                   "filter": format!("{{{{ event.payload.templateId == '{tid}' }}}}") }],
+                    "steps": [{ "id": "hi", "type": "transform", "output": "hi" }]
+                }
+            } })),
+        )
+        .await;
+    s.ok(
+        &s.owner,
+        "POST",
+        &format!("/api/v1/workflows/{}/publish", wf["id"].as_str().unwrap()),
+        Some(json!({})),
+    )
+    .await;
+    let listed = s
+        .ok(
+            &s.owner,
+            "GET",
+            &format!("/api/v1/project-templates/{tid}/workflows"),
+            None,
+        )
+        .await;
+    assert_eq!(listed.as_array().unwrap().len(), 1, "{listed}");
+    assert_eq!(
+        (&listed[0]["name"], &listed[0]["event"]),
+        (&json!("Kickoff"), &json!("project.created"))
+    );
+}
+
+#[tokio::test]
+async fn capacity_spreads_task_estimates_and_flags_over_booking() {
+    let Some(s) = setup().await else { return };
+    let skill = Uuid::now_v7();
+    sqlx::query("INSERT INTO wf_skills (id, name, category) VALUES ($1, $2, 'Networking')")
+        .bind(skill)
+        .bind(unique("Firewalls"))
+        .execute(&s.pools.owner)
+        .await
+        .unwrap();
+    let ctx = RequestContext::system(Via::System);
+    let mut tx = begin_scoped(&s.pools.app, &OrgScope::System).await.unwrap();
+    huxley_modules::set_enabled(&mut tx, &ctx, "projects", true, false)
+        .await
+        .unwrap();
+    tx.commit().await.unwrap();
+    let template = s
+        .ok(
+            &s.owner,
+            "POST",
+            "/api/v1/project-templates",
+            Some(json!({ "orgId": s.provider, "name": unique("Firewall swap"), "structure": { "phases": [
+                { "name": "Swap", "tasks": [{ "key": "fw", "title": "Swap the firewall", "estimateHours": 8,
+                                              "startOffsetDays": 0, "durationDays": 4,
+                                              "skills": [{ "skillId": skill, "minLevel": 3 }] }] } ] } })),
+        )
+        .await;
+    let (ada, _) = user(&s.pools, Some(("technician", s.provider))).await;
+    // Monday 7 January 2030: the task is spread over that week.
+    let project = s
+        .ok(
+            &s.owner,
+            "POST",
+            "/api/v1/projects",
+            Some(json!({ "orgId": s.acme, "name": "Firewall", "startOn": "2030-01-07", "templateId": template["id"],
+                         "assignees": { "fw": ada } })),
+        )
+        .await;
+    let task = &project["tasks"][0];
+    assert_eq!(
+        (&task["startOn"], &task["dueOn"]),
+        (&json!("2030-01-07"), &json!("2030-01-11"))
+    );
+    let needs: i64 = sqlx::query_scalar("SELECT count(*) FROM wf_requirements WHERE target_type = 'ticket' AND target_id = $1 AND skill_id = $2")
+        .bind(Uuid::parse_str(task["ticketId"].as_str().unwrap()).unwrap())
+        .bind(skill)
+        .fetch_one(&s.pools.owner)
+        .await
+        .unwrap();
+    assert_eq!(needs, 1, "the template's skill is the task's requirement");
+
+    let url = "/api/v1/projects/capacity?from=2030-01-09&weeks=2";
+    let mine = |plan: &Value| {
+        plan["people"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|p| p["userId"] == json!(ada))
+            .unwrap()
+            .clone()
+    };
+    let plan = s.ok(&s.owner, "GET", url, None).await;
+    assert_eq!(plan["weeks"], json!(["2030-01-07", "2030-01-14"]));
+    let week = &mine(&plan)["weeks"][0];
+    assert_eq!(
+        (&week["capacityHours"], &week["projectHours"], &week["over"]),
+        (&json!(40.0), &json!(8.0), &json!(false))
+    );
+    // Another 36 hours that week books Ada beyond 40.
+    let id = project["id"].as_str().unwrap();
+    s.ok(
+        &s.owner,
+        "POST",
+        &format!("/api/v1/projects/{id}/tasks"),
+        Some(json!({ "title": "Cabling", "assigneeUserId": ada, "estimateHours": 36, "startOn": "2030-01-07", "dueOn": "2030-01-11" })),
+    )
+    .await;
+    let plan = s.ok(&s.owner, "GET", url, None).await;
+    let me = mine(&plan);
+    assert_eq!(
+        (
+            &me["weeks"][0]["bookedHours"],
+            &me["weeks"][0]["over"],
+            &me["openTasks"]
+        ),
+        (&json!(44.0), &json!(true), &json!(2))
+    );
+    assert_eq!(me["weeks"][1]["projectHours"], json!(0.0));
+}
+
+#[tokio::test]
+async fn status_reports_are_written_shared_and_shown_in_the_portal() {
+    let Some(s) = setup().await else { return };
+    onboarding_template(&s).await; // turns projects on
+    let project = s
+        .ok(
+            &s.owner,
+            "POST",
+            "/api/v1/projects",
+            Some(json!({ "orgId": s.acme, "name": "Acme reports", "startOn": "2026-12-01" })),
+        )
+        .await;
+    let url = format!(
+        "/api/v1/projects/{}/status-reports",
+        project["id"].as_str().unwrap()
+    );
+    let report = s
+        .ok(
+            &s.owner,
+            "POST",
+            &url,
+            Some(json!({ "body": "All good this week." })),
+        )
+        .await;
+    assert_eq!(
+        (&report["clientVisible"], &report["health"]),
+        (&json!(false), &json!("on_track"))
+    );
+    let portal = |s: &Setup| {
+        let pools = s.pools.app.clone();
+        let acme = s.acme;
+        async move {
+            let mut tx = begin_scoped(&pools, &OrgScope::System).await.unwrap();
+            let all = huxley_servicedesk::projects::for_portal(&mut tx, acme)
+                .await
+                .unwrap();
+            tx.commit().await.unwrap();
+            all.into_iter().find(|p| p.name == "Acme reports").unwrap()
+        }
+    };
+    assert!(portal(&s).await.latest_report.is_none(), "not shared yet");
+    let at = format!("{url}/{}", report["id"].as_str().unwrap());
+    s.ok(
+        &s.owner,
+        "PATCH",
+        &at,
+        Some(json!({ "clientVisible": true })),
+    )
+    .await;
+    assert_eq!(
+        portal(&s).await.latest_report.unwrap().body,
+        "All good this week."
+    );
+    let (status, _) = s.call(&s.owner, "DELETE", &at, None).await;
+    assert_eq!(status, StatusCode::NO_CONTENT);
+    assert!(portal(&s).await.latest_report.is_none());
+}

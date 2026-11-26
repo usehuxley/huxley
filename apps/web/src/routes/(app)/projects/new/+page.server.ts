@@ -7,17 +7,21 @@ import type { Actions, PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async (event) => {
 	const client = api(event);
-	const [orgs, templates, people] = await Promise.all([
+	const [orgs, templates, people, agreements] = await Promise.all([
 		client.GET('/api/v1/orgs'),
 		client.GET('/api/v1/project-templates'),
-		assignees(event)
+		assignees(event),
+		client.GET('/api/v1/agreements')
 	]);
 	return {
 		companies: (orgs.data ?? [])
 			.filter((o) => o.kind === 'client')
 			.map((o) => ({ value: o.id, label: o.name })),
 		templates: templates.data ?? [],
-		people: people.people
+		people: people.people,
+		agreements: (agreements.data ?? [])
+			.filter((a) => a.status !== 'cancelled')
+			.map((a) => ({ value: a.id, label: a.name, orgId: a.orgId }))
 	};
 };
 
@@ -44,6 +48,7 @@ export const actions: Actions = {
 				templateId: formString(form, 'templateId') || null,
 				budgetHours: budget ? Number(budget) : null,
 				billingMethod: formString(form, 'billingMethod'),
+				agreementId: formString(form, 'agreementId') || null,
 				assignees: assigneesByKey
 			}
 		});

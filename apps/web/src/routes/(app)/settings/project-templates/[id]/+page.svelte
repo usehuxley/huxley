@@ -8,6 +8,9 @@
 
 	let { data, form }: PageProps = $props();
 	type Task = {
+		skills: { skillId: string; minLevel: number }[];
+		startOffsetDays: number | null;
+		durationDays: number | null;
 		key: string;
 		title: string;
 		estimateHours: number | null;
@@ -28,7 +31,10 @@
 				title: t.title,
 				estimateHours: t.estimateHours ?? null,
 				dependsOn: [...(t.dependsOn ?? [])],
-				clientVisible: t.clientVisible ?? false
+				clientVisible: t.clientVisible ?? false,
+				startOffsetDays: t.startOffsetDays ?? null,
+				durationDays: t.durationDays ?? null,
+				skills: (t.skills ?? []).map((k) => ({ skillId: k.skillId, minLevel: k.minLevel }))
 			}))
 		}))
 	);
@@ -55,7 +61,16 @@
 							? null
 							: Number(t.estimateHours),
 					dependsOn: t.dependsOn,
-					clientVisible: t.clientVisible
+					clientVisible: t.clientVisible,
+					startOffsetDays:
+						t.startOffsetDays === null || Number.isNaN(t.startOffsetDays)
+							? undefined
+							: Number(t.startOffsetDays),
+					durationDays:
+						t.durationDays === null || Number.isNaN(t.durationDays)
+							? undefined
+							: Number(t.durationDays),
+					skills: t.skills
 				}))
 			})),
 			milestones: milestones.map((m) => ({
@@ -108,7 +123,9 @@
 					</Button>
 				</div>
 				{#each phase.tasks as task, j (task.key)}
-					<div class="grid gap-2 sm:grid-cols-[1fr_6rem_12rem_auto_auto] sm:items-end">
+					<div
+						class="grid gap-2 sm:grid-cols-[1fr_5rem_6rem_6rem_10rem_10rem_auto_auto] sm:items-end"
+					>
 						<Field label="Task" for="tk-{task.key}">
 							<Input id="tk-{task.key}" bind:value={task.title} required />
 						</Field>
@@ -120,6 +137,33 @@
 								step="0.5"
 								bind:value={task.estimateHours}
 							/>
+						</Field>
+						<Field label="Starts on day" for="tks-{task.key}">
+							<Input id="tks-{task.key}" type="number" min="0" bind:value={task.startOffsetDays} />
+						</Field>
+						<Field label="Takes days" for="tkn-{task.key}">
+							<Input id="tkn-{task.key}" type="number" min="0" bind:value={task.durationDays} />
+						</Field>
+						<Field label="Needs skill" for="tkk-{task.key}">
+							<select
+								id="tkk-{task.key}"
+								class="h-9 w-full rounded-control border border-border-strong bg-surface px-2 text-sm text-fg"
+								value={task.skills[0] ? `${task.skills[0].skillId}:${task.skills[0].minLevel}` : ''}
+								onchange={(e) => {
+									const v = e.currentTarget.value;
+									const rest = task.skills.slice(1);
+									task.skills = v
+										? [{ skillId: v.split(':')[0], minLevel: Number(v.split(':')[1]) }, ...rest]
+										: rest;
+								}}
+							>
+								<option value="">None</option>
+								{#each data.skills as k (k.value)}
+									{#each [[2, 'working'], [3, 'proficient'], [4, 'expert']] as [lvl, word] (lvl)}
+										<option value="{k.value}:{lvl}">{k.label}, {word}</option>
+									{/each}
+								{/each}
+							</select>
 						</Field>
 						<Field label="After" for="tkd-{task.key}">
 							<select
@@ -160,7 +204,10 @@
 								title: '',
 								estimateHours: null,
 								dependsOn: [],
-								clientVisible: false
+								clientVisible: false,
+								startOffsetDays: null,
+								durationDays: null,
+								skills: []
 							})}
 					>
 						<Plus size={16} /> Add a task
@@ -219,6 +266,34 @@
 	</div>
 </form>
 {#if initial}
+	<Card
+		title="Workflows"
+		description="Workflows that run for projects made from this template: on project events, filtered to it."
+		class="mt-4"
+	>
+		<div class="flex flex-col gap-2 text-sm">
+			<ul class="flex flex-col gap-1" aria-label="Template workflows">
+				{#each data.workflows as w (w.id)}
+					<li class="flex items-center justify-between gap-2">
+						<a
+							href={resolve('/(app)/workflows/[id]', { id: w.id })}
+							class="text-accent hover:underline"
+						>
+							{w.name}
+						</a>
+						<span class="text-fg-muted">on {w.event} · {w.status}</span>
+					</li>
+				{:else}
+					<li class="text-fg-muted">None yet.</li>
+				{/each}
+			</ul>
+			<form method="POST" action="?/workflow" use:enhance>
+				<Button type="submit" variant="ghost">
+					<Plus size={16} /> New workflow for this template
+				</Button>
+			</form>
+		</div>
+	</Card>
 	<form method="POST" action="?/remove" class="mt-4" use:enhance>
 		<Button type="submit" variant="ghost"><Trash2 size={16} /> Delete template</Button>
 	</form>
