@@ -412,6 +412,12 @@ pub enum Step {
     /// Record a client message's sentiment (the `cx` module).
     #[serde(rename = "core.sentiment.record")]
     SentimentRecord(SentimentRecordStep),
+    /// What a ticket can be triaged to (the `servicedesk` module).
+    #[serde(rename = "core.triage.options")]
+    TriageOptions(TriageOptionsStep),
+    /// Record (and apply) a triage answer (the `servicedesk` module).
+    #[serde(rename = "core.triage.apply")]
+    TriageApply(TriageApplyStep),
     /// Run a dataset → asset mapping rule (the `cmdb` module).
     #[serde(rename = "core.asset.sync")]
     AssetSync(AssetSyncStep),
@@ -758,6 +764,16 @@ step!(SentimentRecordStep {
     pub record: SentimentRecord,
 });
 
+step!(TriageOptionsStep {
+    #[serde(default, rename = "with")]
+    pub options: TriageOptions,
+});
+
+step!(TriageApplyStep {
+    #[serde(rename = "with")]
+    pub apply: TriageApply,
+});
+
 step!(AssetSyncStep {
     #[serde(rename = "with")]
     pub sync: AssetSync,
@@ -842,6 +858,8 @@ impl Step {
             NpsSend,
             HealthCompute,
             SentimentRecord,
+            TriageOptions,
+            TriageApply,
             AssetSync,
             AssetWarranty,
             TicketEmailReply,
@@ -897,6 +915,8 @@ impl Step {
             Self::NpsSend(_) => "core.nps.send",
             Self::HealthCompute(_) => "core.health.compute",
             Self::SentimentRecord(_) => "core.sentiment.record",
+            Self::TriageOptions(_) => "core.triage.options",
+            Self::TriageApply(_) => "core.triage.apply",
             Self::AssetSync(_) => "core.asset.sync",
             Self::AssetWarranty(_) => "core.asset.set_warranty",
             Self::TicketCreate(_) => "core.ticket.create",
@@ -1389,6 +1409,40 @@ pub struct SentimentRecord {
     pub note_id: Option<Value>,
     pub score: Value,
     pub reason: Value,
+}
+
+/// What a ticket can be triaged to (`core.triage.options`): the queues at
+/// `ticket_id`'s organization or above (or the run's organization's,
+/// without one), and the priorities. Output: `{ queues: [{ id, name,
+/// description }], queue_names (the names and "(none)"), priority_keys,
+/// guide (a line per queue and priority, for a prompt) }`.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct TriageOptions {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ticket_id: Option<Value>,
+}
+
+/// A triage answer to record (`core.triage.apply`): `queue` (a name from
+/// `core.triage.options`, or "(none)"), `priority` (`p1` to `p4`) and a
+/// `reason`. With `ticket_id`, it's kept as the ticket's suggestion and
+/// applied while no person has changed the ticket (the queue only if it
+/// has none). With `evaluation_id` and `sample_id` (an accuracy
+/// evaluation's run), it's recorded in the evaluation instead. Output: `{
+/// mode, applied, queue_id, priority }`.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct TriageApply {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ticket_id: Option<Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub evaluation_id: Option<Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sample_id: Option<Value>,
+    pub queue: Value,
+    pub priority: Value,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reason: Option<Value>,
 }
 
 /// Mapping rules to run (`core.asset.sync`): a dataset's rows become

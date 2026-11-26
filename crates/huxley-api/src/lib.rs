@@ -65,6 +65,7 @@ pub mod team_routes;
 mod template_routes;
 mod timesheet_routes;
 pub mod token_routes;
+pub mod triage_routes;
 pub mod user_routes;
 mod variable_routes;
 pub mod vault_routes;

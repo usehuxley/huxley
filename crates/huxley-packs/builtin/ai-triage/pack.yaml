@@ -1,0 +1,9 @@
+apiVersion: usehuxley.io/v1
+kind: Pack
+key: huxley/ai-triage
+name: AI triage
+version: 1.0.0
+publisher: Huxley
+description: Suggests a queue and priority for each ticket a client raises, using your AI provider and your queues, and applies them until someone works the ticket. Measure its accuracy on a labeled sample set under Service desk settings.
+contents:
+  workflows: [triage-ticket]

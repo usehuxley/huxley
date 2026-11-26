@@ -1104,6 +1104,54 @@ export type Step =
 			 * Fail the attempt after this long, e.g. `30s`.
 			 */
 			timeout?: string | null;
+			type: 'core.triage.options';
+			with?: TriageOptions;
+	  }
+	| {
+			/**
+			 * Record the error as the step's output and carry on.
+			 */
+			continue_on_error?: boolean;
+			description?: string | null;
+			/**
+			 * Unique in the workflow: lowercase letters, digits, underscores.
+			 * Other steps read this step's output as `steps.<id>.output`.
+			 */
+			id: string;
+			/**
+			 * Skip the step unless this expression is true.
+			 */
+			if?: string | null;
+			name?: string | null;
+			retry?: RetryPolicy | null;
+			/**
+			 * Fail the attempt after this long, e.g. `30s`.
+			 */
+			timeout?: string | null;
+			type: 'core.triage.apply';
+			with: TriageApply;
+	  }
+	| {
+			/**
+			 * Record the error as the step's output and carry on.
+			 */
+			continue_on_error?: boolean;
+			description?: string | null;
+			/**
+			 * Unique in the workflow: lowercase letters, digits, underscores.
+			 * Other steps read this step's output as `steps.<id>.output`.
+			 */
+			id: string;
+			/**
+			 * Skip the step unless this expression is true.
+			 */
+			if?: string | null;
+			name?: string | null;
+			retry?: RetryPolicy | null;
+			/**
+			 * Fail the attempt after this long, e.g. `30s`.
+			 */
+			timeout?: string | null;
 			type: 'core.asset.sync';
 			with: AssetSync;
 	  }
@@ -1974,6 +2022,36 @@ export interface SentimentRecord {
 	ticket_id: unknown;
 }
 /**
+ * What a ticket can be triaged to (`core.triage.options`): the queues at
+ * `ticket_id`'s organization or above (or the run's organization's,
+ * without one), and the priorities. Output: `{ queues: [{ id, name,
+ * description }], queue_names (the names and "(none)"), priority_keys,
+ * guide (a line per queue and priority, for a prompt) }`.
+ */
+export interface TriageOptions {
+	ticket_id?: unknown;
+}
+/**
+ * A triage answer to record (`core.triage.apply`): `queue` (a name from
+ * `core.triage.options`, or "(none)"), `priority` (`p1` to `p4`) and a
+ * `reason`. With `ticket_id`, it's kept as the ticket's suggestion and
+ * applied while no person has changed the ticket (the queue only if it
+ * has none). With `evaluation_id` and `sample_id` (an accuracy
+ * evaluation's run), it's recorded in the evaluation instead. Output: `{
+ * mode, applied, queue_id, priority }`.
+ *
+ * This interface was referenced by `HuxleyWorkflowFormatV1`'s JSON-Schema
+ * via the `definition` "TriageApply".
+ */
+export interface TriageApply {
+	evaluation_id?: unknown;
+	priority: unknown;
+	queue: unknown;
+	reason?: unknown;
+	sample_id?: unknown;
+	ticket_id?: unknown;
+}
+/**
  * Mapping rules to run (`core.asset.sync`): a dataset's rows become
  * assets, matched, updated and created by the rule. Give `mapping_id` for
  * one rule, or `dataset` (a dataset's key) for every rule on it that's on.
@@ -2182,4 +2260,17 @@ export interface NpsSend1 {
  */
 export interface TicketEmbed1 {
 	limit?: unknown;
+}
+/**
+ * What a ticket can be triaged to (`core.triage.options`): the queues at
+ * `ticket_id`'s organization or above (or the run's organization's,
+ * without one), and the priorities. Output: `{ queues: [{ id, name,
+ * description }], queue_names (the names and "(none)"), priority_keys,
+ * guide (a line per queue and priority, for a prompt) }`.
+ *
+ * This interface was referenced by `HuxleyWorkflowFormatV1`'s JSON-Schema
+ * via the `definition` "TriageOptions".
+ */
+export interface TriageOptions1 {
+	ticket_id?: unknown;
 }

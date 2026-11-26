@@ -96,6 +96,13 @@ const SOURCES: &[Source] = &[
         ],
     },
     Source {
+        manifest: include_str!("../builtin/ai-triage/pack.yaml"),
+        files: &[(
+            "workflows/triage-ticket.yaml",
+            include_str!("../builtin/ai-triage/workflows/triage-ticket.yaml"),
+        )],
+    },
+    Source {
         manifest: include_str!("../builtin/ai-sentiment/pack.yaml"),
         files: &[
             (

@@ -20,6 +20,12 @@ export const SETTINGS_SECTIONS = [
 		module: 'servicedesk'
 	},
 	{
+		key: 'triage',
+		label: 'AI triage',
+		permission: 'servicedesk:configure',
+		module: 'servicedesk'
+	},
+	{
 		key: 'templates',
 		label: 'Ticket templates',
 		permission: 'servicedesk:configure',

@@ -3342,6 +3342,132 @@
         },
         {
           "additionalProperties": false,
+          "description": "What a ticket can be triaged to (the `servicedesk` module).",
+          "properties": {
+            "continue_on_error": {
+              "description": "Record the error as the step's output and carry on.",
+              "type": "boolean"
+            },
+            "description": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "id": {
+              "description": "Unique in the workflow: lowercase letters, digits, underscores.\nOther steps read this step's output as `steps.<id>.output`.",
+              "type": "string"
+            },
+            "if": {
+              "description": "Skip the step unless this expression is true.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "name": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "retry": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/RetryPolicy"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "timeout": {
+              "description": "Fail the attempt after this long, e.g. `30s`.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "type": {
+              "const": "core.triage.options",
+              "type": "string"
+            },
+            "with": {
+              "$ref": "#/$defs/TriageOptions",
+              "default": {}
+            }
+          },
+          "required": [
+            "type",
+            "id"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Record (and apply) a triage answer (the `servicedesk` module).",
+          "properties": {
+            "continue_on_error": {
+              "description": "Record the error as the step's output and carry on.",
+              "type": "boolean"
+            },
+            "description": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "id": {
+              "description": "Unique in the workflow: lowercase letters, digits, underscores.\nOther steps read this step's output as `steps.<id>.output`.",
+              "type": "string"
+            },
+            "if": {
+              "description": "Skip the step unless this expression is true.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "name": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "retry": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/RetryPolicy"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "timeout": {
+              "description": "Fail the attempt after this long, e.g. `30s`.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "type": {
+              "const": "core.triage.apply",
+              "type": "string"
+            },
+            "with": {
+              "$ref": "#/$defs/TriageApply"
+            }
+          },
+          "required": [
+            "type",
+            "id",
+            "with"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
           "description": "Run a dataset → asset mapping rule (the `cmdb` module).",
           "properties": {
             "continue_on_error": {
@@ -3893,6 +4019,31 @@
       "required": [
         "check"
       ],
+      "type": "object"
+    },
+    "TriageApply": {
+      "additionalProperties": false,
+      "description": "A triage answer to record (`core.triage.apply`): `queue` (a name from\n`core.triage.options`, or \"(none)\"), `priority` (`p1` to `p4`) and a\n`reason`. With `ticket_id`, it's kept as the ticket's suggestion and\napplied while no person has changed the ticket (the queue only if it\nhas none). With `evaluation_id` and `sample_id` (an accuracy\nevaluation's run), it's recorded in the evaluation instead. Output: `{\nmode, applied, queue_id, priority }`.",
+      "properties": {
+        "evaluation_id": true,
+        "priority": true,
+        "queue": true,
+        "reason": true,
+        "sample_id": true,
+        "ticket_id": true
+      },
+      "required": [
+        "queue",
+        "priority"
+      ],
+      "type": "object"
+    },
+    "TriageOptions": {
+      "additionalProperties": false,
+      "description": "What a ticket can be triaged to (`core.triage.options`): the queues at\n`ticket_id`'s organization or above (or the run's organization's,\nwithout one), and the priorities. Output: `{ queues: [{ id, name,\ndescription }], queue_names (the names and \"(none)\"), priority_keys,\nguide (a line per queue and priority, for a prompt) }`.",
+      "properties": {
+        "ticket_id": true
+      },
       "type": "object"
     },
     "Trigger": {

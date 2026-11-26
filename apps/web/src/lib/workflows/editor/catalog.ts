@@ -465,6 +465,45 @@ export const STEPS: StepSpec[] = [
 		]
 	},
 	{
+		type: 'core.triage.options',
+		label: 'Triage options',
+		description:
+			'List the queues (with descriptions) and priorities a ticket can be triaged to, for an AI step.',
+		group: 'Data',
+		module: 'servicedesk',
+		template: { with: { ticket_id: '{{ trigger.subject_id }}' } },
+		fields: [
+			{
+				path: 'with.ticket_id',
+				label: 'Ticket',
+				kind: 'expression',
+				hint: 'Leave empty for the run’s organization'
+			}
+		]
+	},
+	{
+		type: 'core.triage.apply',
+		label: 'Apply triage',
+		description:
+			'Record an AI triage answer and apply it while no one has worked the ticket (or record it in an accuracy evaluation).',
+		group: 'Actions',
+		module: 'servicedesk',
+		template: {
+			with: {
+				ticket_id: '{{ trigger.subject_id }}',
+				queue: '{{ steps.judge.output.queue }}',
+				priority: '{{ steps.judge.output.priority }}',
+				reason: '{{ steps.judge.output.reason }}'
+			}
+		},
+		fields: [
+			{ path: 'with.ticket_id', label: 'Ticket', kind: 'expression' },
+			{ path: 'with.queue', label: 'Queue', kind: 'expression', hint: 'A queue name, or (none)' },
+			{ path: 'with.priority', label: 'Priority', kind: 'expression', hint: 'p1 to p4' },
+			{ path: 'with.reason', label: 'Reason', kind: 'expression' }
+		]
+	},
+	{
 		type: 'core.sentiment.record',
 		label: 'Record sentiment',
 		description:

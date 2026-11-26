@@ -39,6 +39,7 @@ mod script_credentials;
 mod step;
 mod tickets;
 mod timesheets;
+mod triage;
 mod walk;
 mod worker;
 
