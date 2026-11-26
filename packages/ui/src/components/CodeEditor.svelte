@@ -60,8 +60,14 @@
 				lint,
 				onChange: (text) => (value = text)
 			});
-			if (cancelled) made.destroy();
-			else editor = made;
+			if (cancelled) {
+				made.destroy();
+				return;
+			}
+			// Typed or set while it loaded (the textarea took it): catch up.
+			made.setValue(untrack(() => value));
+			made.setReadonly(untrack(() => readonly));
+			editor = made;
 		});
 		return () => {
 			cancelled = true;
