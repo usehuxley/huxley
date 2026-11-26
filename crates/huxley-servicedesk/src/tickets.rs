@@ -14,7 +14,9 @@ use crate::config;
 use crate::{DeskError, DeskResult, text};
 
 pub const PRIORITIES: &[&str] = &["p1", "p2", "p3", "p4"];
-pub const SOURCES: &[&str] = &["web", "email", "portal", "api", "workflow", "phone"];
+pub const SOURCES: &[&str] = &[
+    "web", "email", "portal", "api", "workflow", "phone", "project",
+];
 pub const NOTE_KINDS: &[&str] = &["public", "internal", "resolution"];
 
 #[derive(Debug, Clone, Serialize, ToSchema, sqlx::FromRow)]
@@ -800,6 +802,7 @@ pub async fn change_status(
     }
     crate::sla::sync(conn, id).await?;
     let after = get(conn, id).await?;
+    crate::projects::after_status(&mut *conn, id, &after.status_category).await?;
     record(
         conn,
         ctx,

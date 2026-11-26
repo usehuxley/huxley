@@ -121,9 +121,9 @@ pub const REGISTRY: &[Module] = &[
         key: "projects",
         name: "Projects",
         description: "Projects, templates, resource planning, and project billing.",
-        requires: &["crm"],
+        requires: &["crm", "servicedesk"],
         phase: 9,
-        released: false,
+        released: true,
     },
     Module {
         key: "inventory",

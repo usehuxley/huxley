@@ -362,6 +362,9 @@ pub async fn log(
     .bind(&c.notes)
     .execute(&mut *conn)
     .await?;
+    if let Some(t) = ticket {
+        crate::projects::after_time(&mut *conn, t.id).await?;
+    }
     entry(conn, id).await
 }
 
@@ -397,6 +400,9 @@ pub async fn update(
     if rows == 0 {
         return Err(DeskError::VersionConflict);
     }
+    if let Some(t) = before.ticket_id {
+        crate::projects::after_time(&mut *conn, t).await?;
+    }
     entry(conn, id).await
 }
 
@@ -410,12 +416,14 @@ pub async fn delete(conn: &mut PgConnection, user: Uuid, id: Uuid) -> DeskResult
     let rows = sqlx::query("DELETE FROM sd_time_entries WHERE id = $1 AND user_id = $2")
         .bind(id)
         .bind(user)
-        .execute(conn)
+        .execute(&mut *conn)
         .await?
         .rows_affected();
     if rows == 0 {
-        Err(DeskError::NotFound)
-    } else {
-        Ok(())
+        return Err(DeskError::NotFound);
     }
+    if let Some(t) = before.ticket_id {
+        crate::projects::after_time(&mut *conn, t).await?;
+    }
+    Ok(())
 }

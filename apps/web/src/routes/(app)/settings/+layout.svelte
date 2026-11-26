@@ -18,6 +18,7 @@
 		queues: resolve('/(app)/settings/queues'),
 		sla: resolve('/(app)/settings/sla'),
 		triage: resolve('/(app)/settings/triage'),
+		'project-templates': resolve('/(app)/settings/project-templates'),
 		mailboxes: resolve('/(app)/settings/mailboxes'),
 		skills: resolve('/(app)/settings/skills'),
 		responses: resolve('/(app)/settings/responses'),

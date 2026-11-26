@@ -558,6 +558,23 @@ export interface paths {
 		patch: operations['portal_change_access'];
 		trace?: never;
 	};
+	'/api/portal/v1/projects': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** Your company's projects: milestones, progress and client-facing tasks. */
+		get: operations['portal_projects'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
 	'/api/portal/v1/requests': {
 		parameters: {
 			query?: never;
@@ -4249,6 +4266,122 @@ export interface paths {
 		put: operations['update_portal_identity_provider'];
 		post?: never;
 		delete: operations['delete_portal_identity_provider'];
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/project-templates': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** Project templates you can see. */
+		get: operations['list_project_templates'];
+		put?: never;
+		/**
+		 * Adds a template: phases with tasks (estimates, dependencies, client
+		 *     visibility) and milestones (days after the start).
+		 */
+		post: operations['create_project_template'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/project-templates/{id}': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get: operations['get_project_template'];
+		put: operations['update_project_template'];
+		post?: never;
+		delete: operations['delete_project_template'];
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/projects': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** Projects you can see, newest first. */
+		get: operations['list_projects'];
+		put?: never;
+		/**
+		 * Creates a project for a client company, laid out from a template if
+		 *     given (its phases, milestones and task tickets, assigned as asked).
+		 */
+		post: operations['create_project'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/projects/{id}': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/**
+		 * A project: its budget burn, health, progress, phases, milestones and
+		 *     tasks.
+		 */
+		get: operations['get_project'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		/**
+		 * Changes a project: its name, status, manager, end, budget, billing
+		 *     method, budget thresholds and portal visibility.
+		 */
+		patch: operations['update_project'];
+		trace?: never;
+	};
+	'/api/v1/projects/{id}/milestones/{milestone}': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/** Marks a milestone reached (raising `project.milestone_reached`) or not. */
+		post: operations['set_project_milestone'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/projects/{id}/tasks': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/** Adds a task (a ticket) to a project. */
+		post: operations['add_project_task'];
+		delete?: never;
 		options?: never;
 		head?: never;
 		patch?: never;
@@ -9423,6 +9556,11 @@ export interface components {
 			 */
 			user?: string | null;
 		};
+		Health: {
+			/** @description `on_track`, `at_risk` or `off_track`. */
+			level: string;
+			reasons: string[];
+		};
 		HealthFactor: {
 			/** @description What it's based on, e.g. "12% of 40 tickets missed an SLA target". */
 			detail: string;
@@ -10048,6 +10186,18 @@ export interface components {
 		 * @enum {string}
 		 */
 		MfaTrust: 'never' | 'amr' | 'always';
+		Milestone: {
+			clientVisible: boolean;
+			dueOn?: string | null;
+			/** Format: uuid */
+			id: string;
+			name: string;
+			/** Format: date-time */
+			reachedAt?: string | null;
+		};
+		MilestoneState: {
+			reached: boolean;
+		};
 		/** @description A feature module's manifest. */
 		Module: {
 			description: string;
@@ -10148,6 +10298,33 @@ export interface components {
 			/** @description `public` (the requester can see it), `internal` or `resolution`. */
 			kind: string;
 		};
+		NewProject: {
+			/** @description A template task's key → who's assigned it. */
+			assignees?: {
+				[key: string]: string;
+			};
+			billingMethod?: string | null;
+			/**
+			 * Format: double
+			 * @description Default: the template's phase budgets added up.
+			 */
+			budgetHours?: number | null;
+			description?: string;
+			endOn?: string | null;
+			/** Format: uuid */
+			managerUserId?: string | null;
+			name: string;
+			/**
+			 * Format: uuid
+			 * @description The client company it's for.
+			 */
+			orgId: string;
+			/** @description `YYYY-MM-DD`. */
+			startOn: string;
+			/** Format: uuid */
+			templateId?: string | null;
+			thresholds?: number[] | null;
+		};
 		/** @description A new script. */
 		NewScript: {
 			description?: string | null;
@@ -10159,6 +10336,18 @@ export interface components {
 				[key: string]: unknown;
 			} | null;
 			source: string;
+		};
+		NewTask: {
+			/** Format: uuid */
+			assigneeUserId?: string | null;
+			clientVisible?: boolean;
+			dependsOn?: string[];
+			description?: string;
+			/** Format: double */
+			estimateHours?: number | null;
+			/** Format: uuid */
+			phaseId?: string | null;
+			title: string;
 		};
 		NewTicket: {
 			/** Format: uuid */
@@ -10857,6 +11046,20 @@ export interface components {
 			orgName: string;
 			role: components['schemas']['PortalRole'];
 		};
+		/** @description What a client's portal shows of a project. */
+		PortalProject: {
+			description: string;
+			endOn?: string | null;
+			/** Format: uuid */
+			id: string;
+			milestones: components['schemas']['Milestone'][];
+			name: string;
+			progress: components['schemas']['Progress'];
+			startOn: string;
+			status: string;
+			/** @description Tasks marked for the client. */
+			tasks: components['schemas']['PortalTask'][];
+		};
 		PortalRating: {
 			comment?: string | null;
 			/**
@@ -10939,6 +11142,11 @@ export interface components {
 			rating?: number | null;
 			/** @description `five` (1 to 5) or `thumbs` (1 down, 5 up). */
 			scale: string;
+		};
+		PortalTask: {
+			done: boolean;
+			statusName: string;
+			title: string;
 		};
 		/** @description A ticket in the portal. */
 		PortalTicket: {
@@ -11039,6 +11247,119 @@ export interface components {
 			/** Format: int32 */
 			version: number;
 			workaround: string;
+		};
+		Progress: {
+			/** Format: int64 */
+			done: number;
+			/** Format: int64 */
+			total: number;
+		};
+		Project: {
+			billingMethod: string;
+			/** Format: double */
+			budgetHours?: number | null;
+			/**
+			 * Format: double
+			 * @description Used against budget, in percent.
+			 */
+			burnPercent?: number | null;
+			description: string;
+			endOn?: string | null;
+			health: components['schemas']['Health'];
+			/** Format: uuid */
+			id: string;
+			managerName?: string | null;
+			/** Format: uuid */
+			managerUserId?: string | null;
+			milestones: components['schemas']['Milestone'][];
+			name: string;
+			/** Format: uuid */
+			orgId: string;
+			orgName: string;
+			phases: components['schemas']['ProjectPhase'][];
+			portalVisible: boolean;
+			progress: components['schemas']['Progress'];
+			startOn: string;
+			status: string;
+			tasks: components['schemas']['ProjectTask'][];
+			/** Format: uuid */
+			templateId?: string | null;
+			thresholds: number[];
+			thresholdsFired: number[];
+			/**
+			 * Format: double
+			 * @description Hours logged on its tasks.
+			 */
+			usedHours: number;
+			/** Format: int32 */
+			version: number;
+		};
+		ProjectChanges: {
+			billingMethod?: string | null;
+			/** Format: double */
+			budgetHours?: number | null;
+			description?: string | null;
+			endOn?: string | null;
+			/** Format: uuid */
+			managerUserId?: string | null;
+			name?: string | null;
+			portalVisible?: boolean | null;
+			status?: string | null;
+			thresholds?: number[] | null;
+			/** Format: int32 */
+			version: number;
+		};
+		ProjectPhase: {
+			/** Format: double */
+			budgetHours?: number | null;
+			/** Format: uuid */
+			id: string;
+			name: string;
+			/** Format: int32 */
+			position: number;
+			/** Format: double */
+			usedHours: number;
+		};
+		ProjectTask: {
+			assigneeName?: string | null;
+			/** Format: uuid */
+			assigneeUserId?: string | null;
+			clientVisible: boolean;
+			dependsOn: string[];
+			/** Format: double */
+			estimateHours?: number | null;
+			/** Format: uuid */
+			phaseId?: string | null;
+			reference: string;
+			statusCategory: string;
+			statusName: string;
+			/** Format: uuid */
+			ticketId: string;
+			title: string;
+			/** Format: double */
+			usedHours: number;
+			/** @description A task it depends on isn't done yet. */
+			waiting: boolean;
+		};
+		ProjectTemplate: {
+			description: string;
+			/** Format: uuid */
+			id: string;
+			name: string;
+			/** Format: uuid */
+			orgId: string;
+			structure: components['schemas']['Structure'];
+			/** Format: int32 */
+			version: number;
+		};
+		ProjectTemplateInput: {
+			description?: string;
+			name: string;
+			/** Format: uuid */
+			orgId: string;
+			structure: components['schemas']['Structure'];
+			/** Format: int32 */
+			version?: number | null;
 		};
 		/** @description A configured identity provider. The client secret is never returned. */
 		Provider: {
@@ -12052,6 +12373,10 @@ export interface components {
 		};
 		/** @enum {string} */
 		StepStatus: 'running' | 'waiting' | 'succeeded' | 'failed' | 'skipped' | 'cancelled';
+		Structure: {
+			milestones?: components['schemas']['TemplateMilestone'][];
+			phases?: components['schemas']['TemplatePhase'][];
+		};
 		/** @enum {string} */
 		SubmissionStatus: 'pending' | 'approved' | 'rejected' | 'withdrawn';
 		SubmissionView: {
@@ -12254,6 +12579,32 @@ export interface components {
 			 *     where it lives. Built-ins have none.
 			 */
 			orgId?: string | null;
+		};
+		TemplateMilestone: {
+			clientVisible?: boolean;
+			name: string;
+			/**
+			 * Format: int32
+			 * @description Days after the project starts it's due.
+			 */
+			offsetDays?: number;
+		};
+		TemplatePhase: {
+			/** Format: double */
+			budgetHours?: number | null;
+			name: string;
+			tasks?: components['schemas']['TemplateTask'][];
+		};
+		TemplateTask: {
+			clientVisible?: boolean;
+			/** @description Keys of tasks that must be done first. */
+			dependsOn?: string[];
+			description?: string;
+			/** Format: double */
+			estimateHours?: number | null;
+			/** @description Unique in the template: what `dependsOn` and assignments name. */
+			key: string;
+			title: string;
 		};
 		TestCaseRequest: {
 			/** @description The HWF document to test (not saved). */
@@ -14245,6 +14596,25 @@ export interface operations {
 				};
 				content: {
 					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	portal_projects: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['PortalProject'][];
 				};
 			};
 		};
@@ -21957,6 +22327,279 @@ export interface operations {
 					[name: string]: unknown;
 				};
 				content?: never;
+			};
+		};
+	};
+	list_project_templates: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ProjectTemplate'][];
+				};
+			};
+		};
+	};
+	create_project_template: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['ProjectTemplateInput'];
+			};
+		};
+		responses: {
+			201: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ProjectTemplate'];
+				};
+			};
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	get_project_template: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ProjectTemplate'];
+				};
+			};
+		};
+	};
+	update_project_template: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['ProjectTemplateInput'];
+			};
+		};
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ProjectTemplate'];
+				};
+			};
+		};
+	};
+	delete_project_template: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			204: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content?: never;
+			};
+		};
+	};
+	list_projects: {
+		parameters: {
+			query?: {
+				/** @description One company's projects. */
+				orgId?: string;
+			};
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['Project'][];
+				};
+			};
+		};
+	};
+	create_project: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['NewProject'];
+			};
+		};
+		responses: {
+			201: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['Project'];
+				};
+			};
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	get_project: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['Project'];
+				};
+			};
+		};
+	};
+	update_project: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['ProjectChanges'];
+			};
+		};
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['Project'];
+				};
+			};
+			409: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	set_project_milestone: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+				milestone: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['MilestoneState'];
+			};
+		};
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['Project'];
+				};
+			};
+		};
+	};
+	add_project_task: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['NewTask'];
+			};
+		};
+		responses: {
+			201: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['Project'];
+				};
 			};
 		};
 	};

@@ -3260,3 +3260,171 @@ async fn problems_link_incidents_become_known_errors_and_draft_articles() {
         StatusCode::UNPROCESSABLE_ENTITY
     );
 }
+
+/// An onboarding template at the provider: two phases (4 and 6 budget
+/// hours), three tasks (b waits on a; c is for the client) and two
+/// milestones.
+async fn onboarding_template(s: &Setup) -> Value {
+    let ctx = RequestContext::system(Via::System);
+    let mut tx = begin_scoped(&s.pools.app, &OrgScope::System).await.unwrap();
+    huxley_modules::set_enabled(&mut tx, &ctx, "projects", true, false)
+        .await
+        .unwrap();
+    tx.commit().await.unwrap();
+    s.ok(
+        &s.owner,
+        "POST",
+        "/api/v1/project-templates",
+        Some(json!({
+            "orgId": s.provider, "name": unique("Client onboarding"),
+            "structure": {
+                "phases": [
+                    { "name": "Discovery", "budgetHours": 4, "tasks": [
+                        { "key": "audit", "title": "Audit the network", "estimateHours": 2 },
+                        { "key": "plan", "title": "Write the plan", "estimateHours": 2, "dependsOn": ["audit"] } ] },
+                    { "name": "Rollout", "budgetHours": 6, "tasks": [
+                        { "key": "deploy", "title": "Deploy the agents", "estimateHours": 4, "clientVisible": true } ] }
+                ],
+                "milestones": [ { "name": "Kickoff", "offsetDays": 0 }, { "name": "Live", "offsetDays": 14 } ]
+            }
+        })),
+    )
+    .await
+}
+
+#[tokio::test]
+async fn projects_from_templates_assign_tasks_and_track_budget() {
+    let Some(s) = setup().await else { return };
+    let template = onboarding_template(&s).await;
+    let (ada, ada_email) = user(&s.pools, Some(("technician", s.provider))).await;
+    let (bob, _) = user(&s.pools, Some(("technician", s.provider))).await;
+    let ada_cookie = login(&s.app, &ada_email).await;
+    // Technicians work projects; they don't create them.
+    let (status, _) = s
+        .call(
+            &ada_cookie,
+            "POST",
+            "/api/v1/projects",
+            Some(json!({ "orgId": s.acme, "name": "Nope", "startOn": "2026-12-01" })),
+        )
+        .await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+    let project = s
+        .ok(
+            &s.owner,
+            "POST",
+            "/api/v1/projects",
+            Some(json!({ "orgId": s.acme, "name": "Acme onboarding", "startOn": "2026-12-01", "templateId": template["id"],
+                         "assignees": { "audit": ada, "deploy": bob }, "thresholds": [50, 100] })),
+        )
+        .await;
+    assert_eq!(
+        (&project["budgetHours"], &project["progress"]["total"]),
+        (&json!(10.0), &json!(3)),
+        "{project}"
+    );
+    assert_eq!(project["milestones"][1]["dueOn"], "2026-12-15");
+    let tasks = project["tasks"].as_array().unwrap();
+    let task = |title: &str| tasks.iter().find(|t| t["title"] == title).unwrap().clone();
+    assert_eq!(task("Audit the network")["assigneeUserId"], json!(ada));
+    assert_eq!(
+        task("Write the plan")["waiting"],
+        true,
+        "it waits on the audit"
+    );
+    // The task is in Ada's My Work like any ticket.
+    let work = s.ok(&ada_cookie, "GET", "/api/v1/my-work", None).await;
+    let audit = task("Audit the network");
+    assert!(
+        work["mine"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|t| t["id"] == audit["ticketId"]),
+        "{work}"
+    );
+    project_budget(&s, &project, &audit, &ada_cookie).await;
+}
+
+/// Time on a task burns the budget; each threshold fires once; the portal
+/// shows milestones and client-facing tasks.
+async fn project_budget(s: &Setup, project: &Value, audit: &Value, ada: &str) {
+    let id = Uuid::parse_str(project["id"].as_str().unwrap()).unwrap();
+    let remote = work_type(s, "Remote support").await;
+    let time = format!(
+        "/api/v1/tickets/{}/time",
+        audit["ticketId"].as_str().unwrap()
+    );
+    for minutes in [300, 60] {
+        s.ok(
+            ada,
+            "POST",
+            &time,
+            Some(json!({ "workTypeId": remote["id"], "minutes": minutes })),
+        )
+        .await;
+    }
+    let fired = || async {
+        sqlx::query_scalar::<_, Value>(
+            "SELECT payload FROM events_outbox WHERE event_type = 'project.budget_threshold' AND subject_id = $1 ORDER BY occurred_at, id",
+        )
+        .bind(id)
+        .fetch_all(&s.pools.owner)
+        .await
+        .unwrap()
+    };
+    let events = fired().await;
+    assert_eq!(events.len(), 1, "50% once: {events:?}");
+    assert_eq!(
+        (&events[0]["threshold"], &events[0]["percent"]),
+        (&json!(50), &json!(50.0))
+    );
+    s.ok(
+        ada,
+        "POST",
+        &time,
+        Some(json!({ "workTypeId": remote["id"], "minutes": 300 })),
+    )
+    .await;
+    assert_eq!(fired().await.len(), 2, "then 100%");
+    let url = format!("/api/v1/projects/{id}");
+    let now = s.ok(&s.owner, "GET", &url, None).await;
+    assert_eq!(
+        (
+            &now["usedHours"],
+            &now["burnPercent"],
+            &now["health"]["level"]
+        ),
+        (&json!(11.0), &json!(110.0), &json!("off_track"))
+    );
+    // Reaching a milestone.
+    let kickoff = now["milestones"][0]["id"].as_str().unwrap();
+    s.ok(
+        ada,
+        "POST",
+        &format!("{url}/milestones/{kickoff}"),
+        Some(json!({ "reached": true })),
+    )
+    .await;
+    let reached: i64 = sqlx::query_scalar("SELECT count(*) FROM events_outbox WHERE event_type = 'project.milestone_reached' AND subject_id = $1")
+        .bind(id)
+        .fetch_one(&s.pools.owner)
+        .await
+        .unwrap();
+    assert_eq!(reached, 1);
+    let mut tx = begin_scoped(&s.pools.app, &OrgScope::System).await.unwrap();
+    let portal = huxley_servicedesk::projects::for_portal(&mut tx, s.acme)
+        .await
+        .unwrap();
+    tx.commit().await.unwrap();
+    let mine = portal.iter().find(|p| p.id == id).unwrap();
+    assert_eq!(mine.milestones.len(), 2);
+    assert!(mine.milestones[0].reached_at.is_some());
+    assert_eq!(
+        mine.tasks
+            .iter()
+            .map(|t| t.title.as_str())
+            .collect::<Vec<_>>(),
+        ["Deploy the agents"]
+    );
+}

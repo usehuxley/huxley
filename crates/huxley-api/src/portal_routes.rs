@@ -216,6 +216,7 @@ const PORTAL_MODULES: &[&str] = &[
     huxley_servicedesk::MODULE,
     huxley_knowledge::MODULE,
     huxley_cmdb::MODULE,
+    crate::project_routes::MODULE,
 ];
 
 impl From<PortalPrincipal> for PortalMe {

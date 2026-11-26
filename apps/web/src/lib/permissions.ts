@@ -26,6 +26,12 @@ export const SETTINGS_SECTIONS = [
 		module: 'servicedesk'
 	},
 	{
+		key: 'project-templates',
+		label: 'Project templates',
+		permission: 'project:manage',
+		module: 'projects'
+	},
+	{
 		key: 'templates',
 		label: 'Ticket templates',
 		permission: 'servicedesk:configure',

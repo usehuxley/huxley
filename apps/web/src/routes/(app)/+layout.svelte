@@ -18,6 +18,7 @@
 		Clock,
 		Database,
 		FileCode,
+		FolderKanban,
 		House,
 		ListTodo,
 		Package,
@@ -72,6 +73,10 @@
 		data.user.grantedPermissions.includes('ticket:read')
 			? [{ href: '/tickets', label: 'Tickets', icon: Ticket }]
 			: [{ href: '/tickets', label: 'Tickets', icon: Ticket, soon: true }]),
+		...(data.user.activeModules.includes('projects') &&
+		data.user.grantedPermissions.includes('project:read')
+			? [{ href: '/projects', label: 'Projects', icon: FolderKanban }]
+			: []),
 		...(data.user.activeModules.includes('change') &&
 		data.user.grantedPermissions.includes('ticket:read')
 			? [{ href: '/changes', label: 'Changes', icon: CalendarRange }]
