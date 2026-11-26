@@ -1,6 +1,6 @@
 # Product catalog
 
-The **Catalog** (the `contracts` module) holds what you sell: products, services, and bundles of them, with costs and prices. Agreements and, later, quotes and invoices build on it. Turn the module on under **Settings → Modules**.
+The **Catalog** (the `contracts` module) holds what you sell: products, services, and bundles of them, with costs and prices. [Agreements](agreements.md) bill them as recurring lines, and quotes and invoices will build on it. Turn the module on under **Settings → Modules**.
 
 ## Products, services and bundles
 

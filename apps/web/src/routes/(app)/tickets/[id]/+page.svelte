@@ -33,10 +33,12 @@
 	import ActionsCard from '#lib/forms/ActionsCard.svelte';
 	import KnowledgeCard from '#lib/kb/KnowledgeCard.svelte';
 	import TicketAssetsCard from '#lib/assets/TicketAssetsCard.svelte';
+	import { OUTCOME } from '#lib/agreements/coverage.ts';
 	import { onMount, untrack } from 'svelte';
 	import type { PageProps } from './$types';
 
 	let { data, form }: PageProps = $props();
+	let coverageOf = $derived(new Map((data.coverage ?? []).map((c) => [c.timeEntryId, c])));
 
 	let ticket = $derived(data.ticket);
 	let canWrite = $derived(data.user.grantedPermissions.includes('ticket:write'));
@@ -563,6 +565,7 @@
 				{:else}
 					<ul class="flex flex-col gap-2" aria-label="Time entries">
 						{#each data.time as entry (entry.id)}
+							{@const covered = coverageOf.get(entry.id)}
 							<li class="flex items-start justify-between gap-2 text-sm">
 								<div class="min-w-0">
 									<p class="text-fg">
@@ -574,6 +577,22 @@
 									<p class="text-xs text-fg-muted">
 										{entry.userName} · {entry.workedOn}{entry.notes ? ` · ${entry.notes}` : ''}
 									</p>
+									{#if covered}
+										<p class="mt-0.5 flex flex-wrap items-center gap-1 text-xs text-fg-muted">
+											<Badge tone={OUTCOME[covered.outcome].tone}>
+												{OUTCOME[covered.outcome].label}
+											</Badge>
+											{#if covered.agreementName}<span>{covered.agreementName}</span>{/if}
+											{#if covered.billableMinutes > 0}
+												<span>
+													· {formatDuration(covered.billableMinutes)} billable{covered.amount &&
+													covered.currency
+														? ` (${covered.amount} ${covered.currency})`
+														: ''}
+												</span>
+											{/if}
+										</p>
+									{/if}
 								</div>
 								{#if entry.userId === data.user.id}
 									<form method="POST" action="?/deleteTime" use:enhance={saved('Time deleted.')}>

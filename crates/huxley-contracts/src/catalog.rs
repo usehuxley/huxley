@@ -108,7 +108,10 @@ pub struct Product {
 
 /// Out as a decimal string without trailing zeros (`"1149"`, `"22.5"`).
 #[allow(clippy::ref_option, clippy::trivially_copy_pass_by_ref)]
-fn plain<S: serde::Serializer>(value: &Option<Decimal>, s: S) -> Result<S::Ok, S::Error> {
+pub(crate) fn plain<S: serde::Serializer>(
+    value: &Option<Decimal>,
+    s: S,
+) -> Result<S::Ok, S::Error> {
     match value {
         Some(d) => s.serialize_str(&d.normalize().to_string()),
         None => s.serialize_none(),
@@ -116,12 +119,12 @@ fn plain<S: serde::Serializer>(value: &Option<Decimal>, s: S) -> Result<S::Ok, S
 }
 
 #[allow(clippy::trivially_copy_pass_by_ref)]
-fn plain_one<S: serde::Serializer>(value: &Decimal, s: S) -> Result<S::Ok, S::Error> {
+pub(crate) fn plain_one<S: serde::Serializer>(value: &Decimal, s: S) -> Result<S::Ok, S::Error> {
     s.serialize_str(&value.normalize().to_string())
 }
 
 /// Money and quantities: a decimal string (`"12.50"`) or a JSON number.
-fn decimal<'de, D: Deserializer<'de>>(d: D) -> Result<Option<Decimal>, D::Error> {
+pub(crate) fn decimal<'de, D: Deserializer<'de>>(d: D) -> Result<Option<Decimal>, D::Error> {
     use serde::de::Error;
     match Option::<Json>::deserialize(d)? {
         None | Some(Json::Null) => Ok(None),
@@ -137,7 +140,7 @@ fn decimal<'de, D: Deserializer<'de>>(d: D) -> Result<Option<Decimal>, D::Error>
     }
 }
 
-fn quantity<'de, D: Deserializer<'de>>(d: D) -> Result<Decimal, D::Error> {
+pub(crate) fn quantity<'de, D: Deserializer<'de>>(d: D) -> Result<Decimal, D::Error> {
     use serde::de::Error;
     decimal(d)?.ok_or_else(|| D::Error::custom("a quantity is needed"))
 }
@@ -286,11 +289,11 @@ async fn with_components(conn: &mut PgConnection, products: &mut [Product]) -> C
 }
 
 /// The largest amount `numeric(18,4)` holds, plus one.
-fn too_big() -> Decimal {
+pub(crate) fn too_big() -> Decimal {
     Decimal::from(100_000_000_000_000_i64)
 }
 
-fn money(field: &str, value: Option<Decimal>) -> ContractsResult<Option<Decimal>> {
+pub(crate) fn money(field: &str, value: Option<Decimal>) -> ContractsResult<Option<Decimal>> {
     match value {
         Some(v) if v.is_sign_negative() && !v.is_zero() => {
             Err(ContractsError::invalid(field, "can't be negative"))

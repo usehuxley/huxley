@@ -5,6 +5,7 @@
 	import { Globe, MapPin, Phone, Plus, Search, UserPlus } from '@lucide/svelte';
 	import { Badge, Button, Card, Dialog, Field, Input, Select, Tabs, toast } from '@usehuxley/ui';
 	import VaultPanel from '#lib/vault/VaultPanel.svelte';
+	import AgreementsPanel from '#lib/agreements/AgreementsPanel.svelte';
 	import SiteForm from '#lib/crm/SiteForm.svelte';
 	import { RELATIONSHIPS, STATUSES, hoursSummary, label, statusTone } from '#lib/crm/labels.ts';
 	import type { PageProps } from './$types';
@@ -104,7 +105,10 @@
 			...(data.documents
 				? [{ value: 'documentation', label: `Documentation (${data.documents.length})` }]
 				: []),
-			...(data.vault ? [{ value: 'vault', label: `Passwords (${data.vault.length})` }] : [])
+			...(data.vault ? [{ value: 'vault', label: `Passwords (${data.vault.length})` }] : []),
+			...(data.agreements
+				? [{ value: 'agreements', label: `Agreements (${data.agreements.length})` }]
+				: [])
 		]}
 	>
 		{#snippet panel(value)}
@@ -369,6 +373,19 @@
 						</ul>
 					{/if}
 				</Card>
+			{/if}
+			{#if value === 'agreements' && data.agreements}
+				<AgreementsPanel
+					agreements={data.agreements}
+					usage={data.agreementUsage}
+					workTypes={data.workTypes}
+					assetTypes={data.assetTypes}
+					products={data.products}
+					canManage={data.canManageAgreements}
+					errors={form && 'agreement' in form && form.agreement && 'errors' in form.agreement
+						? (form.agreement.errors ?? {})
+						: {}}
+				/>
 			{/if}
 			{#if value === 'vault' && data.vault}
 				<VaultPanel items={data.vault} canManage={data.canManageVault} />

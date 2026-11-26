@@ -5,7 +5,10 @@ import { actionsFor } from '#lib/forms/actions.server.ts';
 import { formString } from '#lib/forms.ts';
 import { api } from '#lib/server/api.ts';
 import { problemMessage } from '#lib/server/problems.ts';
+import type { components } from '@usehuxley/api-client';
 import type { Actions, PageServerLoad } from './$types';
+
+type AgreementInput = components['schemas']['AgreementInput'];
 
 export const load: PageServerLoad = async (event) => {
 	const client = api(event);
@@ -30,17 +33,43 @@ export const load: PageServerLoad = async (event) => {
 	const { user } = await event.parent();
 	const has = (module: string, permission: string) =>
 		user.activeModules.includes(module) && user.grantedPermissions.includes(permission);
-	const [vault, documents, assets] = await Promise.all([
-		has('vault', 'vault:read')
-			? client.GET('/api/v1/vault/items', { params: { query: { orgId: id } } })
-			: Promise.resolve({ data: undefined }),
-		has('knowledge', 'kb:read')
-			? client.GET('/api/v1/kb/articles', { params: { query: { orgId: id, limit: 200 } } })
-			: Promise.resolve({ data: undefined }),
-		has('cmdb', 'asset:read')
-			? client.GET('/api/v1/assets', { params: { query: { orgId: id, limit: 500 } } })
-			: Promise.resolve({ data: undefined })
-	]);
+	const showAgreements = has('contracts', 'agreement:read');
+	const [vault, documents, assets, agreements, workTypes, assetTypes, products] = await Promise.all(
+		[
+			has('vault', 'vault:read')
+				? client.GET('/api/v1/vault/items', { params: { query: { orgId: id } } })
+				: Promise.resolve({ data: undefined }),
+			has('knowledge', 'kb:read')
+				? client.GET('/api/v1/kb/articles', { params: { query: { orgId: id, limit: 200 } } })
+				: Promise.resolve({ data: undefined }),
+			has('cmdb', 'asset:read')
+				? client.GET('/api/v1/assets', { params: { query: { orgId: id, limit: 500 } } })
+				: Promise.resolve({ data: undefined }),
+			showAgreements
+				? client.GET('/api/v1/agreements', { params: { query: { orgId: id } } })
+				: Promise.resolve({ data: undefined }),
+			showAgreements ? client.GET('/api/v1/work-types') : Promise.resolve({ data: undefined }),
+			showAgreements && user.activeModules.includes('cmdb')
+				? client.GET('/api/v1/asset-types')
+				: Promise.resolve({ data: undefined }),
+			showAgreements && user.grantedPermissions.includes('catalog:read')
+				? client.GET('/api/v1/catalog/products', { params: { query: { active: true } } })
+				: Promise.resolve({ data: undefined })
+		]
+	);
+	// This month's usage of each active agreement.
+	const usage = Object.fromEntries(
+		await Promise.all(
+			(agreements.data ?? [])
+				.filter((a) => a.status === 'active')
+				.map(async (a) => {
+					const { data } = await client.GET('/api/v1/agreements/{id}/usage', {
+						params: { path: { id: a.id } }
+					});
+					return [a.id, data ?? null] as const;
+				})
+		)
+	);
 	return {
 		org: org.data,
 		company: company.data,
@@ -50,6 +79,12 @@ export const load: PageServerLoad = async (event) => {
 		vault: vault.data ?? null,
 		documents: documents.data?.items ?? null,
 		assets: assets.data?.items ?? null,
+		agreements: agreements.data ?? null,
+		agreementUsage: usage,
+		workTypes: workTypes.data ?? [],
+		assetTypes: (assetTypes.data ?? []).filter((t) => !t.archived),
+		products: (products.data ?? []).filter((p) => p.kind !== 'bundle'),
+		canManageAgreements: user.grantedPermissions.includes('agreement:manage'),
 		canWriteAssets: user.grantedPermissions.includes('asset:write'),
 		canWriteDocs: user.grantedPermissions.includes('kb:write'),
 		canManageVault: user.grantedPermissions.includes('vault:manage'),
@@ -105,6 +140,45 @@ function vaultBody(form: FormData) {
 }
 
 export const actions: Actions = {
+	agreementSave: async (event) => {
+		const form = await event.request.formData();
+		const agreementId = formString(form, 'agreementId');
+		let body: AgreementInput;
+		try {
+			body = JSON.parse(formString(form, 'agreement')) as AgreementInput;
+		} catch {
+			return fail(400, { agreement: { errors: {}, message: 'The agreement could not be read.' } });
+		}
+		const result = agreementId
+			? await api(event).PUT('/api/v1/agreements/{id}', {
+					params: { path: { id: agreementId } },
+					body
+				})
+			: await api(event).POST('/api/v1/agreements', {
+					body: { orgId: event.params.id, agreement: body }
+				});
+		if (!result.data) {
+			return fail(result.response.status, {
+				agreement: {
+					errors: fieldErrors(result.error),
+					message: problemMessage(result.error, 'Could not save the agreement.')
+				}
+			});
+		}
+		return { agreement: { saved: agreementId ? 'Agreement saved.' : 'Agreement added.' } };
+	},
+	agreementDelete: async (event) => {
+		const agreementId = formString(await event.request.formData(), 'agreementId');
+		const { error: problem, response } = await api(event).DELETE('/api/v1/agreements/{id}', {
+			params: { path: { id: agreementId } }
+		});
+		if (response.status !== 204) {
+			return fail(response.status, {
+				agreement: { errors: {}, message: problemMessage(problem, 'Could not delete it.') }
+			});
+		}
+		return { agreement: { saved: 'Agreement deleted.' } };
+	},
 	vaultSave: async (event) => {
 		const form = await event.request.formData();
 		const itemId = formString(form, 'itemId');

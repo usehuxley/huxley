@@ -88,7 +88,7 @@ pub const REGISTRY: &[Module] = &[
     Module {
         key: "contracts",
         name: "Contracts",
-        description: "The product catalog: products, services and bundles, with costs and prices. Agreements come next.",
+        description: "Agreements (coverage, rates, recurring lines, and how time falls under them) and the product catalog.",
         requires: &["crm"],
         phase: 6,
         released: true,

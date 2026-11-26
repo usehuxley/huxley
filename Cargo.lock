@@ -2113,9 +2113,12 @@ dependencies = [
 name = "huxley-contracts"
 version = "0.1.0"
 dependencies = [
+ "huxley-auth",
+ "huxley-cmdb",
  "huxley-core",
  "huxley-db",
  "huxley-orgs",
+ "huxley-servicedesk",
  "rust_decimal",
  "serde",
  "serde_json",
