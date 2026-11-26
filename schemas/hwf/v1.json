@@ -605,6 +605,23 @@
       ],
       "type": "string"
     },
+    "ReportSend": {
+      "additionalProperties": false,
+      "description": "A report to email (`core.report.send`): a shared dashboard (at the\nrun's organization, above or below it) or a prebuilt one by key, with\nthe numbers of the run's organization and below over `range` (default:\nthe dashboard's), as `format` (`csv`, `xlsx` or `pdf`, the default),\nattached to an email to `to` (`user:<id>`, `team:<id>` or `role:<key>`\nentries) with an optional `subject` and `message`. Output: `{ sent,\nfile_name }`.",
+      "properties": {
+        "dashboard_id": true,
+        "format": true,
+        "message": true,
+        "range": true,
+        "subject": true,
+        "to": true
+      },
+      "required": [
+        "dashboard_id",
+        "to"
+      ],
+      "type": "object"
+    },
     "RetryPolicy": {
       "additionalProperties": false,
       "properties": {
@@ -3800,6 +3817,69 @@
             },
             "with": {
               "$ref": "#/$defs/TimeSuggest"
+            }
+          },
+          "required": [
+            "type",
+            "id",
+            "with"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Email a dashboard as a CSV, XLSX or PDF.",
+          "properties": {
+            "continue_on_error": {
+              "description": "Record the error as the step's output and carry on.",
+              "type": "boolean"
+            },
+            "description": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "id": {
+              "description": "Unique in the workflow: lowercase letters, digits, underscores.\nOther steps read this step's output as `steps.<id>.output`.",
+              "type": "string"
+            },
+            "if": {
+              "description": "Skip the step unless this expression is true.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "name": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "retry": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/RetryPolicy"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "timeout": {
+              "description": "Fail the attempt after this long, e.g. `30s`.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "type": {
+              "const": "core.report.send",
+              "type": "string"
+            },
+            "with": {
+              "$ref": "#/$defs/ReportSend"
             }
           },
           "required": [

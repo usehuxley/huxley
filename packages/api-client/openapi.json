@@ -6069,6 +6069,68 @@
 				}
 			}
 		},
+		"/api/v1/dashboards/{id}/export": {
+			"get": {
+				"tags": ["analytics"],
+				"summary": "Downloads a dashboard: each widget's numbers (as you may see them) as a\nCSV, an XLSX workbook (a sheet per widget) or a PDF.",
+				"operationId": "export_dashboard",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string"
+						}
+					},
+					{
+						"name": "format",
+						"in": "query",
+						"description": "`csv`, `xlsx` or `pdf`.",
+						"required": true,
+						"schema": {
+							"type": "string"
+						}
+					},
+					{
+						"name": "range",
+						"in": "query",
+						"description": "A named range (default: the dashboard's).",
+						"required": false,
+						"schema": {
+							"type": "string"
+						}
+					},
+					{
+						"name": "orgId",
+						"in": "query",
+						"description": "Only this organization and those below.",
+						"required": false,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "The file",
+						"content": {
+							"application/octet-stream": {
+								"schema": {
+									"type": "array",
+									"items": {
+										"type": "integer",
+										"format": "int32",
+										"minimum": 0
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		},
 		"/api/v1/dashboards/{id}/submissions": {
 			"get": {
 				"tags": ["analytics"],

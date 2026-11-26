@@ -435,6 +435,9 @@ pub enum Step {
     /// module).
     #[serde(rename = "core.time.suggest")]
     TimeSuggest(TimeSuggestStep),
+    /// Email a dashboard as a CSV, XLSX or PDF.
+    #[serde(rename = "core.report.send")]
+    ReportSend(ReportSendStep),
     /// Run a dataset → asset mapping rule (the `cmdb` module).
     #[serde(rename = "core.asset.sync")]
     AssetSync(AssetSyncStep),
@@ -816,6 +819,11 @@ step!(TimeSuggestStep {
     pub suggest: TimeSuggest,
 });
 
+step!(ReportSendStep {
+    #[serde(rename = "with")]
+    pub report: ReportSend,
+});
+
 step!(AssetSyncStep {
     #[serde(rename = "with")]
     pub sync: AssetSync,
@@ -907,6 +915,7 @@ impl Step {
             TicketInsight,
             KbDraft,
             TimeSuggest,
+            ReportSend,
             AssetSync,
             AssetWarranty,
             TicketEmailReply,
@@ -969,6 +978,7 @@ impl Step {
             Self::TicketInsight(_) => "core.ticket.insight",
             Self::KbDraft(_) => "core.kb.draft",
             Self::TimeSuggest(_) => "core.time.suggest",
+            Self::ReportSend(_) => "core.report.send",
             Self::AssetSync(_) => "core.asset.sync",
             Self::AssetWarranty(_) => "core.asset.set_warranty",
             Self::TicketCreate(_) => "core.ticket.create",
@@ -1577,6 +1587,28 @@ pub struct TimeSuggest {
     pub notes: Option<Value>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub user_id: Option<Value>,
+}
+
+/// A report to email (`core.report.send`): a shared dashboard (at the
+/// run's organization, above or below it) or a prebuilt one by key, with
+/// the numbers of the run's organization and below over `range` (default:
+/// the dashboard's), as `format` (`csv`, `xlsx` or `pdf`, the default),
+/// attached to an email to `to` (`user:<id>`, `team:<id>` or `role:<key>`
+/// entries) with an optional `subject` and `message`. Output: `{ sent,
+/// file_name }`.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct ReportSend {
+    pub dashboard_id: Value,
+    pub to: Value,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub format: Option<Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub range: Option<Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub subject: Option<Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub message: Option<Value>,
 }
 
 /// Mapping rules to run (`core.asset.sync`): a dataset's rows become

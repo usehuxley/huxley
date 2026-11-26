@@ -55,3 +55,4 @@ Decisions that shape Huxley. Add a new ADR by copying `0000-template.md` with th
 | [049](0049-skill-gaps.md) | Skill gaps are computed from requirements, not guessed | Accepted |
 | [050](0050-ticket-insights.md) | Ticket insights: an AI summary by workflow, similar tickets by embedding | Accepted |
 | [051](0051-auto-documentation.md) | Auto-documentation drafts; people decide | Accepted |
+| [052](0052-report-export.md) | Reports export without new dependencies, and schedule as workflows | Accepted |

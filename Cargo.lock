@@ -1984,6 +1984,7 @@ dependencies = [
  "tokio",
  "utoipa",
  "uuid",
+ "zip",
 ]
 
 [[package]]
@@ -2281,6 +2282,7 @@ dependencies = [
  "bytes",
  "getrandom 0.4.3",
  "huxley-ai",
+ "huxley-analytics",
  "huxley-auth",
  "huxley-authz",
  "huxley-cmdb",

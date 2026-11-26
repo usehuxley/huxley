@@ -465,6 +465,45 @@ export const STEPS: StepSpec[] = [
 		]
 	},
 	{
+		type: 'core.report.send',
+		label: 'Email a report',
+		description:
+			'Email a shared or prebuilt dashboard, with this organization’s numbers, as a PDF, Excel or CSV attachment.',
+		group: 'Actions',
+		template: { with: { dashboard_id: 'service-desk', format: 'pdf', to: 'role:admin' } },
+		fields: [
+			{
+				path: 'with.dashboard_id',
+				label: 'Dashboard',
+				kind: 'expression',
+				hint: 'Its id, or a prebuilt key such as service-desk'
+			},
+			{
+				path: 'with.format',
+				label: 'Format',
+				kind: 'select',
+				options: [
+					{ value: 'pdf', label: 'PDF' },
+					{ value: 'xlsx', label: 'Excel (XLSX)' },
+					{ value: 'csv', label: 'CSV' }
+				]
+			},
+			{
+				path: 'with.to',
+				label: 'To',
+				kind: 'expression',
+				hint: 'user:<id>, team:<id> or role:<key>'
+			},
+			{
+				path: 'with.range',
+				label: 'Range',
+				kind: 'expression',
+				hint: 'e.g. last_7_days (default: the dashboard’s)'
+			},
+			{ path: 'with.subject', label: 'Subject', kind: 'expression' }
+		]
+	},
+	{
 		type: 'core.kb.draft',
 		label: 'Draft a knowledge article',
 		description:

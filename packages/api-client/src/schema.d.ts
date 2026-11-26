@@ -2340,6 +2340,26 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
+	'/api/v1/dashboards/{id}/export': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/**
+		 * Downloads a dashboard: each widget's numbers (as you may see them) as a
+		 *     CSV, an XLSX workbook (a sheet per widget) or a PDF.
+		 */
+		get: operations['export_dashboard'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
 	'/api/v1/dashboards/{id}/submissions': {
 		parameters: {
 			query?: never;
@@ -17689,6 +17709,35 @@ export interface operations {
 				};
 				content: {
 					'application/json': components['schemas']['Dashboard'];
+				};
+			};
+		};
+	};
+	export_dashboard: {
+		parameters: {
+			query: {
+				/** @description `csv`, `xlsx` or `pdf`. */
+				format: string;
+				/** @description A named range (default: the dashboard's). */
+				range?: string;
+				/** @description Only this organization and those below. */
+				orgId?: string;
+			};
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			/** @description The file */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/octet-stream': number[];
 				};
 			};
 		};

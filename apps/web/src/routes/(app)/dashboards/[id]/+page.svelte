@@ -3,15 +3,20 @@
 	import { goto, invalidateAll } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
-	import { Copy, Pencil, RefreshCw, Send } from '@lucide/svelte';
+	import { CalendarClock, Copy, Download, Pencil, RefreshCw, Send } from '@lucide/svelte';
 	import { Badge, Button, Select } from '@usehuxley/ui';
 	import { Widget } from '@usehuxley/widgets';
 	import { RANGES } from '#lib/dashboards/spec.ts';
 	import PublishDialog from '#lib/dashboards/PublishDialog.svelte';
+	import ScheduleDialog from '#lib/dashboards/ScheduleDialog.svelte';
 	import type { PageProps } from './$types';
 
 	let { data, form }: PageProps = $props();
 	let publishing = $state(false);
+	let scheduling = $state(false);
+	let exportQuery = $derived(
+		`range=${encodeURIComponent(data.range)}${data.orgId ? `&org=${encodeURIComponent(data.orgId)}` : ''}`
+	);
 	let pending = $derived(data.submissions.find((s) => s.status === 'pending'));
 	let latest = $derived(data.submissions[0]);
 	let names = (ids: string[], from: { id: string; name: string }[]) =>
@@ -71,6 +76,38 @@
 			<Button variant="ghost" onclick={() => invalidateAll()} aria-label="Refresh">
 				<RefreshCw size={16} />
 			</Button>
+			<details class="relative">
+				<summary
+					class="flex h-9 cursor-pointer list-none items-center gap-1 rounded-control border border-border-strong px-3 text-sm text-fg"
+				>
+					<Download size={16} /> Download
+				</summary>
+				<ul
+					class="absolute right-0 z-10 mt-1 w-40 rounded-card border border-border bg-surface p-1 text-sm shadow"
+					aria-label="Download as"
+				>
+					{#each [['pdf', 'PDF'], ['xlsx', 'Excel (XLSX)'], ['csv', 'CSV']] as [format, label] (format)}
+						<li>
+							<!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- a file download -->
+							<a
+								href="{resolve('/(app)/dashboards/[id]/export', {
+									id: data.dashboard.id
+								})}?format={format}&{exportQuery}"
+								class="block rounded px-2 py-1 text-fg hover:bg-surface-raised"
+								data-sveltekit-reload
+								download
+							>
+								{label}
+							</a>
+						</li>
+					{/each}
+				</ul>
+			</details>
+			{#if data.canSchedule}
+				<Button onclick={() => (scheduling = true)}>
+					<CalendarClock size={16} /> Email regularly
+				</Button>
+			{/if}
 			{#if data.canSubmit && !pending}
 				<Button onclick={() => (publishing = true)}><Send size={16} /> Publish</Button>
 			{/if}
@@ -127,4 +164,12 @@
 	bind:open={publishing}
 	audiences={data.audiences}
 	problem={form && 'publish' in form ? (form.publish as string) : null}
+/>
+
+<ScheduleDialog
+	bind:open={scheduling}
+	me={data.user.id}
+	teams={data.audiences.teams}
+	problem={form && 'schedule' in form ? (form.schedule as string) : null}
+	scheduled={form && 'scheduled' in form ? (form.scheduled as string) : null}
 />

@@ -277,6 +277,7 @@ use crate::workforce_routes;
         crate::dashboard_routes::update_dashboard,
         crate::dashboard_routes::delete_dashboard,
         crate::dashboard_routes::copy_dashboard,
+        crate::dashboard_routes::export_dashboard,
         crate::dashboard_routes::submit_dashboard,
         crate::dashboard_routes::dashboard_submissions,
         crate::dashboard_routes::pending_submissions,

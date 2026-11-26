@@ -9,6 +9,7 @@ repository.workspace = true
 publish = false
 
 [dependencies]
+huxley-analytics.workspace = true
 huxley-cx.workspace = true
 base64.workspace = true
 getrandom.workspace = true

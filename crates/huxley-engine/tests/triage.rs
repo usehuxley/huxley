@@ -368,3 +368,40 @@ async fn run_pack(
         tokio::time::sleep(Duration::from_millis(20)).await;
     }
 }
+
+#[tokio::test]
+async fn a_report_is_emailed_as_a_spreadsheet() {
+    let Some(db) = isolated("report_send").await else {
+        return;
+    };
+    let pools = db.pools.clone();
+    let (provider, _, _, _) = world(&pools).await;
+    let reader = Uuid::now_v7();
+    sqlx::query("INSERT INTO users (id, email, display_name) VALUES ($1, $2, 'Reggie')")
+        .bind(reader)
+        .bind(format!(
+            "{}@example.com",
+            unique("reggie").replace(' ', ".")
+        ))
+        .execute(&pools.owner)
+        .await
+        .unwrap();
+    let crypto = huxley_crypto::Crypto::new(pools.app.clone(), huxley_crypto::testing::key_ring());
+    let (mailer, sent) = huxley_email::Mailer::memory();
+    let engine = Engine::with_config(pools.app.clone(), crypto, &EngineConfig::default())
+        .with_mailer(mailer);
+    let yaml = format!(
+        "apiVersion: usehuxley.io/v1\nkind: Workflow\nmetadata: {{ key: report, name: Report }}\nspec:\n  steps:\n    \
+         - id: send\n      type: core.report.send\n      with: {{ dashboard_id: service-desk, format: xlsx, to: \"user:{reader}\", \
+         subject: Weekly desk }}\n"
+    );
+    let (status, error) =
+        run_pack(&engine, &pools, provider, Uuid::now_v7(), &yaml, "manual").await;
+    assert_eq!(status, RunStatus::Succeeded, "{error:?}");
+    let sent = sent.lock().unwrap();
+    assert_eq!(sent.len(), 1);
+    assert_eq!(sent[0].subject, "Weekly desk");
+    let attached = &sent[0].attachments[0];
+    assert_eq!(attached.filename, "service-desk-overview.xlsx");
+    assert_eq!(&attached.bytes[..2], b"PK");
+}

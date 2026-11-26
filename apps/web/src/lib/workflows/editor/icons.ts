@@ -70,6 +70,7 @@ const ICONS: Record<string, typeof Globe> = {
 	'core.workforce.insights': ListChecks,
 	'core.ticket.insight': ListChecks,
 	'core.kb.draft': ListChecks,
+	'core.report.send': Mail,
 	'core.time.suggest': ListChecks,
 	'core.asset.sync': Boxes,
 	'core.asset.set_warranty': Boxes,
