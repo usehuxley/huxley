@@ -245,6 +245,87 @@ test.describe('assets', () => {
 		await expect(page.getByLabel('Details')).toContainText('rmm');
 	});
 
+	test('a mapping places each row with the client whose variable matches', async ({ page }) => {
+		const stamp = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+		const client = await setUp(stamp);
+		const variable = `e2e_${stamp}`;
+		const api = await request.newContext({
+			baseURL: apiUrl,
+			extraHTTPHeaders: { 'x-requested-with': 'huxley' }
+		});
+		await api.post('/api/v1/auth/login', { data: { email: ownerEmail, password: ownerPassword } });
+		const set = await api.put(`/api/v1/orgs/${client}/variables/${variable}`, {
+			data: { type: 'string', value: `c-${stamp}` }
+		});
+		expect(set.status(), await set.text()).toBeLessThan(300);
+		const orgs = (await (await api.get('/api/v1/orgs')).json()) as {
+			id: string;
+			parentId: string | null;
+		}[];
+		const msp = orgs.find((o) => o.parentId === null)!.id;
+		// At the MSP, as an RMM sync writes it.
+		const ds = await api.post('/api/v1/datasets', {
+			data: {
+				orgId: msp,
+				dataset: {
+					key: `rmm-org-${stamp}`,
+					name: `RMM org ${stamp}`,
+					primaryKey: ['device_id'],
+					columns: [
+						{ name: 'device_id', type: 'text' },
+						{ name: 'hostname', type: 'text' },
+						{ name: 'client_ref', type: 'text' }
+					]
+				}
+			}
+		});
+		expect(ds.status(), await ds.text()).toBe(201);
+		const { id: dsId } = (await ds.json()) as { id: string };
+		const rows = await api.post(`/api/v1/datasets/${dsId}/rows`, {
+			data: {
+				orgId: msp,
+				rows: [
+					{ device_id: `m-${stamp}`, hostname: `MATCHED-${stamp}`, client_ref: `c-${stamp}` },
+					{ device_id: `u-${stamp}`, hostname: `UNKNOWN-${stamp}`, client_ref: 'nobody' }
+				]
+			}
+		});
+		expect(rows.status(), await rows.text()).toBe(200);
+		await api.dispose();
+
+		await signIn(page);
+		await page.goto('/settings/asset-sync');
+		await expect(async () => {
+			await page.getByRole('button', { name: 'New mapping' }).click();
+			await expect(page.getByRole('dialog')).toBeVisible({ timeout: 1000 });
+		}).toPass({ timeout: 15_000 });
+		const dialog = page.getByRole('dialog');
+		await dialog.locator('#map-name').fill(`RMM org ${stamp}`);
+		await dialog.getByLabel('Dataset').selectOption({ label: `RMM org ${stamp}` });
+		await dialog
+			.getByRole('group', { name: 'Match key 1' })
+			.getByLabel('Column')
+			.selectOption('device_id');
+		await dialog.locator('#mf-name').selectOption('hostname');
+		await dialog.locator('#mf-external_id').selectOption('device_id');
+		await dialog.locator('#map-place').selectOption('variable');
+		await dialog.locator('#map-org-column').selectOption('client_ref');
+		await dialog.locator('#map-org-variable').fill(variable);
+		await dialog.getByRole('button', { name: 'Save' }).click();
+		await expect(page.getByText('Mapping saved.')).toBeVisible();
+
+		const mappings = page.getByRole('list', { name: 'Asset mappings' });
+		await mappings.getByRole('button', { name: `Sync RMM org ${stamp} now` }).click();
+		await expect(page.getByText('Synced: 2 rows: 1 new').first()).toBeVisible();
+		await expect(mappings).toContainText(`no organization has ${variable} = nobody`);
+		// The asset is the client's.
+		await page.goto(`/assets?q=MATCHED-${stamp}`);
+		await expect(page.getByRole('link', { name: `MATCHED-${stamp}` })).toBeVisible();
+		await expect(page.getByRole('row').filter({ hasText: `MATCHED-${stamp}` })).toContainText(
+			`Assets ${stamp}`
+		);
+	});
+
 	test('a purchase date and a warranty are kept, and ending warranties found', async ({ page }) => {
 		const stamp = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
 		const client = await setUp(stamp);

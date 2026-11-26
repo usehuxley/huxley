@@ -86,6 +86,17 @@ impl FieldMap {
     }
 }
 
+/// Which organization a row's asset belongs to: the one (at or below the
+/// dataset's) whose variable `variable` equals the row's `column`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(deny_unknown_fields)]
+#[schema(as = AssetOrgMatch)]
+pub struct OrgMatch {
+    pub column: String,
+    /// An organization variable's key, e.g. `automate_client_id`.
+    pub variable: String,
+}
+
 #[derive(Debug, Clone, Serialize, ToSchema, sqlx::FromRow)]
 #[serde(rename_all = "camelCase")]
 #[schema(as = AssetMapping)]
@@ -105,6 +116,10 @@ pub struct Mapping {
     pub conflict: String,
     pub create_missing: bool,
     pub enabled: bool,
+    /// Which organization each row's asset belongs to (none: the
+    /// organization the row was written for).
+    #[schema(value_type = Option<OrgMatch>)]
+    pub org_match: Option<sqlx::types::Json<OrgMatch>>,
     #[serde(with = "time::serde::rfc3339::option")]
     pub last_run_at: Option<OffsetDateTime>,
     #[schema(value_type = Option<SyncResult>)]
@@ -113,7 +128,7 @@ pub struct Mapping {
 }
 
 const SELECT: &str = "SELECT m.id, m.dataset_id, d.name AS dataset_name, m.name, m.source, m.type_id, \
-    t.name AS type_name, m.match_keys, m.fields, m.conflict, m.create_missing, m.enabled, m.last_run_at, \
+    t.name AS type_name, m.match_keys, m.fields, m.conflict, m.create_missing, m.enabled, m.org_match, m.last_run_at, \
     m.last_result, m.version \
     FROM cmdb_mappings m JOIN datasets d ON d.id = m.dataset_id JOIN cmdb_asset_types t ON t.id = m.type_id";
 
@@ -153,6 +168,10 @@ pub struct MappingInput {
     pub create_missing: bool,
     #[serde(default = "yes")]
     pub enabled: bool,
+    /// Place each row's asset with the organization whose variable matches
+    /// a column; leave out to use the organization the row was written for.
+    #[serde(default)]
+    pub org_match: Option<OrgMatch>,
     /// The version you read (changes only).
     #[serde(default)]
     pub version: Option<i32>,
@@ -238,6 +257,19 @@ async fn check(conn: &mut PgConnection, input: &MappingInput) -> CmdbResult<(Str
         }
         column(&format!("fields/attributes/{key}"), c)?;
     }
+    if let Some(om) = &input.org_match {
+        column("orgMatch/column", &om.column)?;
+        let mut chars = om.variable.chars();
+        if om.variable.len() > 64
+            || !chars.next().is_some_and(|c| c.is_ascii_lowercase())
+            || !chars.all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_')
+        {
+            return Err(CmdbError::invalid(
+                "orgMatch/variable",
+                "an organization variable's key, e.g. automate_client_id",
+            ));
+        }
+    }
     if input.create_missing
         && input.fields.name.is_none()
         && input.fields.hostname.is_none()
@@ -270,7 +302,7 @@ pub async fn create(
     let id = huxley_core::new_id();
     sqlx::query(
         "INSERT INTO cmdb_mappings (id, dataset_id, name, source, type_id, match_keys, fields, conflict, \
-                create_missing, enabled, created_by) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)",
+                create_missing, enabled, created_by, org_match) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)",
     )
     .bind(id)
     .bind(input.dataset_id)
@@ -283,6 +315,7 @@ pub async fn create(
     .bind(input.create_missing)
     .bind(input.enabled)
     .bind(ctx.actor.id())
+    .bind(input.org_match.as_ref().map(sqlx::types::Json))
     .execute(&mut *conn)
     .await
     .map_err(taken)?;
@@ -307,7 +340,7 @@ pub async fn update(
     let (name, conflict) = check(conn, input).await?;
     let rows = sqlx::query(
         "UPDATE cmdb_mappings SET dataset_id = $3, name = $4, source = $5, type_id = $6, match_keys = $7, fields = $8, \
-                conflict = $9, create_missing = $10, enabled = $11, version = version + 1 \
+                conflict = $9, create_missing = $10, enabled = $11, org_match = $12, version = version + 1 \
           WHERE id = $1 AND version = $2",
     )
     .bind(id)
@@ -321,6 +354,7 @@ pub async fn update(
     .bind(&conflict)
     .bind(input.create_missing)
     .bind(input.enabled)
+    .bind(input.org_match.as_ref().map(sqlx::types::Json))
     .execute(&mut *conn)
     .await
     .map_err(taken)?
@@ -490,6 +524,8 @@ pub async fn run(
     let dataset = huxley_datasets::get(conn, m.dataset_id)
         .await
         .map_err(|e| CmdbError::invalid("datasetId", e.to_string()))?;
+    let mut orgs: std::collections::HashMap<String, Result<Uuid, String>> =
+        std::collections::HashMap::new();
     let mut result = SyncResult {
         preview,
         ..SyncResult::default()
@@ -516,13 +552,23 @@ pub async fn run(
             result.rows += 1;
             let n = result.rows;
             let Some(row) = row.as_object() else { continue };
-            let Some(org) = row
+            let Some(written_for) = row
                 .get("_org_id")
                 .and_then(Json::as_str)
                 .and_then(|s| s.parse::<Uuid>().ok())
             else {
                 result.skip(n, "the row has no organization");
                 continue;
+            };
+            let org = match &m.org_match {
+                None => written_for,
+                Some(om) => match matched_org(conn, &dataset, om, row, &mut orgs).await? {
+                    Ok(org) => org,
+                    Err(why) => {
+                        result.skip(n, why);
+                        continue;
+                    }
+                },
             };
             sync_row(conn, ctx, &m, &ty, org, row, n, &mut result).await?;
         }
@@ -543,6 +589,44 @@ pub async fn run(
         .await?;
     }
     Ok(result)
+}
+
+/// The organization at or below the dataset's whose variable matches the
+/// row's column (cached per value for the run).
+async fn matched_org(
+    conn: &mut PgConnection,
+    dataset: &huxley_datasets::Dataset,
+    om: &OrgMatch,
+    row: &Map<String, Json>,
+    cache: &mut std::collections::HashMap<String, Result<Uuid, String>>,
+) -> CmdbResult<Result<Uuid, String>> {
+    let Some(value) = as_text(row.get(&om.column)) else {
+        return Ok(Err(format!("the row has no {}", om.column)));
+    };
+    if let Some(hit) = cache.get(&value) {
+        return Ok(hit.clone());
+    }
+    let found: Vec<Uuid> = sqlx::query_scalar(
+        "SELECT v.org_id FROM org_variables v JOIN organizations o ON o.id = v.org_id \
+          WHERE v.key = $1 AND v.type <> 'secret' AND v.value #>> '{}' = $2 \
+            AND o.path <@ (SELECT path FROM organizations WHERE id = $3) \
+          LIMIT 2",
+    )
+    .bind(&om.variable)
+    .bind(&value)
+    .bind(dataset.org_id)
+    .fetch_all(&mut *conn)
+    .await?;
+    let hit = match found.as_slice() {
+        [org] => Ok(*org),
+        [] => Err(format!("no organization has {} = {value}", om.variable)),
+        _ => Err(format!(
+            "more than one organization has {} = {value}",
+            om.variable
+        )),
+    };
+    cache.insert(value, hit.clone());
+    Ok(hit)
 }
 
 #[allow(clippy::too_many_arguments)]

@@ -14,7 +14,14 @@ use utoipa::ToSchema;
 use uuid::Uuid;
 
 /// The kinds of things a pack adds.
-pub const KINDS: [&str; 5] = ["integrations", "workflows", "forms", "scripts", "templates"];
+pub const KINDS: [&str; 6] = [
+    "datasets",
+    "integrations",
+    "workflows",
+    "forms",
+    "scripts",
+    "templates",
+];
 
 /// What installing would do to one item.
 #[derive(Debug, Clone, Serialize, ToSchema)]
@@ -73,6 +80,7 @@ fn keys<'a>(pack: &'a Pack, kind: &str) -> &'a [String] {
         "workflows" => &c.workflows,
         "forms" => &c.forms,
         "scripts" => &c.scripts,
+        "datasets" => &c.datasets,
         _ => &c.templates,
     }
 }
@@ -89,6 +97,7 @@ pub(crate) async fn existing(
         "workflows" => "workflows",
         "forms" => "forms",
         "scripts" => "scripts",
+        "datasets" => "datasets",
         // Templates have no key: a pack's own are tracked by id.
         _ => return Ok(None),
     };
@@ -352,6 +361,32 @@ impl Target<'_> {
         Ok(form.id)
     }
 
+    async fn dataset(
+        &mut self,
+        pack: &Pack,
+        key: &str,
+        current: Option<Uuid>,
+    ) -> Result<Uuid, InstallError> {
+        let bad = |e: &dyn std::fmt::Display| content_error("datasets", key, e);
+        let mut file: Json = serde_json::from_str(
+            pack.text(&format!("datasets/{key}.json"))
+                .unwrap_or_default(),
+        )
+        .map_err(|e| bad(&e))?;
+        let Some(fields) = file.as_object_mut() else {
+            return Err(bad(&"not a dataset definition"));
+        };
+        fields.insert("key".to_owned(), json!(key));
+        let input: huxley_datasets::DatasetInput =
+            serde_json::from_value(file).map_err(|e| bad(&e))?;
+        let dataset = match current {
+            Some(id) => huxley_datasets::update(&mut *self.conn, self.ctx, id, &input).await,
+            None => huxley_datasets::create(&mut *self.conn, self.ctx, self.org_id, &input).await,
+        }
+        .map_err(|e| bad(&e))?;
+        Ok(dataset.id)
+    }
+
     async fn script(
         &mut self,
         pack: &Pack,
@@ -511,15 +546,16 @@ pub async fn install(
         ctx,
         org_id,
     };
-    // Dependencies first: workflows may use the integrations, forms and
-    // scripts.
-    for kind in ["integrations", "forms", "scripts", "workflows"] {
+    // Dependencies first: workflows may use the datasets, integrations,
+    // forms and scripts.
+    for kind in ["datasets", "integrations", "forms", "scripts", "workflows"] {
         for key in keys(pack, kind) {
             let at = id_of(kind, key);
             let id = match kind {
                 "integrations" => target.integration(pack, key, at).await?,
                 "forms" => target.form(pack, key, at).await?,
                 "scripts" => target.script(pack, key, at).await?,
+                "datasets" => target.dataset(pack, key, at).await?,
                 _ => target.workflow(expr, pack, key, at).await?,
             };
             items

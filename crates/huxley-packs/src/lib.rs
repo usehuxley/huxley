@@ -29,6 +29,7 @@ const FOLDERS: &[&str] = &[
     "forms/",
     "scripts/",
     "templates/",
+    "datasets/",
     "docs/",
 ];
 /// What a public key looks like as text.
@@ -70,6 +71,11 @@ pub struct Contents {
     pub scripts: Vec<String>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub templates: Vec<String>,
+    /// Datasets the pack's workflows write to (`datasets/<key>.json`: a
+    /// dataset definition without its key). Installing makes or changes
+    /// the definition; rows are never touched.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub datasets: Vec<String>,
 }
 
 /// A pack's manifest.
@@ -235,6 +241,12 @@ impl Manifest {
                 .templates
                 .iter()
                 .map(|k| format!("templates/{k}.yaml")),
+        );
+        out.extend(
+            self.contents
+                .datasets
+                .iter()
+                .map(|k| format!("datasets/{k}.json")),
         );
         out
     }

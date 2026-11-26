@@ -1,6 +1,6 @@
 # Packs
 
-A **pack** bundles integrations, workflows, forms, scripts and templates so they can be shared between instances, by Huxley, MSPs and the community (design doc §6.6, ADR-028). This page covers installing, exporting and signing packs, the built-in packs, and the format.
+A **pack** bundles integrations, workflows, forms, scripts, templates and datasets so they can be shared between instances, by Huxley, MSPs and the community (design doc §6.6, ADR-028). This page covers installing, exporting and signing packs, the built-in packs, and the format.
 
 ## Installing a pack
 
@@ -19,8 +19,9 @@ Things to know about installing:
   - scripts get a new version and workflows a new draft
   - integration specs are updated, and your own overlay edits stay
   - the pack's templates are replaced
+  - dataset definitions are changed to match (new columns added); their rows are kept
   - items an older version had and the new one doesn't are left alone
-- **Permissions:** installing needs `pack:install` *and* the permissions for what the pack adds (`integration:manage`, `form:manage`, `script:manage`, `workflow:write`). A pack never lets anyone do more than they could by hand.
+- **Permissions:** installing needs `pack:install` *and* the permissions for what the pack adds (`integration:manage`, `form:manage`, `script:manage`, `dataset:manage`, `workflow:write`). A pack never lets anyone do more than they could by hand.
 - Installs are audited (`pack.installed`). Uploads are kept for a day, for reviewing.
 
 To trust your own or a partner's signing key, list it in the server config:
@@ -64,6 +65,7 @@ workflows/<key>.yaml       an HWF workflow
 forms/<key>.json           a form: { name, schema, ui }
 scripts/<key>.json         a script's name, language and parameters, with scripts/<key>.ps1, .py or .js
 templates/<key>.yaml       a template, in the built-in templates' format
+datasets/<key>.json        a dataset its workflows write to: { name, description, columns, primaryKey }
 docs/…                     anything you'd like to include for readers
 ```
 

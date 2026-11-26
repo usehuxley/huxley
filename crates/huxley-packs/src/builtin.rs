@@ -94,6 +94,14 @@ const SOURCES: &[Source] = &[
                 "workflows/automate-run-command.yaml",
                 include_str!("../builtin/cwautomate/workflows/automate-run-command.yaml"),
             ),
+            (
+                "workflows/automate-sync-computers.yaml",
+                include_str!("../builtin/cwautomate/workflows/automate-sync-computers.yaml"),
+            ),
+            (
+                "datasets/automate-computers.json",
+                include_str!("../builtin/cwautomate/datasets/automate-computers.json"),
+            ),
         ],
     },
     Source {

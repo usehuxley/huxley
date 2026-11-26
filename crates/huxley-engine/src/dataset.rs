@@ -82,7 +82,7 @@ impl Engine {
     }
 
     /// The dataset `key` for `org_id` (its own, or the nearest above).
-    async fn dataset_for(&self, org_id: Uuid, key: &str) -> Result<Dataset, Json> {
+    pub(crate) async fn dataset_for(&self, org_id: Uuid, key: &str) -> Result<Dataset, Json> {
         let mut tx = begin_scoped(self.db(), &OrgScope::System)
             .await
             .map_err(|e| error("internal", e.to_string()))?;

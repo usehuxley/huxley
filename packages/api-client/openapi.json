@@ -15840,6 +15840,17 @@
 					"name": {
 						"type": "string"
 					},
+					"orgMatch": {
+						"oneOf": [
+							{
+								"$ref": "#/components/schemas/AssetOrgMatch",
+								"description": "Which organization each row's asset belongs to (none: the\norganization the row was written for)."
+							},
+							{
+								"type": "null"
+							}
+						]
+					},
 					"source": {
 						"type": "string"
 					},
@@ -15887,6 +15898,17 @@
 					"name": {
 						"type": "string"
 					},
+					"orgMatch": {
+						"oneOf": [
+							{
+								"$ref": "#/components/schemas/AssetOrgMatch",
+								"description": "Place each row's asset with the organization whose variable matches\na column; leave out to use the organization the row was written for."
+							},
+							{
+								"type": "null"
+							}
+						]
+					},
 					"source": {
 						"type": "string",
 						"description": "The source's name, e.g. `rmm`: lowercase letters, digits and `_`."
@@ -15915,6 +15937,21 @@
 					"field": {
 						"type": "string",
 						"description": "`external_id`, `serial_number`, `hostname` or `name`."
+					}
+				},
+				"additionalProperties": false
+			},
+			"AssetOrgMatch": {
+				"type": "object",
+				"description": "Which organization a row's asset belongs to: the one (at or below the\ndataset's) whose variable `variable` equals the row's `column`.",
+				"required": ["column", "variable"],
+				"properties": {
+					"column": {
+						"type": "string"
+					},
+					"variable": {
+						"type": "string",
+						"description": "An organization variable's key, e.g. `automate_client_id`."
 					}
 				},
 				"additionalProperties": false
@@ -17562,6 +17599,13 @@
 				"type": "object",
 				"description": "What a pack adds, by key.",
 				"properties": {
+					"datasets": {
+						"type": "array",
+						"items": {
+							"type": "string"
+						},
+						"description": "Datasets the pack's workflows write to (`datasets/<key>.json`: a\ndataset definition without its key). Installing makes or changes\nthe definition; rows are never touched."
+					},
 					"forms": {
 						"type": "array",
 						"items": {

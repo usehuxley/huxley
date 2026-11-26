@@ -1,0 +1,76 @@
+apiVersion: usehuxley.io/v1
+kind: Workflow
+metadata:
+  key: automate-sync-computers
+  name: Sync Automate computers
+  description: >-
+    Every hour, reads every computer from ConnectWise Automate into the
+    Automate computers dataset, replacing what was there (so computers
+    removed from Automate drop out). Then runs the asset mappings on that
+    dataset, so assets stay up to date (skipped if Assets are off). Uses the
+    connection named automate; run it at your MSP.
+spec:
+  triggers:
+    - type: schedule
+      interval: 1h
+  inputs:
+    type: object
+    properties:
+      pagesize: { type: integer, title: Computers a page, default: 1000, minimum: 1, maximum: 1000 }
+  steps:
+    - id: begin
+      type: set_var
+      vars: { done: false, written: 0 }
+    # Up to 100 pages; stops at the first short one.
+    - id: pages
+      type: foreach
+      items: "{{ range(1, 101) | list }}"
+      as: page
+      steps:
+        - id: more
+          type: if
+          condition: "{{ not run.vars.done }}"
+          then:
+            - id: fetch
+              type: integration.action
+              action: cwautomate/listComputers
+              connection: automate
+              with:
+                page: "{{ page }}"
+                pagesize: "{{ inputs.pagesize | default(1000) }}"
+                orderby: Id asc
+            - id: save
+              type: dataset.upsert
+              with:
+                dataset: automate-computers
+                rows: "{{ steps.fetch.output }}"
+                replace: "{{ page == 1 }}"
+                map:
+                  id: Id
+                  name: ComputerName
+                  client_id: Client.Id
+                  client_name: Client.Name
+                  location: Location.Name
+                  type: Type
+                  status: Status
+                  os: OperatingSystemName
+                  serial: SerialNumber
+                  manufacturer: BIOSManufacturer
+                  domain: DomainName
+                  ip: LocalIPAddress
+                  mac: MacAddress
+                  virtual: IsVirtualMachine
+                  last_contact: RemoteAgentLastContact
+            - id: count
+              type: set_var
+              vars:
+                written: "{{ run.vars.written + (steps.fetch.output | length) }}"
+                done: "{{ (steps.fetch.output | length) < (inputs.pagesize | default(1000)) }}"
+    - id: assets
+      type: core.asset.sync
+      continue_on_error: true
+      with:
+        dataset: automate-computers
+  outputs:
+    computers: "{{ run.vars.written }}"
+    assets: "{{ steps.assets.output }}"

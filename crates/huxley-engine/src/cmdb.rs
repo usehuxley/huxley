@@ -13,13 +13,56 @@ fn internal(e: impl std::fmt::Display) -> Json {
 }
 
 impl Engine {
-    /// `core.asset.sync`: runs a dataset → asset mapping rule, in one
-    /// transaction. Its output is what it did.
-    pub(crate) async fn sync_assets(&self, input: &Json) -> Result<Json, Json> {
-        let id = input["mapping_id"]
-            .as_str()
-            .and_then(|s| s.parse::<Uuid>().ok())
-            .ok_or_else(|| error("input", "mapping_id is a mapping rule's id"))?;
+    /// `core.asset.sync`: runs a dataset → asset mapping rule (or every rule
+    /// that's on for a dataset), in one transaction. Its output is what it
+    /// did.
+    pub(crate) async fn sync_assets(&self, org_id: Uuid, input: &Json) -> Result<Json, Json> {
+        let ids = match (&input["mapping_id"], input["dataset"].as_str()) {
+            (Json::Null, Some(key)) => {
+                let dataset = self.dataset_for(org_id, key).await?;
+                let mut tx = begin_scoped(self.db(), &OrgScope::System)
+                    .await
+                    .map_err(internal)?;
+                let ids: Vec<Uuid> = sqlx::query_scalar(
+                    "SELECT id FROM cmdb_mappings WHERE dataset_id = $1 AND enabled ORDER BY created_at",
+                )
+                .bind(dataset.id)
+                .fetch_all(&mut *tx)
+                .await
+                .map_err(internal)?;
+                tx.commit().await.map_err(internal)?;
+                Some(ids)
+            }
+            (Json::String(s), None) => Some(vec![s.parse::<Uuid>().map_err(|_| {
+                error("input", "mapping_id is a mapping rule's id")
+            })?]),
+            _ => None,
+        }
+        .ok_or_else(|| {
+            error(
+                "input",
+                "give mapping_id (a mapping rule's id) or dataset (a dataset's key)",
+            )
+        })?;
+        let by_dataset = input["mapping_id"].is_null();
+        let mut total = huxley_cmdb::mappings::SyncResult::default();
+        for id in &ids {
+            let result = self.sync_mapping(*id).await?;
+            total.rows += result.rows;
+            total.created += result.created;
+            total.updated += result.updated;
+            total.unchanged += result.unchanged;
+            total.skipped += result.skipped;
+            total.problems.extend(result.problems);
+        }
+        let mut out = serde_json::to_value(total).map_err(internal)?;
+        if by_dataset {
+            out["mappings"] = ids.len().into();
+        }
+        Ok(out)
+    }
+
+    async fn sync_mapping(&self, id: Uuid) -> Result<huxley_cmdb::mappings::SyncResult, Json> {
         let mut tx = begin_scoped(self.db(), &OrgScope::System)
             .await
             .map_err(internal)?;
@@ -48,7 +91,7 @@ impl Engine {
             .await
             .map_err(internal)?;
         tx.commit().await.map_err(internal)?;
-        serde_json::to_value(result).map_err(internal)
+        Ok(result)
     }
 
     /// `core.asset.set_warranty`: records a warranty a lookup found, for an

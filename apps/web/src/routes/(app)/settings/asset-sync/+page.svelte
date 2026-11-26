@@ -56,6 +56,9 @@
 	let conflict = $state('manual_wins');
 	let createMissing = $state(true);
 	let enabled = $state(true);
+	let placeBy = $state<'row' | 'variable'>('row');
+	let orgColumn = $state('');
+	let orgVariable = $state('');
 	let errors: Record<string, string> = $derived(
 		form && 'errors' in form ? (form.errors ?? {}) : {}
 	);
@@ -90,6 +93,9 @@
 		conflict = m?.conflict ?? 'manual_wins';
 		createMissing = m?.createMissing ?? true;
 		enabled = m?.enabled ?? true;
+		placeBy = m?.orgMatch ? 'variable' : 'row';
+		orgColumn = m?.orgMatch?.column ?? '';
+		orgVariable = m?.orgMatch?.variable ?? '';
 		open = true;
 	}
 
@@ -109,6 +115,7 @@
 			conflict,
 			createMissing,
 			enabled,
+			...(placeBy === 'variable' ? { orgMatch: { column: orgColumn, variable: orgVariable } } : {}),
 			...(editingVersion !== null ? { version: editingVersion } : {})
 		})
 	);
@@ -308,6 +315,34 @@
 					/>
 				</Field>
 			{/each}
+		</fieldset>
+
+		<fieldset class="flex flex-col gap-2">
+			<legend class="mb-1 text-sm font-medium text-fg">Each asset belongs to</legend>
+			<Select
+				id="map-place"
+				aria-label="Each asset belongs to"
+				bind:value={placeBy}
+				options={[
+					{ value: 'row', label: 'The organization the row was written for' },
+					{ value: 'variable', label: 'The organization whose variable matches a column' }
+				]}
+			/>
+			{#if placeBy === 'variable'}
+				<div class="grid gap-3 sm:grid-cols-2">
+					<Field label="Column" for="map-org-column" error={errors['orgMatch/column']}>
+						<Select id="map-org-column" bind:value={orgColumn} options={columns} />
+					</Field>
+					<Field
+						label="Organization variable"
+						for="map-org-variable"
+						hint="e.g. automate_client_id, set on each client"
+						error={errors['orgMatch/variable']}
+					>
+						<Input id="map-org-variable" bind:value={orgVariable} maxlength={64} />
+					</Field>
+				</div>
+			{/if}
 		</fieldset>
 
 		<Field label="When a value was changed by hand" for="map-conflict" error={errors.conflict}>

@@ -91,13 +91,11 @@
     },
     "AssetSync": {
       "additionalProperties": false,
-      "description": "A mapping rule to run (`core.asset.sync`): the dataset's rows become\nassets, matched, updated and created by the rule (`mapping_id`). Run it\nafter the step that fills the dataset. Output: `{ rows, created,\nupdated, unchanged, skipped, problems: [{ row, reason }] }`.",
+      "description": "Mapping rules to run (`core.asset.sync`): a dataset's rows become\nassets, matched, updated and created by the rule. Give `mapping_id` for\none rule, or `dataset` (a dataset's key) for every rule on it that's on.\nRun it after the step that fills the dataset. Output: `{ rows, created,\nupdated, unchanged, skipped, problems: [{ row, reason }] }`, summed over\nthe rules, plus `mappings` (how many ran) given `dataset`.",
       "properties": {
+        "dataset": true,
         "mapping_id": true
       },
-      "required": [
-        "mapping_id"
-      ],
       "type": "object"
     },
     "AssetWarranty": {

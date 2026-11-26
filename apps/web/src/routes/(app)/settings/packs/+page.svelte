@@ -14,7 +14,8 @@
 		workflows: 'Workflow (as a draft)',
 		forms: 'Form',
 		scripts: 'Script',
-		templates: 'Template'
+		templates: 'Template',
+		datasets: 'Dataset (its definition; rows are kept)'
 	};
 	const actions: Record<string, string> = {
 		add: 'Adds',
