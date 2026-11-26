@@ -68,6 +68,7 @@ pub fn router(state: AppState) -> Router {
         .nest("/teams", team_routes::routes())
         .nest("/notifications", notification_routes::routes())
         .nest("/workflows", workflow_routes::workflow_routes())
+        .nest("/workflow-folders", crate::folder_routes::routes())
         .nest("/runs", workflow_routes::run_routes())
         .nest("/jobs", workflow_routes::job_routes())
         .nest("/integrations", integration_routes::routes())

@@ -188,13 +188,14 @@ This is a long-term project. The plan follows four rules:
 - **Warranties**: per asset, vendor lookup workflow (Dell/Lenovo/HP packs), expiry events.
 - **Product catalog** (basic; needed by agreements and later by inventory/CPQ).
 - **Workflow folders** (added 2026-11-25, at the user's request):
-  - **Folders:** per organization, nestable, to organize the Workflows list. A workflow is in one folder, or none (unfiled, at the top level). Keeping folders (create, rename, move, delete) needs `workflow:manage` there. Deleting a folder moves its contents to its parent; it never deletes workflows.
-  - **The System folder:** every organization has one, made by Huxley. It can't be deleted, renamed or moved.
+  - **Folders:** per organization, nestable, to organize the Workflows list. A workflow is in one folder, or none (unfiled, at the top level). Keeping folders (create, rename, move, delete) needs `workflow:write` there (there's no `workflow:manage`). Deleting a folder moves its contents to its parent; it never deletes workflows.
+  - **The System folder:** made by Huxley in an organization when a built-in pack first installs workflows there (so clients without any don't get an empty one). It can't be deleted, renamed or moved.
     - It holds the workflows installed from Huxley's built-in packs (their installs are recorded in `pack_installs`): new installs go there automatically, and existing ones are moved there by a migration.
     - It holds only those: your own workflows can't be moved into it, and system workflows stay in it. System workflows can still be published, paused and edited as today.
   - **Other packs:** a third-party pack's workflows go into a folder named after the pack, created if needed, which can then be renamed, moved or deleted like any folder.
   - **The Workflows list** shows the folder tree beside the list, with counts. Search and status filters cover every folder. Moving workflows works one at a time or in bulk.
-  - **API:** `/api/v1/workflow-folders`, a workflow's `folderId`, and a `folderId` filter on the workflow list. Workflows-as-code exports keep the folder path.
+  - **API:** `/api/v1/workflow-folders`, a workflow's `folderId`, and a `folderId` filter on the workflow list. (Done.)
+  - **Workflows as code** keep the folder path: `pull` writes into folders, `push` files workflows by their folder. (Next.)
 
 **Exit criteria:** assets sync from an RMM, map into CIs with relationships, and render in the dependency map. Time entries on tickets correctly evaluate as covered or billable under an agreement. A technician's weekly timesheet is submitted, rejected with a comment, corrected, approved and locked, and only its approved time reaches a billing preview.
 

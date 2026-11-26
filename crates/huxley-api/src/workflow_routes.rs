@@ -69,7 +69,9 @@ fn db_err(e: impl std::fmt::Display) -> ApiError {
 
 pub(crate) fn map_workflow(e: WorkflowError) -> ApiError {
     match e {
-        WorkflowError::NotFound | WorkflowError::VersionNotFound => ApiError::not_found(),
+        WorkflowError::NotFound
+        | WorkflowError::VersionNotFound
+        | WorkflowError::FolderNotFound => ApiError::not_found(),
         WorkflowError::KeyTaken(_) | WorkflowError::Archived => ApiError::conflict(e.to_string()),
         WorkflowError::RevisionConflict(_) => ApiError::new(
             StatusCode::CONFLICT,
@@ -97,12 +99,21 @@ pub(crate) fn map_workflow(e: WorkflowError) -> ApiError {
         WorkflowError::InvalidRunAs => {
             ApiError::validation().with_field_error("serviceAccountId", e.to_string())
         }
+        WorkflowError::FolderTaken(_) | WorkflowError::FolderRule(_) => {
+            ApiError::conflict(e.to_string())
+        }
+        WorkflowError::InvalidFolder(_) => {
+            ApiError::validation().with_field_error("name", e.to_string())
+        }
         WorkflowError::Db(e) => ApiError::internal(&e),
     }
 }
 
 /// Paths of the given orgs, to check permissions on many rows at once.
-async fn org_paths(state: &AppState, orgs: Vec<Uuid>) -> ApiResult<HashMap<Uuid, String>> {
+pub(crate) async fn org_paths(
+    state: &AppState,
+    orgs: Vec<Uuid>,
+) -> ApiResult<HashMap<Uuid, String>> {
     let mut tx = begin_scoped(&state.db, &OrgScope::System)
         .await
         .map_err(db_err)?;
@@ -167,12 +178,22 @@ async fn authorize(
     Ok(workflow)
 }
 
+#[derive(Debug, Deserialize, IntoParams)]
+#[serde(rename_all = "camelCase")]
+#[into_params(parameter_in = Query)]
+pub struct ListWorkflowsQuery {
+    /// Only the workflows directly in this folder.
+    pub folder_id: Option<Uuid>,
+}
+
 /// Workflows the caller can view.
 #[utoipa::path(get, path = "/api/v1/workflows", operation_id = "list_workflows", tag = "workflows",
+    params(ListWorkflowsQuery),
     responses((status = 200, body = Vec<WorkflowSummary>)))]
 pub async fn list(
     State(state): State<AppState>,
     authed: Authed,
+    Query(query): Query<ListWorkflowsQuery>,
 ) -> ApiResult<Json<Vec<WorkflowSummary>>> {
     let mut tx = begin_scoped(&state.db, &authed.scope(&state).await?)
         .await
@@ -184,6 +205,7 @@ pub async fn list(
     let paths = org_paths(&state, all.iter().map(|w| w.org_id).collect()).await?;
     Ok(Json(
         all.into_iter()
+            .filter(|w| query.folder_id.is_none() || w.folder_id == query.folder_id)
             .filter(|w| {
                 paths
                     .get(&w.org_id)

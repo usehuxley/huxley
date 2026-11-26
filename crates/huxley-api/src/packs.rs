@@ -556,7 +556,20 @@ pub async fn install(
                 "forms" => target.form(pack, key, at).await?,
                 "scripts" => target.script(pack, key, at).await?,
                 "datasets" => target.dataset(pack, key, at).await?,
-                _ => target.workflow(expr, pack, key, at).await?,
+                _ => {
+                    let id = target.workflow(expr, pack, key, at).await?;
+                    huxley_workflows::folders::file_installed(
+                        &mut *target.conn,
+                        id,
+                        org_id,
+                        matches!(trust, Trust::BuiltIn { .. }),
+                        &pack.manifest.name,
+                        at.is_none(),
+                    )
+                    .await
+                    .map_err(|e| content_error("workflows", key, e))?;
+                    id
+                }
             };
             items
                 .entry(kind.to_owned())

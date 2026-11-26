@@ -53,6 +53,22 @@ Connections follow from the order and nesting of the steps, so the canvas can't 
 - **Archive:** stops triggers and runs; history stays. Restore brings the published version's triggers back.
 - **Compare** any two versions, or a version and the draft.
 
+## Folders
+
+Folders organize the Workflows page. The folder tree sits beside the list, with how many workflows each folder holds.
+
+- **Folders belong to an organization** and can be nested. A workflow is in one folder of its organization, or none (**Unfiled**).
+- **Making, renaming, moving and deleting folders** needs `workflow:write` at the folder's organization. Deleting a folder moves what was in it up a level; it never deletes a workflow.
+- **Moving workflows:** press **Move workflows**, choose them, and pick a folder. You can also use `POST /api/v1/workflow-folders/move` (`{ "workflowIds": [...], "folderId": ... }`).
+- **Search and the status filter** look in every folder.
+- **The System folder** holds the workflows installed from Huxley's built-in packs. It's made in an organization the first time one is installed there.
+  - It can't be renamed, moved or deleted, and has no subfolders.
+  - It holds only built-in workflows, and they stay in it.
+  - They can still be edited, published and archived as usual.
+- **Other packs:** a pack's new workflows go into a folder named after the pack. You can rename, move or delete it like any other.
+
+The API is `/api/v1/workflow-folders`. Each workflow has a `folderId`, and `GET /api/v1/workflows?folderId=` lists one folder's workflows.
+
 ## Templates
 
 **Workflows → start from a template** lists ready-made workflows:

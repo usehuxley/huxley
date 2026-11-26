@@ -4529,6 +4529,65 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
+	'/api/v1/workflow-folders': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** Every folder the caller can view, with how many workflows each holds. */
+		get: operations['list_workflow_folders'];
+		put?: never;
+		/** Makes a folder. */
+		post: operations['create_workflow_folder'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/workflow-folders/move': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/**
+		 * Moves workflows into a folder (or out of any). Built-in workflows stay
+		 *     in the System folder, which holds nothing else.
+		 */
+		post: operations['move_workflows'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/workflow-folders/{id}': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		post?: never;
+		/**
+		 * Deletes a folder; what was in it moves up to its parent. The System
+		 *     folder can't be deleted.
+		 */
+		delete: operations['delete_workflow_folder'];
+		options?: never;
+		head?: never;
+		/** Renames or moves a folder. The System folder stays as it is. */
+		patch: operations['update_workflow_folder'];
+		trace?: never;
+	};
 	'/api/v1/workflows': {
 		parameters: {
 			query?: never;
@@ -6361,6 +6420,11 @@ export interface components {
 			/** Format: uuid */
 			orgId: string;
 		};
+		CreateFolderRequest: {
+			folder: components['schemas']['WorkflowFolderInput'];
+			/** Format: uuid */
+			orgId: string;
+		};
 		CreateFormRequest: {
 			form: components['schemas']['FormInput'];
 			/** Format: uuid */
@@ -7404,6 +7468,16 @@ export interface components {
 			parentId: string;
 			/** Format: int32 */
 			version: number;
+		};
+		MoveWorkflowsRequest: {
+			/**
+			 * Format: uuid
+			 * @description Where to: a folder of each workflow's organization, or none
+			 *     (unfiled).
+			 */
+			folderId?: string | null;
+			/** @description 1 to 500 workflows, all moved or none. */
+			workflowIds: string[];
 		};
 		MyWork: {
 			/**
@@ -9608,6 +9682,33 @@ export interface components {
 				[key: string]: unknown;
 			};
 		};
+		WorkflowFolder: {
+			/** Format: date-time */
+			createdAt: string;
+			/** Format: uuid */
+			id: string;
+			name: string;
+			/** Format: uuid */
+			orgId: string;
+			/** Format: uuid */
+			parentId?: string | null;
+			/** @description The System folder: built-in workflows, fixed in place. */
+			system: boolean;
+			/**
+			 * Format: int64
+			 * @description Workflows directly in it.
+			 */
+			workflows: number;
+		};
+		/** @description A folder to make, or a folder's new name and place. */
+		WorkflowFolderInput: {
+			name: string;
+			/**
+			 * Format: uuid
+			 * @description The folder it's in (none: the top level).
+			 */
+			parentId?: string | null;
+		};
 		/** @enum {string} */
 		WorkflowStatus: 'active' | 'archived';
 		WorkflowSummary: {
@@ -9619,6 +9720,11 @@ export interface components {
 			 */
 			currentVersion?: number | null;
 			description?: string | null;
+			/**
+			 * Format: uuid
+			 * @description The folder it's in (none: unfiled).
+			 */
+			folderId?: string | null;
 			/** Format: uuid */
 			id: string;
 			key: string;
@@ -9639,6 +9745,8 @@ export interface components {
 			/** @description That service account's name. */
 			runAsName?: string | null;
 			status: components['schemas']['WorkflowStatus'];
+			/** @description Installed from a built-in pack: it stays in the System folder. */
+			system: boolean;
 			/** Format: date-time */
 			updatedAt: string;
 		};
@@ -19525,9 +19633,184 @@ export interface operations {
 			};
 		};
 	};
-	list_workflows: {
+	list_workflow_folders: {
 		parameters: {
 			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['WorkflowFolder'][];
+				};
+			};
+		};
+	};
+	create_workflow_folder: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['CreateFolderRequest'];
+			};
+		};
+		responses: {
+			201: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['WorkflowFolder'];
+				};
+			};
+			/** @description The name is taken there, or the System folder */
+			409: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	move_workflows: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['MoveWorkflowsRequest'];
+			};
+		};
+		responses: {
+			204: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content?: never;
+			};
+			404: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+			409: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	delete_workflow_folder: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			204: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content?: never;
+			};
+			404: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+			409: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	update_workflow_folder: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['WorkflowFolderInput'];
+			};
+		};
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['WorkflowFolder'];
+				};
+			};
+			404: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+			409: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	list_workflows: {
+		parameters: {
+			query?: {
+				/** @description Only the workflows directly in this folder. */
+				folderId?: string;
+			};
 			header?: never;
 			path?: never;
 			cookie?: never;

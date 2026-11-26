@@ -6,6 +6,7 @@
 //! Publishing requires none: structure (`huxley-hwf`) and expressions
 //! (`huxley-expr`) both have to check out.
 
+pub mod folders;
 pub mod triggers;
 
 use huxley_core::RequestContext;
@@ -40,6 +41,17 @@ pub enum WorkflowError {
     /// A run-as identity must be an active service account.
     #[error("runs can only act as an active service account")]
     InvalidRunAs,
+    #[error("folder not found")]
+    FolderNotFound,
+    #[error("there's already a folder named {0:?} here")]
+    FolderTaken(String),
+    /// A folder name that's empty or too long.
+    #[error("{0}")]
+    InvalidFolder(String),
+    /// Something the System folder (or its workflows) can't do, or a move
+    /// that would loop.
+    #[error("{0}")]
+    FolderRule(String),
     #[error(transparent)]
     Db(#[from] sqlx::Error),
 }
@@ -72,6 +84,10 @@ pub struct WorkflowSummary {
     pub run_as: Option<Uuid>,
     /// That service account's name.
     pub run_as_name: Option<String>,
+    /// The folder it's in (none: unfiled).
+    pub folder_id: Option<Uuid>,
+    /// Installed from a built-in pack: it stays in the System folder.
+    pub system: bool,
     #[serde(with = "time::serde::rfc3339")]
     pub created_at: OffsetDateTime,
     #[serde(with = "time::serde::rfc3339")]
@@ -165,7 +181,7 @@ fn detail(expr: &huxley_expr::Engine, summary: WorkflowSummary, draft: Json) -> 
 pub async fn list(conn: &mut PgConnection) -> WorkflowResult<Vec<WorkflowSummary>> {
     Ok(sqlx::query_as(
         "SELECT w.id, w.org_id, w.key, w.name, w.description, w.status, w.current_version, \
-                w.revision, w.run_as, u.display_name AS run_as_name, w.created_at, w.updated_at \
+                w.revision, w.run_as, u.display_name AS run_as_name, w.folder_id, w.system, w.created_at, w.updated_at \
            FROM workflows w LEFT JOIN users u ON u.id = w.run_as \
           ORDER BY lower(w.name), w.id",
     )
@@ -176,7 +192,7 @@ pub async fn list(conn: &mut PgConnection) -> WorkflowResult<Vec<WorkflowSummary
 pub async fn summary(conn: &mut PgConnection, id: Uuid) -> WorkflowResult<WorkflowSummary> {
     sqlx::query_as(
         "SELECT w.id, w.org_id, w.key, w.name, w.description, w.status, w.current_version, \
-                w.revision, w.run_as, u.display_name AS run_as_name, w.created_at, w.updated_at \
+                w.revision, w.run_as, u.display_name AS run_as_name, w.folder_id, w.system, w.created_at, w.updated_at \
            FROM workflows w LEFT JOIN users u ON u.id = w.run_as WHERE w.id = $1",
     )
     .bind(id)
@@ -238,7 +254,7 @@ pub async fn create(
     get(conn, expr, id).await
 }
 
-fn db(e: huxley_db::DbError) -> WorkflowError {
+pub(crate) fn db(e: huxley_db::DbError) -> WorkflowError {
     match e {
         huxley_db::DbError::Sqlx(e) => WorkflowError::Db(e),
         other => WorkflowError::Db(sqlx::Error::Protocol(other.to_string())),
