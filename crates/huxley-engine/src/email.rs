@@ -82,6 +82,7 @@ impl Engine {
                 text: text.clone(),
                 html: html.clone(),
                 reply: None,
+                attachments: Vec::new(),
             };
             if let Err(e) = mailer.send(email).await {
                 return Err(error("email", format!("sending to {address} failed: {e}")));

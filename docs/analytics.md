@@ -86,6 +86,13 @@ The answer has `columns` (key, label, kind) and `rows` (arrays in column order).
 - **The client portal:** a shared dashboard can be shown there, to client admins with their company's numbers. See [Client portal: Reports](portal.md#reports).
 - **API:** `GET`/`POST /api/v1/dashboards`; `GET`/`PUT`/`DELETE /api/v1/dashboards/{id}` (a uuid, or a prebuilt dashboard's key such as `service-desk`); `POST /api/v1/dashboards/{id}/copy` `{ orgId, name? }`. Widgets store query specs, never SQL.
 
+### Download and email
+
+- **Download:** on a dashboard, **Download** gives a **PDF**, an **Excel** workbook (a sheet per widget) or a **CSV**, for the range and organization you're looking at, with the numbers you may see. Charts come out as their tables. `GET /api/v1/dashboards/{id}/export?format=pdf|xlsx|csv&range=…&orgId=…`.
+- **Email regularly** (with `workflow:write`, shared or prebuilt dashboards): pick how often (every day, every Monday or the 1st of the month), the hour, the format and who gets it (you, administrators, or a team).
+  - It's made as a workflow with a schedule trigger and the `core.report.send` step, so you can change, pause or follow it under Workflows.
+  - Recipients get the numbers of your current organization and those below (ADR-052).
+
 ### Publishing
 
 Anyone with `dashboard:read` can build a personal dashboard and ask for it to be shared (ADR-045):

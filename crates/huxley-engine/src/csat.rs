@@ -83,6 +83,7 @@ fn email(
         text,
         html,
         reply: None,
+        attachments: Vec::new(),
     }
 }
 
@@ -198,6 +199,7 @@ fn nps_email(to: &str, first_name: &str, company: &str, url: &str) -> huxley_ema
         text,
         html,
         reply: None,
+        attachments: Vec::new(),
     }
 }
 

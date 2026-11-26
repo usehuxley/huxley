@@ -176,6 +176,7 @@ impl Engine {
                 in_reply_to: reply.in_reply_to.clone(),
                 references: reply.references.clone(),
             }),
+            attachments: Vec::new(),
         };
         let sent = mailer.send(email).await;
         let failure = sent.as_ref().err().map(ToString::to_string);

@@ -29,6 +29,7 @@ pub fn routes() -> Router<AppState> {
                 .delete(delete_dashboard),
         )
         .route("/dashboards/{id}/copy", post(copy_dashboard))
+        .route("/dashboards/{id}/export", get(export_dashboard))
         .route("/dashboards/{id}/submit", post(submit_dashboard))
         .route("/dashboards/{id}/submissions", get(dashboard_submissions))
         .route("/dashboard-submissions", get(pending_submissions))
@@ -520,4 +521,87 @@ pub async fn withdraw_submission(
     } else {
         Err(ApiError::not_found())
     }
+}
+
+#[derive(Debug, Deserialize, utoipa::IntoParams)]
+#[into_params(parameter_in = Query)]
+#[serde(rename_all = "camelCase")]
+pub struct ExportParams {
+    /// `csv`, `xlsx` or `pdf`.
+    pub format: String,
+    /// A named range (default: the dashboard's).
+    pub range: Option<String>,
+    /// Only this organization and those below.
+    pub org_id: Option<Uuid>,
+}
+
+/// Downloads a dashboard: each widget's numbers (as you may see them) as a
+/// CSV, an XLSX workbook (a sheet per widget) or a PDF.
+#[utoipa::path(get, path = "/api/v1/dashboards/{id}/export", operation_id = "export_dashboard", tag = "analytics",
+    params(("id" = String, Path), ExportParams),
+    responses((status = 200, description = "The file", content_type = "application/octet-stream", body = Vec<u8>)))]
+pub async fn export_dashboard(
+    State(state): State<AppState>,
+    authed: Authed,
+    Path(id): Path<String>,
+    axum::extract::Query(params): axum::extract::Query<ExportParams>,
+) -> ApiResult<axum::response::Response> {
+    use huxley_analytics::export;
+    let format = export::Format::parse(&params.format)
+        .ok_or_else(|| ApiError::validation().with_field_error("/format", "csv, xlsx or pdf"))?;
+    let dashboard = visible(&state, &authed, &id).await?;
+    let range = params
+        .range
+        .filter(|r| huxley_analytics::query::ranges().any(|k| k == r))
+        .unwrap_or_else(|| dashboard.range.clone());
+    let only: Option<Vec<Uuid>> = match params.org_id {
+        Some(org) => {
+            let mut tx = begin_scoped(&state.db, &OrgScope::System)
+                .await
+                .map_err(db_err)?;
+            let ids: Vec<Uuid> = sqlx::query_scalar(
+                "SELECT id FROM organizations WHERE path <@ (SELECT path FROM organizations WHERE id = $1)",
+            )
+            .bind(org)
+            .fetch_all(&mut *tx)
+            .await
+            .map_err(db_err)?;
+            tx.commit().await.map_err(db_err)?;
+            Some(ids)
+        }
+        None => None,
+    };
+    let pool = state.read_db.as_ref().unwrap_or(&state.db).clone();
+    let mut resolved = export::Resolved::new();
+    for key in export::sources(&dashboard) {
+        let found = match crate::analytics_routes::source_and_scope(&state, &authed, &key).await {
+            Err(_) => Err("Not available to you.".to_owned()),
+            Ok((source, scope)) => Ok((
+                source,
+                match (scope, &only) {
+                    (scope, None) => scope,
+                    (huxley_analytics::Scope::All, Some(ids)) => {
+                        huxley_analytics::Scope::Orgs(ids.clone())
+                    }
+                    (huxley_analytics::Scope::Orgs(mine), Some(ids)) => {
+                        huxley_analytics::Scope::Orgs(
+                            mine.into_iter().filter(|o| ids.contains(o)).collect(),
+                        )
+                    }
+                },
+            )),
+        };
+        resolved.insert(key, found);
+    }
+    let tables = export::tables(&pool, &state.analytics, &dashboard, &range, &resolved).await;
+    let bytes = export::render(format, &dashboard.name, &range, &tables).map_err(db_err)?;
+    let name = export::file_name(&dashboard.name, format);
+    axum::response::Response::builder()
+        .header(axum::http::header::CONTENT_TYPE, format.content_type())
+        .header(
+            axum::http::header::CONTENT_DISPOSITION,
+            format!("attachment; filename=\"{name}\""),
+        )
+        .body(axum::body::Body::from(bytes))
+        .map_err(db_err)
 }

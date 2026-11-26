@@ -83,6 +83,16 @@ pub struct Email {
     pub html: String,
     /// Sent as a reply from a mailbox, rather than from the instance.
     pub reply: Option<Reply>,
+    /// Files attached to it.
+    pub attachments: Vec<Attachment>,
+}
+
+/// A file attached to an email.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Attachment {
+    pub filename: String,
+    pub content_type: String,
+    pub bytes: Vec<u8>,
 }
 
 /// A message sent from a mailbox, threaded into a conversation.
@@ -247,20 +257,34 @@ impl Mailer {
                         b
                     }
                 };
-                let message = builder
-                    .multipart(
-                        MultiPart::alternative()
-                            .singlepart(
-                                lettre::message::SinglePart::builder()
-                                    .header(ContentType::TEXT_PLAIN)
-                                    .body(email.text),
-                            )
-                            .singlepart(
-                                lettre::message::SinglePart::builder()
-                                    .header(ContentType::TEXT_HTML)
-                                    .body(email.html),
-                            ),
+                let body = MultiPart::alternative()
+                    .singlepart(
+                        lettre::message::SinglePart::builder()
+                            .header(ContentType::TEXT_PLAIN)
+                            .body(email.text),
                     )
+                    .singlepart(
+                        lettre::message::SinglePart::builder()
+                            .header(ContentType::TEXT_HTML)
+                            .body(email.html),
+                    );
+                let body = if email.attachments.is_empty() {
+                    body
+                } else {
+                    let mut mixed = MultiPart::mixed().multipart(body);
+                    for a in email.attachments {
+                        let kind = ContentType::parse(&a.content_type).unwrap_or(
+                            ContentType::parse("application/octet-stream")
+                                .map_err(|e| EmailError::Send(e.to_string()))?,
+                        );
+                        mixed = mixed.singlepart(
+                            lettre::message::Attachment::new(a.filename).body(a.bytes, kind),
+                        );
+                    }
+                    mixed
+                };
+                let message = builder
+                    .multipart(body)
                     .map_err(|e| EmailError::Send(e.to_string()))?;
                 smtp.send(message)
                     .await
@@ -328,6 +352,7 @@ pub fn action_email(
         text,
         html,
         reply: None,
+        attachments: Vec::new(),
     }
 }
 

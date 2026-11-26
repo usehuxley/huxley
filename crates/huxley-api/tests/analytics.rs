@@ -767,3 +767,60 @@ async fn lookups(
         StatusCode::NOT_FOUND
     );
 }
+
+/// A raw GET: status, content type and body.
+async fn download(app: &axum::Router, cookie: &str, uri: &str) -> (StatusCode, String, Vec<u8>) {
+    let req = Request::get(uri)
+        .header("x-requested-with", "huxley")
+        .header("cookie", cookie)
+        .body(Body::empty())
+        .unwrap();
+    let res = app.clone().oneshot(req).await.unwrap();
+    let status = res.status();
+    let kind = res
+        .headers()
+        .get("content-type")
+        .map(|v| v.to_str().unwrap().to_owned())
+        .unwrap_or_default();
+    (
+        status,
+        kind,
+        res.into_body().collect().await.unwrap().to_bytes().to_vec(),
+    )
+}
+
+#[tokio::test]
+async fn dashboards_export_as_csv_xlsx_and_pdf() {
+    let Some(db) = isolated("dashboard_export").await else {
+        return;
+    };
+    let pools = db.pools.clone();
+    let app = app_for(&pools);
+    ensure_root(&pools).await;
+    let owner = login(&app, &user(&pools, None).await.1).await;
+    let base = "/api/v1/dashboards/service-desk/export";
+    let (status, kind, body) = download(&app, &owner, &format!("{base}?format=csv")).await;
+    assert_eq!(
+        (status, kind.as_str()),
+        (StatusCode::OK, "text/csv; charset=utf-8")
+    );
+    let text = String::from_utf8(body).unwrap();
+    assert!(
+        text.starts_with("Service desk overview (Last 30 days)"),
+        "{text}"
+    );
+    assert!(text.contains("Open tickets"), "{text}");
+    let (status, _, body) =
+        download(&app, &owner, &format!("{base}?format=xlsx&range=this_year")).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(&body[..2], b"PK");
+    let (status, kind, body) = download(&app, &owner, &format!("{base}?format=pdf")).await;
+    assert_eq!((status, kind.as_str()), (StatusCode::OK, "application/pdf"));
+    assert!(body.starts_with(b"%PDF-1.4"));
+    assert_eq!(
+        download(&app, &owner, &format!("{base}?format=docx"))
+            .await
+            .0,
+        StatusCode::UNPROCESSABLE_ENTITY
+    );
+}

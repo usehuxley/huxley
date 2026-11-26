@@ -1272,6 +1272,30 @@ export type Step =
 			 * Fail the attempt after this long, e.g. `30s`.
 			 */
 			timeout?: string | null;
+			type: 'core.report.send';
+			with: ReportSend;
+	  }
+	| {
+			/**
+			 * Record the error as the step's output and carry on.
+			 */
+			continue_on_error?: boolean;
+			description?: string | null;
+			/**
+			 * Unique in the workflow: lowercase letters, digits, underscores.
+			 * Other steps read this step's output as `steps.<id>.output`.
+			 */
+			id: string;
+			/**
+			 * Skip the step unless this expression is true.
+			 */
+			if?: string | null;
+			name?: string | null;
+			retry?: RetryPolicy | null;
+			/**
+			 * Fail the attempt after this long, e.g. `30s`.
+			 */
+			timeout?: string | null;
 			type: 'core.asset.sync';
 			with: AssetSync;
 	  }
@@ -2251,6 +2275,26 @@ export interface TimeSuggest {
 	notes?: unknown;
 	ticket_id: unknown;
 	user_id?: unknown;
+}
+/**
+ * A report to email (`core.report.send`): a shared dashboard (at the
+ * run's organization, above or below it) or a prebuilt one by key, with
+ * the numbers of the run's organization and below over `range` (default:
+ * the dashboard's), as `format` (`csv`, `xlsx` or `pdf`, the default),
+ * attached to an email to `to` (`user:<id>`, `team:<id>` or `role:<key>`
+ * entries) with an optional `subject` and `message`. Output: `{ sent,
+ * file_name }`.
+ *
+ * This interface was referenced by `HuxleyWorkflowFormatV1`'s JSON-Schema
+ * via the `definition` "ReportSend".
+ */
+export interface ReportSend {
+	dashboard_id: unknown;
+	format?: unknown;
+	message?: unknown;
+	range?: unknown;
+	subject?: unknown;
+	to: unknown;
 }
 /**
  * Mapping rules to run (`core.asset.sync`): a dataset's rows become

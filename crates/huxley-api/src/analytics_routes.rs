@@ -40,6 +40,31 @@ pub(crate) async fn scope_for(
     }
 }
 
+/// A source (from the catalog, or a dataset's) and where the caller may
+/// read it.
+pub(crate) async fn source_and_scope(
+    state: &AppState,
+    authed: &Authed,
+    key: &str,
+) -> ApiResult<(Source, Scope)> {
+    let no_source = || ApiError::validation().with_field_error("/source", "there's no such source");
+    if huxley_analytics::Source::is_dataset(key) {
+        let scope = dataset_scope(state, authed).await?;
+        let mut tx = begin_scoped(&state.db, &OrgScope::System)
+            .await
+            .map_err(db_err)?;
+        let found = huxley_analytics::datasets::source(&mut tx, &scope, key)
+            .await
+            .map_err(map)?;
+        tx.commit().await.map_err(db_err)?;
+        Ok((found.ok_or_else(no_source)?, scope))
+    } else {
+        let source = huxley_analytics::catalog::source(key).ok_or_else(no_source)?;
+        let scope = scope_for(state, authed, source).await?;
+        Ok((source.clone(), scope))
+    }
+}
+
 /// The organizations where the caller can read datasets.
 async fn dataset_scope(state: &AppState, authed: &Authed) -> ApiResult<Scope> {
     match authed
@@ -128,22 +153,7 @@ pub async fn query(
     authed: Authed,
     Json(spec): Json<QuerySpec>,
 ) -> ApiResult<Json<Answer>> {
-    let no_source = || ApiError::validation().with_field_error("/source", "there's no such source");
-    let (source, scope) = if huxley_analytics::Source::is_dataset(&spec.source) {
-        let scope = dataset_scope(&state, &authed).await?;
-        let mut tx = begin_scoped(&state.db, &OrgScope::System)
-            .await
-            .map_err(db_err)?;
-        let found = huxley_analytics::datasets::source(&mut tx, &scope, &spec.source)
-            .await
-            .map_err(map)?;
-        tx.commit().await.map_err(db_err)?;
-        (found.ok_or_else(no_source)?, scope)
-    } else {
-        let source = huxley_analytics::catalog::source(&spec.source).ok_or_else(no_source)?;
-        let scope = scope_for(&state, &authed, source).await?;
-        (source.clone(), scope)
-    };
+    let (source, scope) = source_and_scope(&state, &authed, &spec.source).await?;
     let pool = state.read_db.as_ref().unwrap_or(&state.db);
     let answer = huxley_analytics::run_for(pool, &state.analytics, &source, &spec, &scope)
         .await

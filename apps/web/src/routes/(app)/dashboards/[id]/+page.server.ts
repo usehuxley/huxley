@@ -31,7 +31,9 @@ export const load: PageServerLoad = async (event) => {
 					params: { path: { id: dashboard.id } }
 				})
 			: Promise.resolve({ data: undefined }),
-		mine || dashboard.audienceTeams.length + dashboard.audienceRoles.length > 0
+		mine ||
+		user.grantedPermissions.includes('workflow:write') ||
+		dashboard.audienceTeams.length + dashboard.audienceRoles.length > 0
 			? api(event).GET('/api/v1/dashboard-audiences')
 			: Promise.resolve({ data: undefined })
 	]);
@@ -39,6 +41,8 @@ export const load: PageServerLoad = async (event) => {
 		submissions: submissions.data ?? [],
 		audiences: audiences.data ?? { teams: [], roles: [] },
 		canSubmit: dashboard.ownerUserId === user.id,
+		// Personal dashboards can't be emailed on a schedule (it runs at an organization).
+		canSchedule: user.grantedPermissions.includes('workflow:write') && !dashboard.ownerUserId,
 		dashboard,
 		range,
 		orgId,
@@ -81,6 +85,67 @@ export const actions: Actions = {
 			return fail(response.status, { publish: problemMessage(problem, 'Could not submit it.') });
 		}
 		return { submitted: true };
+	},
+	schedule: async (event) => {
+		const form = await event.request.formData();
+		const { data: dashboard } = await api(event).GET('/api/v1/dashboards/{id}', {
+			params: { path: { id: event.params.id } }
+		});
+		const orgId = await homeOrg(event);
+		if (!dashboard || !orgId) return fail(404, { schedule: 'Could not find the dashboard.' });
+		const hour = Math.min(23, Math.max(0, Number(formString(form, 'hour')) || 8));
+		const cron = {
+			daily: `0 ${hour} * * *`,
+			weekly: `0 ${hour} * * 1`,
+			monthly: `0 ${hour} 1 * *`
+		}[formString(form, 'cadence') as 'daily' | 'weekly' | 'monthly'];
+		if (!cron) return fail(422, { schedule: 'Pick how often.' });
+		const key = `report-${Date.now().toString(36)}`;
+		const {
+			data: workflow,
+			error: problem,
+			response
+		} = await api(event).POST('/api/v1/workflows', {
+			body: {
+				orgId,
+				document: {
+					apiVersion: 'usehuxley.io/v1',
+					kind: 'Workflow',
+					metadata: {
+						key,
+						name: `Email “${dashboard.name}”`,
+						description: `Emails the ${dashboard.name} dashboard (${formString(form, 'format')}) on a schedule.`
+					},
+					spec: {
+						triggers: [{ type: 'schedule', cron }],
+						steps: [
+							{
+								id: 'send',
+								type: 'core.report.send',
+								with: {
+									dashboard_id: dashboard.id,
+									format: formString(form, 'format') || 'pdf',
+									to: formString(form, 'to')
+								}
+							}
+						]
+					}
+				}
+			}
+		});
+		if (!workflow) {
+			return fail(response.status, { schedule: problemMessage(problem, 'Could not schedule it.') });
+		}
+		const published = await api(event).POST('/api/v1/workflows/{id}/publish', {
+			params: { path: { id: workflow.id } },
+			body: {}
+		});
+		if (published.response.status !== 200) {
+			return fail(published.response.status, {
+				schedule: 'Scheduled as a draft: publish it to start.'
+			});
+		}
+		return { scheduled: workflow.id };
 	},
 	withdraw: async (event) => {
 		const form = await event.request.formData();
