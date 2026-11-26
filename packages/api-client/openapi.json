@@ -446,6 +446,66 @@
 				}
 			}
 		},
+		"/api/portal/v1/devices": {
+			"get": {
+				"tags": ["portal"],
+				"summary": "Your devices (client admins: the company's), by name.",
+				"operationId": "portal_devices",
+				"parameters": [
+					{
+						"name": "q",
+						"in": "query",
+						"description": "Words in the name, serial number, hostname, model or manufacturer.",
+						"required": false,
+						"schema": {
+							"type": "string"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "array",
+									"items": {
+										"$ref": "#/components/schemas/PortalDevice"
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/portal/v1/devices/{id}": {
+			"get": {
+				"tags": ["portal"],
+				"operationId": "portal_device",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/PortalDevice"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
 		"/api/portal/v1/me": {
 			"get": {
 				"tags": ["portal"],
@@ -24346,6 +24406,60 @@
 					}
 				}
 			},
+			"PortalDevice": {
+				"type": "object",
+				"required": [
+					"id",
+					"name",
+					"typeName",
+					"status",
+					"serialNumber",
+					"hostname",
+					"manufacturer",
+					"model"
+				],
+				"properties": {
+					"contactId": {
+						"type": ["string", "null"],
+						"format": "uuid"
+					},
+					"contactName": {
+						"type": ["string", "null"]
+					},
+					"hostname": {
+						"type": "string"
+					},
+					"id": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"manufacturer": {
+						"type": "string"
+					},
+					"model": {
+						"type": "string"
+					},
+					"name": {
+						"type": "string"
+					},
+					"serialNumber": {
+						"type": "string"
+					},
+					"siteName": {
+						"type": ["string", "null"]
+					},
+					"status": {
+						"type": "string"
+					},
+					"typeName": {
+						"type": "string"
+					},
+					"warrantyEndsOn": {
+						"type": ["string", "null"],
+						"format": "date"
+					}
+				}
+			},
 			"PortalForm": {
 				"type": "object",
 				"description": "A form as the portal shows it.",
@@ -25421,6 +25535,11 @@
 				"type": "object",
 				"required": ["title"],
 				"properties": {
+					"assetId": {
+						"type": ["string", "null"],
+						"format": "uuid",
+						"description": "The device it's about (one you can see in the portal)."
+					},
 					"description": {
 						"type": "string"
 					},
