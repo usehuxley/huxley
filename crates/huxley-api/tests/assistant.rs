@@ -656,22 +656,16 @@ async fn unreadable_context_is_refused(s: &Setup) {
     assert_eq!(status, StatusCode::NOT_FOUND);
 }
 
-/// Other tests may turn the CMDB on instance-wide: off for `org` (and
-/// anything needing it there).
+/// Other tests may turn the CMDB on instance-wide at any moment: narrow
+/// it off at `org` directly (narrowing through the API does nothing while
+/// it's off instance-wide, which would leave the race open).
 async fn cmdb_off(tx: &mut sqlx::PgConnection, org: Uuid) {
-    let ctx = RequestContext::system(Via::System);
-    let mut pending = vec!["cmdb"];
-    while let Some(&key) = pending.last() {
-        match huxley_modules::set_for_org(&mut *tx, &ctx, org, key, false).await {
-            Ok(_) => {
-                pending.pop();
-            }
-            Err(huxley_modules::SetError::Module(huxley_modules::ModuleError::HasDependents(
-                needing,
-            ))) => {
-                pending.extend(needing);
-            }
-            Err(e) => panic!("turning {key} off: {e}"),
-        }
-    }
+    sqlx::query(
+        "INSERT INTO module_settings (org_id, module_key, enabled) VALUES ($1, 'cmdb', false) \
+         ON CONFLICT (org_id, module_key) DO UPDATE SET enabled = false",
+    )
+    .bind(org)
+    .execute(&mut *tx)
+    .await
+    .unwrap();
 }
