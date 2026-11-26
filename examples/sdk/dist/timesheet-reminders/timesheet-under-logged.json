@@ -1,0 +1,47 @@
+{
+	"apiVersion": "usehuxley.io/v1",
+	"kind": "Workflow",
+	"metadata": {
+		"key": "timesheet-under-logged",
+		"name": "Remind people about days logged short",
+		"description": "Every morning at 9:00, tells people who logged less time yesterday than their working hours expect (not on time off), so they can fill it in while they remember."
+	},
+	"spec": {
+		"triggers": [
+			{
+				"type": "schedule",
+				"cron": "0 9 * * *"
+			}
+		],
+		"steps": [
+			{
+				"id": "find",
+				"type": "core.timesheet.check",
+				"with": {
+					"check": "under_logged"
+				}
+			},
+			{
+				"id": "remind",
+				"type": "foreach",
+				"items": "{{ steps.find.output.people }}",
+				"as": "person",
+				"steps": [
+					{
+						"id": "tell",
+						"type": "core.notify",
+						"with": {
+							"to": "{{ person.recipient }}",
+							"title": "Yesterday: {{ person.logged_minutes // 60 }}h {{ person.logged_minutes % 60 }}m logged of {{ person.expected_minutes // 60 }}h {{ person.expected_minutes % 60 }}m",
+							"message": "Log the rest of your time while you remember it.",
+							"url": "/time?week={{ person.period_start }}"
+						}
+					}
+				]
+			}
+		],
+		"outputs": {
+			"reminded": "{{ steps.find.output.people | length }}"
+		}
+	}
+}

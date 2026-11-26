@@ -1,0 +1,76 @@
+{
+	"apiVersion": "usehuxley.io/v1",
+	"kind": "Workflow",
+	"metadata": {
+		"key": "timesheet-unsubmitted",
+		"name": "Remind people to submit their timesheets",
+		"description": "Every weekday at 9:00, reminds people whose timesheet for the last period isn't submitted (or was rejected and not resubmitted). From three days late, their team leads are told too."
+	},
+	"spec": {
+		"triggers": [
+			{
+				"type": "schedule",
+				"cron": "0 9 * * 1-5"
+			}
+		],
+		"inputs": {
+			"type": "object",
+			"properties": {
+				"lead_after_days": {
+					"type": "integer",
+					"title": "Tell leads from this many days late",
+					"default": 3,
+					"minimum": 0
+				}
+			}
+		},
+		"steps": [
+			{
+				"id": "find",
+				"type": "core.timesheet.check",
+				"with": {
+					"check": "unsubmitted",
+					"days_late": 1
+				}
+			},
+			{
+				"id": "remind",
+				"type": "foreach",
+				"items": "{{ steps.find.output.people }}",
+				"as": "person",
+				"steps": [
+					{
+						"id": "tell",
+						"type": "core.notify",
+						"with": {
+							"to": "{{ person.recipient }}",
+							"title": "Your timesheet for {{ person.period_start }} to {{ person.period_end }} {{ 'was rejected: please fix and resubmit it' if person.status == 'rejected' else 'isn\\'t submitted' }}",
+							"message": "{{ person.logged_minutes // 60 }}h {{ person.logged_minutes % 60 }}m logged; the period ended {{ person.days_late }} day{{ '' if person.days_late == 1 else 's' }} ago.",
+							"url": "/time?week={{ person.period_start }}"
+						}
+					},
+					{
+						"id": "late",
+						"type": "if",
+						"condition": "{{ person.days_late >= (inputs.lead_after_days | default(3)) and person.lead_recipients }}",
+						"then": [
+							{
+								"id": "tell_leads",
+								"type": "core.notify",
+								"with": {
+									"to": "{{ person.lead_recipients }}",
+									"title": "{{ person.person }}'s timesheet for {{ person.period_start }} to {{ person.period_end }} is {{ person.days_late }} days late",
+									"message": "It's {{ person.status }}.",
+									"url": "/timesheets"
+								}
+							}
+						]
+					}
+				]
+			}
+		],
+		"outputs": {
+			"reminded": "{{ steps.find.output.people | length }}"
+		}
+	}
+}

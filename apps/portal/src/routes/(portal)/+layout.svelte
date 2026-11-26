@@ -1,7 +1,15 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
-	import { BookOpen, Boxes, CircleCheck, ClipboardList, House, Ticket } from '@lucide/svelte';
+	import {
+		BookOpen,
+		Boxes,
+		CircleCheck,
+		ClipboardList,
+		House,
+		Ticket,
+		UsersRound
+	} from '@lucide/svelte';
 	import { AppShell, Button, type NavItem } from '@usehuxley/ui';
 	import { accentStyle, DEFAULT_BRANDING } from '#lib/branding.ts';
 	import type { LayoutProps } from './$types';
@@ -17,12 +25,15 @@
 			{ href: '/requests', label: 'Request something', icon: ClipboardList, module: null },
 			{ href: '/assets', label: 'Devices', icon: Boxes, module: 'cmdb' },
 			{ href: '/knowledge', label: 'Help articles', icon: BookOpen, module: 'knowledge' },
-			{ href: '/approvals', label: 'Approvals', icon: CircleCheck, module: 'approvals' }
+			{ href: '/approvals', label: 'Approvals', icon: CircleCheck, module: 'approvals' },
+			{ href: '/people', label: 'People', icon: UsersRound, module: 'people' }
 		]
 			.filter((item) =>
 				item.module === 'approvals'
 					? data.me.permissions.includes('portal.approval:decide')
-					: item.module === null || data.me.modules.includes(item.module)
+					: item.module === 'people'
+						? data.me.permissions.includes('portal.contacts:manage')
+						: item.module === null || data.me.modules.includes(item.module)
 			)
 			.map((item) => ({ href: item.href, label: item.label, icon: item.icon }))
 	);
