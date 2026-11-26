@@ -6,7 +6,9 @@ metadata:
   description: >-
     When a client raises a ticket (by email or in the portal), asks the AI
     provider which queue and priority fit, from your queues and their
-    descriptions, and applies them while no one has worked the ticket.
+    descriptions (and the skills it needs, from your skill catalog), and
+    applies them while no one has worked the ticket, unless the
+    organization only takes suggestions.
     Accuracy evaluations run it by hand on labeled samples: then it records
     the answer instead of changing a ticket.
 spec:
@@ -41,8 +43,9 @@ spec:
              if trigger.subject_id is defined else inputs.text }}
         instructions: >-
           You triage tickets for an IT service desk. Pick the queue that should
-          handle this ticket and its priority, using these descriptions. Give a
-          reason of at most 15 words.
+          handle this ticket, its priority, and the skills it needs (at most
+          three; "(none)" if none fits), using these descriptions. Give a reason
+          of at most 15 words.
 
           {{ steps.options.output.guide }}
         schema:
@@ -50,8 +53,11 @@ spec:
           properties:
             queue: { type: string, enum: "{{ steps.options.output.queue_names }}" }
             priority: { type: string, enum: [p1, p2, p3, p4] }
+            skills:
+              type: array
+              items: { type: string, enum: "{{ steps.options.output.skill_names }}" }
             reason: { type: string }
-          required: [queue, priority, reason]
+          required: [queue, priority, skills, reason]
     - id: record
       type: core.triage.apply
       with:
@@ -61,6 +67,7 @@ spec:
         queue: "{{ steps.judge.output.queue }}"
         priority: "{{ steps.judge.output.priority }}"
         reason: "{{ steps.judge.output.reason }}"
+        skills: "{{ steps.judge.output.skills }}"
   outputs:
     queue: "{{ steps.judge.output.queue }}"
     priority: "{{ steps.judge.output.priority }}"

@@ -1,0 +1,224 @@
+//! The built-in AI triage workflow in a real run (ADR-047, ADR-048): with
+//! a stand-in AI provider, a client's untouched ticket gets the queue,
+//! priority and needed skills the model picked from the real options.
+
+use std::time::{Duration, Instant};
+
+use axum::Json as AxumJson;
+use axum::routing::post;
+use huxley_core::{RequestContext, Via};
+use huxley_db::testing::{ensure_root, isolated, unique};
+use huxley_db::{OrgScope, begin_scoped};
+use huxley_engine::{EgressConfig, Engine, EngineConfig, RunStatus, StartRun};
+use serde_json::{Value as Json, json};
+use uuid::Uuid;
+
+const TRIAGE: &str =
+    include_str!("../../huxley-packs/builtin/ai-triage/workflows/triage-ticket.yaml");
+
+/// Answers like Anthropic's Messages API: the Network queue, p2, and the
+/// Networking skill, picked from the schema's enums.
+async fn mock_anthropic() -> u16 {
+    let app = axum::Router::new().route(
+        "/v1/messages",
+        post(|AxumJson(body): AxumJson<Json>| async move {
+            let props = &body["output_config"]["format"]["schema"]["properties"];
+            let pick = |list: &Json, prefix: &str| {
+                list.as_array()
+                    .and_then(|l| {
+                        l.iter()
+                            .find(|v| v.as_str().is_some_and(|s| s.starts_with(prefix)))
+                    })
+                    .cloned()
+                    .unwrap_or(Json::Null)
+            };
+            let answer = json!({
+                "queue": pick(&props["queue"]["enum"], "Network"),
+                "priority": "p2",
+                "skills": [pick(&props["skills"]["items"]["enum"], "Networking")],
+                "reason": "The VPN is down for one person",
+            });
+            AxumJson(json!({ "model": body["model"], "stop_reason": "end_turn",
+                             "content": [{ "type": "text", "text": answer.to_string() }],
+                             "usage": { "input_tokens": 40, "output_tokens": 10 } }))
+        }),
+    );
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let port = listener.local_addr().unwrap().port();
+    tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+    port
+}
+
+async fn org(tx: &mut sqlx::PgConnection, parent: Uuid, kind: &str) -> Uuid {
+    let id = Uuid::now_v7();
+    sqlx::query("INSERT INTO organizations (id, parent_id, kind, name, path) VALUES ($1, $2, $3::org_kind, $4, '')")
+        .bind(id)
+        .bind(parent)
+        .bind(kind)
+        .bind(unique("triage"))
+        .execute(&mut *tx)
+        .await
+        .unwrap();
+    id
+}
+
+#[tokio::test]
+async fn a_new_ticket_gets_its_queue_priority_and_skills() {
+    let Some(db) = isolated("triage").await else {
+        return;
+    };
+    let pools = db.pools.clone();
+    let (provider, queues, skill, ticket) = world(&pools).await;
+    let engine = engine_with_ai(&pools, provider).await;
+    let (status, error) = run_triage(&engine, &pools, provider, ticket).await;
+    assert_eq!(status, RunStatus::Succeeded, "{error:?}");
+    let (queue, priority): (Option<Uuid>, String) =
+        sqlx::query_as("SELECT queue_id, priority FROM sd_tickets WHERE id = $1")
+            .bind(ticket)
+            .fetch_one(&pools.owner)
+            .await
+            .unwrap();
+    assert_eq!((queue, priority.as_str()), (Some(queues[1]), "p2"));
+    let needs: Vec<(Uuid, i16)> = sqlx::query_as(
+        "SELECT skill_id, min_level FROM wf_requirements WHERE target_type = 'ticket' AND target_id = $1",
+    )
+    .bind(ticket)
+    .fetch_all(&pools.owner)
+    .await
+    .unwrap();
+    assert_eq!(needs, [(skill, 2)]);
+    let applied: bool = sqlx::query_scalar("SELECT applied FROM sd_triage WHERE ticket_id = $1")
+        .bind(ticket)
+        .fetch_one(&pools.owner)
+        .await
+        .unwrap();
+    assert!(applied);
+}
+
+/// A provider with a client, Hardware and Network queues, a Networking
+/// skill, and a client's untouched ticket.
+async fn world(pools: &huxley_db::testing::TestPools) -> (Uuid, Vec<Uuid>, Uuid, Uuid) {
+    let root = ensure_root(pools).await;
+    let ctx = RequestContext::system(Via::System);
+    let mut tx = begin_scoped(&pools.app, &OrgScope::System).await.unwrap();
+    let provider = org(&mut tx, root, "provider").await;
+    let client = org(&mut tx, provider, "client").await;
+    for module in ["crm", "servicedesk", "workforce"] {
+        huxley_modules::set_enabled(&mut tx, &ctx, module, true, false)
+            .await
+            .unwrap();
+    }
+    let mut queues = Vec::new();
+    for name in ["Hardware", "Network"] {
+        let input: huxley_servicedesk::queues::QueueInput = serde_json::from_value(
+            json!({ "name": unique(name), "description": format!("{name} problems") }),
+        )
+        .unwrap();
+        queues.push(
+            huxley_servicedesk::queues::create(&mut tx, &ctx, provider, &input)
+                .await
+                .unwrap()
+                .id,
+        );
+    }
+    let skill = Uuid::now_v7();
+    sqlx::query(
+        "INSERT INTO wf_skills (id, name, description) VALUES ($1, $2, 'VPNs and routers')",
+    )
+    .bind(skill)
+    .bind(unique("Networking"))
+    .execute(&mut *tx)
+    .await
+    .unwrap();
+    let ticket = huxley_servicedesk::tickets::create(
+        &mut tx,
+        &ctx,
+        &huxley_servicedesk::tickets::NewTicket {
+            org_id: client,
+            title: "VPN won't connect".into(),
+            ..Default::default()
+        },
+        "T",
+        None,
+    )
+    .await
+    .unwrap()
+    .id;
+    tx.commit().await.unwrap();
+
+    (provider, queues, skill, ticket)
+}
+
+/// An engine that may reach the stand-in provider, set up at `provider`.
+async fn engine_with_ai(pools: &huxley_db::testing::TestPools, provider: Uuid) -> Engine {
+    let ctx = RequestContext::system(Via::System);
+    let port = mock_anthropic().await;
+    let crypto = huxley_crypto::Crypto::new(pools.app.clone(), huxley_crypto::testing::key_ring());
+    let input: huxley_ai::store::ProviderInput = serde_json::from_value(json!({
+        "kind": "anthropic", "baseUrl": format!("http://localhost:{port}"), "apiKey": "sk-ant-test"
+    }))
+    .unwrap();
+    let mut tx = begin_scoped(&pools.app, &OrgScope::System).await.unwrap();
+    huxley_ai::store::set(
+        &mut tx,
+        &ctx,
+        &crypto,
+        provider,
+        huxley_ai::store::Use::Chat,
+        &input,
+    )
+    .await
+    .unwrap();
+    tx.commit().await.unwrap();
+    let config = EngineConfig {
+        egress: EgressConfig {
+            private_hosts: vec!["localhost".into()],
+            ..EgressConfig::default()
+        },
+        ..EngineConfig::default()
+    };
+    Engine::with_config(pools.app.clone(), crypto, &config)
+}
+
+/// Runs the pack's workflow as `ticket.created` would, until it finishes.
+async fn run_triage(
+    engine: &Engine,
+    pools: &huxley_db::testing::TestPools,
+    provider: Uuid,
+    ticket: Uuid,
+) -> (RunStatus, Option<Json>) {
+    let document = serde_json::to_value(huxley_hwf::parse_yaml(TRIAGE).unwrap()).unwrap();
+    let mut tx = begin_scoped(&pools.app, &OrgScope::System).await.unwrap();
+    let run = engine
+        .start_run(
+            &mut tx,
+            StartRun {
+                org_id: provider,
+                workflow_id: None,
+                version: None,
+                document: Some(document),
+                trigger_type: "event".into(),
+                trigger: json!({ "event_type": "ticket.created", "subject_type": "ticket", "subject_id": ticket }),
+                inputs: json!({ "reference": "T-1", "actorId": null }),
+                actor_id: None,
+            },
+        )
+        .await
+        .unwrap();
+    tx.commit().await.unwrap();
+    let deadline = Instant::now() + Duration::from_secs(20);
+    loop {
+        engine.drain("triage-test", 50).await.unwrap();
+        let row: (RunStatus, Option<Json>) =
+            sqlx::query_as("SELECT status, error FROM runs WHERE id = $1")
+                .bind(run)
+                .fetch_one(&pools.owner)
+                .await
+                .unwrap();
+        if row.0.is_finished() {
+            return row;
+        }
+        assert!(Instant::now() < deadline, "the run didn't finish");
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    }
+}

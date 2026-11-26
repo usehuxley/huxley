@@ -114,25 +114,45 @@ fn clip(reason: &str) -> Option<String> {
     (!r.is_empty()).then_some(r)
 }
 
+/// An AI triage answer.
+#[derive(Debug, Clone, Copy)]
+pub struct Answer<'a> {
+    pub queue: &'a str,
+    pub priority: &'a str,
+    pub reason: &'a str,
+    /// The skills it needs, by name.
+    pub skills: &'a [String],
+}
+
 #[derive(Debug, Clone, Serialize)]
 pub struct Applied {
-    /// It changed the ticket (no one had worked on it yet).
+    /// It changed the ticket's queue or priority (no one had worked on it
+    /// yet, and the organization lets triage apply).
     pub applied: bool,
+    /// The caller may set the ticket's needed skills (the same conditions).
+    pub apply_skills: bool,
+    /// The organization only takes suggestions (`triage.auto_apply` off).
+    pub suggest_only: bool,
     pub queue_id: Option<Uuid>,
     pub priority: Option<String>,
 }
 
-/// Records a suggestion for a ticket, and applies it while no one has
-/// worked on the ticket (no person changed it): the queue if it has none,
-/// and the priority.
+/// Records a suggestion for a ticket (with the skills it needs, by name),
+/// and applies it while no one has worked on the ticket (no person changed
+/// it) unless the organization only takes suggestions: the queue if it has
+/// none, and the priority.
 pub async fn apply(
     conn: &mut PgConnection,
     ctx: &RequestContext,
     ticket_id: Uuid,
-    queue: &str,
-    priority_answer: &str,
-    reason: &str,
+    answer: &Answer<'_>,
 ) -> DeskResult<Applied> {
+    let Answer {
+        queue,
+        priority: priority_answer,
+        reason,
+        skills,
+    } = *answer;
     let ticket = tickets::get(conn, ticket_id).await?;
     let opts = options(&mut *conn, ticket.org_id).await?;
     let queue_id = resolve(&opts, queue)?;
@@ -145,7 +165,15 @@ pub async fn apply(
     .await?;
     let set_queue = queue_id.is_some() && ticket.queue_id.is_none();
     let set_priority = priority.as_ref().is_some_and(|p| *p != ticket.priority);
-    let applied = !touched && (set_queue || set_priority);
+    let auto = huxley_orgs::settings::value(
+        &mut *conn,
+        ticket.org_id,
+        huxley_orgs::settings::TRIAGE_AUTO,
+    )
+    .await
+    .map_err(|e| DeskError::Sqlx(sqlx::Error::Protocol(e.to_string())))?
+    .is_none_or(|v| v == "true");
+    let applied = auto && !touched && (set_queue || set_priority);
     if applied {
         let changes = TicketChanges {
             version: ticket.version,
@@ -156,9 +184,10 @@ pub async fn apply(
         tickets::update(conn, ctx, ticket_id, &changes).await?;
     }
     sqlx::query(
-        "INSERT INTO sd_triage (ticket_id, org_id, queue_id, priority, reason, applied) VALUES ($1, $2, $3, $4, $5, $6) \
+        "INSERT INTO sd_triage (ticket_id, org_id, queue_id, priority, reason, applied, skills) \
+         VALUES ($1, $2, $3, $4, $5, $6, $7) \
          ON CONFLICT (ticket_id) DO UPDATE SET queue_id = EXCLUDED.queue_id, priority = EXCLUDED.priority, \
-             reason = EXCLUDED.reason, applied = sd_triage.applied OR EXCLUDED.applied, at = now()",
+             reason = EXCLUDED.reason, applied = sd_triage.applied OR EXCLUDED.applied, skills = EXCLUDED.skills, at = now()",
     )
     .bind(ticket_id)
     .bind(ticket.org_id)
@@ -166,10 +195,13 @@ pub async fn apply(
     .bind(&priority)
     .bind(clip(reason))
     .bind(applied)
+    .bind(skills)
     .execute(&mut *conn)
     .await?;
     Ok(Applied {
         applied,
+        apply_skills: auto && !touched,
+        suggest_only: !auto,
         queue_id,
         priority,
     })

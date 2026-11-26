@@ -1425,7 +1425,8 @@ pub struct SentimentRecord {
 /// `ticket_id`'s organization or above (or the run's organization's,
 /// without one), and the priorities. Output: `{ queues: [{ id, name,
 /// description }], queue_names (the names and "(none)"), priority_keys,
-/// guide (a line per queue and priority, for a prompt) }`.
+/// skill_names (the workforce skill catalog's and "(none)"), guide (a line
+/// per queue, priority and skill, for a prompt) }`.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct TriageOptions {
@@ -1435,9 +1436,11 @@ pub struct TriageOptions {
 
 /// A triage answer to record (`core.triage.apply`): `queue` (a name from
 /// `core.triage.options`, or "(none)"), `priority` (`p1` to `p4`) and a
-/// `reason`. With `ticket_id`, it's kept as the ticket's suggestion and
-/// applied while no person has changed the ticket (the queue only if it
-/// has none). With `evaluation_id` and `sample_id` (an accuracy
+/// `reason`, and the `skills` it needs. With `ticket_id`, it's kept as the
+/// ticket's suggestion and applied while no person has changed the ticket
+/// and the organization lets triage apply (the queue only if it has none;
+/// skills as the ticket's own requirements, at working level, if it has
+/// none). With `evaluation_id` and `sample_id` (an accuracy
 /// evaluation's run), it's recorded in the evaluation instead. Output: `{
 /// mode, applied, queue_id, priority }`.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
@@ -1453,6 +1456,9 @@ pub struct TriageApply {
     pub priority: Value,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub reason: Option<Value>,
+    /// The skills the ticket needs, by name (from `skill_names`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub skills: Option<Value>,
 }
 
 /// Who should take a ticket (`core.dispatch.recommend`), in the run's

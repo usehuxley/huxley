@@ -4098,13 +4098,16 @@
     },
     "TriageApply": {
       "additionalProperties": false,
-      "description": "A triage answer to record (`core.triage.apply`): `queue` (a name from\n`core.triage.options`, or \"(none)\"), `priority` (`p1` to `p4`) and a\n`reason`. With `ticket_id`, it's kept as the ticket's suggestion and\napplied while no person has changed the ticket (the queue only if it\nhas none). With `evaluation_id` and `sample_id` (an accuracy\nevaluation's run), it's recorded in the evaluation instead. Output: `{\nmode, applied, queue_id, priority }`.",
+      "description": "A triage answer to record (`core.triage.apply`): `queue` (a name from\n`core.triage.options`, or \"(none)\"), `priority` (`p1` to `p4`) and a\n`reason`, and the `skills` it needs. With `ticket_id`, it's kept as the\nticket's suggestion and applied while no person has changed the ticket\nand the organization lets triage apply (the queue only if it has none;\nskills as the ticket's own requirements, at working level, if it has\nnone). With `evaluation_id` and `sample_id` (an accuracy\nevaluation's run), it's recorded in the evaluation instead. Output: `{\nmode, applied, queue_id, priority }`.",
       "properties": {
         "evaluation_id": true,
         "priority": true,
         "queue": true,
         "reason": true,
         "sample_id": true,
+        "skills": {
+          "description": "The skills the ticket needs, by name (from `skill_names`)."
+        },
         "ticket_id": true
       },
       "required": [
@@ -4115,7 +4118,7 @@
     },
     "TriageOptions": {
       "additionalProperties": false,
-      "description": "What a ticket can be triaged to (`core.triage.options`): the queues at\n`ticket_id`'s organization or above (or the run's organization's,\nwithout one), and the priorities. Output: `{ queues: [{ id, name,\ndescription }], queue_names (the names and \"(none)\"), priority_keys,\nguide (a line per queue and priority, for a prompt) }`.",
+      "description": "What a ticket can be triaged to (`core.triage.options`): the queues at\n`ticket_id`'s organization or above (or the run's organization's,\nwithout one), and the priorities. Output: `{ queues: [{ id, name,\ndescription }], queue_names (the names and \"(none)\"), priority_keys,\nskill_names (the workforce skill catalog's and \"(none)\"), guide (a line\nper queue, priority and skill, for a prompt) }`.",
       "properties": {
         "ticket_id": true
       },

@@ -2,6 +2,8 @@
 //! can be triaged to, and `core.triage.apply` records the AI's answer on a
 //! ticket, or in an evaluation for a labeled sample.
 
+use std::fmt::Write as _;
+
 use huxley_core::{RequestContext, Via};
 use huxley_db::{OrgScope, begin_scoped};
 use huxley_servicedesk::{DeskError, triage};
@@ -40,7 +42,102 @@ fn text<'a>(input: &'a Json, key: &str) -> &'a str {
     input[key].as_str().unwrap_or_default()
 }
 
+/// The skill names an answer gave (a list, or one name), without "(none)".
+fn skills_of(input: &Json) -> Vec<String> {
+    let names: Vec<String> = match &input["skills"] {
+        Json::Array(items) => items
+            .iter()
+            .filter_map(|v| v.as_str().map(str::to_owned))
+            .collect(),
+        Json::String(s) if !s.trim().is_empty() => vec![s.clone()],
+        _ => Vec::new(),
+    };
+    names
+        .into_iter()
+        .map(|n| n.trim().to_owned())
+        .filter(|n| !n.is_empty() && !n.eq_ignore_ascii_case(triage::NO_QUEUE))
+        .take(10)
+        .collect()
+}
+
 impl Engine {
+    /// The skill catalog (name, description) when the workforce module is
+    /// on at `org_id`; empty otherwise.
+    async fn skill_catalog(&self, org_id: Uuid) -> Result<Vec<(String, String)>, Json> {
+        let mut tx = begin_scoped(self.db(), &OrgScope::System)
+            .await
+            .map_err(internal)?;
+        let on = huxley_modules::is_active_at(&mut tx, huxley_workforce::MODULE, org_id)
+            .await
+            .map_err(internal)?;
+        let skills: Vec<(String, String)> = if on {
+            sqlx::query_as("SELECT name, description FROM wf_skills WHERE archived_at IS NULL ORDER BY lower(name) LIMIT 100")
+                .fetch_all(&mut *tx)
+                .await
+                .map_err(internal)?
+        } else {
+            Vec::new()
+        };
+        tx.commit().await.map_err(internal)?;
+        Ok(skills)
+    }
+
+    /// Sets a ticket's needed skills (at working level) from their names,
+    /// unless it has its own requirements already or the workforce module
+    /// is off. Returns how many were set.
+    async fn set_ticket_skills(
+        &self,
+        tx: &mut sqlx::PgConnection,
+        ctx: &RequestContext,
+        ticket: Uuid,
+        names: &[String],
+    ) -> Result<usize, Json> {
+        if names.is_empty() {
+            return Ok(0);
+        }
+        let org: Uuid = sqlx::query_scalar("SELECT org_id FROM sd_tickets WHERE id = $1")
+            .bind(ticket)
+            .fetch_one(&mut *tx)
+            .await
+            .map_err(internal)?;
+        if !huxley_modules::is_active_at(&mut *tx, huxley_workforce::MODULE, org)
+            .await
+            .map_err(internal)?
+        {
+            return Ok(0);
+        }
+        let own = huxley_workforce::requirements::of(&mut *tx, "ticket", ticket)
+            .await
+            .map_err(internal)?;
+        if !own.is_empty() {
+            return Ok(0);
+        }
+        let lower: Vec<String> = names.iter().map(|n| n.to_lowercase()).collect();
+        let ids: Vec<Uuid> = sqlx::query_scalar(
+            "SELECT id FROM wf_skills WHERE archived_at IS NULL AND lower(name) = ANY($1)",
+        )
+        .bind(&lower)
+        .fetch_all(&mut *tx)
+        .await
+        .map_err(internal)?;
+        let wanted: Vec<huxley_workforce::requirements::Requirement> = ids
+            .iter()
+            .map(|id| huxley_workforce::requirements::Requirement {
+                skill_id: Some(*id),
+                min_level: Some(2),
+                certification_id: None,
+                name: None,
+            })
+            .collect();
+        if wanted.is_empty() {
+            return Ok(0);
+        }
+        huxley_workforce::requirements::set(&mut *tx, ctx, "ticket", ticket, &wanted)
+            .await
+            .map_err(internal)?;
+        Ok(wanted.len())
+    }
+
     /// `core.triage.options`: `{ queues, queue_names, priority_keys, guide }`
     /// for a ticket's organization (or the run's).
     pub(crate) async fn triage_options(&self, org_id: Uuid, input: &Json) -> Result<Json, Json> {
@@ -60,7 +157,25 @@ impl Engine {
         };
         let options = triage::options(&mut tx, at).await.map_err(desk_error)?;
         tx.commit().await.map_err(internal)?;
-        Ok(json!(options))
+        let mut out = json!(options);
+        // The skills it may need, while the workforce module is on there.
+        let skills = self.skill_catalog(at).await?;
+        let mut names: Vec<Json> = skills.iter().map(|(name, _)| json!(name)).collect();
+        names.push(json!(triage::NO_QUEUE));
+        if !skills.is_empty() {
+            let mut guide = out["guide"].as_str().unwrap_or_default().to_owned();
+            guide.push_str("Skills:\n");
+            for (name, about) in &skills {
+                let _ = if about.is_empty() {
+                    writeln!(guide, "- {name}")
+                } else {
+                    writeln!(guide, "- {name}: {about}")
+                };
+            }
+            out["guide"] = json!(guide);
+        }
+        out["skill_names"] = json!(names);
+        Ok(out)
     }
 
     /// `core.triage.apply`: with `ticket_id`, records the suggestion and
@@ -78,12 +193,31 @@ impl Engine {
         let mut tx = begin_scoped(self.db(), &OrgScope::Orgs(subtree))
             .await
             .map_err(internal)?;
+        let mut pending_skills: Option<(Uuid, Vec<String>)> = None;
         let out = if let Some(ticket) = id(input, "ticket_id")? {
             let ctx = RequestContext::system(Via::Workflow);
-            let applied = triage::apply(&mut tx, &ctx, ticket, queue, priority, reason)
+            let skills = skills_of(input);
+            let answer = triage::Answer {
+                queue,
+                priority,
+                reason,
+                skills: &skills,
+            };
+            let applied = triage::apply(&mut tx, &ctx, ticket, &answer)
                 .await
                 .map_err(desk_error)?;
-            json!({ "mode": "ticket", "applied": applied.applied, "queue_id": applied.queue_id, "priority": applied.priority })
+            // Needed skills go in after the ticket's checked to be here (the
+            // skill catalog and module settings are read across scopes).
+            let set_skills = if applied.apply_skills {
+                Some((ticket, skills.clone()))
+            } else {
+                None
+            };
+            pending_skills = set_skills;
+            json!({
+                "mode": "ticket", "applied": applied.applied, "suggest_only": applied.suggest_only,
+                "queue_id": applied.queue_id, "priority": applied.priority, "skills": skills,
+            })
         } else {
             let (Some(evaluation), Some(sample)) =
                 (id(input, "evaluation_id")?, id(input, "sample_id")?)
@@ -99,6 +233,18 @@ impl Engine {
             json!({ "mode": "evaluation", "applied": false, "queue_id": null, "priority": priority })
         };
         tx.commit().await.map_err(internal)?;
+        let mut out = out;
+        if let Some((ticket, skills)) = pending_skills {
+            let ctx = RequestContext::system(Via::Workflow);
+            let mut tx = begin_scoped(self.db(), &OrgScope::System)
+                .await
+                .map_err(internal)?;
+            let set = self
+                .set_ticket_skills(&mut tx, &ctx, ticket, &skills)
+                .await?;
+            tx.commit().await.map_err(internal)?;
+            out["skills_set"] = json!(set);
+        }
         Ok(out)
     }
 }

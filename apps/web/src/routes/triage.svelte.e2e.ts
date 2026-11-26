@@ -26,10 +26,10 @@ async function model(): Promise<{ port: number; close: () => void }> {
 			const text = JSON.stringify(parsed.messages).toLowerCase();
 			const pick = (word: string) => queues.find((q) => q.startsWith(word))!;
 			const answer = text.includes('offline')
-				? { queue: pick('Network'), priority: 'p1', reason: 'Everyone is offline' }
+				? { queue: pick('Network'), priority: 'p1', skills: [], reason: 'Everyone is offline' }
 				: text.includes('monitor')
-					? { queue: pick('Hardware'), priority: 'p3', reason: 'A hardware request' }
-					: { queue: pick('Hardware'), priority: 'p2', reason: 'Sounds like a device' };
+					? { queue: pick('Hardware'), priority: 'p3', skills: [], reason: 'A hardware request' }
+					: { queue: pick('Hardware'), priority: 'p2', skills: [], reason: 'Sounds like a device' };
 			res.writeHead(200, { 'content-type': 'application/json' });
 			res.end(
 				JSON.stringify({
