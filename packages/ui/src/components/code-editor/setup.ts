@@ -22,7 +22,13 @@ import {
 } from '@codemirror/language';
 import { linter, lintGutter, lintKeymap } from '@codemirror/lint';
 import { highlightSelectionMatches, searchKeymap } from '@codemirror/search';
-import { Compartment, EditorState, type Extension } from '@codemirror/state';
+import {
+	Annotation,
+	Compartment,
+	EditorState,
+	type Extension,
+	type TransactionSpec
+} from '@codemirror/state';
 import {
 	drawSelection,
 	EditorView,
@@ -159,6 +165,49 @@ function wordSource(words: () => CodeCompletion[]): CompletionSource {
 	};
 }
 
+/** Completes with the page's own logic (it filters, so CodeMirror doesn't). */
+function pageSource(complete: NonNullable<CodeEditorOptions['complete']>): CompletionSource {
+	return (context: CompletionContext): CompletionResult | null => {
+		const found = complete(context.state.doc.toString(), context.pos);
+		if (!found || found.options.length === 0) return null;
+		return {
+			from: found.from,
+			to: found.to,
+			options: found.options.map(completion),
+			filter: false
+		};
+	};
+}
+
+/** Browsers put non-breaking spaces into editable text where a typed space
+ * would otherwise collapse (beside closed brackets, say). In code they're
+ * always a mistake (an expression with one doesn't parse), so typed and
+ * pasted ones become ordinary spaces. */
+const plainSpaces = EditorState.transactionFilter.of((tr) => {
+	if (!tr.docChanged || !tr.isUserEvent('input')) return tr;
+	let found = false;
+	tr.changes.iterChanges((_fa, _ta, _fb, _tb, inserted) => {
+		if (inserted.toString().includes('\u00a0')) found = true;
+	});
+	if (!found) return tr;
+	const changes: { from: number; to: number; insert: string }[] = [];
+	tr.changes.iterChanges((from, to, _fb, _tb, inserted) => {
+		changes.push({ from, to, insert: inserted.toString().replaceAll('\u00a0', ' ') });
+	});
+	// Same lengths, so the selection and effects carry over unchanged.
+	const spec: TransactionSpec = {
+		changes,
+		selection: tr.selection,
+		effects: tr.effects,
+		scrollIntoView: tr.scrollIntoView,
+		userEvent: 'input'
+	};
+	return spec;
+});
+
+/** Marks a change the page made (`setValue`), not the person. */
+const external = Annotation.define<boolean>();
+
 export type Controller = {
 	setValue: (value: string) => void;
 	setReadonly: (readonly: boolean) => void;
@@ -170,16 +219,17 @@ export async function create(parent: HTMLElement, options: CodeEditorOptions): P
 	const language = new Compartment();
 	const editable = new Compartment();
 	const lint = options.lint;
+	const gutters: Extension[] = options.compact
+		? []
+		: [lineNumbers(), highlightActiveLineGutter(), foldGutter(), highlightActiveLine()];
 	const extensions: Extension[] = [
-		lineNumbers(),
-		highlightActiveLineGutter(),
-		foldGutter(),
+		...gutters,
 		history(),
 		drawSelection(),
 		indentOnInput(),
 		bracketMatching(),
 		closeBrackets(),
-		highlightActiveLine(),
+		plainSpaces,
 		highlightSelectionMatches(),
 		syntaxHighlighting(highlight),
 		theme,
@@ -205,7 +255,14 @@ export async function create(parent: HTMLElement, options: CodeEditorOptions): P
 			EditorView.editable.of(!options.readonly)
 		]),
 		EditorView.updateListener.of((u) => {
-			if (u.docChanged) options.onChange(u.state.doc.toString());
+			if (!u.docChanged) return;
+			const theirs = u.transactions.some((tr) => tr.docChanged && !tr.annotation(external));
+			options.onChange(u.state.doc.toString(), theirs);
+		}),
+		EditorView.domEventHandlers({
+			blur: () => {
+				options.onBlur?.();
+			}
 		})
 	];
 	if (options.placeholder) extensions.push(placeholderText(options.placeholder));
@@ -215,6 +272,11 @@ export async function create(parent: HTMLElement, options: CodeEditorOptions): P
 	// Each language's own completion, plus the given words alongside it.
 	extensions.push(autocompletion());
 	const words = options.words;
+	const complete = options.complete;
+	if (complete) {
+		const data = [{ autocomplete: pageSource(complete) }];
+		extensions.push(EditorState.languageData.of(() => data));
+	}
 	if (words) {
 		// One source for the editor's life: CodeMirror matches results to
 		// sources by identity, so a new function per lookup drops them all.
@@ -236,7 +298,10 @@ export async function create(parent: HTMLElement, options: CodeEditorOptions): P
 		setValue(value) {
 			const current = view.state.doc.toString();
 			if (value !== current) {
-				view.dispatch({ changes: { from: 0, to: current.length, insert: value } });
+				view.dispatch({
+					changes: { from: 0, to: current.length, insert: value },
+					annotations: external.of(true)
+				});
 			}
 		},
 		setReadonly(readonly) {

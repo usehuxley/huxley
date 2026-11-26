@@ -13,7 +13,6 @@
 	} from './catalog.ts';
 	import type { EditorContext } from './context.ts';
 	import ExpressionInput from './ExpressionInput.svelte';
-	import PreviewButton from './PreviewButton.svelte';
 	import { namesFor } from './suggest.ts';
 
 	let { editor }: { editor: EditorContext } = $props();
@@ -66,6 +65,26 @@
 		// Expressions read better without JSON's quotes.
 		if (typeof value === 'string' && value.includes('{{')) return value;
 		return JSON.stringify(value, null, 2);
+	}
+
+	/** The server's problems with a field, were it `text`: the document is
+	 * checked with the draft in place, and only that field's problems kept. */
+	function checkField(field: string) {
+		const check = editor.check;
+		const at = path;
+		if (!check || !at) return undefined;
+		return async (text: string): Promise<string[]> => {
+			const copy = structuredClone($state.snapshot(editor.document));
+			const target = getAt(copy, at);
+			if (!isStep(target)) return [];
+			setField(target, field, text);
+			const key = `${pathKey(at)}.${field}`;
+			return (await check(copy))
+				.filter(
+					(p) => p.path === key || p.path.startsWith(`${key}.`) || p.path.startsWith(`${key}[`)
+				)
+				.map((p) => p.message);
+		};
 	}
 
 	function set(field: string, value: unknown) {
@@ -223,18 +242,20 @@
 							{/each}
 						</select>
 					{:else if field.kind === 'json'}
-						<textarea
+						<!-- JSON, or an expression: the same editor, committed as JSON. -->
+						<ExpressionInput
 							id={fieldId(field)}
-							rows="3"
-							spellcheck="false"
-							class="rounded-control border border-border bg-surface-sunken p-2 font-mono text-xs text-fg"
+							label={field.label}
 							value={json(value)}
+							{names}
+							lines={8}
 							readonly={editor.readonly}
-							onchange={(e) => setJson(field.path, e.currentTarget.value)}></textarea>
+							onchange={(v: string) => setJson(field.path, v)}
+							preview={editor.preview}
+							check={checkField(field.path)}
+						/>
 						{#if jsonErrors[field.path]}
 							<p class="text-xs text-danger" role="alert">{jsonErrors[field.path]}</p>
-						{:else if editor.preview && json(value).includes('{{')}
-							<PreviewButton preview={editor.preview} value={() => value} />
 						{/if}
 					{:else if field.kind === 'number'}
 						<input
@@ -288,11 +309,13 @@
 					{:else if field.kind === 'expression'}
 						<ExpressionInput
 							id={fieldId(field)}
+							label={field.label}
 							value={text(value)}
 							{names}
 							readonly={editor.readonly}
 							onchange={(v) => set(field.path, v)}
 							preview={editor.preview}
+							check={checkField(field.path)}
 						/>
 					{:else}
 						<input

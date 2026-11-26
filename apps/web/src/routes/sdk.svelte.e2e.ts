@@ -77,8 +77,8 @@ test.describe('the TypeScript SDK', () => {
 			await expect(page.getByRole('button', { name: new RegExp(`^Step ${step},`) })).toBeAttached();
 		}
 		await page.getByRole('tab', { name: 'YAML' }).click();
-		await expect(page.getByRole('textbox', { name: 'Workflow YAML' })).toHaveValue(
-			/lead_after_days/
+		await expect(page.getByRole('textbox', { name: 'Workflow YAML' })).toContainText(
+			'lead_after_days'
 		);
 	});
 });

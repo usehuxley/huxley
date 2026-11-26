@@ -24,6 +24,14 @@ Scripts, expressions, workflow YAML and JSON Schemas were edited in plain text b
   - The word source is created once per editor, because CodeMirror matches completion results to their source by identity.
   - Jinja takes a scope: names in scope, and the properties under a dotted path. This is how expressions will complete `steps.<id>.output.`.
 - **Diagnostics:** a page passes a `lint` function, debounced, whose problems are underlined and marked in the gutter. The scripts page checks the parameters JSON Schema as you type. Expression and HWF checks will call the server's own validators, so the editor and the API never disagree.
+- **Expressions** (the workflow editor's expression and JSON fields):
+  - the editor in Jinja, in a compact form without gutters
+  - completion comes from the editor's existing scope logic (`namesFor` and `complete`: inputs, steps that have run by then, loop items, run variables, filters and functions), passed in as a `complete(text, pos)` hook
+  - edits commit shortly after typing stops, on blur, and when the field goes away
+  - each field is checked as you type by sending the draft document, with the field's text in place, to `POST /workflows/validate` (through the page's `check` route) and keeping that field's problems, so the message is the API's own
+- **The workflow's YAML view** is the editor in YAML. Syntax errors are underlined where the parser stops. Otherwise the parsed draft goes to the same validate endpoint, and each problem is underlined at its path in the source (via the `yaml` package's ranges; a missing field points at its parent). Run inputs are JSON, checked as you type.
+- **Whose change:** the page's own updates (loading a saved version, say) are tagged, and `onchange` fires only for the person's edits, so pages can track unsaved changes.
+- **Non-breaking spaces:** browsers put them into editable text where a typed space would collapse (beside an auto-closed `}}`, say), and an expression with one doesn't parse. Typed and pasted ones become ordinary spaces.
 - **Theme:** colours come from the design tokens. Syntax colours are new tokens (`--hx-code-*`), each readable on its surface in light and dark.
 - **Content Security Policy:**
   - CodeMirror adds its styles as `<style>` tags, which the web app's `style-src 'self'` blocks. Blocked, the editor still showed text, but its completion lists were parked off-screen.

@@ -45,9 +45,19 @@ export type CodeEditorOptions = {
 	 * script parameters. */
 	words?: () => CodeCompletion[];
 	jinja?: JinjaScope;
+	/** Completes at a position: the range being completed and the options
+	 * (already filtered), or nothing. Created once, read live. */
+	complete?: (
+		text: string,
+		pos: number
+	) => { from: number; to?: number; options: CodeCompletion[] } | null;
+	/** One or a few lines with no gutters, e.g. an expression field. */
+	compact?: boolean;
 	/** Checks the text (debounced); problems are underlined. */
 	lint?: (text: string) => CodeDiagnostic[] | Promise<CodeDiagnostic[]>;
-	onChange: (value: string) => void;
+	/** Every change; `byPerson` is false for changes the page made. */
+	onChange: (value: string, byPerson: boolean) => void;
+	onBlur?: () => void;
 	/** The page's CSP nonce for style elements, if it has one. */
 	cspNonce?: string;
 };

@@ -270,23 +270,38 @@ test.describe('workflows', () => {
 		await page.getByRole('menuitem', { name: /^If/ }).click();
 		const settings = page.getByLabel('Step settings');
 		await expect(settings).toContainText('Branch on a condition.');
-		// Suggestions complete names inside {{ }}.
-		const condition = settings.getByRole('combobox', { name: 'Condition' });
-		await condition.fill('');
-		await condition.pressSequentially('{{ inputs.na');
-		await expect(page.getByRole('option', { name: /inputs\.name/ })).toBeVisible();
-		await condition.press('Enter');
-		await expect(condition).toHaveValue('{{ inputs.name');
-		await condition.pressSequentially(" == 'Ada' }}");
+		// The code editor completes names inside {{ }} (closing them as you go).
+		const condition = settings.getByRole('textbox', { name: 'Condition' });
+		await condition.click();
+		await page.keyboard.press('ControlOrMeta+a');
+		await page.keyboard.press('Delete');
+		await page.keyboard.type('{{ inputs.na');
+		await page.getByRole('option', { name: /inputs\.name/ }).click();
+		await expect(condition).toHaveText('{{ inputs.name}}');
+		await page.keyboard.type(" == 'Ada' ");
+		await expect(condition).toHaveText("{{ inputs.name == 'Ada' }}");
 		await condition.blur();
 
-		// Inside Then: a transform that reads the first step.
+		// Inside Then: a transform that reads the first step, completed.
 		await page.getByRole('button', { name: 'Add a step at the start of Then' }).click();
 		await page.getByRole('menuitem', { name: /^Transform/ }).click();
 		await settings.getByLabel('Step id').fill('cheer');
 		await settings.getByLabel('Step id').blur();
-		await settings.getByLabel('Output').fill('{{ steps.greet.output ~ "!" }}');
-		await settings.getByLabel('Output').blur();
+		const output = settings.getByRole('textbox', { name: 'Output' });
+		await output.click();
+		await page.keyboard.press('ControlOrMeta+a');
+		await page.keyboard.press('Delete');
+		await page.keyboard.type('{{ steps.gr');
+		await page.getByRole('option', { name: /steps\.greet\.output/ }).click();
+		// A broken expression is flagged inline, with the server's message.
+		await page.keyboard.type(' | ');
+		const problem = settings.locator('.cm-lintRange-error');
+		await expect(problem).toHaveCount(1);
+		await page.keyboard.press('ControlOrMeta+a');
+		await page.keyboard.press('Delete');
+		await output.fill('{{ steps.greet.output ~ "!" }}');
+		await expect(problem).toHaveCount(0);
+		await output.blur();
 		await page.getByRole('button', { name: 'Save draft' }).click();
 		await expect(page.getByText('Draft saved. It is ready to publish.')).toBeVisible();
 
@@ -300,8 +315,8 @@ test.describe('workflows', () => {
 		// The YAML view shows the same document.
 		await page.getByRole('tab', { name: 'YAML' }).click();
 		const yaml = page.getByRole('textbox', { name: 'Workflow YAML' });
-		await expect(yaml).toHaveValue(/type: if/);
-		await expect(yaml).toHaveValue(/id: cheer/);
+		await expect(yaml).toContainText('type: if');
+		await expect(yaml).toContainText('id: cheer');
 
 		await page.getByRole('textbox', { name: 'Inputs' }).fill('{"name": "Ada"}');
 		await page.getByRole('button', { name: 'Test run the draft' }).click();

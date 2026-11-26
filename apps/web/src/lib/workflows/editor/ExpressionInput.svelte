@@ -1,119 +1,108 @@
 <!--
-	A text field for an expression, with suggestions while typing inside
-	`{{ }}` (an ARIA combobox): arrows move, Enter or Tab accepts, Escape
-	closes. The value is committed on change, like the other panel fields.
+	An expression field: the code editor in Jinja, compact. While typing
+	inside `{{ }}` it completes what the step can read (inputs, earlier
+	steps, loop items, run variables, filters and functions); problems the
+	server finds in it are underlined as you type. Edits are committed
+	shortly after typing stops, and when the field goes away.
 -->
 <script lang="ts">
-	import { tick } from 'svelte';
-	import { complete, type Completion, type Suggestion } from './suggest.ts';
+	import { onDestroy, untrack } from 'svelte';
+	import { CodeEditor, type CodeDiagnostic } from '@usehuxley/ui';
+	import { complete, type Suggestion } from './suggest.ts';
 	import type { PreviewResult } from './context.ts';
 	import PreviewButton from './PreviewButton.svelte';
 
 	let {
 		id,
+		label,
 		value,
 		names,
 		readonly = false,
 		onchange,
-		preview
+		preview,
+		check,
+		lines = 4
 	}: {
 		id: string;
+		/** Its accessible name (the field's label). */
+		label: string;
 		value: string;
 		names: Suggestion[];
 		readonly?: boolean;
 		onchange: (value: string) => void;
 		/** Evaluates the expression against the latest run. */
 		preview?: (expression: unknown) => Promise<PreviewResult>;
+		/** The server's problems with this field, were it this text. */
+		check?: (text: string) => Promise<string[]>;
+		/** Height in lines before it scrolls. */
+		lines?: number;
 	} = $props();
 
-	let input = $state<HTMLInputElement>();
-	let open = $state<Completion | null>(null);
-	let active = $state(0);
-	const listId = $derived(`${id}-suggestions`);
+	let text = $state(untrack(() => value));
+	let committed = untrack(() => value);
+	let timer: ReturnType<typeof setTimeout> | undefined;
 
-	function refresh() {
-		if (!input || readonly) return;
-		open = complete(input.value, input.selectionStart ?? input.value.length, names);
-		active = 0;
-	}
+	// A new value from outside (another step selected, undo) replaces ours.
+	$effect(() => {
+		const v = value;
+		untrack(() => {
+			if (v !== committed) {
+				committed = v;
+				text = v;
+			}
+		});
+	});
 
-	async function accept(item: Suggestion) {
-		if (!input || !open) return;
-		const text = input.value;
-		input.value = text.slice(0, open.from) + item.label + text.slice(open.to);
-		const caret = open.from + item.label.length;
-		open = null;
-		onchange(input.value);
-		await tick();
-		input.setSelectionRange(caret, caret);
-		input.focus();
-	}
-
-	function keydown(e: KeyboardEvent) {
-		if (!open) return;
-		if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
-			e.preventDefault();
-			const n = open.items.length;
-			active = (active + (e.key === 'ArrowDown' ? 1 : n - 1)) % n;
-		} else if (e.key === 'Enter' || e.key === 'Tab') {
-			e.preventDefault();
-			void accept(open.items[active]);
-		} else if (e.key === 'Escape') {
-			e.preventDefault();
-			open = null;
+	function commit() {
+		clearTimeout(timer);
+		if (text !== committed) {
+			committed = text;
+			onchange(text);
 		}
 	}
+	function edited() {
+		clearTimeout(timer);
+		timer = setTimeout(commit, 400);
+	}
+	onDestroy(commit);
+
+	const completions = (doc: string, pos: number) => {
+		const found = complete(doc, pos, names);
+		if (!found) return null;
+		return {
+			from: found.from,
+			to: found.to,
+			options: found.items.map((s) => ({ label: s.label, detail: s.detail }))
+		};
+	};
+
+	const lint = $derived(
+		check
+			? async (doc: string): Promise<CodeDiagnostic[]> =>
+					(await check(doc)).map((message) => ({
+						from: 0,
+						to: doc.length,
+						severity: 'error' as const,
+						message
+					}))
+			: undefined
+	);
 </script>
 
-<div class="relative">
-	<input
-		bind:this={input}
-		{id}
-		class="w-full rounded-control border border-border bg-surface px-2 py-1 font-mono text-sm text-fg"
-		{value}
+<div class="flex flex-col gap-1" {id}>
+	<CodeEditor
+		{label}
+		language="jinja"
+		compact
+		{lines}
 		{readonly}
-		spellcheck="false"
-		autocomplete="off"
-		role="combobox"
-		aria-autocomplete="list"
-		aria-expanded={open !== null}
-		aria-controls={listId}
-		aria-activedescendant={open ? `${listId}-${active}` : undefined}
-		oninput={refresh}
-		onclick={refresh}
-		onkeydown={keydown}
-		onblur={() => (open = null)}
-		onchange={(e) => onchange(e.currentTarget.value)}
+		complete={completions}
+		{lint}
+		onchange={edited}
+		onblur={commit}
+		bind:value={text}
 	/>
-	{#if open}
-		<ul
-			id={listId}
-			role="listbox"
-			aria-label="Suggestions"
-			class="absolute z-20 mt-1 max-h-64 w-full overflow-auto rounded-control border border-border bg-surface py-1 shadow-lg"
-		>
-			{#each open.items as item, i (item.label)}
-				<li
-					id={`${listId}-${i}`}
-					role="option"
-					aria-selected={i === active}
-					class="flex cursor-pointer items-baseline justify-between gap-3 px-2 py-1 text-sm {i ===
-					active
-						? 'bg-surface-sunken'
-						: ''}"
-					onmousedown={(e) => {
-						// Before the input's blur closes the list.
-						e.preventDefault();
-						void accept(item);
-					}}
-				>
-					<span class="font-mono text-fg">{item.label}</span>
-					<span class="truncate text-xs text-fg-muted">{item.detail}</span>
-				</li>
-			{/each}
-		</ul>
-	{/if}
-	{#if preview && value.includes('{{')}
-		<PreviewButton {preview} value={() => input?.value ?? value} />
+	{#if preview && text.includes('{{')}
+		<PreviewButton {preview} value={() => text} />
 	{/if}
 </div>
