@@ -1,0 +1,35 @@
+{
+	"name": "@usehuxley/sdk",
+	"version": "0.1.0",
+	"private": true,
+	"license": "MIT",
+	"type": "module",
+	"description": "Write Huxley workflows in TypeScript; they compile to HWF (usehuxley.io/v1)",
+	"exports": {
+		".": {
+			"types": "./src/index.ts",
+			"default": "./src/index.ts"
+		}
+	},
+	"bin": {
+		"huxley-sdk": "./src/cli.ts"
+	},
+	"engines": {
+		"node": ">=24"
+	},
+	"scripts": {
+		"generate": "node scripts/generate-types.ts",
+		"check": "tsc --noEmit -p tsconfig.json",
+		"lint": "prettier --check .",
+		"format": "prettier --write .",
+		"test:unit": "vitest"
+	},
+	"devDependencies": {
+		"@types/node": "^26",
+		"json-schema-to-typescript": "^16.0.0",
+		"prettier": "^3.10.1",
+		"typescript": "^6.0.3",
+		"vitest": "^5.1.0",
+		"yaml": "^2.8.1"
+	}
+}

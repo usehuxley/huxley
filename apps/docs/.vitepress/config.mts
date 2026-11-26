@@ -66,6 +66,7 @@ export default defineConfig({
 				items: [
 					{ text: 'Workflows', link: '/workflows' },
 					{ text: 'Expressions', link: '/expressions' },
+					{ text: 'TypeScript SDK', link: '/sdk' },
 					{ text: 'Integrations', link: '/integrations' },
 					{ text: 'Forms', link: '/forms' },
 					{ text: 'Scripts and runners', link: '/runners' },

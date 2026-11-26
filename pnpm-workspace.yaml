@@ -1,6 +1,7 @@
 packages:
   - apps/*
   - packages/*
+  - examples/sdk
 
 # Dependency install scripts are blocked unless listed here (supply-chain hardening).
 allowBuilds:
