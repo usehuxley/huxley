@@ -552,6 +552,7 @@ async fn opened_from_a_ticket_the_assistant_knows_it_and_has_desk_tools() {
             .await
             .unwrap();
     }
+    cmdb_off(&mut tx, s.org).await;
     tx.commit().await.unwrap();
     let (status, ticket) = s
         .call(
@@ -653,4 +654,24 @@ async fn unreadable_context_is_refused(s: &Setup) {
         )
         .await;
     assert_eq!(status, StatusCode::NOT_FOUND);
+}
+
+/// Other tests may turn the CMDB on instance-wide: off for `org` (and
+/// anything needing it there).
+async fn cmdb_off(tx: &mut sqlx::PgConnection, org: Uuid) {
+    let ctx = RequestContext::system(Via::System);
+    let mut pending = vec!["cmdb"];
+    while let Some(&key) = pending.last() {
+        match huxley_modules::set_for_org(&mut *tx, &ctx, org, key, false).await {
+            Ok(_) => {
+                pending.pop();
+            }
+            Err(huxley_modules::SetError::Module(huxley_modules::ModuleError::HasDependents(
+                needing,
+            ))) => {
+                pending.extend(needing);
+            }
+            Err(e) => panic!("turning {key} off: {e}"),
+        }
+    }
 }
