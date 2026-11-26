@@ -289,9 +289,26 @@ This is a long-term project. The plan follows four rules:
 - **Inventory** (§8.7): warehouses/locations, stock levels, serial/lot tracking, movements, allocation to tickets/projects, reorder alerts.
 - **Purchase orders**: vendors, POs (consolidated by vendor from sales orders, or manual), approval, receiving into inventory, partial receipts.
 - **Sales orders**: from accepted quotes → generate POs → receive → allocate/fulfill → hand-off to agreements (recurring lines), projects (create from template), and invoice generation.
+- **Presales scoping for projects** (§8.10), a workspace on the opportunity that assists the final quote:
+  - **Discovery:** notes, transcripts, uploaded documents, the client's CMDB environment, and similar past opportunities and projects (by meaning).
+  - **Scope of Work builder:** sections from templates, with AI drafts that cite their sources and turn gaps into open questions. Versioned, and attached to and signed with the quote.
+  - **Work Breakdown Structure generator:** phases, tasks and milestones with hours by role and low/likely/high estimates, grounded in project templates and past projects' logged hours. Contingency by risk, and every deliverable mapped to tasks.
+  - **Bill of Materials generator:** lines driven by quantities from the client's environment (users, sites, devices), matched to the catalog with distributor pricing, alternates and end-of-life warnings.
+  - **Quote assembly:**
+    - WBS hours × rate card become labour lines, per billing method; the BOM becomes product lines under the margin rules
+    - consistency checks before sending
+    - on a win, the WBS becomes the project and the BOM feeds the sales order and POs
+  - Estimates are compared with actuals when the project closes, to improve the next WBS.
 - Sales dashboards and reports.
 
-**Exit criteria:** opportunity → quote → client e-accepts in the portal → sales order → POs to vendors → receive into stock → allocate and fulfill. Recurring lines create or update an agreement, and an onboarding project is created from a template.
+**Exit criteria:**
+- Opportunity → quote → client e-accepts in the portal → sales order → POs to vendors → receive into stock → allocate and fulfill. Recurring lines create or update an agreement, and an onboarding project is created from a template.
+- A firewall replacement opportunity is scoped:
+  - AI drafts the SOW from discovery notes and the client's CMDB, citing its sources
+  - the WBS is drafted from it with estimates grounded in past projects
+  - the BOM is drafted with quantities from the client's sites and devices
+  - the sales engineer edits all three and assembles one quote (labour from WBS hours × rates, products from the BOM)
+  - on acceptance, the project is created from the WBS and the BOM lines feed the sales order
 
 **→ Release M6: Operations Suite**
 

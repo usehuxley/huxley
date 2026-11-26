@@ -586,6 +586,31 @@ Guardrails:
   - Margin and markup rules, recurring vs one-time lines, options/alternates, and branded quote templates (HTML → PDF).
   - A quote version history and a client acceptance page (portal/public link with e-signature capture and audit trail).
 - **Orders**: accepted quote → **Sales Order** → generates **Purchase Orders** to vendors (consolidated by vendor) → receiving into inventory → allocation/fulfillment → billing. Recurring lines can create or update agreements.
+- **Presales scoping for projects**: a workspace on an opportunity where the work is scoped before it's quoted. It produces three linked artifacts, each drafted by AI (with the customer's own provider, §8.8) and edited and approved by people. They then assemble the quote.
+  - **Discovery:** what the scoping draws on.
+    - meeting notes, call transcripts and uploaded documents (RFPs, site surveys)
+    - the client's environment from the CMDB (users, sites, devices, licences, lifecycle)
+    - the client's agreements and history
+    - similar past opportunities and projects (by meaning, §8.8)
+  - **Scope of Work (SOW) builder:**
+    - Sections from a template per kind of engagement: objectives, in scope, out of scope, deliverables, assumptions, client responsibilities, acceptance criteria, timeline, change control.
+    - AI drafts each section from discovery and past SOWs, citing what it drew on. It never invents facts: gaps become open questions for the sales engineer.
+    - Versioned, with a branded document that is attached to the quote and signed with it.
+  - **Work Breakdown Structure (WBS) generator:**
+    - Phases, tasks, milestones and dependencies, each task with hours by role and a low/likely/high estimate, drafted from the SOW's deliverables.
+    - Grounded in actuals, not guesses: project templates (§8.14), and the hours logged against similar past projects' tasks.
+    - Contingency is set by risk.
+    - Every SOW deliverable must map to WBS tasks, and gaps are flagged.
+  - **Bill of Materials (BOM) generator:**
+    - Hardware, software, licences and third-party services, drafted from the SOW and the client's environment. For example, 45 users and 3 sites become licences, firewalls and access points.
+    - Quantities follow drivers (users, sites, devices), so changing one updates the lines.
+    - Lines are matched to the product catalog, with distributor pricing and availability (CPQ), alternates, and warnings for end-of-life or incompatible items.
+  - **Quote assembly:**
+    - WBS hours × the rate card become labour lines, priced per the billing method (fixed fee, by milestone, T&M, not-to-exceed, §8.14).
+    - BOM lines become product lines under the margin rules, with recurring services alongside.
+    - Consistency checks run before sending: every deliverable is costed, and every BOM item is referenced in the scope.
+  - **On a win:** the WBS becomes the project (phases, tasks, estimates, budget, billing method; §8.14), and the BOM feeds the sales order and purchase orders.
+  - **Learning:** when the project closes, estimated hours are compared with actuals by task and role, and the comparison feeds the next WBS.
 
 ### 8.11 Invoice generation and accounting sync (later phase, designed now)
 
