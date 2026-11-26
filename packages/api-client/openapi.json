@@ -544,6 +544,65 @@
 				}
 			}
 		},
+		"/api/portal/v1/dashboards": {
+			"get": {
+				"tags": ["portal"],
+				"summary": "The dashboards published to your company's portal.",
+				"operationId": "portal_dashboards",
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "array",
+									"items": {
+										"$ref": "#/components/schemas/Dashboard"
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/portal/v1/dashboards/{id}": {
+			"get": {
+				"tags": ["portal"],
+				"summary": "A published dashboard with your company's numbers.",
+				"operationId": "portal_dashboard",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					},
+					{
+						"name": "range",
+						"in": "query",
+						"description": "A named range, e.g. `last_30_days` (default: the dashboard's).",
+						"required": false,
+						"schema": {
+							"type": "string"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/PortalDashboardView"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
 		"/api/portal/v1/devices": {
 			"get": {
 				"tags": ["portal"],
@@ -21491,7 +21550,7 @@
 			},
 			"Dashboard": {
 				"type": "object",
-				"required": ["id", "name", "range", "widgets", "builtin", "version"],
+				"required": ["id", "name", "range", "widgets", "builtin", "portal", "version"],
 				"properties": {
 					"builtin": {
 						"type": "boolean",
@@ -21514,6 +21573,10 @@
 					"ownerUserId": {
 						"type": ["string", "null"],
 						"format": "uuid"
+					},
+					"portal": {
+						"type": "boolean",
+						"description": "Shown in the client portal (shared dashboards only)."
 					},
 					"range": {
 						"type": "string"
@@ -21544,8 +21607,16 @@
 					"name": {
 						"type": "string"
 					},
+					"portal": {
+						"type": "boolean",
+						"description": "Show it in the client portal (a shared dashboard only)."
+					},
 					"range": {
 						"type": ["string", "null"]
+					},
+					"shared": {
+						"type": ["boolean", "null"],
+						"description": "Share a personal dashboard with its organization (changing it then\nneeds `dashboard:manage`)."
 					},
 					"version": {
 						"type": ["integer", "null"],
@@ -25200,6 +25271,28 @@
 				},
 				"additionalProperties": false
 			},
+			"PortalDashboardView": {
+				"type": "object",
+				"required": ["dashboard", "range", "results"],
+				"properties": {
+					"dashboard": {
+						"$ref": "#/components/schemas/Dashboard"
+					},
+					"range": {
+						"type": "string"
+					},
+					"results": {
+						"type": "object",
+						"description": "By widget id.",
+						"additionalProperties": {
+							"$ref": "#/components/schemas/PortalWidgetResult"
+						},
+						"propertyNames": {
+							"type": "string"
+						}
+					}
+				}
+			},
 			"PortalDecision": {
 				"type": "object",
 				"required": ["approve"],
@@ -25960,6 +26053,24 @@
 					"secret": {
 						"type": "string",
 						"description": "For typing into the app (base32)."
+					}
+				}
+			},
+			"PortalWidgetResult": {
+				"type": "object",
+				"properties": {
+					"answer": {
+						"oneOf": [
+							{
+								"$ref": "#/components/schemas/AnalyticsResult"
+							},
+							{
+								"type": "null"
+							}
+						]
+					},
+					"problem": {
+						"type": ["string", "null"]
 					}
 				}
 			},

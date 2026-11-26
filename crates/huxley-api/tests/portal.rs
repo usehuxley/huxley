@@ -927,6 +927,98 @@ async fn contacts_see_their_devices_and_raise_tickets_about_them() {
 }
 
 #[tokio::test]
+async fn client_admins_see_published_dashboards_with_their_numbers() {
+    let Some(db) = isolated("portal_dashboards").await else {
+        return;
+    };
+    let s = setup(&db.pools).await;
+    for (org, n) in [(s.acme, 2), (s.globex, 5)] {
+        for i in 0..n {
+            let (status, t, _) = s
+                .call(
+                    &s.staff,
+                    "POST",
+                    "/api/v1/tickets",
+                    json!({ "orgId": org, "title": format!("T{i}") }),
+                )
+                .await;
+            assert_eq!(status, StatusCode::CREATED, "{t}");
+        }
+    }
+    let count = json!([{ "fn": "count" }]);
+    let board = |portal: bool, name: &str| {
+        json!({ "orgId": s.root, "shared": true, "dashboard": {
+        "name": name, "portal": portal, "widgets": [
+            { "id": "open", "title": "Tickets", "viz": "number", "width": 6, "spec": { "source": "tickets", "measures": count } },
+            { "id": "runs", "title": "Runs", "viz": "number", "width": 6, "spec": { "source": "runs", "measures": count } },
+        ] } })
+    };
+    let (status, published, _) = s
+        .call(
+            &s.staff,
+            "POST",
+            "/api/v1/dashboards",
+            board(true, "Your service"),
+        )
+        .await;
+    assert_eq!(status, StatusCode::CREATED, "{published}");
+    s.call(
+        &s.staff,
+        "POST",
+        "/api/v1/dashboards",
+        board(false, "Internal"),
+    )
+    .await;
+    // Only shared dashboards go to the portal.
+    let mut personal = board(true, "Mine");
+    personal["shared"] = json!(false);
+    assert_eq!(
+        s.call(&s.staff, "POST", "/api/v1/dashboards", personal)
+            .await
+            .0,
+        StatusCode::UNPROCESSABLE_ENTITY
+    );
+
+    let (bea, _) = s.portal_user(s.acme, "Bea", "client_admin").await;
+    let (_, list, _) = s
+        .call(&bea, "GET", "/api/portal/v1/dashboards", Value::Null)
+        .await;
+    let names: Vec<&str> = list
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|d| d["name"].as_str().unwrap())
+        .collect();
+    assert_eq!(names, ["Your service"]);
+    let id = published["id"].as_str().unwrap();
+    let (status, view, _) = s
+        .call(
+            &bea,
+            "GET",
+            &format!("/api/portal/v1/dashboards/{id}?range=this_year"),
+            Value::Null,
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK, "{view}");
+    assert_eq!(view["range"], "this_year");
+    assert_eq!(
+        view["results"]["open"]["answer"]["rows"],
+        json!([[2]]),
+        "Acme's two, not Globex's: {view}"
+    );
+    assert_eq!(view["results"]["runs"]["problem"], "Not available here.");
+
+    // Client users don't see dashboards.
+    let (ada, _) = s.portal_user(s.acme, "Ada", "client_user").await;
+    assert_eq!(
+        s.call(&ada, "GET", "/api/portal/v1/dashboards", Value::Null)
+            .await
+            .0,
+        StatusCode::FORBIDDEN
+    );
+}
+
+#[tokio::test]
 async fn client_admins_manage_their_colleagues_access() {
     let Some(db) = isolated("portal_people").await else {
         return;

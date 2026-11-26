@@ -14,6 +14,8 @@
 	let name = $state(d.name);
 	let description = $state(d.description ?? '');
 	let range = $state(d.range);
+	let shared = $state(!d.ownerUserId);
+	let portal = $state(d.portal);
 	let widgets = $state<DashboardWidget[]>(d.widgets.map((w) => ({ ...w })));
 	let editing = $state<{ index: number | null } | null>(null);
 	let dialogOpen = $state(false);
@@ -27,7 +29,15 @@
 	}
 
 	let payload = $derived(
-		JSON.stringify({ name, description: description || null, range, widgets, version: d.version })
+		JSON.stringify({
+			name,
+			description: description || null,
+			range,
+			widgets,
+			shared,
+			portal: shared && portal,
+			version: d.version
+		})
 	);
 
 	function move(i: number, by: number) {
@@ -59,6 +69,22 @@
 			<Field label="Range it opens with" for="d-range">
 				<Select id="d-range" bind:value={range} options={RANGES} />
 			</Field>
+			{#if d.ownerUserId && data.canShare}
+				<label class="flex items-center gap-2 text-sm text-fg">
+					<input type="checkbox" bind:checked={shared} /> Share it with everyone at its organization
+				</label>
+			{/if}
+			{#if shared}
+				<label class="flex items-center gap-2 text-sm text-fg">
+					<input type="checkbox" bind:checked={portal} /> Show it in the client portal
+				</label>
+				{#if portal}
+					<p class="text-sm text-fg-muted">
+						Client admins see it with their own company’s numbers. Only tickets, time and assets
+						show there.
+					</p>
+				{/if}
+			{/if}
 		</div>
 	</Card>
 	<Card title="Widgets">

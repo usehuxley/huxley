@@ -11,7 +11,12 @@ export const load: PageServerLoad = async (event) => {
 		api(event).GET('/api/v1/analytics/sources')
 	]);
 	if (!dashboard || dashboard.builtin) error(404, 'There’s no such dashboard to change.');
-	return { dashboard, sources: catalog?.sources ?? [] };
+	const { user } = await event.parent();
+	return {
+		dashboard,
+		sources: catalog?.sources ?? [],
+		canShare: user.grantedPermissions.includes('dashboard:manage')
+	};
 };
 
 export const actions: Actions = {

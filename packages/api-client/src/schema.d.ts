@@ -288,6 +288,40 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
+	'/api/portal/v1/dashboards': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** The dashboards published to your company's portal. */
+		get: operations['portal_dashboards'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/portal/v1/dashboards/{id}': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** A published dashboard with your company's numbers. */
+		get: operations['portal_dashboard'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
 	'/api/portal/v1/devices': {
 		parameters: {
 			query?: never;
@@ -7849,6 +7883,8 @@ export interface components {
 			orgId?: string | null;
 			/** Format: uuid */
 			ownerUserId?: string | null;
+			/** @description Shown in the client portal (shared dashboards only). */
+			portal: boolean;
 			range: string;
 			/** Format: date-time */
 			updatedAt?: string | null;
@@ -7859,7 +7895,14 @@ export interface components {
 		DashboardInput: {
 			description?: string | null;
 			name: string;
+			/** @description Show it in the client portal (a shared dashboard only). */
+			portal?: boolean;
 			range?: string | null;
+			/**
+			 * @description Share a personal dashboard with its organization (changing it then
+			 *     needs `dashboard:manage`).
+			 */
+			shared?: boolean | null;
 			/** Format: int32 */
 			version?: number | null;
 			widgets?: components['schemas']['Widget'][];
@@ -9417,6 +9460,14 @@ export interface components {
 			/** Format: int32 */
 			version?: number | null;
 		};
+		PortalDashboardView: {
+			dashboard: components['schemas']['Dashboard'];
+			range: string;
+			/** @description By widget id. */
+			results: {
+				[key: string]: components['schemas']['PortalWidgetResult'];
+			};
+		};
 		PortalDecision: {
 			approve: boolean;
 			comment?: string | null;
@@ -9697,6 +9748,10 @@ export interface components {
 			otpauthUri: string;
 			/** @description For typing into the app (base32). */
 			secret: string;
+		};
+		PortalWidgetResult: {
+			answer?: components['schemas']['AnalyticsResult'] | null;
+			problem?: string | null;
 		};
 		/** @description A kind with the user's effective channels. */
 		Preference: {
@@ -12187,6 +12242,49 @@ export interface operations {
 				};
 				content: {
 					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	portal_dashboards: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['Dashboard'][];
+				};
+			};
+		};
+	};
+	portal_dashboard: {
+		parameters: {
+			query?: {
+				/** @description A named range, e.g. `last_30_days` (default: the dashboard's). */
+				range?: string;
+			};
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['PortalDashboardView'];
 				};
 			};
 		};

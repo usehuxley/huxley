@@ -112,6 +112,14 @@ Workflow **approval** steps can ask client contacts, who decide in the portal's 
 - **The decision** is the step's output, as for staff. `by` has the contact's `id`, `name` and `email`, plus `contact` and `portal_account`.
 - **The run's company** decides who `client_approvers` is, so run the workflow for the client: a form submitted for it, a trigger at it, or a workflow saved there.
 
+## Reports
+
+**Reports** in the portal shows the dashboards you publish there, to client admins, with their own company's numbers.
+
+- **Publishing:** in a shared dashboard's editor, tick **Show it in the client portal**. A personal dashboard can be shared first (needs `dashboard:manage`). It shows in the portal of its organization and the organizations below it, so a dashboard at the MSP reaches every client.
+- **Their numbers only:** every widget is narrowed to the contact's company. Only tickets, time entries and assets show there, and only where those modules are on for the company. Other widgets show as unavailable.
+- **Range:** they can pick a range. The dashboard's own range is the default.
+
 ## Two-factor sign-in
 
 Contacts can add a code from an authenticator app (Microsoft Authenticator, Google Authenticator, 1Password and others) to signing in with a link or password: **Profile**, **Manage two-factor sign-in**.
@@ -152,6 +160,7 @@ Contacts can sign in with their company's own accounts, such as the client's Mic
   - `PUT /api/portal/v1/me/password`
   - `GET /api/portal/v1/articles` (`q`, `category`), `GET …/articles/{id}`
   - `GET`/`POST /api/portal/v1/people`; `POST`/`PATCH …/people/{contact}/access` (client admins)
+  - `GET /api/portal/v1/dashboards`, `GET …/dashboards/{id}?range=` (client admins)
   - `GET /api/portal/v1/approvals`, `GET …/approvals/{id}`, `POST …/approvals/{id}/decision` `{ approve, comment }`
   - `GET /api/portal/v1/devices` (`q`), `GET …/devices/{id}`; `POST …/tickets` takes an optional `assetId`
   - `GET /api/portal/v1/catalog`, `GET …/catalog/{id}`, `POST …/catalog/{id}/requests` `{ answers }`; `GET …/requests`
