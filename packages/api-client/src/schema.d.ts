@@ -5588,6 +5588,47 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
+	'/api/v1/tickets/{id}/problem': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** A problem ticket's root cause, workaround and known-error status. */
+		get: operations['get_problem'];
+		/**
+		 * Changes a problem. A known error needs a root cause and a workaround,
+		 *     and raises `problem.known_error`.
+		 */
+		put: operations['save_problem'];
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/tickets/{id}/problem/article': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/**
+		 * Drafts a knowledge article from the problem's root cause and
+		 *     workaround, submits it for review and links it to the problem.
+		 */
+		post: operations['draft_problem_article'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
 	'/api/v1/tickets/{id}/recommendations': {
 		parameters: {
 			query?: never;
@@ -9091,6 +9132,10 @@ export interface components {
 		};
 		/** @enum {string} */
 		Direction: 'asc' | 'desc';
+		DraftedArticle: {
+			/** Format: uuid */
+			articleId: string;
+		};
 		/** @description A received message, as kept. */
 		Email: {
 			/** @description `[{filename, contentType, size, inline}]` */
@@ -10966,6 +11011,34 @@ export interface components {
 		};
 		PreviewRequest: {
 			spec: string;
+		};
+		ProblemInput: {
+			knownError?: boolean | null;
+			rootCause?: string | null;
+			/** Format: int32 */
+			version?: number | null;
+			workaround?: string | null;
+		};
+		ProblemRecord: {
+			/**
+			 * Format: int64
+			 * @description Incidents linked to it.
+			 */
+			incidents: number;
+			/** Format: uuid */
+			kbArticleId?: string | null;
+			/** @description The cause is known and there's a workaround. */
+			knownError: boolean;
+			/** Format: date-time */
+			knownErrorAt?: string | null;
+			/** Format: uuid */
+			orgId: string;
+			rootCause: string;
+			/** Format: uuid */
+			ticketId: string;
+			/** Format: int32 */
+			version: number;
+			workaround: string;
 		};
 		/** @description A configured identity provider. The client secret is never returned. */
 		Provider: {
@@ -24860,6 +24933,89 @@ export interface operations {
 				};
 				content: {
 					'application/json': components['schemas']['TicketViewer'][];
+				};
+			};
+		};
+	};
+	get_problem: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ProblemRecord'];
+				};
+			};
+		};
+	};
+	save_problem: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['ProblemInput'];
+			};
+		};
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ProblemRecord'];
+				};
+			};
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	draft_problem_article: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			201: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['DraftedArticle'];
+				};
+			};
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
 				};
 			};
 		};

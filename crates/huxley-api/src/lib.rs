@@ -53,6 +53,7 @@ pub mod portal_routes;
 pub mod portal_sso_routes;
 pub mod portal_ticket_routes;
 pub mod problem;
+pub mod problem_routes;
 mod public_form_routes;
 pub mod rate_limit;
 pub mod recommend_routes;

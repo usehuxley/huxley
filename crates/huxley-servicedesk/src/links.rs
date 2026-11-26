@@ -18,7 +18,7 @@ use uuid::Uuid;
 use crate::tickets::{self, Ticket, record};
 use crate::{DeskError, DeskResult};
 
-pub const KINDS: &[&str] = &["related", "parent", "child"];
+pub const KINDS: &[&str] = &["related", "parent", "child", "problem", "incident"];
 
 /// Another ticket linked to this one.
 #[derive(Debug, Clone, Serialize, ToSchema, sqlx::FromRow)]
@@ -53,6 +53,9 @@ fn inverse(kind: &str) -> &'static str {
     match kind {
         "parent" => "child",
         "child" => "parent",
+        // An incident's problem (its cause); a problem's incidents.
+        "problem" => "incident",
+        "incident" => "problem",
         _ => "related",
     }
 }
@@ -87,7 +90,7 @@ pub async fn list(conn: &mut PgConnection, id: Uuid) -> DeskResult<Vec<LinkedTic
            JOIN sd_statuses s ON s.id = t.status_id \
            JOIN organizations o ON o.id = t.org_id \
           WHERE l.ticket_id = $1 \
-          ORDER BY array_position(ARRAY['parent', 'child', 'related'], l.kind), t.number",
+          ORDER BY array_position(ARRAY['problem', 'parent', 'child', 'incident', 'related'], l.kind), t.number",
     )
     .bind(id)
     .fetch_all(conn)
@@ -123,7 +126,10 @@ pub async fn link(
     kind: &str,
 ) -> DeskResult<Vec<LinkedTicket>> {
     if !KINDS.contains(&kind) {
-        return Err(DeskError::invalid("kind", "related, parent or child"));
+        return Err(DeskError::invalid(
+            "kind",
+            "related, parent, child, problem or incident",
+        ));
     }
     if ticket == other {
         return Err(DeskError::invalid(

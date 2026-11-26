@@ -58,3 +58,4 @@ Decisions that shape Huxley. Add a new ADR by copying `0000-template.md` with th
 | [052](0052-report-export.md) | Reports export without new dependencies, and schedule as workflows | Accepted |
 | [053](0053-assistant-v2.md) | Assistant v2: tool groups by module, and context from where it's opened | Accepted |
 | [054](0054-change-management.md) | Changes extend change tickets; approval is a workflow | Accepted |
+| [055](0055-problem-management.md) | Problems extend problem tickets; incidents link to them | Accepted |

@@ -83,6 +83,10 @@ export const load: PageServerLoad = async (event) => {
 	// A change ticket: its change details, the risk questions, its impact
 	// and the client's assets to pick from.
 	const isChange = ticket.data.typeKey === 'change' && user.activeModules.includes('change');
+	const problem =
+		ticket.data.typeKey === 'problem' && user.activeModules.includes('change')
+			? ((await client.GET('/api/v1/tickets/{id}/problem', path)).data ?? null)
+			: null;
 	const [change, questions, impact, changeAssets] = isChange
 		? await Promise.all([
 				client.GET('/api/v1/tickets/{id}/change', path),
@@ -117,6 +121,7 @@ export const load: PageServerLoad = async (event) => {
 		recommendations: recommendations.data ?? [],
 		insight: insight.data ?? null,
 		change: change.data ?? null,
+		problem,
 		changeQuestions: questions.data ?? [],
 		changeImpact: impact.data ?? null,
 		changeAssets:
@@ -360,6 +365,38 @@ export const actions: Actions = {
 			{ title: formString(form, 'title'), description: formString(form, 'description') },
 			'edit'
 		);
+	},
+	saveProblem: async (event) => {
+		const form = await event.request.formData();
+		const { error: problem, response } = await api(event).PUT('/api/v1/tickets/{id}/problem', {
+			params: { path: { id: event.params.id } },
+			body: {
+				rootCause: formString(form, 'rootCause'),
+				workaround: formString(form, 'workaround'),
+				knownError: form.get('knownError') === 'on',
+				version: Number(formString(form, 'version'))
+			}
+		});
+		if (response.status !== 200) {
+			return fail(response.status, {
+				problem: { message: problemMessage(problem, 'Could not save it.') }
+			});
+		}
+		return { problem: { saved: true } };
+	},
+	problemArticle: async (event) => {
+		const { error: problem, response } = await api(event).POST(
+			'/api/v1/tickets/{id}/problem/article',
+			{
+				params: { path: { id: event.params.id } }
+			}
+		);
+		if (response.status !== 201) {
+			return fail(response.status, {
+				problem: { message: problemMessage(problem, 'Could not draft it.') }
+			});
+		}
+		return { problem: { drafted: true } };
 	},
 	saveChange: async (event) => {
 		const form = await event.request.formData();
