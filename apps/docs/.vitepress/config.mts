@@ -88,7 +88,8 @@ export default defineConfig({
 					{ text: 'Workforce', link: '/workforce' },
 					{ text: 'Assets', link: '/assets' },
 					{ text: 'Knowledge base', link: '/knowledge' },
-					{ text: 'Credential vault', link: '/vault' }
+					{ text: 'Credential vault', link: '/vault' },
+					{ text: 'ConnectWise Automate', link: '/cwautomate' }
 				]
 			},
 			{

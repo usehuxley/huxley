@@ -1,0 +1,83 @@
+apiVersion: usehuxley.io/v1
+kind: Workflow
+metadata:
+  key: automate-run-command
+  name: Run a command on an Automate computer
+  description: >-
+    Runs a command line (PowerShell by default, or cmd) on a computer through
+    ConnectWise Automate, waits up to two minutes for it to finish, and, given
+    a ticket, adds its output to the ticket as an internal note. Use the
+    connection named automate.
+spec:
+  inputs:
+    type: object
+    required: [computer_id, command]
+    properties:
+      computer_id: { type: integer, title: Automate computer ID }
+      command: { type: string, title: Command }
+      powershell: { type: boolean, title: Run in PowerShell, default: true }
+      ticket_id: { type: string, title: Ticket (to add the output to) }
+  steps:
+    - id: start
+      type: integration.action
+      action: cwautomate/runCommand
+      connection: automate
+      with:
+        computerId: "{{ inputs.computer_id }}"
+        body:
+          ComputerId: "{{ inputs.computer_id | int }}"
+          Command: { Id: 2 }
+          Parameters:
+            - >-
+              {{ ('powershell.exe!!! -NonInteractive -Command ' if inputs.powershell | default(true) else 'cmd.exe!!! /c ') ~ inputs.command }}
+    - id: begin
+      type: set_var
+      vars: { done: false, status: Pending, output: "" }
+    # No loop-until: check every 5 seconds, 24 times, until it's finished.
+    - id: poll
+      type: foreach
+      items: "{{ range(24) | list }}"
+      steps:
+        - id: unfinished
+          type: if
+          condition: "{{ not run.vars.done }}"
+          then:
+            - id: pause
+              type: wait
+              duration: 5s
+            - id: check
+              type: integration.action
+              action: cwautomate/getCommandResults
+              connection: automate
+              with:
+                computerId: "{{ inputs.computer_id }}"
+                ids: "{{ steps.start.output.Id | string }}"
+            - id: note
+              type: set_var
+              vars:
+                status: "{{ (steps.check.output | first).Status | default('Pending') }}"
+                output: "{{ (steps.check.output | first).Output | default('') }}"
+                done: "{{ ((steps.check.output | first).Status | default('')) in ['Success', 'Failed'] }}"
+    - id: on_ticket
+      type: if
+      condition: "{{ inputs.ticket_id is defined and inputs.ticket_id }}"
+      then:
+        - id: add_note
+          type: core.ticket.note
+          with:
+            ticket_id: "{{ inputs.ticket_id }}"
+            kind: internal
+            body: |-
+              Ran on Automate computer {{ inputs.computer_id }}: {{ run.vars.status if run.vars.done else 'not finished after 2 minutes' }}
+              $ {{ inputs.command }}
+              {{ run.vars.output }}
+    - id: unfinished_in_time
+      type: if
+      condition: "{{ not run.vars.done }}"
+      then:
+        - id: timed_out
+          type: fail
+          message: The command didn't finish within 2 minutes; Automate may still run it.
+  outputs:
+    status: "{{ run.vars.status }}"
+    output: "{{ run.vars.output }}"

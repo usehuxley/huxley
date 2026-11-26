@@ -73,7 +73,7 @@ export const actions: Actions = {
 		const scheme = integration.data?.definition.authSchemes.find(
 			(s) => s.key === formString(form, 'authScheme')
 		);
-		const connection = connectionFromForm(form, scheme?.type);
+		const connection = connectionFromForm(form, scheme);
 		if (!connection.name) return fail(400, { connectMessage: 'Give the connection a name.' });
 		const {
 			data,

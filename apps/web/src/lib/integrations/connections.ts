@@ -24,10 +24,38 @@ const FIELDS: Record<string, ConnectionField[]> = {
 	]
 };
 
-/** The fields for an auth scheme's `type`. */
-export function fieldsFor(type: string | undefined): ConnectionField[] {
-	if (!type) return [];
+/** What the form needs of an auth scheme. */
+export interface SchemeShape {
+	type: string;
+	body?: Record<string, string>;
+	headers?: Record<string, string>;
+	secrets?: string[];
+	optional?: string[];
+}
+
+/** A field's label from its name: `client_id` → `Client ID`. */
+export function fieldLabel(name: string): string {
+	const words = name.split('_').map((w) => (w === 'id' ? 'ID' : w));
+	const text = words.join(' ');
+	return text.charAt(0).toUpperCase() + text.slice(1);
+}
+
+/** The fields for an auth scheme. */
+export function fieldsFor(scheme: SchemeShape | undefined): ConnectionField[] {
+	if (!scheme) return [];
+	const { type } = scheme;
 	if (type === 'apiKey' || type === 'basic' || type === 'bearer') return FIELDS[type];
+	if (type === 'tokenExchange') {
+		const names = [
+			...new Set([...Object.values(scheme.body ?? {}), ...Object.values(scheme.headers ?? {})])
+		];
+		return names.map((name) => ({
+			name,
+			label: fieldLabel(name),
+			secret: (scheme.secrets ?? []).includes(name),
+			hint: (scheme.optional ?? []).includes(name) ? 'Optional' : undefined
+		}));
+	}
 	return FIELDS.oauth;
 }
 
@@ -47,7 +75,10 @@ export interface ConnectionBody {
  * `shared`, `var.<name>` for server variables, and `field.<name>` for
  * the scheme's fields.
  */
-export function connectionFromForm(form: FormData, schemeType: string | undefined): ConnectionBody {
+export function connectionFromForm(
+	form: FormData,
+	scheme: SchemeShape | undefined
+): ConnectionBody {
 	const text = (name: string) => {
 		const value = form.get(name);
 		return typeof value === 'string' ? value.trim() : '';
@@ -60,7 +91,7 @@ export function connectionFromForm(form: FormData, schemeType: string | undefine
 	}
 	const settings: Record<string, string | string[]> = {};
 	const secrets: Record<string, string> = {};
-	for (const field of fieldsFor(schemeType)) {
+	for (const field of fieldsFor(scheme)) {
 		const value = text(`field.${field.name}`);
 		if (!value) continue;
 		if (field.secret) secrets[field.name] = value;

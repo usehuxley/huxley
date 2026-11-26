@@ -211,3 +211,34 @@ fn not_openapi() {
     );
     assert!(matches!(import(&huge), Err(ImportError::TooLarge)));
 }
+
+#[test]
+fn token_exchange_schemes_are_imported_and_ask_for_their_fields() {
+    let spec = include_str!("../../huxley-packs/builtin/cwautomate/integrations/cwautomate.yaml");
+    let imported = import(spec).unwrap();
+    assert!(imported.warnings.is_empty(), "{:?}", imported.warnings);
+    let scheme = &imported.definition.auth_schemes[0];
+    let AuthKind::TokenExchange(t) = &scheme.kind else {
+        panic!("{:?}", scheme.kind)
+    };
+    assert_eq!(
+        (t.path.as_str(), t.token_field.as_str()),
+        ("/apitoken", "AccessToken")
+    );
+    let fields = huxley_integrations::connections::fields(&scheme.kind);
+    assert_eq!(fields.settings, ["username", "client_id"]);
+    assert_eq!(fields.secrets, ["password"]);
+
+    // A malformed one is reported, not imported.
+    let bad = spec.replace("tokenField: AccessToken", "tokenFeld: AccessToken");
+    let imported = import(&bad).unwrap();
+    assert_eq!(imported.definition.auth_schemes.len(), 0);
+    assert!(
+        imported
+            .warnings
+            .iter()
+            .any(|w| w.message.contains("x-huxley-token-exchange")),
+        "{:?}",
+        imported.warnings
+    );
+}

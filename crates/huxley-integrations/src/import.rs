@@ -137,6 +137,23 @@ fn servers(doc: &Json, r: &mut Resolver<'_>) -> Vec<Server> {
         .collect()
 }
 
+/// A security scheme's `x-huxley-token-exchange`, checked.
+fn token_exchange(exchange: &Json, r: &mut Resolver<'_>, at: &str) -> Option<AuthKind> {
+    match serde_json::from_value::<crate::TokenExchange>(exchange.clone()) {
+        Ok(t) if !t.path.is_empty() && !t.token_field.is_empty() => {
+            Some(AuthKind::TokenExchange(t))
+        }
+        Ok(_) => {
+            r.warn(at, "x-huxley-token-exchange needs a path and a tokenField");
+            None
+        }
+        Err(e) => {
+            r.warn(at, format!("x-huxley-token-exchange: {e}"));
+            None
+        }
+    }
+}
+
 /// The schemes, and each spec scheme name's keys among them (an `OAuth2`
 /// scheme with two usable flows becomes two schemes).
 fn auth_schemes(
@@ -162,6 +179,13 @@ fn auth_schemes(
                 kind,
             });
         };
+        // A token-exchange login, whatever the scheme's declared type.
+        if let Some(exchange) = def.get("x-huxley-token-exchange") {
+            if let Some(kind) = token_exchange(exchange, r, &at) {
+                push(name.clone(), kind);
+            }
+            continue;
+        }
         match def["type"].as_str() {
             Some("apiKey") => match location(&def["in"]) {
                 Some(location) if location != ParamLocation::Path => push(

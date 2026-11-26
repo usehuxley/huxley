@@ -360,6 +360,13 @@ fn request(
             let token = token.unwrap_or_default();
             headers.insert("Authorization".into(), json!(format!("Bearer {token}")));
         }
+        ResolvedAuth::TokenExchange { headers: extra, .. } => {
+            let token = token.unwrap_or_default();
+            headers.insert("Authorization".into(), json!(format!("Bearer {token}")));
+            for (name, value) in extra {
+                headers.insert(name.clone(), json!(value));
+            }
+        }
     }
     if !cookies.is_empty() {
         headers.insert("Cookie".into(), Json::String(cookies.join("; ")));
@@ -494,7 +501,8 @@ impl Engine {
         }
         let token = match &resolved.auth {
             ResolvedAuth::OAuth2ClientCredentials { .. }
-            | ResolvedAuth::OAuth2AuthorizationCode { .. } => {
+            | ResolvedAuth::OAuth2AuthorizationCode { .. }
+            | ResolvedAuth::TokenExchange { .. } => {
                 match self
                     .connection_token_for(target.connection_id, Some(org_id))
                     .await

@@ -118,6 +118,57 @@ pub enum AuthKind {
     OpenIdConnect {
         discovery_url: String,
     },
+    /// Credentials posted to a login endpoint for a bearer token
+    /// (`x-huxley-token-exchange` on a security scheme), as APIs such as
+    /// `ConnectWise` Automate's do.
+    TokenExchange(TokenExchange),
+}
+
+/// How a token-exchange login works: the request, which connection fields
+/// fill it, and where the token is in the answer.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct TokenExchange {
+    /// The login URL: a path below the connection's base URL (e.g.
+    /// `/apitoken`), or an absolute `https://` URL.
+    pub path: String,
+    /// JSON body fields: `{ field in the body: connection field }`.
+    #[serde(default)]
+    pub body: std::collections::BTreeMap<String, String>,
+    /// Headers sent with the login and with every call:
+    /// `{ header: connection field }`.
+    #[serde(default)]
+    pub headers: std::collections::BTreeMap<String, String>,
+    /// Connection fields that are secrets (encrypted, never shown again).
+    #[serde(default)]
+    pub secrets: Vec<String>,
+    /// Connection fields that may be left empty (then left out).
+    #[serde(default)]
+    pub optional: Vec<String>,
+    /// The answer's field holding the token (matched ignoring case).
+    pub token_field: String,
+    /// The answer's field holding when the token expires (a date-time).
+    #[serde(default)]
+    pub expires_at_field: Option<String>,
+    /// The answer's field holding seconds until the token expires.
+    #[serde(default)]
+    pub expires_in_field: Option<String>,
+    /// How long a token lasts when the answer doesn't say (default 3600).
+    #[serde(default)]
+    pub lifetime_seconds: Option<i64>,
+}
+
+impl TokenExchange {
+    /// The connection fields it uses, in order, each once.
+    pub fn fields(&self) -> Vec<String> {
+        let mut out: Vec<String> = Vec::new();
+        for f in self.body.values().chain(self.headers.values()) {
+            if !out.contains(f) {
+                out.push(f.clone());
+            }
+        }
+        out
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ToSchema)]

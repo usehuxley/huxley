@@ -16328,6 +16328,25 @@
 								"enum": ["openIdConnect"]
 							}
 						}
+					},
+					{
+						"allOf": [
+							{
+								"$ref": "#/components/schemas/TokenExchange",
+								"description": "Credentials posted to a login endpoint for a bearer token\n(`x-huxley-token-exchange` on a security scheme), as APIs such as\n`ConnectWise` Automate's do."
+							},
+							{
+								"type": "object",
+								"required": ["type"],
+								"properties": {
+									"type": {
+										"type": "string",
+										"enum": ["tokenExchange"]
+									}
+								}
+							}
+						],
+						"description": "Credentials posted to a login endpoint for a bearer token\n(`x-huxley-token-exchange` on a security scheme), as APIs such as\n`ConnectWise` Automate's do."
 					}
 				]
 			},
@@ -24348,6 +24367,69 @@
 					"startsOn": {
 						"type": "string",
 						"description": "`YYYY-MM-DD`."
+					}
+				},
+				"additionalProperties": false
+			},
+			"TokenExchange": {
+				"type": "object",
+				"description": "How a token-exchange login works: the request, which connection fields\nfill it, and where the token is in the answer.",
+				"required": ["path", "tokenField"],
+				"properties": {
+					"body": {
+						"type": "object",
+						"description": "JSON body fields: `{ field in the body: connection field }`.",
+						"additionalProperties": {
+							"type": "string"
+						},
+						"propertyNames": {
+							"type": "string"
+						}
+					},
+					"expiresAtField": {
+						"type": ["string", "null"],
+						"description": "The answer's field holding when the token expires (a date-time)."
+					},
+					"expiresInField": {
+						"type": ["string", "null"],
+						"description": "The answer's field holding seconds until the token expires."
+					},
+					"headers": {
+						"type": "object",
+						"description": "Headers sent with the login and with every call:\n`{ header: connection field }`.",
+						"additionalProperties": {
+							"type": "string"
+						},
+						"propertyNames": {
+							"type": "string"
+						}
+					},
+					"lifetimeSeconds": {
+						"type": ["integer", "null"],
+						"format": "int64",
+						"description": "How long a token lasts when the answer doesn't say (default 3600)."
+					},
+					"optional": {
+						"type": "array",
+						"items": {
+							"type": "string"
+						},
+						"description": "Connection fields that may be left empty (then left out)."
+					},
+					"path": {
+						"type": "string",
+						"description": "The login URL: a path below the connection's base URL (e.g.\n`/apitoken`), or an absolute `https://` URL."
+					},
+					"secrets": {
+						"type": "array",
+						"items": {
+							"type": "string"
+						},
+						"description": "Connection fields that are secrets (encrypted, never shown again)."
+					},
+					"tokenField": {
+						"type": "string",
+						"description": "The answer's field holding the token (matched ignoring case)."
 					}
 				},
 				"additionalProperties": false
