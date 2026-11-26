@@ -384,7 +384,7 @@ fn measure(source: &Source, m: &Measure, at: &str) -> AnalyticsResult<(String, C
             format!("{name:?} isn't a field of {}", source.key),
         )
     })?;
-    let e = field.sql;
+    let e = &*field.sql;
     let (sql, label, kind) = match m.aggregate {
         Aggregate::Count => unreachable!("handled above"),
         Aggregate::CountDistinct => (
@@ -441,13 +441,13 @@ fn dimension(
     at: &str,
     tz: &str,
 ) -> AnalyticsResult<(String, Column)> {
-    let e = field.sql;
+    let e = &*field.sql;
     let Some(g) = d.granularity else {
         return Ok((
             e.to_owned(),
             Column {
-                key: field.key.into(),
-                label: field.label.into(),
+                key: field.key.to_string(),
+                label: field.label.to_string(),
                 kind: field.kind,
             },
         ));
@@ -474,8 +474,8 @@ fn dimension(
     Ok((
         sql,
         Column {
-            key: field.key.into(),
-            label: field.label.into(),
+            key: field.key.to_string(),
+            label: field.label.to_string(),
             kind,
         },
     ))
@@ -494,7 +494,7 @@ fn filter(
             format!("{:?} isn't a field of {}", flt.field, source.key),
         )
     })?;
-    let expr = field.sql;
+    let expr = &*field.sql;
     let ty = cast(field.kind);
     let ordered = matches!(field.kind, Kind::Number | Kind::Date | Kind::Time);
     let value_at = format!("{at}/value");
@@ -590,6 +590,11 @@ fn filter(
 pub fn compile(spec: &QuerySpec, scope: &Scope) -> AnalyticsResult<Compiled> {
     let source = catalog::source(&spec.source)
         .ok_or_else(|| bad("source", format!("{:?} isn't a source", spec.source)))?;
+    compile_for(source, spec, scope)
+}
+
+/// Compiles a spec over `source` (a catalog source, or a dataset's).
+pub fn compile_for(source: &Source, spec: &QuerySpec, scope: &Scope) -> AnalyticsResult<Compiled> {
     if spec.measures.is_empty() && spec.dimensions.is_empty() {
         return Err(bad("measures", "ask for at least one measure or dimension"));
     }

@@ -13,6 +13,15 @@ Each source is a curated view of one kind of record. You can query a source if y
 | `assets` | Configuration items: devices and other assets, with their type, status and warranty. | cmdb | `asset:read` | `client` (text), `type` (text), `status` (text), `manufacturer` (text), `model` (text), `site` (text), `purchased_on` (date), `warranty_ends_on` (date), `in_warranty` (bool), `created_at` (time) |
 | `runs` | Workflow runs: which workflow, how it was triggered, how it ended and how long it took. | (none) | `workflow:read` | `organization` (text), `workflow` (text), `status` (text), `trigger` (text), `created_at` (time), `finished_at` (time), `duration_seconds` (number) |
 
+### Datasets
+
+Every [dataset](datasets.md) is a source too: `dataset:<key>`, read with `dataset:read`.
+
+- **Fields:** one per column (JSON columns aside), plus `_organization` (whose row it is) and `_synced_at` (when it was written).
+- **Time:** the dataset's first date or timestamp column is its time field, else `_synced_at`.
+- **Rows:** only those of the organizations where you can read datasets.
+- **Which dataset:** those defined at an organization you can read datasets at, or above it. The same key at several organizations is the one nearest the top.
+
 ## Asking a question
 
 `POST /api/v1/analytics/query` with a query spec:
