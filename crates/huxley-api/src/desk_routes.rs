@@ -1711,6 +1711,8 @@ pub struct BoardPerson {
     #[schema(value_type = Vec<std::collections::HashMap<String, String>>)]
     pub time_off: Vec<serde_json::Value>,
     pub appointments: Vec<Appointment>,
+    /// Busy time from their synced calendar (with the workforce module).
+    pub busy: Vec<huxley_workforce::calendar::BusyBlock>,
 }
 
 /// The dispatch board: people (a queue's members, or everyone in a queue,
@@ -1745,6 +1747,15 @@ pub async fn dispatch_board(
     .await?;
     let workforce = huxley_modules_active(&state, "workforce").await?;
     let people = board_people(&state, params.queue_id, &booked, workforce, from, to).await?;
+    let busy = if workforce {
+        let ids: Vec<Uuid> = people.iter().map(|p| p.user_id).collect();
+        crate::workforce_routes::system(&state, async |tx| {
+            huxley_workforce::calendar::between(tx, &ids, from, to).await
+        })
+        .await?
+    } else {
+        Vec::new()
+    };
     Ok(Json(
         people
             .into_iter()
@@ -1752,6 +1763,11 @@ pub async fn dispatch_board(
                 p.appointments = booked
                     .iter()
                     .filter(|a| a.user_id == p.user_id)
+                    .cloned()
+                    .collect();
+                p.busy = busy
+                    .iter()
+                    .filter(|b| b.user_id == p.user_id)
                     .cloned()
                     .collect();
                 p
@@ -1822,7 +1838,7 @@ async fn board_people(
                 .fetch_all(&mut *tx)
                 .await?;
             }
-            people.push(BoardPerson { user_id, name, timezone, hours, time_off, appointments: Vec::new() });
+            people.push(BoardPerson { user_id, name, timezone, hours, time_off, appointments: Vec::new(), busy: Vec::new() });
         }
         Ok::<_, huxley_servicedesk::DeskError>(people)
     })

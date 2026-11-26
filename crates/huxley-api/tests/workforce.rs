@@ -972,3 +972,131 @@ async fn skill_gaps_show_thin_coverage_unqualified_work_and_expiring_certificati
         ])
     );
 }
+
+#[tokio::test]
+async fn calendars_are_set_up_per_person_and_show_on_the_dispatch_board() {
+    // Calendar settings are instance-wide: a database of its own.
+    let Some(db) = huxley_db::testing::isolated("calendars_api").await else {
+        return;
+    };
+    let s = setup_with(db.pools.clone()).await;
+    let (tech, tech_email) = user(&s.pools, Some(("technician", s.provider))).await;
+    let (other, _) = user(&s.pools, Some(("technician", s.provider))).await;
+    let tech_cookie = login(&s.app, &tech_email).await;
+
+    // Microsoft 365 needs a Graph connection that exists.
+    let (status, problem) = s
+        .call(
+            &s.owner,
+            "PUT",
+            "/api/v1/workforce/calendars/settings",
+            Some(json!({ "provider": "m365", "orgId": s.provider, "connection": "nope" })),
+        )
+        .await;
+    assert_eq!(
+        (status, field(&problem)),
+        (StatusCode::UNPROCESSABLE_ENTITY, "/connection".into())
+    );
+
+    // A feed of your own; it's sealed, and never shown again.
+    let url = format!("/api/v1/workforce/calendars/people/{tech}");
+    let (status, problem) = s
+        .call(
+            &tech_cookie,
+            "PUT",
+            &url,
+            Some(json!({ "source": "ics", "icsUrl": "file:///etc/passwd" })),
+        )
+        .await;
+    assert_eq!(
+        (status, field(&problem)),
+        (StatusCode::UNPROCESSABLE_ENTITY, "/icsUrl".into())
+    );
+    let mine = s
+        .ok(&tech_cookie, "PUT", &url, Some(json!({ "source": "ics", "icsUrl": "https://calendar.example/private-abc/basic.ics" })))
+        .await;
+    assert_eq!(
+        (&mine["source"], &mine["hasFeed"]),
+        (&json!("ics"), &json!(true))
+    );
+    assert!(!mine.to_string().contains("private-abc"), "{mine}");
+    let sealed: Vec<u8> =
+        sqlx::query_scalar("SELECT ics_url FROM wf_calendar_people WHERE user_id = $1")
+            .bind(tech)
+            .fetch_one(&s.pools.owner)
+            .await
+            .unwrap();
+    assert!(!String::from_utf8_lossy(&sealed).contains("private-abc"));
+    // Not someone else's.
+    let (status, _) = s
+        .call(
+            &tech_cookie,
+            "PUT",
+            &format!("/api/v1/workforce/calendars/people/{other}"),
+            Some(json!({ "source": "none" })),
+        )
+        .await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+    let overview = s
+        .ok(&s.owner, "GET", "/api/v1/workforce/calendars", None)
+        .await;
+    assert_eq!(overview["settings"], Value::Null);
+    let listed = overview["people"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|p| p["userId"] == json!(tech))
+        .unwrap()
+        .clone();
+    assert_eq!(listed["hasFeed"], true);
+
+    board_shows_busy(&s, tech).await;
+}
+
+/// A queue member's busy time is on the dispatch board.
+async fn board_shows_busy(s: &Setup, tech: Uuid) {
+    sqlx::query(
+        "INSERT INTO wf_busy_blocks (id, user_id, starts_at, ends_at, status) \
+         VALUES ($1, $2, '2030-01-07 15:00Z', '2030-01-07 16:00Z', 'busy')",
+    )
+    .bind(Uuid::now_v7())
+    .bind(tech)
+    .execute(&s.pools.owner)
+    .await
+    .unwrap();
+    let ctx = RequestContext::system(Via::System);
+    let mut tx = begin_scoped(&s.pools.app, &OrgScope::System).await.unwrap();
+    let input: huxley_servicedesk::queues::QueueInput =
+        serde_json::from_value(json!({ "name": unique("Calendar queue") })).unwrap();
+    let queue = huxley_servicedesk::queues::create(&mut tx, &ctx, s.provider, &input)
+        .await
+        .unwrap()
+        .id;
+    sqlx::query("INSERT INTO sd_queue_members (queue_id, org_id, user_id) VALUES ($1, $2, $3)")
+        .bind(queue)
+        .bind(s.provider)
+        .bind(tech)
+        .execute(&mut *tx)
+        .await
+        .unwrap();
+    tx.commit().await.unwrap();
+    let board = s
+        .ok(
+            &s.owner,
+            "GET",
+            &format!("/api/v1/dispatch/board?from=2030-01-07&days=1&queueId={queue}"),
+            None,
+        )
+        .await;
+    let row = board
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|p| p["userId"] == json!(tech))
+        .unwrap();
+    assert_eq!(
+        (&row["busy"][0]["status"], &row["busy"][0]["startsAt"]),
+        (&json!("busy"), &json!("2030-01-07T15:00:00Z")),
+        "{row}"
+    );
+}

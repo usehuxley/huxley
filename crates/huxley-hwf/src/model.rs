@@ -444,6 +444,9 @@ pub enum Step {
     /// Record a project scope change's decision (the `projects` module).
     #[serde(rename = "core.project.scope.decide")]
     ScopeDecide(ScopeDecideStep),
+    /// Sync people's busy time from their calendars (the `workforce` module).
+    #[serde(rename = "core.calendar.sync")]
+    CalendarSync(CalendarSyncStep),
     /// Gather what happened on projects, for a status report.
     #[serde(rename = "core.project.status")]
     ProjectStatus(ProjectStatusStep),
@@ -846,6 +849,11 @@ step!(ScopeDecideStep {
     pub decide: ScopeDecide,
 });
 
+step!(CalendarSyncStep {
+    #[serde(rename = "with", default, skip_serializing_if = "Option::is_none")]
+    pub sync: Option<CalendarSync>,
+});
+
 step!(ProjectStatusStep {
     #[serde(rename = "with", default, skip_serializing_if = "Option::is_none")]
     pub status: Option<ProjectStatus>,
@@ -950,6 +958,7 @@ impl Step {
             ReportSend,
             ChangeDecide,
             ScopeDecide,
+            CalendarSync,
             ProjectStatus,
             ProjectReport,
             AssetSync,
@@ -1017,6 +1026,7 @@ impl Step {
             Self::ReportSend(_) => "core.report.send",
             Self::ChangeDecide(_) => "core.change.decide",
             Self::ScopeDecide(_) => "core.project.scope.decide",
+            Self::CalendarSync(_) => "core.calendar.sync",
             Self::ProjectStatus(_) => "core.project.status",
             Self::ProjectReport(_) => "core.project.report",
             Self::AssetSync(_) => "core.asset.sync",
@@ -1682,6 +1692,17 @@ pub struct ScopeDecide {
     pub by: Option<Value>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub comment: Option<Value>,
+}
+
+/// Whose calendars to sync (`core.calendar.sync`): everyone set up (from
+/// Microsoft 365 or an iCalendar feed), or `user_id`. Busy blocks are
+/// replaced from a day back to 60 days ahead. Output: `{ people, blocks,
+/// failed: [{ user_id, error }] }`.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct CalendarSync {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub user_id: Option<Value>,
 }
 
 /// What to gather for status reports (`core.project.status`): one

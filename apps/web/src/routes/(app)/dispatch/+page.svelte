@@ -29,9 +29,21 @@
 			away: away?.kind ?? null,
 			off: ranges !== null && ranges.length === 0,
 			hours: ranges?.map(([a, b]) => `${a}–${b}`).join(', ') ?? '',
-			appointments: person.appointments.filter((a) => isoDay(new Date(a.startsAt)) === day)
+			appointments: person.appointments.filter((a) => isoDay(new Date(a.startsAt)) === day),
+			// Busy time from their calendar, on each day it overlaps.
+			busy: person.busy.filter((b) => {
+				const start = new Date(`${day}T00:00:00`).getTime();
+				return Date.parse(b.startsAt) < start + 86_400_000 && Date.parse(b.endsAt) > start;
+			})
 		};
 	}
+
+	const BUSY: Record<string, string> = {
+		busy: 'Busy',
+		oof: 'Out of office',
+		tentative: 'Tentative',
+		elsewhere: 'Working elsewhere'
+	};
 
 	function week(monday: string, queue: string): string {
 		const q = [`week=${monday}`, queue ? `queue=${queue}` : ''].filter(Boolean).join('&');
@@ -112,6 +124,17 @@
 										<p class="text-xs text-fg-subtle">{c.hours}</p>
 									{/if}
 									<ul class="mt-1 flex flex-col gap-1">
+										{#each c.busy as b (b.startsAt + b.status)}
+											<li
+												class="rounded-control border border-dashed border-border-strong px-1.5 py-1 text-xs text-fg-muted"
+												title={b.subject ?? BUSY[b.status]}
+											>
+												<span class="tabular-nums">{clock(b.startsAt)}–{clock(b.endsAt)}</span>
+												<span class="block truncate">
+													{b.subject ?? BUSY[b.status] ?? b.status}
+												</span>
+											</li>
+										{/each}
 										{#each c.appointments as a (a.id)}
 											<li>
 												<a

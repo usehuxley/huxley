@@ -95,6 +95,8 @@ struct Calendar {
     days: i64,
     hours: BTreeMap<Uuid, [f64; 7]>,
     off: BTreeSet<(Uuid, Date)>,
+    /// Hours busy in their synced calendar each day (ADR-061).
+    busy: BTreeMap<(Uuid, Date), f64>,
 }
 
 impl Calendar {
@@ -103,7 +105,9 @@ impl Calendar {
             return 0.0;
         }
         let week = self.hours.get(&user).unwrap_or(&DEFAULT_DAY);
-        week[usize::from(d.weekday().number_days_from_monday())]
+        let scheduled = week[usize::from(d.weekday().number_days_from_monday())];
+        let busy = self.busy.get(&(user, d)).copied().unwrap_or(0.0);
+        (scheduled - busy).max(0.0)
     }
 
     /// Which week a day falls in: earlier days count in the first.
@@ -202,8 +206,9 @@ pub async fn plan(
     .bind(&who)
     .bind(from)
     .bind(to)
-    .fetch_all(conn)
+    .fetch_all(&mut *conn)
     .await?;
+    let busy = busy_hours(conn, &who, from, to).await?;
     let mut off = BTreeSet::new();
     for (u, s, e) in time_off {
         let mut d = s.max(from);
@@ -220,6 +225,7 @@ pub async fn plan(
             .map(|(u, h)| (u, day_hours(&h)))
             .collect(),
         off,
+        busy,
     };
     Ok(Capacity {
         weeks: (0..weeks)
@@ -230,6 +236,39 @@ pub async fn plan(
             .map(|(user, name)| person(&cal, weeks, user, name, &tasks, &appointments))
             .collect(),
     })
+}
+
+/// Hours each person is busy (or out of office) in their synced calendar,
+/// by day (UTC), within `[from, to)`.
+async fn busy_hours(
+    conn: &mut PgConnection,
+    who: &[Uuid],
+    from: Date,
+    to: Date,
+) -> DeskResult<BTreeMap<(Uuid, Date), f64>> {
+    let blocks: Vec<(Uuid, OffsetDateTime, OffsetDateTime)> = sqlx::query_as(
+        "SELECT user_id, starts_at, ends_at FROM wf_busy_blocks \
+          WHERE user_id = ANY($1) AND status IN ('busy', 'oof') AND starts_at < $3::date AND ends_at > $2::date",
+    )
+    .bind(who)
+    .bind(from)
+    .bind(to)
+    .fetch_all(conn)
+    .await?;
+    let mut out: BTreeMap<(Uuid, Date), f64> = BTreeMap::new();
+    for (user, starts, ends) in blocks {
+        let mut day = starts.date().max(from);
+        while day < to && day <= ends.date() {
+            let day_start = day.midnight().assume_utc();
+            let day_end = day_start + Duration::days(1);
+            let overlap = (ends.min(day_end) - starts.max(day_start)).as_seconds_f64() / 3600.0;
+            if overlap > 0.0 {
+                *out.entry((user, day)).or_default() += overlap;
+            }
+            day += Duration::days(1);
+        }
+    }
+    Ok(out)
 }
 
 fn person(
@@ -312,6 +351,7 @@ mod tests {
             days: 14,
             hours: BTreeMap::new(),
             off: [(user, date("2026-12-02"))].into_iter().collect(),
+            busy: BTreeMap::new(),
         };
         // Mon to Fri with Wednesday off: four working days.
         let spread = cal.spread(&Load {

@@ -34,6 +34,12 @@ components:
     message: { name: message, in: path, required: true, description: The message's ID, schema: { type: string } }
     orderby: { name: $orderby, in: query, description: "Sort order, e.g. receivedDateTime", schema: { type: string } }
   schemas:
+    DateTimeTimeZone:
+      type: object
+      required: [dateTime, timeZone]
+      properties:
+        dateTime: { type: string, description: "e.g. 2026-12-01T09:00:00" }
+        timeZone: { type: string, description: "e.g. UTC" }
     User:
       type: object
       properties:
@@ -215,6 +221,59 @@ paths:
                           emailAddress: { type: object, properties: { address: { type: string }, name: { type: string } } }
       responses:
         "202": { description: Accepted }
+  /users/{user}/calendar/getSchedule:
+    post:
+      operationId: getSchedule
+      summary: Free/busy schedules of up to 20 people
+      description: >-
+        Busy, tentative, out-of-office and working-elsewhere blocks of each
+        schedule (mailbox) over a window of up to 62 days. Private events show
+        only as busy. Needs Calendars.Read (or Calendars.ReadBasic.All).
+        Send the Prefer header `outlook.timezone="UTC"` for times in UTC.
+      tags: [Calendar]
+      parameters:
+        - { $ref: "#/components/parameters/user" }
+        - name: Prefer
+          in: header
+          schema: { type: string }
+          description: e.g. outlook.timezone="UTC"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [schedules, startTime, endTime]
+              properties:
+                schedules: { type: array, maxItems: 20, items: { type: string }, description: Mailbox addresses }
+                startTime: { $ref: "#/components/schemas/DateTimeTimeZone" }
+                endTime: { $ref: "#/components/schemas/DateTimeTimeZone" }
+                availabilityViewInterval: { type: integer, minimum: 5, maximum: 1440 }
+      responses:
+        "200":
+          description: Each schedule's items
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  value:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        scheduleId: { type: string }
+                        error: { type: object, properties: { message: { type: string }, responseCode: { type: string } } }
+                        scheduleItems:
+                          type: array
+                          items:
+                            type: object
+                            properties:
+                              status: { type: string, enum: [free, tentative, busy, oof, workingElsewhere, unknown] }
+                              isPrivate: { type: boolean }
+                              subject: { type: string }
+                              start: { $ref: "#/components/schemas/DateTimeTimeZone" }
+                              end: { $ref: "#/components/schemas/DateTimeTimeZone" }
   /users/{user}/mailFolders/{folder}/messages:
     get:
       operationId: listMailMessages

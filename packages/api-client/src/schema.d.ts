@@ -7031,6 +7031,64 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
+	'/api/v1/workforce/calendars': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get: operations['calendar_overview'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/workforce/calendars/people/{user_id}': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		/**
+		 * Sets how someone's calendar is synced: from Microsoft 365 (at their
+		 *     email, or `calendar`), from an iCalendar feed (`icsUrl`, kept sealed and
+		 *     never shown again), or not at all. Yours, or with `workforce:manage`.
+		 */
+		put: operations['set_calendar_person'];
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/workforce/calendars/settings': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		/**
+		 * Sets up Microsoft 365: an `msgraph` connection at an organization. Busy
+		 *     time is read with its free/busy schedule.
+		 */
+		put: operations['set_calendar_settings'];
+		post?: never;
+		/** Stops reading Microsoft 365 (feeds keep syncing). */
+		delete: operations['clear_calendar_settings'];
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
 	'/api/v1/workforce/certifications': {
 		parameters: {
 			query?: never;
@@ -8398,6 +8456,8 @@ export interface components {
 		/** @description One person on the dispatch board. */
 		BoardPerson: {
 			appointments: components['schemas']['Appointment'][];
+			/** @description Busy time from their synced calendar (with the workforce module). */
+			busy: components['schemas']['BusyBlock'][];
 			hours?: {
 				[key: string]: string[][];
 			} | null;
@@ -8454,6 +8514,19 @@ export interface components {
 			/** @description Then a status for all of them (a status key, e.g. `in_progress`). */
 			status?: string | null;
 		};
+		/** @description A stored block of busy time. */
+		BusyBlock: {
+			/** Format: date-time */
+			endsAt: string;
+			/** Format: date-time */
+			startsAt: string;
+			/** @description `busy`, `tentative`, `oof` (out of office) or `elsewhere`. */
+			status: string;
+			/** @description Only when subjects are kept, and never a private event's. */
+			subject?: string | null;
+			/** Format: uuid */
+			userId: string;
+		};
 		CalendarChange: {
 			changeType: string;
 			orgName: string;
@@ -8467,6 +8540,57 @@ export interface components {
 			/** Format: uuid */
 			ticketId: string;
 			title: string;
+		};
+		/** @description How calendars are synced, and everyone's. */
+		CalendarOverview: {
+			people: components['schemas']['CalendarPerson'][];
+			settings?: components['schemas']['CalendarSettings'] | null;
+		};
+		/** @description Someone whose calendar can be synced, and how it is. */
+		CalendarPerson: {
+			/** @description Their calendar's address at the provider, when not their email. */
+			calendar?: string | null;
+			email: string;
+			/** @description An ICS feed is set (its URL is never shown). */
+			hasFeed: boolean;
+			lastError?: string | null;
+			/** Format: date-time */
+			lastSyncedAt?: string | null;
+			name: string;
+			/** @description `provider`, `ics` or `none`. */
+			source: string;
+			/** Format: uuid */
+			userId: string;
+		};
+		CalendarPersonInput: {
+			/** @description Their calendar's address at the provider, when not their email. */
+			calendar?: string | null;
+			/** @description A new ICS feed URL (never returned). Leave out to keep the current one. */
+			icsUrl?: string | null;
+			/** @description `provider`, `ics` or `none`. */
+			source: string;
+		};
+		/** @description How calendars are reached. */
+		CalendarSettings: {
+			/** @description The `msgraph` connection's key. */
+			connection: string;
+			keepSubjects: boolean;
+			/**
+			 * Format: uuid
+			 * @description The organization the connection is at.
+			 */
+			orgId: string;
+			/** @description `m365`. */
+			provider: string;
+			/** Format: date-time */
+			updatedAt: string;
+		};
+		CalendarSettingsInput: {
+			connection: string;
+			keepSubjects?: boolean;
+			/** Format: uuid */
+			orgId: string;
+			provider: string;
 		};
 		CancelRunResponse: {
 			/** @description False if the run had already finished. */
@@ -28376,6 +28500,106 @@ export interface operations {
 				content: {
 					'application/problem+json': components['schemas']['ApiError'];
 				};
+			};
+		};
+	};
+	calendar_overview: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['CalendarOverview'];
+				};
+			};
+		};
+	};
+	set_calendar_person: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				user_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['CalendarPersonInput'];
+			};
+		};
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['CalendarPerson'];
+				};
+			};
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	set_calendar_settings: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['CalendarSettingsInput'];
+			};
+		};
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['CalendarSettings'];
+				};
+			};
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	clear_calendar_settings: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			204: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content?: never;
 			};
 		};
 	};

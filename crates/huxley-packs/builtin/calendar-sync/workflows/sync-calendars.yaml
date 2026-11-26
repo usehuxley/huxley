@@ -1,0 +1,20 @@
+apiVersion: usehuxley.io/v1
+kind: Workflow
+metadata:
+  key: sync-calendars
+  name: Sync calendars
+  description: >-
+    Every five minutes (and when run by hand), reads people's busy time
+    from Microsoft 365 or their iCalendar feeds, from a day back to 60
+    days ahead. Set up who's synced under Settings → Calendars.
+spec:
+  triggers:
+    - type: schedule
+      cron: "*/5 * * * *"
+    - type: manual
+  steps:
+    - id: sync
+      type: core.calendar.sync
+  outputs:
+    people: "{{ steps.sync.output.people }}"
+    failed: "{{ steps.sync.output.failed | length }}"
