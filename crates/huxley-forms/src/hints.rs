@@ -312,6 +312,8 @@ mod tests {
             schema,
             ui,
             action_for: None,
+            portal: false,
+            portal_category: None,
             archived: false,
             created_at: time::OffsetDateTime::UNIX_EPOCH,
             updated_at: time::OffsetDateTime::UNIX_EPOCH,

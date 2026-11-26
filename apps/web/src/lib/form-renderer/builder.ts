@@ -3,7 +3,7 @@
  * form's JSON Schema and UI hints. Schema details the builder doesn't edit
  * (e.g. `minLength`, `pattern`) are kept as they were.
  */
-import { fieldsOf, type FieldKind } from './fields.ts';
+import { fieldsOf, type FieldKind } from '@usehuxley/ui';
 
 type Obj = Record<string, unknown>;
 const isObj = (v: unknown): v is Obj => typeof v === 'object' && v !== null && !Array.isArray(v);

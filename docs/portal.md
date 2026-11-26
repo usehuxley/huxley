@@ -64,6 +64,16 @@ Like every setting, these apply to the organization and everything below it, so 
 - **Sessions** last up to 14 days, ending after a day unused.
 - **Separation:** the portal has its own session cookie (`hx_portal_session`) and its own API (`/api/portal/v1`). A portal session can't reach the staff API, and a staff session can't reach the portal's.
 
+## Requests
+
+**Request something** in the portal lists the forms you offer there. Contacts fill one in, and its workflows run, the same as when staff fill it in.
+
+- **Offering a form:** in the form's editor, tick **Offer in the client portal**. Optionally give a **Portal category**, such as *Accounts* or *Hardware*, to group forms. A form is offered to contacts of its organization and of the organizations below it, so an MSP's form reaches every client.
+- **What the workflows get:** the answers as inputs, and `trigger.context` with `client` (the contact's company), `contact` (name, email, phone…) and `portal` (their portal account and role). The runs happen for the contact's company.
+- **Who the runs act as:** each workflow's run-as service account, as for a public link. They never act as a person.
+- **No lookups:** forms that look choices up through an integration can't be offered in the portal.
+- **Following up:** contacts see **Your requests** with a status: *Received* (no workflow to run), *In progress*, *Done*, or *Being looked at* (a run failed or was cancelled; check the run history).
+
 ## Two-factor sign-in
 
 Contacts can add a code from an authenticator app (Microsoft Authenticator, Google Authenticator, 1Password and others) to signing in with a link or password: **Profile**, **Manage two-factor sign-in**.
@@ -102,4 +112,5 @@ Contacts can sign in with their company's own accounts, such as the client's Mic
   - `GET /api/portal/v1/me`
   - `GET`, `POST /api/portal/v1/tickets` (`status=open|closed`, `scope=mine|company`, `q`); `GET …/tickets/{id}`; `POST …/tickets/{id}/replies`
   - `PUT /api/portal/v1/me/password`
+  - `GET /api/portal/v1/catalog`, `GET …/catalog/{id}`, `POST …/catalog/{id}/requests` `{ answers }`; `GET …/requests`
   - Two-factor: `…/auth/link` redemption and `…/auth/password` answer `202 { challenge }` when a code is needed; finish with `POST …/auth/mfa` `{ challenge, code }`. `GET …/me/mfa`; `POST …/me/mfa/totp` (start), `…/totp/confirm` `{ code }` (returns recovery codes), `…/totp/disable` `{ code }`, `…/recovery-codes`

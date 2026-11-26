@@ -2,9 +2,8 @@
 	import { enhance } from '$app/forms';
 	import { resolve } from '$app/paths';
 	import { ArrowLeft } from '@lucide/svelte';
-	import { Button, Card, Field, Input, Select } from '@usehuxley/ui';
+	import { Button, Card, Field, Input, Select, FormRenderer } from '@usehuxley/ui';
 	import FormBuilder from '#lib/form-renderer/FormBuilder.svelte';
-	import FormRenderer from '#lib/form-renderer/FormRenderer.svelte';
 	import {
 		builderFieldsOf,
 		definitionOf,
@@ -121,6 +120,25 @@
 						]}
 					/>
 				</Field>
+				<div class="flex flex-wrap items-end gap-4">
+					<label class="flex items-center gap-2 text-sm text-fg">
+						<input type="checkbox" name="portal" checked={data.form.portal} />
+						Offer in the client portal
+					</label>
+					<Field
+						label="Portal category"
+						for="portalCategory"
+						hint="Groups forms in the portal, e.g. Accounts"
+					>
+						<Input
+							id="portalCategory"
+							name="portalCategory"
+							value={data.form.portalCategory ?? ''}
+							maxlength={60}
+							class="w-56"
+						/>
+					</Field>
+				</div>
 				<div class="flex items-center gap-2 text-sm" role="group" aria-label="Editor">
 					<Button
 						type="button"

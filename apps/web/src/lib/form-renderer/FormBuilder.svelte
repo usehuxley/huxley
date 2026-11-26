@@ -6,7 +6,7 @@
 	import { ArrowDown, ArrowUp, Plus, Trash2 } from '@lucide/svelte';
 	import { Button } from '@usehuxley/ui';
 	import { KINDS, hasOptions, nameFrom, problemsOf, type BuilderField } from './builder.ts';
-	import type { FieldKind } from './fields.ts';
+	import type { FieldKind } from '@usehuxley/ui';
 
 	let { fields = $bindable([]) }: { fields?: BuilderField[] } = $props();
 

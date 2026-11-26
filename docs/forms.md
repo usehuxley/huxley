@@ -50,6 +50,10 @@ Run from a ticket, the contact is its requester, and the ticket's history record
 
 **From the API.** Through the API, send `context: { contactId, ticketId }` with the submission (`POST /api/v1/forms/{id}/submissions`). A pack's form can be an Action too, with `"actionFor"` in its JSON.
 
+## In the client portal
+
+Tick **Offer in the client portal** in the editor (or `"portal": true`, with an optional `"portalCategory"`, in a pack's form JSON) to list the form under **Request something** in the client portal. Contacts of the form's organization and those below it can fill it in. The runs act as each workflow's run-as account, and get the contact and their company as `trigger.context`. Such forms can't look choices up through an integration. See [the client portal](portal.md#requests).
+
 ## Secret answers
 
 A **Secret (password)** field, which is `{ "type": "string", "writeOnly": true }` in JSON, is for answers such as a temporary password or a PIN. It shows as a password box. The stored submission keeps only `«redacted»`, and the runs it starts keep the answer encrypted, even if the workflow doesn't mark that input secret. Workflows read it as `inputs.<name>`, with the same masking as secrets (see [workflows](workflows.md#variables-and-secrets)).

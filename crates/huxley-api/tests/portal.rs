@@ -650,3 +650,84 @@ async fn identity_providers_are_kept_by_staff_and_only_return_to_this_portal() {
         .await;
     assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
 }
+
+#[tokio::test]
+async fn contacts_ask_for_things_with_portal_forms() {
+    let Some(db) = isolated("portal_catalog").await else {
+        return;
+    };
+    let s = setup(&db.pools).await;
+    let form = |key: &str, portal: bool, org: Uuid| {
+        json!({ "orgId": org, "form": {
+            "key": key, "name": format!("Form {key}"), "portal": portal, "portalCategory": "Accounts",
+            "schema": { "type": "object", "required": ["who"], "properties": { "who": { "type": "string" } } },
+        }})
+    };
+    // The MSP offers one to every client; Globex offers its own; one isn't offered.
+    for (key, portal, org) in [
+        ("new-user", true, s.root),
+        ("globex-only", true, s.globex),
+        ("internal", false, s.root),
+    ] {
+        let (status, body, _) = s
+            .call(&s.staff, "POST", "/api/v1/forms", form(key, portal, org))
+            .await;
+        assert_eq!(status, StatusCode::CREATED, "{body}");
+    }
+    // A form that looks choices up through an integration can't be offered.
+    let mut lookup = form("lookup", true, s.root);
+    lookup["form"]["ui"] =
+        json!({ "who": { "options_from": { "integration": "x", "action": "y" } } });
+    let (status, _, _) = s.call(&s.staff, "POST", "/api/v1/forms", lookup).await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+
+    let (ada, _) = s.portal_user(s.acme, "Ada", "client_user").await;
+    let (_, catalog, _) = s
+        .call(&ada, "GET", "/api/portal/v1/catalog", Value::Null)
+        .await;
+    let names: Vec<&str> = catalog
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|f| f["name"].as_str().unwrap())
+        .collect();
+    assert_eq!(names, ["Form new-user"]);
+    assert_eq!(catalog[0]["category"], "Accounts");
+    let id = catalog[0]["id"].as_str().unwrap();
+
+    let uri = format!("/api/portal/v1/catalog/{id}/requests");
+    let (status, _, _) = s.call(&ada, "POST", &uri, json!({ "answers": {} })).await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+    let (status, created, _) = s
+        .call(&ada, "POST", &uri, json!({ "answers": { "who": "Bob" } }))
+        .await;
+    assert_eq!(status, StatusCode::CREATED, "{created}");
+    let (_, requests, _) = s
+        .call(&ada, "GET", "/api/portal/v1/requests", Value::Null)
+        .await;
+    assert_eq!(requests.as_array().unwrap().len(), 1, "{requests}");
+    assert_eq!(
+        (&requests[0]["formName"], &requests[0]["status"]),
+        (&json!("Form new-user"), &json!("received"))
+    );
+    // Globex's own form isn't Acme's to use.
+    let (_, forms, _) = s.call(&s.staff, "GET", "/api/v1/forms", Value::Null).await;
+    let globex_form = forms
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|f| f["key"] == "globex-only")
+        .unwrap()["id"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    let (status, _, _) = s
+        .call(
+            &ada,
+            "POST",
+            &format!("/api/portal/v1/catalog/{globex_form}/requests"),
+            json!({ "answers": { "who": "x" } }),
+        )
+        .await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+}

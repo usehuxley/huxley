@@ -3,7 +3,7 @@
 	answers in `values` and per-field `errors` (by field name).
 -->
 <script lang="ts">
-	import { fieldsOf, shownFields, type Choice, type Field } from './fields.ts';
+	import { fieldsOf, shownFields, type Choice, type Field } from './fields';
 
 	let {
 		schema,

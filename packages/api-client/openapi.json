@@ -282,6 +282,104 @@
 				}
 			}
 		},
+		"/api/portal/v1/catalog": {
+			"get": {
+				"tags": ["portal"],
+				"summary": "What you can ask for: forms offered to your company's contacts.",
+				"operationId": "portal_catalog",
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "array",
+									"items": {
+										"$ref": "#/components/schemas/PortalForm"
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/portal/v1/catalog/{id}": {
+			"get": {
+				"tags": ["portal"],
+				"operationId": "portal_catalog_form",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/PortalForm"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/portal/v1/catalog/{id}/requests": {
+			"post": {
+				"tags": ["portal"],
+				"summary": "Asks for something with a form: starts its workflows for your company.",
+				"operationId": "portal_submit_request",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/PortalRequestInput"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"201": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/PortalRequestCreated"
+								}
+							}
+						}
+					},
+					"422": {
+						"description": "The answers don't fit",
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
 		"/api/portal/v1/me": {
 			"get": {
 				"tags": ["portal"],
@@ -460,6 +558,27 @@
 							"application/problem+json": {
 								"schema": {
 									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/portal/v1/requests": {
+			"get": {
+				"tags": ["portal"],
+				"summary": "What you've asked for, newest first.",
+				"operationId": "portal_requests",
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "array",
+									"items": {
+										"$ref": "#/components/schemas/PortalRequest"
+									}
 								}
 							}
 						}
@@ -21347,6 +21466,7 @@
 					"name",
 					"schema",
 					"ui",
+					"portal",
 					"archived",
 					"createdAt",
 					"updatedAt"
@@ -21379,6 +21499,14 @@
 					"orgId": {
 						"type": "string",
 						"format": "uuid"
+					},
+					"portal": {
+						"type": "boolean",
+						"description": "Offered to client contacts in the portal, for the form's\norganization and those below it."
+					},
+					"portalCategory": {
+						"type": ["string", "null"],
+						"description": "Its group in the portal, e.g. \"Accounts\"."
 					},
 					"schema": {
 						"type": "object",
@@ -21419,6 +21547,14 @@
 					},
 					"name": {
 						"type": "string"
+					},
+					"portal": {
+						"type": "boolean",
+						"description": "Offer it to client contacts in the portal. It can't look choices up\nthrough an integration."
+					},
+					"portalCategory": {
+						"type": ["string", "null"],
+						"description": "Its group in the portal, e.g. \"Accounts\"."
 					},
 					"schema": {
 						"type": "object",
@@ -24060,6 +24196,40 @@
 					}
 				}
 			},
+			"PortalForm": {
+				"type": "object",
+				"description": "A form as the portal shows it.",
+				"required": ["id", "name", "schema", "ui"],
+				"properties": {
+					"category": {
+						"type": ["string", "null"]
+					},
+					"description": {
+						"type": ["string", "null"]
+					},
+					"id": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"name": {
+						"type": "string"
+					},
+					"schema": {
+						"type": "object",
+						"additionalProperties": {},
+						"propertyNames": {
+							"type": "string"
+						}
+					},
+					"ui": {
+						"type": "object",
+						"additionalProperties": {},
+						"propertyNames": {
+							"type": "string"
+						}
+					}
+				}
+			},
 			"PortalIdentityProvider": {
 				"type": "object",
 				"required": [
@@ -24392,6 +24562,58 @@
 				"properties": {
 					"body": {
 						"type": "string"
+					}
+				},
+				"additionalProperties": false
+			},
+			"PortalRequest": {
+				"type": "object",
+				"description": "Something a contact asked for in the portal.",
+				"required": ["id", "formId", "formName", "status", "createdAt"],
+				"properties": {
+					"createdAt": {
+						"type": "string",
+						"format": "date-time"
+					},
+					"formId": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"formName": {
+						"type": "string"
+					},
+					"id": {
+						"type": "string",
+						"format": "uuid",
+						"description": "The submission."
+					},
+					"status": {
+						"type": "string",
+						"description": "`received` (nothing to run), `in_progress`, `done`, or `failed` (a\nrun failed or was cancelled; the service desk can see why)."
+					}
+				}
+			},
+			"PortalRequestCreated": {
+				"type": "object",
+				"required": ["id"],
+				"properties": {
+					"id": {
+						"type": "string",
+						"format": "uuid",
+						"description": "The request (submission)."
+					}
+				}
+			},
+			"PortalRequestInput": {
+				"type": "object",
+				"required": ["answers"],
+				"properties": {
+					"answers": {
+						"type": "object",
+						"additionalProperties": {},
+						"propertyNames": {
+							"type": "string"
+						}
 					}
 				},
 				"additionalProperties": false
