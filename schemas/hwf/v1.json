@@ -2984,6 +2984,69 @@
         },
         {
           "additionalProperties": false,
+          "description": "Find timesheets to remind people about (the `workforce` module).",
+          "properties": {
+            "continue_on_error": {
+              "description": "Record the error as the step's output and carry on.",
+              "type": "boolean"
+            },
+            "description": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "id": {
+              "description": "Unique in the workflow: lowercase letters, digits, underscores.\nOther steps read this step's output as `steps.<id>.output`.",
+              "type": "string"
+            },
+            "if": {
+              "description": "Skip the step unless this expression is true.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "name": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "retry": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/RetryPolicy"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "timeout": {
+              "description": "Fail the attempt after this long, e.g. `30s`.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "type": {
+              "const": "core.timesheet.check",
+              "type": "string"
+            },
+            "with": {
+              "$ref": "#/$defs/TimesheetCheck"
+            }
+          },
+          "required": [
+            "type",
+            "id",
+            "with"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
           "description": "Run a dataset → asset mapping rule (the `cmdb` module).",
           "properties": {
             "continue_on_error": {
@@ -3521,6 +3584,19 @@
       },
       "required": [
         "ticket_id"
+      ],
+      "type": "object"
+    },
+    "TimesheetCheck": {
+      "additionalProperties": false,
+      "description": "What to look for in timesheets (`core.timesheet.check`), for reminders:\n\n- `unsubmitted`: the last period that ended at least `days_late` days ago\n  (default 1), for people who log time or have a working schedule,\n  whose timesheet for it is open or rejected.\n- `under_logged`: a day (`date`, `YYYY-MM-DD`; default yesterday) people\n  logged less than their schedule expects, not on time off.\n- `missing_notes`: entries without notes in the current period.\n\nOutput: `{ check, people: [{ user_id, person, email, period_start,\nperiod_end, status, logged_minutes, expected_minutes, missing_notes,\ndays_late, leads: [user ids], recipient, lead_recipients }] }`, where\n`recipient` and `lead_recipients` are ready for `core.notify`'s `to`.",
+      "properties": {
+        "check": true,
+        "date": true,
+        "days_late": true
+      },
+      "required": [
+        "check"
       ],
       "type": "object"
     },

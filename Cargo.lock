@@ -2241,6 +2241,8 @@ dependencies = [
  "bytes",
  "getrandom 0.4.3",
  "huxley-ai",
+ "huxley-auth",
+ "huxley-authz",
  "huxley-cmdb",
  "huxley-core",
  "huxley-crm",

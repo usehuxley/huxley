@@ -1,0 +1,9 @@
+apiVersion: usehuxley.io/v1
+kind: Pack
+key: huxley/timesheet-reminders
+name: Timesheet reminders
+version: 1.0.0
+publisher: Huxley
+description: Reminds people about unsubmitted timesheets (and their leads when they're late), days logged under their working hours, and entries without notes.
+contents:
+  workflows: [timesheet-unsubmitted, timesheet-under-logged, timesheet-missing-notes]

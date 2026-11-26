@@ -397,6 +397,9 @@ pub enum Step {
     /// `knowledge` module).
     #[serde(rename = "core.kb.embed")]
     KbEmbed(KbEmbedStep),
+    /// Find timesheets to remind people about (the `workforce` module).
+    #[serde(rename = "core.timesheet.check")]
+    TimesheetCheck(TimesheetCheckStep),
     /// Run a dataset → asset mapping rule (the `cmdb` module).
     #[serde(rename = "core.asset.sync")]
     AssetSync(AssetSyncStep),
@@ -716,6 +719,11 @@ step!(KbEmbedStep {
     pub embed: KbEmbed,
 });
 
+step!(TimesheetCheckStep {
+    #[serde(rename = "with")]
+    pub check: TimesheetCheck,
+});
+
 step!(AssetSyncStep {
     #[serde(rename = "with")]
     pub sync: AssetSync,
@@ -795,6 +803,7 @@ impl Step {
             MailFetch,
             TicketEmbed,
             KbEmbed,
+            TimesheetCheck,
             AssetSync,
             AssetWarranty,
             TicketEmailReply,
@@ -845,6 +854,7 @@ impl Step {
             Self::MailFetch(_) => "core.mail.fetch",
             Self::TicketEmbed(_) => "core.ticket.embed",
             Self::KbEmbed(_) => "core.kb.embed",
+            Self::TimesheetCheck(_) => "core.timesheet.check",
             Self::AssetSync(_) => "core.asset.sync",
             Self::AssetWarranty(_) => "core.asset.set_warranty",
             Self::TicketCreate(_) => "core.ticket.create",
@@ -1255,6 +1265,29 @@ pub struct TicketEmbed {
 pub struct KbEmbed {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub limit: Option<Value>,
+}
+
+/// What to look for in timesheets (`core.timesheet.check`), for reminders:
+///
+/// - `unsubmitted`: the last period that ended at least `days_late` days ago
+///   (default 1), for people who log time or have a working schedule,
+///   whose timesheet for it is open or rejected.
+/// - `under_logged`: a day (`date`, `YYYY-MM-DD`; default yesterday) people
+///   logged less than their schedule expects, not on time off.
+/// - `missing_notes`: entries without notes in the current period.
+///
+/// Output: `{ check, people: [{ user_id, person, email, period_start,
+/// period_end, status, logged_minutes, expected_minutes, missing_notes,
+/// days_late, leads: [user ids], recipient, lead_recipients }] }`, where
+/// `recipient` and `lead_recipients` are ready for `core.notify`'s `to`.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct TimesheetCheck {
+    pub check: Value,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub days_late: Option<Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub date: Option<Value>,
 }
 
 /// Mapping rules to run (`core.asset.sync`): a dataset's rows become
