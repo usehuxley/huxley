@@ -8,6 +8,7 @@ export type CodeLanguage =
 	| 'json'
 	| 'markdown'
 	| 'jinja'
+	| 'sql'
 	| 'text';
 
 /** Something to suggest while typing. */

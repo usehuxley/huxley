@@ -1,8 +1,9 @@
 <script lang="ts">
+	import { lintJson } from '#lib/workflows/yaml-lint.ts';
 	import { enhance } from '$app/forms';
 	import { resolve } from '$app/paths';
 	import { ArrowLeft } from '@lucide/svelte';
-	import { Button, Card, Field, Input, Select, FormRenderer } from '@usehuxley/ui';
+	import { Button, Card, CodeEditor, Field, FormRenderer, Input, Select } from '@usehuxley/ui';
 	import FormBuilder from '#lib/form-renderer/FormBuilder.svelte';
 	import {
 		builderFieldsOf,
@@ -165,22 +166,26 @@
 					<input type="hidden" name="schema" value={JSON.stringify(built.schema)} />
 					<input type="hidden" name="ui" value={JSON.stringify(built.ui)} />
 				{:else}
-					<label for="schema" class="text-sm font-medium text-fg">Schema</label>
-					<textarea
+					<p class="text-sm font-medium text-fg">Schema</p>
+					<CodeEditor
 						id="schema"
 						name="schema"
-						rows="14"
-						spellcheck="false"
-						class="rounded-control border border-border bg-surface p-2 font-mono text-xs text-fg"
-						bind:value={schemaText}></textarea>
-					<label for="ui" class="text-sm font-medium text-fg">UI hints</label>
-					<textarea
+						label="Schema"
+						language="json"
+						lines={16}
+						lint={lintJson}
+						bind:value={schemaText}
+					/>
+					<p class="text-sm font-medium text-fg">UI hints</p>
+					<CodeEditor
 						id="ui"
 						name="ui"
-						rows="5"
-						spellcheck="false"
-						class="rounded-control border border-border bg-surface p-2 font-mono text-xs text-fg"
-						bind:value={uiText}></textarea>
+						label="UI hints"
+						language="json"
+						lines={6}
+						lint={lintJson}
+						bind:value={uiText}
+					/>
 					<p class="text-xs text-fg-muted">
 						e.g. {`{ "order": ["name"], "notes": { "widget": "textarea", "help": "…" } }`}
 					</p>

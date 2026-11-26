@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
 	import { resolve } from '$app/paths';
-	import { Badge, Button, Card, EmptyState, Field, Input, Select } from '@usehuxley/ui';
+	import { Badge, Button, Card, CodeEditor, EmptyState, Field, Input, Select } from '@usehuxley/ui';
 	import { Plug } from '@lucide/svelte';
 	import type { PageProps } from './$types';
 
@@ -122,14 +122,9 @@
 						/>
 					</Field>
 				</div>
-				<label for="spec" class="text-sm font-medium text-fg">Or paste the spec</label>
-				<textarea
-					id="spec"
-					name="spec"
-					rows="8"
-					spellcheck="false"
-					class="rounded-control border border-border bg-surface p-2 font-mono text-xs text-fg"
-				></textarea>
+				<p class="text-sm font-medium text-fg">Or paste the spec</p>
+				<!-- JSON is YAML too, so one mode suits both. -->
+				<CodeEditor id="spec" name="spec" label="Or paste the spec" language="yaml" lines={10} />
 				<div>
 					<Button type="submit" disabled={importing}>
 						{importing ? 'Importing…' : 'Import'}

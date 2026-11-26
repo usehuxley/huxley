@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
 	import { resolve } from '$app/paths';
-	import { Button, Card } from '@usehuxley/ui';
+	import { Button, Card, CodeEditor } from '@usehuxley/ui';
 	import type { PageProps } from './$types';
 
 	let { data, form }: PageProps = $props();
@@ -57,14 +57,23 @@
 					update({ reset: false })}
 			class="flex flex-col gap-3"
 		>
-			<label for="query" class="sr-only">SQL query</label>
-			<textarea
+			<CodeEditor
 				id="query"
 				name="query"
+				label="SQL query"
+				language="sql"
+				lines={8}
 				value={query}
-				rows={6}
-				spellcheck="false"
-				class="rounded-control border border-border bg-surface p-2 font-mono text-sm"></textarea>
+				words={[
+					...data.datasets.map((d) => ({
+						label: `ds_${d.id.replaceAll('-', '')}`,
+						detail: d.name,
+						type: 'type' as const
+					})),
+					{ label: '_org_id', detail: 'the row’s organization', type: 'property' as const },
+					{ label: '_synced_at', detail: 'when it was synced', type: 'property' as const }
+				]}
+			/>
 			<div><Button type="submit">Run</Button></div>
 		</form>
 		{#if form && 'message' in form && form.message}

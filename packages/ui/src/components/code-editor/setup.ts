@@ -138,6 +138,8 @@ function load(language: CodeLanguage, options: CodeEditorOptions): Promise<Exten
 			yaml: () => lang(import('@codemirror/lang-yaml').then((m) => m.yaml())),
 			json: () => lang(import('@codemirror/lang-json').then((m) => m.json())),
 			markdown: () => lang(import('@codemirror/lang-markdown').then((m) => m.markdown())),
+			// Dataset queries run on PostgreSQL.
+			sql: () => lang(import('@codemirror/lang-sql').then((m) => m.sql({ dialect: m.PostgreSQL }))),
 			text: () => Promise.resolve([] as Extension)
 		}[language]();
 		cache.set(language, found);
