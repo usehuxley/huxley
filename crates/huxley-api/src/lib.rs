@@ -4,6 +4,7 @@
 //! RFC 9457 problem details for errors, cursor pagination, `Idempotency-Key`
 //! support on unsafe methods, and OpenAPI documentation generated with `utoipa`.
 
+pub mod agreement_routes;
 mod ai_routes;
 mod approval_routes;
 mod assistant;

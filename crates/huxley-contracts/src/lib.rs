@@ -1,12 +1,21 @@
-//! The `contracts` module (design doc §8.7). So far, the **product
-//! catalog**: products and services an MSP sells, with SKUs, vendors, cost
-//! and price, and bundles of them. Agreements build on it.
+//! The `contracts` module (design doc §8.7): the **product catalog**
+//! (products and services an MSP sells, and bundles of them), and
+//! **agreements** (what a client has agreed to, what it covers, rates and
+//! recurring lines), against which time is evaluated (ADR-039).
 //!
 //! Records are organization-scoped (RLS); the API checks `catalog:*`
 //! permissions and that the module is on. Money is `numeric(18,4)` with an
 //! explicit currency, as decimal strings in JSON.
 
+pub mod agreements;
 pub mod catalog;
+pub mod coverage;
+
+/// Dates as `YYYY-MM-DD` in JSON.
+pub(crate) mod date {
+    time::serde::format_description!(ymd, Date, "[year]-[month]-[day]");
+    pub(crate) use ymd::{deserialize, option, serialize};
+}
 
 /// The module's key in the registry.
 pub const MODULE: &str = "contracts";

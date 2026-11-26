@@ -60,6 +60,7 @@ pub fn router(state: AppState) -> Router {
         .merge(desk_routes::routes())
         .merge(cmdb_routes::routes())
         .nest("/catalog/products", crate::catalog_routes::routes())
+        .merge(crate::agreement_routes::routes())
         .nest("/workforce", workforce_routes::routes())
         .nest("/kb", kb_routes::routes())
         .nest("/vault", vault_routes::routes())

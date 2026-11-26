@@ -94,6 +94,8 @@ permissions! {
     VAULT_MANAGE = "vault:manage", Org, "Add, change and delete credential vault items and their secrets";
     CATALOG_READ = "catalog:read", Org, "View the product catalog: products, services and bundles";
     CATALOG_MANAGE = "catalog:manage", Org, "Add, change and retire products, services and bundles, with their costs and prices";
+    AGREEMENT_READ = "agreement:read", Org, "View agreements: what they cover, their rates and lines, and how time falls under them";
+    AGREEMENT_MANAGE = "agreement:manage", Org, "Add, change and cancel agreements, their coverage, rates and lines";
 }
 
 /// Wildcard granting every permission.

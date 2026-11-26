@@ -4,6 +4,65 @@
  */
 
 export interface paths {
+	'/api/v1/agreements': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** Agreements you can see. */
+		get: operations['list_agreements'];
+		put?: never;
+		/** Adds an agreement (a draft unless `status` says otherwise). */
+		post: operations['create_agreement'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/agreements/{id}': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get: operations['get_agreement'];
+		/**
+		 * Changes an agreement (send the version you read). Coverage, rates and
+		 *     lines are replaced with the input's.
+		 */
+		put: operations['update_agreement'];
+		post?: never;
+		/** Deletes a draft (others are cancelled instead). */
+		delete: operations['delete_agreement'];
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/agreements/{id}/usage': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/**
+		 * The time that fell under an agreement between two days (this month by
+		 *     default), entry by entry, with totals.
+		 */
+		get: operations['agreement_usage'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
 	'/api/v1/ai/calls': {
 		parameters: {
 			query?: never;
@@ -4261,6 +4320,23 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
+	'/api/v1/tickets/{id}/time-coverage': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** How a ticket's time falls under agreements, entry by entry. */
+		get: operations['ticket_time_coverage'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
 	'/api/v1/tickets/{ticket_id}/assets': {
 		parameters: {
 			query?: never;
@@ -5361,6 +5437,145 @@ export interface components {
 			steps: components['schemas']['AffectedStep'][];
 			/** Format: uuid */
 			workflowId: string;
+		};
+		Agreement: {
+			/** @description Coverage: tickets about assets of these types (none: any ticket). */
+			assetTypeIds: string[];
+			autoRenew: boolean;
+			/**
+			 * Format: int32
+			 * @description Billable minutes round up to this.
+			 */
+			billingIncrement: number;
+			/**
+			 * Format: int32
+			 * @description Block hours: minutes bought for the term.
+			 */
+			blockMinutes?: number | null;
+			/** @description Coverage: every work type, or `workTypeIds`. */
+			coversAllWorkTypes: boolean;
+			/** Format: date-time */
+			createdAt: string;
+			currency: string;
+			endsOn?: string | null;
+			/** Format: uuid */
+			id: string;
+			kind: components['schemas']['AgreementKind'];
+			lines: components['schemas']['AgreementLine'][];
+			/**
+			 * Format: int32
+			 * @description Managed: minutes included a calendar month (none: unlimited).
+			 */
+			monthlyMinutes?: number | null;
+			name: string;
+			notes: string;
+			/** Format: uuid */
+			orgId: string;
+			orgName: string;
+			/** Format: int32 */
+			priority: number;
+			rates: components['schemas']['AgreementRate'][];
+			/** Format: int32 */
+			renewalNoticeDays: number;
+			/** @example 2026-01-01 */
+			startsOn: string;
+			status: components['schemas']['AgreementStatus'];
+			/** Format: date-time */
+			updatedAt: string;
+			/** Format: int32 */
+			version: number;
+			workTypeIds: string[];
+		};
+		AgreementInput: {
+			assetTypeIds?: string[];
+			autoRenew?: boolean;
+			/** Format: int32 */
+			billingIncrement?: number;
+			/** Format: int32 */
+			blockMinutes?: number | null;
+			coversAllWorkTypes?: boolean;
+			/** @description Default USD. */
+			currency?: string | null;
+			endsOn?: string | null;
+			kind: components['schemas']['AgreementKind'];
+			lines?: components['schemas']['AgreementLineInput'][];
+			/** Format: int32 */
+			monthlyMinutes?: number | null;
+			name: string;
+			notes?: string;
+			/** Format: int32 */
+			priority?: number;
+			rates?: components['schemas']['AgreementRateInput'][];
+			/** Format: int32 */
+			renewalNoticeDays?: number;
+			/** @example 2026-01-01 */
+			startsOn: string;
+			status?: components['schemas']['AgreementStatus'] | null;
+			/**
+			 * Format: int32
+			 * @description The version you read (changes only).
+			 */
+			version?: number | null;
+			workTypeIds?: string[];
+		};
+		/** @enum {string} */
+		AgreementKind: 'managed' | 'block_hours' | 'time_materials' | 'project';
+		AgreementLine: {
+			billing: components['schemas']['AgreementLineBilling'];
+			description: string;
+			/** @description The price it bills at: its own, else the product's. */
+			effectivePrice?: string | null;
+			/** Format: uuid */
+			id: string;
+			/** Format: uuid */
+			productId?: string | null;
+			productSku?: string | null;
+			quantity: string;
+			/** @description Its own price (none: the product's). */
+			unitPrice?: string | null;
+		};
+		/** @enum {string} */
+		AgreementLineBilling: 'monthly' | 'quarterly' | 'annual';
+		AgreementLineInput: {
+			billing?: components['schemas']['AgreementLineBilling'] | null;
+			/** @description Default: the product's name. */
+			description?: string | null;
+			/** Format: uuid */
+			productId?: string | null;
+			quantity: string;
+			unitPrice?: string | null;
+		};
+		AgreementRate: {
+			hourlyRate: string;
+			/**
+			 * Format: uuid
+			 * @description None: the default rate.
+			 */
+			workTypeId?: string | null;
+			workTypeName?: string | null;
+		};
+		AgreementRateInput: {
+			hourlyRate: string;
+			/**
+			 * Format: uuid
+			 * @description None: the default rate.
+			 */
+			workTypeId?: string | null;
+		};
+		/** @enum {string} */
+		AgreementStatus: 'draft' | 'active' | 'cancelled';
+		/** @description What fell under an agreement between two days, and its totals. */
+		AgreementUsage: {
+			/** @description What the billable time comes to (entries without a rate left out). */
+			amount?: string | null;
+			/** Format: int32 */
+			billableMinutes: number;
+			/** Format: int32 */
+			coveredMinutes: number;
+			currency: string;
+			entries: components['schemas']['TimeCoverage'][];
+			from: string;
+			to: string;
 		};
 		/** @description A logged call. */
 		AiCall: {
@@ -6508,6 +6723,14 @@ export interface components {
 			title: string;
 			/** Format: date-time */
 			updatedAt: string;
+		};
+		/** @enum {string} */
+		CoverageOutcome:
+			'non_billable' | 'covered' | 'partly_covered' | 'overage' | 'billable' | 'no_agreement';
+		CreateAgreementRequest: {
+			agreement: components['schemas']['AgreementInput'];
+			/** Format: uuid */
+			orgId: string;
 		};
 		CreateAssignmentRequest: {
 			/** @description Also apply to every sub-organization (default true). */
@@ -9365,6 +9588,37 @@ export interface components {
 			/** Format: uuid */
 			userId: string;
 		};
+		/** @description A time entry, evaluated. */
+		TimeCoverage: {
+			/** Format: uuid */
+			agreementId?: string | null;
+			agreementName?: string | null;
+			amount?: string | null;
+			/**
+			 * Format: int32
+			 * @description Rounded up to the agreement's billing increment.
+			 */
+			billableMinutes: number;
+			/** Format: int32 */
+			coveredMinutes: number;
+			currency?: string | null;
+			hourlyRate?: string | null;
+			/** Format: int32 */
+			minutes: number;
+			outcome: components['schemas']['CoverageOutcome'];
+			/** @description Why, in a few words. */
+			reason: string;
+			/** Format: uuid */
+			ticketId?: string | null;
+			ticketReference?: string | null;
+			/** Format: uuid */
+			timeEntryId: string;
+			userName: string;
+			/** Format: uuid */
+			workTypeId: string;
+			workTypeName: string;
+			workedOn: string;
+		};
 		TimeEntry: {
 			billable: boolean;
 			/** Format: uuid */
@@ -9902,6 +10156,182 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+	list_agreements: {
+		parameters: {
+			query?: {
+				/** @description Only this organization's. */
+				orgId?: string;
+			};
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['Agreement'][];
+				};
+			};
+		};
+	};
+	create_agreement: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['CreateAgreementRequest'];
+			};
+		};
+		responses: {
+			201: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['Agreement'];
+				};
+			};
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	get_agreement: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['Agreement'];
+				};
+			};
+			404: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	update_agreement: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['AgreementInput'];
+			};
+		};
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['Agreement'];
+				};
+			};
+			409: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	delete_agreement: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			204: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content?: never;
+			};
+			409: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	agreement_usage: {
+		parameters: {
+			query?: {
+				/** @description `YYYY-MM-DD` (default: the start of this month). */
+				from?: string;
+				/** @description `YYYY-MM-DD` (default: the end of this month). */
+				to?: string;
+			};
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['AgreementUsage'];
+				};
+			};
+		};
+	};
 	list_ai_calls: {
 		parameters: {
 			query: {
@@ -19164,6 +19594,27 @@ export interface operations {
 				};
 				content: {
 					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	ticket_time_coverage: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['TimeCoverage'][];
 				};
 			};
 		};

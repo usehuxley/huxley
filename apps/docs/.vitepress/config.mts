@@ -90,6 +90,7 @@ export default defineConfig({
 					{ text: 'Knowledge base', link: '/knowledge' },
 					{ text: 'Credential vault', link: '/vault' },
 					{ text: 'Product catalog', link: '/catalog' },
+					{ text: 'Agreements', link: '/agreements' },
 					{ text: 'ConnectWise Automate', link: '/cwautomate' },
 					{ text: 'ImmyBot', link: '/immybot' }
 				]

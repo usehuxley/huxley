@@ -32,7 +32,8 @@ export const load: PageServerLoad = async (event) => {
 		actions,
 		appointments,
 		knowledge,
-		assets
+		assets,
+		coverage
 	] = await Promise.all([
 		assignees(event),
 		client.GET('/api/v1/orgs/{id}/contacts', {
@@ -54,6 +55,9 @@ export const load: PageServerLoad = async (event) => {
 			? client.GET('/api/v1/tickets/{ticket_id}/assets', {
 					params: { path: { ticket_id: event.params.id } }
 				})
+			: Promise.resolve({ data: undefined }),
+		user.activeModules.includes('contracts') && user.grantedPermissions.includes('agreement:read')
+			? client.GET('/api/v1/tickets/{id}/time-coverage', path)
 			: Promise.resolve({ data: undefined })
 	]);
 	return {
@@ -71,7 +75,8 @@ export const load: PageServerLoad = async (event) => {
 		actions,
 		appointments: appointments.data ?? [],
 		knowledge: knowledge.data ?? null,
-		assets: assets.data ?? null
+		assets: assets.data ?? null,
+		coverage: coverage.data ?? null
 	};
 };
 

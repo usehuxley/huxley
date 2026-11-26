@@ -39,3 +39,7 @@ Decisions that shape Huxley. Add a new ADR by copying `0000-template.md` with th
 | [033](0033-lookups-are-recorded-per-run.md) | A run records each `lookup()` answer the first time it asks | Accepted |
 | [034](0034-workflow-canvas-with-derived-edges.md) | The visual workflow editor is a SvelteFlow canvas whose edges come from the document | Accepted |
 | [035](0035-crm-records-belong-to-organizations.md) | CRM records belong to organizations; contacts can link to several | Accepted |
+| [036](0036-tickets-types-statuses-and-queues.md) | Tickets, with per-type statuses, service queues and a priority matrix | Accepted |
+| [037](0037-sla-clocks.md) | SLAs as per-ticket clocks over a snapshot calendar | Accepted |
+| [038](0038-email-intake.md) | Email intake: mailboxes, stored messages, and email to ticket as a step | Accepted |
+| [039](0039-agreement-coverage.md) | Agreements evaluate time on demand, one agreement per entry | Accepted |
