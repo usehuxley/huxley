@@ -1,0 +1,65 @@
+apiVersion: usehuxley.io/v1
+kind: Workflow
+metadata:
+  key: weekly-status-reports
+  name: Draft weekly project status reports
+  description: >-
+    Every Monday at 07:00 (and when run by hand), gathers the last week on
+    each active project and has the AI provider draft a status report. The
+    draft is saved on the project (not shared with the client until the
+    manager shares it) and the project's manager is told.
+spec:
+  triggers:
+    - type: schedule
+      cron: "0 7 * * 1"
+    - type: manual
+  steps:
+    - id: status
+      type: core.project.status
+      with:
+        days: 7
+    - id: each
+      type: foreach
+      items: "{{ steps.status.output.projects }}"
+      as: project
+      steps:
+        - id: draft
+          type: ai.extract
+          with:
+            text: "{{ project | to_json }}"
+            instructions: >-
+              You write a weekly status report for a client's IT project, from
+              its facts as JSON: what was completed this period, hours logged,
+              budget used, milestones reached and coming up, tasks that are
+              overdue or waiting, scope changes waiting for approval, and its
+              health with reasons. Write for the client: plain and specific,
+              no internal jargon, never invent anything that isn't in the
+              facts. Give a summary of at most 80 words, up to five highlights,
+              up to five risks or blockers (empty if none), and up to five
+              next steps.
+            schema:
+              type: object
+              properties:
+                summary: { type: string }
+                highlights: { type: array, items: { type: string } }
+                risks: { type: array, items: { type: string } }
+                next_steps: { type: array, items: { type: string } }
+              required: [summary, highlights, risks, next_steps]
+        - id: save
+          type: core.project.report
+          with:
+            project_id: "{{ project.project_id }}"
+            period_start: "{{ project.period_start }}"
+            period_end: "{{ project.period_end }}"
+            body: |-
+              {{ steps.draft.output.summary }}{{ ('\n\n**Highlights**\n\n- ' ~ (steps.draft.output.highlights | join('\n- '))) if steps.draft.output.highlights else '' }}{{ ('\n\n**Risks and blockers**\n\n- ' ~ (steps.draft.output.risks | join('\n- '))) if steps.draft.output.risks else '' }}{{ ('\n\n**Next steps**\n\n- ' ~ (steps.draft.output.next_steps | join('\n- '))) if steps.draft.output.next_steps else '' }}
+        - id: tell
+          type: core.notify
+          if: "{{ project.manager_recipient is not none }}"
+          with:
+            to: "{{ project.manager_recipient }}"
+            title: "Status report drafted for {{ project.name }}"
+            message: "{{ steps.draft.output.summary }}"
+            url: "/projects/{{ project.project_id }}"
+  outputs:
+    reports: "{{ steps.status.output.projects | length }}"

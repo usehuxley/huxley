@@ -196,6 +196,34 @@ test.describe('projects', () => {
 			200
 		);
 
+		// A scope change goes to the client's approvers (the pack, at the client).
+		const review = await json<{ uploadId: string; version: string }>(
+			owner.post(`/api/v1/packs/builtin/huxley/project-scope-approvals?orgId=${client.id}`)
+		);
+		const installed = await json<{ items: { workflows: Record<string, string> } }>(
+			owner.post(`/api/v1/packs/uploads/${review.uploadId}/install`, {
+				data: { orgId: client.id, version: review.version }
+			})
+		);
+		for (const id of Object.values(installed.items.workflows)) {
+			await json(owner.post(`/api/v1/workflows/${id}/publish`, { data: {} }), 200);
+		}
+		const scope = await json<{ id: string }>(
+			owner.post(`/api/v1/projects/${project.id}/scope-changes`, {
+				data: { title: `Second site ${stamp}`, description: 'A second office.', hours: 2 }
+			})
+		);
+		await json(owner.post(`/api/v1/projects/${project.id}/scope-changes/${scope.id}/submit`), 200);
+
+		await json(
+			owner.post(`/api/v1/projects/${project.id}/status-reports`, {
+				data: {
+					body: `Audit under way ${stamp}.\n\n**Next steps**\n\n- Deploy the agents`,
+					clientVisible: true
+				}
+			})
+		);
+
 		// The client's approver sees the milestones in the portal.
 		const email = `cleo-${stamp}@example.com`;
 		const contact = await json<{ id: string }>(
@@ -219,6 +247,39 @@ test.describe('projects', () => {
 		await expect(
 			milestones.getByRole('listitem').filter({ hasText: `Live ${stamp}` })
 		).toContainText('Upcoming');
+		const update = page.getByRole('region', {
+			name: `Latest status report on Onboarding ${stamp}`
+		});
+		await expect(update).toContainText(`Audit under way ${stamp}.`);
+		await expect(update.getByRole('listitem')).toHaveText('Deploy the agents');
+		// ...and approves the scope change, which grows the budget.
+		const title = `Approve scope change 1 on Onboarding ${stamp}: Second site ${stamp}`;
+		await expect
+			.poll(
+				async () => {
+					await page.goto('/approvals');
+					return page.getByRole('link', { name: title }).isVisible();
+				},
+				{ timeout: 20_000 }
+			)
+			.toBe(true);
+		await page.getByRole('link', { name: title }).click();
+		await expect(page.getByText('It changes the work by 2', { exact: false })).toBeVisible();
+		await page.getByRole('button', { name: 'Approve' }).click();
+		await expect
+			.poll(
+				async () =>
+					(await json<{ budgetHours: number }>(owner.get(`/api/v1/projects/${project.id}`), 200))
+						.budgetHours,
+				{
+					timeout: 20_000
+				}
+			)
+			.toBe(6);
+		await page.goto('/projects');
+		await expect(
+			page.getByRole('list', { name: `Scope changes of Onboarding ${stamp}` }).getByRole('listitem')
+		).toContainText('Approved');
 		for (const c of [owner, ada.api, bob.api]) await c.dispose();
 	});
 });

@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Badge, Card, EmptyState } from '@usehuxley/ui';
+	import { Badge, Card, EmptyState, ReportBody } from '@usehuxley/ui';
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
@@ -30,6 +30,22 @@
 				<span>· {p.progress.done} of {p.progress.total} tasks done</span>
 			</div>
 			{#if p.description}<p class="mt-2 text-sm text-fg">{p.description}</p>{/if}
+			{#if p.latestReport}
+				<section
+					class="mt-3 rounded-control bg-surface-sunken p-3"
+					aria-label="Latest status report on {p.name}"
+				>
+					<h2 class="mb-1 text-sm font-semibold text-fg">
+						Latest update
+						<span class="font-normal text-fg-muted">
+							· {p.latestReport.periodEnd
+								? date(p.latestReport.periodEnd)
+								: new Date(p.latestReport.createdAt).toLocaleDateString()}
+						</span>
+					</h2>
+					<ReportBody body={p.latestReport.body} />
+				</section>
+			{/if}
 			{#if p.milestones.length > 0}
 				<h2 class="mt-3 text-sm font-semibold text-fg">Milestones</h2>
 				<ul class="mt-1 flex flex-col gap-1 text-sm" aria-label="Milestones of {p.name}">
@@ -41,6 +57,38 @@
 							{:else}
 								<Badge>Upcoming</Badge>
 							{/if}
+						</li>
+					{/each}
+				</ul>
+			{/if}
+			{#if p.scopeChanges.length > 0}
+				<h2 class="mt-3 text-sm font-semibold text-fg">Scope changes</h2>
+				<ul class="mt-1 flex flex-col gap-1 text-sm" aria-label="Scope changes of {p.name}">
+					{#each p.scopeChanges as c (c.id)}
+						<li class="flex items-center justify-between gap-2">
+							<span class="text-fg">
+								#{c.number}
+								{c.title}
+								<span class="text-fg-muted">
+									· {c.hours > 0 ? '+' : ''}{c.hours} hours{c.amount !== null &&
+									c.amount !== undefined
+										? ` · ${c.amount}`
+										: ''}
+								</span>
+							</span>
+							<Badge
+								tone={c.state === 'approved'
+									? 'success'
+									: c.state === 'rejected'
+										? 'danger'
+										: 'warning'}
+							>
+								{c.state === 'submitted'
+									? 'Waiting for your approval'
+									: c.state === 'approved'
+										? 'Approved'
+										: 'Rejected'}
+							</Badge>
 						</li>
 					{/each}
 				</ul>

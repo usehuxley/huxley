@@ -27,6 +27,23 @@ pub struct TemplateTask {
     pub depends_on: Vec<String>,
     #[serde(default)]
     pub client_visible: bool,
+    /// Starts this many days after the project does.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub start_offset_days: Option<i32>,
+    /// Due this many days after it starts.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub duration_days: Option<i32>,
+    /// Skills it needs, which become the task's requirements.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub skills: Vec<TemplateSkill>,
+}
+
+/// A skill a template task needs, at a level (1 learning … 4 expert).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct TemplateSkill {
+    pub skill_id: Uuid,
+    pub min_level: i16,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema)]
@@ -111,6 +128,18 @@ impl Structure {
                     .is_some_and(|h| !(0.0..=10_000.0).contains(&h))
                 {
                     return Err(bad(format!("{at}/estimateHours"), "0 to 10,000"));
+                }
+                if t.start_offset_days
+                    .is_some_and(|d| !(0..=3650).contains(&d))
+                    || t.duration_days.is_some_and(|d| !(0..=3650).contains(&d))
+                {
+                    return Err(bad(format!("{at}/startOffsetDays"), "0 to 3,650 days"));
+                }
+                if t.skills.len() > 20 || t.skills.iter().any(|s| !(1..=4).contains(&s.min_level)) {
+                    return Err(bad(
+                        format!("{at}/skills"),
+                        "up to 20 skills, levels 1 to 4",
+                    ));
                 }
                 keys.push(&t.key);
             }
@@ -334,6 +363,9 @@ mod tests {
             estimate_hours: Some(2.0),
             depends_on: deps.iter().map(|d| (*d).to_owned()).collect(),
             client_visible: false,
+            start_offset_days: None,
+            duration_days: None,
+            skills: Vec::new(),
         }
     }
 

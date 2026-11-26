@@ -490,6 +490,58 @@ export const STEPS: StepSpec[] = [
 		]
 	},
 	{
+		type: 'core.project.scope.decide',
+		label: 'Decide a scope change',
+		description:
+			'Record whether a project scope change is approved (adding its hours to the budget) or rejected.',
+		group: 'Actions',
+		module: 'projects',
+		template: {
+			with: {
+				scope_change_id: '{{ inputs.scopeChangeId }}',
+				decision: 'approved',
+				by: '{{ steps.client.output.by.name }}'
+			}
+		},
+		fields: [
+			{ path: 'with.scope_change_id', label: 'Scope change', kind: 'expression' },
+			{
+				path: 'with.decision',
+				label: 'Decision',
+				kind: 'expression',
+				hint: 'approved or rejected'
+			},
+			{ path: 'with.by', label: 'Decided by', kind: 'expression' },
+			{ path: 'with.comment', label: 'Comment', kind: 'expression' }
+		]
+	},
+	{
+		type: 'core.project.status',
+		label: 'Gather project status',
+		description: 'What happened on a project (or every active one) lately, for a status report.',
+		group: 'Actions',
+		module: 'projects',
+		template: { with: { days: 7 } },
+		fields: [
+			{ path: 'with.project_id', label: 'Project (empty: every active one)', kind: 'expression' },
+			{ path: 'with.days', label: 'Days back', kind: 'expression' }
+		]
+	},
+	{
+		type: 'core.project.report',
+		label: 'Save a status report',
+		description: 'Save a status report on a project, optionally shared with the client.',
+		group: 'Actions',
+		module: 'projects',
+		template: { with: { project_id: '{{ project.project_id }}', body: '' } },
+		fields: [
+			{ path: 'with.project_id', label: 'Project', kind: 'expression' },
+			{ path: 'with.body', label: 'Report (Markdown)', kind: 'expression' },
+			{ path: 'with.client_visible', label: 'Share with the client', kind: 'boolean' },
+			{ path: 'with.author', label: 'Author', kind: 'expression' }
+		]
+	},
+	{
 		type: 'core.report.send',
 		label: 'Email a report',
 		description:
