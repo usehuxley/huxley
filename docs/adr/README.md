@@ -62,3 +62,4 @@ Decisions that shape Huxley. Add a new ADR by copying `0000-template.md` with th
 | [056](0056-projects.md) | Project tasks are tickets; budgets burn from time on them | Accepted |
 | [057](0057-project-scope-and-views.md) | Scope changes are client-approved through a workflow; template workflows are filtered events | Accepted |
 | [058](0058-project-capacity.md) | Capacity is computed from schedules, appointments and task estimates | Accepted |
+| [059](0059-project-status-reports.md) | Status reports are drafted by a pack and shared by a person | Accepted |

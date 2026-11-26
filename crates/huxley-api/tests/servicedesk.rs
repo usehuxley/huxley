@@ -3667,3 +3667,61 @@ async fn capacity_spreads_task_estimates_and_flags_over_booking() {
     );
     assert_eq!(me["weeks"][1]["projectHours"], json!(0.0));
 }
+
+#[tokio::test]
+async fn status_reports_are_written_shared_and_shown_in_the_portal() {
+    let Some(s) = setup().await else { return };
+    onboarding_template(&s).await; // turns projects on
+    let project = s
+        .ok(
+            &s.owner,
+            "POST",
+            "/api/v1/projects",
+            Some(json!({ "orgId": s.acme, "name": "Acme reports", "startOn": "2026-12-01" })),
+        )
+        .await;
+    let url = format!(
+        "/api/v1/projects/{}/status-reports",
+        project["id"].as_str().unwrap()
+    );
+    let report = s
+        .ok(
+            &s.owner,
+            "POST",
+            &url,
+            Some(json!({ "body": "All good this week." })),
+        )
+        .await;
+    assert_eq!(
+        (&report["clientVisible"], &report["health"]),
+        (&json!(false), &json!("on_track"))
+    );
+    let portal = |s: &Setup| {
+        let pools = s.pools.app.clone();
+        let acme = s.acme;
+        async move {
+            let mut tx = begin_scoped(&pools, &OrgScope::System).await.unwrap();
+            let all = huxley_servicedesk::projects::for_portal(&mut tx, acme)
+                .await
+                .unwrap();
+            tx.commit().await.unwrap();
+            all.into_iter().find(|p| p.name == "Acme reports").unwrap()
+        }
+    };
+    assert!(portal(&s).await.latest_report.is_none(), "not shared yet");
+    let at = format!("{url}/{}", report["id"].as_str().unwrap());
+    s.ok(
+        &s.owner,
+        "PATCH",
+        &at,
+        Some(json!({ "clientVisible": true })),
+    )
+    .await;
+    assert_eq!(
+        portal(&s).await.latest_report.unwrap().body,
+        "All good this week."
+    );
+    let (status, _) = s.call(&s.owner, "DELETE", &at, None).await;
+    assert_eq!(status, StatusCode::NO_CONTENT);
+    assert!(portal(&s).await.latest_report.is_none());
+}

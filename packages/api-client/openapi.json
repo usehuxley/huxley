@@ -11988,6 +11988,120 @@
 				}
 			}
 		},
+		"/api/v1/projects/{id}/status-reports": {
+			"post": {
+				"tags": ["projects"],
+				"summary": "Writes a status report on a project (by you).",
+				"operationId": "create_project_report",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/NewStatusReport"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"201": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/StatusReport"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/projects/{id}/status-reports/{report}": {
+			"delete": {
+				"tags": ["projects"],
+				"operationId": "delete_project_report",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					},
+					{
+						"name": "report",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"responses": {
+					"204": {}
+				}
+			},
+			"patch": {
+				"tags": ["projects"],
+				"summary": "Shares a status report with the client in the portal, or stops.",
+				"operationId": "share_project_report",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					},
+					{
+						"name": "report",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/ReportSharing"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/StatusReport"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
 		"/api/v1/projects/{id}/tasks": {
 			"post": {
 				"tags": ["projects"],
@@ -27720,6 +27834,26 @@
 				},
 				"additionalProperties": false
 			},
+			"NewStatusReport": {
+				"type": "object",
+				"required": ["body"],
+				"properties": {
+					"body": {
+						"type": "string"
+					},
+					"clientVisible": {
+						"type": "boolean"
+					},
+					"periodEnd": {
+						"type": ["string", "null"]
+					},
+					"periodStart": {
+						"type": ["string", "null"],
+						"description": "`YYYY-MM-DD`."
+					}
+				},
+				"additionalProperties": false
+			},
 			"NewTask": {
 				"type": "object",
 				"required": ["title"],
@@ -29555,6 +29689,17 @@
 						"type": "string",
 						"format": "uuid"
 					},
+					"latestReport": {
+						"oneOf": [
+							{
+								"$ref": "#/components/schemas/StatusReport",
+								"description": "The latest status report shared with the client."
+							},
+							{
+								"type": "null"
+							}
+						]
+					},
 					"milestones": {
 						"type": "array",
 						"items": {
@@ -30091,6 +30236,7 @@
 					"milestones",
 					"tasks",
 					"scopeChanges",
+					"statusReports",
 					"version"
 				],
 				"properties": {
@@ -30172,6 +30318,13 @@
 					},
 					"status": {
 						"type": "string"
+					},
+					"statusReports": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/StatusReport"
+						},
+						"description": "The latest status reports, newest first."
 					},
 					"tasks": {
 						"type": "array",
@@ -31111,6 +31264,16 @@
 					"note": {
 						"type": ["string", "null"],
 						"description": "Needed when a reviewer reopens one: why."
+					}
+				},
+				"additionalProperties": false
+			},
+			"ReportSharing": {
+				"type": "object",
+				"required": ["clientVisible"],
+				"properties": {
+					"clientVisible": {
+						"type": "boolean"
 					}
 				},
 				"additionalProperties": false
@@ -32940,6 +33103,43 @@
 					}
 				},
 				"additionalProperties": false
+			},
+			"StatusReport": {
+				"type": "object",
+				"required": ["id", "projectId", "body", "health", "clientVisible", "author", "createdAt"],
+				"properties": {
+					"author": {
+						"type": "string"
+					},
+					"body": {
+						"type": "string",
+						"description": "Markdown."
+					},
+					"clientVisible": {
+						"type": "boolean"
+					},
+					"createdAt": {
+						"type": "string",
+						"format": "date-time"
+					},
+					"health": {
+						"type": "string"
+					},
+					"id": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"periodEnd": {
+						"type": ["string", "null"]
+					},
+					"periodStart": {
+						"type": ["string", "null"]
+					},
+					"projectId": {
+						"type": "string",
+						"format": "uuid"
+					}
+				}
 			},
 			"StepRunView": {
 				"type": "object",

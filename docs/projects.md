@@ -54,6 +54,12 @@ When the work grows (or shrinks), draft a **scope change** on the project: what 
 
 Install the **Project scope approvals** pack at the client (or above) to send submitted changes to the client's approvers in the portal. When they approve, the hours are added to the project's budget, and its thresholds are checked again. Change the pack's workflow to add a provider approval first, or to approve small changes automatically.
 
+## Status reports
+
+A project's **Status reports** card lists its reports, newest first. Managers can write one themselves (a line in `**bold**` is a heading, and lines starting with `- ` are a list), and can **share it with the client**, stop sharing it, or delete it.
+
+Install the **AI project status reports** pack to have them drafted for you. Every Monday at 07:00, for each active project, it gathers the last week (tasks done, hours, budget, milestones reached and coming up, overdue and waiting tasks, scope changes waiting for approval) and has your [AI provider](ai.md) draft a summary, highlights, risks and next steps. The draft is saved on the project, not shared, and the project's manager is told. Change the workflow to run on another day, or to email the report.
+
 ## Events
 
 | Event | When | Payload |
@@ -65,6 +71,7 @@ Install the **Project scope approvals** pack at the client (or above) to send su
 | `project.budget_threshold` | A threshold is reached | `name`, `threshold`, `percent`, `usedHours`, `budgetHours` |
 | `project.scope_change_submitted` | A scope change is submitted | `scopeChangeId`, `projectName`, `number`, `title`, `description`, `hours`, `amount`, `currency` |
 | `project.scope_change_approved`, `project.scope_change_rejected` | It's decided | `scopeChangeId`, `projectName`, `number`, `title`, `hours`, `amount`, `by`, `comment` |
+| `project.status_report` | A report is saved | `reportId`, `projectName`, `health`, `clientVisible`, `author` |
 
 Every project event also carries `projectId` and `templateId`.
 
@@ -72,4 +79,4 @@ The event's subject is the project, at the client company. Workflows decide what
 
 ## In the portal
 
-Client approvers and admins see **Projects** in the portal. It lists the company's projects marked for the portal (on by default, apart from cancelled ones), with their progress, the milestones marked for the client (reached or upcoming), the tasks marked for the client, and scope changes sent to them (waiting, approved or rejected). Hours used and the budget never show there.
+Client approvers and admins see **Projects** in the portal. It lists the company's projects marked for the portal (on by default, apart from cancelled ones), with their progress, the milestones marked for the client (reached or upcoming), the tasks marked for the client, scope changes sent to them (waiting, approved or rejected), and the latest status report shared with them. Hours used and the budget never show there.

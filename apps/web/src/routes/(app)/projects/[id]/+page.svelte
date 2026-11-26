@@ -5,6 +5,7 @@
 	import { BILLING, HEALTH, STATUSES, label } from '#lib/projects/labels.ts';
 	import Board from '#lib/projects/Board.svelte';
 	import ScopeChanges from '#lib/projects/ScopeChanges.svelte';
+	import StatusReports from '#lib/projects/StatusReports.svelte';
 	import Timeline from '#lib/projects/Timeline.svelte';
 	import type { PageProps } from './$types';
 
@@ -318,5 +319,6 @@
 		</div>
 	</Card>
 
+	<StatusReports reports={p.statusReports} canManage={data.canManage} />
 	<ScopeChanges changes={p.scopeChanges} canManage={data.canManage} />
 </div>

@@ -4486,6 +4486,40 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
+	'/api/v1/projects/{id}/status-reports': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/** Writes a status report on a project (by you). */
+		post: operations['create_project_report'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/projects/{id}/status-reports/{report}': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		post?: never;
+		delete: operations['delete_project_report'];
+		options?: never;
+		head?: never;
+		/** Shares a status report with the client in the portal, or stops. */
+		patch: operations['share_project_report'];
+		trace?: never;
+	};
 	'/api/v1/projects/{id}/tasks': {
 		parameters: {
 			query?: never;
@@ -10483,6 +10517,13 @@ export interface components {
 			} | null;
 			source: string;
 		};
+		NewStatusReport: {
+			body: string;
+			clientVisible?: boolean;
+			periodEnd?: string | null;
+			/** @description `YYYY-MM-DD`. */
+			periodStart?: string | null;
+		};
 		NewTask: {
 			/** Format: uuid */
 			assigneeUserId?: string | null;
@@ -11235,6 +11276,7 @@ export interface components {
 			endOn?: string | null;
 			/** Format: uuid */
 			id: string;
+			latestReport?: components['schemas']['StatusReport'] | null;
 			milestones: components['schemas']['Milestone'][];
 			name: string;
 			progress: components['schemas']['Progress'];
@@ -11470,6 +11512,8 @@ export interface components {
 			scopeChanges: components['schemas']['ScopeChange'][];
 			startOn: string;
 			status: string;
+			/** @description The latest status reports, newest first. */
+			statusReports: components['schemas']['StatusReport'][];
 			tasks: components['schemas']['ProjectTask'][];
 			/** Format: uuid */
 			templateId?: string | null;
@@ -11847,6 +11891,9 @@ export interface components {
 		ReopenTimesheet: {
 			/** @description Needed when a reviewer reopens one: why. */
 			note?: string | null;
+		};
+		ReportSharing: {
+			clientVisible: boolean;
 		};
 		Requirement: {
 			/**
@@ -12590,6 +12637,21 @@ export interface components {
 			 * @description The version you read.
 			 */
 			version: number;
+		};
+		StatusReport: {
+			author: string;
+			/** @description Markdown. */
+			body: string;
+			clientVisible: boolean;
+			/** Format: date-time */
+			createdAt: string;
+			health: string;
+			/** Format: uuid */
+			id: string;
+			periodEnd?: string | null;
+			periodStart?: string | null;
+			/** Format: uuid */
+			projectId: string;
 		};
 		/** @description The latest attempt of a step. */
 		StepRunView: {
@@ -23007,6 +23069,77 @@ export interface operations {
 				};
 				content: {
 					'application/json': components['schemas']['ScopeChange'];
+				};
+			};
+		};
+	};
+	create_project_report: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['NewStatusReport'];
+			};
+		};
+		responses: {
+			201: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['StatusReport'];
+				};
+			};
+		};
+	};
+	delete_project_report: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+				report: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			204: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content?: never;
+			};
+		};
+	};
+	share_project_report: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+				report: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['ReportSharing'];
+			};
+		};
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['StatusReport'];
 				};
 			};
 		};

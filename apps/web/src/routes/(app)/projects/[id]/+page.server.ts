@@ -165,6 +165,38 @@ export const actions: Actions = {
 			return fail(response.status, { message: problemMessage(problem, 'Could not assign it.') });
 		return { saved: true };
 	},
+	report: async (event) => {
+		const form = await event.request.formData();
+		const { error: problem, response } = await api(event).POST(
+			'/api/v1/projects/{id}/status-reports',
+			{
+				params: { path: { id: event.params.id } },
+				body: { body: formString(form, 'body'), clientVisible: form.get('clientVisible') === 'on' }
+			}
+		);
+		if (response.status !== 201)
+			return fail(response.status, {
+				message: problemMessage(problem, 'Could not save the report.')
+			});
+		return { saved: true };
+	},
+	shareReport: async (event) => {
+		const form = await event.request.formData();
+		const { response } = await api(event).PATCH('/api/v1/projects/{id}/status-reports/{report}', {
+			params: { path: { id: event.params.id, report: formString(form, 'report') } },
+			body: { clientVisible: formString(form, 'visible') === 'true' }
+		});
+		if (response.status !== 200)
+			return fail(response.status, { message: 'Could not change sharing.' });
+		return { saved: true };
+	},
+	deleteReport: async (event) => {
+		const form = await event.request.formData();
+		await api(event).DELETE('/api/v1/projects/{id}/status-reports/{report}', {
+			params: { path: { id: event.params.id, report: formString(form, 'report') } }
+		});
+		return { saved: true };
+	},
 	status: async (event) => {
 		const form = await event.request.formData();
 		const agreement = formString(form, 'agreementId');

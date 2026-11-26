@@ -20,6 +20,7 @@ pub mod portal;
 pub mod presence;
 pub mod problems;
 pub mod project_scope;
+pub mod project_status;
 pub mod project_templates;
 pub mod projects;
 pub mod queues;

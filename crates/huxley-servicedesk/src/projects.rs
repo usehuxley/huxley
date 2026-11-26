@@ -17,6 +17,7 @@ use utoipa::ToSchema;
 use uuid::Uuid;
 
 use crate::project_scope::{self, ScopeChange};
+use crate::project_status::{self, StatusReport};
 use crate::project_templates;
 use crate::tickets::{self, NewTicket};
 use crate::{DeskError, DeskResult};
@@ -218,6 +219,8 @@ pub struct Project {
     pub milestones: Vec<Milestone>,
     pub tasks: Vec<ProjectTask>,
     pub scope_changes: Vec<ScopeChange>,
+    /// The latest status reports, newest first.
+    pub status_reports: Vec<StatusReport>,
     pub version: i32,
 }
 
@@ -334,6 +337,7 @@ fn assemble(
     row: Row,
     (phases, milestones, tasks): (Vec<ProjectPhase>, Vec<Milestone>, Vec<ProjectTask>),
     scope_changes: Vec<ScopeChange>,
+    status_reports: Vec<StatusReport>,
 ) -> Project {
     let progress = Progress {
         done: i64::try_from(
@@ -378,6 +382,7 @@ fn assemble(
         milestones,
         tasks,
         scope_changes,
+        status_reports,
         version: row.version,
     }
 }
@@ -390,7 +395,8 @@ pub async fn get(conn: &mut PgConnection, id: Uuid) -> DeskResult<Project> {
         .ok_or(DeskError::NotFound)?;
     let parts = details(&mut *conn, id).await?;
     let scope = project_scope::list(&mut *conn, id).await?;
-    Ok(assemble(row, parts, scope))
+    let reports = project_status::list(&mut *conn, id, 5).await?;
+    Ok(assemble(row, parts, scope, reports))
 }
 
 /// Projects in the transaction's scope (optionally one company's), newest
@@ -406,7 +412,8 @@ pub async fn list(conn: &mut PgConnection, org_id: Option<Uuid>) -> DeskResult<V
     for row in rows {
         let parts = details(&mut *conn, row.id).await?;
         let scope = project_scope::list(&mut *conn, row.id).await?;
-        out.push(assemble(row, parts, scope));
+        let reports = project_status::list(&mut *conn, row.id, 1).await?;
+        out.push(assemble(row, parts, scope, reports));
     }
     Ok(out)
 }
@@ -1138,6 +1145,8 @@ pub struct PortalProject {
     pub tasks: Vec<PortalTask>,
     /// Scope changes sent to the client (not drafts or withdrawn ones).
     pub scope_changes: Vec<ScopeChange>,
+    /// The latest status report shared with the client.
+    pub latest_report: Option<StatusReport>,
 }
 
 #[derive(Debug, Clone, Serialize, ToSchema)]
@@ -1172,6 +1181,7 @@ pub async fn for_portal(conn: &mut PgConnection, org_id: Uuid) -> DeskResult<Vec
                 .into_iter()
                 .filter(|m| m.client_visible)
                 .collect(),
+            latest_report: p.status_reports.iter().find(|r| r.client_visible).cloned(),
             scope_changes: p
                 .scope_changes
                 .into_iter()

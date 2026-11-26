@@ -408,6 +408,8 @@ impl<'a> Walker<'a> {
             | Step::ReportSend(_)
             | Step::ChangeDecide(_)
             | Step::ScopeDecide(_)
+            | Step::ProjectStatus(_)
+            | Step::ProjectReport(_)
             | Step::AssetSync(_)
             | Step::AssetWarranty(_)
             | Step::TicketEmailReply(_)
@@ -876,6 +878,8 @@ fn with_block(step: &Step) -> Json {
         Step::ReportSend(s) => serde_json::to_value(&s.report),
         Step::ChangeDecide(s) => serde_json::to_value(&s.decide),
         Step::ScopeDecide(s) => serde_json::to_value(&s.decide),
+        Step::ProjectStatus(s) => serde_json::to_value(&s.status),
+        Step::ProjectReport(s) => serde_json::to_value(&s.report),
         Step::AssetSync(s) => serde_json::to_value(&s.sync),
         Step::AssetWarranty(s) => serde_json::to_value(&s.warranty),
         Step::TicketEmailReply(s) => serde_json::to_value(&s.reply),

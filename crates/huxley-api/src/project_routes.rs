@@ -35,6 +35,11 @@ pub fn routes() -> Router<AppState> {
         .route("/projects/{id}/tasks", post(add_task))
         .route("/projects/{id}/tasks/{ticket}", patch(update_task))
         .route("/projects/{id}/scope-changes", post(create_scope_change))
+        .route("/projects/{id}/status-reports", post(create_report))
+        .route(
+            "/projects/{id}/status-reports/{report}",
+            patch(share_report).delete(delete_report),
+        )
         .route(
             "/projects/{id}/scope-changes/{change}",
             put(update_scope_change),
@@ -517,4 +522,75 @@ pub async fn capacity(
         .map_err(map)?;
     tx.commit().await.map_err(db_err)?;
     Ok(Json(plan))
+}
+
+/// Writes a status report on a project (by you).
+#[utoipa::path(post, path = "/api/v1/projects/{id}/status-reports", operation_id = "create_project_report", tag = "projects",
+    params(("id" = Uuid, Path)), request_body = huxley_servicedesk::project_status::NewStatusReport,
+    responses((status = 201, body = huxley_servicedesk::project_status::StatusReport)))]
+pub async fn create_report(
+    State(state): State<AppState>,
+    authed: Authed,
+    Path(id): Path<Uuid>,
+    Json(body): Json<huxley_servicedesk::project_status::NewStatusReport>,
+) -> ApiResult<(
+    StatusCode,
+    Json<huxley_servicedesk::project_status::StatusReport>,
+)> {
+    let org = org_of(&state, "prj_projects", id).await?;
+    allowed(&state, &authed, org, permissions::PROJECT_MANAGE).await?;
+    let ctx = authed.user.ctx.clone();
+    let author = authed.user.auth.user.display_name.clone();
+    let made = system(&state, async |tx| {
+        huxley_servicedesk::project_status::save(tx, &ctx, id, &body, &author).await
+    })
+    .await?;
+    Ok((StatusCode::CREATED, Json(made)))
+}
+
+#[derive(Debug, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ReportSharing {
+    pub client_visible: bool,
+}
+
+/// Shares a status report with the client in the portal, or stops.
+#[utoipa::path(patch, path = "/api/v1/projects/{id}/status-reports/{report}", operation_id = "share_project_report", tag = "projects",
+    params(("id" = Uuid, Path), ("report" = Uuid, Path)), request_body = ReportSharing,
+    responses((status = 200, body = huxley_servicedesk::project_status::StatusReport)))]
+pub async fn share_report(
+    State(state): State<AppState>,
+    authed: Authed,
+    Path((id, report)): Path<(Uuid, Uuid)>,
+    Json(body): Json<ReportSharing>,
+) -> ApiResult<Json<huxley_servicedesk::project_status::StatusReport>> {
+    let org = org_of(&state, "prj_projects", id).await?;
+    allowed(&state, &authed, org, permissions::PROJECT_MANAGE).await?;
+    Ok(Json(
+        system(&state, async |tx| {
+            huxley_servicedesk::project_status::set_visible(tx, id, report, body.client_visible)
+                .await
+        })
+        .await?,
+    ))
+}
+
+#[utoipa::path(delete, path = "/api/v1/projects/{id}/status-reports/{report}", operation_id = "delete_project_report", tag = "projects",
+    params(("id" = Uuid, Path), ("report" = Uuid, Path)), responses((status = 204)))]
+pub async fn delete_report(
+    State(state): State<AppState>,
+    authed: Authed,
+    Path((id, report)): Path<(Uuid, Uuid)>,
+) -> ApiResult<StatusCode> {
+    let org = org_of(&state, "prj_projects", id).await?;
+    allowed(&state, &authed, org, permissions::PROJECT_MANAGE).await?;
+    if system(&state, async |tx| {
+        huxley_servicedesk::project_status::delete(tx, id, report).await
+    })
+    .await?
+    {
+        Ok(StatusCode::NO_CONTENT)
+    } else {
+        Err(ApiError::not_found())
+    }
 }
