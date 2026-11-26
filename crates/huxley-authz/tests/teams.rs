@@ -95,10 +95,10 @@ async fn members_get_the_teams_grants_until_they_leave() {
         &huxley_authz::org_path(&mut tx, client.id).await.unwrap()
     ));
 
-    teams::add_member(&mut tx, &ctx(), team.id, member)
+    teams::add_member(&mut tx, &ctx(), team.id, member, None)
         .await
         .unwrap();
-    teams::add_member(&mut tx, &ctx(), team.id, member)
+    teams::add_member(&mut tx, &ctx(), team.id, member, None)
         .await
         .unwrap(); // idempotent
     assert_eq!(teams::get(&mut tx, team.id).await.unwrap().member_count, 1);
@@ -224,7 +224,7 @@ async fn deleting_a_team_removes_its_assignments() {
     .await
     .unwrap();
     // Deleting the team removes its assignments.
-    teams::add_member(&mut tx, &ctx(), team.id, member)
+    teams::add_member(&mut tx, &ctx(), team.id, member, None)
         .await
         .unwrap();
     teams::delete(&mut tx, &ctx(), team.id).await.unwrap();

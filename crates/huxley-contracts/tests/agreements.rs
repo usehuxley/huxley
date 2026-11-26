@@ -197,9 +197,15 @@ async fn time_falls_under_the_right_agreement_and_draws_down_allowances() {
     assert_eq!(evaluated[0].agreement_id, Some(managed.id));
 
     // Usage for March, and the ticket's view, agree.
-    let march = coverage::usage(tx, managed.id, date!(2026 - 03 - 01), date!(2026 - 03 - 31))
-        .await
-        .unwrap();
+    let march = coverage::usage(
+        tx,
+        managed.id,
+        date!(2026 - 03 - 01),
+        date!(2026 - 03 - 31),
+        false,
+    )
+    .await
+    .unwrap();
     assert_eq!(march.entries.len(), 3);
     assert_eq!((march.covered_minutes, march.billable_minutes), (120, 45));
     assert_eq!(march.amount, Some(Decimal::from(75)));

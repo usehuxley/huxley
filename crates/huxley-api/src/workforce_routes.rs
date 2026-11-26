@@ -74,7 +74,7 @@ pub fn routes() -> Router<AppState> {
         )
 }
 
-fn map(e: WorkforceError) -> ApiError {
+pub(crate) fn map(e: WorkforceError) -> ApiError {
     match e {
         WorkforceError::NotFound => ApiError::not_found(),
         WorkforceError::Invalid { field, message } => {
@@ -88,7 +88,7 @@ fn map(e: WorkforceError) -> ApiError {
     }
 }
 
-async fn system<T>(
+pub(crate) async fn system<T>(
     state: &AppState,
     f: impl AsyncFnOnce(&mut sqlx::PgConnection) -> Result<T, WorkforceError>,
 ) -> ApiResult<T> {

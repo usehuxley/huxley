@@ -69,7 +69,7 @@
 
 	<Card
 		title="Members"
-		description="Members get the team's roles immediately, and lose them when removed."
+		description="Members get the team's roles immediately, and lose them when removed. Leads review members' timesheets."
 	>
 		<div class="flex flex-col gap-4">
 			{#if data.team.members.length === 0}
@@ -83,14 +83,31 @@
 								<span class="text-fg-muted">
 									{member.kind === 'service' ? 'Service account' : member.email}
 								</span>
+								{#if member.lead}<Badge tone="info">Lead</Badge>{/if}
 							</p>
 							{#if canManage}
-								<form method="POST" action="?/removeMember" use:enhance={notify}>
-									<input type="hidden" name="userId" value={member.userId} />
-									<Button type="submit" size="sm" aria-label="Remove {member.displayName}">
-										Remove
-									</Button>
-								</form>
+								<div class="flex gap-2">
+									<form method="POST" action="?/setLead" use:enhance={notify}>
+										<input type="hidden" name="userId" value={member.userId} />
+										<input type="hidden" name="lead" value={member.lead ? 'false' : 'true'} />
+										<Button
+											type="submit"
+											size="sm"
+											variant="ghost"
+											aria-label="{member.lead ? 'Stop' : 'Make'} {member.displayName} {member.lead
+												? 'leading'
+												: 'a lead'}"
+										>
+											{member.lead ? 'Not lead' : 'Make lead'}
+										</Button>
+									</form>
+									<form method="POST" action="?/removeMember" use:enhance={notify}>
+										<input type="hidden" name="userId" value={member.userId} />
+										<Button type="submit" size="sm" aria-label="Remove {member.displayName}">
+											Remove
+										</Button>
+									</form>
+								</div>
 							{/if}
 						</li>
 					{/each}

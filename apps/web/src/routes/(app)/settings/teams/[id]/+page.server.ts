@@ -52,6 +52,20 @@ export const actions: Actions = {
 		return { message: 'Member added.' };
 	},
 
+	setLead: async (event) => {
+		const form = await event.request.formData();
+		const lead = formString(form, 'lead') === 'true';
+		const { error: problem, response } = await api(event).PUT(
+			'/api/v1/teams/{id}/members/{user_id}',
+			{
+				params: { path: { id: event.params.id, user_id: formString(form, 'userId') } },
+				body: { lead }
+			}
+		);
+		if (response.status !== 204) return failed(response.status, problem, 'Could not change it.');
+		return { message: lead ? 'They now lead the team.' : 'They no longer lead the team.' };
+	},
+
 	removeMember: async (event) => {
 		const form = await event.request.formData();
 		const { error: problem, response } = await api(event).DELETE(

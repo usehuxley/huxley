@@ -7,6 +7,7 @@
 	import { formatDuration } from '#lib/tickets/duration.ts';
 	import { addWeeks, isoDay } from '#lib/time/week.ts';
 	import { clock, timers } from '#lib/time/timer.svelte.ts';
+	import TimesheetCard from '#lib/timesheets/TimesheetCard.svelte';
 	import type { PageProps } from './$types';
 
 	let { data, form }: PageProps = $props();
@@ -96,6 +97,14 @@
 			<!-- eslint-enable svelte/no-navigation-without-resolve -->
 		</nav>
 	</div>
+
+	{#if data.timesheet}
+		<TimesheetCard
+			sheet={data.timesheet}
+			query="week={data.monday}"
+			canSubmit={data.timesheet.periodStart <= today}
+		/>
+	{/if}
 
 	<Card
 		title="Log time"

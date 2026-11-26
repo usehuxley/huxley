@@ -24,7 +24,8 @@
 		Ticket,
 		UsersRound,
 		Workflow,
-		Package
+		Package,
+		CalendarCheck
 	} from '@lucide/svelte';
 	import { AppShell, Button, CommandPalette, type Command, type NavItem } from '@usehuxley/ui';
 	import OrgSwitcher from '#lib/orgs/OrgSwitcher.svelte';
@@ -76,6 +77,10 @@
 		...(data.user.activeModules.includes('workforce') &&
 		data.user.grantedPermissions.includes('workforce:read')
 			? [{ href: '/people', label: 'People', icon: UsersRound }]
+			: []),
+		...(data.user.activeModules.includes('workforce') &&
+		data.user.grantedPermissions.some((p) => p === 'timesheet:approve' || p === 'workforce:manage')
+			? [{ href: '/timesheets', label: 'Timesheets', icon: CalendarCheck }]
 			: []),
 		...(data.user.activeModules.includes('cmdb') &&
 		data.user.grantedPermissions.includes('asset:read')

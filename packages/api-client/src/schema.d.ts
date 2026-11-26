@@ -3928,7 +3928,6 @@ export interface paths {
 			cookie?: never;
 		};
 		get?: never;
-		/** Adds a user to a team (idempotent). They get the team's roles at once. */
 		put: operations['add_team_member'];
 		post?: never;
 		/** Removes a user from a team. They lose the team's roles at once. */
@@ -4409,6 +4408,151 @@ export interface paths {
 		post?: never;
 		/** Deletes one of your time entries. */
 		delete: operations['delete_time'];
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/timesheets': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** Timesheets you review, oldest first (submitted ones by default). */
+		get: operations['list_timesheets'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/timesheets/mine': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** Your timesheet for the period containing a day. */
+		get: operations['my_timesheet'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/timesheets/payroll.csv': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/**
+		 * Approved time (from approved timesheets) and approved time off, as CSV:
+		 *     person, email, date, kind, minutes, billable.
+		 */
+		get: operations['payroll_export'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/timesheets/settings': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get: operations['get_timesheet_settings'];
+		/**
+		 * How periods are cut, and whether billing previews use only approved
+		 *     time.
+		 */
+		put: operations['set_timesheet_settings'];
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/timesheets/submit': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/** Submits your timesheet for a period, for review. */
+		post: operations['submit_timesheet'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/timesheets/{id}': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** A timesheet: yours, or one you review. */
+		get: operations['get_timesheet'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/timesheets/{id}/decision': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/** Approves (locking its entries) or rejects a submitted timesheet. */
+		post: operations['decide_timesheet'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/timesheets/{id}/reopen': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/**
+		 * Reopens a timesheet: a reviewer reopens a submitted or approved one, or
+		 *     you withdraw one you submitted. Its entries can change again.
+		 */
+		post: operations['reopen_timesheet'];
+		delete?: never;
 		options?: never;
 		head?: never;
 		patch?: never;
@@ -5568,6 +5712,8 @@ export interface components {
 		AgreementUsage: {
 			/** @description What the billable time comes to (entries without a rate left out). */
 			amount?: string | null;
+			/** @description Only time on approved timesheets. */
+			approvedOnly: boolean;
 			/** Format: int32 */
 			billableMinutes: number;
 			/** Format: int32 */
@@ -7735,6 +7881,14 @@ export interface components {
 			/** @description Why there are no results, when something stopped the search. */
 			message?: string | null;
 		};
+		/**
+		 * @description Adds a user to a team (idempotent). They get the team's roles at once.
+		 *     Whether a member leads the team (left out: unchanged, or not for a new
+		 *     member).
+		 */
+		MemberBody: {
+			lead?: boolean | null;
+		};
 		MergeInto: {
 			/** @description …or by reference (e.g. `T-1042`). */
 			into?: string | null;
@@ -8495,6 +8649,10 @@ export interface components {
 		RenamePasskeyRequest: {
 			name: string;
 		};
+		ReopenTimesheet: {
+			/** @description Needed when a reviewer reopens one: why. */
+			note?: string | null;
+		};
 		Requirement: {
 			/**
 			 * Format: uuid
@@ -9162,6 +9320,11 @@ export interface components {
 			 */
 			orgId?: string | null;
 		};
+		SubmitTimesheetRequest: {
+			note?: string | null;
+			/** @description The period's first day (`YYYY-MM-DD`). */
+			periodStart: string;
+		};
 		/** @description What a submission started. */
 		Submitted: {
 			/** @description The runs it started, one per workflow with a trigger for the form. */
@@ -9303,6 +9466,8 @@ export interface components {
 			email: string;
 			/** @description `human` or `service`. */
 			kind: string;
+			/** @description Leads the team: reviews its members' timesheets. */
+			lead: boolean;
 			/** Format: uuid */
 			userId: string;
 		};
@@ -9690,6 +9855,102 @@ export interface components {
 			note?: string | null;
 			/** @description `YYYY-MM-DD`. */
 			startsOn: string;
+		};
+		/** @description A person's timesheet for a period, with its days and entries. */
+		Timesheet: {
+			/** Format: int32 */
+			billableMinutes: number;
+			days: components['schemas']['TimesheetDay'][];
+			entries: components['schemas']['TimesheetEntry'][];
+			/** Format: int32 */
+			expectedMinutes?: number | null;
+			history: components['schemas']['TimesheetEvent'][];
+			/**
+			 * Format: uuid
+			 * @description None until someone acts on the period.
+			 */
+			id?: string | null;
+			/**
+			 * Format: int32
+			 * @description Entries without notes.
+			 */
+			missingNotes: number;
+			periodEnd: string;
+			periodStart: string;
+			person: string;
+			/** @description `open`, `submitted`, `approved` or `rejected`. */
+			status: string;
+			/** Format: int32 */
+			totalMinutes: number;
+			/** Format: uuid */
+			userId: string;
+			/** Format: int32 */
+			version: number;
+		};
+		TimesheetDay: {
+			/** Format: int32 */
+			billableMinutes: number;
+			date: string;
+			/**
+			 * Format: int32
+			 * @description From their working schedule (none without one); 0 on time off.
+			 */
+			expectedMinutes?: number | null;
+			/** Format: int32 */
+			minutes: number;
+			/** @description Approved time off that day: its kind. */
+			timeOff?: string | null;
+		};
+		TimesheetDecision: {
+			approve: boolean;
+			/** @description Needed to reject: what needs changing. */
+			note?: string | null;
+		};
+		TimesheetEntry: {
+			billable: boolean;
+			/** Format: uuid */
+			id: string;
+			/** Format: int32 */
+			minutes: number;
+			notes: string;
+			/** Format: uuid */
+			ticketId?: string | null;
+			ticketReference?: string | null;
+			workTypeName: string;
+			workedOn: string;
+		};
+		TimesheetEvent: {
+			action: string;
+			/** Format: date-time */
+			at: string;
+			by?: string | null;
+			note: string;
+		};
+		TimesheetSettings: {
+			/** @description `YYYY-MM-DD`: a day periods start on. */
+			anchor: string;
+			/** @description Billing previews use only time on approved timesheets. */
+			billApprovedOnly: boolean;
+			/**
+			 * Format: int32
+			 * @description 7 (weekly) or 14 (every two weeks).
+			 */
+			periodDays: number;
+		};
+		/** @description A timesheet in a list. */
+		TimesheetSummary: {
+			/** Format: uuid */
+			id: string;
+			periodEnd: string;
+			periodStart: string;
+			person: string;
+			status: string;
+			/** Format: date-time */
+			submittedAt?: string | null;
+			/** Format: int32 */
+			totalMinutes: number;
+			/** Format: uuid */
+			userId: string;
 		};
 		/**
 		 * @description How a token-exchange login works: the request, which connection fields
@@ -10313,6 +10574,11 @@ export interface operations {
 				from?: string;
 				/** @description `YYYY-MM-DD` (default: the end of this month). */
 				to?: string;
+				/**
+				 * @description Only time on approved timesheets (default: the timesheet setting
+				 *     "bill only approved time").
+				 */
+				approvedOnly?: boolean;
 			};
 			header?: never;
 			path: {
@@ -18690,7 +18956,12 @@ export interface operations {
 			};
 			cookie?: never;
 		};
-		requestBody?: never;
+		/** @description Optional: { lead } */
+		requestBody?: {
+			content: {
+				'application/json': components['schemas']['MemberBody'] | null;
+			};
+		};
 		responses: {
 			204: {
 				headers: {
@@ -19827,6 +20098,242 @@ export interface operations {
 					[name: string]: unknown;
 				};
 				content?: never;
+			};
+		};
+	};
+	list_timesheets: {
+		parameters: {
+			query?: {
+				/** @description `submitted` (the default), `approved`, `rejected` or `open`. */
+				status?: string;
+			};
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['TimesheetSummary'][];
+				};
+			};
+		};
+	};
+	my_timesheet: {
+		parameters: {
+			query?: {
+				/** @description A day in the period (`YYYY-MM-DD`; default today). */
+				date?: string;
+			};
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['Timesheet'];
+				};
+			};
+		};
+	};
+	payroll_export: {
+		parameters: {
+			query: {
+				/** @description `YYYY-MM-DD`. */
+				from: string;
+				/** @description `YYYY-MM-DD`, at most 100 days after `from`. */
+				to: string;
+			};
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'text/csv': string;
+				};
+			};
+		};
+	};
+	get_timesheet_settings: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['TimesheetSettings'];
+				};
+			};
+		};
+	};
+	set_timesheet_settings: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['TimesheetSettings'];
+			};
+		};
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['TimesheetSettings'];
+				};
+			};
+		};
+	};
+	submit_timesheet: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['SubmitTimesheetRequest'];
+			};
+		};
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['Timesheet'];
+				};
+			};
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	get_timesheet: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['Timesheet'];
+				};
+			};
+			404: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	decide_timesheet: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['TimesheetDecision'];
+			};
+		};
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['Timesheet'];
+				};
+			};
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	reopen_timesheet: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['ReopenTimesheet'];
+			};
+		};
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['Timesheet'];
+				};
+			};
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
 			};
 		};
 	};
