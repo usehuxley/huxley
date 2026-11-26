@@ -2724,3 +2724,93 @@ async fn suggest_only(s: &Setup, hw_name: &str) {
             .unwrap();
     assert_eq!(kept, skills);
 }
+
+#[tokio::test]
+async fn tickets_show_their_insight_and_similar_tickets() {
+    let Some(s) = setup().await else { return };
+    let printer = s
+        .ticket(
+            &s.owner,
+            json!({ "orgId": s.acme, "title": "Printer offline" }),
+        )
+        .await;
+    let toner = s
+        .ticket(
+            &s.owner,
+            json!({ "orgId": s.acme, "title": "Toner light on" }),
+        )
+        .await;
+    let id = Uuid::parse_str(printer["id"].as_str().unwrap()).unwrap();
+    let insight = format!("{}/insight", url(&printer));
+    assert_eq!(s.ok(&s.owner, "GET", &insight, None).await, Value::Null);
+    // Refresh asks the pack, through an event.
+    let (status, _) = s
+        .call(&s.owner, "POST", &format!("{insight}/refresh"), None)
+        .await;
+    assert_eq!(status, StatusCode::ACCEPTED);
+    let asked: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM events_outbox WHERE event_type = 'ticket.insight_requested' AND subject_id = $1",
+    )
+    .bind(id)
+    .fetch_one(&s.pools.owner)
+    .await
+    .unwrap();
+    assert_eq!(asked, 1);
+    let mut tx = begin_scoped(&s.pools.app, &OrgScope::System).await.unwrap();
+    huxley_servicedesk::insights::record(
+        &mut tx,
+        id,
+        "The second-floor printer is offline.",
+        &json!({ "devices": ["PRN-2F"], "people": [] }),
+        Some("Power-cycle it."),
+    )
+    .await
+    .unwrap();
+    tx.commit().await.unwrap();
+    let shown = s.ok(&s.owner, "GET", &insight, None).await;
+    assert_eq!(
+        (&shown["summary"], &shown["nextStep"]),
+        (
+            &json!("The second-floor printer is offline."),
+            &json!("Power-cycle it.")
+        )
+    );
+    assert_eq!(shown["entities"]["devices"], json!(["PRN-2F"]));
+
+    // Similar tickets come from the ticket's own embedding.
+    let similar = format!("{}/similar", url(&printer));
+    let found = s.ok(&s.owner, "GET", &similar, None).await;
+    assert_eq!(found["available"], false, "not embedded yet: {found}");
+    let pgvector: bool =
+        sqlx::query_scalar("SELECT EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'vector')")
+            .fetch_one(&s.pools.owner)
+            .await
+            .unwrap();
+    if pgvector {
+        // A model of its own: other runs' embeddings don't count.
+        let model = format!("test-{}", Uuid::now_v7());
+        for (ticket, v) in [(&printer, [1.0f32, 0.0, 0.0]), (&toner, [0.9, 0.1, 0.0])] {
+            sqlx::query(
+                "INSERT INTO sd_ticket_embeddings (ticket_id, org_id, model, content_hash, embedding) VALUES ($1, $2, $4, 'x', $3)",
+            )
+            .bind(Uuid::parse_str(ticket["id"].as_str().unwrap()).unwrap())
+            .bind(s.acme)
+            .bind(v.to_vec())
+            .bind(&model)
+            .execute(&s.pools.owner)
+            .await
+            .unwrap();
+        }
+        let found = s.ok(&s.owner, "GET", &similar, None).await;
+        assert_eq!(
+            (&found["available"], &found["tickets"][0]["id"]),
+            (&json!(true), &toner["id"]),
+            "{found}"
+        );
+    } else {
+        assert!(
+            found["message"].as_str().unwrap().contains("pgvector"),
+            "{found}"
+        );
+    }
+}

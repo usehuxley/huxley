@@ -402,6 +402,7 @@ impl<'a> Walker<'a> {
             | Step::TriageApply(_)
             | Step::DispatchRecommend(_)
             | Step::WorkforceInsights(_)
+            | Step::TicketInsight(_)
             | Step::AssetSync(_)
             | Step::AssetWarranty(_)
             | Step::TicketEmailReply(_)
@@ -864,6 +865,7 @@ fn with_block(step: &Step) -> Json {
         Step::TriageApply(s) => serde_json::to_value(&s.apply),
         Step::DispatchRecommend(s) => serde_json::to_value(&s.recommend),
         Step::WorkforceInsights(s) => serde_json::to_value(&s.insights),
+        Step::TicketInsight(s) => serde_json::to_value(&s.insight),
         Step::AssetSync(s) => serde_json::to_value(&s.sync),
         Step::AssetWarranty(s) => serde_json::to_value(&s.warranty),
         Step::TicketEmailReply(s) => serde_json::to_value(&s.reply),

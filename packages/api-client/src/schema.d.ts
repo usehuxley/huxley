@@ -5268,6 +5268,46 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
+	'/api/v1/tickets/{id}/insight': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/**
+		 * The ticket's AI summary, entities and next step (the AI ticket insights
+		 *     pack writes it); `null` before there's one.
+		 */
+		get: operations['get_ticket_insight'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/tickets/{id}/insight/refresh': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/**
+		 * Asks for a fresh insight: raises `ticket.insight_requested`, which the
+		 *     AI ticket insights pack answers.
+		 */
+		post: operations['refresh_ticket_insight'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
 	'/api/v1/tickets/{id}/links': {
 		parameters: {
 			query?: never;
@@ -5416,6 +5456,26 @@ export interface paths {
 		};
 		/** A ticket's judged client messages (the AI sentiment pack), oldest first. */
 		get: operations['get_ticket_sentiment'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/tickets/{id}/similar': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/**
+		 * Tickets nearest in meaning to this one (by its own embedding: no AI
+		 *     call), among those you can read.
+		 */
+		get: operations['similar_tickets'];
 		put?: never;
 		post?: never;
 		delete?: never;
@@ -11238,6 +11298,16 @@ export interface components {
 			/** @description Send the browser here; the provider returns it to the callback. */
 			authorizeUrl: string;
 		};
+		SimilarTickets: {
+			/**
+			 * @description Whether similar tickets can be found (pgvector, and the ticket is
+			 *     embedded).
+			 */
+			available: boolean;
+			/** @description Why not, when not. */
+			message?: string | null;
+			tickets: components['schemas']['MeaningHit'][];
+		};
 		Site: {
 			addressLine1?: string | null;
 			addressLine2?: string | null;
@@ -11862,6 +11932,16 @@ export interface components {
 			 * @description The version you read.
 			 */
 			version: number;
+		};
+		TicketInsight: {
+			/** Format: date-time */
+			at: string;
+			/** @description `{ people, devices, applications, errors }`, each a list of names. */
+			entities: Record<string, never>;
+			nextStep?: string | null;
+			summary: string;
+			/** Format: uuid */
+			ticketId: string;
 		};
 		/** @description What the knowledge base has for a ticket. */
 		TicketKnowledge: {
@@ -23845,6 +23925,46 @@ export interface operations {
 			};
 		};
 	};
+	get_ticket_insight: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['TicketInsight'] | null;
+				};
+			};
+		};
+	};
+	refresh_ticket_insight: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			202: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content?: never;
+			};
+		};
+	};
 	list_links: {
 		parameters: {
 			query?: never;
@@ -24093,6 +24213,30 @@ export interface operations {
 				};
 				content: {
 					'application/json': components['schemas']['SentimentEntry'][];
+				};
+			};
+		};
+	};
+	similar_tickets: {
+		parameters: {
+			query?: {
+				/** @description How many (default 5, at most 20). */
+				limit?: number;
+			};
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['SimilarTickets'];
 				};
 			};
 		};

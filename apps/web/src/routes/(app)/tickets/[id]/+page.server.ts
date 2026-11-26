@@ -36,7 +36,9 @@ export const load: PageServerLoad = async (event) => {
 		coverage,
 		csat,
 		sentiment,
-		recommendations
+		recommendations,
+		insight,
+		similar
 	] = await Promise.all([
 		assignees(event),
 		client.GET('/api/v1/orgs/{id}/contacts', {
@@ -72,7 +74,11 @@ export const load: PageServerLoad = async (event) => {
 			? client.GET('/api/v1/tickets/{id}/recommendations', {
 					params: { path: { id: event.params.id }, query: { limit: 3 } }
 				})
-			: Promise.resolve({ data: undefined })
+			: Promise.resolve({ data: undefined }),
+		client.GET('/api/v1/tickets/{id}/insight', path),
+		client.GET('/api/v1/tickets/{id}/similar', {
+			params: { path: { id: event.params.id }, query: { limit: 5 } }
+		})
 	]);
 	return {
 		ticket: ticket.data,
@@ -93,7 +99,9 @@ export const load: PageServerLoad = async (event) => {
 		coverage: coverage.data ?? null,
 		csat: csat.data ?? null,
 		sentiment: sentiment.data ?? [],
-		recommendations: recommendations.data ?? []
+		recommendations: recommendations.data ?? [],
+		insight: insight.data ?? null,
+		similar: similar.data ?? null
 	};
 };
 
@@ -332,6 +340,14 @@ export const actions: Actions = {
 			{ title: formString(form, 'title'), description: formString(form, 'description') },
 			'edit'
 		);
+	},
+	insight: async (event) => {
+		const { response } = await api(event).POST('/api/v1/tickets/{id}/insight/refresh', {
+			params: { path: { id: event.params.id } }
+		});
+		if (response.status !== 202)
+			return fail(response.status, { insight: { message: 'Could not ask for it.' } });
+		return { insight: { asked: true } };
 	},
 	assign: async (event) => {
 		const form = await event.request.formData();

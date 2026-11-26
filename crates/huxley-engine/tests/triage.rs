@@ -15,9 +15,12 @@ use uuid::Uuid;
 
 const TRIAGE: &str =
     include_str!("../../huxley-packs/builtin/ai-triage/workflows/triage-ticket.yaml");
+const SUMMARIZE: &str =
+    include_str!("../../huxley-packs/builtin/ai-ticket-insights/workflows/summarize-ticket.yaml");
 
-/// Answers like Anthropic's Messages API: the Network queue, p2, and the
-/// Networking skill, picked from the schema's enums.
+/// Answers like Anthropic's Messages API: for triage, the Network queue, p2,
+/// and the Networking skill, picked from the schema's enums; for insights,
+/// a summary with entities.
 async fn mock_anthropic() -> u16 {
     let app = axum::Router::new().route(
         "/v1/messages",
@@ -32,12 +35,20 @@ async fn mock_anthropic() -> u16 {
                     .cloned()
                     .unwrap_or(Json::Null)
             };
-            let answer = json!({
-                "queue": pick(&props["queue"]["enum"], "Network"),
-                "priority": "p2",
-                "skills": [pick(&props["skills"]["items"]["enum"], "Networking")],
-                "reason": "The VPN is down for one person",
-            });
+            let answer = if props["summary"].is_object() {
+                json!({
+                    "summary": "One person's VPN won't connect since this morning.",
+                    "people": ["Ada", "ada"], "devices": ["LAPTOP-42"], "applications": ["GlobalProtect"],
+                    "errors": ["Gateway unreachable"], "next_step": "Check the VPN gateway's certificate.",
+                })
+            } else {
+                json!({
+                    "queue": pick(&props["queue"]["enum"], "Network"),
+                    "priority": "p2",
+                    "skills": [pick(&props["skills"]["items"]["enum"], "Networking")],
+                    "reason": "The VPN is down for one person",
+                })
+            };
             AxumJson(json!({ "model": body["model"], "stop_reason": "end_turn",
                              "content": [{ "type": "text", "text": answer.to_string() }],
                              "usage": { "input_tokens": 40, "output_tokens": 10 } }))
@@ -187,7 +198,58 @@ async fn run_triage(
     provider: Uuid,
     ticket: Uuid,
 ) -> (RunStatus, Option<Json>) {
-    let document = serde_json::to_value(huxley_hwf::parse_yaml(TRIAGE).unwrap()).unwrap();
+    run_pack(engine, pools, provider, ticket, TRIAGE, "ticket.created").await
+}
+
+#[tokio::test]
+async fn a_ticket_gets_a_summary_with_its_entities() {
+    let Some(db) = isolated("insights").await else {
+        return;
+    };
+    let pools = db.pools.clone();
+    let (provider, _, _, ticket) = world(&pools).await;
+    let engine = engine_with_ai(&pools, provider).await;
+    let (status, error) = run_pack(
+        &engine,
+        &pools,
+        provider,
+        ticket,
+        SUMMARIZE,
+        "ticket.insight_requested",
+    )
+    .await;
+    assert_eq!(status, RunStatus::Succeeded, "{error:?}");
+    let (summary, entities, next): (String, Json, Option<String>) = sqlx::query_as(
+        "SELECT summary, entities, next_step FROM sd_ticket_insights WHERE ticket_id = $1",
+    )
+    .bind(ticket)
+    .fetch_one(&pools.owner)
+    .await
+    .unwrap();
+    assert_eq!(
+        summary,
+        "One person's VPN won't connect since this morning."
+    );
+    assert_eq!(
+        entities,
+        json!({ "people": ["Ada"], "devices": ["LAPTOP-42"], "applications": ["GlobalProtect"], "errors": ["Gateway unreachable"] })
+    );
+    assert_eq!(
+        next.as_deref(),
+        Some("Check the VPN gateway's certificate.")
+    );
+}
+
+/// Runs a pack workflow as `event` about `ticket` would, until it finishes.
+async fn run_pack(
+    engine: &Engine,
+    pools: &huxley_db::testing::TestPools,
+    provider: Uuid,
+    ticket: Uuid,
+    yaml: &str,
+    event: &str,
+) -> (RunStatus, Option<Json>) {
+    let document = serde_json::to_value(huxley_hwf::parse_yaml(yaml).unwrap()).unwrap();
     let mut tx = begin_scoped(&pools.app, &OrgScope::System).await.unwrap();
     let run = engine
         .start_run(
@@ -198,7 +260,7 @@ async fn run_triage(
                 version: None,
                 document: Some(document),
                 trigger_type: "event".into(),
-                trigger: json!({ "event_type": "ticket.created", "subject_type": "ticket", "subject_id": ticket }),
+                trigger: json!({ "event_type": event, "subject_type": "ticket", "subject_id": ticket }),
                 inputs: json!({ "reference": "T-1", "actorId": null }),
                 actor_id: None,
             },

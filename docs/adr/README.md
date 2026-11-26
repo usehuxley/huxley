@@ -53,3 +53,4 @@ Decisions that shape Huxley. Add a new ADR by copying `0000-template.md` with th
 | [047](0047-ai-triage.md) | AI triage is measured by running its own workflow on labeled samples | Accepted |
 | [048](0048-dispatch-recommendations.md) | Dispatch recommendations are a transparent score, not a model's guess | Accepted |
 | [049](0049-skill-gaps.md) | Skill gaps are computed from requirements, not guessed | Accepted |
+| [050](0050-ticket-insights.md) | Ticket insights: an AI summary by workflow, similar tickets by embedding | Accepted |
