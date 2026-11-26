@@ -44,3 +44,4 @@ Decisions that shape Huxley. Add a new ADR by copying `0000-template.md` with th
 | [038](0038-email-intake.md) | Email intake: mailboxes, stored messages, and email to ticket as a step | Accepted |
 | [039](0039-agreement-coverage.md) | Agreements evaluate time on demand, one agreement per entry | Accepted |
 | [040](0040-portal-realm.md) | The client portal is a separate realm: its own accounts, sessions and API | Accepted |
+| [041](0041-semantic-data-layer.md) | A semantic data layer: a catalog of sources and a query spec compiled to SQL | Accepted |

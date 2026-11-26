@@ -1,0 +1,27 @@
+[package]
+name = "huxley-analytics"
+description = "The semantic data layer for Huxley: a catalog of data sources and a structured query spec compiled to SQL"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[dependencies]
+huxley-db.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sqlx.workspace = true
+thiserror.workspace = true
+utoipa.workspace = true
+uuid.workspace = true
+
+[dev-dependencies]
+huxley-core.workspace = true
+huxley-db = { workspace = true, features = ["testing"] }
+huxley-orgs.workspace = true
+tokio.workspace = true
+
+[lints]
+workspace = true

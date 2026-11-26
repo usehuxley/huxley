@@ -63,6 +63,7 @@ pub fn router(state: AppState) -> Router {
         .merge(crate::agreement_routes::routes())
         .merge(crate::portal_access_routes::routes())
         .merge(crate::portal_sso_routes::staff_routes())
+        .merge(crate::analytics_routes::routes())
         .nest("/workforce", workforce_routes::routes())
         .nest("/timesheets", crate::timesheet_routes::routes())
         .nest("/kb", kb_routes::routes())

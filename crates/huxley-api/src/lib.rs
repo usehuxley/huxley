@@ -6,6 +6,7 @@
 
 pub mod agreement_routes;
 mod ai_routes;
+pub mod analytics_routes;
 mod approval_routes;
 mod assistant;
 mod assistant_routes;
@@ -133,6 +134,10 @@ pub struct AppState {
     pub trusted_pack_keys: Arc<Vec<String>>,
     /// The datasets SQL console's login (`datasets.console_url`), if set.
     pub datasets_console: Option<PgPool>,
+    /// Reporting queries' read replica, if any (else `db`).
+    pub read_db: Option<PgPool>,
+    /// Recent reporting results (ADR-041).
+    pub analytics: Arc<huxley_analytics::Cache>,
     pub config: Arc<ApiConfig>,
     pub login_limiter: Arc<RateLimiter>,
     /// Public form links, per client address.
@@ -168,6 +173,8 @@ impl AppState {
             runner_gateway_url: None,
             trusted_pack_keys: Arc::new(Vec::new()),
             datasets_console: None,
+            read_db: None,
+            analytics: Arc::new(huxley_analytics::Cache::default()),
             auth,
             crypto,
             config: Arc::new(config),

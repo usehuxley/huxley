@@ -639,6 +639,44 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
+	'/api/v1/analytics/query': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/**
+		 * Runs a query: measures by dimensions over a source, filtered. Numbers
+		 *     cover only the organizations where you can read the source. Results are
+		 *     reused for up to a minute.
+		 */
+		post: operations['run_analytics_query'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/analytics/sources': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** The data sources you can query, with their fields. */
+		get: operations['list_analytics_sources'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
 	'/api/v1/appointments/{id}': {
 		parameters: {
 			query?: never;
@@ -6223,6 +6261,11 @@ export interface components {
 			/** Format: uuid */
 			workflowId: string;
 		};
+		/**
+		 * @description What to aggregate.
+		 * @enum {string}
+		 */
+		Aggregate: 'count' | 'count_distinct' | 'sum' | 'avg' | 'min' | 'max';
 		Agreement: {
 			/** @description Coverage: tickets about assets of these types (none: any ticket). */
 			assetTypeIds: string[];
@@ -6442,6 +6485,44 @@ export interface components {
 			orgId: string;
 			/** Format: date-time */
 			updatedAt: string;
+		};
+		AnalyticsCatalog: {
+			/** @description What `within` filters accept, e.g. `last_30_days`. */
+			ranges: string[];
+			sources: components['schemas']['AnalyticsSource'][];
+		};
+		/** @description A result column. */
+		AnalyticsColumn: {
+			key: string;
+			kind: components['schemas']['Kind'];
+			label: string;
+		};
+		AnalyticsField: {
+			key: string;
+			kind: components['schemas']['Kind'];
+			label: string;
+		};
+		/** @description A query's answer. */
+		AnalyticsResult: {
+			/** @description Served from the cache (at most a minute old). */
+			cached: boolean;
+			columns: components['schemas']['AnalyticsColumn'][];
+			/** @description One array per row, in column order. */
+			rows: unknown[][];
+			/** @description More rows matched than the limit. */
+			truncated: boolean;
+		};
+		AnalyticsSource: {
+			description: string;
+			fields: components['schemas']['AnalyticsField'][];
+			key: string;
+			label: string;
+			/** @description The module it belongs to, if any. */
+			module?: string | null;
+			/** @description The permission that reads it. */
+			permission: string;
+			/** @description The time field most queries bucket by. */
+			timeField: string;
 		};
 		/** @description An RFC 9457 problem details response. */
 		ApiError: {
@@ -7767,6 +7848,12 @@ export interface components {
 			/** @description e.g. `spec.steps[2].then[0].id` */
 			path: string;
 		};
+		Dimension: {
+			field: string;
+			granularity?: components['schemas']['Granularity'] | null;
+		};
+		/** @enum {string} */
+		Direction: 'asc' | 'desc';
 		/** @description A received message, as kept. */
 		Email: {
 			/** @description `[{filename, contentType, size, inline}]` */
@@ -7910,6 +7997,11 @@ export interface components {
 		FieldValue: components['schemas']['FieldDef'] & {
 			value: Record<string, never>;
 		};
+		Filter: {
+			field: string;
+			op: components['schemas']['Op'];
+			value?: components['schemas']['Value'];
+		};
 		FinishRegistrationRequest: {
 			/** Format: uuid */
 			ceremony: string;
@@ -8007,6 +8099,11 @@ export interface components {
 			/** @description Set when the grant comes through a team. */
 			teamName?: string | null;
 		};
+		/**
+		 * @description A time bucket for a date or time dimension.
+		 * @enum {string}
+		 */
+		Granularity: 'hour' | 'day' | 'week' | 'month' | 'quarter' | 'year';
 		/** @description Where a Microsoft 365 mailbox fetches from, through Microsoft Graph. */
 		GraphSettings: {
 			/**
@@ -8336,6 +8433,12 @@ export interface components {
 			status: string;
 			title: string;
 		};
+		/**
+		 * @description What a field holds, which decides the operators, measures and time
+		 *     buckets it allows.
+		 * @enum {string}
+		 */
+		Kind: 'text' | 'number' | 'bool' | 'date' | 'time';
 		/** @enum {string} */
 		Language: 'pwsh' | 'python' | 'javascript';
 		LinkArticle: {
@@ -8549,6 +8652,11 @@ export interface components {
 			hits: components['schemas']['MeaningHit'][];
 			/** @description Why there are no results, when something stopped the search. */
 			message?: string | null;
+		};
+		Measure: {
+			/** @description The field (not for `count`). */
+			field?: string | null;
+			fn: components['schemas']['Aggregate'];
 		};
 		/**
 		 * @description Adds a user to a team (idempotent). They get the team's roles at once.
@@ -8823,6 +8931,21 @@ export interface components {
 			/** Format: int64 */
 			unreadCount: number;
 		};
+		/** @enum {string} */
+		Op:
+			| 'eq'
+			| 'neq'
+			| 'in'
+			| 'not_in'
+			| 'gt'
+			| 'gte'
+			| 'lt'
+			| 'lte'
+			| 'between'
+			| 'contains'
+			| 'is_null'
+			| 'not_null'
+			| 'within';
 		/**
 		 * @description `provider`: the owning company, an MSP brand, or a division. `client`: a
 		 *     customer of a provider, or a site/sub-org of one.
@@ -9560,6 +9683,26 @@ export interface components {
 			/** Format: uuid */
 			orgId?: string | null;
 		};
+		/** @description A query: what to count or add up, by what, for which records. */
+		QuerySpec: {
+			dimensions?: components['schemas']['Dimension'][];
+			filters?: components['schemas']['Filter'][];
+			/**
+			 * Format: int32
+			 * @description Rows to return (default 100, at most 1,000).
+			 */
+			limit?: number | null;
+			measures?: components['schemas']['Measure'][];
+			/**
+			 * Format: uuid
+			 * @description Only this organization and those below it.
+			 */
+			orgId?: string | null;
+			sort?: components['schemas']['Sort'][];
+			source: string;
+			/** @description For time buckets and named ranges (default `UTC`). */
+			timezone?: string | null;
+		};
 		Queue: {
 			/** Format: date-time */
 			archivedAt?: string | null;
@@ -10211,6 +10354,14 @@ export interface components {
 			security?: string | null;
 			/** @description Default: the IMAP username. */
 			username?: string | null;
+		};
+		Sort: {
+			/**
+			 * @description A column's key: a dimension's field, or a measure's key (`count`,
+			 *     `sum_hours`…).
+			 */
+			by: string;
+			dir?: components['schemas']['Direction'];
 		};
 		SqlRequest: {
 			/** @description One `SELECT` (or `WITH … SELECT`) over the `datasets` schema. */
@@ -12535,6 +12686,64 @@ export interface operations {
 				};
 				content: {
 					'application/json': components['schemas']['AiProviderTest'];
+				};
+			};
+		};
+	};
+	run_analytics_query: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['QuerySpec'];
+			};
+		};
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['AnalyticsResult'];
+				};
+			};
+			403: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	list_analytics_sources: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['AnalyticsCatalog'];
 				};
 			};
 		};
