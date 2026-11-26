@@ -65,6 +65,7 @@ pub fn router(state: AppState) -> Router {
         .merge(crate::portal_sso_routes::staff_routes())
         .merge(crate::analytics_routes::routes())
         .merge(crate::dashboard_routes::routes())
+        .merge(crate::csat_routes::staff_routes())
         .nest("/workforce", workforce_routes::routes())
         .nest("/timesheets", crate::timesheet_routes::routes())
         .nest("/kb", kb_routes::routes())
@@ -153,6 +154,7 @@ fn portal_api() -> Router<AppState> {
         .merge(crate::portal_approval_routes::routes())
         .merge(crate::portal_people_routes::routes())
         .merge(crate::portal_dashboard_routes::routes())
+        .merge(crate::csat_routes::portal_routes())
         .layer(middleware::from_fn(csrf::require_header))
 }
 

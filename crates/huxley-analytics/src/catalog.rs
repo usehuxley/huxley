@@ -254,11 +254,47 @@ pub const RUNS: Source = Source {
     ]),
 };
 
+pub const CSAT: Source = Source {
+    key: Cow::Borrowed("csat"),
+    label: Cow::Borrowed("Satisfaction surveys"),
+    description: Cow::Borrowed(
+        "Surveys sent when tickets were resolved, and their answers: ratings, comments, who handled the ticket.",
+    ),
+    module: Some("cx"),
+    permission: "ticket:read",
+    time_field: Cow::Borrowed("sent_at"),
+    from: Cow::Borrowed(
+        "cx_surveys v JOIN organizations o ON o.id = v.org_id JOIN sd_tickets t ON t.id = v.ticket_id \
+         LEFT JOIN users u ON u.id = v.assignee_user_id LEFT JOIN sd_queues q ON q.id = t.queue_id",
+    ),
+    fields: Cow::Borrowed(&[
+        CLIENT,
+        f("technician", "Technician", Kind::Text, "u.display_name"),
+        f("queue", "Queue", Kind::Text, "q.name"),
+        f(
+            "answered",
+            "Answered",
+            Kind::Bool,
+            "(v.responded_at IS NOT NULL)",
+        ),
+        f("rating", "Rating", Kind::Number, "v.rating"),
+        f(
+            "satisfaction",
+            "Satisfaction %",
+            Kind::Number,
+            "(CASE WHEN v.rating IS NULL THEN NULL WHEN (v.scale = 'thumbs' AND v.rating = 5) OR (v.scale = 'five' AND v.rating >= 4) THEN 100 ELSE 0 END)",
+        ),
+        f("channel", "Answered by", Kind::Text, "v.channel"),
+        f("sent_at", "Sent", Kind::Time, "v.sent_at"),
+        f("responded_at", "Answered", Kind::Time, "v.responded_at"),
+    ]),
+};
+
 /// Dataset sources' keys: `dataset:<dataset key>`.
 pub const DATASET_PREFIX: &str = "dataset:";
 
 /// Every source, in display order.
-pub const SOURCES: &[Source] = &[TICKETS, TIME_ENTRIES, ASSETS, RUNS];
+pub const SOURCES: &[Source] = &[TICKETS, TIME_ENTRIES, ASSETS, RUNS, CSAT];
 
 pub fn source(key: &str) -> Option<&'static Source> {
     SOURCES.iter().find(|s| s.key == key)

@@ -400,6 +400,9 @@ pub enum Step {
     /// Find timesheets to remind people about (the `workforce` module).
     #[serde(rename = "core.timesheet.check")]
     TimesheetCheck(TimesheetCheckStep),
+    /// Ask a resolved ticket's requester how it went (the `cx` module).
+    #[serde(rename = "core.csat.survey")]
+    CsatSurvey(CsatSurveyStep),
     /// Run a dataset → asset mapping rule (the `cmdb` module).
     #[serde(rename = "core.asset.sync")]
     AssetSync(AssetSyncStep),
@@ -726,6 +729,11 @@ step!(TimesheetCheckStep {
     pub check: TimesheetCheck,
 });
 
+step!(CsatSurveyStep {
+    #[serde(rename = "with")]
+    pub survey: CsatSurvey,
+});
+
 step!(AssetSyncStep {
     #[serde(rename = "with")]
     pub sync: AssetSync,
@@ -806,6 +814,7 @@ impl Step {
             TicketEmbed,
             KbEmbed,
             TimesheetCheck,
+            CsatSurvey,
             AssetSync,
             AssetWarranty,
             TicketEmailReply,
@@ -857,6 +866,7 @@ impl Step {
             Self::TicketEmbed(_) => "core.ticket.embed",
             Self::KbEmbed(_) => "core.kb.embed",
             Self::TimesheetCheck(_) => "core.timesheet.check",
+            Self::CsatSurvey(_) => "core.csat.survey",
             Self::AssetSync(_) => "core.asset.sync",
             Self::AssetWarranty(_) => "core.asset.set_warranty",
             Self::TicketCreate(_) => "core.ticket.create",
@@ -1290,6 +1300,20 @@ pub struct TimesheetCheck {
     pub days_late: Option<Value>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub date: Option<Value>,
+}
+
+/// A satisfaction survey (`core.csat.survey`) for a resolved ticket: unless
+/// its company opted out, it has no requester, they were asked about it in
+/// the last week, or sampling leaves it out, the requester is asked (by
+/// email with one-click rating links when email and the portal's address
+/// are set up, and in the portal). Output: `{ sent, skipped, survey,
+/// emailed }`, where `skipped` says why not (`opted_out`, `no_requester`,
+/// `already_asked`, `sampled_out`, `not_resolved`).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct CsatSurvey {
+    /// The ticket's id.
+    pub ticket: Value,
 }
 
 /// Mapping rules to run (`core.asset.sync`): a dataset's rows become

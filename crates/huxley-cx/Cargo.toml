@@ -1,0 +1,31 @@
+[package]
+name = "huxley-cx"
+description = "The customer experience module for Huxley: CSAT surveys (NPS and client health to follow)"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[dependencies]
+huxley-auth.workspace = true
+huxley-core.workspace = true
+huxley-db.workspace = true
+huxley-orgs.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sqlx.workspace = true
+thiserror.workspace = true
+time.workspace = true
+utoipa.workspace = true
+uuid.workspace = true
+
+[dev-dependencies]
+huxley-crm.workspace = true
+huxley-db = { workspace = true, features = ["testing"] }
+huxley-servicedesk.workspace = true
+tokio.workspace = true
+
+[lints]
+workspace = true

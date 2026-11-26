@@ -118,6 +118,21 @@
 										]}
 										disabled={!editable}
 									/>
+								{:else if s.kind === 'percent'}
+									<span class="flex items-center gap-1">
+										<Input
+											{id}
+											name="value"
+											type="number"
+											min="0"
+											max="100"
+											step="1"
+											value={s.value ?? ''}
+											disabled={!editable}
+											class="w-24"
+										/>
+										<span class="text-sm text-fg-muted">%</span>
+									</span>
 								{:else if s.kind === 'hostname'}
 									<Input
 										{id}

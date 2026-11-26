@@ -392,6 +392,7 @@ impl<'a> Walker<'a> {
             | Step::TicketEmbed(_)
             | Step::KbEmbed(_)
             | Step::TimesheetCheck(_)
+            | Step::CsatSurvey(_)
             | Step::AssetSync(_)
             | Step::AssetWarranty(_)
             | Step::TicketEmailReply(_)
@@ -846,6 +847,7 @@ fn with_block(step: &Step) -> Json {
         Step::TicketEmbed(s) => serde_json::to_value(&s.embed),
         Step::KbEmbed(s) => serde_json::to_value(&s.embed),
         Step::TimesheetCheck(s) => serde_json::to_value(&s.check),
+        Step::CsatSurvey(s) => serde_json::to_value(&s.survey),
         Step::AssetSync(s) => serde_json::to_value(&s.sync),
         Step::AssetWarranty(s) => serde_json::to_value(&s.warranty),
         Step::TicketEmailReply(s) => serde_json::to_value(&s.reply),

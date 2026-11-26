@@ -15,6 +15,7 @@ pub mod approval;
 mod callback;
 mod cmdb;
 mod crm;
+mod csat;
 mod dataset;
 mod desk;
 mod dispatch;
@@ -46,6 +47,7 @@ use std::sync::Arc;
 use huxley_crypto::{Crypto, CryptoError};
 use huxley_db::DbError;
 use sqlx::PgPool;
+use uuid::Uuid;
 
 pub use callback::CallbackRequest;
 pub use egress::{Blocked, EgressConfig, allowed_addrs};
@@ -117,6 +119,26 @@ impl Engine {
             mailer: None,
             portal_url: None,
         }
+    }
+
+    /// The client portal's address for `org_id`'s contacts: its portal
+    /// domain (set there or above), else `http.portal_public_url`.
+    pub(crate) async fn portal_base(
+        &self,
+        conn: &mut sqlx::PgConnection,
+        org_id: Uuid,
+    ) -> EngineResult<Option<String>> {
+        let domain =
+            huxley_orgs::settings::value(conn, org_id, huxley_orgs::settings::PORTAL_DOMAIN)
+                .await
+                .map_err(|e| EngineError::Document(e.to_string()))?;
+        Ok(match domain {
+            Some(d) if d == "localhost" || d.starts_with("localhost:") => {
+                Some(format!("http://{d}"))
+            }
+            Some(d) => Some(format!("https://{d}")),
+            None => self.portal_url.clone(),
+        })
     }
 
     /// Sets the client portal's address (`http.portal_public_url`).

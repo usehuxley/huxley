@@ -3,6 +3,8 @@
 	import { resolve } from '$app/paths';
 	import { Badge, Button, Card, Field } from '@usehuxley/ui';
 	import { statusTone, when } from '#lib/tickets/status.ts';
+	import RatingForm from '#lib/csat/RatingForm.svelte';
+	import { ratingText } from '#lib/csat/choices.ts';
 	import type { PageProps } from './$types';
 
 	let { data, form }: PageProps = $props();
@@ -29,6 +31,25 @@
 		<p class="rounded-md border border-border bg-surface px-4 py-3 text-sm text-fg" role="status">
 			Thanks: your ticket is raised. We’ll reply here and by email.
 		</p>
+	{/if}
+
+	{#if t.survey}
+		<Card title="Your rating">
+			{#if t.survey.rating}
+				<p class="text-fg">
+					{ratingText(t.survey.scale, t.survey.rating)}{form && 'rated' in form
+						? '. Thanks for letting us know.'
+						: ''}
+				</p>
+				{#if t.survey.comment}<p class="mt-1 text-sm text-fg-muted">“{t.survey.comment}”</p>{/if}
+			{:else if t.survey.open}
+				<RatingForm
+					scale={t.survey.scale}
+					action="?/rate"
+					message={form && 'rateMessage' in form ? form.rateMessage : null}
+				/>
+			{/if}
+		</Card>
 	{/if}
 
 	{#if t.description}

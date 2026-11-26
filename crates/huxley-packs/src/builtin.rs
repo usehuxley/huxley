@@ -57,6 +57,19 @@ const SOURCES: &[Source] = &[
         ],
     },
     Source {
+        manifest: include_str!("../builtin/csat/pack.yaml"),
+        files: &[
+            (
+                "workflows/csat-survey.yaml",
+                include_str!("../builtin/csat/workflows/csat-survey.yaml"),
+            ),
+            (
+                "workflows/csat-low-rating.yaml",
+                include_str!("../builtin/csat/workflows/csat-low-rating.yaml"),
+            ),
+        ],
+    },
+    Source {
         manifest: include_str!("../builtin/knowledge-search/pack.yaml"),
         files: &[(
             "workflows/embed-articles.yaml",

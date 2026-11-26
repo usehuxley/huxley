@@ -33,6 +33,7 @@
 	import ActionsCard from '#lib/forms/ActionsCard.svelte';
 	import KnowledgeCard from '#lib/kb/KnowledgeCard.svelte';
 	import TicketAssetsCard from '#lib/assets/TicketAssetsCard.svelte';
+	import CsatCard from '#lib/tickets/CsatCard.svelte';
 	import { OUTCOME } from '#lib/agreements/coverage.ts';
 	import { onMount, untrack } from 'svelte';
 	import type { PageProps } from './$types';
@@ -414,6 +415,9 @@
 			/>
 			{#if data.assets}
 				<TicketAssetsCard assets={data.assets} />
+			{/if}
+			{#if data.csat}
+				<CsatCard survey={data.csat} />
 			{/if}
 			{#if data.knowledge}
 				<KnowledgeCard knowledge={data.knowledge} />

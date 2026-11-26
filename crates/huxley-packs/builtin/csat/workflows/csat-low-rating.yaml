@@ -1,0 +1,24 @@
+apiVersion: usehuxley.io/v1
+kind: Workflow
+metadata:
+  key: csat-low-rating
+  name: Tell the technician about a poor rating
+  description: >-
+    When a requester rates a ticket poorly (1 or 2, or a thumbs down), tells
+    whoever it was assigned to, with their comment.
+spec:
+  triggers:
+    - type: event
+      event: csat.responded
+      filter: "{{ not event.payload.positive and event.payload.rating <= 2 and event.payload.assigneeUserId is not none }}"
+  steps:
+    - id: tell
+      type: core.notify
+      with:
+        to: "user:{{ inputs.assigneeUserId }}"
+        kind: ticket.replied
+        title: "{{ inputs.reference }} was rated {{ 'thumbs down' if inputs.scale == 'thumbs' else (inputs.rating ~ ' out of 5') }}"
+        message: "{{ inputs.comment or 'No comment.' }}"
+        url: "/tickets/{{ trigger.subject_id }}"
+  outputs:
+    sent: "{{ steps.tell.output.sent }}"

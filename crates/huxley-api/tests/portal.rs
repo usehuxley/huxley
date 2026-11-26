@@ -43,7 +43,7 @@ async fn setup(pools: &TestPools) -> Setup {
     huxley_authz::grant_root_owner(&mut tx, &ctx, owner.id)
         .await
         .unwrap();
-    for module in ["crm", "servicedesk", "portal", "knowledge", "cmdb"] {
+    for module in ["crm", "servicedesk", "portal", "knowledge", "cmdb", "cx"] {
         huxley_modules::set_enabled(&mut tx, &ctx, module, true, false)
             .await
             .unwrap();
@@ -1155,4 +1155,199 @@ async fn changes_and_limits(
             .0,
         StatusCode::FORBIDDEN
     );
+}
+
+impl Setup {
+    /// A resolved ticket for `requester` at Acme: its id.
+    async fn resolved_ticket(&self, requester: &str, title: &str) -> Uuid {
+        let (_, t, _) = self
+            .call(
+                &self.staff,
+                "POST",
+                "/api/v1/tickets",
+                json!({ "orgId": self.acme, "title": title, "requesterId": requester }),
+            )
+            .await;
+        let id: Uuid = t["id"].as_str().unwrap().parse().unwrap();
+        let resolved: String = sqlx::query_scalar(
+            "SELECT s.key FROM sd_statuses s JOIN sd_tickets t ON t.type_id = s.type_id \
+              WHERE t.id = $1 AND s.category = 'resolved' ORDER BY s.position LIMIT 1",
+        )
+        .bind(id)
+        .fetch_one(&self.pools.owner)
+        .await
+        .unwrap();
+        let (status, done, _) = self
+            .call(
+                &self.staff,
+                "POST",
+                &format!("/api/v1/tickets/{id}/status"),
+                json!({ "status": resolved, "resolution": "Done", "version": t["version"] }),
+            )
+            .await;
+        assert_eq!(status, StatusCode::OK, "{done}");
+        id
+    }
+
+    /// Starts a ticket's survey as the pack's step would (sampling passes).
+    async fn survey(&self, ticket: Uuid) -> huxley_cx::surveys::Started {
+        let ctx = RequestContext::system(Via::System);
+        let mut tx = begin_scoped(&self.pools.app, &OrgScope::System)
+            .await
+            .unwrap();
+        let started = huxley_cx::surveys::start(&mut tx, &ctx, ticket, 0.0)
+            .await
+            .unwrap();
+        tx.commit().await.unwrap();
+        started
+    }
+}
+
+#[tokio::test]
+async fn requesters_rate_resolved_tickets() {
+    let Some(db) = isolated("portal_csat").await else {
+        return;
+    };
+    let s = setup(&db.pools).await;
+    let (ada, ada_contact) = s.portal_user(s.acme, "Ada", "client_user").await;
+    let ticket = s.resolved_ticket(&ada_contact, "Printer jam").await;
+    assert!(matches!(
+        s.survey(ticket).await,
+        huxley_cx::surveys::Started::Survey { .. }
+    ));
+    // Asked once a week at most.
+    assert!(matches!(
+        s.survey(ticket).await,
+        huxley_cx::surveys::Started::Skipped("already_asked")
+    ));
+
+    // Ada rates it in the portal, once.
+    let (_, view, _) = s
+        .call(
+            &ada,
+            "GET",
+            &format!("/api/portal/v1/tickets/{ticket}"),
+            Value::Null,
+        )
+        .await;
+    assert_eq!(
+        (&view["survey"]["scale"], &view["survey"]["open"]),
+        (&json!("five"), &json!(true)),
+        "{view}"
+    );
+    let rate = format!("/api/portal/v1/tickets/{ticket}/rating");
+    assert_eq!(
+        s.call(&ada, "POST", &rate, json!({ "rating": 9 })).await.0,
+        StatusCode::UNPROCESSABLE_ENTITY
+    );
+    let (status, rated, _) = s
+        .call(
+            &ada,
+            "POST",
+            &rate,
+            json!({ "rating": 4, "comment": "Quick, thanks" }),
+        )
+        .await;
+    assert_eq!(
+        (status, &rated["survey"]["rating"]),
+        (StatusCode::OK, &json!(4)),
+        "{rated}"
+    );
+    assert_eq!(
+        s.call(&ada, "POST", &rate, json!({ "rating": 1 })).await.0,
+        StatusCode::CONFLICT
+    );
+    let (_, staff_view, _) = s
+        .call(
+            &s.staff,
+            "GET",
+            &format!("/api/v1/tickets/{ticket}/csat"),
+            Value::Null,
+        )
+        .await;
+    assert_eq!(
+        (&staff_view["comment"], &staff_view["channel"]),
+        (&json!("Quick, thanks"), &json!("portal"))
+    );
+
+    answers_by_link_and_settings(&s, &ada_contact).await;
+}
+
+/// The emailed link answers without signing in; thumbs and opting out and
+/// sampling follow the company's settings.
+async fn answers_by_link_and_settings(s: &Setup, ada_contact: &str) {
+    let ctx = RequestContext::system(Via::System);
+    let set = async |key: &str, value: &str| {
+        let mut tx = begin_scoped(&s.pools.app, &OrgScope::System).await.unwrap();
+        huxley_orgs::settings::set(&mut tx, &ctx, s.acme, key, value, false)
+            .await
+            .unwrap();
+        tx.commit().await.unwrap();
+    };
+    set("csat.thumbs", "true").await;
+    let ticket = s.resolved_ticket(ada_contact, "VPN down").await;
+    let huxley_cx::surveys::Started::Survey { token, .. } = s.survey(ticket).await else {
+        panic!("not sent")
+    };
+    let link = format!("/api/portal/v1/surveys/{token}");
+    let (status, shown, _) = s.call("", "GET", &link, Value::Null).await;
+    assert_eq!(status, StatusCode::OK, "{shown}");
+    assert_eq!(
+        (
+            &shown["scale"],
+            &shown["open"],
+            &shown["reference"].is_string()
+        ),
+        (&json!("thumbs"), &json!(true), &true)
+    );
+    assert_eq!(
+        s.call("", "POST", &link, json!({ "rating": 3 })).await.0,
+        StatusCode::UNPROCESSABLE_ENTITY
+    );
+    let (status, answered, _) = s
+        .call(
+            "",
+            "POST",
+            &link,
+            json!({ "rating": 1, "comment": "Still down" }),
+        )
+        .await;
+    assert_eq!(
+        (status, &answered["open"]),
+        (StatusCode::OK, &json!(false)),
+        "{answered}"
+    );
+    assert_eq!(
+        s.call("", "GET", "/api/portal/v1/surveys/hxcs_madeup", Value::Null)
+            .await
+            .0,
+        StatusCode::NOT_FOUND
+    );
+
+    set("csat.sample_percent", "0").await;
+    let sampled = s.resolved_ticket(ada_contact, "Sampled").await;
+    assert!(matches!(
+        s.survey(sampled).await,
+        huxley_cx::surveys::Started::Skipped("sampled_out")
+    ));
+    set("csat.enabled", "false").await;
+    let opted = s.resolved_ticket(ada_contact, "Opted out").await;
+    assert!(matches!(
+        s.survey(opted).await,
+        huxley_cx::surveys::Started::Skipped("opted_out")
+    ));
+
+    // A satisfaction score: one up (4/5), one down.
+    let (status, score, _) = s
+        .call(
+            &s.staff,
+            "POST",
+            "/api/v1/analytics/query",
+            json!({ "source": "csat",
+            "measures": [{ "fn": "avg", "field": "satisfaction" }, { "fn": "count" }],
+            "filters": [{ "field": "answered", "op": "eq", "value": true }] }),
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK, "{score}");
+    assert_eq!(score["rows"], json!([[50.0, 2]]), "{score}");
 }

@@ -1,5 +1,6 @@
 import { error, fail } from '@sveltejs/kit';
 import { api } from '#lib/server/api.ts';
+import { ratingFrom } from '#lib/server/csat.ts';
 import type { Actions, PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async (event) => {
@@ -27,5 +28,22 @@ export const actions: Actions = {
 			return fail(response.status, { message: detail });
 		}
 		return { sent: true };
+	},
+	rate: async (event) => {
+		const answer = ratingFrom(await event.request.formData());
+		if (!answer) return fail(400, { rateMessage: 'Choose a rating.' });
+		const { data, response } = await api(event).POST('/api/portal/v1/tickets/{id}/rating', {
+			params: { path: { id: event.params.id } },
+			body: answer
+		});
+		if (!data) {
+			return fail(response.status, {
+				rateMessage:
+					response.status === 409
+						? 'This was answered already, or it’s too late to answer.'
+						: 'Your answer couldn’t be sent.'
+			});
+		}
+		return { rated: true };
 	}
 };

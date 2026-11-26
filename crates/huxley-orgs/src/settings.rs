@@ -37,6 +37,8 @@ pub enum SettingKind {
     Hostname,
     /// On or off: `true` or `false`.
     Toggle,
+    /// A whole percentage, 0 to 100.
+    Percent,
 }
 
 /// The largest image setting, as a `data:` URL.
@@ -77,6 +79,12 @@ settings! {
         "Shown in the client portal. PNG, JPEG, WebP or SVG, up to 200 KB.";
     PORTAL_DOMAIN = "portal.domain", "Branding", Hostname, None, "Portal domain",
         "The client portal's address for this organization and those below, e.g. support.example.com. Point it at the portal, and sign-in links use it.";
+    CSAT_ENABLED = "csat.enabled", "Customer experience", Toggle, Some("true"), "Satisfaction surveys",
+        "Ask requesters how it went when their ticket is resolved (with the Customer experience module and its pack). Turn off for a company to opt it out.";
+    CSAT_SAMPLE = "csat.sample_percent", "Customer experience", Percent, Some("100"), "Survey this share of tickets",
+        "Ask about this percentage of resolved tickets, at random, so regular requesters aren't asked every time.";
+    CSAT_THUMBS = "csat.thumbs", "Customer experience", Toggle, Some("false"), "Thumbs up or down",
+        "Ask for a thumbs up or down instead of a rating from 1 to 5.";
     PORTAL_REQUIRE_MFA = "portal.require_mfa", "Portal", Toggle, Some("false"), "Require two-factor sign-in",
         "Contacts who sign in to the portal with a link or password must set up an authenticator app. Signing in with their organization's account is left to their organization.";
     TICKET_PREFIX = "numbering.ticket_prefix", "Numbering", Prefix, Some("T"), "Ticket prefix",
@@ -159,6 +167,7 @@ pub fn validate(kind: SettingKind, raw: &str) -> Result<String, String> {
                 })
         }
         SettingKind::Toggle => matches!(value.to_ascii_lowercase().as_str(), "true" | "false"),
+        SettingKind::Percent => value.parse::<u8>().is_ok_and(|p| p <= 100),
         SettingKind::Prefix => {
             (1..=8).contains(&value.len())
                 && value.starts_with(|c: char| c.is_ascii_uppercase())
@@ -179,6 +188,7 @@ pub fn validate(kind: SettingKind, raw: &str) -> Result<String, String> {
             SettingKind::Image => "Choose a PNG, JPEG, WebP or SVG image up to 200 KB.",
             SettingKind::Hostname => "Enter a host name such as support.example.com.",
             SettingKind::Toggle => "Use true or false.",
+            SettingKind::Percent => "Enter a whole percentage from 0 to 100.",
         }
         .into());
     }

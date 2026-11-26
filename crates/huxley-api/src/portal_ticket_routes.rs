@@ -22,6 +22,60 @@ pub fn routes() -> Router<AppState> {
         .route("/tickets", get(list_tickets).post(raise_ticket))
         .route("/tickets/{id}", get(get_ticket))
         .route("/tickets/{id}/replies", post(reply_to_ticket))
+        .route("/tickets/{id}/rating", post(rate_ticket))
+}
+
+#[derive(Debug, Deserialize, ToSchema)]
+#[serde(deny_unknown_fields)]
+pub struct PortalRating {
+    /// 1 to 5 (thumbs: 1 down, 5 up).
+    pub rating: i16,
+    #[serde(default)]
+    pub comment: Option<String>,
+}
+
+pub(crate) fn cx_error(e: huxley_cx::CxError) -> ApiError {
+    match e {
+        huxley_cx::CxError::NotFound => ApiError::not_found(),
+        huxley_cx::CxError::Invalid { field, message } => {
+            ApiError::validation().with_field_error(format!("/{field}"), message)
+        }
+        huxley_cx::CxError::Closed => {
+            ApiError::conflict("It was answered already, or it's too late to answer.")
+        }
+        huxley_cx::CxError::Db(e) => ApiError::internal(&e),
+    }
+}
+
+/// Rates your resolved ticket (its satisfaction survey, once).
+#[utoipa::path(post, path = "/api/portal/v1/tickets/{id}/rating", operation_id = "portal_rate_ticket", tag = "portal",
+    params(("id" = Uuid, Path)), request_body = PortalRating,
+    responses((status = 200, body = PortalTicketView), (status = 409, body = ApiError, content_type = "application/problem+json")))]
+pub async fn rate_ticket(
+    State(state): State<AppState>,
+    authed: PortalAuthed,
+    Path(id): Path<Uuid>,
+    Json(body): Json<PortalRating>,
+) -> ApiResult<Json<PortalTicketView>> {
+    view(&state, &authed, id).await?;
+    let survey = survey_for(&state, &authed, id)
+        .await?
+        .ok_or_else(ApiError::not_found)?;
+    let mut tx = begin_scoped(&state.db, &OrgScope::System)
+        .await
+        .map_err(db_err)?;
+    huxley_cx::surveys::respond(
+        &mut tx,
+        &authed.ctx,
+        &survey,
+        body.rating,
+        body.comment.as_deref(),
+        "portal",
+    )
+    .await
+    .map_err(cx_error)?;
+    tx.commit().await.map_err(db_err)?;
+    Ok(Json(view(&state, &authed, id).await?))
 }
 
 fn db_err(e: impl std::fmt::Display) -> ApiError {
@@ -107,6 +161,54 @@ pub struct PortalTicketView {
     pub notes: Vec<PortalNote>,
     /// Whether you can reply (it isn't closed).
     pub can_reply: bool,
+    /// Its satisfaction survey, when it was sent to you.
+    pub survey: Option<PortalSurvey>,
+}
+
+/// A satisfaction survey as its contact sees it.
+#[derive(Debug, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct PortalSurvey {
+    /// `five` (1 to 5) or `thumbs` (1 down, 5 up).
+    pub scale: String,
+    pub rating: Option<i16>,
+    pub comment: Option<String>,
+    /// It can still be answered.
+    pub open: bool,
+}
+
+impl From<huxley_cx::surveys::Survey> for PortalSurvey {
+    fn from(s: huxley_cx::surveys::Survey) -> Self {
+        Self {
+            open: s.open(),
+            scale: s.scale,
+            rating: s.rating,
+            comment: s.comment,
+        }
+    }
+}
+
+/// The ticket's latest survey, if it was for this contact and the module's on.
+async fn survey_for(
+    state: &AppState,
+    authed: &PortalAuthed,
+    ticket: Uuid,
+) -> ApiResult<Option<huxley_cx::surveys::Survey>> {
+    let mut tx = begin_scoped(&state.db, &OrgScope::System)
+        .await
+        .map_err(db_err)?;
+    if !huxley_modules::is_active_at(&mut tx, huxley_cx::MODULE, authed.principal.org_id)
+        .await
+        .map_err(db_err)?
+    {
+        return Ok(None);
+    }
+    let survey = huxley_cx::surveys::latest_for_ticket(&mut tx, ticket)
+        .await
+        .map_err(db_err)?
+        .filter(|s| s.contact_id == Some(authed.principal.contact_id));
+    tx.commit().await.map_err(db_err)?;
+    Ok(survey)
 }
 
 async fn view(state: &AppState, authed: &PortalAuthed, id: Uuid) -> ApiResult<PortalTicketView> {
@@ -120,10 +222,12 @@ async fn view(state: &AppState, authed: &PortalAuthed, id: Uuid) -> ApiResult<Po
     let notes = portal::notes(&mut tx, id).await.map_err(desk)?;
     tx.commit().await.map_err(db_err)?;
     let can_reply = ticket.status_category != "closed";
+    let survey = survey_for(state, authed, id).await?.map(PortalSurvey::from);
     Ok(PortalTicketView {
         ticket,
         notes,
         can_reply,
+        survey,
     })
 }
 

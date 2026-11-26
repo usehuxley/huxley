@@ -18,6 +18,7 @@ pub mod cmdb_routes;
 mod connection_routes;
 pub mod context;
 pub mod crm_routes;
+pub mod csat_routes;
 pub mod csrf;
 pub mod dashboard_routes;
 mod dataset_routes;

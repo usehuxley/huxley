@@ -1010,6 +1010,80 @@
 				}
 			}
 		},
+		"/api/portal/v1/surveys/{token}": {
+			"get": {
+				"tags": ["portal"],
+				"summary": "The survey an answer link is for.",
+				"operationId": "get_csat_survey",
+				"parameters": [
+					{
+						"name": "token",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/PublicSurvey"
+								}
+							}
+						}
+					},
+					"404": {}
+				}
+			},
+			"post": {
+				"tags": ["portal"],
+				"summary": "Answers a survey from its link (once).",
+				"operationId": "answer_csat_survey",
+				"parameters": [
+					{
+						"name": "token",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string"
+						}
+					}
+				],
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/PortalRating"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/PublicSurvey"
+								}
+							}
+						}
+					},
+					"409": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
 		"/api/portal/v1/tickets": {
 			"get": {
 				"tags": ["portal"],
@@ -1121,6 +1195,54 @@
 						}
 					},
 					"404": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/portal/v1/tickets/{id}/rating": {
+			"post": {
+				"tags": ["portal"],
+				"summary": "Rates your resolved ticket (its satisfaction survey, once).",
+				"operationId": "portal_rate_ticket",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/PortalRating"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/PortalTicketView"
+								}
+							}
+						}
+					},
+					"409": {
 						"content": {
 							"application/problem+json": {
 								"schema": {
@@ -13837,6 +13959,42 @@
 				}
 			}
 		},
+		"/api/v1/tickets/{id}/csat": {
+			"get": {
+				"tags": ["tickets"],
+				"summary": "A ticket's latest satisfaction survey, if it has one.",
+				"operationId": "get_ticket_csat",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"oneOf": [
+										{
+											"$ref": "#/components/schemas/CsatSurvey"
+										},
+										{
+											"type": "null"
+										}
+									]
+								}
+							}
+						}
+					}
+				}
+			}
+		},
 		"/api/v1/tickets/{id}/links": {
 			"get": {
 				"tags": ["servicedesk"],
@@ -21568,6 +21726,80 @@
 					}
 				]
 			},
+			"CsatSurvey": {
+				"type": "object",
+				"description": "A survey and its answer.",
+				"required": [
+					"id",
+					"orgId",
+					"ticketId",
+					"reference",
+					"title",
+					"scale",
+					"emailed",
+					"sentAt",
+					"expiresAt"
+				],
+				"properties": {
+					"assigneeUserId": {
+						"type": ["string", "null"],
+						"format": "uuid",
+						"description": "Who the ticket was assigned to when it was resolved."
+					},
+					"channel": {
+						"type": ["string", "null"],
+						"description": "`email` or `portal`."
+					},
+					"comment": {
+						"type": ["string", "null"]
+					},
+					"contactId": {
+						"type": ["string", "null"],
+						"format": "uuid"
+					},
+					"emailed": {
+						"type": "boolean"
+					},
+					"expiresAt": {
+						"type": "string",
+						"format": "date-time"
+					},
+					"id": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"orgId": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"rating": {
+						"type": ["integer", "null"],
+						"format": "int32"
+					},
+					"reference": {
+						"type": "string"
+					},
+					"respondedAt": {
+						"type": ["string", "null"],
+						"format": "date-time"
+					},
+					"scale": {
+						"type": "string",
+						"description": "`five` (1 to 5) or `thumbs` (1 down, 5 up)."
+					},
+					"sentAt": {
+						"type": "string",
+						"format": "date-time"
+					},
+					"ticketId": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"title": {
+						"type": "string"
+					}
+				}
+			},
 			"Dashboard": {
 				"type": "object",
 				"required": ["id", "name", "range", "widgets", "builtin", "portal", "version"],
@@ -25828,6 +26060,21 @@
 					}
 				}
 			},
+			"PortalRating": {
+				"type": "object",
+				"required": ["rating"],
+				"properties": {
+					"comment": {
+						"type": ["string", "null"]
+					},
+					"rating": {
+						"type": "integer",
+						"format": "int32",
+						"description": "1 to 5 (thumbs: 1 down, 5 up)."
+					}
+				},
+				"additionalProperties": false
+			},
 			"PortalRecoveryCodes": {
 				"type": "object",
 				"required": ["recoveryCodes"],
@@ -25973,6 +26220,28 @@
 					}
 				}
 			},
+			"PortalSurvey": {
+				"type": "object",
+				"description": "A satisfaction survey as its contact sees it.",
+				"required": ["scale", "open"],
+				"properties": {
+					"comment": {
+						"type": ["string", "null"]
+					},
+					"open": {
+						"type": "boolean",
+						"description": "It can still be answered."
+					},
+					"rating": {
+						"type": ["integer", "null"],
+						"format": "int32"
+					},
+					"scale": {
+						"type": "string",
+						"description": "`five` (1 to 5) or `thumbs` (1 down, 5 up)."
+					}
+				}
+			},
 			"PortalTicket": {
 				"type": "object",
 				"description": "A ticket in the portal.",
@@ -26046,6 +26315,17 @@
 								"items": {
 									"$ref": "#/components/schemas/PortalNote"
 								}
+							},
+							"survey": {
+								"oneOf": [
+									{
+										"$ref": "#/components/schemas/PortalSurvey",
+										"description": "Its satisfaction survey, when it was sent to you."
+									},
+									{
+										"type": "null"
+									}
+								]
 							}
 						}
 					}
@@ -26402,6 +26682,37 @@
 					}
 				},
 				"additionalProperties": false
+			},
+			"PublicSurvey": {
+				"type": "object",
+				"description": "A survey as its answer link shows it.",
+				"required": ["reference", "title", "scale", "open", "branding"],
+				"properties": {
+					"branding": {
+						"$ref": "#/components/schemas/PortalBranding"
+					},
+					"comment": {
+						"type": ["string", "null"]
+					},
+					"open": {
+						"type": "boolean",
+						"description": "It can still be answered."
+					},
+					"rating": {
+						"type": ["integer", "null"],
+						"format": "int32"
+					},
+					"reference": {
+						"type": "string"
+					},
+					"scale": {
+						"type": "string",
+						"description": "`five` (1 to 5) or `thumbs` (1 down, 5 up)."
+					},
+					"title": {
+						"type": "string"
+					}
+				}
 			},
 			"PublishRequest": {
 				"type": "object",
@@ -27727,7 +28038,17 @@
 			"SettingKind": {
 				"type": "string",
 				"description": "How a setting's value is validated (and edited in the UI).",
-				"enum": ["text", "timezone", "color", "email", "prefix", "image", "hostname", "toggle"]
+				"enum": [
+					"text",
+					"timezone",
+					"color",
+					"email",
+					"prefix",
+					"image",
+					"hostname",
+					"toggle",
+					"percent"
+				]
 			},
 			"ShownCall": {
 				"type": "object",
