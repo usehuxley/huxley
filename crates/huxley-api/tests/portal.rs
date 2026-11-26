@@ -21,6 +21,7 @@ struct Setup {
     pools: TestPools,
     app: axum::Router,
     staff: String,
+    root: Uuid,
     acme: Uuid,
     globex: Uuid,
 }
@@ -75,6 +76,7 @@ async fn setup(pools: &TestPools) -> Setup {
         pools: pools.clone(),
         app,
         staff,
+        root,
         acme,
         globex,
     }
@@ -507,4 +509,97 @@ async fn resolved_tickets_reopen_on_reply(s: &Setup, ada: &str, ticket: &str) {
         .map(|n| n["resolution"].as_bool().unwrap())
         .collect();
     assert_eq!(notes, [false, true, false]);
+}
+
+#[tokio::test]
+async fn the_portal_wears_the_msps_brand_and_a_clients_own() {
+    let Some(db) = isolated("portal_branding").await else {
+        return;
+    };
+    let s = setup(&db.pools).await;
+    let set = async |org: Uuid, key: &str, value: &str| {
+        s.call(
+            &s.staff,
+            "PUT",
+            &format!("/api/v1/orgs/{org}/settings/{key}"),
+            json!({ "value": value }),
+        )
+        .await
+        .0
+    };
+    assert_eq!(
+        set(s.root, "branding.name", "Contoso Support").await,
+        StatusCode::NO_CONTENT
+    );
+    assert_eq!(
+        set(s.root, "branding.accent_color", "#112233").await,
+        StatusCode::NO_CONTENT
+    );
+    assert_eq!(
+        set(s.root, "portal.domain", "Support.Contoso.test").await,
+        StatusCode::NO_CONTENT
+    );
+    assert_eq!(
+        set(
+            s.root,
+            "branding.logo",
+            "data:image/png;base64,iVBORw0KGgo="
+        )
+        .await,
+        StatusCode::NO_CONTENT
+    );
+    // Acme gets its own accent; a script isn't a logo; a domain is one organization's.
+    assert_eq!(
+        set(s.acme, "branding.accent_color", "#aa0000").await,
+        StatusCode::NO_CONTENT
+    );
+    assert_eq!(
+        set(
+            s.acme,
+            "branding.logo",
+            "data:text/html;base64,PHNjcmlwdD4="
+        )
+        .await,
+        StatusCode::UNPROCESSABLE_ENTITY
+    );
+    assert_eq!(
+        set(s.globex, "portal.domain", "support.contoso.test").await,
+        StatusCode::UNPROCESSABLE_ENTITY
+    );
+
+    // Before signing in: by the portal's host.
+    let (status, brand, _) = s
+        .call(
+            "",
+            "GET",
+            "/api/portal/v1/branding?host=support.contoso.test",
+            Value::Null,
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(
+        (&brand["name"], &brand["accentColor"]),
+        (&json!("Contoso Support"), &json!("#112233"))
+    );
+    assert_eq!(brand["logo"], "data:image/png;base64,iVBORw0KGgo=");
+    let (_, unknown, _) = s
+        .call(
+            "",
+            "GET",
+            "/api/portal/v1/branding?host=elsewhere.test",
+            Value::Null,
+        )
+        .await;
+    assert_eq!(
+        unknown["name"], "Contoso Support",
+        "unknown hosts get the MSP's"
+    );
+
+    // Signed in: their company's (Acme's accent, the MSP's name and logo).
+    let (ada, _) = s.portal_user(s.acme, "Ada", "client_user").await;
+    let (_, me, _) = s.call(&ada, "GET", "/api/portal/v1/me", Value::Null).await;
+    assert_eq!(
+        (&me["branding"]["name"], &me["branding"]["accentColor"]),
+        (&json!("Contoso Support"), &json!("#aa0000"))
+    );
 }

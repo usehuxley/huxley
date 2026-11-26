@@ -75,6 +75,26 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
+	'/api/portal/v1/branding': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/**
+		 * How the portal looks before anyone signs in: the branding of the
+		 *     organization whose portal domain this is (else the MSP's).
+		 */
+		get: operations['portal_branding'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
 	'/api/portal/v1/me': {
 		parameters: {
 			query?: never;
@@ -8691,6 +8711,15 @@ export interface components {
 		};
 		/** @enum {string} */
 		PortalAccountStatus: 'invited' | 'active' | 'disabled';
+		PortalBranding: {
+			/** @description `#rrggbb`. */
+			accentColor: string;
+			/** @description A `data:` URL, if a logo is set. */
+			logo?: string | null;
+			/** @description The brand name (the organization's name if none is set). */
+			name: string;
+			supportEmail?: string | null;
+		};
 		PortalLinkRequest: {
 			email: string;
 		};
@@ -8700,6 +8729,7 @@ export interface components {
 		};
 		/** @description The signed-in account, as the portal shows it. */
 		PortalMe: components['schemas']['PortalPrincipal'] & {
+			branding?: components['schemas']['PortalBranding'] | null;
 			/** @description Portal permissions, e.g. `portal.ticket:read:company`. */
 			permissions: string[];
 		};
@@ -9391,7 +9421,7 @@ export interface components {
 		 * @description How a setting's value is validated (and edited in the UI).
 		 * @enum {string}
 		 */
-		SettingKind: 'text' | 'timezone' | 'color' | 'email' | 'prefix';
+		SettingKind: 'text' | 'timezone' | 'color' | 'email' | 'prefix' | 'image' | 'hostname';
 		/** @description A tool call as the user sees it. */
 		ShownCall: {
 			id: string;
@@ -10887,6 +10917,28 @@ export interface operations {
 				};
 				content: {
 					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	portal_branding: {
+		parameters: {
+			query?: {
+				/** @description The portal's host name, e.g. `support.example.com`. */
+				host?: string;
+			};
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['PortalBranding'];
 				};
 			};
 		};

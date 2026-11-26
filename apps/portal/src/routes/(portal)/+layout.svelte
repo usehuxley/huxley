@@ -3,9 +3,11 @@
 	import { page } from '$app/state';
 	import { BookOpen, Boxes, ClipboardList, House, Ticket } from '@lucide/svelte';
 	import { AppShell, Button, type NavItem } from '@usehuxley/ui';
+	import { accentStyle, DEFAULT_BRANDING } from '#lib/branding.ts';
 	import type { LayoutProps } from './$types';
 
 	let { data, children }: LayoutProps = $props();
+	let branding = $derived(data.me.branding ?? DEFAULT_BRANDING);
 
 	const nav: NavItem[] = [
 		{ href: '/', label: 'Home', icon: House },
@@ -16,14 +18,16 @@
 	];
 </script>
 
-<AppShell brand="Support portal" {nav} currentPath={page.url.pathname}>
-	{#snippet topbar()}
-		<a href={resolve('/(portal)/profile')} class="text-sm text-fg-muted hover:text-fg">
-			{data.me.name} · {data.me.orgName}
-		</a>
-		<form method="POST" action="/logout">
-			<Button type="submit" variant="ghost" size="sm">Sign out</Button>
-		</form>
-	{/snippet}
-	{@render children()}
-</AppShell>
+<div style={accentStyle(branding.accentColor)}>
+	<AppShell brand={branding.name} logo={branding.logo} {nav} currentPath={page.url.pathname}>
+		{#snippet topbar()}
+			<a href={resolve('/(portal)/profile')} class="text-sm text-fg-muted hover:text-fg">
+				{data.me.name} · {data.me.orgName}
+			</a>
+			<form method="POST" action="/logout">
+				<Button type="submit" variant="ghost" size="sm">Sign out</Button>
+			</form>
+		{/snippet}
+		{@render children()}
+	</AppShell>
+</div>

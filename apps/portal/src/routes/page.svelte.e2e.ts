@@ -3,9 +3,7 @@ import { expect, test } from '@playwright/test';
 test('signed-out visitors are sent to sign in', async ({ page }) => {
 	await page.goto('/');
 	await expect(page).toHaveURL(/\/login$/);
-	await expect(page.getByRole('heading', { level: 1 })).toHaveText(
-		'Sign in to your support portal'
-	);
+	await expect(page.getByRole('heading', { level: 1 })).toHaveText(/^Sign in to /);
 });
 
 test('sign-in offers a link or a password', async ({ page }) => {

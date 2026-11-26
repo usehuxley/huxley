@@ -29,7 +29,16 @@ pub enum SettingKind {
     Email,
     /// A short uppercase prefix for numbers, e.g. `T` in `T-1042`.
     Prefix,
+    /// A small image as a `data:` URL (PNG, JPEG, WebP or SVG, at most
+    /// 200 KB).
+    Image,
+    /// A host name, e.g. `support.example.com` (a port allowed for local
+    /// use).
+    Hostname,
 }
+
+/// The largest image setting, as a `data:` URL.
+pub const MAX_IMAGE_CHARS: usize = 280_000;
 
 #[derive(Debug, Clone, Copy, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
@@ -62,6 +71,10 @@ settings! {
         "Buttons and links in the portal and emails.";
     BRAND_SUPPORT_EMAIL = "branding.support_email", "Branding", Email, None, "Support email",
         "Where clients are told to write for help.";
+    BRAND_LOGO = "branding.logo", "Branding", Image, None, "Logo",
+        "Shown in the client portal. PNG, JPEG, WebP or SVG, up to 200 KB.";
+    PORTAL_DOMAIN = "portal.domain", "Branding", Hostname, None, "Portal domain",
+        "The client portal's address for this organization and those below, e.g. support.example.com. Point it at the portal, and sign-in links use it.";
     TICKET_PREFIX = "numbering.ticket_prefix", "Numbering", Prefix, Some("T"), "Ticket prefix",
         "Ticket numbers look like T-1042.";
     QUOTE_PREFIX = "numbering.quote_prefix", "Numbering", Prefix, Some("Q"), "Quote prefix",
@@ -109,6 +122,38 @@ pub fn validate(kind: SettingKind, raw: &str) -> Result<String, String> {
                 })
                 && !value.chars().any(|c| c.is_whitespace() || c.is_control())
         }
+        SettingKind::Image => {
+            value.len() <= MAX_IMAGE_CHARS
+                && ["image/png", "image/jpeg", "image/webp", "image/svg+xml"]
+                    .iter()
+                    .any(|t| {
+                        value
+                            .strip_prefix("data:")
+                            .and_then(|v| v.strip_prefix(t))
+                            .and_then(|v| v.strip_prefix(";base64,"))
+                            .is_some_and(|b64| {
+                                !b64.is_empty()
+                                    && b64
+                                        .bytes()
+                                        .all(|c| c.is_ascii_alphanumeric() || b"+/=".contains(&c))
+                            })
+                    })
+        }
+        SettingKind::Hostname => {
+            let (host, port) = value.split_once(':').unwrap_or((value, ""));
+            !host.is_empty()
+                && host.len() <= 253
+                && (port.is_empty()
+                    || (port.len() <= 5 && port.bytes().all(|c| c.is_ascii_digit())))
+                && host.split('.').all(|label| {
+                    (1..=63).contains(&label.len())
+                        && !label.starts_with('-')
+                        && !label.ends_with('-')
+                        && label
+                            .bytes()
+                            .all(|c| c.is_ascii_alphanumeric() || c == b'-')
+                })
+        }
         SettingKind::Prefix => {
             (1..=8).contains(&value.len())
                 && value.starts_with(|c: char| c.is_ascii_uppercase())
@@ -126,11 +171,13 @@ pub fn validate(kind: SettingKind, raw: &str) -> Result<String, String> {
             SettingKind::Prefix => {
                 "Use 1 to 8 uppercase letters or digits, starting with a letter."
             }
+            SettingKind::Image => "Choose a PNG, JPEG, WebP or SVG image up to 200 KB.",
+            SettingKind::Hostname => "Enter a host name such as support.example.com.",
         }
         .into());
     }
     Ok(match kind {
-        SettingKind::Color => value.to_ascii_lowercase(),
+        SettingKind::Color | SettingKind::Hostname => value.to_ascii_lowercase(),
         _ => value.to_owned(),
     })
 }
@@ -274,6 +321,22 @@ pub async fn set(
     if let Some(by) = ancestor_lock(conn, org_id, key).await? {
         return Err(OrgError::SettingLocked(by));
     }
+    if def.kind == SettingKind::Hostname {
+        let taken: Option<String> = sqlx::query_scalar(
+            "SELECT o.name FROM org_settings s JOIN organizations o ON o.id = s.org_id \
+              WHERE s.key = $1 AND s.value = $2 AND s.org_id <> $3",
+        )
+        .bind(key)
+        .bind(json!(value))
+        .bind(org_id)
+        .fetch_optional(&mut *conn)
+        .await?;
+        if let Some(other) = taken {
+            return Err(OrgError::InvalidSetting(format!(
+                "{other} already uses {value}."
+            )));
+        }
+    }
     sqlx::query(
         "INSERT INTO org_settings (org_id, key, value, locked, updated_by) VALUES ($1, $2, $3, $4, $5) \
          ON CONFLICT (org_id, key) DO UPDATE \
@@ -348,6 +411,19 @@ mod tests {
         assert!(validate(SettingKind::Email, "help@acme.example").is_ok());
         assert!(validate(SettingKind::Email, "nope").is_err());
         assert!(validate(SettingKind::Text, "").is_err());
+        assert_eq!(
+            validate(SettingKind::Hostname, "Support.Example.com").unwrap(),
+            "support.example.com"
+        );
+        assert!(validate(SettingKind::Hostname, "localhost:4174").is_ok());
+        assert!(validate(SettingKind::Hostname, "https://x.example").is_err());
+        assert!(validate(SettingKind::Hostname, "bad_host.example").is_err());
+        assert!(validate(SettingKind::Image, "data:image/png;base64,iVBORw0KGgo=").is_ok());
+        assert!(validate(SettingKind::Image, "data:text/html;base64,PHNjcmlwdD4=").is_err());
+        assert!(validate(SettingKind::Image, "data:image/png;base64,<script>").is_err());
+        assert!(validate(SettingKind::Image, "https://evil.example/logo.png").is_err());
+        let huge = format!("data:image/png;base64,{}", "A".repeat(MAX_IMAGE_CHARS));
+        assert!(validate(SettingKind::Image, &huge).is_err());
     }
 
     #[test]

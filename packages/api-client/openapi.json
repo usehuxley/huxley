@@ -122,6 +122,35 @@
 				}
 			}
 		},
+		"/api/portal/v1/branding": {
+			"get": {
+				"tags": ["portal"],
+				"summary": "How the portal looks before anyone signs in: the branding of the\norganization whose portal domain this is (else the MSP's).",
+				"operationId": "portal_branding",
+				"parameters": [
+					{
+						"name": "host",
+						"in": "query",
+						"description": "The portal's host name, e.g. `support.example.com`.",
+						"required": false,
+						"schema": {
+							"type": "string"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/PortalBranding"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
 		"/api/portal/v1/me": {
 			"get": {
 				"tags": ["portal"],
@@ -23563,6 +23592,27 @@
 				"type": "string",
 				"enum": ["invited", "active", "disabled"]
 			},
+			"PortalBranding": {
+				"type": "object",
+				"required": ["name", "accentColor"],
+				"properties": {
+					"accentColor": {
+						"type": "string",
+						"description": "`#rrggbb`."
+					},
+					"logo": {
+						"type": ["string", "null"],
+						"description": "A `data:` URL, if a logo is set."
+					},
+					"name": {
+						"type": "string",
+						"description": "The brand name (the organization's name if none is set)."
+					},
+					"supportEmail": {
+						"type": ["string", "null"]
+					}
+				}
+			},
 			"PortalLinkRequest": {
 				"type": "object",
 				"required": ["email"],
@@ -23592,6 +23642,17 @@
 						"type": "object",
 						"required": ["permissions"],
 						"properties": {
+							"branding": {
+								"oneOf": [
+									{
+										"$ref": "#/components/schemas/PortalBranding",
+										"description": "How the portal looks for their company."
+									},
+									{
+										"type": "null"
+									}
+								]
+							},
 							"permissions": {
 								"type": "array",
 								"items": {
@@ -25371,7 +25432,7 @@
 			"SettingKind": {
 				"type": "string",
 				"description": "How a setting's value is validated (and edited in the UI).",
-				"enum": ["text", "timezone", "color", "email", "prefix"]
+				"enum": ["text", "timezone", "color", "email", "prefix", "image", "hostname"]
 			},
 			"ShownCall": {
 				"type": "object",

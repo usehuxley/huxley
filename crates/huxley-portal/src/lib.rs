@@ -5,6 +5,7 @@
 //! authentication, and staff sessions never authenticate portal requests.
 
 pub mod accounts;
+pub mod branding;
 pub mod signin;
 
 use serde::{Deserialize, Serialize};
