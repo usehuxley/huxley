@@ -15,11 +15,11 @@
 			{ href: '/', label: 'Home', icon: House, module: null },
 			{ href: '/tickets', label: 'Tickets', icon: Ticket, module: 'servicedesk' },
 			{ href: '/requests', label: 'Request something', icon: ClipboardList, module: null },
-			{ href: '/assets', label: 'Devices', icon: Boxes, soon: true, module: 'cmdb' },
+			{ href: '/assets', label: 'Devices', icon: Boxes, module: 'cmdb' },
 			{ href: '/knowledge', label: 'Help articles', icon: BookOpen, module: 'knowledge' }
 		]
 			.filter((item) => item.module === null || data.me.modules.includes(item.module))
-			.map((item) => ({ href: item.href, label: item.label, icon: item.icon, soon: item.soon }))
+			.map((item) => ({ href: item.href, label: item.label, icon: item.icon }))
 	);
 </script>
 

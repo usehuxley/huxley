@@ -139,11 +139,14 @@ pub async fn get_ticket(
 }
 
 #[derive(Debug, Deserialize, ToSchema)]
-#[serde(deny_unknown_fields)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct RaisePortalTicket {
     pub title: String,
     #[serde(default)]
     pub description: String,
+    /// The device it's about (one you can see in the portal).
+    #[serde(default)]
+    pub asset_id: Option<Uuid>,
 }
 
 /// Raises a ticket for you, at your company.
@@ -156,11 +159,22 @@ pub async fn raise_ticket(
     Json(body): Json<RaisePortalTicket>,
 ) -> ApiResult<(StatusCode, Json<PortalTicketView>)> {
     require_module_at(&state, huxley_servicedesk::MODULE, authed.principal.org_id).await?;
+    if body.asset_id.is_some() {
+        require_module_at(&state, huxley_cmdb::MODULE, authed.principal.org_id).await?;
+    }
     // Numbering and SLA terms come from above the company: system scope,
     // for the account's own company only.
     let mut tx = begin_scoped(&state.db, &OrgScope::System)
         .await
         .map_err(db_err)?;
+    if let Some(asset) = body.asset_id {
+        let seen = crate::portal_device_routes::seen(&authed);
+        huxley_cmdb::portal::get(&mut tx, authed.principal.org_id, seen, asset)
+            .await
+            .map_err(|_| {
+                ApiError::validation().with_field_error("/assetId", "not one of your devices")
+            })?;
+    }
     let ticket = portal::create(
         &mut tx,
         &authed.ctx,
@@ -171,6 +185,11 @@ pub async fn raise_ticket(
     )
     .await
     .map_err(desk)?;
+    if let Some(asset) = body.asset_id {
+        huxley_cmdb::tickets::link(&mut tx, &authed.ctx, asset, ticket.id)
+            .await
+            .map_err(db_err)?;
+    }
     tx.commit().await.map_err(db_err)?;
     Ok((
         StatusCode::CREATED,

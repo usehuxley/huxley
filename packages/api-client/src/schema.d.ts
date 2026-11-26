@@ -238,6 +238,39 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
+	'/api/portal/v1/devices': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** Your devices (client admins: the company's), by name. */
+		get: operations['portal_devices'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/portal/v1/devices/{id}': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get: operations['portal_device'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
 	'/api/portal/v1/me': {
 		parameters: {
 			query?: never;
@@ -9076,6 +9109,23 @@ export interface components {
 			name: string;
 			supportEmail?: string | null;
 		};
+		PortalDevice: {
+			/** Format: uuid */
+			contactId?: string | null;
+			contactName?: string | null;
+			hostname: string;
+			/** Format: uuid */
+			id: string;
+			manufacturer: string;
+			model: string;
+			name: string;
+			serialNumber: string;
+			siteName?: string | null;
+			status: string;
+			typeName: string;
+			/** Format: date */
+			warrantyEndsOn?: string | null;
+		};
 		/** @description A form as the portal shows it. */
 		PortalForm: {
 			category?: string | null;
@@ -9498,6 +9548,11 @@ export interface components {
 			unassigned: number;
 		};
 		RaisePortalTicket: {
+			/**
+			 * Format: uuid
+			 * @description The device it's about (one you can see in the portal).
+			 */
+			assetId?: string | null;
 			description?: string;
 			title: string;
 		};
@@ -11665,6 +11720,49 @@ export interface operations {
 				};
 				content: {
 					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	portal_devices: {
+		parameters: {
+			query?: {
+				/** @description Words in the name, serial number, hostname, model or manufacturer. */
+				q?: string;
+			};
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['PortalDevice'][];
+				};
+			};
+		};
+	};
+	portal_device: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['PortalDevice'];
 				};
 			};
 		};

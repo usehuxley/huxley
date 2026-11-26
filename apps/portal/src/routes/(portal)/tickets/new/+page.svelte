@@ -14,6 +14,13 @@
 	<h1 class="text-2xl font-semibold text-fg">Raise a ticket</h1>
 	<Card>
 		<form method="POST" class="flex flex-col gap-4" use:enhance>
+			{#if data.device}
+				<input type="hidden" name="assetId" value={data.device.id} />
+				<p class="text-sm text-fg-muted">
+					About <span class="font-medium text-fg">{data.device.name}</span>
+					{#if data.device.serialNumber}(serial {data.device.serialNumber}){/if}
+				</p>
+			{/if}
 			<Field label="What do you need?" for="title" hint="A short summary">
 				<Input id="title" name="title" value={form?.title ?? ''} maxlength={300} required />
 			</Field>

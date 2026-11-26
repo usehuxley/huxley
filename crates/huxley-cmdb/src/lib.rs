@@ -13,6 +13,7 @@ pub(crate) mod date {
     pub(crate) use ymd::{deserialize, option, serialize};
 }
 pub mod mappings;
+pub mod portal;
 pub mod relationships;
 pub mod tickets;
 pub mod types;

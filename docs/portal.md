@@ -82,6 +82,15 @@ Like every setting, these apply to the organization and everything below it, so 
 - **Search** matches titles and text, best match first, and categories with articles are listed for browsing.
 - **The knowledge module** must be on for the company. The portal's navigation shows only the parts that are on (tickets, help articles).
 
+## Devices
+
+**Devices** in the portal lists the company's assets in use (not retired or disposed), from the CMDB.
+
+- **Client admins** see all of their company's devices. **Everyone else** sees the devices assigned to them.
+- **Shown:** name, type, serial number, hostname, make and model, site, who it's assigned to, and the warranty end date. Notes, custom fields, outside ids and sync details stay with staff.
+- **Raise a ticket about it:** from a device's page. The new ticket is linked to the device, so staff see it on the ticket's Assets card.
+- **The CMDB module** must be on for the company.
+
 ## Two-factor sign-in
 
 Contacts can add a code from an authenticator app (Microsoft Authenticator, Google Authenticator, 1Password and others) to signing in with a link or password: **Profile**, **Manage two-factor sign-in**.
@@ -121,5 +130,6 @@ Contacts can sign in with their company's own accounts, such as the client's Mic
   - `GET`, `POST /api/portal/v1/tickets` (`status=open|closed`, `scope=mine|company`, `q`); `GET …/tickets/{id}`; `POST …/tickets/{id}/replies`
   - `PUT /api/portal/v1/me/password`
   - `GET /api/portal/v1/articles` (`q`, `category`), `GET …/articles/{id}`
+  - `GET /api/portal/v1/devices` (`q`), `GET …/devices/{id}`; `POST …/tickets` takes an optional `assetId`
   - `GET /api/portal/v1/catalog`, `GET …/catalog/{id}`, `POST …/catalog/{id}/requests` `{ answers }`; `GET …/requests`
   - Two-factor: `…/auth/link` redemption and `…/auth/password` answer `202 { challenge }` when a code is needed; finish with `POST …/auth/mfa` `{ challenge, code }`. `GET …/me/mfa`; `POST …/me/mfa/totp` (start), `…/totp/confirm` `{ code }` (returns recovery codes), `…/totp/disable` `{ code }`, `…/recovery-codes`

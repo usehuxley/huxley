@@ -43,7 +43,7 @@ async fn setup(pools: &TestPools) -> Setup {
     huxley_authz::grant_root_owner(&mut tx, &ctx, owner.id)
         .await
         .unwrap();
-    for module in ["crm", "servicedesk", "portal", "knowledge"] {
+    for module in ["crm", "servicedesk", "portal", "knowledge", "cmdb"] {
         huxley_modules::set_enabled(&mut tx, &ctx, module, true, false)
             .await
             .unwrap();
@@ -822,4 +822,106 @@ async fn contacts_read_published_articles_meant_for_clients() {
         )
         .await;
     assert_eq!(status, StatusCode::NOT_FOUND);
+}
+
+#[tokio::test]
+async fn contacts_see_their_devices_and_raise_tickets_about_them() {
+    let Some(db) = isolated("portal_devices").await else {
+        return;
+    };
+    let s = setup(&db.pools).await;
+    let (ada, ada_contact) = s.portal_user(s.acme, "Ada", "client_user").await;
+    let (bea, _) = s.portal_user(s.acme, "Bea", "client_admin").await;
+    let (_, types, _) = s
+        .call(&s.staff, "GET", "/api/v1/asset-types", Value::Null)
+        .await;
+    let workstation = types
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|t| t["key"] == "workstation")
+        .unwrap()["id"]
+        .clone();
+    let asset = async |org: Uuid, name: &str, contact: Option<&str>, status: &str| {
+        let (code, a, _) = s
+            .call(
+                &s.staff,
+                "POST",
+                "/api/v1/assets",
+                json!({ "orgId": org, "typeId": workstation, "name": name, "contactId": contact,
+                        "status": status, "notes": "Admin password in the vault", "serialNumber": format!("SN-{name}") }),
+            )
+            .await;
+        assert_eq!(code, StatusCode::CREATED, "{a}");
+        a["id"].as_str().unwrap().to_owned()
+    };
+    let adas = asset(s.acme, "ADA-LAPTOP", Some(&ada_contact), "active").await;
+    asset(s.acme, "FRONT-DESK", None, "active").await;
+    asset(s.acme, "OLD-PC", None, "retired").await;
+    let globex = asset(s.globex, "GLOBEX-PC", None, "active").await;
+
+    let names = async |cookie: &str| -> Vec<String> {
+        let (_, list, _) = s
+            .call(cookie, "GET", "/api/portal/v1/devices", Value::Null)
+            .await;
+        list.as_array()
+            .unwrap()
+            .iter()
+            .map(|d| d["name"].as_str().unwrap().to_owned())
+            .collect()
+    };
+    // Ada sees her own; Bea (client admin) sees the company's in use.
+    assert_eq!(names(&ada).await, ["ADA-LAPTOP"]);
+    assert_eq!(names(&bea).await, ["ADA-LAPTOP", "FRONT-DESK"]);
+    let (_, device, _) = s
+        .call(
+            &ada,
+            "GET",
+            &format!("/api/portal/v1/devices/{adas}"),
+            Value::Null,
+        )
+        .await;
+    assert_eq!(device["serialNumber"], "SN-ADA-LAPTOP");
+    assert!(
+        device.get("notes").is_none(),
+        "staff notes stay internal: {device}"
+    );
+    let (status, _, _) = s
+        .call(
+            &bea,
+            "GET",
+            &format!("/api/portal/v1/devices/{globex}"),
+            Value::Null,
+        )
+        .await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+
+    // A ticket about her laptop is linked to it; another client's device isn't hers to name.
+    let (status, ticket, _) = s
+        .call(
+            &ada,
+            "POST",
+            "/api/portal/v1/tickets",
+            json!({ "title": "Laptop is slow", "assetId": adas }),
+        )
+        .await;
+    assert_eq!(status, StatusCode::CREATED, "{ticket}");
+    let (_, linked, _) = s
+        .call(
+            &s.staff,
+            "GET",
+            &format!("/api/v1/tickets/{}/assets", ticket["id"].as_str().unwrap()),
+            Value::Null,
+        )
+        .await;
+    assert_eq!(linked["linked"][0]["name"], "ADA-LAPTOP", "{linked}");
+    let (status, _, _) = s
+        .call(
+            &ada,
+            "POST",
+            "/api/portal/v1/tickets",
+            json!({ "title": "Not mine", "assetId": globex }),
+        )
+        .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
 }
