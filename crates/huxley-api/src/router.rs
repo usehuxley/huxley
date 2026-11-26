@@ -120,10 +120,7 @@ pub fn router(state: AppState) -> Router {
         .route("/readyz", get(health::readyz))
         .nest("/api/v1", api_v1)
         // The client portal's own API: portal sessions only (ADR-040).
-        .nest(
-            "/api/portal/v1",
-            crate::portal_routes::routes().layer(middleware::from_fn(csrf::require_header)),
-        )
+        .nest("/api/portal/v1", portal_api())
         .fallback(not_found)
         .layer(stack);
 
@@ -140,6 +137,13 @@ pub fn router(state: AppState) -> Router {
         .merge(main)
         .layer(axum::Extension(internal))
         .with_state(state)
+}
+
+/// The client portal's API, with the anti-forgery header required.
+fn portal_api() -> Router<AppState> {
+    crate::portal_routes::routes()
+        .merge(crate::portal_ticket_routes::routes())
+        .layer(middleware::from_fn(csrf::require_header))
 }
 
 /// Webhooks, public forms and callbacks: outside /api/v1 (no sessions or

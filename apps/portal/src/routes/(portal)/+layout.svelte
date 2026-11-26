@@ -9,7 +9,7 @@
 
 	const nav: NavItem[] = [
 		{ href: '/', label: 'Home', icon: House },
-		{ href: '/tickets', label: 'Tickets', icon: Ticket, soon: true },
+		{ href: '/tickets', label: 'Tickets', icon: Ticket },
 		{ href: '/requests', label: 'Request something', icon: ClipboardList, soon: true },
 		{ href: '/assets', label: 'Devices', icon: Boxes, soon: true },
 		{ href: '/knowledge', label: 'Help articles', icon: BookOpen, soon: true }

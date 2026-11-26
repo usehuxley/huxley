@@ -42,7 +42,7 @@ async fn setup(pools: &TestPools) -> Setup {
     huxley_authz::grant_root_owner(&mut tx, &ctx, owner.id)
         .await
         .unwrap();
-    for module in ["crm", "portal"] {
+    for module in ["crm", "servicedesk", "portal"] {
         huxley_modules::set_enabled(&mut tx, &ctx, module, true, false)
             .await
             .unwrap();
@@ -283,4 +283,228 @@ async fn one_account_per_address(s: &Setup) {
         StatusCode::CONFLICT,
         "one portal account per address"
     );
+}
+
+impl Setup {
+    /// Invites a contact with a role and signs them in: their portal cookie.
+    async fn portal_user(&self, org: Uuid, first: &str, role: &str) -> (String, String) {
+        let contact = self
+            .contact(
+                org,
+                first,
+                &format!("{}@{}.example", first.to_lowercase(), org.simple()),
+            )
+            .await;
+        let (_, invited, _) = self
+            .call(
+                &self.staff,
+                "POST",
+                &format!("/api/v1/contacts/{contact}/portal-access"),
+                json!({ "role": role }),
+            )
+            .await;
+        let account: Uuid = invited["account"]["id"].as_str().unwrap().parse().unwrap();
+        let mut tx = begin_scoped(&self.pools.app, &OrgScope::System)
+            .await
+            .unwrap();
+        let secret = huxley_portal::signin::issue_link(&mut tx, account)
+            .await
+            .unwrap();
+        tx.commit().await.unwrap();
+        let (_, _, cookie) = self
+            .call(
+                "",
+                "POST",
+                "/api/portal/v1/auth/redeem",
+                json!({ "token": secret }),
+            )
+            .await;
+        (cookie.unwrap(), contact)
+    }
+}
+
+#[tokio::test]
+async fn contacts_see_and_work_their_tickets_only() {
+    let Some(db) = isolated("portal_tickets").await else {
+        return;
+    };
+    let s = setup(&db.pools).await;
+    let (ada, _) = s.portal_user(s.acme, "Ada", "client_user").await;
+    let (bea, _) = s.portal_user(s.acme, "Bea", "client_admin").await;
+    let (gil, _) = s.portal_user(s.globex, "Gil", "client_admin").await;
+
+    // Ada raises a ticket; Bea raises one.
+    let (status, raised, _) = s
+        .call(
+            &ada,
+            "POST",
+            "/api/portal/v1/tickets",
+            json!({ "title": "Printer jammed", "description": "Floor 2" }),
+        )
+        .await;
+    assert_eq!(status, StatusCode::CREATED, "{raised}");
+    let ticket = raised["id"].as_str().unwrap().to_owned();
+    assert_eq!(raised["requesterName"], "Ada Client");
+    s.call(
+        &bea,
+        "POST",
+        "/api/portal/v1/tickets",
+        json!({ "title": "New starter" }),
+    )
+    .await;
+
+    // Ada sees hers; she can't ask for the company's. Bea sees both.
+    let (_, mine, _) = s
+        .call(&ada, "GET", "/api/portal/v1/tickets", Value::Null)
+        .await;
+    assert_eq!(mine.as_array().unwrap().len(), 1);
+    let (status, _, _) = s
+        .call(
+            &ada,
+            "GET",
+            "/api/portal/v1/tickets?scope=company",
+            Value::Null,
+        )
+        .await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+    let (_, company, _) = s
+        .call(
+            &bea,
+            "GET",
+            "/api/portal/v1/tickets?scope=company",
+            Value::Null,
+        )
+        .await;
+    assert_eq!(company.as_array().unwrap().len(), 2);
+    let bea_ticket = company
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|t| t["title"] == "New starter")
+        .unwrap()["id"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    // Ada can't open Bea's; another company can't open either.
+    let (status, _, _) = s
+        .call(
+            &ada,
+            "GET",
+            &format!("/api/portal/v1/tickets/{bea_ticket}"),
+            Value::Null,
+        )
+        .await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+    let (status, _, _) = s
+        .call(
+            &gil,
+            "GET",
+            &format!("/api/portal/v1/tickets/{ticket}"),
+            Value::Null,
+        )
+        .await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+
+    internal_notes_stay_internal(&s, &ada, &ticket).await;
+    resolved_tickets_reopen_on_reply(&s, &ada, &ticket).await;
+}
+
+/// The service desk answers publicly and notes internally: only the public
+/// answer shows.
+async fn internal_notes_stay_internal(s: &Setup, ada: &str, ticket: &str) {
+    for (kind, body) in [("public", "On our way"), ("internal", "Toner order #42")] {
+        let (status, _, _) = s
+            .call(
+                &s.staff,
+                "POST",
+                &format!("/api/v1/tickets/{ticket}/notes"),
+                json!({ "kind": kind, "body": body }),
+            )
+            .await;
+        assert_eq!(status, StatusCode::CREATED);
+    }
+    let (_, seen, _) = s
+        .call(
+            ada,
+            "GET",
+            &format!("/api/portal/v1/tickets/{ticket}"),
+            Value::Null,
+        )
+        .await;
+    let bodies: Vec<&str> = seen["notes"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|n| n["body"].as_str().unwrap())
+        .collect();
+    assert_eq!(bodies, ["On our way"]);
+    assert_eq!(seen["notes"][0]["fromSupport"], true);
+    assert!(!seen.to_string().contains("Toner order"));
+}
+
+/// A reply to a resolved ticket reopens it, and shows as the contact's.
+async fn resolved_tickets_reopen_on_reply(s: &Setup, ada: &str, ticket: &str) {
+    let resolved: String = sqlx::query_scalar(
+        "SELECT s.key FROM sd_statuses s JOIN sd_tickets t ON t.type_id = s.type_id \
+          WHERE t.id = $1 AND s.category = 'resolved' ORDER BY s.position LIMIT 1",
+    )
+    .bind(ticket.parse::<Uuid>().unwrap())
+    .fetch_one(&s.pools.owner)
+    .await
+    .unwrap();
+    let (_, current, _) = s
+        .call(
+            &s.staff,
+            "GET",
+            &format!("/api/v1/tickets/{ticket}"),
+            Value::Null,
+        )
+        .await;
+    let (status, done, _) = s
+        .call(
+            &s.staff,
+            "POST",
+            &format!("/api/v1/tickets/{ticket}/status"),
+            json!({ "status": resolved, "resolution": "Cleared the jam", "version": current["version"] }),
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK, "{done}");
+    let (_, closed, _) = s
+        .call(
+            ada,
+            "GET",
+            "/api/portal/v1/tickets?status=closed",
+            Value::Null,
+        )
+        .await;
+    assert_eq!(closed.as_array().unwrap().len(), 1);
+    let (status, reply, _) = s
+        .call(
+            ada,
+            "POST",
+            &format!("/api/portal/v1/tickets/{ticket}/replies"),
+            json!({ "body": "Jammed again" }),
+        )
+        .await;
+    assert_eq!(status, StatusCode::CREATED, "{reply}");
+    assert_eq!(
+        (&reply["authorName"], &reply["fromSupport"]),
+        (&json!("Ada Client"), &json!(false))
+    );
+    let (_, after, _) = s
+        .call(
+            ada,
+            "GET",
+            &format!("/api/portal/v1/tickets/{ticket}"),
+            Value::Null,
+        )
+        .await;
+    assert_eq!(after["statusCategory"], "open");
+    let notes: Vec<bool> = after["notes"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|n| n["resolution"].as_bool().unwrap())
+        .collect();
+    assert_eq!(notes, [false, true, false]);
 }

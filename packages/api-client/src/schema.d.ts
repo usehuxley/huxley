@@ -109,6 +109,60 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
+	'/api/portal/v1/tickets': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/**
+		 * Your tickets (or, for client admins with `scope=company`, your
+		 *     company's).
+		 */
+		get: operations['portal_list_tickets'];
+		put?: never;
+		/** Raises a ticket for you, at your company. */
+		post: operations['portal_raise_ticket'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/portal/v1/tickets/{id}': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get: operations['portal_get_ticket'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/portal/v1/tickets/{id}/replies': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/** Replies to a ticket you see. A resolved ticket reopens. */
+		post: operations['portal_reply_to_ticket'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
 	'/api/v1/agreements': {
 		parameters: {
 			query?: never;
@@ -8649,6 +8703,20 @@ export interface components {
 			/** @description Portal permissions, e.g. `portal.ticket:read:company`. */
 			permissions: string[];
 		};
+		/** @description A public note in the portal. */
+		PortalNote: {
+			/** @description Who wrote it: a contact, or someone at the service desk. */
+			authorName?: string | null;
+			body: string;
+			/** Format: date-time */
+			createdAt: string;
+			/** @description Written by the service desk (not a contact). */
+			fromSupport: boolean;
+			/** Format: uuid */
+			id: string;
+			/** @description The resolution. */
+			resolution: boolean;
+		};
 		PortalPasswordSignIn: {
 			email: string;
 			password: string;
@@ -8672,6 +8740,9 @@ export interface components {
 		PortalRedeemRequest: {
 			token: string;
 		};
+		PortalReply: {
+			body: string;
+		};
 		/**
 		 * @description A portal account's role at its company.
 		 * @enum {string}
@@ -8679,6 +8750,31 @@ export interface components {
 		PortalRole: 'client_user' | 'client_approver' | 'client_admin';
 		PortalSetPassword: {
 			password: string;
+		};
+		/** @description A ticket in the portal. */
+		PortalTicket: {
+			/** Format: date-time */
+			createdAt: string;
+			description: string;
+			/** Format: uuid */
+			id: string;
+			priority: string;
+			reference: string;
+			/** Format: uuid */
+			requesterId?: string | null;
+			requesterName?: string | null;
+			/** @description `new`, `open`, `pending`, `resolved` or `closed`. */
+			statusCategory: string;
+			statusName: string;
+			title: string;
+			/** Format: date-time */
+			updatedAt: string;
+		};
+		/** @description A ticket with its public notes. */
+		PortalTicketView: components['schemas']['PortalTicket'] & {
+			/** @description Whether you can reply (it isn't closed). */
+			canReply: boolean;
+			notes: components['schemas']['PortalNote'][];
 		};
 		/** @description A kind with the user's effective channels. */
 		Preference: {
@@ -8874,6 +8970,10 @@ export interface components {
 			 * @description How many open tickets in it nobody (person or team) has.
 			 */
 			unassigned: number;
+		};
+		RaisePortalTicket: {
+			description?: string;
+			title: string;
 		};
 		/** @description A fixed-window rate limit. */
 		RateLimit: {
@@ -10836,6 +10936,125 @@ export interface operations {
 					[name: string]: unknown;
 				};
 				content?: never;
+			};
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	portal_list_tickets: {
+		parameters: {
+			query?: {
+				/** @description `open` (the default) or `closed` (resolved and closed). */
+				status?: string;
+				/** @description `mine` (the default) or `company` (client admins). */
+				scope?: string;
+				/** @description Words in the title, or the reference. */
+				q?: string;
+			};
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['PortalTicket'][];
+				};
+			};
+		};
+	};
+	portal_raise_ticket: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['RaisePortalTicket'];
+			};
+		};
+		responses: {
+			201: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['PortalTicketView'];
+				};
+			};
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	portal_get_ticket: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['PortalTicketView'];
+				};
+			};
+			404: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	portal_reply_to_ticket: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['PortalReply'];
+			};
+		};
+		responses: {
+			201: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['PortalNote'];
+				};
 			};
 			422: {
 				headers: {
