@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { answersOf, fieldsOf } from './fields.ts';
+import { answersOf, fieldsOf } from '@usehuxley/ui';
 
 const schema = {
 	type: 'object',

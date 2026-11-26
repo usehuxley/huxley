@@ -3,9 +3,7 @@
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
 	import { ArrowLeft } from '@lucide/svelte';
-	import { Button, Card, Field, Select } from '@usehuxley/ui';
-	import FormRenderer from '#lib/form-renderer/FormRenderer.svelte';
-	import { answersOf, fieldsOf } from '#lib/form-renderer/fields.ts';
+	import { Button, Card, Field, Select, FormRenderer, answersOf, fieldsOf } from '@usehuxley/ui';
 	import type { PageProps } from './$types';
 
 	let { data, form }: PageProps = $props();

@@ -145,6 +145,7 @@ fn portal_api() -> Router<AppState> {
     crate::portal_routes::routes()
         .merge(crate::portal_ticket_routes::routes())
         .merge(crate::portal_sso_routes::portal_routes())
+        .merge(crate::portal_catalog_routes::routes())
         .layer(middleware::from_fn(csrf::require_header))
 }
 

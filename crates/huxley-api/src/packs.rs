@@ -341,6 +341,11 @@ impl Target<'_> {
             /// Offered as an Action on a client, contact or ticket.
             #[serde(default, rename = "actionFor")]
             action_for: Option<String>,
+            /// Offered to client contacts in the portal.
+            #[serde(default)]
+            portal: bool,
+            #[serde(default, rename = "portalCategory")]
+            portal_category: Option<String>,
         }
         let file: FormFile =
             serde_json::from_str(pack.text(&format!("forms/{key}.json")).unwrap_or_default())
@@ -352,6 +357,8 @@ impl Target<'_> {
             schema: file.schema,
             ui: file.ui,
             action_for: file.action_for,
+            portal: file.portal,
+            portal_category: file.portal_category,
         };
         let form = match current {
             Some(id) => huxley_forms::update(&mut *self.conn, self.ctx, id, &input).await,

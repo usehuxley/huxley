@@ -48,6 +48,8 @@ export const actions: Actions = {
 				name: formString(form, 'name'),
 				description: formString(form, 'description') || null,
 				actionFor: formString(form, 'actionFor') || null,
+				portal: form.get('portal') === 'on',
+				portalCategory: formString(form, 'portalCategory') || null,
 				schema: schema as Record<string, unknown>,
 				ui: ui as Record<string, unknown>
 			}

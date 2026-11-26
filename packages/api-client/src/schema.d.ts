@@ -155,6 +155,56 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
+	'/api/portal/v1/catalog': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** What you can ask for: forms offered to your company's contacts. */
+		get: operations['portal_catalog'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/portal/v1/catalog/{id}': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get: operations['portal_catalog_form'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/portal/v1/catalog/{id}/requests': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/** Asks for something with a form: starts its workflows for your company. */
+		post: operations['portal_submit_request'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
 	'/api/portal/v1/me': {
 		parameters: {
 			query?: never;
@@ -273,6 +323,23 @@ export interface paths {
 		get?: never;
 		/** Sets your portal password (your other sessions end). */
 		put: operations['portal_set_password'];
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/portal/v1/requests': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** What you've asked for, newest first. */
+		get: operations['portal_requests'];
+		put?: never;
 		post?: never;
 		delete?: never;
 		options?: never;
@@ -7774,6 +7841,13 @@ export interface components {
 			name: string;
 			/** Format: uuid */
 			orgId: string;
+			/**
+			 * @description Offered to client contacts in the portal, for the form's
+			 *     organization and those below it.
+			 */
+			portal: boolean;
+			/** @description Its group in the portal, e.g. "Accounts". */
+			portalCategory?: string | null;
 			/** @description JSON Schema of the answers. */
 			schema: {
 				[key: string]: unknown;
@@ -7792,6 +7866,13 @@ export interface components {
 			description?: string | null;
 			key: string;
 			name: string;
+			/**
+			 * @description Offer it to client contacts in the portal. It can't look choices up
+			 *     through an integration.
+			 */
+			portal?: boolean;
+			/** @description Its group in the portal, e.g. "Accounts". */
+			portalCategory?: string | null;
 			schema: {
 				[key: string]: unknown;
 			};
@@ -8930,6 +9011,20 @@ export interface components {
 			name: string;
 			supportEmail?: string | null;
 		};
+		/** @description A form as the portal shows it. */
+		PortalForm: {
+			category?: string | null;
+			description?: string | null;
+			/** Format: uuid */
+			id: string;
+			name: string;
+			schema: {
+				[key: string]: unknown;
+			};
+			ui: {
+				[key: string]: unknown;
+			};
+		};
 		PortalIdentityProvider: {
 			clientId: string;
 			defaultRole: components['schemas']['PortalRole'];
@@ -9047,6 +9142,36 @@ export interface components {
 		};
 		PortalReply: {
 			body: string;
+		};
+		/** @description Something a contact asked for in the portal. */
+		PortalRequest: {
+			/** Format: date-time */
+			createdAt: string;
+			/** Format: uuid */
+			formId: string;
+			formName: string;
+			/**
+			 * Format: uuid
+			 * @description The submission.
+			 */
+			id: string;
+			/**
+			 * @description `received` (nothing to run), `in_progress`, `done`, or `failed` (a
+			 *     run failed or was cancelled; the service desk can see why).
+			 */
+			status: string;
+		};
+		PortalRequestCreated: {
+			/**
+			 * Format: uuid
+			 * @description The request (submission).
+			 */
+			id: string;
+		};
+		PortalRequestInput: {
+			answers: {
+				[key: string]: unknown;
+			};
 		};
 		/**
 		 * @description A portal account's role at its company.
@@ -11356,6 +11481,80 @@ export interface operations {
 			};
 		};
 	};
+	portal_catalog: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['PortalForm'][];
+				};
+			};
+		};
+	};
+	portal_catalog_form: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['PortalForm'];
+				};
+			};
+		};
+	};
+	portal_submit_request: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['PortalRequestInput'];
+			};
+		};
+		responses: {
+			201: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['PortalRequestCreated'];
+				};
+			};
+			/** @description The answers don't fit */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
 	portal_me: {
 		parameters: {
 			query?: never;
@@ -11533,6 +11732,25 @@ export interface operations {
 				};
 				content: {
 					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	portal_requests: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['PortalRequest'][];
 				};
 			};
 		};

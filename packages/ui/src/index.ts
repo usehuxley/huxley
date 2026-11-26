@@ -15,3 +15,13 @@ export { default as Tabs, type TabItem } from './components/Tabs.svelte';
 export { default as ThemeToggle, type ThemePreference } from './components/ThemeToggle.svelte';
 export { default as Toaster } from './components/Toaster.svelte';
 export { toast, type Toast, type ToastTone } from './toast.svelte';
+export { default as FormRenderer } from './form/FormRenderer.svelte';
+export {
+	answersOf,
+	fieldsOf,
+	shownFields,
+	type Choice,
+	type Field as FormField,
+	type FieldKind,
+	type ShowIf
+} from './form/fields';

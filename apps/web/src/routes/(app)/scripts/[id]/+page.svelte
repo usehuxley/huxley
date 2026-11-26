@@ -2,8 +2,7 @@
 	import { enhance } from '$app/forms';
 	import { resolve } from '$app/paths';
 	import { ArrowLeft } from '@lucide/svelte';
-	import { Button, Card, Field, Input } from '@usehuxley/ui';
-	import FormRenderer from '#lib/form-renderer/FormRenderer.svelte';
+	import { Button, Card, Field, Input, FormRenderer } from '@usehuxley/ui';
 	import type { PageProps } from './$types';
 
 	let { data, form }: PageProps = $props();

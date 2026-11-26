@@ -6,7 +6,7 @@ import {
 	problemsOf,
 	type BuilderField
 } from './builder.ts';
-import { fieldsOf } from './fields.ts';
+import { fieldsOf } from '@usehuxley/ui';
 
 const field = (over: Partial<BuilderField>): BuilderField => ({
 	name: 'x',

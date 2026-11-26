@@ -14,6 +14,7 @@
 
 mod hints;
 mod links;
+pub mod portal;
 
 pub use hints::{Choice, OptionsFrom, ShowIf, choices_of, options, shown};
 pub use links::{LinkView, TOKEN_PREFIX, create_link, links, open, revoke_link};
@@ -26,6 +27,20 @@ pub enum Submitter {
     /// Someone with a public link: runs act as each workflow's run-as
     /// service account (or no one), never as a person.
     Link(Uuid),
+    /// A client contact in the portal (their portal account): runs act as
+    /// each workflow's run-as account, as for a link.
+    Portal(Uuid),
+}
+
+impl Submitter {
+    /// The submission's `submitted_by`, `link_id` and `portal_account_id`.
+    fn columns(self) -> (Option<Uuid>, Option<Uuid>, Option<Uuid>) {
+        match self {
+            Self::User(user) => (Some(user), None, None),
+            Self::Link(link) => (None, Some(link), None),
+            Self::Portal(account) => (None, None, Some(account)),
+        }
+    }
 }
 
 use huxley_core::RequestContext;
@@ -90,6 +105,11 @@ pub struct Form {
     /// Offered as an Action on a `client`, `contact` or `ticket`: run from
     /// that record, its workflows get it as `trigger.context`.
     pub action_for: Option<String>,
+    /// Offered to client contacts in the portal, for the form's
+    /// organization and those below it.
+    pub portal: bool,
+    /// Its group in the portal, e.g. "Accounts".
+    pub portal_category: Option<String>,
     pub archived: bool,
     #[serde(with = "time::serde::rfc3339")]
     pub created_at: OffsetDateTime,
@@ -97,8 +117,7 @@ pub struct Form {
     pub updated_at: OffsetDateTime,
 }
 
-const COLUMNS: &str =
-    "id, org_id, key, name, description, schema, ui, action_for, archived, created_at, updated_at";
+const COLUMNS: &str = "id, org_id, key, name, description, schema, ui, action_for, portal, portal_category, archived, created_at, updated_at";
 
 /// A form's definition, to create or replace it.
 #[derive(Debug, Clone, Deserialize, ToSchema)]
@@ -116,6 +135,39 @@ pub struct FormInput {
     /// Offer it as an Action on a `client`, `contact` or `ticket`.
     #[serde(default)]
     pub action_for: Option<String>,
+    /// Offer it to client contacts in the portal. It can't look choices up
+    /// through an integration.
+    #[serde(default)]
+    pub portal: bool,
+    /// Its group in the portal, e.g. "Accounts".
+    #[serde(default)]
+    pub portal_category: Option<String>,
+}
+
+/// The portal category, trimmed (empty is none), and the portal rules.
+fn portal_of(input: &FormInput) -> FormResult<Option<String>> {
+    let category = input
+        .portal_category
+        .as_deref()
+        .map(str::trim)
+        .filter(|c| !c.is_empty())
+        .map(str::to_owned);
+    if category.as_ref().is_some_and(|c| c.chars().count() > 60) {
+        return Err(invalid("portalCategory", "at most 60 characters"));
+    }
+    if input.portal {
+        let looks_up = input.schema["properties"].as_object().is_some_and(|p| {
+            p.keys()
+                .any(|name| hints::options_from(&input.ui, name).is_some())
+        });
+        if looks_up {
+            return Err(invalid(
+                "portal",
+                "forms that look choices up through an integration can't be offered in the portal",
+            ));
+        }
+    }
+    Ok(category)
 }
 
 /// Where a form can be offered as an Action.
@@ -219,10 +271,11 @@ pub async fn create(
 ) -> FormResult<Form> {
     check(input)?;
     let action = action_for(input)?;
+    let category = portal_of(input)?;
     let id = huxley_core::new_id();
     let inserted = sqlx::query(
-        "INSERT INTO forms (id, org_id, key, name, description, schema, ui, created_by, action_for) \
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) ON CONFLICT (org_id, key) DO NOTHING",
+        "INSERT INTO forms (id, org_id, key, name, description, schema, ui, created_by, action_for, portal, \
+            portal_category) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) ON CONFLICT (org_id, key) DO NOTHING",
     )
     .bind(id)
     .bind(org_id)
@@ -233,6 +286,8 @@ pub async fn create(
     .bind(ui(input))
     .bind(ctx.actor.id())
     .bind(action)
+    .bind(input.portal)
+    .bind(&category)
     .execute(&mut *conn)
     .await?;
     if inserted.rows_affected() == 0 {
@@ -264,6 +319,7 @@ pub async fn update(
     }
     check(input)?;
     let action = action_for(input)?;
+    let category = portal_of(input)?;
     let public: bool = sqlx::query_scalar(
         "SELECT EXISTS (SELECT 1 FROM form_links WHERE form_id = $1 AND revoked_at IS NULL \
                           AND (expires_at IS NULL OR expires_at > now()))",
@@ -286,7 +342,7 @@ pub async fn update(
     }
     sqlx::query(
         "UPDATE forms SET name = $2, description = $3, schema = $4, ui = $5, action_for = $6, \
-                updated_at = now() \
+                portal = $7, portal_category = $8, updated_at = now() \
           WHERE id = $1",
     )
     .bind(id)
@@ -295,6 +351,8 @@ pub async fn update(
     .bind(&input.schema)
     .bind(ui(input))
     .bind(action)
+    .bind(input.portal)
+    .bind(&category)
     .execute(&mut *conn)
     .await?;
     audit::record(
@@ -439,9 +497,11 @@ async fn actor_for(
 ) -> FormResult<Result<Option<Uuid>, String>> {
     match by {
         Submitter::User(user) => Ok(Ok(Some(user))),
-        Submitter::Link(_) => huxley_workflows::trigger_actor(conn, workflow_id)
-            .await
-            .map_err(|e| FormError::Db(sqlx::Error::Protocol(e.to_string()))),
+        Submitter::Link(_) | Submitter::Portal(_) => {
+            huxley_workflows::trigger_actor(conn, workflow_id)
+                .await
+                .map_err(|e| FormError::Db(sqlx::Error::Protocol(e.to_string())))
+        }
     }
 }
 
@@ -487,7 +547,7 @@ pub async fn submit(
     }
     let answers = check_answers(&form, &answers)?;
     let secret_fields = secret_fields(&form);
-    if let Submitter::Link(_) = by {
+    if let Submitter::Link(_) | Submitter::Portal(_) = by {
         links::refuse_lookups(&form)?;
     }
     let workflows: Vec<(Uuid, String, i32, Json)> = sqlx::query_as(
@@ -502,6 +562,7 @@ pub async fn submit(
     .fetch_all(&mut *conn)
     .await?;
     let submission_id = huxley_core::new_id();
+    let submitter = by.columns();
     let mut runs = Vec::new();
     let mut skipped = Vec::new();
     for (workflow_id, name, version, document) in workflows {
@@ -539,23 +600,18 @@ pub async fn submit(
         runs.push(run);
     }
     sqlx::query(
-        "INSERT INTO form_submissions (id, form_id, org_id, submitted_by, link_id, data, run_ids, context) \
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)",
+        "INSERT INTO form_submissions (id, form_id, org_id, submitted_by, link_id, data, run_ids, context, \
+            portal_account_id) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)",
     )
     .bind(submission_id)
     .bind(form_id)
     .bind(org_id)
-    .bind(match by {
-        Submitter::User(user) => Some(user),
-        Submitter::Link(_) => None,
-    })
-    .bind(match by {
-        Submitter::Link(link) => Some(link),
-        Submitter::User(_) => None,
-    })
+    .bind(submitter.0)
+    .bind(submitter.1)
     .bind(redacted(&answers, &secret_fields))
     .bind(&runs)
     .bind(context)
+    .bind(submitter.2)
     .execute(&mut *conn)
     .await?;
     if let Submitter::Link(link) = by {
@@ -593,6 +649,8 @@ mod tests {
             schema,
             ui: json!({}),
             action_for: None,
+            portal: false,
+            portal_category: None,
         }
     }
 
@@ -609,6 +667,8 @@ mod tests {
             schema: json!({ "type": "object", "properties": { "reason": { "type": "string" } } }),
             ui: json!({}),
             action_for: None,
+            portal: false,
+            portal_category: None,
             archived: false,
             created_at: OffsetDateTime::UNIX_EPOCH,
             updated_at: OffsetDateTime::UNIX_EPOCH,

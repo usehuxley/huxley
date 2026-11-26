@@ -1,8 +1,6 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
-	import { Button } from '@usehuxley/ui';
-	import FormRenderer from '#lib/form-renderer/FormRenderer.svelte';
-	import { answersOf, fieldsOf } from '#lib/form-renderer/fields.ts';
+	import { Button, FormRenderer, answersOf, fieldsOf } from '@usehuxley/ui';
 	import type { PageProps } from './$types';
 
 	let { data, form }: PageProps = $props();
