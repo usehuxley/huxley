@@ -21,6 +21,7 @@
 		'project-templates': resolve('/(app)/settings/project-templates'),
 		mailboxes: resolve('/(app)/settings/mailboxes'),
 		skills: resolve('/(app)/settings/skills'),
+		calendars: resolve('/(app)/settings/calendars'),
 		responses: resolve('/(app)/settings/responses'),
 		templates: resolve('/(app)/settings/templates'),
 		'work-types': resolve('/(app)/settings/work-types'),

@@ -211,6 +211,9 @@ const plainSpaces = EditorState.transactionFilter.of((tr) => {
 const external = Annotation.define<boolean>();
 
 export type Controller = {
+	/** The text now, including typing the editor hasn't read from the page
+	 * yet (it reads changes a moment after they happen). */
+	flush: () => string;
 	setValue: (value: string) => void;
 	setReadonly: (readonly: boolean) => void;
 	focus: () => void;
@@ -297,6 +300,12 @@ export async function create(parent: HTMLElement, options: CodeEditorOptions): P
 		state: EditorState.create({ doc: options.value, extensions })
 	});
 	return {
+		flush() {
+			// CodeMirror's DOM observer isn't public API: reached defensively.
+			const observer = (view as unknown as { observer?: { flush?: () => void } }).observer;
+			observer?.flush?.();
+			return view.state.doc.toString();
+		},
 		setValue(value) {
 			const current = view.state.doc.toString();
 			if (value !== current) {

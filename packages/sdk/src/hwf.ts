@@ -1344,6 +1344,30 @@ export type Step =
 			 * Fail the attempt after this long, e.g. `30s`.
 			 */
 			timeout?: string | null;
+			type: 'core.calendar.sync';
+			with?: CalendarSync | null;
+	  }
+	| {
+			/**
+			 * Record the error as the step's output and carry on.
+			 */
+			continue_on_error?: boolean;
+			description?: string | null;
+			/**
+			 * Unique in the workflow: lowercase letters, digits, underscores.
+			 * Other steps read this step's output as `steps.<id>.output`.
+			 */
+			id: string;
+			/**
+			 * Skip the step unless this expression is true.
+			 */
+			if?: string | null;
+			name?: string | null;
+			retry?: RetryPolicy | null;
+			/**
+			 * Fail the attempt after this long, e.g. `30s`.
+			 */
+			timeout?: string | null;
 			type: 'core.project.status';
 			with?: ProjectStatus | null;
 	  }
@@ -2424,6 +2448,18 @@ export interface ScopeDecide {
 	comment?: unknown;
 	decision: unknown;
 	scope_change_id: unknown;
+}
+/**
+ * Whose calendars to sync (`core.calendar.sync`): everyone set up (from
+ * Microsoft 365 or an iCalendar feed), or `user_id`. Busy blocks are
+ * replaced from a day back to 60 days ahead. Output: `{ people, blocks,
+ * failed: [{ user_id, error }] }`.
+ *
+ * This interface was referenced by `HuxleyWorkflowFormatV1`'s JSON-Schema
+ * via the `definition` "CalendarSync".
+ */
+export interface CalendarSync {
+	user_id?: unknown;
 }
 /**
  * What to gather for status reports (`core.project.status`): one

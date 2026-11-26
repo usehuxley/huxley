@@ -28,6 +28,7 @@ use crate::{ApiError, ApiResult, AppState};
 
 pub fn routes() -> Router<AppState> {
     Router::new()
+        .merge(crate::calendar_routes::routes())
         .route("/skills", get(list_skills).post(create_skill))
         .route("/skills/{id}", put(update_skill).delete(archive_skill))
         .route(

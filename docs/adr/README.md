@@ -64,3 +64,4 @@ Decisions that shape Huxley. Add a new ADR by copying `0000-template.md` with th
 | [058](0058-project-capacity.md) | Capacity is computed from schedules, appointments and task estimates | Accepted |
 | [059](0059-project-status-reports.md) | Status reports are drafted by a pack and shared by a person | Accepted |
 | [060](0060-code-editor.md) | One CodeMirror 6 editor, loaded on demand | Accepted |
+| [061](0061-calendar-sync.md) | Calendar sync reads free/busy, through connections and a pack | Accepted |

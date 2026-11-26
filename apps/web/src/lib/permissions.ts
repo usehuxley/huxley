@@ -56,6 +56,12 @@ export const SETTINGS_SECTIONS = [
 		module: 'workforce'
 	},
 	{
+		key: 'calendars',
+		label: 'Calendars',
+		permission: 'workforce:manage',
+		module: 'workforce'
+	},
+	{
 		key: 'asset-types',
 		label: 'Asset types',
 		permission: 'cmdb:configure',

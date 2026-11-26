@@ -56,6 +56,7 @@
 	}: Props = $props();
 
 	let host: HTMLDivElement;
+	let field: HTMLInputElement | undefined = $state();
 
 	/** The page's nonce for style elements (a meta tag the server fills in;
 	 * an unfilled placeholder means there's none). */
@@ -100,8 +101,19 @@
 			made.setReadonly(untrack(() => readonly));
 			editor = made;
 		});
+		// Submitting: the form gets the text as it is this instant, even typing
+		// the editor hasn't read yet (capture: before SvelteKit reads the form).
+		const form = host.closest('form');
+		const beforeSubmit = () => {
+			if (!made || cancelled) return;
+			const text = made.flush();
+			value = text;
+			if (field) field.value = text;
+		};
+		form?.addEventListener('submit', beforeSubmit, { capture: true });
 		return () => {
 			cancelled = true;
+			form?.removeEventListener('submit', beforeSubmit, { capture: true });
 			made?.destroy();
 		};
 	});
@@ -125,7 +137,7 @@
 	data-compact={compact ? '' : undefined}
 >
 	{#if editor}
-		{#if name}<input type="hidden" {name} {value} />{/if}
+		{#if name}<input type="hidden" {name} {value} bind:this={field} />{/if}
 	{:else}
 		<textarea
 			{name}
