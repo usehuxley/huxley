@@ -58,6 +58,21 @@ The event names the person, the certification and its expiry date.
 
 **Where it shows.** The **People** page marks who is away today. Managers also see the requests waiting for them there.
 
+**Calendars.** People's busy time comes from their work calendars, so dispatch, the dispatch board and capacity planning know when they're actually free (ADR-061). Set it up under **Settings → Calendars**:
+
+- **Microsoft 365:** choose a Microsoft Graph connection (its app needs `Calendars.Read`, or `Calendars.ReadBasic.All`). Everyone is read at their email, or at the calendar address you set for them. Up to 20 people are read per call, from their free/busy schedule, so private events show only as busy.
+- **An iCalendar feed:** for anything else, paste the feed's address, such as Google Calendar's *secret address in iCal format*. It's kept sealed and never shown again. Recurring events, exceptions and moved occurrences are followed.
+- **Not synced:** for someone whose calendar shouldn't be read.
+- **Subjects:** only free/busy is kept, unless you choose to keep event subjects. Private events' subjects are never kept.
+
+Install the **Calendar sync** pack to read calendars every five minutes, from a day back to 60 days ahead. Each person's last sync, or why it failed, shows on the settings page.
+
+**What busy time changes:**
+
+- Someone busy at a moment, or out of office, isn't offered for work then. Dispatch skips them, and who-fits ranks them below people who are free. Tentative and working-elsewhere time doesn't block.
+- The **dispatch board** shows busy time beside appointments.
+- **Capacity** subtracts busy and out-of-office hours from each day's working hours.
+
 ## Timesheets
 
 A **timesheet** is a person's time for a period, weekly from Monday by default. **My time** shows each week's timesheet:

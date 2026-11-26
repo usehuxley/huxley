@@ -9,10 +9,13 @@ repository.workspace = true
 publish = false
 
 [dependencies]
+chrono.workspace = true
 huxley-core.workspace = true
+huxley-crypto.workspace = true
 huxley-db.workspace = true
 huxley-modules.workspace = true
 jiff.workspace = true
+rrule.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 sqlx.workspace = true

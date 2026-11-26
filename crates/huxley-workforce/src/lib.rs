@@ -4,7 +4,9 @@
 //! people); the API checks permissions and that the module is on.
 
 pub mod availability;
+pub mod calendar;
 pub mod catalog;
+pub mod ics;
 pub mod insights;
 pub mod people;
 pub mod recommend;
@@ -32,7 +34,7 @@ pub enum WorkforceError {
 }
 
 impl WorkforceError {
-    pub(crate) fn invalid(field: &str, message: impl Into<String>) -> Self {
+    pub fn invalid(field: &str, message: impl Into<String>) -> Self {
         Self::Invalid {
             field: field.to_owned(),
             message: message.into(),

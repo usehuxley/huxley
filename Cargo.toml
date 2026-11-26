@@ -92,6 +92,9 @@ serde-saphyr = { version = "2.2", default-features = false, features = ["deseria
 schemars = "1.2"
 # Time zones for schedules; the bundled tz database works in minimal images.
 jiff = { version = "0.2", features = ["tzdb-bundle-always"] }
+# Recurring calendar events (ICS RRULE), for calendar sync.
+rrule = "0.14"
+chrono = { version = "0.4", default-features = false }
 # Run inputs against a workflow's input schema. No remote or file $ref resolution.
 jsonschema = { version = "0.63", default-features = false }
 # Expressions (ADR-005): sandboxed, no loaders; fuel bounds evaluation.

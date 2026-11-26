@@ -371,11 +371,26 @@ pub async fn unavailable(
     .bind(at)
     .fetch_all(&mut *conn)
     .await?;
+    // Busy in their calendar (synced, ADR-061): out of office counts as
+    // away; tentative and working elsewhere don't block.
+    let busy: Vec<(Uuid, String)> = sqlx::query_as(
+        "SELECT DISTINCT ON (user_id) user_id, status FROM wf_busy_blocks \
+          WHERE user_id = ANY($1) AND status IN ('busy', 'oof') \
+            AND starts_at <= to_timestamp($2) AND ends_at > to_timestamp($2) \
+          ORDER BY user_id, status = 'oof' DESC",
+    )
+    .bind(people)
+    .bind(at)
+    .fetch_all(&mut *conn)
+    .await?;
     let mut out = BTreeMap::new();
     for (user, tz, hours) in &schedules {
         if Calendar::weekly(tz, hours).is_some_and(|c| !c.is_open(at)) {
             out.insert(*user, "off_hours");
         }
+    }
+    for (user, status) in busy {
+        out.insert(user, if status == "oof" { "away" } else { "busy" });
     }
     for user in away {
         out.insert(user, "away");
