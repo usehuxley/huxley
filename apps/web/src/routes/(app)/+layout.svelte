@@ -72,7 +72,7 @@
 		data.user.grantedPermissions.includes('ticket:read')
 			? [{ href: '/tickets', label: 'Tickets', icon: Ticket }]
 			: [{ href: '/tickets', label: 'Tickets', icon: Ticket, soon: true }]),
-		...(data.user.activeModules.includes('servicedesk') &&
+		...(data.user.activeModules.includes('change') &&
 		data.user.grantedPermissions.includes('ticket:read')
 			? [{ href: '/changes', label: 'Changes', icon: CalendarRange }]
 			: []),

@@ -1,6 +1,6 @@
 # Change management
 
-A change is a ticket of the **Change** type, with a **Change** card for its details (ADR-054).
+Turn on **Change and problem management** (Settings → Modules; it's on in the service-desk starting point). A change is then a ticket of the **Change** type, with a **Change** card for its details (ADR-054).
 
 ## Filling one in
 

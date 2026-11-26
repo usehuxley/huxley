@@ -82,25 +82,25 @@ test.describe('settings (as the bootstrap owner)', () => {
 		await page.goto('/settings/modules');
 		await expect(page.getByText('No modules on: automation engine only.')).toBeVisible();
 
-		const row = page.getByRole('listitem').filter({ hasText: 'Change and problem management' });
-		await expect(row.getByText('also turns on Clients and contacts, Service desk')).toBeVisible();
+		const row = page.getByRole('listitem').filter({ hasText: 'Sales and quoting' });
+		await expect(row.getByText('also turns on Clients and contacts, Contracts')).toBeVisible();
 		await row.getByRole('button', { name: 'Turn on' }).click();
 		await expect(
-			page.getByText('Turned on: Clients and contacts, Service desk, Change and problem management')
+			page.getByText('Turned on: Clients and contacts, Contracts, Sales and quoting')
 		).toBeVisible();
-		await expect(row.getByText('On: arrives in Phase 9')).toBeVisible();
+		await expect(row.getByText('On: arrives in Phase 10')).toBeVisible();
 
-		// Service desk can't be turned off while Change and problem management needs it.
-		const desk = page.getByRole('listitem').filter({ hasText: 'Tickets, service queues' });
-		await desk.getByRole('button', { name: 'Turn off' }).click();
+		// Contracts can't be turned off while Sales and quoting needs it.
+		const contracts = page.getByRole('listitem').filter({ hasText: 'Agreements (coverage' });
+		await contracts.getByRole('button', { name: 'Turn off' }).click();
 		await expect(page.getByText(/other enabled modules depend on it/i)).toBeVisible();
 
 		await row.getByRole('button', { name: 'Turn off' }).click();
-		await expect(page.getByText('Turned off: Change and problem management')).toBeVisible();
+		await expect(page.getByText('Turned off: Sales and quoting')).toBeVisible();
 
 		// Leave the instance as it was: every module off.
-		await desk.getByRole('button', { name: 'Turn off' }).click();
-		await expect(page.getByText('Turned off: Service desk')).toBeVisible();
+		await contracts.getByRole('button', { name: 'Turn off' }).click();
+		await expect(page.getByText('Turned off: Contracts')).toBeVisible();
 		const crm = page.getByRole('listitem').filter({ hasText: 'Companies, contacts, sites' });
 		await crm.getByRole('button', { name: 'Turn off' }).click();
 		await expect(page.getByText('Turned off: Clients and contacts')).toBeVisible();

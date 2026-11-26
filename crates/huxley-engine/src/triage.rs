@@ -280,6 +280,19 @@ impl Engine {
     /// change (in the run's organization or below). Output: the change.
     pub(crate) async fn change_decide(&self, org_id: Uuid, input: &Json) -> Result<Json, Json> {
         self.require_desk(org_id).await?;
+        let mut tx = begin_scoped(self.db(), &OrgScope::System)
+            .await
+            .map_err(internal)?;
+        let on = huxley_modules::is_active_at(&mut tx, "change", org_id)
+            .await
+            .map_err(internal)?;
+        tx.commit().await.map_err(internal)?;
+        if !on {
+            return Err(error(
+                "module_disabled",
+                "Change and problem management is turned off",
+            ));
+        }
         let ticket =
             id(input, "ticket_id")?.ok_or_else(|| error("input", "ticket_id is required"))?;
         let approved = match &input["decision"] {

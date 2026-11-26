@@ -50,7 +50,7 @@ async fn setup() -> Option<Setup> {
     // The module is instance-wide: switch it on (other tests may have too).
     let ctx = RequestContext::system(Via::System);
     let mut tx = begin_scoped(&pools.app, &OrgScope::System).await.unwrap();
-    for module in ["crm", "servicedesk"] {
+    for module in ["crm", "servicedesk", "change"] {
         huxley_modules::set_enabled(&mut tx, &ctx, module, true, false)
             .await
             .unwrap();

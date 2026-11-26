@@ -9,10 +9,13 @@ use axum::routing::{delete, get, post};
 use axum::{Json, Router};
 use huxley_authz::permissions;
 use huxley_db::{OrgScope, begin_scoped};
+use huxley_servicedesk::DeskError;
 use huxley_servicedesk::changes::{
     self, Calendar, Change, ChangeInput, Freeze, FreezeInput, RiskQuestion, Submitted,
 };
-use huxley_servicedesk::{DeskError, MODULE};
+
+/// The change management module.
+const MODULE: &str = "change";
 use serde::{Deserialize, Serialize};
 use time::OffsetDateTime;
 use utoipa::{IntoParams, ToSchema};

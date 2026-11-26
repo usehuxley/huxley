@@ -82,7 +82,7 @@ export const load: PageServerLoad = async (event) => {
 	]);
 	// A change ticket: its change details, the risk questions, its impact
 	// and the client's assets to pick from.
-	const isChange = ticket.data.typeKey === 'change';
+	const isChange = ticket.data.typeKey === 'change' && user.activeModules.includes('change');
 	const [change, questions, impact, changeAssets] = isChange
 		? await Promise.all([
 				client.GET('/api/v1/tickets/{id}/change', path),
