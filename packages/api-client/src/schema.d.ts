@@ -5575,6 +5575,7 @@ export interface components {
 			lastRunAt?: string | null;
 			matchKeys: components['schemas']['AssetMatchKey'][];
 			name: string;
+			orgMatch?: components['schemas']['AssetOrgMatch'] | null;
 			source: string;
 			/** Format: uuid */
 			typeId: string;
@@ -5593,6 +5594,7 @@ export interface components {
 			fields: components['schemas']['AssetFieldMap'];
 			matchKeys: components['schemas']['AssetMatchKey'][];
 			name: string;
+			orgMatch?: components['schemas']['AssetOrgMatch'] | null;
 			/** @description The source's name, e.g. `rmm`: lowercase letters, digits and `_`. */
 			source: string;
 			/**
@@ -5611,6 +5613,15 @@ export interface components {
 			column: string;
 			/** @description `external_id`, `serial_number`, `hostname` or `name`. */
 			field: string;
+		};
+		/**
+		 * @description Which organization a row's asset belongs to: the one (at or below the
+		 *     dataset's) whose variable `variable` equals the row's `column`.
+		 */
+		AssetOrgMatch: {
+			column: string;
+			/** @description An organization variable's key, e.g. `automate_client_id`. */
+			variable: string;
 		};
 		AssetPage: {
 			items: components['schemas']['Asset'][];
@@ -6289,6 +6300,12 @@ export interface components {
 		};
 		/** @description What a pack adds, by key. */
 		Contents: {
+			/**
+			 * @description Datasets the pack's workflows write to (`datasets/<key>.json`: a
+			 *     dataset definition without its key). Installing makes or changes
+			 *     the definition; rows are never touched.
+			 */
+			datasets?: string[];
 			forms?: string[];
 			integrations?: string[];
 			scripts?: string[];

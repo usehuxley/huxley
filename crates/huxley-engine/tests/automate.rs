@@ -22,6 +22,10 @@ const SPEC: &str =
     include_str!("../../huxley-packs/builtin/cwautomate/integrations/cwautomate.yaml");
 const RUN: &str =
     include_str!("../../huxley-packs/builtin/cwautomate/workflows/automate-run-command.yaml");
+const SYNC: &str =
+    include_str!("../../huxley-packs/builtin/cwautomate/workflows/automate-sync-computers.yaml");
+const DATASET: &str =
+    include_str!("../../huxley-packs/builtin/cwautomate/datasets/automate-computers.json");
 
 #[derive(Default)]
 struct Mock {
@@ -82,6 +86,39 @@ async fn run_command(
     axum::Json(json!({ "Id": 77, "Status": "Pending" }))
 }
 
+/// Three computers, a page at a time.
+async fn computers(
+    State(m): State<Shared>,
+    Query(q): Query<std::collections::HashMap<String, String>>,
+    h: HeaderMap,
+) -> axum::Json<Json> {
+    let mut m = m.lock().unwrap();
+    m.calls.push((
+        format!(
+            "GET /computers?page={}&pagesize={}",
+            q["page"], q["pagesize"]
+        ),
+        header(&h, "authorization"),
+        header(&h, "clientid"),
+    ));
+    let all = [
+        json!({ "Id": 1, "ComputerName": "ACME-PC", "Client": { "Id": 7, "Name": "Acme" },
+                "Location": { "Id": 1, "Name": "HQ" }, "Type": "Workstation", "Status": "Online",
+                "SerialNumber": "SN-1", "IsVirtualMachine": false }),
+        json!({ "Id": 2, "ComputerName": "ACME-SRV", "Client": { "Id": 7, "Name": "Acme" },
+                "Type": "Server", "IsVirtualMachine": true }),
+        json!({ "Id": 3, "ComputerName": "GLOBEX-PC", "Client": { "Id": 8, "Name": "Globex" } }),
+    ];
+    let page: usize = q["page"].parse().unwrap();
+    let size: usize = q["pagesize"].parse().unwrap();
+    axum::Json(json!(
+        all.iter()
+            .skip((page - 1) * size)
+            .take(size)
+            .collect::<Vec<_>>()
+    ))
+}
+
 async fn command_results(
     State(m): State<Shared>,
     Path(id): Path<u64>,
@@ -125,6 +162,7 @@ async fn harness(password: &str) -> Option<(huxley_db::testing::IsolatedDb, Harn
     let mock: Shared = Arc::default();
     let app = axum::Router::new()
         .route("/cwa/api/v1/apitoken", post(login))
+        .route("/cwa/api/v1/computers", axum::routing::get(computers))
         .route(
             "/cwa/api/v1/Computers/{id}/CommandExecute",
             post(run_command).get(command_results),
@@ -186,6 +224,22 @@ async fn harness(password: &str) -> Option<(huxley_db::testing::IsolatedDb, Harn
 }
 
 impl Harness {
+    /// The pack's Automate computers dataset, at the MSP.
+    async fn dataset(&self) -> huxley_datasets::Dataset {
+        let ctx = RequestContext::system(Via::System);
+        let mut definition: Json = serde_json::from_str(DATASET).unwrap();
+        definition["key"] = json!("automate-computers");
+        let input: huxley_datasets::DatasetInput = serde_json::from_value(definition).unwrap();
+        let mut tx = begin_scoped(&self.pools.app, &OrgScope::System)
+            .await
+            .unwrap();
+        let ds = huxley_datasets::create(&mut tx, &ctx, self.root, &input)
+            .await
+            .unwrap();
+        tx.commit().await.unwrap();
+        ds
+    }
+
     async fn ticket(&self) -> Uuid {
         let ctx = RequestContext::system(Via::System);
         let mut tx = begin_scoped(&self.pools.app, &OrgScope::System)
@@ -209,7 +263,15 @@ impl Harness {
     }
 
     async fn run(&self, inputs: Json) -> (RunStatus, Option<Json>, Option<Json>) {
-        let document = serde_json::to_value(huxley_hwf::parse_yaml(RUN).unwrap()).unwrap();
+        self.run_workflow(RUN, inputs).await
+    }
+
+    async fn run_workflow(
+        &self,
+        workflow: &str,
+        inputs: Json,
+    ) -> (RunStatus, Option<Json>, Option<Json>) {
+        let document = serde_json::to_value(huxley_hwf::parse_yaml(workflow).unwrap()).unwrap();
         let mut tx = begin_scoped(&self.pools.app, &OrgScope::System)
             .await
             .unwrap();
@@ -320,4 +382,137 @@ async fn a_refused_login_fails_the_run_saying_why() {
         .await;
     assert_eq!(status, RunStatus::Failed);
     assert!(error.unwrap().to_string().contains("bad credentials"));
+}
+
+#[tokio::test]
+async fn computers_sync_into_the_dataset_page_by_page() {
+    let Some((_db, h)) = harness("s3cret").await else {
+        return;
+    };
+    let ctx = RequestContext::system(Via::System);
+    let mut definition: Json = serde_json::from_str(DATASET).unwrap();
+    definition["key"] = json!("automate-computers");
+    let input: huxley_datasets::DatasetInput = serde_json::from_value(definition).unwrap();
+    let mut tx = begin_scoped(&h.pools.app, &OrgScope::System).await.unwrap();
+    let ds = huxley_datasets::create(&mut tx, &ctx, h.root, &input)
+        .await
+        .unwrap();
+    // A computer since removed from Automate.
+    huxley_datasets::upsert(
+        &mut tx,
+        &ds,
+        h.root,
+        &[json!({ "id": 99, "name": "GONE-PC" })],
+    )
+    .await
+    .unwrap();
+    tx.commit().await.unwrap();
+
+    let (status, outputs, error) = h.run_workflow(SYNC, json!({ "pagesize": 2 })).await;
+    assert_eq!(status, RunStatus::Succeeded, "{error:?}");
+    assert_eq!(outputs.unwrap()["computers"], 3);
+    let pages: Vec<String> = h
+        .mock
+        .lock()
+        .unwrap()
+        .calls
+        .iter()
+        .map(|c| c.0.clone())
+        .collect();
+    assert_eq!(
+        pages,
+        [
+            "GET /computers?page=1&pagesize=2",
+            "GET /computers?page=2&pagesize=2"
+        ]
+    );
+
+    let mut tx = begin_scoped(&h.pools.app, &OrgScope::System).await.unwrap();
+    let rows = huxley_datasets::query(
+        &mut tx,
+        &ds,
+        &huxley_datasets::Query {
+            order_by: Some("id".into()),
+            ..huxley_datasets::Query::default()
+        },
+    )
+    .await
+    .unwrap();
+    let summary: Vec<Json> = rows
+        .rows
+        .iter()
+        .map(|r| json!([r["id"], r["name"], r["client_id"], r["type"], r["virtual"]]))
+        .collect();
+    assert_eq!(
+        summary,
+        [
+            json!([1, "ACME-PC", 7, "Workstation", false]),
+            json!([2, "ACME-SRV", 7, "Server", true]),
+            json!([3, "GLOBEX-PC", 8, null, null]),
+        ]
+    );
+}
+
+#[tokio::test]
+async fn synced_computers_become_assets_of_their_clients() {
+    let Some((_db, h)) = harness("s3cret").await else {
+        return;
+    };
+    let ds = h.dataset().await;
+    let ctx = RequestContext::system(Via::System);
+    let mut tx = begin_scoped(&h.pools.app, &OrgScope::System).await.unwrap();
+    huxley_modules::set_enabled(&mut tx, &ctx, "cmdb", true, false)
+        .await
+        .unwrap();
+    let acme = huxley_orgs::create(&mut tx, &ctx, h.root, huxley_orgs::OrgKind::Client, "Acme")
+        .await
+        .unwrap()
+        .id;
+    sqlx::query(
+        "INSERT INTO org_variables (id, org_id, key, type, value) \
+         VALUES ($1, $2, 'automate_client_id', 'number', '7')",
+    )
+    .bind(Uuid::now_v7())
+    .bind(acme)
+    .execute(&mut *tx)
+    .await
+    .unwrap();
+    let ws = huxley_cmdb::types::list(&mut tx)
+        .await
+        .unwrap()
+        .into_iter()
+        .find(|t| t.key == "workstation")
+        .unwrap()
+        .id;
+    let mapping: huxley_cmdb::mappings::MappingInput = serde_json::from_value(json!({
+        "datasetId": ds.id, "name": "Automate", "source": "automate", "typeId": ws,
+        "matchKeys": [{ "field": "external_id", "column": "id" }],
+        "fields": { "name": "name", "serial_number": "serial", "external_id": "id" },
+        "orgMatch": { "column": "client_id", "variable": "automate_client_id" },
+    }))
+    .unwrap();
+    huxley_cmdb::mappings::create(&mut tx, &ctx, &mapping)
+        .await
+        .unwrap();
+    tx.commit().await.unwrap();
+
+    let (status, outputs, error) = h.run_workflow(SYNC, json!({})).await;
+    assert_eq!(status, RunStatus::Succeeded, "{error:?}");
+    let assets = &outputs.unwrap()["assets"];
+    // Acme's two; Globex (client 8) has no organization here.
+    assert_eq!(
+        (assets["mappings"].as_u64(), assets["created"].as_u64()),
+        (Some(1), Some(2)),
+        "{assets}"
+    );
+    assert_eq!(assets["skipped"], 1, "{assets}");
+    let placed: Vec<(String, Uuid)> =
+        sqlx::query_as("SELECT name, org_id FROM assets ORDER BY name")
+            .fetch_all(&h.pools.owner)
+            .await
+            .unwrap();
+    assert_eq!(
+        placed,
+        [("ACME-PC".to_owned(), acme), ("ACME-SRV".to_owned(), acme)]
+    );
 }

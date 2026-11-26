@@ -2,9 +2,10 @@ apiVersion: usehuxley.io/v1
 kind: Pack
 key: huxley/cwautomate
 name: ConnectWise Automate
-version: 1.0.0
+version: 1.1.0
 publisher: Huxley
-description: "ConnectWise Automate: list computers, and run commands on them (with their output added to a ticket)."
+description: "ConnectWise Automate: sync computers into a dataset (for asset sync), and run commands on them with their output added to a ticket."
 contents:
   integrations: [cwautomate]
-  workflows: [automate-run-command]
+  workflows: [automate-run-command, automate-sync-computers]
+  datasets: [automate-computers]

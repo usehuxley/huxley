@@ -2,7 +2,8 @@
 //! an organization, install or upgrade it, and list what's installed.
 //!
 //! Installing needs `pack:install` *and* the permissions for what the pack
-//! adds (managing integrations, forms, scripts; writing workflows), so a
+//! adds (managing integrations, forms, scripts, datasets; writing
+//! workflows), so a
 //! pack never lets anyone do more than they could by hand.
 
 use axum::body::Bytes;
@@ -85,6 +86,9 @@ fn needed(pack: &Pack) -> Vec<&'static str> {
     }
     if !c.scripts.is_empty() {
         out.push(permissions::SCRIPT_MANAGE);
+    }
+    if !c.datasets.is_empty() {
+        out.push(permissions::DATASET_MANAGE);
     }
     if !c.workflows.is_empty() || !c.templates.is_empty() {
         out.push(permissions::WORKFLOW_WRITE);

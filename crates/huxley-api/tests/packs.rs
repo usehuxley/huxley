@@ -218,6 +218,7 @@ impl Setup {
                 forms: vec!["greet".into()],
                 scripts: vec!["hello".into()],
                 templates: vec!["starter".into()],
+                datasets: vec!["widget-counts".into()],
             },
             files: BTreeMap::new(),
         };
@@ -235,8 +236,25 @@ impl Setup {
             "template": { "key": "starter", "name": "Widget starter", "description": "", "category": "Widgets" },
             "workflow": workflow
         });
+        let mut columns = vec![
+            json!({ "name": "widget", "type": "text" }),
+            json!({ "name": "count", "type": "number" }),
+        ];
+        if version != "1.0.0" {
+            columns.push(json!({ "name": "colour", "type": "text" }));
+        }
         let files: BTreeMap<String, Vec<u8>> = [
             ("integrations/widgets.yaml", SPEC.as_bytes().to_vec()),
+            (
+                "datasets/widget-counts.json",
+                json!({
+                    "name": "Widget counts",
+                    "columns": columns,
+                    "primaryKey": ["widget"],
+                })
+                .to_string()
+                .into_bytes(),
+            ),
             ("workflows/greet.yaml", workflow.to_string().into_bytes()),
             (
                 "forms/greet.json",
@@ -307,7 +325,7 @@ async fn packs_are_reviewed_installed_and_upgraded() {
         .iter()
         .map(|i| i["action"].as_str().unwrap())
         .collect();
-    assert_eq!(actions, ["add"; 5]);
+    assert_eq!(actions, ["add"; 6]);
 
     // Installing needs the version reviewed.
     let (status, _) = s.install(&s.owner, &review, "9.9.9").await;
@@ -358,6 +376,16 @@ async fn packs_are_reviewed_installed_and_upgraded() {
     assert!(workflow.to_string().contains("hello again"), "{workflow}");
     let (_, script) = s.get(&format!("/api/v1/scripts/{script_id}")).await;
     assert!(script.to_string().contains("hello again"), "{script}");
+    // The dataset gained its new column, in place.
+    let dataset_id = upgraded["items"]["datasets"]["widget-counts"]
+        .as_str()
+        .unwrap();
+    let (_, dataset) = s.get(&format!("/api/v1/datasets/{dataset_id}")).await;
+    assert_eq!(
+        dataset["columns"].as_array().map(Vec::len),
+        Some(3),
+        "{dataset}"
+    );
     // The pack's template was replaced, not duplicated.
     let (_, templates) = s.get(&format!("/api/v1/templates?orgId={}", s.org)).await;
     let starters = templates

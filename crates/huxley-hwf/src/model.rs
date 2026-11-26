@@ -1257,14 +1257,19 @@ pub struct KbEmbed {
     pub limit: Option<Value>,
 }
 
-/// A mapping rule to run (`core.asset.sync`): the dataset's rows become
-/// assets, matched, updated and created by the rule (`mapping_id`). Run it
-/// after the step that fills the dataset. Output: `{ rows, created,
-/// updated, unchanged, skipped, problems: [{ row, reason }] }`.
+/// Mapping rules to run (`core.asset.sync`): a dataset's rows become
+/// assets, matched, updated and created by the rule. Give `mapping_id` for
+/// one rule, or `dataset` (a dataset's key) for every rule on it that's on.
+/// Run it after the step that fills the dataset. Output: `{ rows, created,
+/// updated, unchanged, skipped, problems: [{ row, reason }] }`, summed over
+/// the rules, plus `mappings` (how many ran) given `dataset`.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct AssetSync {
-    pub mapping_id: Value,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub mapping_id: Option<Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub dataset: Option<Value>,
 }
 
 /// A warranty to record (`core.asset.set_warranty`) for an asset at the

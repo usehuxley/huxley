@@ -28,7 +28,7 @@ Each warranty is announced once when it's 60 days from ending, as `asset.warrant
 
 ## Syncing from datasets
 
-Assets can be kept in step with another system, such as an RMM's devices or Microsoft 365's tenants, through a [dataset](datasets.md) and a mapping rule under **Settings → Asset sync** (`cmdb:configure`). Each dataset row becomes an asset of the row's organization.
+Assets can be kept in step with another system, such as an RMM's devices or Microsoft 365's tenants, through a [dataset](datasets.md) and a mapping rule under **Settings → Asset sync** (`cmdb:configure`). Each dataset row becomes an asset of the row's organization, or of the organization a lookup finds (below).
 
 A rule has:
 
@@ -37,8 +37,9 @@ A rule has:
 - **Fields to fill in:** columns for the name, hostname, serial number, manufacturer, model and id in the source, and the type's own fields. Empty values never clear anything.
 - **What happens to values changed by hand:** *keep them*, so the source fills only what nobody changed, or *replace them* with the source's value.
 - **Whether to create assets** of a type you choose for rows that match none. A new asset is named from its name, hostname or serial number column.
+- **Which organization each asset belongs to.** By default, the organization the row was written for. An RMM sync usually writes every device at the MSP, though, with the RMM's own client id in a column. Then choose *the organization whose variable matches a column*: give the column (e.g. `client_id`) and an [organization variable](workflows.md#variables-and-secrets) (e.g. `automate_client_id`), and set that variable on each client. A row goes to the one organization, at or below the dataset's, whose variable equals the row's value. Rows that match no organization, or more than one, are skipped, saying so.
 
-**Preview** shows what a sync would do without keeping anything. **Sync now** runs it. Both report rows created, updated, unchanged and skipped, with the first problems and why. To sync on a schedule, add a `core.asset.sync` step after the step that fills the dataset, in the same workflow.
+**Preview** shows what a sync would do without keeping anything. **Sync now** runs it. Both report rows created, updated, unchanged and skipped, with the first problems and why. To sync on a schedule, add a `core.asset.sync` step after the step that fills the dataset, in the same workflow. With `dataset: <key>` it runs every rule on that dataset that's on, so a pack's sync workflow picks up the rules you add.
 
 Every asset field remembers where its value came from: `manual`, or the source. The asset page marks synced fields with their source, and lists the asset's ids in other systems and when it was last synced.
 

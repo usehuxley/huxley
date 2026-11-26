@@ -2,7 +2,7 @@
 //! provenance and conflicts, new assets, previews and problems.
 
 use huxley_cmdb::assets::{self, AssetInput};
-use huxley_cmdb::mappings::{self, FieldMap, MappingInput, MatchKey};
+use huxley_cmdb::mappings::{self, FieldMap, MappingInput, MatchKey, OrgMatch};
 use huxley_cmdb::types;
 use huxley_core::{RequestContext, Via};
 use huxley_db::testing::{TestPools, ensure_root, isolated};
@@ -107,6 +107,7 @@ fn rule(dataset: Uuid, type_id: Uuid, conflict: &str) -> MappingInput {
         conflict: Some(conflict.into()),
         create_missing: true,
         enabled: true,
+        org_match: None,
         version: None,
     }
 }
@@ -293,4 +294,129 @@ async fn ambiguous_matches_are_skipped() {
     assert_eq!((result.created, result.skipped), (0, 1), "{result:?}");
     assert!(result.problems[0].reason.contains("more than one asset"));
     tx.commit().await.unwrap();
+}
+
+async fn set_variable(pools: &TestPools, org: Uuid, key: &str, value: serde_json::Value) {
+    sqlx::query("INSERT INTO org_variables (id, org_id, key, type, value) VALUES ($1, $2, $3, $4::variable_type, $5)")
+        .bind(Uuid::now_v7())
+        .bind(org)
+        .bind(key)
+        .bind(if value.is_number() { "number" } else { "string" })
+        .bind(value)
+        .execute(&pools.owner)
+        .await
+        .unwrap();
+}
+
+#[tokio::test]
+async fn rows_go_to_the_organization_whose_variable_matches() {
+    let Some(db) = isolated("asset_mappings_org_match").await else {
+        return;
+    };
+    let pools = db.pools.clone();
+    let root = ensure_root(&pools).await;
+    let acme = client(&pools, root, "Acme").await;
+    let globex = client(&pools, root, "Globex").await;
+    let twin_a = client(&pools, root, "Twin A").await;
+    let twin_b = client(&pools, root, "Twin B").await;
+    set_variable(&pools, acme, "automate_client_id", json!("7")).await;
+    set_variable(&pools, globex, "automate_client_id", json!(8)).await;
+    set_variable(&pools, twin_a, "automate_client_id", json!("9")).await;
+    set_variable(&pools, twin_b, "automate_client_id", json!("9")).await;
+
+    let ctx = RequestContext::system(Via::System);
+    let mut tx = begin_scoped(&pools.app, &OrgScope::System).await.unwrap();
+    let input: huxley_datasets::DatasetInput = serde_json::from_value(json!({
+        "key": "automate-computers", "name": "Automate computers",
+        "columns": [
+            { "name": "id", "type": "text" }, { "name": "name", "type": "text" },
+            { "name": "client_id", "type": "number" },
+        ],
+        "primaryKey": ["id"],
+    }))
+    .unwrap();
+    let ds = huxley_datasets::create(&mut tx, &ctx, root, &input)
+        .await
+        .unwrap();
+    // All written at the MSP, as a sync workflow would.
+    huxley_datasets::upsert(
+        &mut tx,
+        &ds,
+        root,
+        &[
+            json!({ "id": "1", "name": "ACME-PC", "client_id": 7 }),
+            json!({ "id": "2", "name": "GLOBEX-SRV", "client_id": 8 }),
+            json!({ "id": "3", "name": "LOST-PC", "client_id": 5 }),
+            json!({ "id": "4", "name": "TWIN-PC", "client_id": 9 }),
+            json!({ "id": "5", "name": "NO-CLIENT" }),
+        ],
+    )
+    .await
+    .unwrap();
+    let ws = types::list(&mut tx)
+        .await
+        .unwrap()
+        .into_iter()
+        .find(|t| t.key == "workstation")
+        .unwrap()
+        .id;
+    let r = MappingInput {
+        match_keys: vec![MatchKey {
+            field: "external_id".into(),
+            column: "id".into(),
+        }],
+        fields: FieldMap {
+            name: Some("name".into()),
+            external_id: Some("id".into()),
+            ..FieldMap::default()
+        },
+        org_match: Some(OrgMatch {
+            column: "client_id".into(),
+            variable: "automate_client_id".into(),
+        }),
+        ..rule(ds.id, ws, "manual_wins")
+    };
+    let m = mappings::create(&mut tx, &ctx, &r).await.unwrap();
+    assert_eq!(m.org_match.as_deref(), r.org_match.as_ref());
+    let result = mappings::run(&mut tx, &ctx, m.id, false).await.unwrap();
+    assert_eq!((result.created, result.skipped), (2, 3), "{result:?}");
+    let reasons: Vec<&str> = result.problems.iter().map(|p| p.reason.as_str()).collect();
+    assert!(
+        reasons.contains(&"no organization has automate_client_id = 5"),
+        "{reasons:?}"
+    );
+    assert!(
+        reasons.contains(&"more than one organization has automate_client_id = 9"),
+        "{reasons:?}"
+    );
+    assert!(reasons.contains(&"the row has no client_id"), "{reasons:?}");
+    tx.commit().await.unwrap();
+    let placed: Vec<(String, Uuid)> =
+        sqlx::query_as("SELECT name, org_id FROM assets ORDER BY name")
+            .fetch_all(&pools.owner)
+            .await
+            .unwrap();
+    assert_eq!(
+        placed,
+        [
+            ("ACME-PC".to_owned(), acme),
+            ("GLOBEX-SRV".to_owned(), globex)
+        ]
+    );
+
+    refuses_bad_variable_keys(&pools, ds.id, ws).await;
+}
+
+async fn refuses_bad_variable_keys(pools: &TestPools, ds: Uuid, ws: Uuid) {
+    let ctx = RequestContext::system(Via::System);
+    let mut tx = begin_scoped(&pools.app, &OrgScope::System).await.unwrap();
+    let bad = MappingInput {
+        name: "Bad".into(),
+        org_match: Some(OrgMatch {
+            column: "client_id".into(),
+            variable: "Bad Key".into(),
+        }),
+        ..rule(ds, ws, "manual_wins")
+    };
+    assert!(mappings::create(&mut tx, &ctx, &bad).await.is_err());
 }
