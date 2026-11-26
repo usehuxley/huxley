@@ -66,7 +66,8 @@ fn spawn_scheduler(
 ) {
     let engine = huxley_engine::Engine::with_config(db.clone(), crypto.clone(), &config.engine)
         .with_storage(storage.clone())
-        .with_public_url(config.auth.public_url.clone());
+        .with_public_url(config.auth.public_url.clone())
+        .with_portal_url(config.http.api.portal_public_url.clone());
     let stop = shutdown.clone();
     tasks.spawn(async move {
         huxley_triggers::run_scheduler(engine, stop).await;
@@ -201,6 +202,7 @@ pub async fn serve(config: Config, roles: BTreeSet<Role>) -> anyhow::Result<()> 
                     huxley_engine::Engine::with_config(db.clone(), crypto.clone(), &config.engine)
                         .with_storage(storage.clone())
                         .with_public_url(config.auth.public_url.clone())
+                        .with_portal_url(config.http.api.portal_public_url.clone())
                         .with_mailer(mailer.clone());
                 let worker_config = huxley_engine::WorkerConfig::from(&config.engine);
                 let stop = shutdown.clone();

@@ -267,3 +267,114 @@ async fn approvers_must_resolve_to_someone() {
     .await;
     assert_eq!(h.run(id).await.status, RunStatus::Failed);
 }
+
+impl Harness {
+    /// A contact at the harness org with a portal account in `role`.
+    async fn portal_contact(&self, first: &str, role: &str) -> (Uuid, Uuid) {
+        let contact = Uuid::now_v7();
+        sqlx::query("INSERT INTO crm_contacts (id, org_id, first_name, last_name, email) VALUES ($1, $2, $3, 'Client', $4)")
+            .bind(contact)
+            .bind(self.org)
+            .bind(first)
+            .bind(format!("{}@client.example", contact.simple()))
+            .execute(&self.pools.owner)
+            .await
+            .unwrap();
+        let account = Uuid::now_v7();
+        sqlx::query(
+            "INSERT INTO portal_accounts (id, contact_id, org_id, email, role, status) VALUES ($1, $2, $3, $4, $5, 'active')",
+        )
+        .bind(account)
+        .bind(contact)
+        .bind(self.org)
+        .bind(format!("{}@client.example", contact.simple()))
+        .bind(role)
+        .execute(&self.pools.owner)
+        .await
+        .unwrap();
+        (contact, account)
+    }
+}
+
+#[tokio::test]
+async fn client_contacts_decide_in_the_portal() {
+    let Some(h) = harness().await else { return };
+    let ctx = RequestContext::system(Via::System);
+    let (_, approver) = h.portal_contact("Cara", "client_approver").await;
+    let (_, admin) = h.portal_contact("Abe", "client_admin").await;
+    let (user_contact, user) = h.portal_contact("Uma", "client_user").await;
+
+    // A client user can't be named: the step fails with a reason.
+    let refused = h.start(&format!("\"contact:{user_contact}\""), "1d").await;
+    h.until("the refusal", async || {
+        h.run(refused).await.status == RunStatus::Failed
+    })
+    .await;
+
+    // client_approvers: the company's approvers and admins.
+    let id = h.start("[client_approvers]", "1d").await;
+    h.until("the approval", async || {
+        h.step_status(id, "ask").await == "waiting"
+    })
+    .await;
+    let approval_id = h.approval_of(id).await;
+    let mut tx = begin_scoped(&h.pools.app, &OrgScope::System).await.unwrap();
+    let waiting = approval::portal_approvals(&mut tx, approver).await.unwrap();
+    assert_eq!(waiting.len(), 1);
+    assert_eq!(
+        (waiting[0].title.as_str(), waiting[0].status.as_str()),
+        ("Buy 5 licenses?", "pending")
+    );
+    assert_eq!(
+        approval::portal_approvals(&mut tx, admin)
+            .await
+            .unwrap()
+            .len(),
+        1
+    );
+    assert!(
+        approval::portal_approvals(&mut tx, user)
+            .await
+            .unwrap()
+            .is_empty()
+    );
+    tx.commit().await.unwrap();
+
+    // A staff user isn't on it, nor is the client user.
+    let staff = h.user("Staff").await;
+    assert!(matches!(
+        h.engine
+            .decide_approval(&ctx, approval_id, staff, true, None)
+            .await,
+        Err(DecisionError::NotAnApprover)
+    ));
+    assert!(matches!(
+        h.engine
+            .decide_portal_approval(&ctx, approval_id, user, true, None)
+            .await,
+        Err(DecisionError::NotAnApprover)
+    ));
+    h.engine
+        .decide_portal_approval(&ctx, approval_id, approver, true, Some("OK by us"))
+        .await
+        .unwrap();
+    h.until("the run to finish", async || {
+        h.run(id).await.status == RunStatus::Succeeded
+    })
+    .await;
+    let outputs = h.run(id).await.outputs.unwrap();
+    assert_eq!(outputs["decision"], "approved");
+    assert_eq!(outputs["by"], "Cara Client");
+    let mut tx = begin_scoped(&h.pools.app, &OrgScope::System).await.unwrap();
+    let decided = approval::portal_approval(&mut tx, admin, approval_id)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(decided.decided_by_name.as_deref(), Some("Cara Client"));
+    assert!(matches!(
+        h.engine
+            .decide_portal_approval(&ctx, approval_id, admin, false, None)
+            .await,
+        Err(DecisionError::Closed)
+    ));
+}

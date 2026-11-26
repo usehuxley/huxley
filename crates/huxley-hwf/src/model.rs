@@ -594,7 +594,9 @@ step!(ApprovalStep {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub message: Option<String>,
     /// Who may decide: `user:<id>`, `team:<id>`, `role:<key>` (holders at the
-    /// run's organization). The first decision counts.
+    /// run's organization), and client contacts in the portal:
+    /// `contact:<id>` or `client_approvers` (the run's company's client
+    /// approvers and admins). The first decision counts.
     pub approvers: Value,
     /// How long approvers have, e.g. `3d` (default `7d`). After that the
     /// step fails with `kind: timeout`.

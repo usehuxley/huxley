@@ -4,6 +4,56 @@
  */
 
 export interface paths {
+	'/api/portal/v1/approvals': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** Approvals sent to you: waiting ones first. */
+		get: operations['portal_approvals'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/portal/v1/approvals/{id}': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get: operations['portal_approval'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/portal/v1/approvals/{id}/decision': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/** Approves or rejects. The first decision counts. */
+		post: operations['portal_decide_approval'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
 	'/api/portal/v1/articles': {
 		parameters: {
 			query?: never;
@@ -9068,6 +9118,23 @@ export interface components {
 		};
 		/** @enum {string} */
 		PortalAccountStatus: 'invited' | 'active' | 'disabled';
+		/** @description An approval as a client contact sees it in the portal. */
+		PortalApproval: {
+			comment?: string | null;
+			/** Format: date-time */
+			createdAt: string;
+			/** Format: date-time */
+			decidedAt?: string | null;
+			decidedByName?: string | null;
+			/** Format: date-time */
+			expiresAt: string;
+			/** Format: uuid */
+			id: string;
+			message?: string | null;
+			/** @description `pending`, `approved`, `rejected` or `expired`. */
+			status: string;
+			title: string;
+		};
 		PortalArticle: {
 			/** @description Rendered from markdown, safe to show. */
 			bodyHtml: string;
@@ -9108,6 +9175,10 @@ export interface components {
 			/** @description The brand name (the organization's name if none is set). */
 			name: string;
 			supportEmail?: string | null;
+		};
+		PortalDecision: {
+			approve: boolean;
+			comment?: string | null;
 		};
 		PortalDevice: {
 			/** Format: uuid */
@@ -11371,6 +11442,80 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+	portal_approvals: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['PortalApproval'][];
+				};
+			};
+		};
+	};
+	portal_approval: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['PortalApproval'];
+				};
+			};
+		};
+	};
+	portal_decide_approval: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['PortalDecision'];
+			};
+		};
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['PortalApproval'];
+				};
+			};
+			/** @description Already decided, or expired */
+			409: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
 	portal_articles: {
 		parameters: {
 			query?: {

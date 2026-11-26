@@ -24,6 +24,17 @@
 		</Button>
 	</div>
 
+	{#if data.waiting > 0}
+		<a
+			href={resolve('/(portal)/approvals')}
+			class="rounded-card border border-accent bg-surface p-4 text-sm text-fg shadow-card hover:underline"
+		>
+			{data.waiting === 1
+				? 'One request is waiting for your approval.'
+				: `${data.waiting} requests are waiting for your approval.`}
+		</a>
+	{/if}
+
 	<Card title="Your open tickets">
 		{#if data.open.length === 0}
 			<EmptyState title="Nothing open" description="Raise a ticket when you need help.">

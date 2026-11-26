@@ -91,6 +91,18 @@ Like every setting, these apply to the organization and everything below it, so 
 - **Raise a ticket about it:** from a device's page. The new ticket is linked to the device, so staff see it on the ticket's Assets card.
 - **The CMDB module** must be on for the company.
 
+## Approvals
+
+Workflow **approval** steps can ask client contacts, who decide in the portal's **Approvals** page.
+
+- **In the step's `approvers`:**
+  - `contact:<id>` names a contact. They need portal access at the run's company, as a client approver or client admin.
+  - `client_approvers` means all of the run's company's client approvers and client admins.
+  - Mix them with staff (`user:`, `team:`, `role:`) freely. The first decision counts.
+- **Telling them:** they're emailed a link to the approval in the portal, at their company's portal domain or `HUXLEY_HTTP__PORTAL_PUBLIC_URL`, when email is set up. The portal's home page shows what's waiting.
+- **The decision** is the step's output, as for staff. `by` has the contact's `id`, `name` and `email`, plus `contact` and `portal_account`.
+- **The run's company** decides who `client_approvers` is, so run the workflow for the client: a form submitted for it, a trigger at it, or a workflow saved there.
+
 ## Two-factor sign-in
 
 Contacts can add a code from an authenticator app (Microsoft Authenticator, Google Authenticator, 1Password and others) to signing in with a link or password: **Profile**, **Manage two-factor sign-in**.
@@ -130,6 +142,7 @@ Contacts can sign in with their company's own accounts, such as the client's Mic
   - `GET`, `POST /api/portal/v1/tickets` (`status=open|closed`, `scope=mine|company`, `q`); `GET …/tickets/{id}`; `POST …/tickets/{id}/replies`
   - `PUT /api/portal/v1/me/password`
   - `GET /api/portal/v1/articles` (`q`, `category`), `GET …/articles/{id}`
+  - `GET /api/portal/v1/approvals`, `GET …/approvals/{id}`, `POST …/approvals/{id}/decision` `{ approve, comment }`
   - `GET /api/portal/v1/devices` (`q`), `GET …/devices/{id}`; `POST …/tickets` takes an optional `assetId`
   - `GET /api/portal/v1/catalog`, `GET …/catalog/{id}`, `POST …/catalog/{id}/requests` `{ answers }`; `GET …/requests`
   - Two-factor: `…/auth/link` redemption and `…/auth/password` answer `202 { challenge }` when a code is needed; finish with `POST …/auth/mfa` `{ challenge, code }`. `GET …/me/mfa`; `POST …/me/mfa/totp` (start), `…/totp/confirm` `{ code }` (returns recovery codes), `…/totp/disable` `{ code }`, `…/recovery-codes`

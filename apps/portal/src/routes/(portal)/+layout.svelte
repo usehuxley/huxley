@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
-	import { BookOpen, Boxes, ClipboardList, House, Ticket } from '@lucide/svelte';
+	import { BookOpen, Boxes, CircleCheck, ClipboardList, House, Ticket } from '@lucide/svelte';
 	import { AppShell, Button, type NavItem } from '@usehuxley/ui';
 	import { accentStyle, DEFAULT_BRANDING } from '#lib/branding.ts';
 	import type { LayoutProps } from './$types';
@@ -16,9 +16,14 @@
 			{ href: '/tickets', label: 'Tickets', icon: Ticket, module: 'servicedesk' },
 			{ href: '/requests', label: 'Request something', icon: ClipboardList, module: null },
 			{ href: '/assets', label: 'Devices', icon: Boxes, module: 'cmdb' },
-			{ href: '/knowledge', label: 'Help articles', icon: BookOpen, module: 'knowledge' }
+			{ href: '/knowledge', label: 'Help articles', icon: BookOpen, module: 'knowledge' },
+			{ href: '/approvals', label: 'Approvals', icon: CircleCheck, module: 'approvals' }
 		]
-			.filter((item) => item.module === null || data.me.modules.includes(item.module))
+			.filter((item) =>
+				item.module === 'approvals'
+					? data.me.permissions.includes('portal.approval:decide')
+					: item.module === null || data.me.modules.includes(item.module)
+			)
 			.map((item) => ({ href: item.href, label: item.label, icon: item.icon }))
 	);
 </script>
