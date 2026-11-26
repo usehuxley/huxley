@@ -24,7 +24,7 @@ export interface WidgetResult {
 /** Each widget's numbers, as the viewer may see them. */
 export async function answersFor(
 	event: RequestEvent,
-	dashboard: Dashboard,
+	dashboard: Pick<Dashboard, 'widgets'>,
 	range: string,
 	orgId: string | null
 ): Promise<{ sources: Source[]; results: Record<string, WidgetResult> }> {

@@ -23,6 +23,26 @@
 			<Button type="submit" variant="primary"><Plus size={16} /> New dashboard</Button>
 		</form>
 	</div>
+	{#if data.waiting.length > 0}
+		<Card title="Waiting for your approval">
+			<ul class="flex flex-col gap-2" aria-label="Waiting for your approval">
+				{#each data.waiting as s (s.id)}
+					<li class="flex flex-wrap items-center justify-between gap-2">
+						<a
+							href={resolve('/(app)/dashboards/submissions/[id]', { id: s.id })}
+							class="font-medium text-accent hover:underline"
+						>
+							{s.snapshot.name}
+						</a>
+						<span class="text-sm text-fg-muted">
+							{s.submittedByName ?? 'Someone'} · {new Date(s.submittedAt).toLocaleDateString()}
+							{#if s.portal}· for the client portal too{/if}
+						</span>
+					</li>
+				{/each}
+			</ul>
+		</Card>
+	{/if}
 	{#each [{ title: 'Prebuilt', list: prebuilt }, { title: 'Shared', list: shared }, { title: 'Yours', list: mine }] as group (group.title)}
 		{#if group.list.length > 0}
 			<Card title={group.title}>

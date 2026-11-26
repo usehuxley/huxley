@@ -471,3 +471,299 @@ async fn refusals(app: &axum::Router, owner: &str) {
         )
     );
 }
+
+/// A submission's decision endpoint (`approve` or `reject`).
+fn decide(sub: &Value, how: &str) -> String {
+    format!(
+        "/api/v1/dashboard-submissions/{}/{how}",
+        sub["id"].as_str().unwrap()
+    )
+}
+
+/// Names of the stored (not prebuilt) dashboards a caller sees.
+async fn stored_names(app: &axum::Router, cookie: &str) -> Vec<String> {
+    let (_, all) = call(app, cookie, "GET", "/api/v1/dashboards", Value::Null).await;
+    all.as_array()
+        .unwrap()
+        .iter()
+        .filter(|d| d["builtin"] == false)
+        .map(|d| d["name"].as_str().unwrap().to_owned())
+        .collect()
+}
+
+#[tokio::test]
+async fn dashboards_are_submitted_approved_and_published_to_an_audience() {
+    let Some(db) = isolated("dashboard_publishing").await else {
+        return;
+    };
+    let pools = db.pools.clone();
+    let app = app_for(&pools);
+    let (acme, team, [approver, author, mate, outsider]) = publishing_people(&app, &pools).await;
+    let widget = json!({ "id": "open", "title": "Tickets", "viz": "number", "width": 3,
+                         "spec": { "source": "tickets", "measures": [{ "fn": "count" }] } });
+    let (status, board) = call(
+        &app,
+        &author,
+        "POST",
+        "/api/v1/dashboards",
+        json!({ "orgId": acme, "dashboard": { "name": "Ops board", "widgets": [widget] } }),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED, "{board}");
+    let id = board["id"].as_str().unwrap().to_owned();
+    let submit = format!("/api/v1/dashboards/{id}/submit");
+    let ask = json!({ "teams": [team], "portal": true, "note": "For the ops team and Acme" });
+    let (status, first) = call(&app, &author, "POST", &submit, ask.clone()).await;
+    assert_eq!(
+        (status, &first["status"]),
+        (StatusCode::CREATED, &json!("pending")),
+        "{first}"
+    );
+    assert_eq!(
+        call(&app, &author, "POST", &submit, ask.clone()).await.0,
+        StatusCode::UNPROCESSABLE_ENTITY
+    );
+    first_is_sent_back(&app, &approver, &author, &mate, &first).await;
+    // Resubmitted and approved: shared with the team and the portal, as submitted.
+    let (_, second) = call(&app, &author, "POST", &submit, ask).await;
+    lookups(&app, &author, &approver, &mate, &second, team).await;
+    let (_, waiting) = call(
+        &app,
+        &approver,
+        "GET",
+        "/api/v1/dashboard-submissions",
+        Value::Null,
+    )
+    .await;
+    assert!(
+        waiting
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|s| s["id"] == second["id"]),
+        "{waiting}"
+    );
+    let (status, publication) = call(
+        &app,
+        &approver,
+        "POST",
+        &decide(&second, "approve"),
+        json!({}),
+    )
+    .await;
+    assert_eq!(
+        (status, &publication["number"]),
+        (StatusCode::OK, &json!(1)),
+        "{publication}"
+    );
+    assert_eq!(
+        call(
+            &app,
+            &approver,
+            "POST",
+            &decide(&second, "approve"),
+            json!({})
+        )
+        .await
+        .0,
+        StatusCode::CONFLICT
+    );
+    published(
+        &app,
+        &pools,
+        &id,
+        team,
+        [&approver, &author, &mate, &outsider],
+    )
+    .await;
+
+    copies(&app, &outsider, acme).await;
+}
+
+/// After approval: the team and its author see it, others don't; it's
+/// shared, in the portal, with its history and events.
+async fn published(app: &axum::Router, pools: &TestPools, id: &str, team: Uuid, who: [&String; 4]) {
+    let [approver, author, mate, outsider] = who;
+    let app = app.clone();
+    let (approver, author, mate, outsider) = (
+        approver.as_str(),
+        author.as_str(),
+        mate.as_str(),
+        outsider.as_str(),
+    );
+    assert_eq!(stored_names(&app, mate).await, ["Ops board"]);
+    assert_eq!(stored_names(&app, author).await, ["Ops board"]);
+    assert_eq!(stored_names(&app, outsider).await, Vec::<String>::new());
+    let (_, published) = call(
+        &app,
+        approver,
+        "GET",
+        &format!("/api/v1/dashboards/{id}"),
+        Value::Null,
+    )
+    .await;
+    assert_eq!(
+        (&published["ownerUserId"], &published["portal"]),
+        (&Value::Null, &json!(true)),
+        "{published}"
+    );
+    assert_eq!(published["audienceTeams"], json!([team]));
+    let (_, history) = call(
+        &app,
+        author,
+        "GET",
+        &format!("/api/v1/dashboards/{id}/submissions"),
+        Value::Null,
+    )
+    .await;
+    let statuses: Vec<&str> = history
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|s| s["status"].as_str().unwrap())
+        .collect();
+    assert_eq!(statuses, ["approved", "rejected"]);
+    let events: Vec<String> = sqlx::query_scalar(
+        "SELECT event_type FROM events_outbox WHERE subject_id = $1 ORDER BY occurred_at, id",
+    )
+    .bind(Uuid::parse_str(id).unwrap())
+    .fetch_all(&pools.owner)
+    .await
+    .unwrap();
+    assert_eq!(
+        events,
+        [
+            "dashboard.submitted",
+            "dashboard.rejected",
+            "dashboard.submitted",
+            "dashboard.published"
+        ]
+    );
+}
+
+/// Acme; an approver (root owner); three technicians at Acme (an author, a
+/// teammate in the Ops team, an outsider); the team.
+async fn publishing_people(app: &axum::Router, pools: &TestPools) -> (Uuid, Uuid, [String; 4]) {
+    let (app, pools) = (app.clone(), pools.clone());
+    let root = ensure_root(&pools).await;
+    let acme = org(&pools, root, huxley_orgs::OrgKind::Client, "Acme").await;
+    let approver = login(&app, &user(&pools, None).await.1).await;
+    let (_, author_email) = user(&pools, Some(("technician", acme))).await;
+    let author = login(&app, &author_email).await;
+    let (mate_id, mate_email) = user(&pools, Some(("technician", acme))).await;
+    let mate = login(&app, &mate_email).await;
+    let outsider = login(&app, &user(&pools, Some(("technician", acme))).await.1).await;
+    let team = Uuid::now_v7();
+    sqlx::query("INSERT INTO teams (id, name) VALUES ($1, $2)")
+        .bind(team)
+        .bind(unique("Ops"))
+        .execute(&pools.owner)
+        .await
+        .unwrap();
+    sqlx::query("INSERT INTO team_members (team_id, user_id) VALUES ($1, $2)")
+        .bind(team)
+        .bind(mate_id)
+        .execute(&pools.owner)
+        .await
+        .unwrap();
+
+    (acme, team, [approver, author, mate, outsider])
+}
+
+/// Anyone copies what they can see into a personal dashboard.
+async fn copies(app: &axum::Router, outsider: &str, acme: Uuid) {
+    let (status, copy) = call(
+        app,
+        outsider,
+        "POST",
+        "/api/v1/dashboards/service-desk/copy",
+        json!({ "orgId": acme }),
+    )
+    .await;
+    assert_eq!(
+        (status, &copy["name"]),
+        (StatusCode::CREATED, &json!("Copy of Service desk overview")),
+        "{copy}"
+    );
+    assert_eq!(
+        stored_names(app, outsider).await,
+        ["Copy of Service desk overview"]
+    );
+}
+
+/// Only someone who manages dashboards there decides, and a rejection says
+/// why; it stays personal.
+async fn first_is_sent_back(
+    app: &axum::Router,
+    approver: &str,
+    author: &str,
+    mate: &str,
+    first: &Value,
+) {
+    assert_eq!(
+        call(app, author, "POST", &decide(first, "approve"), json!({}))
+            .await
+            .0,
+        StatusCode::FORBIDDEN
+    );
+    assert_eq!(
+        call(app, approver, "POST", &decide(first, "reject"), json!({}))
+            .await
+            .0,
+        StatusCode::UNPROCESSABLE_ENTITY
+    );
+    let (status, rejected) = call(
+        app,
+        approver,
+        "POST",
+        &decide(first, "reject"),
+        json!({ "comment": "Add a title that says it's Acme's" }),
+    )
+    .await;
+    assert_eq!(
+        (status, &rejected["status"]),
+        (StatusCode::OK, &json!("rejected")),
+        "{rejected}"
+    );
+    assert_eq!(stored_names(app, mate).await, Vec::<String>::new());
+}
+
+/// Authors see the audiences to pick from; a submission is its author's
+/// and its approvers' to see.
+async fn lookups(
+    app: &axum::Router,
+    author: &str,
+    approver: &str,
+    mate: &str,
+    second: &Value,
+    team: Uuid,
+) {
+    let (_, audiences) = call(
+        app,
+        author,
+        "GET",
+        "/api/v1/dashboard-audiences",
+        Value::Null,
+    )
+    .await;
+    assert!(
+        audiences["teams"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|t| t["id"] == json!(team)),
+        "{audiences}"
+    );
+    let one = format!(
+        "/api/v1/dashboard-submissions/{}",
+        second["id"].as_str().unwrap()
+    );
+    assert_eq!(
+        call(app, approver, "GET", &one, Value::Null).await.1["snapshot"]["name"],
+        "Ops board"
+    );
+    assert_eq!(
+        call(app, mate, "GET", &one, Value::Null).await.0,
+        StatusCode::NOT_FOUND
+    );
+}

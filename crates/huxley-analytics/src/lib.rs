@@ -6,6 +6,7 @@
 pub mod catalog;
 pub mod dashboards;
 pub mod datasets;
+pub mod publishing;
 pub mod query;
 
 use std::collections::HashMap;

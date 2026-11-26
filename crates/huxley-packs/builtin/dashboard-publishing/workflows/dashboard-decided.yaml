@@ -1,0 +1,27 @@
+apiVersion: usehuxley.io/v1
+kind: Workflow
+metadata:
+  key: dashboard-decided
+  name: Tell an author about their dashboard
+  description: >-
+    When a submitted dashboard is approved (published) or sent back, tells
+    the person who submitted it, with the reviewer's comment.
+spec:
+  triggers:
+    - id: published
+      type: event
+      event: dashboard.published
+    - id: rejected
+      type: event
+      event: dashboard.rejected
+  steps:
+    - id: tell
+      type: core.notify
+      with:
+        to: "user:{{ inputs.submitted_by }}"
+        title: >-
+          {{ '"' ~ inputs.name ~ '" is published' if inputs.number else '"' ~ inputs.name ~ '" needs changes' }}
+        message: "{{ inputs.comment if inputs.comment else 'No comment.' }}"
+        url: "/dashboards/{{ trigger.subject_id }}"
+  outputs:
+    sent: "{{ steps.tell.output.sent }}"
