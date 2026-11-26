@@ -34,8 +34,8 @@ export const load: PageServerLoad = async (event) => {
 	const has = (module: string, permission: string) =>
 		user.activeModules.includes(module) && user.grantedPermissions.includes(permission);
 	const showAgreements = has('contracts', 'agreement:read');
-	const [vault, documents, assets, agreements, workTypes, assetTypes, products] = await Promise.all(
-		[
+	const [vault, documents, assets, agreements, workTypes, assetTypes, products, slaPolicies] =
+		await Promise.all([
 			has('vault', 'vault:read')
 				? client.GET('/api/v1/vault/items', { params: { query: { orgId: id } } })
 				: Promise.resolve({ data: undefined }),
@@ -54,9 +54,11 @@ export const load: PageServerLoad = async (event) => {
 				: Promise.resolve({ data: undefined }),
 			showAgreements && user.grantedPermissions.includes('catalog:read')
 				? client.GET('/api/v1/catalog/products', { params: { query: { active: true } } })
+				: Promise.resolve({ data: undefined }),
+			showAgreements && user.activeModules.includes('servicedesk')
+				? client.GET('/api/v1/servicedesk/sla-policies')
 				: Promise.resolve({ data: undefined })
-		]
-	);
+		]);
 	// This month's usage of each active agreement.
 	const usage = Object.fromEntries(
 		await Promise.all(
@@ -84,6 +86,7 @@ export const load: PageServerLoad = async (event) => {
 		workTypes: workTypes.data ?? [],
 		assetTypes: (assetTypes.data ?? []).filter((t) => !t.archived),
 		products: (products.data ?? []).filter((p) => p.kind !== 'bundle'),
+		slaPolicies: (slaPolicies.data ?? []).map((p) => ({ id: p.id, name: p.name })),
 		canManageAgreements: user.grantedPermissions.includes('agreement:manage'),
 		canWriteAssets: user.grantedPermissions.includes('asset:write'),
 		canWriteDocs: user.grantedPermissions.includes('kb:write'),

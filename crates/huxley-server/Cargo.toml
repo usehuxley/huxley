@@ -30,6 +30,7 @@ huxley-modules.workspace = true
 huxley-servicedesk.workspace = true
 huxley-workforce.workspace = true
 huxley-cmdb.workspace = true
+huxley-contracts.workspace = true
 huxley-notify.workspace = true
 huxley-storage.workspace = true
 huxley-orgs.workspace = true

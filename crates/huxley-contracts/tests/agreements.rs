@@ -323,3 +323,113 @@ async fn keeping_rules(tx: &mut PgConnection, ctx: &RequestContext, w: &World, a
         Err(ContractsError::Conflict(_))
     ));
 }
+
+#[tokio::test]
+async fn agreements_bind_slas_and_renew() {
+    let Some(db) = isolated("agreement_renewals").await else {
+        return;
+    };
+    let pools = db.pools.clone();
+    ensure_root(&pools).await;
+    let ctx = RequestContext::system(Via::System);
+    let mut tx = begin_scoped(&pools.app, &OrgScope::System).await.unwrap();
+    let tx = &mut *tx;
+    for module in ["crm", "servicedesk", "contracts"] {
+        huxley_modules::set_enabled(tx, &ctx, module, true, false)
+            .await
+            .unwrap();
+    }
+    let world_ = world(tx).await;
+    let w = &world_;
+    let gold = huxley_servicedesk::sla::create(
+        tx,
+        &ctx,
+        &serde_json::from_value(json!({ "name": "Gold", "hoursSource": "always" })).unwrap(),
+    )
+    .await
+    .unwrap();
+    let silver = huxley_servicedesk::sla::create(
+        tx,
+        &ctx,
+        &serde_json::from_value(json!({ "name": "Silver", "hoursSource": "always" })).unwrap(),
+    )
+    .await
+    .unwrap();
+    let today = time::OffsetDateTime::now_utc().date();
+    let day = |offset: i64| (today + time::Duration::days(offset)).to_string();
+    let gold_deal = agreements::create(
+        tx,
+        &ctx,
+        w.acme,
+        &agreement(json!({
+            "name": "Gold support", "kind": "managed", "status": "active",
+            "startsOn": day(-300), "endsOn": day(20), "renewalNoticeDays": 30,
+            "slaPolicyId": gold.id,
+        })),
+    )
+    .await
+    .unwrap();
+    assert_eq!(gold_deal.sla_policy_name.as_deref(), Some("Gold"));
+    let source =
+        |a: &huxley_servicedesk::sla::SlaAssignment| (a.effective_policy_id, a.source.clone());
+    let acme_sla = huxley_servicedesk::sla::assignment(tx, w.acme)
+        .await
+        .unwrap();
+    assert_eq!(source(&acme_sla), (Some(gold.id), Some("agreement".into())));
+    // An assignment above doesn't override it.
+    huxley_servicedesk::sla::assign(tx, &ctx, w.root, Some(silver.id))
+        .await
+        .unwrap();
+    let acme_sla = huxley_servicedesk::sla::assignment(tx, w.acme)
+        .await
+        .unwrap();
+    assert_eq!(source(&acme_sla), (Some(gold.id), Some("agreement".into())));
+    // Globex has no agreement: the assignment above applies.
+    let globex_sla = huxley_servicedesk::sla::assignment(tx, w.globex)
+        .await
+        .unwrap();
+    assert_eq!(source(&globex_sla), (Some(silver.id), Some("above".into())));
+
+    // 20 days left, 30 days' notice: due, once.
+    let first = huxley_contracts::renewals::sweep(tx, today).await.unwrap();
+    assert_eq!((first.announced, first.renewed), (1, 0));
+    let again = huxley_contracts::renewals::sweep(tx, today).await.unwrap();
+    assert_eq!((again.announced, again.renewed), (0, 0));
+    let due: Value = sqlx::query_scalar(
+        "SELECT payload FROM events_outbox WHERE event_type = 'contract.renewal_due' ORDER BY occurred_at DESC LIMIT 1",
+    )
+    .fetch_one(&mut *tx)
+    .await
+    .unwrap();
+    assert_eq!(
+        (&due["days_left"], &due["name"]),
+        (&json!(20), &json!("Gold support"))
+    );
+
+    // Renewing automatically: once it ends, the term rolls on (321 days).
+    let mut input = agreement(json!({
+        "name": "Gold support", "kind": "managed", "status": "active",
+        "startsOn": day(-300), "endsOn": day(20), "autoRenew": true, "renewalNoticeDays": 30,
+        "slaPolicyId": gold.id, "version": gold_deal.version,
+    }));
+    agreements::update(tx, &ctx, gold_deal.id, &input)
+        .await
+        .unwrap();
+    let later = today + time::Duration::days(25);
+    let swept = huxley_contracts::renewals::sweep(tx, later).await.unwrap();
+    assert_eq!(swept.renewed, 1);
+    let renewed = agreements::get(tx, gold_deal.id).await.unwrap();
+    assert_eq!(renewed.starts_on, today + time::Duration::days(21));
+    assert_eq!(
+        renewed.ends_on,
+        Some(today + time::Duration::days(21 + 320))
+    );
+    // A bad SLA is refused.
+    input.sla_policy_id = Some(uuid::Uuid::now_v7());
+    input.version = Some(renewed.version);
+    let refused = agreements::update(tx, &ctx, gold_deal.id, &input).await;
+    assert!(
+        matches!(refused, Err(ContractsError::Invalid { .. })),
+        "{refused:?}"
+    );
+}

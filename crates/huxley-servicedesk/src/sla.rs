@@ -407,7 +407,8 @@ pub struct SlaAssignment {
     /// The policy that applies here, if any.
     pub effective_policy_id: Option<Uuid>,
     pub effective_policy_name: Option<String>,
-    /// Where the effective policy comes from: `here`, `above` or `default`.
+    /// Where the effective policy comes from: `agreement` (an agreement in
+    /// force binds it), `here`, `above` or `default`.
     pub source: Option<String>,
 }
 
@@ -417,8 +418,33 @@ async fn effective(
     conn: &mut PgConnection,
     org_id: Uuid,
 ) -> DeskResult<Option<(Uuid, &'static str)>> {
-    let nearest: Option<(Uuid, bool)> = sqlx::query_as(
-        "SELECT a.policy_id, a.org_id = t.id FROM sd_sla_assignments a \
+    // An agreement in force (contracts on) that binds a policy, nearest
+    // first: it wins over an assignment no nearer than it.
+    let agreed: Option<(Uuid, i32)> = if huxley_modules::is_active_at(
+        &mut *conn,
+        "contracts",
+        org_id,
+    )
+    .await
+    .unwrap_or(false)
+    {
+        sqlx::query_as(
+            "SELECT a.sla_policy_id, nlevel(o.path) FROM contract_agreements a \
+               JOIN organizations o ON o.id = a.org_id \
+               JOIN organizations t ON t.id = $1 \
+               JOIN sd_sla_policies p ON p.id = a.sla_policy_id AND p.archived_at IS NULL \
+              WHERE t.path <@ o.path AND a.status = 'active' \
+                AND a.starts_on <= current_date AND (a.ends_on IS NULL OR a.ends_on >= current_date) \
+              ORDER BY nlevel(o.path) DESC, a.priority, a.created_at LIMIT 1",
+        )
+        .bind(org_id)
+        .fetch_optional(&mut *conn)
+        .await?
+    } else {
+        None
+    };
+    let nearest: Option<(Uuid, bool, i32)> = sqlx::query_as(
+        "SELECT a.policy_id, a.org_id = t.id, nlevel(o.path) FROM sd_sla_assignments a \
            JOIN organizations o ON o.id = a.org_id \
            JOIN organizations t ON t.id = $1 \
            JOIN sd_sla_policies p ON p.id = a.policy_id AND p.archived_at IS NULL \
@@ -427,8 +453,15 @@ async fn effective(
     .bind(org_id)
     .fetch_optional(&mut *conn)
     .await?;
-    if let Some((id, here)) = nearest {
-        return Ok(Some((id, if here { "here" } else { "above" })));
+    match (agreed, nearest) {
+        (Some((id, depth)), Some((_, _, assigned))) if depth >= assigned => {
+            return Ok(Some((id, "agreement")));
+        }
+        (Some((id, _)), None) => return Ok(Some((id, "agreement"))),
+        (_, Some((id, here, _))) => {
+            return Ok(Some((id, if here { "here" } else { "above" })));
+        }
+        (None, None) => {}
     }
     let default: Option<Uuid> = sqlx::query_scalar(
         "SELECT id FROM sd_sla_policies WHERE is_default AND archived_at IS NULL",

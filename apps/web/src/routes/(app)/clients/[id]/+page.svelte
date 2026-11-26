@@ -381,6 +381,7 @@
 					workTypes={data.workTypes}
 					assetTypes={data.assetTypes}
 					products={data.products}
+					slaPolicies={data.slaPolicies}
 					canManage={data.canManageAgreements}
 					errors={form && 'agreement' in form && form.agreement && 'errors' in form.agreement
 						? (form.agreement.errors ?? {})

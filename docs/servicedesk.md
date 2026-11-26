@@ -90,7 +90,7 @@ An SLA policy sets targets for each priority: how long until the first response,
 
 **Holidays.** A policy can list holidays: days its clocks don't count, such as public holidays, written one a line in its **Holidays** box (`2026-12-25 Christmas Day`). They apply to whichever hours the policy uses, but not to around-the-clock policies. A ticket keeps the hours and holidays it was opened under, including holidays up to two years ahead, so holidays added later apply to new tickets only.
 
-**Which policy applies.** A policy can be set on any organization and applies to the organizations below it too. The nearest one wins. Without one, the default policy applies: the seeded **Standard** policy.
+**Which policy applies.** A policy can be set on any organization and applies to the organizations below it too. An [agreement](agreements.md#sla) in force can also bind one. The nearest wins, and an agreement wins over a policy set on the same organization. Without either, the default policy applies: the seeded **Standard** policy.
 
 | Priority | First response | Resolution |
 |---|---|---|

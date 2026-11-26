@@ -29,10 +29,20 @@
 		workTypes: WorkType[];
 		assetTypes: AssetType[];
 		products: Product[];
+		slaPolicies: { id: string; name: string }[];
 		canManage: boolean;
 		errors: Record<string, string>;
 	};
-	let { agreements, usage, workTypes, assetTypes, products, canManage, errors }: Props = $props();
+	let {
+		agreements,
+		usage,
+		workTypes,
+		assetTypes,
+		products,
+		slaPolicies,
+		canManage,
+		errors
+	}: Props = $props();
 
 	const STATUS: { value: Status; label: string }[] = [
 		{ value: 'draft', label: 'Draft' },
@@ -66,6 +76,7 @@
 	let autoRenew = $state(false);
 	let noticeDays = $state('30');
 	let notes = $state('');
+	let slaPolicyId = $state('');
 	let defaultRate = $state('');
 	let rates: { workTypeId: string; hourlyRate: string }[] = $state([]);
 	let lines: {
@@ -94,6 +105,7 @@
 		autoRenew = a?.autoRenew ?? false;
 		noticeDays = String(a?.renewalNoticeDays ?? 30);
 		notes = a?.notes ?? '';
+		slaPolicyId = a?.slaPolicyId ?? '';
 		defaultRate = a?.rates.find((r) => !r.workTypeId)?.hourlyRate ?? '';
 		rates = (a?.rates ?? [])
 			.filter((r) => r.workTypeId)
@@ -129,6 +141,7 @@
 			autoRenew,
 			renewalNoticeDays: Number(noticeDays) || 0,
 			notes,
+			slaPolicyId: slaPolicyId || null,
 			rates: [
 				...(defaultRate.trim() ? [{ hourlyRate: defaultRate }] : []),
 				...rates.filter((r) => r.workTypeId && r.hourlyRate.trim())
@@ -234,6 +247,9 @@
 						</span>
 					</div>
 					<p class="text-sm text-fg-muted">{coverage(a)}</p>
+					{#if a.slaPolicyName}
+						<p class="text-xs text-fg-muted">SLA: {a.slaPolicyName}</p>
+					{/if}
 					{#if a.rates.length > 0}
 						<p class="text-xs text-fg-muted">
 							Rates: {a.rates
@@ -481,6 +497,18 @@
 		</fieldset>
 
 		<div class="grid gap-3 sm:grid-cols-3">
+			{#if slaPolicies.length > 0}
+				<Field label="SLA" for="ag-sla" hint="New tickets get it" error={errors.slaPolicyId}>
+					<Select
+						id="ag-sla"
+						bind:value={slaPolicyId}
+						options={[
+							{ value: '', label: 'None' },
+							...slaPolicies.map((p) => ({ value: p.id, label: p.name }))
+						]}
+					/>
+				</Field>
+			{/if}
 			<Field label="Priority" for="ag-priority" hint="Lower goes first" error={errors.priority}>
 				<Input id="ag-priority" bind:value={priority} inputmode="numeric" />
 			</Field>
