@@ -14,6 +14,7 @@ In **Settings → Packs**, choose the organization, then upload a `.hxpack`. Bef
 Things to know about installing:
 
 - **Workflows arrive as drafts.** Nothing is published until someone reviews it.
+- **Where they go:** a built-in pack's workflows go into the organization's System folder, and another pack's into a folder named after the pack (see [Folders](workflows.md#folders)).
 - **Packs never overwrite** what they didn't install. A conflict blocks the install until you rename or remove the other item.
 - **Upgrading** (uploading a newer version) updates what the pack installed, in place:
   - scripts get a new version and workflows a new draft

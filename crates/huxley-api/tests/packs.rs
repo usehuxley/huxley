@@ -639,3 +639,176 @@ async fn built_in_integrations_are_packs() {
         .await;
     assert_eq!(status, StatusCode::CONFLICT);
 }
+
+impl Setup {
+    async fn call(&self, method: &str, uri: &str, body: Value) -> (StatusCode, Value) {
+        let body = if body.is_null() {
+            Vec::new()
+        } else {
+            body.to_string().into_bytes()
+        };
+        self.send(&self.owner, method, uri, "application/json", body)
+            .await
+    }
+
+    async fn folders(&self) -> Vec<Value> {
+        let (_, all) = self.get("/api/v1/workflow-folders").await;
+        all.as_array()
+            .unwrap()
+            .iter()
+            .filter(|f| f["orgId"] == self.org.to_string())
+            .cloned()
+            .collect()
+    }
+}
+
+#[tokio::test]
+async fn installed_workflows_are_filed_and_the_system_folder_stays() {
+    let Some(s) = setup().await else { return };
+    // A built-in pack's workflows go to the System folder.
+    let uri = format!("/api/v1/packs/builtin/huxley/cwautomate?orgId={}", s.org);
+    let (status, review) = s.call("POST", &uri, Value::Null).await;
+    assert_eq!(status, StatusCode::CREATED, "{review}");
+    let version = review["version"].as_str().unwrap().to_owned();
+    let (status, installed) = s.install(&s.owner, &review, &version).await;
+    assert_eq!(status, StatusCode::CREATED, "{installed}");
+    let run_command = installed["items"]["workflows"]["automate-run-command"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    // Another pack's go to a folder named after it.
+    let (_, review) = s.upload(&s.owner, s.pack("1.0.0", "hello", true)).await;
+    let (status, installed) = s.install(&s.owner, &review, "1.0.0").await;
+    assert_eq!(status, StatusCode::CREATED, "{installed}");
+    let greet = installed["items"]["workflows"]["greet"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+
+    let folders = s.folders().await;
+    let system = folders.iter().find(|f| f["system"] == true).unwrap();
+    assert_eq!(
+        (&system["name"], &system["workflows"]),
+        (&json!("System"), &json!(2))
+    );
+    let system_id = system["id"].as_str().unwrap().to_owned();
+    let widgets = folders.iter().find(|f| f["name"] == "Widgets").unwrap();
+    assert_eq!(widgets["workflows"], 1);
+    let (_, workflow) = s.get(&format!("/api/v1/workflows/{run_command}")).await;
+    assert_eq!(
+        (&workflow["system"], &workflow["folderId"]),
+        (&json!(true), &json!(system_id))
+    );
+
+    // The System folder stays as it is, and holds only built-in workflows.
+    let folder_uri = format!("/api/v1/workflow-folders/{system_id}");
+    let (status, _) = s
+        .call("PATCH", &folder_uri, json!({ "name": "Mine" }))
+        .await;
+    assert_eq!(status, StatusCode::CONFLICT);
+    let (status, _) = s.call("DELETE", &folder_uri, Value::Null).await;
+    assert_eq!(status, StatusCode::CONFLICT);
+    let moving = |ids: Vec<&str>, folder: Value| json!({ "workflowIds": ids, "folderId": folder });
+    let (status, _) = s
+        .call(
+            "POST",
+            "/api/v1/workflow-folders/move",
+            moving(vec![&run_command], Value::Null),
+        )
+        .await;
+    assert_eq!(status, StatusCode::CONFLICT);
+    let (status, _) = s
+        .call(
+            "POST",
+            "/api/v1/workflow-folders/move",
+            moving(vec![&greet], json!(system_id)),
+        )
+        .await;
+    assert_eq!(status, StatusCode::CONFLICT);
+    let (status, _) = s
+        .call(
+            "POST",
+            "/api/v1/workflow-folders",
+            json!({ "orgId": s.org, "folder": { "name": "Inside", "parentId": system_id } }),
+        )
+        .await;
+    assert_eq!(status, StatusCode::CONFLICT);
+
+    folder_rules(&s, &greet).await;
+}
+
+/// Making, nesting, moving into, renaming and deleting folders.
+async fn folder_rules(s: &Setup, greet: &str) {
+    let make = |name: &str, parent: Value| json!({ "orgId": s.org, "folder": { "name": name, "parentId": parent } });
+    let (status, ops) = s
+        .call("POST", "/api/v1/workflow-folders", make("Ops", Value::Null))
+        .await;
+    assert_eq!(status, StatusCode::CREATED, "{ops}");
+    let ops = ops["id"].as_str().unwrap().to_owned();
+    let (status, _) = s
+        .call("POST", "/api/v1/workflow-folders", make("ops", Value::Null))
+        .await;
+    assert_eq!(
+        status,
+        StatusCode::CONFLICT,
+        "names are unique among siblings"
+    );
+    let (status, daily) = s
+        .call(
+            "POST",
+            "/api/v1/workflow-folders",
+            make("Daily", json!(ops)),
+        )
+        .await;
+    assert_eq!(status, StatusCode::CREATED, "{daily}");
+    let daily = daily["id"].as_str().unwrap().to_owned();
+    // A folder can't go inside itself.
+    let (status, _) = s
+        .call(
+            "PATCH",
+            &format!("/api/v1/workflow-folders/{ops}"),
+            json!({ "name": "Ops", "parentId": daily }),
+        )
+        .await;
+    assert_eq!(status, StatusCode::CONFLICT);
+
+    let (status, _) = s
+        .call(
+            "POST",
+            "/api/v1/workflow-folders/move",
+            json!({ "workflowIds": [greet], "folderId": daily }),
+        )
+        .await;
+    assert_eq!(status, StatusCode::NO_CONTENT);
+    let (_, listed) = s.get(&format!("/api/v1/workflows?folderId={daily}")).await;
+    let ids: Vec<&str> = listed
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|w| w["id"].as_str().unwrap())
+        .collect();
+    assert_eq!(ids, [greet]);
+
+    // Deleting a folder moves what was in it up a level.
+    let (status, _) = s
+        .call(
+            "DELETE",
+            &format!("/api/v1/workflow-folders/{daily}"),
+            Value::Null,
+        )
+        .await;
+    assert_eq!(status, StatusCode::NO_CONTENT);
+    let (_, workflow) = s.get(&format!("/api/v1/workflows/{greet}")).await;
+    assert_eq!(workflow["folderId"], json!(ops));
+    let (status, _) = s
+        .call(
+            "DELETE",
+            &format!("/api/v1/workflow-folders/{ops}"),
+            Value::Null,
+        )
+        .await;
+    assert_eq!(status, StatusCode::NO_CONTENT);
+    let (_, workflow) = s.get(&format!("/api/v1/workflows/{greet}")).await;
+    assert_eq!(workflow["folderId"], Value::Null);
+    assert!(s.folders().await.iter().all(|f| f["name"] != "Ops"));
+}

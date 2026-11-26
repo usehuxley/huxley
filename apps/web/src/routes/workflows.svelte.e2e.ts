@@ -106,6 +106,70 @@ test.describe('workflows', () => {
 		await expect(page.getByText('No differences.')).toBeVisible();
 	});
 
+	test('workflows are organized in folders', async ({ browser }) => {
+		const stamp = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+		const api = await request.newContext({
+			baseURL: apiUrl,
+			extraHTTPHeaders: { 'x-requested-with': 'huxley' }
+		});
+		await api.post('/api/v1/auth/login', { data: { email: ownerEmail, password: ownerPassword } });
+		const orgs = (await (await api.get('/api/v1/orgs')).json()) as {
+			id: string;
+			parentId: string | null;
+		}[];
+		const orgId = orgs.find((o) => o.parentId === null)!.id;
+		for (const which of ['north', 'south']) {
+			const key = `fold-${which}-${stamp}`;
+			const made = await api.post('/api/v1/workflows', {
+				data: {
+					orgId,
+					document: {
+						apiVersion: 'usehuxley.io/v1',
+						kind: 'Workflow',
+						metadata: { key, name: `Folder test ${which} ${stamp}` },
+						spec: { steps: [{ id: 'a', type: 'transform', output: 'x' }] }
+					}
+				}
+			});
+			expect(made.status(), await made.text()).toBe(201);
+		}
+		await api.dispose();
+
+		const page = await signIn(browser);
+		await page.goto('/workflows');
+		const folders = page.getByRole('navigation', { name: 'Folders' });
+		await expect(async () => {
+			await folders.getByRole('button', { name: 'New folder' }).click();
+			await expect(page.getByRole('dialog')).toBeVisible({ timeout: 1000 });
+		}).toPass({ timeout: 15_000 });
+		await page.getByRole('dialog').getByLabel('Folder name').fill(`Ops ${stamp}`);
+		await page.getByRole('dialog').getByRole('button', { name: 'Save' }).click();
+		await expect(page.getByText('Folder made.')).toBeVisible();
+
+		// Move one workflow into it.
+		await page.getByRole('button', { name: 'Move workflows' }).click();
+		await page.getByLabel(`Choose Folder test north ${stamp}`, { exact: true }).check();
+		await page.getByLabel('Move to').selectOption({ label: `Ops ${stamp}` });
+		await page.getByRole('button', { name: 'Move', exact: true }).click();
+		await expect(page.getByText('Workflow moved.')).toBeVisible();
+
+		const list = page.getByRole('list', { name: 'Workflows' });
+		await folders.getByRole('button', { name: new RegExp(`^Ops ${stamp}`) }).click();
+		await expect(list.getByRole('link')).toHaveText([`Folder test north ${stamp}`]);
+		// Search covers every folder.
+		await page.getByLabel('Search workflows').fill(`folder test`);
+		await expect(list.getByRole('link', { name: `Folder test south ${stamp}` })).toBeVisible();
+		await expect(list.getByRole('link', { name: `Folder test north ${stamp}` })).toBeVisible();
+		await page.getByLabel('Search workflows').fill('');
+
+		// Deleting the folder moves its workflow back up.
+		await page.getByRole('button', { name: 'Delete folder' }).click();
+		await expect(page.getByText('Folder deleted.', { exact: false })).toBeVisible();
+		await expect(folders).not.toContainText(`Ops ${stamp}`);
+		await folders.getByRole('button', { name: /^Unfiled/ }).click();
+		await expect(list.getByRole('link', { name: `Folder test north ${stamp}` })).toBeVisible();
+	});
+
 	test('workflows read organization variables', async ({ browser }) => {
 		const page = await signIn(browser);
 		const suffix = Date.now().toString(36);

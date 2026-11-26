@@ -13049,11 +13049,221 @@
 				}
 			}
 		},
+		"/api/v1/workflow-folders": {
+			"get": {
+				"tags": ["workflows"],
+				"summary": "Every folder the caller can view, with how many workflows each holds.",
+				"operationId": "list_workflow_folders",
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "array",
+									"items": {
+										"$ref": "#/components/schemas/WorkflowFolder"
+									}
+								}
+							}
+						}
+					}
+				}
+			},
+			"post": {
+				"tags": ["workflows"],
+				"summary": "Makes a folder.",
+				"operationId": "create_workflow_folder",
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/CreateFolderRequest"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"201": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/WorkflowFolder"
+								}
+							}
+						}
+					},
+					"409": {
+						"description": "The name is taken there, or the System folder",
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					},
+					"422": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/workflow-folders/move": {
+			"post": {
+				"tags": ["workflows"],
+				"summary": "Moves workflows into a folder (or out of any). Built-in workflows stay\nin the System folder, which holds nothing else.",
+				"operationId": "move_workflows",
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/MoveWorkflowsRequest"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"204": {},
+					"404": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					},
+					"409": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/workflow-folders/{id}": {
+			"delete": {
+				"tags": ["workflows"],
+				"summary": "Deletes a folder; what was in it moves up to its parent. The System\nfolder can't be deleted.",
+				"operationId": "delete_workflow_folder",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"responses": {
+					"204": {},
+					"404": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					},
+					"409": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			},
+			"patch": {
+				"tags": ["workflows"],
+				"summary": "Renames or moves a folder. The System folder stays as it is.",
+				"operationId": "update_workflow_folder",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/WorkflowFolderInput"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/WorkflowFolder"
+								}
+							}
+						}
+					},
+					"404": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					},
+					"409": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
 		"/api/v1/workflows": {
 			"get": {
 				"tags": ["workflows"],
 				"summary": "Workflows the caller can view.",
 				"operationId": "list_workflows",
+				"parameters": [
+					{
+						"name": "folderId",
+						"in": "query",
+						"description": "Only the workflows directly in this folder.",
+						"required": false,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
 				"responses": {
 					"200": {
 						"content": {
@@ -17750,6 +17960,20 @@
 				},
 				"additionalProperties": false
 			},
+			"CreateFolderRequest": {
+				"type": "object",
+				"required": ["orgId", "folder"],
+				"properties": {
+					"folder": {
+						"$ref": "#/components/schemas/WorkflowFolderInput"
+					},
+					"orgId": {
+						"type": "string",
+						"format": "uuid"
+					}
+				},
+				"additionalProperties": false
+			},
 			"CreateFormRequest": {
 				"type": "object",
 				"required": ["orgId", "form"],
@@ -20230,6 +20454,26 @@
 						"format": "int32"
 					}
 				}
+			},
+			"MoveWorkflowsRequest": {
+				"type": "object",
+				"required": ["workflowIds"],
+				"properties": {
+					"folderId": {
+						"type": ["string", "null"],
+						"format": "uuid",
+						"description": "Where to: a folder of each workflow's organization, or none\n(unfiled)."
+					},
+					"workflowIds": {
+						"type": "array",
+						"items": {
+							"type": "string",
+							"format": "uuid"
+						},
+						"description": "1 to 500 workflows, all moved or none."
+					}
+				},
+				"additionalProperties": false
 			},
 			"MyWork": {
 				"type": "object",
@@ -25449,13 +25693,73 @@
 				],
 				"description": "A workflow with its draft and the draft's problems."
 			},
+			"WorkflowFolder": {
+				"type": "object",
+				"required": ["id", "orgId", "name", "system", "workflows", "createdAt"],
+				"properties": {
+					"createdAt": {
+						"type": "string",
+						"format": "date-time"
+					},
+					"id": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"name": {
+						"type": "string"
+					},
+					"orgId": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"parentId": {
+						"type": ["string", "null"],
+						"format": "uuid"
+					},
+					"system": {
+						"type": "boolean",
+						"description": "The System folder: built-in workflows, fixed in place."
+					},
+					"workflows": {
+						"type": "integer",
+						"format": "int64",
+						"description": "Workflows directly in it."
+					}
+				}
+			},
+			"WorkflowFolderInput": {
+				"type": "object",
+				"description": "A folder to make, or a folder's new name and place.",
+				"required": ["name"],
+				"properties": {
+					"name": {
+						"type": "string"
+					},
+					"parentId": {
+						"type": ["string", "null"],
+						"format": "uuid",
+						"description": "The folder it's in (none: the top level)."
+					}
+				},
+				"additionalProperties": false
+			},
 			"WorkflowStatus": {
 				"type": "string",
 				"enum": ["active", "archived"]
 			},
 			"WorkflowSummary": {
 				"type": "object",
-				"required": ["id", "orgId", "key", "name", "status", "revision", "createdAt", "updatedAt"],
+				"required": [
+					"id",
+					"orgId",
+					"key",
+					"name",
+					"status",
+					"revision",
+					"system",
+					"createdAt",
+					"updatedAt"
+				],
 				"properties": {
 					"createdAt": {
 						"type": "string",
@@ -25468,6 +25772,11 @@
 					},
 					"description": {
 						"type": ["string", "null"]
+					},
+					"folderId": {
+						"type": ["string", "null"],
+						"format": "uuid",
+						"description": "The folder it's in (none: unfiled)."
 					},
 					"id": {
 						"type": "string",
@@ -25499,6 +25808,10 @@
 					},
 					"status": {
 						"$ref": "#/components/schemas/WorkflowStatus"
+					},
+					"system": {
+						"type": "boolean",
+						"description": "Installed from a built-in pack: it stays in the System folder."
 					},
 					"updatedAt": {
 						"type": "string",

@@ -19,6 +19,7 @@ pub mod csrf;
 mod dataset_routes;
 pub mod desk_routes;
 pub mod entity_routes;
+mod folder_routes;
 mod form_routes;
 pub mod health;
 mod hook_routes;
