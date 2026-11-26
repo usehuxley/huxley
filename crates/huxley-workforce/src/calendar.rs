@@ -96,6 +96,8 @@ pub struct Settings {
     /// The `msgraph` connection's key.
     pub connection: String,
     pub keep_subjects: bool,
+    /// Appointments are written to people's calendars.
+    pub write_back: bool,
     #[serde(with = "time::serde::rfc3339")]
     pub updated_at: OffsetDateTime,
 }
@@ -109,11 +111,15 @@ pub struct SettingsInput {
     pub connection: String,
     #[serde(default)]
     pub keep_subjects: bool,
+    /// Write appointments to people's calendars (the connection's app needs
+    /// Calendars.ReadWrite).
+    #[serde(default)]
+    pub write_back: bool,
 }
 
 pub async fn settings(conn: &mut PgConnection) -> WorkforceResult<Option<Settings>> {
     Ok(sqlx::query_as(
-        "SELECT provider, org_id, connection, keep_subjects, updated_at FROM wf_calendar_settings",
+        "SELECT provider, org_id, connection, keep_subjects, write_back, updated_at FROM wf_calendar_settings",
     )
     .fetch_optional(conn)
     .await?)
@@ -137,16 +143,17 @@ pub async fn set_settings(
         return Err(WorkforceError::invalid("connection", "a connection's key"));
     }
     sqlx::query(
-        "INSERT INTO wf_calendar_settings (id, provider, org_id, connection, keep_subjects, updated_by) \
-         VALUES (true, $1, $2, $3, $4, $5) \
+        "INSERT INTO wf_calendar_settings (id, provider, org_id, connection, keep_subjects, updated_by, write_back) \
+         VALUES (true, $1, $2, $3, $4, $5, $6) \
          ON CONFLICT (id) DO UPDATE SET provider = $1, org_id = $2, connection = $3, keep_subjects = $4, \
-                updated_by = $5, updated_at = now()",
+                updated_by = $5, write_back = $6, updated_at = now()",
     )
     .bind(&input.provider)
     .bind(input.org_id)
     .bind(connection)
     .bind(input.keep_subjects)
     .bind(ctx.actor.id())
+    .bind(input.write_back)
     .execute(&mut *conn)
     .await?;
     if !input.keep_subjects {
@@ -159,6 +166,7 @@ pub async fn set_settings(
         ctx,
         AuditRecord::new("calendar.settings_changed").details(json!({
             "provider": input.provider, "connection": connection, "keepSubjects": input.keep_subjects,
+            "writeBack": input.write_back,
         })),
     )
     .await?;
@@ -408,7 +416,8 @@ pub async fn record(
     Ok(())
 }
 
-/// Busy blocks of these people overlapping `[from, to)`, by start.
+/// Busy blocks of these people overlapping `[from, to)`, by start, leaving
+/// out those that are appointments Huxley wrote to their calendar.
 pub async fn between(
     conn: &mut PgConnection,
     people: &[Uuid],
@@ -416,12 +425,83 @@ pub async fn between(
     to: OffsetDateTime,
 ) -> WorkforceResult<Vec<BusyBlock>> {
     Ok(sqlx::query_as(
-        "SELECT user_id, starts_at, ends_at, status, subject FROM wf_busy_blocks \
-          WHERE user_id = ANY($1) AND starts_at < $3 AND ends_at > $2 ORDER BY starts_at",
+        "SELECT b.user_id, b.starts_at, b.ends_at, b.status, b.subject FROM wf_busy_blocks b \
+          WHERE b.user_id = ANY($1) AND b.starts_at < $3 AND b.ends_at > $2 \
+            AND NOT EXISTS (SELECT 1 FROM wf_calendar_writes w WHERE w.user_id = b.user_id \
+                             AND w.starts_at = b.starts_at AND w.ends_at = b.ends_at) \
+          ORDER BY b.starts_at",
     )
     .bind(people)
     .bind(from)
     .bind(to)
     .fetch_all(conn)
+    .await?)
+}
+
+/// An appointment's event in someone's calendar.
+#[derive(Debug, Clone, sqlx::FromRow)]
+pub struct Written {
+    pub appointment_id: Uuid,
+    pub user_id: Uuid,
+    pub address: String,
+    pub event_id: String,
+}
+
+/// The event written for an appointment, if any.
+pub async fn written(
+    conn: &mut PgConnection,
+    appointment: Uuid,
+) -> WorkforceResult<Option<Written>> {
+    Ok(sqlx::query_as(
+        "SELECT appointment_id, user_id, address, event_id FROM wf_calendar_writes WHERE appointment_id = $1",
+    )
+    .bind(appointment)
+    .fetch_optional(conn)
+    .await?)
+}
+
+/// Records the event written for an appointment.
+pub async fn record_written(
+    conn: &mut PgConnection,
+    w: &Written,
+    (starts_at, ends_at): (OffsetDateTime, OffsetDateTime),
+) -> WorkforceResult<()> {
+    sqlx::query(
+        "INSERT INTO wf_calendar_writes (appointment_id, user_id, address, event_id, starts_at, ends_at) \
+         VALUES ($1, $2, $3, $4, $5, $6) \
+         ON CONFLICT (appointment_id) DO UPDATE SET user_id = $2, address = $3, event_id = $4, \
+                starts_at = $5, ends_at = $6, written_at = now()",
+    )
+    .bind(w.appointment_id)
+    .bind(w.user_id)
+    .bind(&w.address)
+    .bind(&w.event_id)
+    .bind(starts_at)
+    .bind(ends_at)
+    .execute(conn)
+    .await?;
+    Ok(())
+}
+
+/// Forgets an appointment's event (it was removed from the calendar).
+pub async fn forget_written(conn: &mut PgConnection, appointment: Uuid) -> WorkforceResult<()> {
+    sqlx::query("DELETE FROM wf_calendar_writes WHERE appointment_id = $1")
+        .bind(appointment)
+        .execute(conn)
+        .await?;
+    Ok(())
+}
+
+/// Where someone's calendar is at the provider, if it's synced from it.
+pub async fn provider_address(
+    conn: &mut PgConnection,
+    user: Uuid,
+) -> WorkforceResult<Option<String>> {
+    Ok(sqlx::query_scalar(
+        "SELECT coalesce(p.calendar, u.email) FROM users u LEFT JOIN wf_calendar_people p ON p.user_id = u.id \
+          WHERE u.id = $1 AND u.status = 'active' AND coalesce(p.source, 'provider') = 'provider'",
+    )
+    .bind(user)
+    .fetch_optional(conn)
     .await?)
 }

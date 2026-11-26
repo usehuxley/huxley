@@ -447,6 +447,9 @@ pub enum Step {
     /// Sync people's busy time from their calendars (the `workforce` module).
     #[serde(rename = "core.calendar.sync")]
     CalendarSync(CalendarSyncStep),
+    /// Write an appointment to its person's calendar (the `workforce` module).
+    #[serde(rename = "core.calendar.write")]
+    CalendarWrite(CalendarWriteStep),
     /// Gather what happened on projects, for a status report.
     #[serde(rename = "core.project.status")]
     ProjectStatus(ProjectStatusStep),
@@ -854,6 +857,11 @@ step!(CalendarSyncStep {
     pub sync: Option<CalendarSync>,
 });
 
+step!(CalendarWriteStep {
+    #[serde(rename = "with")]
+    pub write: CalendarWrite,
+});
+
 step!(ProjectStatusStep {
     #[serde(rename = "with", default, skip_serializing_if = "Option::is_none")]
     pub status: Option<ProjectStatus>,
@@ -959,6 +967,7 @@ impl Step {
             ChangeDecide,
             ScopeDecide,
             CalendarSync,
+            CalendarWrite,
             ProjectStatus,
             ProjectReport,
             AssetSync,
@@ -1027,6 +1036,7 @@ impl Step {
             Self::ChangeDecide(_) => "core.change.decide",
             Self::ScopeDecide(_) => "core.project.scope.decide",
             Self::CalendarSync(_) => "core.calendar.sync",
+            Self::CalendarWrite(_) => "core.calendar.write",
             Self::ProjectStatus(_) => "core.project.status",
             Self::ProjectReport(_) => "core.project.report",
             Self::AssetSync(_) => "core.asset.sync",
@@ -1703,6 +1713,17 @@ pub struct ScopeDecide {
 pub struct CalendarSync {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub user_id: Option<Value>,
+}
+
+/// An appointment to write to its person's calendar
+/// (`core.calendar.write`): `appointment_id`. When writing back is on (and
+/// their calendar is Microsoft 365) the event is created, kept in step when
+/// the appointment moves or changes hands, and removed when it's cancelled.
+/// Output: `{ written, action, event_id }` or `{ written: false, reason }`.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct CalendarWrite {
+    pub appointment_id: Value,
 }
 
 /// What to gather for status reports (`core.project.status`): one
