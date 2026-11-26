@@ -1,6 +1,6 @@
 import { fail, redirect } from '@sveltejs/kit';
 import { api } from '#lib/server/api.ts';
-import { adoptSession } from '#lib/server/signin.ts';
+import { adoptSession, toCodeStep } from '#lib/server/signin.ts';
 import type { Actions, PageServerLoad } from './$types';
 
 // Opening the link doesn't sign in: mail scanners open links too, and the
@@ -14,9 +14,10 @@ export const actions: Actions = {
 		const form = await event.request.formData();
 		const raw = form.get('token');
 		const token = typeof raw === 'string' ? raw : '';
-		const { response } = await api(event)
+		const { response, data } = await api(event)
 			.POST('/api/portal/v1/auth/redeem', { body: { token } })
-			.catch(() => ({ response: null }));
+			.catch(() => ({ response: null, data: undefined }));
+		if (response?.status === 202) toCodeStep(event.cookies, data, '/');
 		if (!response || response.status !== 200) {
 			return fail(response?.status ?? 503, {
 				message:

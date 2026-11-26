@@ -131,6 +131,22 @@ export const actions: Actions = {
 			}
 		};
 	},
+	portalMfaReset: async (event) => {
+		const form = await event.request.formData();
+		const {
+			data,
+			error: problem,
+			response
+		} = await api(event).POST('/api/v1/portal-accounts/{id}/mfa-reset', {
+			params: { path: { id: formString(form, 'accountId') } }
+		});
+		if (!data) {
+			return fail(response.status, {
+				portal: { message: problemMessage(problem, 'Could not reset it.') }
+			});
+		}
+		return { portal: { done: 'Two-factor sign-in reset. They’re signed out everywhere.' } };
+	},
 	details: async (event) => {
 		const form = await event.request.formData();
 		const { error: problem, response } = await api(event).PUT('/api/v1/contacts/{id}', {

@@ -35,6 +35,63 @@ pub struct NewSession {
     pub max_age: Duration,
 }
 
+/// How a link or password sign-in went.
+#[derive(Debug)]
+pub enum SignedIn {
+    Session(NewSession),
+    /// They have two-factor sign-in: finish with a code and this challenge
+    /// ([`crate::mfa::complete`]).
+    MfaRequired {
+        challenge: String,
+    },
+}
+
+impl SignedIn {
+    /// The session, unless a code is still needed.
+    pub fn session(self) -> Option<NewSession> {
+        match self {
+            Self::Session(s) => Some(s),
+            Self::MfaRequired { .. } => None,
+        }
+    }
+}
+
+/// After the first factor: a code is asked for when the account has an
+/// authenticator; otherwise a session starts (limited to setting one up
+/// when the company requires it).
+async fn finish(
+    conn: &mut PgConnection,
+    ctx: &RequestContext,
+    account: Uuid,
+    method: &'static str,
+    ip: Option<&str>,
+    user_agent: Option<&str>,
+) -> PortalResult<SignedIn> {
+    let (has_totp, org): (bool, Uuid) = sqlx::query_as(
+        "SELECT a.totp_confirmed_at IS NOT NULL, c.org_id FROM portal_accounts a \
+           JOIN crm_contacts c ON c.id = a.contact_id WHERE a.id = $1",
+    )
+    .bind(account)
+    .fetch_one(&mut *conn)
+    .await?;
+    if has_totp {
+        let challenge = crate::mfa::challenge(&mut *conn, ctx, account, method).await?;
+        return Ok(SignedIn::MfaRequired { challenge });
+    }
+    let setup = crate::mfa::required(&mut *conn, org).await?;
+    let session = start_session(&mut *conn, account, ip, user_agent, setup).await?;
+    audit::record(
+        &mut *conn,
+        ctx,
+        AuditRecord::new("portal.signed_in")
+            .org(session.principal.org_id)
+            .target("portal_account", account)
+            .details(json!({ "method": method, "mfaSetupRequired": setup })),
+    )
+    .await?;
+    Ok(SignedIn::Session(session))
+}
+
 /// Issues a sign-in link for an account (invited or active): its secret.
 pub async fn issue_link(conn: &mut PgConnection, account_id: Uuid) -> PortalResult<String> {
     let t = token::generate(LINK_PREFIX);
@@ -87,13 +144,14 @@ pub(crate) async fn start_session(
     account_id: Uuid,
     ip: Option<&str>,
     user_agent: Option<&str>,
+    mfa_setup_required: bool,
 ) -> PortalResult<NewSession> {
     let t = token::generate(SESSION_PREFIX);
     let now = OffsetDateTime::now_utc();
     let session_id = huxley_core::new_id();
     sqlx::query(
-        "INSERT INTO portal_sessions (id, account_id, token_hash, idle_expires_at, absolute_expires_at, ip, user_agent) \
-         VALUES ($1, $2, $3, $4, $5, $6::inet, $7)",
+        "INSERT INTO portal_sessions (id, account_id, token_hash, idle_expires_at, absolute_expires_at, ip, user_agent, \
+            mfa_setup_required) VALUES ($1, $2, $3, $4, $5, $6::inet, $7, $8)",
     )
     .bind(session_id)
     .bind(account_id)
@@ -102,6 +160,7 @@ pub(crate) async fn start_session(
     .bind(now + SESSION_ABSOLUTE)
     .bind(ip)
     .bind(user_agent.map(|u| u.chars().take(500).collect::<String>()))
+    .bind(mfa_setup_required)
     .execute(&mut *conn)
     .await?;
     sqlx::query(
@@ -131,7 +190,7 @@ pub async fn redeem(
     secret: &str,
     ip: Option<&str>,
     user_agent: Option<&str>,
-) -> PortalResult<NewSession> {
+) -> PortalResult<SignedIn> {
     if !token::looks_valid(secret, LINK_PREFIX) {
         return Err(PortalError::BadCredentials);
     }
@@ -147,17 +206,7 @@ pub async fn redeem(
     let Some(account) = account else {
         return Err(PortalError::BadCredentials);
     };
-    let session = start_session(&mut *conn, account, ip, user_agent).await?;
-    audit::record(
-        &mut *conn,
-        ctx,
-        AuditRecord::new("portal.signed_in")
-            .org(session.principal.org_id)
-            .target("portal_account", account)
-            .details(json!({ "method": "link" })),
-    )
-    .await?;
-    Ok(session)
+    finish(conn, ctx, account, "link", ip, user_agent).await
 }
 
 /// Signs in with an email and password. Wrong passwords lock the account
@@ -169,7 +218,7 @@ pub async fn sign_in_with_password(
     given: &str,
     ip: Option<&str>,
     user_agent: Option<&str>,
-) -> PortalResult<NewSession> {
+) -> PortalResult<SignedIn> {
     let found: Option<(Uuid, Option<String>, i32, Option<OffsetDateTime>)> = sqlx::query_as(
         "SELECT a.id, a.password_hash, a.failed_attempts, a.locked_until \
            FROM portal_accounts a JOIN crm_contacts c ON c.id = a.contact_id \
@@ -188,40 +237,41 @@ pub async fn sign_in_with_password(
         ));
     }
     if !password::verify(given, &hash) {
-        let failed = failed + 1;
-        let lock = (failed >= LOCK_AFTER).then(|| {
-            let doublings = u32::try_from(failed - LOCK_AFTER).unwrap_or(0).min(6);
-            OffsetDateTime::now_utc() + Duration::seconds(60 * 2_i64.pow(doublings))
-        });
-        sqlx::query(
-            "UPDATE portal_accounts SET failed_attempts = $2, locked_until = $3 WHERE id = $1",
-        )
+        count_failure(&mut *conn, ctx, id, failed, "password").await?;
+        return Err(PortalError::BadCredentials);
+    }
+    finish(conn, ctx, id, "password", ip, user_agent).await
+}
+
+/// A wrong password or code: counted, locking the account for a while
+/// after five in a row (doubling with each further miss, up to an hour).
+pub(crate) async fn count_failure(
+    conn: &mut PgConnection,
+    ctx: &RequestContext,
+    id: Uuid,
+    failed_before: i32,
+    factor: &str,
+) -> PortalResult<()> {
+    let failed = failed_before + 1;
+    let lock = (failed >= LOCK_AFTER).then(|| {
+        let doublings = u32::try_from(failed - LOCK_AFTER).unwrap_or(0).min(6);
+        OffsetDateTime::now_utc() + Duration::seconds(60 * 2_i64.pow(doublings))
+    });
+    sqlx::query("UPDATE portal_accounts SET failed_attempts = $2, locked_until = $3 WHERE id = $1")
         .bind(id)
         .bind(failed)
         .bind(lock)
         .execute(&mut *conn)
         .await?;
-        audit::record(
-            &mut *conn,
-            ctx,
-            AuditRecord::new("portal.sign_in_failed")
-                .target("portal_account", id)
-                .details(json!({ "attempts": failed })),
-        )
-        .await?;
-        return Err(PortalError::BadCredentials);
-    }
-    let session = start_session(&mut *conn, id, ip, user_agent).await?;
     audit::record(
         &mut *conn,
         ctx,
-        AuditRecord::new("portal.signed_in")
-            .org(session.principal.org_id)
+        AuditRecord::new("portal.sign_in_failed")
             .target("portal_account", id)
-            .details(json!({ "method": "password" })),
+            .details(json!({ "attempts": failed, "factor": factor })),
     )
     .await?;
-    Ok(session)
+    Ok(())
 }
 
 /// Sets (or changes) a signed-in account's password.
@@ -263,7 +313,8 @@ async fn principal_for(
 ) -> PortalResult<Option<PortalPrincipal>> {
     Ok(sqlx::query_as(
         "SELECT a.id AS account_id, a.contact_id, a.org_id, o.name AS org_name, \
-                btrim(c.first_name || ' ' || c.last_name) AS name, a.email, a.role, s.id AS session_id \
+                btrim(c.first_name || ' ' || c.last_name) AS name, a.email, a.role, s.id AS session_id, \
+                s.mfa_setup_required \
            FROM portal_sessions s JOIN portal_accounts a ON a.id = s.account_id \
            JOIN crm_contacts c ON c.id = a.contact_id JOIN organizations o ON o.id = a.org_id \
           WHERE s.id = $1",

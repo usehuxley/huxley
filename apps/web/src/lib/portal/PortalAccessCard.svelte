@@ -55,6 +55,7 @@
 			Signs in as {account.email}{account.lastSignInAt
 				? `; last signed in ${new Date(account.lastSignInAt).toLocaleString()}`
 				: '; hasn’t signed in yet'}.
+			{account.mfaEnabled ? 'Two-factor sign-in is on.' : ''}
 		</p>
 	{:else}
 		<p class="text-sm text-fg-muted">No portal access yet.</p>
@@ -104,6 +105,12 @@
 					<input type="hidden" name="status" value="disabled" />
 					<Button type="submit" size="sm" variant="ghost">Disable portal access</Button>
 				</form>
+				{#if account.mfaEnabled}
+					<form method="POST" action="?/portalMfaReset" use:enhance={done}>
+						<input type="hidden" name="accountId" value={account.id} />
+						<Button type="submit" size="sm" variant="ghost">Reset two-factor sign-in</Button>
+					</form>
+				{/if}
 			</div>
 		{/if}
 	{/if}

@@ -107,6 +107,17 @@
 									{#if imageErrors[s.key]}<span class="text-sm text-danger">
 											{imageErrors[s.key]}
 										</span>{/if}
+								{:else if s.kind === 'toggle'}
+									<Select
+										{id}
+										name="value"
+										value={s.value ?? 'false'}
+										options={[
+											{ value: 'true', label: 'On' },
+											{ value: 'false', label: 'Off' }
+										]}
+										disabled={!editable}
+									/>
 								{:else if s.kind === 'hostname'}
 									<Input
 										{id}

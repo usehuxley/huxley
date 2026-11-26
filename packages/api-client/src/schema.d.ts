@@ -41,6 +41,26 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
+	'/api/portal/v1/auth/mfa': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/**
+		 * Finishes signing in with a two-factor code. Sets the portal session
+		 *     cookie.
+		 */
+		post: operations['portal_complete_mfa'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
 	'/api/portal/v1/auth/password': {
 		parameters: {
 			query?: never;
@@ -146,6 +166,97 @@ export interface paths {
 		get: operations['portal_me'];
 		put?: never;
 		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/portal/v1/me/mfa': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** Your two-factor sign-in. */
+		get: operations['portal_mfa_status'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/portal/v1/me/mfa/recovery-codes': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/** Replaces your recovery codes (the old ones stop working). */
+		post: operations['portal_regenerate_recovery_codes'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/portal/v1/me/mfa/totp': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/** Starts setting up an authenticator app. */
+		post: operations['portal_begin_totp'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/portal/v1/me/mfa/totp/confirm': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/**
+		 * Finishes setting up with a code from the app. Returns recovery codes
+		 *     (shown once) and signs out your other sessions.
+		 */
+		post: operations['portal_confirm_totp'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/portal/v1/me/mfa/totp/disable': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/**
+		 * Turns off two-factor sign-in, with a current code (not while your
+		 *     organization requires it).
+		 */
+		post: operations['portal_disable_totp'];
 		delete?: never;
 		options?: never;
 		head?: never;
@@ -3384,6 +3495,26 @@ export interface paths {
 		put?: never;
 		/** Emails a new sign-in link to an invited or active account. */
 		post: operations['resend_portal_invitation'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/portal-accounts/{id}/mfa-reset': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/**
+		 * Turns off a contact's two-factor sign-in (a lost phone). Their sessions
+		 *     end; they set it up again if their company requires it.
+		 */
+		post: operations['reset_portal_mfa'];
 		delete?: never;
 		options?: never;
 		head?: never;
@@ -8778,6 +8909,8 @@ export interface components {
 			id: string;
 			/** Format: date-time */
 			lastSignInAt?: string | null;
+			/** @description Two-factor sign-in is set up. */
+			mfaEnabled: boolean;
 			name: string;
 			/** Format: uuid */
 			orgId: string;
@@ -8846,6 +8979,26 @@ export interface components {
 			/** @description Portal permissions, e.g. `portal.ticket:read:company`. */
 			permissions: string[];
 		};
+		PortalMfaCode: {
+			challenge: string;
+			/** @description From the authenticator app, or a recovery code. */
+			code: string;
+		};
+		/** @description A code is needed: finish with `POST /api/portal/v1/auth/mfa`. */
+		PortalMfaRequired: {
+			challenge: string;
+		};
+		PortalMfaStatus: {
+			/** @description An authenticator app is set up. */
+			enabled: boolean;
+			/**
+			 * Format: int64
+			 * @description Unused recovery codes.
+			 */
+			recoveryCodesLeft: number;
+			/** @description Their company requires it. */
+			required: boolean;
+		};
 		/** @description A public note in the portal. */
 		PortalNote: {
 			/** @description Who wrote it: a contact, or someone at the service desk. */
@@ -8871,6 +9024,11 @@ export interface components {
 			/** Format: uuid */
 			contactId: string;
 			email: string;
+			/**
+			 * @description Their company requires two-factor sign-in and they haven't set it
+			 *     up: only the setup is open to them.
+			 */
+			mfaSetupRequired: boolean;
 			name: string;
 			/**
 			 * Format: uuid
@@ -8879,6 +9037,10 @@ export interface components {
 			orgId: string;
 			orgName: string;
 			role: components['schemas']['PortalRole'];
+		};
+		PortalRecoveryCodes: {
+			/** @description Shown once: each signs in once without the app. */
+			recoveryCodes: string[];
 		};
 		PortalRedeemRequest: {
 			token: string;
@@ -8935,6 +9097,15 @@ export interface components {
 			/** @description Whether you can reply (it isn't closed). */
 			canReply: boolean;
 			notes: components['schemas']['PortalNote'][];
+		};
+		PortalTotpCode: {
+			code: string;
+		};
+		PortalTotpEnrollment: {
+			/** @description For a QR code. */
+			otpauthUri: string;
+			/** @description For typing into the app (base32). */
+			secret: string;
 		};
 		/** @description A kind with the user's effective channels. */
 		Preference: {
@@ -9551,7 +9722,8 @@ export interface components {
 		 * @description How a setting's value is validated (and edited in the UI).
 		 * @enum {string}
 		 */
-		SettingKind: 'text' | 'timezone' | 'color' | 'email' | 'prefix' | 'image' | 'hostname';
+		SettingKind:
+			'text' | 'timezone' | 'color' | 'email' | 'prefix' | 'image' | 'hostname' | 'toggle';
 		/** @description A tool call as the user sees it. */
 		ShownCall: {
 			id: string;
@@ -10989,6 +11161,37 @@ export interface operations {
 			};
 		};
 	};
+	portal_complete_mfa: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['PortalMfaCode'];
+			};
+		};
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['PortalMe'];
+				};
+			};
+			401: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
 	portal_password_sign_in: {
 		parameters: {
 			query?: never;
@@ -11008,6 +11211,15 @@ export interface operations {
 				};
 				content: {
 					'application/json': components['schemas']['PortalMe'];
+				};
+			};
+			/** @description A two-factor code is needed */
+			202: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['PortalMfaRequired'];
 				};
 			};
 			401: {
@@ -11039,6 +11251,15 @@ export interface operations {
 				};
 				content: {
 					'application/json': components['schemas']['PortalMe'];
+				};
+			};
+			/** @description A two-factor code is needed */
+			202: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['PortalMfaRequired'];
 				};
 			};
 			401: {
@@ -11153,6 +11374,131 @@ export interface operations {
 				};
 			};
 			401: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	portal_mfa_status: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['PortalMfaStatus'];
+				};
+			};
+		};
+	};
+	portal_regenerate_recovery_codes: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['PortalRecoveryCodes'];
+				};
+			};
+		};
+	};
+	portal_begin_totp: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['PortalTotpEnrollment'];
+				};
+			};
+			409: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	portal_confirm_totp: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['PortalTotpCode'];
+			};
+		};
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['PortalRecoveryCodes'];
+				};
+			};
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	portal_disable_totp: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['PortalTotpCode'];
+			};
+		};
+		responses: {
+			204: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content?: never;
+			};
+			422: {
 				headers: {
 					[name: string]: unknown;
 				};
@@ -18067,6 +18413,27 @@ export interface operations {
 				};
 				content: {
 					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	reset_portal_mfa: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['PortalAccount'];
 				};
 			};
 		};

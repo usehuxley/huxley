@@ -64,6 +64,17 @@ Like every setting, these apply to the organization and everything below it, so 
 - **Sessions** last up to 14 days, ending after a day unused.
 - **Separation:** the portal has its own session cookie (`hx_portal_session`) and its own API (`/api/portal/v1`). A portal session can't reach the staff API, and a staff session can't reach the portal's.
 
+## Two-factor sign-in
+
+Contacts can add a code from an authenticator app (Microsoft Authenticator, Google Authenticator, 1Password and others) to signing in with a link or password: **Profile**, **Manage two-factor sign-in**.
+
+- **Recovery codes:** ten, shown once when they turn it on. Each signs in once without the app. They can replace them from the same page.
+- **Requiring it:** turn on **Require two-factor sign-in** in the organization's settings (Portal group). It's inherited by the organizations below and can be locked. Someone without an authenticator can then only reach the setup page after signing in, until they've set one up.
+- **Signing in with their organization's account** isn't asked for a code: their organization's sign-in decides that.
+- **A lost phone:** on the contact's page, **Reset two-factor sign-in**. Their sessions end, and they set it up again if it's required.
+- **Wrong codes** count toward the same lockout as wrong passwords. A sign-in allows five tries at the code within five minutes.
+- **Turning it off** needs a current code, and isn't possible while their organization requires it.
+
 ## Signing in with their organization
 
 Contacts can sign in with their company's own accounts, such as the client's Microsoft Entra tenant. Add it on the client's page, **Portal** tab, **Add a provider** (needs `crm:manage`).
@@ -81,6 +92,7 @@ Contacts can sign in with their company's own accounts, such as the client's Mic
   - `GET /api/v1/orgs/{id}/portal-accounts`
   - `POST /api/v1/contacts/{id}/portal-access` with `{ role }`
   - `GET`/`POST /api/v1/orgs/{id}/portal-identity-providers`; `PUT`/`DELETE /api/v1/portal-identity-providers/{id}`
+  - `POST /api/v1/portal-accounts/{id}/mfa-reset`
   - `PATCH /api/v1/portal-accounts/{id}` with `{ role, status, version }`
   - `POST /api/v1/portal-accounts/{id}/invitation` (a new sign-in link)
 - The portal's own API, with portal sessions only:
@@ -90,3 +102,4 @@ Contacts can sign in with their company's own accounts, such as the client's Mic
   - `GET /api/portal/v1/me`
   - `GET`, `POST /api/portal/v1/tickets` (`status=open|closed`, `scope=mine|company`, `q`); `GET …/tickets/{id}`; `POST …/tickets/{id}/replies`
   - `PUT /api/portal/v1/me/password`
+  - Two-factor: `…/auth/link` redemption and `…/auth/password` answer `202 { challenge }` when a code is needed; finish with `POST …/auth/mfa` `{ challenge, code }`. `GET …/me/mfa`; `POST …/me/mfa/totp` (start), `…/totp/confirm` `{ code }` (returns recovery codes), `…/totp/disable` `{ code }`, `…/recovery-codes`

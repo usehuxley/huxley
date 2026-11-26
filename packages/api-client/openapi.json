@@ -48,6 +48,43 @@
 				}
 			}
 		},
+		"/api/portal/v1/auth/mfa": {
+			"post": {
+				"tags": ["portal"],
+				"summary": "Finishes signing in with a two-factor code. Sets the portal session\ncookie.",
+				"operationId": "portal_complete_mfa",
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/PortalMfaCode"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/PortalMe"
+								}
+							}
+						}
+					},
+					"401": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
 		"/api/portal/v1/auth/password": {
 			"post": {
 				"tags": ["portal"],
@@ -69,6 +106,16 @@
 							"application/json": {
 								"schema": {
 									"$ref": "#/components/schemas/PortalMe"
+								}
+							}
+						}
+					},
+					"202": {
+						"description": "A two-factor code is needed",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/PortalMfaRequired"
 								}
 							}
 						}
@@ -106,6 +153,16 @@
 							"application/json": {
 								"schema": {
 									"$ref": "#/components/schemas/PortalMe"
+								}
+							}
+						}
+					},
+					"202": {
+						"description": "A two-factor code is needed",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/PortalMfaRequired"
 								}
 							}
 						}
@@ -241,6 +298,135 @@
 						}
 					},
 					"401": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/portal/v1/me/mfa": {
+			"get": {
+				"tags": ["portal"],
+				"summary": "Your two-factor sign-in.",
+				"operationId": "portal_mfa_status",
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/PortalMfaStatus"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/portal/v1/me/mfa/recovery-codes": {
+			"post": {
+				"tags": ["portal"],
+				"summary": "Replaces your recovery codes (the old ones stop working).",
+				"operationId": "portal_regenerate_recovery_codes",
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/PortalRecoveryCodes"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/portal/v1/me/mfa/totp": {
+			"post": {
+				"tags": ["portal"],
+				"summary": "Starts setting up an authenticator app.",
+				"operationId": "portal_begin_totp",
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/PortalTotpEnrollment"
+								}
+							}
+						}
+					},
+					"409": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/portal/v1/me/mfa/totp/confirm": {
+			"post": {
+				"tags": ["portal"],
+				"summary": "Finishes setting up with a code from the app. Returns recovery codes\n(shown once) and signs out your other sessions.",
+				"operationId": "portal_confirm_totp",
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/PortalTotpCode"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/PortalRecoveryCodes"
+								}
+							}
+						}
+					},
+					"422": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/portal/v1/me/mfa/totp/disable": {
+			"post": {
+				"tags": ["portal"],
+				"summary": "Turns off two-factor sign-in, with a current code (not while your\norganization requires it).",
+				"operationId": "portal_disable_totp",
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/PortalTotpCode"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"204": {},
+					"422": {
 						"content": {
 							"application/problem+json": {
 								"schema": {
@@ -9432,6 +9618,35 @@
 							"application/problem+json": {
 								"schema": {
 									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/portal-accounts/{id}/mfa-reset": {
+			"post": {
+				"tags": ["portal"],
+				"summary": "Turns off a contact's two-factor sign-in (a lost phone). Their sessions\nend; they set it up again if their company requires it.",
+				"operationId": "reset_portal_mfa",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/PortalAccount"
 								}
 							}
 						}
@@ -23770,6 +23985,7 @@
 					"role",
 					"status",
 					"hasPassword",
+					"mfaEnabled",
 					"version",
 					"createdAt"
 				],
@@ -23795,6 +24011,10 @@
 					"lastSignInAt": {
 						"type": ["string", "null"],
 						"format": "date-time"
+					},
+					"mfaEnabled": {
+						"type": "boolean",
+						"description": "Two-factor sign-in is set up."
 					},
 					"name": {
 						"type": "string"
@@ -24012,6 +24232,49 @@
 				],
 				"description": "The signed-in account, as the portal shows it."
 			},
+			"PortalMfaCode": {
+				"type": "object",
+				"required": ["challenge", "code"],
+				"properties": {
+					"challenge": {
+						"type": "string"
+					},
+					"code": {
+						"type": "string",
+						"description": "From the authenticator app, or a recovery code."
+					}
+				},
+				"additionalProperties": false
+			},
+			"PortalMfaRequired": {
+				"type": "object",
+				"description": "A code is needed: finish with `POST /api/portal/v1/auth/mfa`.",
+				"required": ["challenge"],
+				"properties": {
+					"challenge": {
+						"type": "string"
+					}
+				}
+			},
+			"PortalMfaStatus": {
+				"type": "object",
+				"required": ["enabled", "recoveryCodesLeft", "required"],
+				"properties": {
+					"enabled": {
+						"type": "boolean",
+						"description": "An authenticator app is set up."
+					},
+					"recoveryCodesLeft": {
+						"type": "integer",
+						"format": "int64",
+						"description": "Unused recovery codes."
+					},
+					"required": {
+						"type": "boolean",
+						"description": "Their company requires it."
+					}
+				}
+			},
 			"PortalNote": {
 				"type": "object",
 				"description": "A public note in the portal.",
@@ -24058,7 +24321,16 @@
 			"PortalPrincipal": {
 				"type": "object",
 				"description": "Who is signed in to the portal.",
-				"required": ["accountId", "contactId", "orgId", "orgName", "name", "email", "role"],
+				"required": [
+					"accountId",
+					"contactId",
+					"orgId",
+					"orgName",
+					"name",
+					"email",
+					"role",
+					"mfaSetupRequired"
+				],
 				"properties": {
 					"accountId": {
 						"type": "string",
@@ -24070,6 +24342,10 @@
 					},
 					"email": {
 						"type": "string"
+					},
+					"mfaSetupRequired": {
+						"type": "boolean",
+						"description": "Their company requires two-factor sign-in and they haven't set it\nup: only the setup is open to them."
 					},
 					"name": {
 						"type": "string"
@@ -24084,6 +24360,19 @@
 					},
 					"role": {
 						"$ref": "#/components/schemas/PortalRole"
+					}
+				}
+			},
+			"PortalRecoveryCodes": {
+				"type": "object",
+				"required": ["recoveryCodes"],
+				"properties": {
+					"recoveryCodes": {
+						"type": "array",
+						"items": {
+							"type": "string"
+						},
+						"description": "Shown once: each signs in once without the app."
 					}
 				}
 			},
@@ -24245,6 +24534,30 @@
 					}
 				],
 				"description": "A ticket with its public notes."
+			},
+			"PortalTotpCode": {
+				"type": "object",
+				"required": ["code"],
+				"properties": {
+					"code": {
+						"type": "string"
+					}
+				},
+				"additionalProperties": false
+			},
+			"PortalTotpEnrollment": {
+				"type": "object",
+				"required": ["secret", "otpauthUri"],
+				"properties": {
+					"otpauthUri": {
+						"type": "string",
+						"description": "For a QR code."
+					},
+					"secret": {
+						"type": "string",
+						"description": "For typing into the app (base32)."
+					}
+				}
 			},
 			"Preference": {
 				"type": "object",
@@ -25824,7 +26137,7 @@
 			"SettingKind": {
 				"type": "string",
 				"description": "How a setting's value is validated (and edited in the UI).",
-				"enum": ["text", "timezone", "color", "email", "prefix", "image", "hostname"]
+				"enum": ["text", "timezone", "color", "email", "prefix", "image", "hostname", "toggle"]
 			},
 			"ShownCall": {
 				"type": "object",
