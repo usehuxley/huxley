@@ -89,6 +89,7 @@ export default defineConfig({
 					{ text: 'Assets', link: '/assets' },
 					{ text: 'Knowledge base', link: '/knowledge' },
 					{ text: 'Credential vault', link: '/vault' },
+					{ text: 'Product catalog', link: '/catalog' },
 					{ text: 'ConnectWise Automate', link: '/cwautomate' }
 				]
 			},

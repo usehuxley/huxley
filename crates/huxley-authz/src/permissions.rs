@@ -92,6 +92,8 @@ permissions! {
     ASSET_WRITE = "asset:write", Org, "Add, change, relate and delete assets";
     CMDB_CONFIGURE = "cmdb:configure", Instance, "Keep asset types and their fields";
     VAULT_MANAGE = "vault:manage", Org, "Add, change and delete credential vault items and their secrets";
+    CATALOG_READ = "catalog:read", Org, "View the product catalog: products, services and bundles";
+    CATALOG_MANAGE = "catalog:manage", Org, "Add, change and retire products, services and bundles, with their costs and prices";
 }
 
 /// Wildcard granting every permission.

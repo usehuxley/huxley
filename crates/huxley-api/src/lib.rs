@@ -11,6 +11,7 @@ mod assistant_routes;
 pub mod audit_routes;
 pub mod auth_routes;
 pub mod authz;
+pub mod catalog_routes;
 pub mod cmdb_routes;
 mod connection_routes;
 pub mod context;
