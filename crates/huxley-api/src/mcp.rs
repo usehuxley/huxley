@@ -161,6 +161,114 @@ const TOOLS: &[(&str, &str, &str, &[&str])] = &[
 const DOCUMENT: &str =
     r#"{ "description": "An HWF workflow document: a JSON object, or YAML text." }"#;
 
+type Tool = (
+    &'static str,
+    &'static str,
+    &'static str,
+    &'static [&'static str],
+);
+
+/// The service desk group (the `servicedesk` module).
+const DESK_TOOLS: &[Tool] = &[
+    (
+        "find_tickets",
+        "Tickets you can see, most urgent first: by words in the title or number, state (open, resolved, closed, all), \
+         organization, queue, priority (e.g. p1,p2) or assignee (a user id, me, or none).",
+        r#"{ "search": { "type": "string" }, "state": { "type": "string", "enum": ["open", "resolved", "closed", "all"] },
+          "org_id": UUID, "queue_id": UUID, "priority": { "type": "string" }, "assignee": { "type": "string" },
+          "limit": { "type": "integer", "minimum": 1, "maximum": 100 } }"#,
+        &[],
+    ),
+    (
+        "get_ticket",
+        "A ticket: its fields, status, queue, assignee and SLA.",
+        r#"{ "id": UUID }"#,
+        &["id"],
+    ),
+    (
+        "get_ticket_notes",
+        "A ticket's notes and replies (public, internal and resolution), oldest first.",
+        r#"{ "id": UUID }"#,
+        &["id"],
+    ),
+    (
+        "recommend_assignees",
+        "Who should take a ticket, best first, with reasons: skills, availability, load, history, familiarity.",
+        r#"{ "id": UUID }"#,
+        &["id"],
+    ),
+    (
+        "similar_tickets",
+        "Tickets nearest in meaning to this one.",
+        r#"{ "id": UUID }"#,
+        &["id"],
+    ),
+    (
+        "add_ticket_note",
+        "Adds a note to a ticket: internal (staff only, the default) or public (emailed to the requester).",
+        r#"{ "id": UUID, "body": { "type": "string" }, "kind": { "type": "string", "enum": ["internal", "public"] } }"#,
+        &["id", "body"],
+    ),
+    (
+        "update_ticket",
+        "Changes a ticket's priority (p1 to p4), queue or assignee (a user id; null clears it).",
+        r#"{ "id": UUID, "priority": { "type": "string", "enum": ["p1", "p2", "p3", "p4"] }, "queue_id": UUID,
+          "assignee_user_id": { "type": ["string", "null"], "format": "uuid" } }"#,
+        &["id"],
+    ),
+];
+
+/// The clients group (the `crm` module).
+const CLIENT_TOOLS: &[Tool] = &[
+    (
+        "list_contacts",
+        "A client company's contacts.",
+        r#"{ "org_id": UUID }"#,
+        &["org_id"],
+    ),
+    (
+        "get_client_health",
+        "A client company's health score (0 to 100), its factors and the reasons (the cx module).",
+        r#"{ "org_id": UUID }"#,
+        &["org_id"],
+    ),
+];
+
+/// The assets group (the `cmdb` module).
+const ASSET_TOOLS: &[Tool] = &[
+    (
+        "find_assets",
+        "Assets you can see: by words in the name, serial number, hostname, model or manufacturer, and organization.",
+        r#"{ "q": { "type": "string" }, "org_id": UUID, "limit": { "type": "integer", "minimum": 1, "maximum": 100 } }"#,
+        &[],
+    ),
+    (
+        "get_asset",
+        "An asset with its details, relationships and tickets.",
+        r#"{ "id": UUID }"#,
+        &["id"],
+    ),
+];
+
+/// Tool groups and the module each needs.
+const GROUPS: &[(&str, &[Tool])] = &[
+    ("servicedesk", DESK_TOOLS),
+    ("crm", CLIENT_TOOLS),
+    ("cmdb", ASSET_TOOLS),
+];
+
+/// The tools while `modules` are on: the core ones and each group whose
+/// module is.
+fn tools_for(modules: &std::collections::BTreeSet<&str>) -> Vec<&'static Tool> {
+    let mut all: Vec<&'static Tool> = TOOLS.iter().collect();
+    for (module, group) in GROUPS {
+        if modules.contains(module) {
+            all.extend(group.iter());
+        }
+    }
+    all
+}
+
 /// A tool's input schema.
 fn schema(properties: &str, required: &[&str]) -> Value {
     let text = properties
@@ -170,10 +278,13 @@ fn schema(properties: &str, required: &[&str]) -> Value {
     json!({ "type": "object", "properties": properties, "required": required, "additionalProperties": false })
 }
 
-/// Every tool, for a model: name, description and input schema.
-pub(crate) fn tool_defs() -> Vec<huxley_ai::chat::ToolDef> {
-    TOOLS
-        .iter()
+/// The tools while `modules` are on, for a model: name, description and
+/// input schema.
+pub(crate) fn tool_defs(
+    modules: &std::collections::BTreeSet<&str>,
+) -> Vec<huxley_ai::chat::ToolDef> {
+    tools_for(modules)
+        .into_iter()
         .map(
             |(name, description, properties, required)| huxley_ai::chat::ToolDef {
                 name: (*name).to_owned(),
@@ -187,6 +298,8 @@ pub(crate) fn tool_defs() -> Vec<huxley_ai::chat::ToolDef> {
 /// Tools that change something (a person approves each call in the
 /// assistant); the rest only read.
 pub(crate) const CHANGING: &[&str] = &[
+    "add_ticket_note",
+    "update_ticket",
     "create_workflow_draft",
     "update_workflow_draft",
     "test_workflow_document",
@@ -331,7 +444,10 @@ impl Caller<'_> {
 }
 
 fn is_tool(name: &str) -> bool {
-    TOOLS.iter().any(|(n, ..)| *n == name)
+    TOOLS
+        .iter()
+        .chain(GROUPS.iter().flat_map(|(_, g)| g.iter()))
+        .any(|(n, ..)| *n == name)
 }
 
 /// A tool's `document` argument: an object, or YAML/JSON text.
@@ -423,7 +539,54 @@ fn plan(name: &str, args: &Value) -> Result<Option<Call>, String> {
                 "limit": args.get("limit").cloned().unwrap_or(json!(100))
             }),
         ),
-        "get_workflow_schema" | "update_workflow_draft" => return Ok(None),
+        "find_tickets" => {
+            let mut query: Vec<String> = Vec::new();
+            for (arg, param) in [
+                ("search", "search"),
+                ("state", "state"),
+                ("org_id", "orgId"),
+                ("queue_id", "queueId"),
+                ("priority", "priority"),
+                ("assignee", "assignee"),
+            ] {
+                if let Some(v) = args[arg].as_str() {
+                    query.push(format!("{param}={}", urlencode(v)));
+                }
+            }
+            query.push(format!(
+                "limit={}",
+                args["limit"].as_i64().unwrap_or(25).clamp(1, 100)
+            ));
+            Call::get(format!("/api/v1/tickets?{}", query.join("&")))
+        }
+        "get_ticket" => Call::get(format!("/api/v1/tickets/{}", arg(args, "id")?)),
+        "get_ticket_notes" => Call::get(format!("/api/v1/tickets/{}/notes", arg(args, "id")?)),
+        "recommend_assignees" => Call::get(format!(
+            "/api/v1/tickets/{}/recommendations",
+            arg(args, "id")?
+        )),
+        "similar_tickets" => Call::get(format!("/api/v1/tickets/{}/similar", arg(args, "id")?)),
+        "add_ticket_note" => Call::post(
+            format!("/api/v1/tickets/{}/notes", arg(args, "id")?),
+            json!({ "body": arg(args, "body")?, "kind": args["kind"].as_str().unwrap_or("internal") }),
+        ),
+        "list_contacts" => Call::get(format!("/api/v1/orgs/{}/contacts", arg(args, "org_id")?)),
+        "get_client_health" => Call::get(format!("/api/v1/orgs/{}/health", arg(args, "org_id")?)),
+        "find_assets" => {
+            let mut query = vec![format!(
+                "limit={}",
+                args["limit"].as_i64().unwrap_or(25).clamp(1, 100)
+            )];
+            if let Some(q) = args["q"].as_str() {
+                query.push(format!("q={}", urlencode(q)));
+            }
+            if let Some(org) = args["org_id"].as_str() {
+                query.push(format!("orgId={}", urlencode(org)));
+            }
+            Call::get(format!("/api/v1/assets?{}", query.join("&")))
+        }
+        "get_asset" => Call::get(format!("/api/v1/assets/{}", arg(args, "id")?)),
+        "get_workflow_schema" | "update_workflow_draft" | "update_ticket" => return Ok(None),
         other => return Err(format!("no tool called {other:?}")),
     }))
 }
@@ -520,6 +683,31 @@ impl<'a> Caller<'a> {
                     })
                     .await)
             }
+            "update_ticket" => {
+                let id = arg(args, "id")?;
+                // The ticket's current version, so the change isn't refused as stale.
+                let (status, current) = self.send(Call::get(format!("/api/v1/tickets/{id}"))).await;
+                if !status.is_success() {
+                    return Ok((status, current));
+                }
+                let mut changes = json!({ "version": current["version"] });
+                for (arg_name, field) in [
+                    ("priority", "priority"),
+                    ("queue_id", "queueId"),
+                    ("assignee_user_id", "assigneeUserId"),
+                ] {
+                    if let Some(v) = args.get(arg_name) {
+                        changes[field] = v.clone();
+                    }
+                }
+                Ok(self
+                    .send(Call {
+                        method: Method::PATCH,
+                        path: format!("/api/v1/tickets/{id}"),
+                        body: Some(changes),
+                    })
+                    .await)
+            }
             _ => match plan(name, args)? {
                 Some(call) => Ok(self.send(call).await),
                 None => Err(format!("no tool called {name:?}")),
@@ -575,7 +763,12 @@ fn tool_result(outcome: Result<(StatusCode, Value), String>) -> Value {
 
 const SCHEMA_URI: &str = "huxley://schemas/hwf/v1.json";
 
-async fn handle(caller: &Caller<'_>, workflows: &[WorkflowTool], message: &Value) -> Option<Value> {
+async fn handle(
+    caller: &Caller<'_>,
+    workflows: &[WorkflowTool],
+    modules: &std::collections::BTreeSet<&str>,
+    message: &Value,
+) -> Option<Value> {
     let id = message.get("id")?.clone();
     let method = message["method"].as_str().unwrap_or_default();
     let params = &message["params"];
@@ -598,8 +791,8 @@ async fn handle(caller: &Caller<'_>, workflows: &[WorkflowTool], message: &Value
         }
         "ping" => rpc_result(&id, &json!({})),
         "tools/list" => {
-            let mut tools: Vec<Value> = TOOLS
-                .iter()
+            let mut tools: Vec<Value> = tools_for(modules)
+                .into_iter()
                 .map(|(name, description, properties, required)| {
                     json!({ "name": name, "description": description, "inputSchema": schema(properties, required) })
                 })
@@ -695,11 +888,12 @@ pub async fn post(
     };
     let caller = Caller::new(&internal, &headers, peer.map(|Extension(p)| p));
     let workflows = workflow_tools(&state, &authed).await;
+    let modules = enabled_modules(&state).await;
     match &body {
         Value::Array(messages) => {
             let mut out = Vec::new();
             for message in messages {
-                if let Some(reply) = handle(&caller, &workflows, message).await {
+                if let Some(reply) = handle(&caller, &workflows, &modules, message).await {
                     out.push(reply);
                 }
             }
@@ -709,7 +903,7 @@ pub async fn post(
                 json_response(StatusCode::OK, &Value::Array(out))
             }
         }
-        Value::Object(_) => match handle(&caller, &workflows, &body).await {
+        Value::Object(_) => match handle(&caller, &workflows, &modules, &body).await {
             Some(reply) => json_response(StatusCode::OK, &reply),
             None => StatusCode::ACCEPTED.into_response(),
         },
@@ -718,6 +912,30 @@ pub async fn post(
             &rpc_error(&Value::Null, -32600, "not a JSON-RPC message"),
         ),
     }
+}
+
+/// The modules on for the instance (empty if they can't be read).
+async fn enabled_modules(state: &AppState) -> std::collections::BTreeSet<&'static str> {
+    let Ok(mut tx) = huxley_db::begin_scoped(&state.db, &huxley_db::OrgScope::System).await else {
+        return std::collections::BTreeSet::new();
+    };
+    let set = huxley_modules::enabled_set(&mut tx)
+        .await
+        .unwrap_or_default();
+    let _ = tx.commit().await;
+    set
+}
+
+/// A query string value, percent-encoded.
+fn urlencode(s: &str) -> String {
+    s.bytes()
+        .map(|b| match b {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
+                char::from(b).to_string()
+            }
+            _ => format!("%{b:02X}"),
+        })
+        .collect()
 }
 
 /// `GET /mcp`: this server doesn't open server-to-client streams.
@@ -742,9 +960,10 @@ mod tests {
 
     #[test]
     fn every_tool_has_a_plan_or_a_handler() {
-        for (name, _, properties, required) in TOOLS {
+        let grouped = GROUPS.iter().flat_map(|(_, g)| g.iter());
+        for (name, _, properties, required) in TOOLS.iter().chain(grouped) {
             let args = json!({ "id": "01a20000-0000-7000-8000-000000000000", "org_id": "01a20000-0000-7000-8000-000000000000",
-                               "document": { "kind": "Workflow" } });
+                               "document": { "kind": "Workflow" }, "body": "x" });
             let planned = plan(name, &args);
             assert!(planned.is_ok(), "{name}: {planned:?}");
             let schema = schema(properties, required);
@@ -754,5 +973,10 @@ mod tests {
         }
         // Nothing publishes.
         assert!(TOOLS.iter().all(|(name, ..)| !name.contains("publish")));
+        // Groups appear with their module.
+        let none = std::collections::BTreeSet::new();
+        assert!(!tool_defs(&none).iter().any(|t| t.name == "find_tickets"));
+        let desk: std::collections::BTreeSet<&str> = ["servicedesk"].into_iter().collect();
+        assert!(tool_defs(&desk).iter().any(|t| t.name == "find_tickets"));
     }
 }

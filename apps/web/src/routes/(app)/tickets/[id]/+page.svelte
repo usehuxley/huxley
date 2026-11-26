@@ -11,6 +11,7 @@
 		MessageSquare,
 		Pencil,
 		Play,
+		Sparkles,
 		Square,
 		X
 	} from '@lucide/svelte';
@@ -247,6 +248,11 @@
 						</form>
 					{/if}
 					<Button onclick={() => (editing = true)}><Pencil size={16} /> Edit</Button>
+					{#if data.user.grantedPermissions.includes('ai:use')}
+						<Button href="{resolve('/(app)/assistant')}?ticket={ticket.id}">
+							<Sparkles size={16} /> Ask the assistant
+						</Button>
+					{/if}
 					{#if !ticket.mergedIntoId && ticket.statusCategory !== 'closed'}
 						<Button onclick={() => (merging = true)}><Merge size={16} /> Merge</Button>
 					{/if}

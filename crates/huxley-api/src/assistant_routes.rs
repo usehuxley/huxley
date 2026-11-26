@@ -186,6 +186,66 @@ pub struct StartConversation {
     /// The organization it works in (whose AI provider it uses).
     pub org_id: Uuid,
     pub text: String,
+    /// What it's about, when opened from a ticket or a client.
+    #[serde(default)]
+    pub context: Option<ContextRef>,
+}
+
+/// A ticket or client a conversation is about.
+#[derive(Debug, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ContextRef {
+    /// `ticket` or `client`.
+    pub kind: String,
+    pub id: Uuid,
+}
+
+/// Checks the caller may read what a conversation is about, and names it:
+/// `{ kind, id, label }`.
+async fn context_of(
+    state: &AppState,
+    authed: &Authed,
+    c: &ContextRef,
+) -> ApiResult<serde_json::Value> {
+    let mut tx = huxley_db::begin_scoped(&state.db, &huxley_db::OrgScope::System)
+        .await
+        .map_err(|e| ApiError::internal(&e))?;
+    let (org, label, permission): (Option<Uuid>, Option<String>, &str) = match c.kind.as_str() {
+        "ticket" => {
+            let row: Option<(Uuid, String)> = sqlx::query_as(
+                "SELECT org_id, number_prefix || '-' || number || ' “' || title || '”' FROM sd_tickets WHERE id = $1",
+            )
+            .bind(c.id)
+            .fetch_optional(&mut *tx)
+            .await
+            .map_err(|e| ApiError::internal(&e))?;
+            (
+                row.as_ref().map(|r| r.0),
+                row.map(|r| r.1),
+                permissions::TICKET_READ,
+            )
+        }
+        "client" => {
+            let name: Option<String> =
+                sqlx::query_scalar("SELECT name FROM organizations WHERE id = $1")
+                    .bind(c.id)
+                    .fetch_optional(&mut *tx)
+                    .await
+                    .map_err(|e| ApiError::internal(&e))?;
+            (name.is_some().then_some(c.id), name, permissions::CRM_READ)
+        }
+        _ => {
+            return Err(
+                ApiError::validation().with_field_error("/context/kind", "ticket or client")
+            );
+        }
+    };
+    tx.commit().await.map_err(|e| ApiError::internal(&e))?;
+    let (Some(org), Some(label)) = (org, label) else {
+        return Err(ApiError::not_found());
+    };
+    authed.require_at(state, permission, org).await?;
+    Ok(serde_json::json!({ "kind": c.kind, "id": c.id, "label": label }))
 }
 
 #[derive(Debug, Deserialize, ToSchema)]
@@ -225,8 +285,13 @@ pub async fn start(
             "Set up an AI provider first (Settings → AI): the assistant uses your own key.",
         ));
     }
+    let context = match &body.context {
+        Some(c) => Some(context_of(&state, &authed, c).await?),
+        None => None,
+    };
     let title: String = text.chars().take(80).collect();
-    let id = assistant::create(&state, user(&authed), body.org_id, &title).await?;
+    let id =
+        assistant::create(&state, user(&authed), body.org_id, &title, context.as_ref()).await?;
     let origin = Origin::new(internal, headers, peer);
     let work = Work::Say(text.to_owned());
     answer(state, origin, &authed, id, work, StatusCode::CREATED).await

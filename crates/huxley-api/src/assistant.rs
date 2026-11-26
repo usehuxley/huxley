@@ -4,6 +4,7 @@
 //! tools that change something wait for the user to approve or deny.
 
 use std::collections::BTreeMap;
+use std::fmt::Write as _;
 
 use huxley_ai::chat::{Message, ToolCall, ToolResult};
 use huxley_ai::{AiError, Purpose};
@@ -53,8 +54,9 @@ fn report(sink: &Sink, progress: Progress) {
 }
 
 const SYSTEM: &str = "You are Huxley's assistant, inside Huxley, an automation platform for MSPs. You help \
-the signed-in person build and debug workflows and answer questions about their organizations, \
-integrations, workflows, runs, scripts, forms and datasets, using the tools you have. Everything you do \
+the signed-in person build and debug workflows, work tickets, and answer questions about their organizations, \
+clients, contacts, assets, tickets, integrations, workflows, runs, scripts, forms and datasets, using the tools \
+you have. Everything you do \
 runs with that person's permissions. Workflows are HWF documents: get_workflow_schema describes every \
 step. Validate documents before saving them, test them with test_workflow_document (mocking steps that \
 would reach real systems) when that helps, and save only drafts: a person publishes them. Tools that \
@@ -222,19 +224,27 @@ pub async fn view(state: &AppState, user_id: Uuid, id: Uuid) -> ApiResult<Conver
     })
 }
 
-/// Starts a conversation for `user_id` in `org_id`.
-pub async fn create(state: &AppState, user_id: Uuid, org_id: Uuid, title: &str) -> ApiResult<Uuid> {
+/// Starts a conversation for `user_id` in `org_id`, about `context` (a
+/// ticket or client: `{ kind, id, label }`) if given.
+pub async fn create(
+    state: &AppState,
+    user_id: Uuid,
+    org_id: Uuid,
+    title: &str,
+    context: Option<&Value>,
+) -> ApiResult<Uuid> {
     let id = huxley_core::new_id();
     let mut tx = begin_scoped(&state.db, &OrgScope::System)
         .await
         .map_err(db_err)?;
     sqlx::query(
-        "INSERT INTO assistant_conversations (id, user_id, org_id, title) VALUES ($1, $2, $3, $4)",
+        "INSERT INTO assistant_conversations (id, user_id, org_id, title, context) VALUES ($1, $2, $3, $4, $5)",
     )
     .bind(id)
     .bind(user_id)
     .bind(org_id)
     .bind(title)
+    .bind(context)
     .execute(&mut *tx)
     .await
     .map_err(db_err)?;
@@ -322,6 +332,49 @@ async fn run_call(
 }
 
 /// Lets the model work until it answers, or until a call needs approval.
+/// The system prompt (with what the conversation is about, if opened from
+/// a ticket or client) and the modules on at its organization.
+async fn prompt(
+    state: &AppState,
+    id: Uuid,
+    org_id: Uuid,
+) -> ApiResult<(String, std::collections::BTreeSet<&'static str>)> {
+    let mut tx = begin_scoped(&state.db, &OrgScope::System)
+        .await
+        .map_err(db_err)?;
+    let context: Option<Value> =
+        sqlx::query_scalar("SELECT context FROM assistant_conversations WHERE id = $1")
+            .bind(id)
+            .fetch_optional(&mut *tx)
+            .await
+            .map_err(db_err)?
+            .flatten();
+    let modules = huxley_modules::enabled_set_at(&mut tx, org_id)
+        .await
+        .map_err(db_err)?;
+    tx.commit().await.map_err(db_err)?;
+    let mut system = SYSTEM.to_owned();
+    if let Some(c) = context {
+        let (kind, cid, label) = (
+            c["kind"].as_str().unwrap_or(""),
+            c["id"].as_str().unwrap_or(""),
+            c["label"].as_str().unwrap_or(""),
+        );
+        let how = match kind {
+            "ticket" => "read it with get_ticket and get_ticket_notes",
+            _ => {
+                "use its id as org_id with list_contacts, get_client_health, find_assets and find_tickets"
+            }
+        };
+        let _ = write!(
+            system,
+            " The person opened this conversation from the {kind} {label} (id {cid}). Unless they say otherwise, \
+             \"this {kind}\" means it: {how}."
+        );
+    }
+    Ok((system, modules))
+}
+
 async fn advance(
     state: &AppState,
     caller: &Caller<'_>,
@@ -338,7 +391,8 @@ async fn advance(
             });
         }
     });
-    let mut tools = tool_defs();
+    let (system, modules) = prompt(state, id, org_id).await?;
+    let mut tools = tool_defs(&modules);
     tools.extend(workflows.iter().map(|t| huxley_ai::chat::ToolDef {
         name: t.name.clone(),
         description: t.description.clone(),
@@ -354,7 +408,7 @@ async fn advance(
                     feature: "assistant",
                     run_id: None,
                 },
-                Some(SYSTEM),
+                Some(&system),
                 &messages,
                 &tools,
                 on_text.as_ref().map(|f| f as &(dyn Fn(&str) + Send + Sync)),
