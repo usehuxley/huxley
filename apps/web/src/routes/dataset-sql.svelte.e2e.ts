@@ -21,6 +21,8 @@ test.describe('datasets SQL console', () => {
 		await page.goto('/datasets');
 		await page.getByRole('link', { name: 'SQL console' }).click();
 		await expect(page.getByRole('heading', { level: 1 })).toHaveText('SQL console');
+		// Typing before the page hydrates is undone when it does.
+		await page.locator('html[data-hydrated]').waitFor({ state: 'attached' });
 		const query = page.getByLabel('SQL query');
 
 		await query.fill("SELECT 41 + 1 AS answer, 'ok' AS status");

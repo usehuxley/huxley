@@ -2,7 +2,7 @@
 	import { enhance } from '$app/forms';
 	import { resolve } from '$app/paths';
 	import { ArrowLeft } from '@lucide/svelte';
-	import { Badge, Button, Card, Field, Input, Select } from '@usehuxley/ui';
+	import { Badge, Button, Card, CodeEditor, Field, Input, Select } from '@usehuxley/ui';
 	import { fieldsFor } from '#lib/integrations/connections.ts';
 	import type { PageProps } from './$types';
 
@@ -547,13 +547,7 @@
 			>
 				<label for="file" class="text-sm font-medium text-fg">Import a newer spec</label>
 				<input id="file" name="file" type="file" accept=".json,.yaml,.yml" class="text-sm" />
-				<textarea
-					name="spec"
-					rows="4"
-					aria-label="Or paste the newer spec"
-					spellcheck="false"
-					class="rounded-control border border-border bg-surface p-2 font-mono text-xs text-fg"
-				></textarea>
+				<CodeEditor name="spec" label="Or paste the newer spec" language="yaml" lines={6} />
 				<div>
 					<Button type="submit" variant="secondary" disabled={updating}>
 						{updating ? 'Reading…' : 'Review changes'}

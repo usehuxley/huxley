@@ -18,7 +18,7 @@ Scripts, expressions, workflow YAML and JSON Schemas were edited in plain text b
 - **Loaded on demand:**
   - The component renders a plain textarea (which works without JavaScript and keeps forms submittable), then imports the editor when it mounts. Each language loads the first time an editor uses it.
   - Pages without code never download CodeMirror. The core is about 300 KB before compression, in its own chunk.
-- **Languages:** PowerShell (CodeMirror's legacy mode), Python, JavaScript, TypeScript, YAML, JSON, Markdown and Jinja (`@codemirror/lang-jinja`), plus plain text.
+- **Languages:** PowerShell (CodeMirror's legacy mode), Python, JavaScript, TypeScript, YAML, JSON, Markdown, Jinja (`@codemirror/lang-jinja`) and SQL (PostgreSQL's dialect, `@codemirror/lang-sql`), plus plain text.
 - **Completion:**
   - Each language's own completion, plus words the page provides (for scripts, the parameters as each language receives them: `$Name` in PowerShell, `inputs["name"]` in Python).
   - The word source is created once per editor, because CodeMirror matches completion results to their source by identity.
@@ -33,6 +33,14 @@ Scripts, expressions, workflow YAML and JSON Schemas were edited in plain text b
 - **Whose change:** the page's own updates (loading a saved version, say) are tagged, and `onchange` fires only for the person's edits, so pages can track unsaved changes.
 - **Non-breaking spaces:** browsers put them into editable text where a typed space would collapse (beside an auto-closed `}}`, say), and an expression with one doesn't parse. Typed and pasted ones become ordinary spaces.
 - **Theme:** colours come from the design tokens. Syntax colours are new tokens (`--hx-code-*`), each readable on its surface in light and dark.
+- **Where it's used:**
+  - scripts and their parameters
+  - the workflow editor's expression and JSON fields, its YAML view and run inputs
+  - the dataset SQL console (completing table names), dataset sync settings and rows
+  - form schemas and UI hints
+  - pasted integration specs
+  - knowledge base article bodies (Markdown)
+  - canned responses (completing their placeholders)
 - **Content Security Policy:**
   - CodeMirror adds its styles as `<style>` tags, which the web app's `style-src 'self'` blocks. Blocked, the editor still showed text, but its completion lists were parked off-screen.
   - SvelteKit only puts a style nonce in the policy when it renders inline styles of its own, so the server hook adds one per response (`'nonce-…'` in `style-src`) and hands it to the page in a meta tag. The editor gives it to CodeMirror (`EditorView.cspNonce`).

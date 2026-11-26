@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
-	import { ArticleBody, Button, Field, Input, Select } from '@usehuxley/ui';
+	import { ArticleBody, Button, CodeEditor, Field, Input, Select } from '@usehuxley/ui';
 
 	type Option = { value: string; label: string };
 	let {
@@ -122,16 +122,17 @@
 				</button>
 			</div>
 		</div>
-		<textarea
-			id="kb-body"
-			name="body"
-			aria-labelledby="kb-body-label"
-			rows="18"
-			hidden={tab !== 'write'}
-			bind:value={body}
-			placeholder="Markdown: # headings, **bold**, `code`, lists, tables and [links](https://…)"
-			class="w-full rounded-control border border-border-strong bg-surface px-3 py-2 font-mono text-sm text-fg"
-		></textarea>
+		<div hidden={tab !== 'write'}>
+			<CodeEditor
+				id="kb-body"
+				name="body"
+				label="Text"
+				language="markdown"
+				lines={20}
+				bind:value={body}
+				placeholder="Markdown: # headings, **bold**, `code`, lists, tables and [links](https://…)"
+			/>
+		</div>
 		{#if tab === 'preview'}
 			<div
 				class="min-h-40 rounded-control border border-border bg-surface px-4 py-3"

@@ -1,7 +1,8 @@
 <script lang="ts">
+	import { lintJson } from '#lib/workflows/yaml-lint.ts';
 	import { enhance } from '$app/forms';
 	import { resolve } from '$app/paths';
-	import { Badge, Button, Card, EmptyState, Field, Input, Select } from '@usehuxley/ui';
+	import { Badge, Button, Card, CodeEditor, EmptyState, Field, Input, Select } from '@usehuxley/ui';
 	import { Database } from '@lucide/svelte';
 	import type { PageProps } from './$types';
 
@@ -164,17 +165,17 @@
 							update({ reset: false })}
 					class="flex flex-col gap-2"
 				>
-					<label for="sync" class="font-medium text-fg">
-						Sync settings (JSON; empty stops syncing)
-					</label>
-					<textarea
+					<p class="font-medium text-fg">Sync settings (JSON; empty stops syncing)</p>
+					<CodeEditor
 						id="sync"
 						name="sync"
-						bind:value={syncText}
-						rows={12}
+						label="Sync settings (JSON; empty stops syncing)"
+						language="json"
+						lines={14}
 						placeholder={example}
-						class="rounded-control border border-border bg-surface p-2 font-mono text-xs"
-					></textarea>
+						lint={lintJson}
+						bind:value={syncText}
+					/>
 					<p class="text-xs text-fg-muted">
 						action, map (column → path in each item), mode (replace | upsert), orgs (own | clients |
 						all), schedule (&#123; cron | interval, timezone &#125;), and optionally connection,
@@ -208,14 +209,22 @@
 				<Field label="Organization" for="add-org">
 					<Select id="add-org" name="orgId" options={orgOptions} bind:value={addOrg} />
 				</Field>
-				<label for="rows" class="text-sm font-medium text-fg">Rows (a JSON object or list)</label>
-				<textarea
+				<p class="text-sm font-medium text-fg">Rows (a JSON object or list)</p>
+				<CodeEditor
 					id="rows"
 					name="rows"
-					bind:value={rowsText}
-					rows={5}
+					label="Rows (a JSON object or list)"
+					language="json"
+					lines={8}
 					placeholder={JSON.stringify([Object.fromEntries(columns.map((c) => [c.name, '…']))])}
-					class="rounded-control border border-border bg-surface p-2 font-mono text-xs"></textarea>
+					lint={lintJson}
+					words={columns.map((c) => ({
+						label: `"${c.name}"`,
+						detail: c.type,
+						type: 'property' as const
+					}))}
+					bind:value={rowsText}
+				/>
 				<div><Button type="submit" variant="secondary">Write rows</Button></div>
 			</form>
 		</Card>

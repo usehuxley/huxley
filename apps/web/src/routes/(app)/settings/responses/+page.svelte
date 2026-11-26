@@ -1,7 +1,17 @@
 <script lang="ts">
 	import { enhance, type SubmitFunction } from '$app/forms';
 	import { Plus } from '@lucide/svelte';
-	import { Badge, Button, Card, Dialog, Field, Input, Select, toast } from '@usehuxley/ui';
+	import {
+		Badge,
+		Button,
+		Card,
+		CodeEditor,
+		Dialog,
+		Field,
+		Input,
+		Select,
+		toast
+	} from '@usehuxley/ui';
 	import { byCategory } from '#lib/workforce/labels.ts';
 	import type { PageProps } from './$types';
 
@@ -27,8 +37,6 @@
 		{ value: 'public', label: 'Reply to the requester' },
 		{ value: 'internal', label: 'Internal note' }
 	];
-	const textarea =
-		'w-full rounded-control border border-border-strong bg-surface px-3 py-2 text-sm text-fg disabled:opacity-50';
 
 	const done =
 		(message: string, after?: () => void): SubmitFunction =>
@@ -144,14 +152,15 @@
 			<Select id="response-kind" name="kind" value={editing?.kind ?? 'public'} options={KINDS} />
 		</Field>
 		<Field label="Text" for="response-body" error={errors.body}>
-			<textarea
+			<CodeEditor
 				id="response-body"
 				name="body"
-				rows="8"
-				required
-				maxlength={20000}
-				class={textarea}
-				value={editing?.body ?? ''}></textarea>
+				label="Text"
+				language="jinja"
+				lines={10}
+				value={editing?.body ?? ''}
+				words={PLACEHOLDERS.map(([key, label]) => ({ label: key, detail: label }))}
+			/>
 		</Field>
 		<details class="text-sm text-fg-muted">
 			<summary class="cursor-pointer">Placeholders</summary>
