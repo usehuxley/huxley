@@ -6,7 +6,7 @@ const REPO = 'https://github.com/usehuxley/huxley';
 function repoLink(href: string): string | null {
 	if (/^[a-z]+:|^#|^\//i.test(href)) return null;
 	const [path, hash = ''] = href.split('#');
-	const internal = /^(\.\/)?(adr\/|DESIGN_DOCUMENT|IMPLEMENTATION_PLAN|PROJECT_OVERVIEW|api-conventions|performance)/.test(path);
+	const internal = /^(\.\/)?(adr\/|DESIGN_DOCUMENT|IMPLEMENTATION_PLAN|api-conventions|performance)/.test(path);
 	// The schema is published with the site.
 	if (/^(\.\.\/)+schemas\//.test(path)) return path.replace(/^(\.\.\/)+/, '/');
 	if (path.startsWith('../')) {

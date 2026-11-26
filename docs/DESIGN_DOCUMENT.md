@@ -6,7 +6,6 @@
 | **Website** | usehuxley.io |
 | **Date** | 2026-11-21 |
 | **License** | MIT |
-| **Source** | `PROJECT_OVERVIEW.md` |
 | **Companion** | `IMPLEMENTATION_PLAN.md` (phased roadmap) |
 
 ---
