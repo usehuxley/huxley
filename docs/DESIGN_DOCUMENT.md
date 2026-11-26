@@ -459,6 +459,7 @@ Everything outside the core platform is a **feature module** that an administrat
 | `sales` | Pipeline, CPQ, sales orders | `crm`, `contracts` |
 | `cx` | CSAT, NPS, client health | `servicedesk` |
 | `billing` | Invoice generation, accounting sync | `contracts` |
+| `expenses` | Expense tracking, reimbursement, billable expenses (§8.16) | none |
 | `portal` | Client portal | `crm` |
 | `workforce` | Skills, certifications, availability, timesheets (§8.15) | none |
 
@@ -585,7 +586,39 @@ Guardrails:
   - Quote builder from the product catalog and bundles, with distributor pricing lookups via integrations.
   - Margin and markup rules, recurring vs one-time lines, options/alternates, and branded quote templates (HTML → PDF).
   - A quote version history and a client acceptance page (portal/public link with e-signature capture and audit trail).
+  - **Internal review and approval before a quote is sent.** The review model is shared with invoices (§8.11):
+    - **When it's needed is customizable.** Rules on the quote decide whether review is needed and who reviews it: total, margin or discount past a threshold, product categories, a new client, the sales rep, or any field. With no rule matching, a quote can go straight out.
+    - **The approval itself is a workflow.** It's a built-in pack using the approval step, like change approvals (§8.6), so chains, parallel reviewers, levels, escalations and timeouts are editable like any workflow.
+    - **A review thread on the quote:** comments, on the whole quote or on a line, with `@mentions` that notify (in the app and by email). Threads can be resolved.
+    - Reviewers approve, request changes or reject. A resubmitted quote shows what changed since the reviewed version.
+    - **It can't be sent until approved,** except by someone with an override permission, which is recorded.
+    - Every step is in the quote's audit trail, and raises events (`quote.submitted_for_review`, `quote.approved`, `quote.changes_requested`, `quote.rejected`).
 - **Orders**: accepted quote → **Sales Order** → generates **Purchase Orders** to vendors (consolidated by vendor) → receiving into inventory → allocation/fulfillment → billing. Recurring lines can create or update agreements.
+- **Presales scoping for projects**: a workspace on an opportunity where the work is scoped before it's quoted. It produces three linked artifacts, each drafted by AI (with the customer's own provider, §8.8) and edited and approved by people. They then assemble the quote.
+  - **Discovery:** what the scoping draws on.
+    - meeting notes, call transcripts and uploaded documents (RFPs, site surveys)
+    - the client's environment from the CMDB (users, sites, devices, licences, lifecycle)
+    - the client's agreements and history
+    - similar past opportunities and projects (by meaning, §8.8)
+  - **Scope of Work (SOW) builder:**
+    - Sections from a template per kind of engagement: objectives, in scope, out of scope, deliverables, assumptions, client responsibilities, acceptance criteria, timeline, change control.
+    - AI drafts each section from discovery and past SOWs, citing what it drew on. It never invents facts: gaps become open questions for the sales engineer.
+    - Versioned, with a branded document that is attached to the quote and signed with it.
+  - **Work Breakdown Structure (WBS) generator:**
+    - Phases, tasks, milestones and dependencies, each task with hours by role and a low/likely/high estimate, drafted from the SOW's deliverables.
+    - Grounded in actuals, not guesses: project templates (§8.14), and the hours logged against similar past projects' tasks.
+    - Contingency is set by risk.
+    - Every SOW deliverable must map to WBS tasks, and gaps are flagged.
+  - **Bill of Materials (BOM) generator:**
+    - Hardware, software, licences and third-party services, drafted from the SOW and the client's environment. For example, 45 users and 3 sites become licences, firewalls and access points.
+    - Quantities follow drivers (users, sites, devices), so changing one updates the lines.
+    - Lines are matched to the product catalog, with distributor pricing and availability (CPQ), alternates, and warnings for end-of-life or incompatible items.
+  - **Quote assembly:**
+    - WBS hours × the rate card become labour lines, priced per the billing method (fixed fee, by milestone, T&M, not-to-exceed, §8.14).
+    - BOM lines become product lines under the margin rules, with recurring services alongside.
+    - Consistency checks run before sending: every deliverable is costed, and every BOM item is referenced in the scope.
+  - **On a win:** the WBS becomes the project (phases, tasks, estimates, budget, billing method; §8.14), and the BOM feeds the sales order and purchase orders.
+  - **Learning:** when the project closes, estimated hours are compared with actuals by task and role, and the comparison feeds the next WBS.
 
 ### 8.11 Invoice generation and accounting sync (later phase, designed now)
 
@@ -598,6 +631,13 @@ Huxley **generates** invoices from the work and sales it tracks, then **syncs** 
   - Product and sales order lines.
   - Agreement recurring charges, with proration and usage-based quantities from datasets (e.g., M365 seat counts).
 - **Billing runs**: select period/companies → system generates invoice drafts → review (line edits, holds, notes, PDF preview) → approve → sync. Generated sources are marked billed so nothing is billed twice. Unbilled work in progress is always visible.
+- **Internal invoice approval before anything leaves Huxley.** No invoice is sent to a client, or synced to the accounting system or any other integration, until it's approved. It uses the same review model as quotes (§8.10):
+  - customizable rules (total, change from last period, credit memos, new clients, lines edited by hand, specific clients)
+  - the approval as an editable workflow
+  - review threads with line comments and `@mentions`
+  - approve, request changes or reject, with a diff on resubmission
+  - an audited override
+  - Whole billing runs can be approved in one pass, with the exceptions flagged.
 - **Accounting sync**: built-in QuickBooks Online and Xero packs plus others via integrations. The sync itself is a system workflow, so MSPs can adapt it or add other accounting platforms. It has three parts:
   - A mapping UI: companies ↔ customers, products/work types ↔ items, tax codes, classes/tracking categories, currencies.
   - Sync status per invoice.
@@ -702,6 +742,28 @@ The `workforce` module describes the MSP's people: what they can do, when they'r
   - `workforce:manage`: catalogs, people's skills and certifications.
   - `timesheet:submit`: one's own.
   - `timesheet:approve`, scoped to the people one leads.
+
+### 8.16 Expenses
+
+The `expenses` module tracks money people spend. It covers the MSP's own costs, reimbursing staff, and expenses billed to clients through the ticket or project they were for.
+
+- **Expense entries:**
+  - date, amount and currency, a category (mileage, travel, meals, parts, software, subcontractor or custom), the vendor, notes and receipts (photos or PDFs, with AI reading the amount, date and vendor for the person to confirm, §8.8)
+  - billable or not; reimbursable or company-paid
+  - tax
+- **Attached to work:** an expense can belong to a ticket, a project (a phase or task, §8.14) or a client, or be internal. On a ticket or project it shows beside the time logged.
+  - Billable expenses carry a markup (by category or agreement), and are evaluated against agreement coverage like time.
+  - They count against project budgets: cost budgets, and burn.
+- **Mileage:** distance × a configurable rate, with a start and end, or a route.
+- **Reports and approval:**
+  - People group expenses into reports, which go to their lead (or a configured approver) for approval through the approval step. Approval chains are workflows.
+  - Approve, reject or request changes, with comments.
+  - Approved reports lock their entries.
+  - Policies flag what's over a limit, missing a receipt or out of policy.
+- **Reimbursement:** approved reimbursable expenses are marked paid when reimbursed, with an export, or synced to the accounting system as bills or expense claims through the accounting integrations (§8.11).
+- **Billing:** approved billable expenses are invoice sources (§8.11). They're marked billed once invoiced, so nothing is billed twice.
+- **Cards and imports:** company card transactions can be imported (CSV, or through integrations) and matched to entries.
+- **Events** (`expense.submitted`, `expense.approved`, `expense_report.approved`, `expense.reimbursed`) let workflows automate the rest.
 
 ## 9. Custom Datasets
 
