@@ -242,3 +242,30 @@ impl Engine {
         Ok(json!({ "recommendations": all, "top": all.first() }))
     }
 }
+
+impl Engine {
+    /// `core.workforce.insights`: skill gaps now (system-wide). Output: `{
+    /// coverage, unqualified, expiring, summary }`.
+    pub(crate) async fn skill_gaps(&self, org_id: Uuid, input: &Json) -> Result<Json, Json> {
+        let days = input["days"]
+            .as_i64()
+            .map_or(60, |d| i32::try_from(d.clamp(1, 365)).unwrap_or(60));
+        let mut tx = begin_scoped(self.db(), &OrgScope::System)
+            .await
+            .map_err(internal)?;
+        if !huxley_modules::is_active_at(&mut tx, huxley_workforce::MODULE, org_id)
+            .await
+            .map_err(internal)?
+        {
+            return Err(error(
+                "module_disabled",
+                "The workforce module is turned off",
+            ));
+        }
+        let found = huxley_workforce::insights::insights(&mut tx, days)
+            .await
+            .map_err(internal)?;
+        tx.commit().await.map_err(internal)?;
+        Ok(json!(found))
+    }
+}

@@ -5,6 +5,7 @@
 
 pub mod availability;
 pub mod catalog;
+pub mod insights;
 pub mod people;
 pub mod recommend;
 pub mod requirements;

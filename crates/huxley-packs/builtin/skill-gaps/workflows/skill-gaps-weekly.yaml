@@ -1,0 +1,30 @@
+apiVersion: usehuxley.io/v1
+kind: Workflow
+metadata:
+  key: skill-gaps-weekly
+  name: Weekly skill-gap report
+  description: >-
+    Every Monday at 08:00 (and when run by hand), finds queues and ticket
+    types few people are qualified for, recent tickets worked without their
+    requirements, and certifications expiring within 60 days, and tells
+    everyone with the Administrator role when there's anything to act on.
+spec:
+  triggers:
+    - type: schedule
+      cron: "0 8 * * 1"
+    - type: manual
+  steps:
+    - id: gaps
+      type: core.workforce.insights
+      with:
+        days: 60
+    - id: tell
+      type: core.notify
+      if: "{{ steps.gaps.output.summary | length > 0 }}"
+      with:
+        to: role:admin
+        title: "Skill gaps: {{ steps.gaps.output.summary | length }} finding{{ '' if (steps.gaps.output.summary | length) == 1 else 's' }}"
+        message: "{{ steps.gaps.output.summary[:8] | join('\n') }}"
+        url: "/people?view=gaps"
+  outputs:
+    findings: "{{ steps.gaps.output.summary | length }}"

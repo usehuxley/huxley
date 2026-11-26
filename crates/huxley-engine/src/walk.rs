@@ -325,6 +325,8 @@ impl<'a> Walker<'a> {
         flow
     }
 
+    // Lists every step type: grows by a line with each one.
+    #[allow(clippy::too_many_lines)]
     fn step(&mut self, step: &Step, frame: &Frame) -> Flow {
         let common = step.common();
         let key = step_key(common.id, &frame.indices);
@@ -399,6 +401,7 @@ impl<'a> Walker<'a> {
             | Step::TriageOptions(_)
             | Step::TriageApply(_)
             | Step::DispatchRecommend(_)
+            | Step::WorkforceInsights(_)
             | Step::AssetSync(_)
             | Step::AssetWarranty(_)
             | Step::TicketEmailReply(_)
@@ -860,6 +863,7 @@ fn with_block(step: &Step) -> Json {
         Step::TriageOptions(s) => serde_json::to_value(&s.options),
         Step::TriageApply(s) => serde_json::to_value(&s.apply),
         Step::DispatchRecommend(s) => serde_json::to_value(&s.recommend),
+        Step::WorkforceInsights(s) => serde_json::to_value(&s.insights),
         Step::AssetSync(s) => serde_json::to_value(&s.sync),
         Step::AssetWarranty(s) => serde_json::to_value(&s.warranty),
         Step::TicketEmailReply(s) => serde_json::to_value(&s.reply),

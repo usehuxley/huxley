@@ -55,6 +55,7 @@ pub fn routes() -> Router<AppState> {
             get(get_requirements).put(set_requirements),
         )
         .route("/fit", get(fit))
+        .route("/insights", get(insights))
         .route(
             "/people/{user_id}/schedule",
             get(get_schedule).put(set_schedule),
@@ -443,6 +444,33 @@ pub async fn set_requirements(
     Ok(Json(
         system(&state, async |tx| {
             requirements::set(tx, &ctx, &target_type, target_id, &body).await
+        })
+        .await?,
+    ))
+}
+
+#[derive(Debug, Deserialize, IntoParams)]
+#[into_params(parameter_in = Query)]
+pub struct InsightParams {
+    /// Certifications expiring within this many days (default 60).
+    pub days: Option<i32>,
+}
+
+/// Skill gaps: who meets each queue's and ticket type's requirements,
+/// recent work done without them, and certifications about to expire with
+/// what they'd leave uncovered. Needs `workforce:manage`.
+#[utoipa::path(get, path = "/api/v1/workforce/insights", operation_id = "skill_gap_insights", tag = "workforce",
+    params(InsightParams), responses((status = 200, body = huxley_workforce::insights::Insights)))]
+pub async fn insights(
+    State(state): State<AppState>,
+    authed: Authed,
+    Query(params): Query<InsightParams>,
+) -> ApiResult<Json<huxley_workforce::insights::Insights>> {
+    manager(&state, &authed).await?;
+    let days = params.days.unwrap_or(60).clamp(1, 365);
+    Ok(Json(
+        system(&state, async |tx| {
+            huxley_workforce::insights::insights(tx, days).await
         })
         .await?,
     ))

@@ -1,0 +1,9 @@
+apiVersion: usehuxley.io/v1
+kind: Pack
+key: huxley/skill-gaps
+name: Skill gaps
+version: 1.0.0
+publisher: Huxley
+description: Every Monday, tells administrators where few people meet the work's requirements, what work was done without them, and which certifications are about to expire and what they'd leave uncovered.
+contents:
+  workflows: [skill-gaps-weekly]

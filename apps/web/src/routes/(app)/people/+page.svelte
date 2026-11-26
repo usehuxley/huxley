@@ -3,6 +3,7 @@
 	import { BadgeCheck } from '@lucide/svelte';
 	import { Badge, Card, EmptyState } from '@usehuxley/ui';
 	import { byCategory, levelLabel } from '#lib/workforce/labels.ts';
+	import SkillGaps from '#lib/workforce/SkillGaps.svelte';
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
@@ -15,10 +16,13 @@
 		>
 	);
 	let groups = $derived(byCategory(data.skills));
-	const tabs = [
+	let tabs = $derived([
 		{ value: 'people', label: 'People', href: resolve('/(app)/people') },
-		{ value: 'matrix', label: 'Skills matrix', href: `${resolve('/(app)/people')}?view=matrix` }
-	];
+		{ value: 'matrix', label: 'Skills matrix', href: `${resolve('/(app)/people')}?view=matrix` },
+		...(data.manager
+			? [{ value: 'gaps', label: 'Skill gaps', href: `${resolve('/(app)/people')}?view=gaps` }]
+			: [])
+	]);
 	const shade = ['', 'bg-accent-soft/40', 'bg-accent-soft', 'bg-accent/40', 'bg-accent/70'];
 </script>
 
@@ -119,7 +123,7 @@
 			title="No skills yet"
 			description="Add skills under Settings → Skills & certifications, then people can rate themselves."
 		/>
-	{:else}
+	{:else if data.view === 'matrix'}
 		<section class="overflow-x-auto rounded-card border border-border bg-surface">
 			<table class="text-sm" aria-label="Skills matrix">
 				<thead class="border-b border-border bg-surface-sunken text-xs text-fg-muted">
@@ -184,5 +188,7 @@
 		<p class="text-xs text-fg-muted">
 			Levels: 1 learning, 2 working, 3 proficient, 4 expert. A tick means a lead verified it.
 		</p>
+	{:else if data.view === 'gaps' && data.gaps}
+		<SkillGaps gaps={data.gaps} />
 	{/if}
 </div>

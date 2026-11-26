@@ -465,6 +465,23 @@ export const STEPS: StepSpec[] = [
 		]
 	},
 	{
+		type: 'core.workforce.insights',
+		label: 'Find skill gaps',
+		description:
+			'Find work few people are qualified for, recent tickets worked without their requirements, and certifications about to expire.',
+		group: 'Data',
+		module: 'workforce',
+		template: { with: { days: 60 } },
+		fields: [
+			{
+				path: 'with.days',
+				label: 'Certifications expiring within (days)',
+				kind: 'expression',
+				hint: 'Default 60'
+			}
+		]
+	},
+	{
 		type: 'core.dispatch.recommend',
 		label: 'Recommend who takes it',
 		description:

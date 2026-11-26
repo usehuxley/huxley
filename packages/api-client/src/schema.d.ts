@@ -6446,6 +6446,27 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
+	'/api/v1/workforce/insights': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/**
+		 * Skill gaps: who meets each queue's and ticket type's requirements,
+		 *     recent work done without them, and certifications about to expire with
+		 *     what they'd leave uncovered. Needs `workforce:manage`.
+		 */
+		get: operations['skill_gap_insights'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
 	'/api/v1/workforce/matrix': {
 		parameters: {
 			query?: never;
@@ -8679,6 +8700,15 @@ export interface components {
 		EntityType: {
 			key: string;
 			label: string;
+		};
+		ExpiringCertification: {
+			certification: string;
+			expiresOn: string;
+			person: string;
+			/** @description Work nobody else is qualified for. */
+			uncovers: string[];
+			/** Format: uuid */
+			userId: string;
 		};
 		/**
 		 * @description What to put in an exported pack: the manifest's identity, and the ids
@@ -11280,6 +11310,26 @@ export interface components {
 			/** Format: int32 */
 			version: number;
 		};
+		SkillCoverage: {
+			name: string;
+			/** @description Everyone who could be asked (its members, for a queue). */
+			pool: number;
+			/** @description Who meets every requirement. */
+			qualified: string[];
+			/** @description What it requires, by name. */
+			requirements: string[];
+			/** Format: uuid */
+			targetId: string;
+			/** @description `queue` or `ticket_type`. */
+			targetType: string;
+		};
+		SkillGapInsights: {
+			coverage: components['schemas']['SkillCoverage'][];
+			expiring: components['schemas']['ExpiringCertification'][];
+			/** @description The findings worth acting on, most serious first, in a line each. */
+			summary: string[];
+			unqualified: components['schemas']['UnqualifiedWork'][];
+		};
 		SkillInput: {
 			category?: string | null;
 			description?: string | null;
@@ -12295,6 +12345,16 @@ export interface components {
 					/** @enum {string} */
 					status: 'unsigned';
 			  };
+		UnqualifiedWork: {
+			people: string[];
+			/** @description The requirement that wasn't met. */
+			requirement: string;
+			/**
+			 * Format: int64
+			 * @description Resolved tickets (of the last 200, 90 days) worked without it.
+			 */
+			tickets: number;
+		};
 		UnreadCount: {
 			/** Format: int64 */
 			unreadCount: number;
@@ -26130,6 +26190,28 @@ export interface operations {
 				};
 				content: {
 					'application/json': components['schemas']['Fit'][];
+				};
+			};
+		};
+	};
+	skill_gap_insights: {
+		parameters: {
+			query?: {
+				/** @description Certifications expiring within this many days (default 60). */
+				days?: number;
+			};
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['SkillGapInsights'];
 				};
 			};
 		};

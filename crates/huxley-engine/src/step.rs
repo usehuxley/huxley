@@ -248,6 +248,7 @@ impl Engine {
             Step::TriageOptions(_) => self.triage_options(org_id, input).await.into(),
             Step::TriageApply(_) => self.triage_apply(org_id, input).await.into(),
             Step::DispatchRecommend(_) => self.recommend_assignees(org_id, input).await.into(),
+            Step::WorkforceInsights(_) => self.skill_gaps(org_id, input).await.into(),
             Step::AssetSync(_) => self.sync_assets(org_id, input).await.into(),
             Step::AssetWarranty(_) => self.set_warranty(org_id, input).await.into(),
             Step::MailFetch(_)

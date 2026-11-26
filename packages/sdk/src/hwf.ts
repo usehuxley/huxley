@@ -1176,6 +1176,30 @@ export type Step =
 			 * Fail the attempt after this long, e.g. `30s`.
 			 */
 			timeout?: string | null;
+			type: 'core.workforce.insights';
+			with?: WorkforceInsights;
+	  }
+	| {
+			/**
+			 * Record the error as the step's output and carry on.
+			 */
+			continue_on_error?: boolean;
+			description?: string | null;
+			/**
+			 * Unique in the workflow: lowercase letters, digits, underscores.
+			 * Other steps read this step's output as `steps.<id>.output`.
+			 */
+			id: string;
+			/**
+			 * Skip the step unless this expression is true.
+			 */
+			if?: string | null;
+			name?: string | null;
+			retry?: RetryPolicy | null;
+			/**
+			 * Fail the attempt after this long, e.g. `30s`.
+			 */
+			timeout?: string | null;
 			type: 'core.asset.sync';
 			with: AssetSync;
 	  }
@@ -2099,6 +2123,17 @@ export interface DispatchRecommend {
 	ticket_id: unknown;
 }
 /**
+ * Skill gaps now (`core.workforce.insights`): who meets each queue's and
+ * ticket type's requirements, recent tickets worked without them, and
+ * certifications expiring within `days` (default 60) with the work only
+ * their holder is qualified for. Output: `{ coverage, unqualified,
+ * expiring, summary }` (`summary`: a line per finding, most serious
+ * first).
+ */
+export interface WorkforceInsights {
+	days?: unknown;
+}
+/**
  * Mapping rules to run (`core.asset.sync`): a dataset's rows become
  * assets, matched, updated and created by the rule. Give `mapping_id` for
  * one rule, or `dataset` (a dataset's key) for every rule on it that's on.
@@ -2321,4 +2356,18 @@ export interface TicketEmbed1 {
  */
 export interface TriageOptions1 {
 	ticket_id?: unknown;
+}
+/**
+ * Skill gaps now (`core.workforce.insights`): who meets each queue's and
+ * ticket type's requirements, recent tickets worked without them, and
+ * certifications expiring within `days` (default 60) with the work only
+ * their holder is qualified for. Output: `{ coverage, unqualified,
+ * expiring, summary }` (`summary`: a line per finding, most serious
+ * first).
+ *
+ * This interface was referenced by `HuxleyWorkflowFormatV1`'s JSON-Schema
+ * via the `definition` "WorkforceInsights".
+ */
+export interface WorkforceInsights1 {
+	days?: unknown;
 }
