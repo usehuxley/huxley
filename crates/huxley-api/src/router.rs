@@ -151,6 +151,7 @@ fn portal_api() -> Router<AppState> {
         .merge(crate::portal_kb_routes::routes())
         .merge(crate::portal_device_routes::routes())
         .merge(crate::portal_approval_routes::routes())
+        .merge(crate::portal_dashboard_routes::routes())
         .layer(middleware::from_fn(csrf::require_header))
 }
 
