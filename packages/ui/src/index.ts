@@ -25,3 +25,4 @@ export {
 	type FieldKind,
 	type ShowIf
 } from './form/fields';
+export { default as ArticleBody } from './components/ArticleBody.svelte';

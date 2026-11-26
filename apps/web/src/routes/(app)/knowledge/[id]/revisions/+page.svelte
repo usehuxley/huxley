@@ -1,7 +1,6 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
-	import { Badge, Card } from '@usehuxley/ui';
-	import ArticleBody from '#lib/kb/ArticleBody.svelte';
+	import { Badge, Card, ArticleBody } from '@usehuxley/ui';
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();

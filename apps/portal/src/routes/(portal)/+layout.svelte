@@ -9,13 +9,18 @@
 	let { data, children }: LayoutProps = $props();
 	let branding = $derived(data.me.branding ?? DEFAULT_BRANDING);
 
-	const nav: NavItem[] = [
-		{ href: '/', label: 'Home', icon: House },
-		{ href: '/tickets', label: 'Tickets', icon: Ticket },
-		{ href: '/requests', label: 'Request something', icon: ClipboardList },
-		{ href: '/assets', label: 'Devices', icon: Boxes, soon: true },
-		{ href: '/knowledge', label: 'Help articles', icon: BookOpen, soon: true }
-	];
+	// Parts of the portal follow what's turned on for their company.
+	let nav: NavItem[] = $derived(
+		[
+			{ href: '/', label: 'Home', icon: House, module: null },
+			{ href: '/tickets', label: 'Tickets', icon: Ticket, module: 'servicedesk' },
+			{ href: '/requests', label: 'Request something', icon: ClipboardList, module: null },
+			{ href: '/assets', label: 'Devices', icon: Boxes, soon: true, module: 'cmdb' },
+			{ href: '/knowledge', label: 'Help articles', icon: BookOpen, module: 'knowledge' }
+		]
+			.filter((item) => item.module === null || data.me.modules.includes(item.module))
+			.map((item) => ({ href: item.href, label: item.label, icon: item.icon, soon: item.soon }))
+	);
 </script>
 
 <div style={accentStyle(branding.accentColor)}>

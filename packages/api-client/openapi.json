@@ -10,6 +10,72 @@
 		"version": "0.1.0"
 	},
 	"paths": {
+		"/api/portal/v1/articles": {
+			"get": {
+				"tags": ["portal"],
+				"summary": "Help articles: searched, or newest first; with their categories.",
+				"operationId": "portal_articles",
+				"parameters": [
+					{
+						"name": "q",
+						"in": "query",
+						"description": "Words to search for.",
+						"required": false,
+						"schema": {
+							"type": "string"
+						}
+					},
+					{
+						"name": "category",
+						"in": "query",
+						"required": false,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/PortalArticles"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/portal/v1/articles/{id}": {
+			"get": {
+				"tags": ["portal"],
+				"operationId": "portal_article",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/PortalArticle"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
 		"/api/portal/v1/auth/link": {
 			"post": {
 				"tags": ["portal"],
@@ -24175,6 +24241,90 @@
 				"type": "string",
 				"enum": ["invited", "active", "disabled"]
 			},
+			"PortalArticle": {
+				"type": "object",
+				"required": ["id", "title", "bodyHtml"],
+				"properties": {
+					"bodyHtml": {
+						"type": "string",
+						"description": "Rendered from markdown, safe to show."
+					},
+					"category": {
+						"type": ["string", "null"]
+					},
+					"id": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"publishedAt": {
+						"type": ["string", "null"],
+						"format": "date-time"
+					},
+					"title": {
+						"type": "string"
+					}
+				}
+			},
+			"PortalArticleCategory": {
+				"type": "object",
+				"description": "A category with articles for the company's contacts.",
+				"required": ["id", "name", "articles"],
+				"properties": {
+					"articles": {
+						"type": "integer",
+						"format": "int64"
+					},
+					"id": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"name": {
+						"type": "string"
+					}
+				}
+			},
+			"PortalArticleSummary": {
+				"type": "object",
+				"required": ["id", "title"],
+				"properties": {
+					"category": {
+						"type": ["string", "null"]
+					},
+					"id": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"publishedAt": {
+						"type": ["string", "null"],
+						"format": "date-time"
+					},
+					"snippet": {
+						"type": ["string", "null"],
+						"description": "Where a search matched, with the matched words in `<b>`."
+					},
+					"title": {
+						"type": "string"
+					}
+				}
+			},
+			"PortalArticles": {
+				"type": "object",
+				"required": ["articles", "categories"],
+				"properties": {
+					"articles": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/PortalArticleSummary"
+						}
+					},
+					"categories": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/PortalArticleCategory"
+						}
+					}
+				}
+			},
 			"PortalBranding": {
 				"type": "object",
 				"required": ["name", "accentColor"],
@@ -24377,7 +24527,7 @@
 					},
 					{
 						"type": "object",
-						"required": ["permissions"],
+						"required": ["permissions", "modules"],
 						"properties": {
 							"branding": {
 								"oneOf": [
@@ -24389,6 +24539,13 @@
 										"type": "null"
 									}
 								]
+							},
+							"modules": {
+								"type": "array",
+								"items": {
+									"type": "string"
+								},
+								"description": "The portal's parts that are on for their company: `servicedesk`\n(tickets), `knowledge` (help articles), `cmdb` (devices)."
 							},
 							"permissions": {
 								"type": "array",

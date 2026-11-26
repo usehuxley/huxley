@@ -43,7 +43,7 @@ async fn setup(pools: &TestPools) -> Setup {
     huxley_authz::grant_root_owner(&mut tx, &ctx, owner.id)
         .await
         .unwrap();
-    for module in ["crm", "servicedesk", "portal"] {
+    for module in ["crm", "servicedesk", "portal", "knowledge"] {
         huxley_modules::set_enabled(&mut tx, &ctx, module, true, false)
             .await
             .unwrap();
@@ -727,6 +727,98 @@ async fn contacts_ask_for_things_with_portal_forms() {
             "POST",
             &format!("/api/portal/v1/catalog/{globex_form}/requests"),
             json!({ "answers": { "who": "x" } }),
+        )
+        .await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+}
+
+#[tokio::test]
+async fn contacts_read_published_articles_meant_for_clients() {
+    let Some(db) = isolated("portal_kb").await else {
+        return;
+    };
+    let s = setup(&db.pools).await;
+    let article = async |org: Uuid, title: &str, visibility: &str, publish: bool| {
+        let (status, a, _) = s
+            .call(
+                &s.staff,
+                "POST",
+                "/api/v1/kb/articles",
+                json!({ "orgId": org, "title": title, "body": format!("How to **{title}**: reset it."), "visibility": visibility }),
+            )
+            .await;
+        assert_eq!(status, StatusCode::CREATED, "{a}");
+        let id = a["id"].as_str().unwrap().to_owned();
+        if publish {
+            let (status, p, _) = s
+                .call(
+                    &s.staff,
+                    "POST",
+                    &format!("/api/v1/kb/articles/{id}/publish"),
+                    json!({}),
+                )
+                .await;
+            assert_eq!(status, StatusCode::OK, "{p}");
+        }
+        id
+    };
+    let shared = article(s.root, "Reset your password", "clients", true).await;
+    article(s.root, "Internal runbook password", "internal", true).await;
+    article(s.root, "Draft password guide", "clients", false).await;
+    let globex = article(s.globex, "Globex VPN password", "public", true).await;
+
+    let (ada, _) = s.portal_user(s.acme, "Ada", "client_user").await;
+    let (_, me, _) = s.call(&ada, "GET", "/api/portal/v1/me", Value::Null).await;
+    assert!(
+        me["modules"]
+            .as_array()
+            .unwrap()
+            .contains(&json!("knowledge")),
+        "{me}"
+    );
+    let (status, list, _) = s
+        .call(
+            &ada,
+            "GET",
+            "/api/portal/v1/articles?q=password",
+            Value::Null,
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK, "{list}");
+    let titles: Vec<&str> = list["articles"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|a| a["title"].as_str().unwrap())
+        .collect();
+    assert_eq!(titles, ["Reset your password"]);
+    assert!(
+        list["articles"][0]["snippet"]
+            .as_str()
+            .unwrap()
+            .contains("<b>")
+    );
+    let (_, one, _) = s
+        .call(
+            &ada,
+            "GET",
+            &format!("/api/portal/v1/articles/{shared}"),
+            Value::Null,
+        )
+        .await;
+    assert!(
+        one["bodyHtml"]
+            .as_str()
+            .unwrap()
+            .contains("<strong>Reset your password</strong>"),
+        "{one}"
+    );
+    let (status, _, _) = s
+        .call(
+            &ada,
+            "GET",
+            &format!("/api/portal/v1/articles/{globex}"),
+            Value::Null,
         )
         .await;
     assert_eq!(status, StatusCode::NOT_FOUND);

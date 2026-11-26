@@ -2,8 +2,7 @@
 	import { enhance, type SubmitFunction } from '$app/forms';
 	import { resolve } from '$app/paths';
 	import { History, Pencil } from '@lucide/svelte';
-	import { Badge, Button, Card, Dialog, Field, toast } from '@usehuxley/ui';
-	import ArticleBody from '#lib/kb/ArticleBody.svelte';
+	import { Badge, Button, Card, Dialog, Field, toast, ArticleBody } from '@usehuxley/ui';
 	import { STATUS_LABELS, statusTone } from '#lib/kb/form.ts';
 	import type { PageProps } from './$types';
 

@@ -241,6 +241,8 @@ use crate::workforce_routes;
         crate::portal_ticket_routes::get_ticket,
         crate::portal_ticket_routes::raise_ticket,
         crate::portal_ticket_routes::reply_to_ticket,
+        crate::portal_kb_routes::list_articles,
+        crate::portal_kb_routes::get_article,
         crate::portal_catalog_routes::list_catalog,
         crate::portal_catalog_routes::get_catalog_form,
         crate::portal_catalog_routes::submit_request,

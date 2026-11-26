@@ -1,7 +1,6 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
-	import { Button, Field, Input, Select } from '@usehuxley/ui';
-	import ArticleBody from './ArticleBody.svelte';
+	import { ArticleBody, Button, Field, Input, Select } from '@usehuxley/ui';
 
 	type Option = { value: string; label: string };
 	let {
