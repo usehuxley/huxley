@@ -2,9 +2,12 @@
 	import './layout.css';
 	import favicon from '#lib/assets/favicon.svg';
 	import { Toaster } from '@usehuxley/ui';
+	import { onMount } from 'svelte';
 	import type { LayoutProps } from './$types';
 
 	let { children }: LayoutProps = $props();
+	// Interactive from here on (end-to-end tests wait for it).
+	onMount(() => document.documentElement.setAttribute('data-hydrated', ''));
 </script>
 
 <svelte:head>
