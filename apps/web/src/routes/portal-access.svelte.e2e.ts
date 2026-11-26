@@ -57,7 +57,10 @@ test.describe('portal access', () => {
 		await expect(page.getByText('No portal access yet.')).toBeVisible();
 		await page.getByLabel('Portal role').selectOption('client_admin');
 		await page.getByRole('button', { name: 'Invite to the portal' }).click();
-		await expect(page.getByText('They have portal access.', { exact: false })).toBeVisible();
+		// Emailed when email and the portal's address are set up; otherwise not.
+		await expect(
+			page.getByText(/Invited: a sign-in link is on its way|They have portal access/)
+		).toBeVisible();
 		await expect(page.getByText('Invited', { exact: true })).toBeVisible();
 		await expect(
 			page.getByText(`Signs in as pat-${stamp}@example.com`, { exact: false })

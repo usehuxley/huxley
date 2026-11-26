@@ -2,7 +2,7 @@
 
 The **client portal** (the `portal` module) is a separate site where your clients' contacts sign in to see and raise their support requests. It runs as its own app (`portal`, at `HUXLEY_PORTAL_DOMAIN` in the compose stack) with its own sign-in, sessions and API, kept apart from staff accounts (ADR-040).
 
-So far, contacts can be invited and can sign in. Tickets, the service catalog, help articles, devices and approvals follow, along with your branding and your clients' own sign-in providers.
+Contacts can sign in, see their tickets, raise new ones and reply. The service catalog, help articles, devices and approvals follow, along with your branding and your clients' own sign-in providers.
 
 ## Setting it up
 
@@ -26,6 +26,15 @@ So far, contacts can be invited and can sign in. Tickets, the service catalog, h
 | **Client approver** | As a client user, and approve what's sent to them. |
 | **Client admin** | Every ticket of their company, its devices, and their colleagues' portal access. |
 
+## Tickets
+
+- **Seeing tickets:** contacts see the tickets they asked for. **Client admins** can switch to **all of their company's** tickets.
+- **The conversation:** a ticket shows its status, its details, and the public conversation: your public notes and the resolution. **Internal notes, assignees, time, queues and SLA details never reach the portal.**
+- **Raising a ticket:** a ticket raised in the portal belongs to the contact's company, with the contact as requester and its source set to `portal`. It gets the default type, routing and SLA, and whatever workflows act on new tickets.
+- **Replying:** a reply is a public note by the contact. Replying to a resolved ticket reopens it. Closed tickets can't be replied to, so the contact raises a new one.
+- **Notifications:** with the **Service desk notifications** pack (1.1.0), whoever a ticket is assigned to is told when the requester replies in the portal, as they are for email replies.
+- **The service desk module** must be on for the company.
+
 ## Signing in
 
 - **A sign-in link**, emailed when they enter their address. It works once, for 15 minutes. Opening the link shows a **Sign in** button rather than signing in straight away, because email security scanners open links too.
@@ -44,4 +53,5 @@ So far, contacts can be invited and can sign in. Tickets, the service catalog, h
 - The portal's own API, with portal sessions only:
   - `POST /api/portal/v1/auth/link`, `…/auth/redeem`, `…/auth/password`, `…/auth/logout`
   - `GET /api/portal/v1/me`
+  - `GET`, `POST /api/portal/v1/tickets` (`status=open|closed`, `scope=mine|company`, `q`); `GET …/tickets/{id}`; `POST …/tickets/{id}/replies`
   - `PUT /api/portal/v1/me/password`

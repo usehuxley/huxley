@@ -2,7 +2,7 @@ apiVersion: usehuxley.io/v1
 kind: Pack
 key: huxley/servicedesk-notifications
 name: Service desk notifications
-version: 1.0.0
+version: 1.1.0
 publisher: Huxley
 description: Tells technicians when a ticket is assigned to them or their team, when its requester replies, and when it's close to or past an SLA target.
 contents:

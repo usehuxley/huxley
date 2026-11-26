@@ -924,6 +924,41 @@ pub async fn add_email_note(
     Ok(id)
 }
 
+/// Adds a contact's public note (from the portal, say), with `details`
+/// recorded on the activity and the `ticket.note_added` event.
+pub async fn add_contact_note(
+    conn: &mut PgConnection,
+    ctx: &RequestContext,
+    ticket: &Ticket,
+    contact: Uuid,
+    body: &str,
+    details: serde_json::Value,
+) -> DeskResult<Uuid> {
+    let id = huxley_core::new_id();
+    sqlx::query(
+        "INSERT INTO sd_ticket_notes (id, ticket_id, org_id, kind, body, author_contact_id) \
+         VALUES ($1, $2, $3, 'public', $4, $5)",
+    )
+    .bind(id)
+    .bind(ticket.id)
+    .bind(ticket.org_id)
+    .bind(body)
+    .bind(contact)
+    .execute(&mut *conn)
+    .await?;
+    sqlx::query("UPDATE sd_tickets SET updated_at = now() WHERE id = $1")
+        .bind(ticket.id)
+        .execute(&mut *conn)
+        .await?;
+    crate::sla::sync(conn, ticket.id).await?;
+    let mut change = json!({ "kind": "public", "note": id });
+    if let (Some(c), Some(extra)) = (change.as_object_mut(), details.as_object()) {
+        c.extend(extra.clone());
+    }
+    record(conn, ctx, ticket, "note", change).await?;
+    Ok(id)
+}
+
 /// Adds a note. The first public note by a person sets the first response.
 pub async fn add_note(
     conn: &mut PgConnection,

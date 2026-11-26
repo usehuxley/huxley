@@ -5,13 +5,14 @@ metadata:
   name: Notify on requester replies
   description: >-
     Tells the person a ticket is assigned to (or, with no person, its team)
-    when the requester replies by email.
+    when the requester replies, by email or in the client portal.
 spec:
   triggers:
     - type: event
       event: ticket.note_added
       filter: >-
-        {{ event.payload.change.kind == 'public' and event.payload.change.email is defined
+        {{ event.payload.change.kind == 'public'
+           and (event.payload.change.email is defined or event.payload.change.portal is defined)
            and (event.payload.assigneeUserId is not none or event.payload.assigneeTeamId is not none) }}
   steps:
     - id: tell

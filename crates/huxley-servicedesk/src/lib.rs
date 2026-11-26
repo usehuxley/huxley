@@ -13,6 +13,7 @@ pub mod embeddings;
 pub mod links;
 pub mod mail;
 pub mod my_work;
+pub mod portal;
 pub mod presence;
 pub mod queues;
 pub mod responses;

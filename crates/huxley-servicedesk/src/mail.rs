@@ -931,7 +931,7 @@ fn crm(e: huxley_crm::CrmError) -> DeskError {
 }
 
 /// Reopens a resolved ticket (to its type's first open status).
-async fn reopen(
+pub(crate) async fn reopen(
     conn: &mut PgConnection,
     ctx: &RequestContext,
     ticket: &tickets::Ticket,

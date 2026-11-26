@@ -40,6 +40,7 @@ pub mod packs;
 pub mod passkey_routes;
 pub mod portal_access_routes;
 pub mod portal_routes;
+pub mod portal_ticket_routes;
 pub mod problem;
 mod public_form_routes;
 pub mod rate_limit;
