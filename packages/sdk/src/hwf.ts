@@ -2050,7 +2050,8 @@ export interface SentimentRecord {
  * `ticket_id`'s organization or above (or the run's organization's,
  * without one), and the priorities. Output: `{ queues: [{ id, name,
  * description }], queue_names (the names and "(none)"), priority_keys,
- * guide (a line per queue and priority, for a prompt) }`.
+ * skill_names (the workforce skill catalog's and "(none)"), guide (a line
+ * per queue, priority and skill, for a prompt) }`.
  */
 export interface TriageOptions {
 	ticket_id?: unknown;
@@ -2058,9 +2059,11 @@ export interface TriageOptions {
 /**
  * A triage answer to record (`core.triage.apply`): `queue` (a name from
  * `core.triage.options`, or "(none)"), `priority` (`p1` to `p4`) and a
- * `reason`. With `ticket_id`, it's kept as the ticket's suggestion and
- * applied while no person has changed the ticket (the queue only if it
- * has none). With `evaluation_id` and `sample_id` (an accuracy
+ * `reason`, and the `skills` it needs. With `ticket_id`, it's kept as the
+ * ticket's suggestion and applied while no person has changed the ticket
+ * and the organization lets triage apply (the queue only if it has none;
+ * skills as the ticket's own requirements, at working level, if it has
+ * none). With `evaluation_id` and `sample_id` (an accuracy
  * evaluation's run), it's recorded in the evaluation instead. Output: `{
  * mode, applied, queue_id, priority }`.
  *
@@ -2073,6 +2076,10 @@ export interface TriageApply {
 	queue: unknown;
 	reason?: unknown;
 	sample_id?: unknown;
+	/**
+	 * The skills the ticket needs, by name (from `skill_names`).
+	 */
+	skills?: unknown;
 	ticket_id?: unknown;
 }
 /**
@@ -2306,7 +2313,8 @@ export interface TicketEmbed1 {
  * `ticket_id`'s organization or above (or the run's organization's,
  * without one), and the priorities. Output: `{ queues: [{ id, name,
  * description }], queue_names (the names and "(none)"), priority_keys,
- * guide (a line per queue and priority, for a prompt) }`.
+ * skill_names (the workforce skill catalog's and "(none)"), guide (a line
+ * per queue, priority and skill, for a prompt) }`.
  *
  * This interface was referenced by `HuxleyWorkflowFormatV1`'s JSON-Schema
  * via the `definition` "TriageOptions".

@@ -428,7 +428,13 @@ How it works:
 The built-in **AI triage** pack (`huxley/ai-triage`) suggests a queue and priority for each ticket a client raises, by email or in the portal, using your [AI provider](ai.md) and your queues (ADR-047).
 
 - **Set up:** install it, publish *Triage new tickets with AI*, and give your queues descriptions. The AI reads them to choose.
-- **What it does:** it picks a queue (or none) and a priority, with a one-line reason. While no one has changed the ticket, it applies them: the queue only if the ticket has none. Afterwards suggestions are only recorded.
+- **What it does:** it picks a queue (or none), a priority and, with the [Workforce](workforce.md) module, the skills the ticket needs (from your skill catalog), with a one-line reason. While no one has changed the ticket, it applies them:
+  - the queue, only if the ticket has none
+  - the priority
+  - the skills, as the ticket's own requirements at *working* level, if it has none (so [recommendations](#who-should-take-it) weigh them)
+
+  Afterwards suggestions are only recorded.
+- **Suggest only:** turn off **Apply AI triage automatically** in an organization's settings, and triage only records its suggestions there.
 - **Settings → AI triage:**
   - **On live tickets:** how often suggestions matched where resolved tickets ended up (90 days).
   - **Labeled samples:** examples with the right queue and priority. Add them by hand, or **Add recently resolved tickets** to take tickets as people left them.

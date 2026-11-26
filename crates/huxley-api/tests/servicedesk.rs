@@ -2281,20 +2281,42 @@ async fn ai_triage_applies_until_someone_works_the_ticket() {
         &mut tx,
         &ctx,
         raised_id,
-        &hw_name.to_uppercase(),
-        "p2",
-        "A dead laptop",
+        &huxley_servicedesk::triage::Answer {
+            queue: &hw_name.to_uppercase(),
+            priority: "p2",
+            reason: "A dead laptop",
+            skills: &[],
+        },
     )
     .await
     .unwrap();
-    let skipped =
-        huxley_servicedesk::triage::apply(&mut tx, &ctx, worked_id, &hw_name, "p1", "Jammed")
-            .await
-            .unwrap();
+    let skipped = huxley_servicedesk::triage::apply(
+        &mut tx,
+        &ctx,
+        worked_id,
+        &huxley_servicedesk::triage::Answer {
+            queue: &hw_name,
+            priority: "p1",
+            reason: "Jammed",
+            skills: &[],
+        },
+    )
+    .await
+    .unwrap();
     assert!(
-        huxley_servicedesk::triage::apply(&mut tx, &ctx, worked_id, "Plumbing", "p1", "x")
-            .await
-            .is_err()
+        huxley_servicedesk::triage::apply(
+            &mut tx,
+            &ctx,
+            worked_id,
+            &huxley_servicedesk::triage::Answer {
+                queue: "Plumbing",
+                priority: "p1",
+                reason: "x",
+                skills: &[]
+            }
+        )
+        .await
+        .is_err()
     );
     tx.commit().await.unwrap();
     assert!(applied.applied && !skipped.applied);
@@ -2306,6 +2328,8 @@ async fn ai_triage_applies_until_someone_works_the_ticket() {
     );
     let untouched = s.ok(&s.owner, "GET", &url(&worked), None).await;
     assert_eq!(untouched["queueId"], Value::Null);
+
+    suggest_only(&s, &hw_name).await;
 
     // Agreement once resolved: the applied one matches, the other doesn't.
     exec(
@@ -2644,4 +2668,59 @@ async fn ranked(s: &Setup, tech: &str, ticket: &Value, (ada, bob): (Uuid, Uuid),
             .starts_with("Missing: Networking"),
         "{second}"
     );
+}
+
+/// With `triage.auto_apply` off at Globex, suggestions are only recorded.
+async fn suggest_only(s: &Setup, hw_name: &str) {
+    let ctx = RequestContext::system(Via::System);
+    let mut tx = begin_scoped(&s.pools.app, &OrgScope::System).await.unwrap();
+    huxley_orgs::settings::set(
+        &mut tx,
+        &ctx,
+        s.globex,
+        huxley_orgs::settings::TRIAGE_AUTO,
+        "false",
+        false,
+    )
+    .await
+    .unwrap();
+    tx.commit().await.unwrap();
+    let ticket = s
+        .ticket(
+            &s.owner,
+            json!({ "orgId": s.globex, "title": "Mouse broken" }),
+        )
+        .await;
+    let id = Uuid::parse_str(ticket["id"].as_str().unwrap()).unwrap();
+    exec(
+        &s.pools,
+        "UPDATE sd_ticket_activity SET actor_id = NULL WHERE ticket_id = $1",
+        &[id],
+    )
+    .await;
+    let mut tx = begin_scoped(&s.pools.app, &OrgScope::System).await.unwrap();
+    let skills = vec!["Hardware repair".to_owned()];
+    let answer = huxley_servicedesk::triage::Answer {
+        queue: hw_name,
+        priority: "p2",
+        reason: "A broken mouse",
+        skills: &skills,
+    };
+    let out = huxley_servicedesk::triage::apply(&mut tx, &ctx, id, &answer)
+        .await
+        .unwrap();
+    tx.commit().await.unwrap();
+    assert!(
+        !out.applied && !out.apply_skills && out.suggest_only,
+        "{out:?}"
+    );
+    let after = s.ok(&s.owner, "GET", &url(&ticket), None).await;
+    assert_eq!(after["queueId"], Value::Null);
+    let kept: Vec<String> =
+        sqlx::query_scalar("SELECT unnest(skills) FROM sd_triage WHERE ticket_id = $1")
+            .bind(id)
+            .fetch_all(&s.pools.owner)
+            .await
+            .unwrap();
+    assert_eq!(kept, skills);
 }
