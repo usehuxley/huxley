@@ -488,6 +488,22 @@
         }
       ]
     },
+    "KbDraft": {
+      "additionalProperties": false,
+      "description": "A knowledge article to draft (`core.kb.draft`): its `title` and `body`\n(Markdown), at `org_id` (default the run's organization), tagged\n`ai-draft`, submitted for review unless `submit` is false, and linked\nto `ticket_id` if given. Output: `{ article_id, status }`.",
+      "properties": {
+        "body": true,
+        "org_id": true,
+        "submit": true,
+        "ticket_id": true,
+        "title": true
+      },
+      "required": [
+        "title",
+        "body"
+      ],
+      "type": "object"
+    },
     "KbEmbed": {
       "additionalProperties": false,
       "description": "Articles to embed (`core.kb.embed`): published knowledge base articles\nat the run's organization and below whose embedding is missing or stale\n(their published title or text changed, they moved organization, or the\nembeddings provider's model changed), up to `limit` (default 200), by\neach organization's embeddings provider. Does nothing when pgvector\nisn't installed. A provider that fails is reported without failing the\nstep. Output: `{ available, embedded, errors: [{ org_id, error }] }`.",
@@ -3669,6 +3685,132 @@
         },
         {
           "additionalProperties": false,
+          "description": "Draft a knowledge article, into review (the `knowledge` module).",
+          "properties": {
+            "continue_on_error": {
+              "description": "Record the error as the step's output and carry on.",
+              "type": "boolean"
+            },
+            "description": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "id": {
+              "description": "Unique in the workflow: lowercase letters, digits, underscores.\nOther steps read this step's output as `steps.<id>.output`.",
+              "type": "string"
+            },
+            "if": {
+              "description": "Skip the step unless this expression is true.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "name": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "retry": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/RetryPolicy"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "timeout": {
+              "description": "Fail the attempt after this long, e.g. `30s`.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "type": {
+              "const": "core.kb.draft",
+              "type": "string"
+            },
+            "with": {
+              "$ref": "#/$defs/KbDraft"
+            }
+          },
+          "required": [
+            "type",
+            "id",
+            "with"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Suggest a time entry for whoever worked a ticket (the `servicedesk`\nmodule).",
+          "properties": {
+            "continue_on_error": {
+              "description": "Record the error as the step's output and carry on.",
+              "type": "boolean"
+            },
+            "description": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "id": {
+              "description": "Unique in the workflow: lowercase letters, digits, underscores.\nOther steps read this step's output as `steps.<id>.output`.",
+              "type": "string"
+            },
+            "if": {
+              "description": "Skip the step unless this expression is true.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "name": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "retry": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/RetryPolicy"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "timeout": {
+              "description": "Fail the attempt after this long, e.g. `30s`.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "type": {
+              "const": "core.time.suggest",
+              "type": "string"
+            },
+            "with": {
+              "$ref": "#/$defs/TimeSuggest"
+            }
+          },
+          "required": [
+            "type",
+            "id",
+            "with"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
           "description": "Run a dataset → asset mapping rule (the `cmdb` module).",
           "properties": {
             "continue_on_error": {
@@ -4221,6 +4363,21 @@
       },
       "required": [
         "ticket_id"
+      ],
+      "type": "object"
+    },
+    "TimeSuggest": {
+      "additionalProperties": false,
+      "description": "A time entry to suggest (`core.time.suggest`): `minutes` on `ticket_id`\nfor `user_id` (default the ticket's assignee) with `notes`, unless they\nlogged time on it already or a suggestion is waiting. They accept it\n(a real entry) or dismiss it from My time. Output: `{ suggestion }`\n(null: skipped).",
+      "properties": {
+        "minutes": true,
+        "notes": true,
+        "ticket_id": true,
+        "user_id": true
+      },
+      "required": [
+        "ticket_id",
+        "minutes"
       ],
       "type": "object"
     },

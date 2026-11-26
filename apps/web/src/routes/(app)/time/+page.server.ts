@@ -18,12 +18,13 @@ export const load: PageServerLoad = async (event) => {
 	const timesheets =
 		user.activeModules.includes('workforce') &&
 		user.grantedPermissions.includes('timesheet:submit');
-	const [entries, workTypes, timesheet] = await Promise.all([
+	const [entries, workTypes, timesheet, suggestions] = await Promise.all([
 		client.GET('/api/v1/time-entries', { params: { query: { from: days[0], to: days[6] } } }),
 		client.GET('/api/v1/work-types'),
 		timesheets
 			? client.GET('/api/v1/timesheets/mine', { params: { query: { date: monday } } })
-			: Promise.resolve({ data: undefined })
+			: Promise.resolve({ data: undefined }),
+		client.GET('/api/v1/time-suggestions')
 	]);
 	if (entries.response.status === 404) error(404, 'The service desk is turned off.');
 	if (!entries.data) error(503, 'Could not load your time.');
@@ -32,11 +33,37 @@ export const load: PageServerLoad = async (event) => {
 		days,
 		entries: entries.data,
 		workTypes: workTypes.data ?? [],
-		timesheet: timesheet.data ?? null
+		timesheet: timesheet.data ?? null,
+		suggestions: suggestions.data ?? []
 	};
 };
 
 export const actions: Actions = {
+	acceptSuggestion: async (event) => {
+		const form = await event.request.formData();
+		const minutes = Number(formString(form, 'minutes'));
+		const { error: problem, response } = await api(event).POST(
+			'/api/v1/time-suggestions/{id}/accept',
+			{
+				params: { path: { id: formString(form, 'id') } },
+				body: {
+					workTypeId: formString(form, 'workTypeId'),
+					minutes: Number.isFinite(minutes) && minutes > 0 ? minutes : null
+				}
+			}
+		);
+		if (response.status !== 201) {
+			return fail(response.status, { suggestion: problemMessage(problem, 'Could not log it.') });
+		}
+		return { saved: true };
+	},
+	dismissSuggestion: async (event) => {
+		const form = await event.request.formData();
+		await api(event).POST('/api/v1/time-suggestions/{id}/dismiss', {
+			params: { path: { id: formString(form, 'id') } }
+		});
+		return { saved: true };
+	},
 	submitTimesheet: async (event) => {
 		const form = await event.request.formData();
 		const { error: problem, response } = await api(event).POST('/api/v1/timesheets/submit', {

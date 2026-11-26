@@ -62,6 +62,7 @@ pub mod search_routes;
 pub mod security_routes;
 pub mod session;
 pub mod sso_routes;
+pub mod suggestion_routes;
 pub mod team_routes;
 mod template_routes;
 mod timesheet_routes;

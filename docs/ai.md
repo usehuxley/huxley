@@ -65,6 +65,7 @@ Built-in packs that use these steps:
 - **AI sentiment** judges the tone of client messages for [client health](health.md#sentiment).
 - **AI triage** suggests a queue, priority and needed skills for new tickets, with an accuracy evaluation on labeled samples ([AI triage](servicedesk.md#ai-triage)).
 - **AI ticket insights** keeps a summary, entities and a next step on each ticket ([Ticket insights](servicedesk.md#ticket-insights)).
+- **AI auto-documentation** drafts a resolution note, a knowledge article for review and suggested time when a ticket is resolved ([Auto-documentation](servicedesk.md#auto-documentation)).
 
 ## Embeddings provider
 

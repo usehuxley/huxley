@@ -69,6 +69,8 @@ const ICONS: Record<string, typeof Globe> = {
 	'core.dispatch.recommend': ListChecks,
 	'core.workforce.insights': ListChecks,
 	'core.ticket.insight': ListChecks,
+	'core.kb.draft': ListChecks,
+	'core.time.suggest': ListChecks,
 	'core.asset.sync': Boxes,
 	'core.asset.set_warranty': Boxes,
 	'core.ticket.create': TicketPlus,

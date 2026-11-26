@@ -1,0 +1,9 @@
+apiVersion: usehuxley.io/v1
+kind: Pack
+key: huxley/ai-auto-documentation
+name: AI auto-documentation
+version: 1.0.0
+publisher: Huxley
+description: When a ticket is resolved, drafts a resolution note on it, a knowledge article (into review) when the fix is worth sharing, and a suggested time entry for whoever resolved it without logging time.
+contents:
+  workflows: [document-resolution]

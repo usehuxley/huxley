@@ -250,6 +250,8 @@ impl Engine {
             Step::DispatchRecommend(_) => self.recommend_assignees(org_id, input).await.into(),
             Step::WorkforceInsights(_) => self.skill_gaps(org_id, input).await.into(),
             Step::TicketInsight(_) => self.ticket_insight(org_id, input).await.into(),
+            Step::KbDraft(_) => self.kb_draft(org_id, input).await.into(),
+            Step::TimeSuggest(_) => self.time_suggest(org_id, input).await.into(),
             Step::AssetSync(_) => self.sync_assets(org_id, input).await.into(),
             Step::AssetWarranty(_) => self.set_warranty(org_id, input).await.into(),
             Step::MailFetch(_)

@@ -465,6 +465,36 @@ export const STEPS: StepSpec[] = [
 		]
 	},
 	{
+		type: 'core.kb.draft',
+		label: 'Draft a knowledge article',
+		description:
+			'Draft an article (tagged ai-draft) and submit it for review, linked to a ticket if you like.',
+		group: 'Actions',
+		module: 'knowledge',
+		template: { with: { title: '', body: '', ticket_id: '{{ trigger.subject_id }}' } },
+		fields: [
+			{ path: 'with.title', label: 'Title', kind: 'expression' },
+			{ path: 'with.body', label: 'Body (Markdown)', kind: 'expression' },
+			{ path: 'with.ticket_id', label: 'Ticket', kind: 'expression' },
+			{ path: 'with.submit', label: 'Submit for review', kind: 'boolean' }
+		]
+	},
+	{
+		type: 'core.time.suggest',
+		label: 'Suggest time',
+		description:
+			'Suggest a time entry to whoever worked a ticket (unless they logged time on it); they log or dismiss it from My time.',
+		group: 'Actions',
+		module: 'servicedesk',
+		template: { with: { ticket_id: '{{ trigger.subject_id }}', minutes: 15 } },
+		fields: [
+			{ path: 'with.ticket_id', label: 'Ticket', kind: 'expression' },
+			{ path: 'with.minutes', label: 'Minutes', kind: 'expression' },
+			{ path: 'with.notes', label: 'Notes', kind: 'expression' },
+			{ path: 'with.user_id', label: 'Person', kind: 'expression', hint: 'Default: the assignee' }
+		]
+	},
+	{
 		type: 'core.ticket.insight',
 		label: 'Record ticket insight',
 		description:

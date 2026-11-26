@@ -428,6 +428,13 @@ pub enum Step {
     /// `servicedesk` module).
     #[serde(rename = "core.ticket.insight")]
     TicketInsight(TicketInsightStep),
+    /// Draft a knowledge article, into review (the `knowledge` module).
+    #[serde(rename = "core.kb.draft")]
+    KbDraft(KbDraftStep),
+    /// Suggest a time entry for whoever worked a ticket (the `servicedesk`
+    /// module).
+    #[serde(rename = "core.time.suggest")]
+    TimeSuggest(TimeSuggestStep),
     /// Run a dataset → asset mapping rule (the `cmdb` module).
     #[serde(rename = "core.asset.sync")]
     AssetSync(AssetSyncStep),
@@ -799,6 +806,16 @@ step!(TicketInsightStep {
     pub insight: TicketInsight,
 });
 
+step!(KbDraftStep {
+    #[serde(rename = "with")]
+    pub draft: KbDraft,
+});
+
+step!(TimeSuggestStep {
+    #[serde(rename = "with")]
+    pub suggest: TimeSuggest,
+});
+
 step!(AssetSyncStep {
     #[serde(rename = "with")]
     pub sync: AssetSync,
@@ -888,6 +905,8 @@ impl Step {
             DispatchRecommend,
             WorkforceInsights,
             TicketInsight,
+            KbDraft,
+            TimeSuggest,
             AssetSync,
             AssetWarranty,
             TicketEmailReply,
@@ -948,6 +967,8 @@ impl Step {
             Self::DispatchRecommend(_) => "core.dispatch.recommend",
             Self::WorkforceInsights(_) => "core.workforce.insights",
             Self::TicketInsight(_) => "core.ticket.insight",
+            Self::KbDraft(_) => "core.kb.draft",
+            Self::TimeSuggest(_) => "core.time.suggest",
             Self::AssetSync(_) => "core.asset.sync",
             Self::AssetWarranty(_) => "core.asset.set_warranty",
             Self::TicketCreate(_) => "core.ticket.create",
@@ -1523,6 +1544,39 @@ pub struct TicketInsight {
     pub entities: Option<Value>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub next_step: Option<Value>,
+}
+
+/// A knowledge article to draft (`core.kb.draft`): its `title` and `body`
+/// (Markdown), at `org_id` (default the run's organization), tagged
+/// `ai-draft`, submitted for review unless `submit` is false, and linked
+/// to `ticket_id` if given. Output: `{ article_id, status }`.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct KbDraft {
+    pub title: Value,
+    pub body: Value,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub org_id: Option<Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ticket_id: Option<Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub submit: Option<Value>,
+}
+
+/// A time entry to suggest (`core.time.suggest`): `minutes` on `ticket_id`
+/// for `user_id` (default the ticket's assignee) with `notes`, unless they
+/// logged time on it already or a suggestion is waiting. They accept it
+/// (a real entry) or dismiss it from My time. Output: `{ suggestion }`
+/// (null: skipped).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct TimeSuggest {
+    pub ticket_id: Value,
+    pub minutes: Value,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub notes: Option<Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub user_id: Option<Value>,
 }
 
 /// Mapping rules to run (`core.asset.sync`): a dataset's rows become
