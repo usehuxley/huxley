@@ -79,6 +79,9 @@ permissions! {
     CRM_MANAGE = "crm:manage", Org, "Create and change contacts and sites, and edit company details";
     TICKET_READ = "ticket:read", Org, "View tickets, their notes and activity";
     TICKET_WRITE = "ticket:write", Org, "Create and work tickets: change them, add notes, change status, assign";
+    PROJECT_READ = "project:read", Org, "View projects, their phases, milestones, tasks and budget";
+    PROJECT_WRITE = "project:write", Org, "Work projects: add tasks and mark milestones reached";
+    PROJECT_MANAGE = "project:manage", Org, "Create and change projects, their budgets and templates";
     SERVICEDESK_CONFIGURE = "servicedesk:configure", Instance, "Set up service queues, SLA policies and mailboxes";
     MAILBOX_INGEST = "mailbox:ingest", Instance, "Post email to service desk mailboxes (for a mail server's forwarding)";
     WORKFORCE_READ = "workforce:read", Instance, "See people's skills, certifications and availability";

@@ -18,6 +18,8 @@ pub mod my_work;
 pub mod portal;
 pub mod presence;
 pub mod problems;
+pub mod project_templates;
+pub mod projects;
 pub mod queues;
 pub mod responses;
 pub mod sla;
