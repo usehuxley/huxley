@@ -99,19 +99,23 @@ async fn call(
     )
 }
 
-#[tokio::test]
-async fn numbers_cover_only_what_you_can_read() {
-    let Some(db) = isolated("analytics_api").await else {
-        return;
-    };
-    let pools = db.pools.clone();
+fn app_for(pools: &TestPools) -> axum::Router {
     let crypto = || Crypto::new(pools.app.clone(), huxley_crypto::testing::key_ring());
     let auth = AuthService::new(pools.app.clone(), AuthConfig::default(), crypto());
     let config = ApiConfig {
         login_attempts_per_minute: 1000,
         ..ApiConfig::default()
     };
-    let app = router(AppState::new(pools.app.clone(), auth, crypto(), config));
+    router(AppState::new(pools.app.clone(), auth, crypto(), config))
+}
+
+#[tokio::test]
+async fn numbers_cover_only_what_you_can_read() {
+    let Some(db) = isolated("analytics_api").await else {
+        return;
+    };
+    let pools = db.pools.clone();
+    let app = app_for(&pools);
     let root = ensure_root(&pools).await;
     let ctx = RequestContext::system(Via::System);
     let mut tx = begin_scoped(&pools.app, &OrgScope::System).await.unwrap();
@@ -200,5 +204,156 @@ async fn numbers_cover_only_what_you_can_read() {
     assert_eq!(
         problem["errors"][0]["pointer"], "/measures/0/field",
         "{problem}"
+    );
+}
+
+#[tokio::test]
+async fn dashboards_are_prebuilt_shared_or_personal() {
+    let Some(db) = isolated("dashboards_api").await else {
+        return;
+    };
+    let pools = db.pools.clone();
+    let app = app_for(&pools);
+    let root = ensure_root(&pools).await;
+    let acme = org(&pools, root, huxley_orgs::OrgKind::Client, "Acme").await;
+    let owner = login(&app, &user(&pools, None).await.1).await;
+    let reader = login(&app, &user(&pools, Some(("read_only", acme))).await.1).await;
+    let widget = json!({ "id": "n", "title": "Runs", "viz": "number", "width": 3,
+                         "spec": { "source": "runs", "measures": [{ "fn": "count" }] } });
+
+    let (_, all) = call(&app, &reader, "GET", "/api/v1/dashboards", Value::Null).await;
+    let builtin: Vec<&str> = all
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|d| d["builtin"] == true)
+        .map(|d| d["id"].as_str().unwrap())
+        .collect();
+    assert_eq!(
+        builtin,
+        ["service-desk", "sla", "utilization", "clients", "time"]
+    );
+    let (status, sd) = call(
+        &app,
+        &reader,
+        "GET",
+        "/api/v1/dashboards/service-desk",
+        Value::Null,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(sd["widgets"][0]["id"], "open");
+
+    // The owner's personal dashboard is theirs alone; a shared one at Acme is Acme's people's.
+    let create = |org: Uuid, shared: bool, name: &str| json!({ "orgId": org, "shared": shared, "dashboard": { "name": name, "widgets": [widget] } });
+    let (status, mine) = call(
+        &app,
+        &owner,
+        "POST",
+        "/api/v1/dashboards",
+        create(root, false, "Mine"),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED, "{mine}");
+    let (status, shared) = call(
+        &app,
+        &owner,
+        "POST",
+        "/api/v1/dashboards",
+        create(acme, true, "Acme board"),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED, "{shared}");
+    let (_, seen) = call(&app, &reader, "GET", "/api/v1/dashboards", Value::Null).await;
+    let names: Vec<&str> = seen
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|d| d["builtin"] == false)
+        .map(|d| d["name"].as_str().unwrap())
+        .collect();
+    assert_eq!(names, ["Acme board"]);
+    let mine_uri = format!("/api/v1/dashboards/{}", mine["id"].as_str().unwrap());
+    assert_eq!(
+        call(&app, &reader, "GET", &mine_uri, Value::Null).await.0,
+        StatusCode::NOT_FOUND
+    );
+
+    // Readers keep personal dashboards but don't change shared ones.
+    let shared_uri = format!("/api/v1/dashboards/{}", shared["id"].as_str().unwrap());
+    let (status, _) = call(
+        &app,
+        &reader,
+        "PUT",
+        &shared_uri,
+        json!({ "name": "Renamed", "widgets": [] }),
+    )
+    .await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+    let (status, _) = call(
+        &app,
+        &reader,
+        "POST",
+        "/api/v1/dashboards",
+        create(acme, false, "My Acme"),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED);
+    let (status, _) = call(
+        &app,
+        &reader,
+        "POST",
+        "/api/v1/dashboards",
+        create(acme, true, "Not allowed"),
+    )
+    .await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+
+    edits_and_refusals(&app, &owner, &shared_uri, &widget).await;
+}
+
+/// The owner changes a shared dashboard (with the version); stale versions
+/// and bad widgets are refused; it's deleted.
+async fn edits_and_refusals(app: &axum::Router, owner: &str, shared_uri: &str, widget: &Value) {
+    // The owner changes the shared one (with the version), and bad widgets are refused.
+    let (status, renamed) = call(
+        app,
+        owner,
+        "PUT",
+        shared_uri,
+        json!({ "name": "Acme overview", "widgets": [widget], "version": 1 }),
+    )
+    .await;
+    assert_eq!(
+        (status, &renamed["version"]),
+        (StatusCode::OK, &json!(2)),
+        "{renamed}"
+    );
+    let (status, _) = call(
+        app,
+        owner,
+        "PUT",
+        shared_uri,
+        json!({ "name": "Stale", "widgets": [], "version": 1 }),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CONFLICT);
+    let pie = json!({ "id": "p", "title": "Pie", "viz": "pie", "spec": { "source": "runs", "measures": [{ "fn": "count" }] } });
+    let (status, problem) = call(
+        app,
+        owner,
+        "PUT",
+        shared_uri,
+        json!({ "name": "Bad", "widgets": [pie] }),
+    )
+    .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+    assert_eq!(
+        problem["errors"][0]["pointer"], "/widgets/0/viz",
+        "{problem}"
+    );
+    assert_eq!(
+        call(app, owner, "DELETE", shared_uri, Value::Null).await.0,
+        StatusCode::NO_CONTENT
     );
 }

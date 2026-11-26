@@ -58,3 +58,20 @@ The answer has `columns` (key, label, kind) and `rows` (arrays in column order).
 - A query gets 5 seconds. A slower one fails with **That took too long**: narrow the time range, group by less, or add a filter.
 - Answers are reused for a minute, per access level and spec.
 - Set `HUXLEY_DATABASE__READ_URL` to send these queries to a read replica.
+
+## Dashboards
+
+**Dashboards** in the staff app show widgets built on these sources: a number, a table, bars, a line, an area, or a donut.
+
+- **Prebuilt:**
+  - **Service desk overview**
+  - **SLA performance**
+  - **Technician utilization**
+  - **Client overview**
+  - **Time and utilization**
+
+  They're read-only: **Copy to change it** makes a personal copy.
+- **Shared** dashboards live at an organization. People with `dashboard:read` there see them, and `dashboard:manage` changes them. **Personal** dashboards are yours alone; `dashboard:read` is enough to keep them.
+- **Range and organization:** pick a range (it's applied to each widget's source time field, unless the widget ignores the dashboard's range) and an organization (that client and those below it). Everyone sees the numbers their own access allows, so the same dashboard can show different numbers to different people.
+- **Building a widget:** pick the data, a measure ("how many", "total of", "average of"…), a grouping (with a time bucket for dates), an optional split, and conditions. Charts can switch to a table of the same numbers.
+- **API:** `GET`/`POST /api/v1/dashboards`; `GET`/`PUT`/`DELETE /api/v1/dashboards/{id}` (a uuid, or a prebuilt dashboard's key such as `service-desk`). Widgets store query specs, never SQL.

@@ -4,6 +4,7 @@
 //! cached briefly.
 
 pub mod catalog;
+pub mod dashboards;
 pub mod query;
 
 use std::collections::HashMap;

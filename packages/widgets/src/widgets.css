@@ -1,0 +1,43 @@
+/*
+ * Chart colors (the data-viz reference palette, validated on Huxley's
+ * surfaces: light #ffffff, dark #15181d). Series take slots in this fixed
+ * order, never cycled; a ninth series folds into "Other". Three light slots
+ * are under 3:1 against white, so every chart has a legend and a table view.
+ */
+.hx-viz {
+	--viz-1: #2a78d6;
+	--viz-2: #eb6834;
+	--viz-3: #1baf7a;
+	--viz-4: #eda100;
+	--viz-5: #e87ba4;
+	--viz-6: #008300;
+	--viz-7: #6250d6;
+	--viz-8: #e34948;
+	--viz-other: #9aa1ab;
+	--viz-grid: var(--color-border);
+	--viz-gap: var(--color-surface);
+}
+@media (prefers-color-scheme: dark) {
+	:root:where(:not([data-theme='light'])) .hx-viz {
+		--viz-1: #3987e5;
+		--viz-2: #d95926;
+		--viz-3: #199e70;
+		--viz-4: #c98500;
+		--viz-5: #d55181;
+		--viz-6: #0ca30c;
+		--viz-7: #9085e9;
+		--viz-8: #e66767;
+		--viz-other: #6b7280;
+	}
+}
+:root[data-theme='dark'] .hx-viz {
+	--viz-1: #3987e5;
+	--viz-2: #d95926;
+	--viz-3: #199e70;
+	--viz-4: #c98500;
+	--viz-5: #d55181;
+	--viz-6: #0ca30c;
+	--viz-7: #9085e9;
+	--viz-8: #e66767;
+	--viz-other: #6b7280;
+}
