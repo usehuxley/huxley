@@ -244,4 +244,33 @@ test.describe('assets', () => {
 		await expect(page.getByTestId('asset-sync')).toContainText(`rmm: a-${stamp}`);
 		await expect(page.getByLabel('Details')).toContainText('rmm');
 	});
+
+	test('a purchase date and a warranty are kept, and ending warranties found', async ({ page }) => {
+		const stamp = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+		const client = await setUp(stamp);
+		const soon = new Date(Date.now() + 20 * 86_400_000).toISOString().slice(0, 10);
+		await signIn(page);
+		await page.goto(`/assets/new?org=${client}`);
+		await page.getByLabel('Name', { exact: true }).fill(`Laptop ${stamp}`);
+		await page.getByLabel('Purchased on').fill('2025-03-01');
+		await page.getByRole('button', { name: 'Add asset' }).click();
+		await expect(page.getByRole('heading', { level: 1 })).toHaveText(`Laptop ${stamp}`);
+		await expect(page.getByLabel('Details')).toContainText('2025-03-01');
+
+		const warranties = page.getByRole('list', { name: 'Warranties' });
+		await page.getByLabel('Provider').fill('Dell');
+		await page.getByLabel('Reference').fill(`SVC-${stamp}`);
+		await page.getByLabel('Ends', { exact: true }).fill(soon);
+		await page.getByRole('button', { name: 'Add warranty' }).click();
+		await expect(warranties).toContainText('Manufacturer · Dell');
+		await expect(warranties).toContainText('(in 20 days)');
+		await expect(page.getByLabel('Details')).toContainText(soon);
+
+		await page.goto(`/assets?q=Laptop%20${stamp}&warranty=30`);
+		await expect(page.getByRole('table', { name: 'Assets' })).toContainText(`Laptop ${stamp}`);
+		await page.goto(`/assets?q=Laptop%20${stamp}&warranty=30`);
+		await page.getByRole('link', { name: `Laptop ${stamp}` }).click();
+		await page.getByRole('button', { name: `Remove the warranty ending ${soon}` }).click();
+		await expect(page.getByText('None recorded.')).toBeVisible();
+	});
 });

@@ -538,3 +538,72 @@ async fn mappings_turn_dataset_rows_into_assets() {
             .any(|m| m["id"] == id.as_str() && m["lastResult"]["unchanged"] == 2)
     );
 }
+
+#[tokio::test]
+async fn warranties_and_dates_round_trip() {
+    let Some(s) = setup().await else { return };
+    let p = people(&s).await;
+    let ws = type_id(&s, &p.tech, "workstation").await;
+    let name = unique("Warranty laptop");
+    let a = s
+        .ok(&p.tech, "POST", "/api/v1/assets", Some(json!({ "orgId": s.provider, "typeId": ws, "name": name, "purchasedOn": "2025-03-01" })))
+        .await;
+    assert_eq!(a["purchasedOn"], "2025-03-01");
+    let id = a["id"].as_str().unwrap().to_owned();
+    let soon = (time::OffsetDateTime::now_utc() + time::Duration::days(20))
+        .date()
+        .to_string();
+    let uri = format!("/api/v1/assets/{id}/warranties");
+    let (status, _) = s
+        .call(&p.reader, "POST", &uri, Some(json!({ "endsOn": soon })))
+        .await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+    let w = s
+        .ok(
+            &p.tech,
+            "POST",
+            &uri,
+            Some(json!({ "endsOn": soon, "provider": "Dell", "kind": "manufacturer" })),
+        )
+        .await;
+    assert_eq!(w["endsOn"], soon.as_str());
+    let a = s
+        .ok(&p.reader, "GET", &format!("/api/v1/assets/{id}"), None)
+        .await;
+    assert_eq!(a["warrantyEndsOn"], soon.as_str());
+    // Ending soon: found by the filter.
+    let ending = s
+        .ok(
+            &p.reader,
+            "GET",
+            &format!(
+                "/api/v1/assets?warrantyWithinDays=60&q={}",
+                name.replace(' ', "%20")
+            ),
+            None,
+        )
+        .await;
+    assert_eq!(ending["total"], 1);
+    let later = s
+        .ok(
+            &p.reader,
+            "GET",
+            &format!(
+                "/api/v1/assets?warrantyWithinDays=7&q={}",
+                name.replace(' ', "%20")
+            ),
+            None,
+        )
+        .await;
+    assert_eq!(later["total"], 0);
+    let wid = w["id"].as_str().unwrap();
+    let (status, _) = s
+        .call(
+            &p.tech,
+            "DELETE",
+            &format!("/api/v1/asset-warranties/{wid}"),
+            None,
+        )
+        .await;
+    assert_eq!(status, StatusCode::NO_CONTENT);
+}

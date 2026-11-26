@@ -239,6 +239,7 @@ impl Engine {
                 .into(),
             Step::KbEmbed(_) => self.embed_articles(org_id, input).await.into(),
             Step::AssetSync(_) => self.sync_assets(input).await.into(),
+            Step::AssetWarranty(_) => self.set_warranty(org_id, input).await.into(),
             Step::MailFetch(_)
             | Step::TicketEmbed(_)
             | Step::TicketFromEmail(_)

@@ -400,6 +400,9 @@ pub enum Step {
     /// Run a dataset → asset mapping rule (the `cmdb` module).
     #[serde(rename = "core.asset.sync")]
     AssetSync(AssetSyncStep),
+    /// Record a warranty a lookup found (the `cmdb` module).
+    #[serde(rename = "core.asset.set_warranty")]
+    AssetWarranty(AssetWarrantyStep),
     /// Email a public note to the ticket's requester (the `servicedesk`
     /// module).
     #[serde(rename = "core.ticket.email_reply")]
@@ -718,6 +721,11 @@ step!(AssetSyncStep {
     pub sync: AssetSync,
 });
 
+step!(AssetWarrantyStep {
+    #[serde(rename = "with")]
+    pub warranty: AssetWarranty,
+});
+
 step!(AiPromptStep {
     #[serde(rename = "with")]
     pub ai: AiPrompt,
@@ -788,6 +796,7 @@ impl Step {
             TicketEmbed,
             KbEmbed,
             AssetSync,
+            AssetWarranty,
             TicketEmailReply,
             TicketCreate,
             TicketGet,
@@ -837,6 +846,7 @@ impl Step {
             Self::TicketEmbed(_) => "core.ticket.embed",
             Self::KbEmbed(_) => "core.kb.embed",
             Self::AssetSync(_) => "core.asset.sync",
+            Self::AssetWarranty(_) => "core.asset.set_warranty",
             Self::TicketCreate(_) => "core.ticket.create",
             Self::TicketGet(_) => "core.ticket.get",
             Self::TicketFind(_) => "core.ticket.find",
@@ -1255,6 +1265,29 @@ pub struct KbEmbed {
 #[serde(deny_unknown_fields)]
 pub struct AssetSync {
     pub mapping_id: Value,
+}
+
+/// A warranty to record (`core.asset.set_warranty`) for an asset at the
+/// run's organization or below, as found by a lookup (`source`, e.g.
+/// `dell`): added, or updated if the lookup recorded one with the same
+/// `reference`. Dates are `YYYY-MM-DD`; `kind` is `manufacturer` (the
+/// default), `extended`, `support` or `other`. Output: the warranty.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct AssetWarranty {
+    pub asset_id: Value,
+    pub source: Value,
+    pub ends_on: Value,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub starts_on: Option<Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub kind: Option<Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub provider: Option<Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reference: Option<Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub notes: Option<Value>,
 }
 
 /// Contacts to find (`core.contact.find`): by `email`, by `external_id`

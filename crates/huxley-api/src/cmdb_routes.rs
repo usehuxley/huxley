@@ -15,6 +15,7 @@ use huxley_cmdb::mappings::{self, Mapping, MappingInput, SyncResult};
 use huxley_cmdb::relationships::{self, DependencyMap, Impacted, Relationship, RelationshipInput};
 use huxley_cmdb::tickets::{self, AssetTicket, TicketAsset};
 use huxley_cmdb::types::{self, AssetType, AssetTypeInput};
+use huxley_cmdb::warranties::{self, Warranty, WarrantyInput};
 use huxley_cmdb::{CmdbError, MODULE};
 use huxley_db::{OrgScope, begin_scoped};
 use serde::{Deserialize, Serialize};
@@ -53,6 +54,14 @@ pub fn routes() -> Router<AppState> {
             put(update_asset_mapping).delete(delete_asset_mapping),
         )
         .route("/asset-mappings/{id}/run", post(run_asset_mapping))
+        .route(
+            "/assets/{id}/warranties",
+            get(list_warranties).post(add_warranty),
+        )
+        .route(
+            "/asset-warranties/{id}",
+            put(update_warranty).delete(delete_warranty),
+        )
         .route("/assets/{id}/tickets", get(asset_tickets))
         .route(
             "/tickets/{ticket_id}/assets",
@@ -243,6 +252,8 @@ pub struct AssetParams {
     /// Leave out retired and disposed assets.
     #[serde(default)]
     pub in_use: bool,
+    /// Only assets whose warranty ends within this many days (or has ended).
+    pub warranty_within_days: Option<i32>,
     /// Default 100, at most 500.
     pub limit: Option<i64>,
     pub offset: Option<i64>,
@@ -272,6 +283,7 @@ pub async fn list_assets(
         type_id: params.type_id,
         status: params.status,
         in_use: params.in_use,
+        warranty_within_days: params.warranty_within_days,
         limit: params.limit.unwrap_or(100),
         offset: params.offset.unwrap_or(0),
     };
@@ -727,4 +739,82 @@ pub async fn run_asset_mapping(
         tx.commit().await.map_err(db_err)?;
     }
     Ok(Json(result))
+}
+
+// ---- Warranties ----
+
+/// An asset's warranties, latest ending first.
+#[utoipa::path(get, path = "/api/v1/assets/{id}/warranties", tag = "cmdb", params(("id" = Uuid, Path)),
+    responses((status = 200, body = Vec<Warranty>)))]
+pub async fn list_warranties(
+    State(state): State<AppState>,
+    authed: Authed,
+    Path(id): Path<Uuid>,
+) -> ApiResult<Json<Vec<Warranty>>> {
+    let scope = asset_access(&state, &authed, id, permissions::ASSET_READ).await?;
+    Ok(Json(
+        scoped(&state, &scope, async |tx| {
+            warranties::for_asset(tx, id).await
+        })
+        .await?,
+    ))
+}
+
+/// Adds a warranty to an asset (`asset:write`).
+#[utoipa::path(post, path = "/api/v1/assets/{id}/warranties", tag = "cmdb", params(("id" = Uuid, Path)),
+    request_body = WarrantyInput,
+    responses((status = 201, body = Warranty), (status = 422, body = ApiError, content_type = "application/problem+json")))]
+pub async fn add_warranty(
+    State(state): State<AppState>,
+    authed: Authed,
+    Path(id): Path<Uuid>,
+    Json(body): Json<WarrantyInput>,
+) -> ApiResult<(StatusCode, Json<Warranty>)> {
+    let scope = asset_access(&state, &authed, id, permissions::ASSET_WRITE).await?;
+    let ctx = authed.user.ctx.clone();
+    let w = scoped(&state, &scope, async |tx| {
+        warranties::add(tx, &ctx, id, &body).await
+    })
+    .await?;
+    Ok((StatusCode::CREATED, Json(w)))
+}
+
+/// Changes a warranty (`asset:write`). A new end date re-arms its
+/// expiry announcements.
+#[utoipa::path(put, path = "/api/v1/asset-warranties/{id}", tag = "cmdb", params(("id" = Uuid, Path)),
+    request_body = WarrantyInput,
+    responses((status = 200, body = Warranty), (status = 422, body = ApiError, content_type = "application/problem+json")))]
+pub async fn update_warranty(
+    State(state): State<AppState>,
+    authed: Authed,
+    Path(id): Path<Uuid>,
+    Json(body): Json<WarrantyInput>,
+) -> ApiResult<Json<Warranty>> {
+    let org = owner(&state, "cmdb_warranties", id).await?;
+    let scope = allow(&state, &authed, permissions::ASSET_WRITE, org).await?;
+    let ctx = authed.user.ctx.clone();
+    Ok(Json(
+        scoped(&state, &scope, async |tx| {
+            warranties::update(tx, &ctx, id, &body).await
+        })
+        .await?,
+    ))
+}
+
+/// Removes a warranty (`asset:write`).
+#[utoipa::path(delete, path = "/api/v1/asset-warranties/{id}", tag = "cmdb", params(("id" = Uuid, Path)),
+    responses((status = 204)))]
+pub async fn delete_warranty(
+    State(state): State<AppState>,
+    authed: Authed,
+    Path(id): Path<Uuid>,
+) -> ApiResult<StatusCode> {
+    let org = owner(&state, "cmdb_warranties", id).await?;
+    let scope = allow(&state, &authed, permissions::ASSET_WRITE, org).await?;
+    let ctx = authed.user.ctx.clone();
+    scoped(&state, &scope, async |tx| {
+        warranties::delete(tx, &ctx, id).await
+    })
+    .await?;
+    Ok(StatusCode::NO_CONTENT)
 }

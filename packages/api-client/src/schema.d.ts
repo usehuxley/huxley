@@ -251,6 +251,27 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
+	'/api/v1/asset-warranties/{id}': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		/**
+		 * Changes a warranty (`asset:write`). A new end date re-arms its
+		 *     expiry announcements.
+		 */
+		put: operations['update_warranty'];
+		post?: never;
+		/** Removes a warranty (`asset:write`). */
+		delete: operations['delete_warranty'];
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
 	'/api/v1/assets': {
 		parameters: {
 			query?: never;
@@ -362,6 +383,24 @@ export interface paths {
 		get: operations['asset_tickets'];
 		put?: never;
 		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/assets/{id}/warranties': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** An asset's warranties, latest ending first. */
+		get: operations['list_warranties'];
+		put?: never;
+		/** Adds a warranty to an asset (`asset:write`). */
+		post: operations['add_warranty'];
 		delete?: never;
 		options?: never;
 		head?: never;
@@ -9491,6 +9530,36 @@ export interface components {
 			/** @description A JSON pointer into the spec, e.g. `/paths/~1users/get`. */
 			pointer: string;
 		};
+		Warranty: {
+			/** Format: uuid */
+			assetId: string;
+			/** Format: date */
+			endsOn: string;
+			/** Format: uuid */
+			id: string;
+			kind: string;
+			notes: string;
+			provider: string;
+			reference: string;
+			/** @description `manual`, or the lookup that recorded it. */
+			source: string;
+			/** Format: date */
+			startsOn?: string | null;
+			/** Format: date-time */
+			updatedAt: string;
+		};
+		WarrantyInput: {
+			/** Format: date */
+			endsOn: string;
+			/** @description `manufacturer` (the default), `extended`, `support` or `other`. */
+			kind?: string | null;
+			notes?: string | null;
+			provider?: string | null;
+			/** @description A contract number, service tag or order reference. */
+			reference?: string | null;
+			/** Format: date */
+			startsOn?: string | null;
+		};
 		WorkType: {
 			archived: boolean;
 			/** @description Entries of this type are billable unless said otherwise. */
@@ -10139,6 +10208,58 @@ export interface operations {
 			};
 		};
 	};
+	update_warranty: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['WarrantyInput'];
+			};
+		};
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['Warranty'];
+				};
+			};
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	delete_warranty: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			204: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content?: never;
+			};
+		};
+	};
 	list_assets: {
 		parameters: {
 			query?: {
@@ -10149,6 +10270,8 @@ export interface operations {
 				status?: string | null;
 				/** @description Leave out retired and disposed assets. */
 				inUse?: boolean;
+				/** @description Only assets whose warranty ends within this many days (or has ended). */
+				warrantyWithinDays?: number | null;
 				/** @description Default 100, at most 500. */
 				limit?: number | null;
 				offset?: number | null;
@@ -10385,6 +10508,60 @@ export interface operations {
 				};
 				content: {
 					'application/json': components['schemas']['AssetTicket'][];
+				};
+			};
+		};
+	};
+	list_warranties: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['Warranty'][];
+				};
+			};
+		};
+	};
+	add_warranty: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['WarrantyInput'];
+			};
+		};
+		responses: {
+			201: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['Warranty'];
+				};
+			};
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
 				};
 			};
 		};
