@@ -1151,6 +1151,45 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
+	'/api/v1/catalog/products': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** Products you can see, by name (at most 1000). */
+		get: operations['list_catalog_products'];
+		put?: never;
+		/** Adds a product, service or bundle. */
+		post: operations['create_catalog_product'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/catalog/products/{id}': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get: operations['get_catalog_product'];
+		/**
+		 * Changes a product (send the version you read). Retire one with
+		 *     `active: false`.
+		 */
+		put: operations['update_catalog_product'];
+		post?: never;
+		/** Deletes a product no bundle uses. */
+		delete: operations['delete_catalog_product'];
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
 	'/api/v1/companies': {
 		parameters: {
 			query?: never;
@@ -6049,6 +6088,26 @@ export interface components {
 			 */
 			version?: number | null;
 		};
+		/**
+		 * @description How often it's charged.
+		 * @enum {string}
+		 */
+		CatalogBilling: 'one_time' | 'monthly' | 'quarterly' | 'annual';
+		/** @description One of a bundle's components. */
+		CatalogComponent: {
+			name: string;
+			price?: string | null;
+			/** Format: uuid */
+			productId: string;
+			quantity: string;
+			sku: string;
+			unit: string;
+		};
+		CatalogComponentInput: {
+			/** Format: uuid */
+			productId: string;
+			quantity: string;
+		};
 		/** @description A built-in integration as the catalog shows it. */
 		CatalogEntry: {
 			/** @description How many actions it has. */
@@ -6058,6 +6117,66 @@ export interface components {
 			key: string;
 			name: string;
 			summary: string;
+		};
+		/** @enum {string} */
+		CatalogKind: 'product' | 'service' | 'bundle';
+		CatalogProduct: {
+			/** @description Retired products stay on what uses them, but aren't offered. */
+			active: boolean;
+			billing: components['schemas']['CatalogBilling'];
+			category?: string | null;
+			/** @description A bundle's components. */
+			components: components['schemas']['CatalogComponent'][];
+			/** @description A bundle's components' prices × quantities, if they all have one. */
+			componentsPrice?: string | null;
+			cost?: string | null;
+			/** Format: date-time */
+			createdAt: string;
+			/** @description ISO 4217, e.g. `USD`. */
+			currency: string;
+			description: string;
+			/** Format: uuid */
+			id: string;
+			kind: components['schemas']['CatalogKind'];
+			manufacturerPart?: string | null;
+			name: string;
+			/** Format: uuid */
+			orgId: string;
+			price?: string | null;
+			sku: string;
+			taxable: boolean;
+			/** @description What one is: each, hour, month, user, device… */
+			unit: string;
+			/** Format: date-time */
+			updatedAt: string;
+			vendor?: string | null;
+			/** Format: int32 */
+			version: number;
+		};
+		CatalogProductInput: {
+			active?: boolean;
+			billing?: components['schemas']['CatalogBilling'] | null;
+			category?: string | null;
+			/** @description A bundle's components (bundles only). */
+			components?: components['schemas']['CatalogComponentInput'][];
+			cost?: string | null;
+			/** @description Default `USD`. */
+			currency?: string | null;
+			description?: string;
+			kind: components['schemas']['CatalogKind'];
+			manufacturerPart?: string | null;
+			name: string;
+			price?: string | null;
+			sku: string;
+			taxable?: boolean;
+			/** @description Default `each`. */
+			unit?: string | null;
+			vendor?: string | null;
+			/**
+			 * Format: int32
+			 * @description The version you read (changes only).
+			 */
+			version?: number | null;
 		};
 		/** @description The first half of a WebAuthn ceremony. */
 		CeremonyView: {
@@ -6454,6 +6573,11 @@ export interface components {
 			name: string;
 			/** Format: uuid */
 			parentId: string;
+		};
+		CreateProductRequest: {
+			/** Format: uuid */
+			orgId: string;
+			product: components['schemas']['CatalogProductInput'];
 		};
 		CreateQueue: components['schemas']['QueueInput'] & {
 			/**
@@ -12135,6 +12259,171 @@ export interface operations {
 					[name: string]: unknown;
 				};
 				content?: never;
+			};
+		};
+	};
+	list_catalog_products: {
+		parameters: {
+			query?: {
+				/** @description Words in the name, or the start of the SKU. */
+				q?: string;
+				kind?: components['schemas']['CatalogKind'];
+				category?: string;
+				/** @description Only active (or only retired) products. */
+				active?: boolean;
+				orgId?: string;
+			};
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['CatalogProduct'][];
+				};
+			};
+		};
+	};
+	create_catalog_product: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['CreateProductRequest'];
+			};
+		};
+		responses: {
+			201: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['CatalogProduct'];
+				};
+			};
+			/** @description The SKU is taken there */
+			409: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	get_catalog_product: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['CatalogProduct'];
+				};
+			};
+			404: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	update_catalog_product: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['CatalogProductInput'];
+			};
+		};
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['CatalogProduct'];
+				};
+			};
+			409: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	delete_catalog_product: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			204: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content?: never;
+			};
+			/** @description A bundle uses it */
+			409: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
 			};
 		};
 	};

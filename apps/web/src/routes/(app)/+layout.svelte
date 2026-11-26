@@ -23,7 +23,8 @@
 		Sparkles,
 		Ticket,
 		UsersRound,
-		Workflow
+		Workflow,
+		Package
 	} from '@lucide/svelte';
 	import { AppShell, Button, CommandPalette, type Command, type NavItem } from '@usehuxley/ui';
 	import OrgSwitcher from '#lib/orgs/OrgSwitcher.svelte';
@@ -84,6 +85,10 @@
 		data.user.grantedPermissions.includes('kb:read')
 			? [{ href: '/knowledge', label: 'Knowledge', icon: BookOpen }]
 			: [{ href: '/knowledge', label: 'Knowledge', icon: BookOpen, soon: true }]),
+		...(data.user.activeModules.includes('contracts') &&
+		data.user.grantedPermissions.includes('catalog:read')
+			? [{ href: '/catalog', label: 'Catalog', icon: Package }]
+			: []),
 		{ href: '/reports', label: 'Reports', icon: ChartColumn, soon: true },
 		...(canSeeSettings ? [{ href: '/settings', label: 'Settings', icon: Settings }] : [])
 	]);
