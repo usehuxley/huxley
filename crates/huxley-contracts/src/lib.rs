@@ -10,6 +10,7 @@
 pub mod agreements;
 pub mod catalog;
 pub mod coverage;
+pub mod renewals;
 
 /// Dates as `YYYY-MM-DD` in JSON.
 pub(crate) mod date {

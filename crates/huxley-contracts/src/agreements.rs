@@ -127,6 +127,9 @@ pub struct Agreement {
     pub block_minutes: Option<i32>,
     /// Billable minutes round up to this.
     pub billing_increment: i32,
+    /// The SLA policy its client's new tickets get.
+    pub sla_policy_id: Option<Uuid>,
+    pub sla_policy_name: Option<String>,
     pub notes: String,
     pub version: i32,
     #[serde(with = "time::serde::rfc3339")]
@@ -218,6 +221,9 @@ pub struct AgreementInput {
     pub block_minutes: Option<i32>,
     #[serde(default = "one")]
     pub billing_increment: i32,
+    /// The SLA policy its client's new tickets get, while it's in force.
+    #[serde(default)]
+    pub sla_policy_id: Option<Uuid>,
     #[serde(default)]
     pub notes: String,
     #[serde(default)]
@@ -231,8 +237,10 @@ pub struct AgreementInput {
 
 const SELECT: &str = "SELECT a.id, a.org_id, o.name AS org_name, a.name, a.kind, a.status, a.starts_on, \
     a.ends_on, a.auto_renew, a.renewal_notice_days, a.currency, a.priority, a.covers_all_work_types, \
-    a.monthly_minutes, a.block_minutes, a.billing_increment, a.notes, a.version, a.created_at, a.updated_at \
-    FROM contract_agreements a JOIN organizations o ON o.id = a.org_id";
+    a.monthly_minutes, a.block_minutes, a.billing_increment, a.sla_policy_id, p.name AS sla_policy_name, \
+    a.notes, a.version, a.created_at, a.updated_at \
+    FROM contract_agreements a JOIN organizations o ON o.id = a.org_id \
+    LEFT JOIN sd_sla_policies p ON p.id = a.sla_policy_id";
 
 /// Agreements here (RLS), at `org_id` if given, newest term first.
 pub async fn list(
@@ -469,6 +477,17 @@ async fn check_refs(
     currency: &str,
 ) -> ContractsResult<Vec<String>> {
     let bad = ContractsError::invalid;
+    if let Some(policy) = input.sla_policy_id {
+        let usable: bool = sqlx::query_scalar(
+            "SELECT EXISTS (SELECT 1 FROM sd_sla_policies WHERE id = $1 AND archived_at IS NULL)",
+        )
+        .bind(policy)
+        .fetch_one(&mut *conn)
+        .await?;
+        if !usable {
+            return Err(bad("slaPolicyId", "no such SLA policy (or it's archived)"));
+        }
+    }
     let mut work_types: Vec<Uuid> = input.work_type_ids.clone();
     work_types.extend(input.rates.iter().filter_map(|r| r.work_type_id));
     for (i, w) in work_types.iter().enumerate() {
@@ -626,8 +645,8 @@ pub async fn create(
     sqlx::query(
         "INSERT INTO contract_agreements (id, org_id, name, kind, status, starts_on, ends_on, auto_renew, \
             renewal_notice_days, currency, priority, covers_all_work_types, monthly_minutes, block_minutes, \
-            billing_increment, notes, created_by) \
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)",
+            billing_increment, notes, created_by, sla_policy_id) \
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)",
     )
     .bind(id)
     .bind(org_id)
@@ -646,6 +665,7 @@ pub async fn create(
     .bind(input.billing_increment)
     .bind(&input.notes)
     .bind(ctx.actor.id())
+    .bind(input.sla_policy_id)
     .execute(&mut *conn)
     .await?;
     set_details(&mut *conn, id, org_id, input, &c, &descriptions).await?;
@@ -674,7 +694,8 @@ pub async fn update(
         "UPDATE contract_agreements SET name = $2, kind = $3, status = $4, starts_on = $5, ends_on = $6, \
                 auto_renew = $7, renewal_notice_days = $8, currency = $9, priority = $10, \
                 covers_all_work_types = $11, monthly_minutes = $12, block_minutes = $13, \
-                billing_increment = $14, notes = $15, version = version + 1, updated_at = now() \
+                billing_increment = $14, notes = $15, sla_policy_id = $17, version = version + 1, \
+                updated_at = now() \
           WHERE id = $1 AND ($16::integer IS NULL OR version = $16)",
     )
     .bind(id)
@@ -693,6 +714,7 @@ pub async fn update(
     .bind(input.billing_increment)
     .bind(&input.notes)
     .bind(input.version)
+    .bind(input.sla_policy_id)
     .execute(&mut *conn)
     .await?
     .rows_affected();

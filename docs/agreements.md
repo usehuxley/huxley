@@ -20,6 +20,7 @@ An **agreement** (the `contracts` module) records what a client has agreed to: w
 - **Rates:** a default hourly rate, and rates for particular work types.
 - **A billing increment** in minutes. Billable time on each entry rounds up to it.
 - **Recurring lines:** catalog products (from this client's catalog or one above it, in the agreement's currency) or free text. Each has a quantity, a price (empty means the product's price) and a billing cycle. Billing will turn them into invoice lines.
+- **An SLA policy** for the client's new tickets (see [SLA](#sla)).
 - **A priority**, renewal settings and notes.
 
 Drafts can be deleted. Agreements that have been active are cancelled instead, so time billed under them stays explained.
@@ -73,8 +74,18 @@ Changes are audited (`agreement.created`, `.updated`, `.deleted`).
 - `GET /api/v1/agreements/{id}/usage?from=&to=`: the entries that fell under it, with totals (default: this month).
 - `GET /api/v1/tickets/{id}/time-coverage`: each time entry on a ticket, evaluated.
 
-## Coming next
+## SLA
 
-- Binding an SLA policy to an agreement.
-- Renewal events (`contract.renewal_due`).
-- Billing previews from approved timesheets.
+An agreement can name an **SLA policy**. While it's in force, new tickets at its client, and at organizations below, get that policy.
+- **Against assignments:** it applies unless a policy is set on an organization nearer the ticket. On the same organization, the agreement wins.
+- **Which agreement:** when several agreements bind policies, the nearest wins, then the lowest priority number.
+- **Existing tickets** keep the terms they were opened under.
+
+## Renewals
+
+- **Notice:** once per term, when an active agreement is within its **renewal notice** (30 days by default) of its end date, Huxley announces `contract.renewal_due`. The event carries the agreement, its end date, days left and whether it renews automatically. Workflows can use it to remind account managers or open a renewal.
+- **Automatic renewal:** an agreement that **renews automatically** rolls on to a new term of the same length the day after it ends. Its allowances start afresh. Huxley announces `contract.renewed`, and the renewal is audited.
+
+## Billing previews
+
+An agreement's usage can count only time on approved timesheets: pass `approvedOnly=true`, or turn on **Bill only approved time** in the timesheet settings (see [Timesheets](workforce.md#timesheets)).

@@ -5621,6 +5621,12 @@ export interface components {
 			rates: components['schemas']['AgreementRate'][];
 			/** Format: int32 */
 			renewalNoticeDays: number;
+			/**
+			 * Format: uuid
+			 * @description The SLA policy its client's new tickets get.
+			 */
+			slaPolicyId?: string | null;
+			slaPolicyName?: string | null;
 			/** @example 2026-01-01 */
 			startsOn: string;
 			status: components['schemas']['AgreementStatus'];
@@ -5652,6 +5658,11 @@ export interface components {
 			rates?: components['schemas']['AgreementRateInput'][];
 			/** Format: int32 */
 			renewalNoticeDays?: number;
+			/**
+			 * Format: uuid
+			 * @description The SLA policy its client's new tickets get, while it's in force.
+			 */
+			slaPolicyId?: string | null;
 			/** @example 2026-01-01 */
 			startsOn: string;
 			status?: components['schemas']['AgreementStatus'] | null;
@@ -9173,7 +9184,10 @@ export interface components {
 			 * @description Set on this organization (none: it follows the one above).
 			 */
 			policyId?: string | null;
-			/** @description Where the effective policy comes from: `here`, `above` or `default`. */
+			/**
+			 * @description Where the effective policy comes from: `agreement` (an agreement in
+			 *     force binds it), `here`, `above` or `default`.
+			 */
 			source?: string | null;
 		};
 		/**

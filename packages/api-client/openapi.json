@@ -16242,6 +16242,14 @@
 						"type": "integer",
 						"format": "int32"
 					},
+					"slaPolicyId": {
+						"type": ["string", "null"],
+						"format": "uuid",
+						"description": "The SLA policy its client's new tickets get."
+					},
+					"slaPolicyName": {
+						"type": ["string", "null"]
+					},
 					"startsOn": {
 						"type": "string",
 						"example": "2026-01-01"
@@ -16330,6 +16338,11 @@
 					"renewalNoticeDays": {
 						"type": "integer",
 						"format": "int32"
+					},
+					"slaPolicyId": {
+						"type": ["string", "null"],
+						"format": "uuid",
+						"description": "The SLA policy its client's new tickets get, while it's in force."
 					},
 					"startsOn": {
 						"type": "string",
@@ -24856,7 +24869,7 @@
 					},
 					"source": {
 						"type": ["string", "null"],
-						"description": "Where the effective policy comes from: `here`, `above` or `default`."
+						"description": "Where the effective policy comes from: `agreement` (an agreement in\nforce binds it), `here`, `above` or `default`."
 					}
 				}
 			},
