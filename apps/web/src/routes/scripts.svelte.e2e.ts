@@ -3,6 +3,12 @@ import { expect, test, type Browser, type Page } from '@playwright/test';
 const ownerEmail = process.env.E2E_EMAIL;
 const ownerPassword = process.env.E2E_PASSWORD;
 
+/** Waits until the page is interactive: typing before it hydrates is undone
+ * when it does. */
+async function hydrated(page: Page) {
+	await page.locator('html[data-hydrated]').waitFor({ state: 'attached' });
+}
+
 async function signIn(browser: Browser): Promise<Page> {
 	const page = await (await browser.newContext()).newPage();
 	await page.goto('/login');
@@ -10,6 +16,8 @@ async function signIn(browser: Browser): Promise<Page> {
 	await page.getByLabel('Password').fill(ownerPassword!);
 	await page.getByRole('button', { name: 'Sign in', exact: true }).click();
 	await expect(page.getByRole('heading', { level: 1 })).toHaveText('Welcome to Huxley');
+	// Interactive before following links (or they're full page loads).
+	await hydrated(page);
 	return page;
 }
 
@@ -18,12 +26,14 @@ test.describe('scripts', () => {
 
 	test('every saved change is a version', async ({ browser }) => {
 		const page = await signIn(browser);
-		const name = `Greeter ${Date.now().toString(36)}`;
+		const name = `Greeter ${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
 		await page.getByRole('link', { name: 'Scripts' }).click();
+		await hydrated(page);
 		await page.getByLabel('Name').fill(name);
 		await page.getByLabel('Language').selectOption('python');
 		await page.getByRole('button', { name: 'Create' }).click();
 		await expect(page.getByRole('heading', { level: 1 })).toHaveText(name);
+		await hydrated(page);
 		// The parameters show as the form a step will ask.
 		await expect(page.getByLabel('Name *')).toBeVisible();
 
@@ -48,11 +58,15 @@ test.describe('scripts', () => {
 			if (m.text().includes('Content Security Policy')) blocked.push(m.text());
 		});
 		await page.getByRole('link', { name: 'Scripts' }).click();
-		await page.getByLabel('Name').fill(`Pinger ${Date.now().toString(36)}`);
+		await hydrated(page);
+		await page
+			.getByLabel('Name')
+			.fill(`Pinger ${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`);
 		await page.getByLabel('Language').selectOption('pwsh');
 		await page.getByRole('button', { name: 'Create' }).click();
 		const source = page.locator('[data-language="powershell"] .cm-content');
-		await expect(source).toBeVisible();
+		// The editor and the PowerShell mode load on demand.
+		await expect(source).toBeVisible({ timeout: 15_000 });
 		// Highlighted: keywords and variables get their own spans.
 		await expect(source.locator('span').first()).toBeVisible();
 		// The new script's parameter, offered while typing.
@@ -80,7 +94,7 @@ test.describe('scripts', () => {
 	test('an admin enrols a script runner', async ({ browser }) => {
 		const page = await signIn(browser);
 		await page.goto('/settings/runners');
-		const name = `runner-${Date.now().toString(36)}`;
+		const name = `runner-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
 		await page.getByLabel('Runner name').fill(name);
 		await page.getByRole('button', { name: 'Create token' }).click();
 		await expect(page.getByTestId('runner-token')).toContainText('hxr_');
