@@ -516,6 +516,24 @@ export const STEPS: StepSpec[] = [
 		]
 	},
 	{
+		type: 'core.calendar.sync',
+		label: 'Sync calendars',
+		description: "Read people's busy time from Microsoft 365 or their calendar feeds.",
+		group: 'Actions',
+		module: 'workforce',
+		template: {},
+		fields: [{ path: 'with.user_id', label: 'One person (empty: everyone)', kind: 'expression' }]
+	},
+	{
+		type: 'core.calendar.write',
+		label: 'Put an appointment in a calendar',
+		description: "Write an appointment to its person's calendar, or update or remove it.",
+		group: 'Actions',
+		module: 'workforce',
+		template: { with: { appointment_id: '{{ trigger.subject_id }}' } },
+		fields: [{ path: 'with.appointment_id', label: 'Appointment', kind: 'expression' }]
+	},
+	{
 		type: 'core.project.status',
 		label: 'Gather project status',
 		description: 'What happened on a project (or every active one) lately, for a status report.',

@@ -67,6 +67,17 @@ The event names the person, the certification and its expiry date.
 
 Install the **Calendar sync** pack to read calendars every five minutes, from a day back to 60 days ahead. Each person's last sync, or why it failed, shows on the settings page.
 
+**Appointments in people's calendars.** Turn on *Put booked appointments in people's calendars* (the connection's app then needs `Calendars.ReadWrite`), and the Calendar sync pack's *Put appointments in calendars* workflow keeps them in step:
+
+- **Booked:** the event is created in the person's Microsoft 365 calendar, with the ticket's reference and title as its subject, the client as its location, and a link back to the ticket.
+- **Moved:** the same event moves.
+- **Given to someone else:** it leaves the first person's calendar and goes into theirs.
+- **Cancelled:** it's removed. If someone deletes it from their calendar by hand, the next change writes it again.
+
+Huxley's own events aren't counted as busy time on top of the appointments they are.
+
+**Conflicts.** When a sync finds busy or out-of-office time overlapping one of someone's upcoming appointments, it raises `calendar.conflict` once for that clash. A workflow can then tell the dispatcher (payload: `ticketId`, `userId`, `appointmentStartsAt`, `appointmentEndsAt`, `busyStartsAt`, `busyEndsAt`, `busyStatus`).
+
 **What busy time changes:**
 
 - Someone busy at a moment, or out of office, isn't offered for work then. Dispatch skips them, and who-fits ranks them below people who are free. Tentative and working-elsewhere time doesn't block.

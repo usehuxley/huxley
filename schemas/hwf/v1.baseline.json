@@ -182,6 +182,17 @@
       },
       "type": "object"
     },
+    "CalendarWrite": {
+      "additionalProperties": false,
+      "description": "An appointment to write to its person's calendar\n(`core.calendar.write`): `appointment_id`. When writing back is on (and\ntheir calendar is Microsoft 365) the event is created, kept in step when\nthe appointment moves or changes hands, and removed when it's cancelled.\nOutput: `{ written, action, event_id }` or `{ written: false, reason }`.",
+      "properties": {
+        "appointment_id": true
+      },
+      "required": [
+        "appointment_id"
+      ],
+      "type": "object"
+    },
     "CallbackSend": {
       "additionalProperties": false,
       "description": "How a `wait_for_callback` step hands its URL over: an integration action\nor a plain HTTP request (set one).",
@@ -4145,6 +4156,69 @@
           "required": [
             "type",
             "id"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Write an appointment to its person's calendar (the `workforce` module).",
+          "properties": {
+            "continue_on_error": {
+              "description": "Record the error as the step's output and carry on.",
+              "type": "boolean"
+            },
+            "description": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "id": {
+              "description": "Unique in the workflow: lowercase letters, digits, underscores.\nOther steps read this step's output as `steps.<id>.output`.",
+              "type": "string"
+            },
+            "if": {
+              "description": "Skip the step unless this expression is true.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "name": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "retry": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/RetryPolicy"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "timeout": {
+              "description": "Fail the attempt after this long, e.g. `30s`.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "type": {
+              "const": "core.calendar.write",
+              "type": "string"
+            },
+            "with": {
+              "$ref": "#/$defs/CalendarWrite"
+            }
+          },
+          "required": [
+            "type",
+            "id",
+            "with"
           ],
           "type": "object"
         },

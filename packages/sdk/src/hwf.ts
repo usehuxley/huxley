@@ -1368,6 +1368,30 @@ export type Step =
 			 * Fail the attempt after this long, e.g. `30s`.
 			 */
 			timeout?: string | null;
+			type: 'core.calendar.write';
+			with: CalendarWrite;
+	  }
+	| {
+			/**
+			 * Record the error as the step's output and carry on.
+			 */
+			continue_on_error?: boolean;
+			description?: string | null;
+			/**
+			 * Unique in the workflow: lowercase letters, digits, underscores.
+			 * Other steps read this step's output as `steps.<id>.output`.
+			 */
+			id: string;
+			/**
+			 * Skip the step unless this expression is true.
+			 */
+			if?: string | null;
+			name?: string | null;
+			retry?: RetryPolicy | null;
+			/**
+			 * Fail the attempt after this long, e.g. `30s`.
+			 */
+			timeout?: string | null;
 			type: 'core.project.status';
 			with?: ProjectStatus | null;
 	  }
@@ -2460,6 +2484,19 @@ export interface ScopeDecide {
  */
 export interface CalendarSync {
 	user_id?: unknown;
+}
+/**
+ * An appointment to write to its person's calendar
+ * (`core.calendar.write`): `appointment_id`. When writing back is on (and
+ * their calendar is Microsoft 365) the event is created, kept in step when
+ * the appointment moves or changes hands, and removed when it's cancelled.
+ * Output: `{ written, action, event_id }` or `{ written: false, reason }`.
+ *
+ * This interface was referenced by `HuxleyWorkflowFormatV1`'s JSON-Schema
+ * via the `definition` "CalendarWrite".
+ */
+export interface CalendarWrite {
+	appointment_id: unknown;
 }
 /**
  * What to gather for status reports (`core.project.status`): one

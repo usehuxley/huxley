@@ -193,6 +193,17 @@ async fn sync(engine: &Engine, pools: &huxley_db::testing::TestPools, org: Uuid)
     }
 }
 
+/// Microsoft 365 through the `contoso` connection at `root`.
+fn m365(root: Uuid) -> calendar::SettingsInput {
+    calendar::SettingsInput {
+        provider: "m365".into(),
+        org_id: root,
+        connection: "contoso".into(),
+        keep_subjects: false,
+        write_back: false,
+    }
+}
+
 async fn person(pools: &huxley_db::testing::TestPools, email: &str) -> Uuid {
     let id = Uuid::now_v7();
     sqlx::query("INSERT INTO users (id, email, display_name) VALUES ($1, $2, $3)")
@@ -235,18 +246,9 @@ async fn busy_time_is_read_from_microsoft_365_and_feeds() {
         .await
         .unwrap();
     let mut tx = begin_scoped(&pools.app, &OrgScope::System).await.unwrap();
-    calendar::set_settings(
-        &mut tx,
-        &ctx,
-        &calendar::SettingsInput {
-            provider: "m365".into(),
-            org_id: root,
-            connection: "contoso".into(),
-            keep_subjects: false,
-        },
-    )
-    .await
-    .unwrap();
+    calendar::set_settings(&mut tx, &ctx, &m365(root))
+        .await
+        .unwrap();
     let ics = calendar::CalendarPersonInput {
         source: "ics".into(),
         calendar: None,

@@ -8584,6 +8584,8 @@ export interface components {
 			provider: string;
 			/** Format: date-time */
 			updatedAt: string;
+			/** @description Appointments are written to people's calendars. */
+			writeBack: boolean;
 		};
 		CalendarSettingsInput: {
 			connection: string;
@@ -8591,6 +8593,11 @@ export interface components {
 			/** Format: uuid */
 			orgId: string;
 			provider: string;
+			/**
+			 * @description Write appointments to people's calendars (the connection's app needs
+			 *     Calendars.ReadWrite).
+			 */
+			writeBack?: boolean;
 		};
 		CancelRunResponse: {
 			/** @description False if the run had already finished. */

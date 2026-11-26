@@ -1,0 +1,27 @@
+apiVersion: usehuxley.io/v1
+kind: Workflow
+metadata:
+  key: write-appointments
+  name: Put appointments in calendars
+  description: >-
+    When an appointment is booked, moved or cancelled, puts it in (or takes
+    it out of) the person's Microsoft 365 calendar, if writing appointments
+    back is on under Settings → Calendars.
+spec:
+  triggers:
+    - id: booked
+      type: event
+      event: appointment.booked
+    - id: moved
+      type: event
+      event: appointment.moved
+    - id: cancelled
+      type: event
+      event: appointment.cancelled
+  steps:
+    - id: write
+      type: core.calendar.write
+      with:
+        appointment_id: "{{ trigger.subject_id }}"
+  outputs:
+    action: "{{ steps.write.output.action }}"
