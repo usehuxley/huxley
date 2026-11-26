@@ -58,7 +58,11 @@ export function describe(
 					? `made ${text(details.linked)} its parent`
 					: details.as === 'child'
 						? `added ${text(details.linked)} as a child`
-						: `linked ${text(details.linked)}`;
+						: details.as === 'problem'
+							? `linked ${text(details.linked)} as its problem`
+							: details.as === 'incident'
+								? `linked ${text(details.linked)} as an incident it causes`
+								: `linked ${text(details.linked)}`;
 		case 'action':
 			return `ran ${text(details.form)}`;
 		case 'merge':

@@ -3161,3 +3161,102 @@ async fn standard_changes_are_pre_approved() {
         .await;
     assert_eq!(questions.as_array().unwrap().len(), 5);
 }
+
+#[tokio::test]
+async fn problems_link_incidents_become_known_errors_and_draft_articles() {
+    let Some(s) = setup().await else { return };
+    let ctx = RequestContext::system(Via::System);
+    let mut tx = begin_scoped(&s.pools.app, &OrgScope::System).await.unwrap();
+    huxley_modules::set_enabled(&mut tx, &ctx, "knowledge", true, false)
+        .await
+        .unwrap();
+    tx.commit().await.unwrap();
+    let problem = s
+        .ticket(
+            &s.owner,
+            json!({ "orgId": s.acme, "type": "problem", "title": "VPN drops hourly" }),
+        )
+        .await;
+    let incident = s
+        .ticket(
+            &s.owner,
+            json!({ "orgId": s.acme, "title": "VPN dropped again" }),
+        )
+        .await;
+    // An incident linked as caused by the problem; the problem lists it.
+    s.ok(
+        &s.owner,
+        "POST",
+        &format!("{}/links", url(&problem)),
+        Some(json!({ "otherId": incident["id"], "kind": "incident" })),
+    )
+    .await;
+    let from_incident = s
+        .ok(&s.owner, "GET", &format!("{}/links", url(&incident)), None)
+        .await;
+    assert_eq!(
+        (&from_incident[0]["kind"], &from_incident[0]["id"]),
+        (&json!("problem"), &problem["id"]),
+        "{from_incident}"
+    );
+    let record = format!("{}/problem", url(&problem));
+    assert_eq!(s.ok(&s.owner, "GET", &record, None).await["incidents"], 1);
+    // A known error needs the cause and a workaround.
+    let (status, _) = s
+        .call(
+            &s.owner,
+            "PUT",
+            &record,
+            Some(json!({ "knownError": true })),
+        )
+        .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+    let known = s
+        .ok(&s.owner, "PUT", &record, Some(json!({ "rootCause": "The firewall drops idle tunnels.", "workaround": "Reconnect.", "knownError": true })))
+        .await;
+    assert!(
+        known["knownError"] == true && known["knownErrorAt"].is_string(),
+        "{known}"
+    );
+    let id = Uuid::parse_str(problem["id"].as_str().unwrap()).unwrap();
+    let raised: i64 = sqlx::query_scalar("SELECT count(*) FROM events_outbox WHERE event_type = 'problem.known_error' AND subject_id = $1")
+        .bind(id)
+        .fetch_one(&s.pools.owner)
+        .await
+        .unwrap();
+    assert_eq!(raised, 1);
+    // The workaround, drafted into the knowledge base for review.
+    let drafted = s
+        .ok(&s.owner, "POST", &format!("{record}/article"), None)
+        .await;
+    let (status, tags, title): (String, Vec<String>, String) =
+        sqlx::query_as("SELECT status, tags, title FROM kb_articles WHERE id = $1")
+            .bind(Uuid::parse_str(drafted["articleId"].as_str().unwrap()).unwrap())
+            .fetch_one(&s.pools.owner)
+            .await
+            .unwrap();
+    assert_eq!(
+        (status.as_str(), tags, title.as_str()),
+        (
+            "in_review",
+            vec!["known-error".to_owned()],
+            "Known error: VPN drops hourly"
+        )
+    );
+    assert_eq!(
+        s.ok(&s.owner, "GET", &record, None).await["kbArticleId"],
+        drafted["articleId"]
+    );
+    // Only problem tickets have problem details.
+    assert_eq!(
+        s.call(
+            &s.owner,
+            "GET",
+            &format!("{}/problem", url(&incident)),
+            None
+        )
+        .await
+        .0,
+        StatusCode::UNPROCESSABLE_ENTITY
+    );
+}

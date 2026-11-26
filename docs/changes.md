@@ -1,4 +1,4 @@
-# Change management
+# Change and problem management
 
 Turn on **Change and problem management** (Settings → Modules; it's on in the service-desk starting point). A change is then a ticket of the **Change** type, with a **Change** card for its details (ADR-054).
 
@@ -38,6 +38,17 @@ Approval is an ordinary workflow, so change the policy there: by risk, type, cli
 ## Changes and freezes
 
 **Changes** in the sidebar lists the changes planned in the next four weeks, by day, with their risk and state, and the freeze windows. People with `servicedesk:configure` add and remove freezes there. A freeze set at an organization applies to it and the organizations below.
+
+## Problems
+
+A problem is a ticket of the **Problem** type, with a **Problem** card (ADR-055):
+
+- **Incidents:** link them from the problem as **Incident (caused by this)**, or from an incident as **Problem (its cause)**. Each side shows the other.
+- **Root cause and workaround.**
+- **Known error:** tick it once the cause is known and there's a workaround. It raises `problem.known_error` with the root cause, workaround and count of linked incidents, so a workflow can tell the incidents' assignees or reply to their requesters.
+- **Draft a knowledge article from the workaround** (with `kb:write`): a "Known error: …" article with the symptoms, cause and workaround, tagged `known-error`, linked to the problem and **submitted for review** in the [knowledge base](knowledge.md).
+
+API: `GET`/`PUT /api/v1/tickets/{id}/problem` `{ rootCause, workaround, knownError }`, and `POST /api/v1/tickets/{id}/problem/article`. Link incidents with `POST /api/v1/tickets/{id}/links` `{ otherId, kind: "incident" }`.
 
 ## Events
 

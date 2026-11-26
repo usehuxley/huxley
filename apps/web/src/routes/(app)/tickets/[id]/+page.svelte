@@ -38,6 +38,7 @@
 	import SentimentCard from '#lib/tickets/SentimentCard.svelte';
 	import InsightCard from '#lib/tickets/InsightCard.svelte';
 	import ChangeCard from '#lib/tickets/ChangeCard.svelte';
+	import ProblemCard from '#lib/tickets/ProblemCard.svelte';
 	import { OUTCOME } from '#lib/agreements/coverage.ts';
 	import { onMount, untrack } from 'svelte';
 	import type { PageProps } from './$types';
@@ -154,7 +155,9 @@
 	const LINK_KINDS = [
 		{ value: 'related', label: 'Related' },
 		{ value: 'parent', label: 'Parent' },
-		{ value: 'child', label: 'Child' }
+		{ value: 'child', label: 'Child' },
+		{ value: 'problem', label: 'Problem (its cause)' },
+		{ value: 'incident', label: 'Incident (caused by this)' }
 	] as const;
 	$effect(() => {
 		status = data.ticket.statusKey;
@@ -422,6 +425,13 @@
 				ticketId={ticket.id}
 				contactId={ticket.requesterId ?? undefined}
 			/>
+			{#if data.problem}
+				<ProblemCard
+					problem={data.problem}
+					{canWrite}
+					canDraft={data.user.grantedPermissions.includes('kb:write')}
+				/>
+			{/if}
 			{#if data.change}
 				<ChangeCard
 					change={data.change}
