@@ -20,6 +20,8 @@ test.describe('datasets', () => {
 		const page = await signIn(browser);
 		const name = `Staff ${Date.now().toString(36)}`;
 		await page.getByRole('link', { name: 'Datasets' }).click();
+		// Typing before the page hydrates is undone when it does.
+		await page.locator('html[data-hydrated]').waitFor({ state: 'attached' });
 		await page.getByLabel('Name', { exact: true }).fill(name);
 		await page.getByLabel('Column 1').fill('upn');
 		await page.getByRole('button', { name: 'Add column' }).click();
