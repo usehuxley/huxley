@@ -55,6 +55,7 @@ export type CodeEditorOptions = {
 	compact?: boolean;
 	/** Checks the text (debounced); problems are underlined. */
 	lint?: (text: string) => CodeDiagnostic[] | Promise<CodeDiagnostic[]>;
-	onChange: (value: string) => void;
+	/** Every change; `byPerson` is false for changes the page made. */
+	onChange: (value: string, byPerson: boolean) => void;
 	onBlur?: () => void;
 };

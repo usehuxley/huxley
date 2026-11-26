@@ -30,7 +30,7 @@
 		) => { from: number; to?: number; options: CodeCompletion[] } | null;
 		/** One or a few lines with no gutters, e.g. an expression field. */
 		compact?: boolean;
-		/** Called on every edit. */
+		/** Called when the person edits it (not when the page sets the value). */
 		onchange?: (value: string) => void;
 		/** Called when the editor loses focus. */
 		onblur?: () => void;
@@ -76,9 +76,9 @@
 				complete: complete ? (text, pos) => complete?.(text, pos) ?? null : undefined,
 				compact,
 				onBlur: () => onblur?.(),
-				onChange: (text) => {
+				onChange: (text, byPerson) => {
 					value = text;
-					onchange?.(text);
+					if (byPerson) onchange?.(text);
 				}
 			});
 			if (cancelled) made.destroy();

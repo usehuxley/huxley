@@ -317,8 +317,8 @@ test.describe('workflows', () => {
 		// The YAML view shows the same document.
 		await page.getByRole('tab', { name: 'YAML' }).click();
 		const yaml = page.getByRole('textbox', { name: 'Workflow YAML' });
-		await expect(yaml).toHaveValue(/type: if/);
-		await expect(yaml).toHaveValue(/id: cheer/);
+		await expect(yaml).toContainText('type: if');
+		await expect(yaml).toContainText('id: cheer');
 
 		await page.getByRole('textbox', { name: 'Inputs' }).fill('{"name": "Ada"}');
 		await page.getByRole('button', { name: 'Test run the draft' }).click();

@@ -2,7 +2,18 @@
 	import { enhance, type SubmitFunction } from '$app/forms';
 	import { resolve } from '$app/paths';
 	import { ArrowLeft } from '@lucide/svelte';
-	import { Badge, Button, Card, Field, Input, Select, Tabs, toast } from '@usehuxley/ui';
+	import {
+		Badge,
+		Button,
+		Card,
+		CodeEditor,
+		Field,
+		Input,
+		Select,
+		Tabs,
+		toast
+	} from '@usehuxley/ui';
+	import { lintJson, lintWorkflowYaml } from '#lib/workflows/yaml-lint.ts';
 	import RunStatusBadge from '#lib/workflows/RunStatusBadge.svelte';
 	import VisualEditor from '#lib/workflows/editor/VisualEditor.svelte';
 	import type { PageProps } from './$types';
@@ -150,17 +161,17 @@
 				{:else}
 					<form method="POST" action="?/save" class="flex flex-col gap-3" use:enhance={notify}>
 						<input type="hidden" name="revision" value={workflow.revision} />
-						<label class="sr-only" for="yaml">Workflow YAML</label>
-						<textarea
+						<CodeEditor
 							id="yaml"
 							name="yaml"
+							label="Workflow YAML"
+							language="yaml"
+							lines={36}
 							bind:value={yaml}
-							oninput={() => (edited = true)}
+							onchange={() => (edited = true)}
 							readonly={!canWrite || archived}
-							spellcheck="false"
-							rows={Math.min(40, Math.max(14, yaml.split('\n').length + 2))}
-							class="w-full rounded-control border border-border bg-surface-sunken p-3 font-mono text-sm text-fg focus:border-accent focus:outline-none"
-						></textarea>
+							lint={canWrite ? (text: string) => lintWorkflowYaml(text, checkDocument) : undefined}
+						/>
 						{#if workflow.diagnostics.length > 0}
 							<div class="rounded-control border border-warning/40 bg-warning/5 p-3" role="status">
 								<p class="text-sm font-medium text-fg">
@@ -213,15 +224,15 @@
 	{#if !archived && (canRun || canWrite)}
 		<Card title="Run" description="Inputs as JSON. A test run uses the saved draft.">
 			<form method="POST" action="?/run" class="flex flex-col gap-3" use:enhance>
-				<label class="sr-only" for="inputs">Inputs</label>
-				<textarea
+				<CodeEditor
 					id="inputs"
 					name="inputs"
+					label="Inputs"
+					language="json"
+					lines={6}
 					bind:value={inputs}
-					rows="4"
-					spellcheck="false"
-					class="w-full rounded-control border border-border bg-surface-sunken p-3 font-mono text-sm text-fg focus:border-accent focus:outline-none"
-				></textarea>
+					lint={lintJson}
+				/>
 				<div class="flex flex-wrap gap-2">
 					{#if canRun}
 						<Button type="submit" disabled={!workflow.currentVersion}>

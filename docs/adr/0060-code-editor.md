@@ -29,6 +29,8 @@ Scripts, expressions, workflow YAML and JSON Schemas were edited in plain text b
   - completion comes from the editor's existing scope logic (`namesFor` and `complete`: inputs, steps that have run by then, loop items, run variables, filters and functions), passed in as a `complete(text, pos)` hook
   - edits commit shortly after typing stops, on blur, and when the field goes away
   - each field is checked as you type by sending the draft document, with the field's text in place, to `POST /workflows/validate` (through the page's `check` route) and keeping that field's problems, so the message is the API's own
+- **The workflow's YAML view** is the editor in YAML. Syntax errors are underlined where the parser stops. Otherwise the parsed draft goes to the same validate endpoint, and each problem is underlined at its path in the source (via the `yaml` package's ranges; a missing field points at its parent). Run inputs are JSON, checked as you type.
+- **Whose change:** the page's own updates (loading a saved version, say) are tagged, and `onchange` fires only for the person's edits, so pages can track unsaved changes.
 - **Non-breaking spaces:** browsers put them into editable text where a typed space would collapse (beside an auto-closed `}}`, say), and an expression with one doesn't parse. Typed and pasted ones become ordinary spaces.
 - **Theme:** colours come from the design tokens. Syntax colours are new tokens (`--hx-code-*`), each readable on its surface in light and dark.
 - **Keyboard:** Tab indents. Escape then Tab leaves the editor (CodeMirror's rule), so the keyboard is never trapped.

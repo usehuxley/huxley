@@ -22,7 +22,13 @@ import {
 } from '@codemirror/language';
 import { linter, lintGutter, lintKeymap } from '@codemirror/lint';
 import { highlightSelectionMatches, searchKeymap } from '@codemirror/search';
-import { Compartment, EditorState, type Extension, type TransactionSpec } from '@codemirror/state';
+import {
+	Annotation,
+	Compartment,
+	EditorState,
+	type Extension,
+	type TransactionSpec
+} from '@codemirror/state';
 import {
 	drawSelection,
 	EditorView,
@@ -198,6 +204,9 @@ const plainSpaces = EditorState.transactionFilter.of((tr) => {
 	return spec;
 });
 
+/** Marks a change the page made (`setValue`), not the person. */
+const external = Annotation.define<boolean>();
+
 export type Controller = {
 	setValue: (value: string) => void;
 	setReadonly: (readonly: boolean) => void;
@@ -242,7 +251,9 @@ export async function create(parent: HTMLElement, options: CodeEditorOptions): P
 			EditorView.editable.of(!options.readonly)
 		]),
 		EditorView.updateListener.of((u) => {
-			if (u.docChanged) options.onChange(u.state.doc.toString());
+			if (!u.docChanged) return;
+			const theirs = u.transactions.some((tr) => tr.docChanged && !tr.annotation(external));
+			options.onChange(u.state.doc.toString(), theirs);
 		}),
 		EditorView.domEventHandlers({
 			blur: () => {
@@ -280,7 +291,10 @@ export async function create(parent: HTMLElement, options: CodeEditorOptions): P
 		setValue(value) {
 			const current = view.state.doc.toString();
 			if (value !== current) {
-				view.dispatch({ changes: { from: 0, to: current.length, insert: value } });
+				view.dispatch({
+					changes: { from: 0, to: current.length, insert: value },
+					annotations: external.of(true)
+				});
 			}
 		},
 		setReadonly(readonly) {
