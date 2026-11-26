@@ -2,6 +2,12 @@
 export const PORTAL_COOKIE = 'hx_portal_session';
 
 /**
+ * Binds a sign-in with the company's identity provider to this browser.
+ * `Lax`: the provider's redirect back is a cross-site navigation.
+ */
+export const SSO_COOKIE = 'hx_portal_sso';
+
+/**
  * The session token and lifetime from the API's `Set-Cookie` header, so the
  * portal can set the same cookie on its own origin.
  */

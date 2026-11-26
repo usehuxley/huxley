@@ -1,7 +1,7 @@
 import { fail, redirect } from '@sveltejs/kit';
 import { api } from '#lib/server/api.ts';
 import { adoptSession } from '#lib/server/signin.ts';
-import { PORTAL_COOKIE, safeNext } from '#lib/session.ts';
+import { PORTAL_COOKIE, SSO_COOKIE, safeNext } from '#lib/session.ts';
 import type { Actions, PageServerLoad } from './$types';
 
 export const load: PageServerLoad = ({ cookies, url }) => {
@@ -24,6 +24,22 @@ export const actions: Actions = {
 	link: async (event) => {
 		const email = text(await event.request.formData(), 'email');
 		if (!email.includes('@')) return fail(400, { message: 'Enter your work email address.' });
+		// The company's own sign-in, if it has one for this address's domain.
+		const sso = await api(event)
+			.POST('/api/portal/v1/auth/sso/start', {
+				body: { email, redirect: `${event.url.origin}/auth/sso/callback` }
+			})
+			.catch(() => null);
+		if (sso?.data) {
+			event.cookies.set(SSO_COOKIE, sso.data.state, {
+				path: '/auth/sso',
+				httpOnly: true,
+				sameSite: 'lax',
+				maxAge: 600
+			});
+			// The provider the API matched for this address, and only it.
+			redirect(303, sso.data.url, { external: [new URL(sso.data.url).origin] });
+		}
 		const { response } = await api(event)
 			.POST('/api/portal/v1/auth/link', { body: { email } })
 			.catch(() => ({ response: { status: 503 } }));

@@ -11,6 +11,8 @@ publish = false
 [dependencies]
 huxley-auth.workspace = true
 huxley-core.workspace = true
+huxley-crypto.workspace = true
+huxley-sso.workspace = true
 huxley-db.workspace = true
 huxley-orgs.workspace = true
 serde.workspace = true
@@ -22,7 +24,14 @@ utoipa.workspace = true
 uuid.workspace = true
 
 [dev-dependencies]
+axum.workspace = true
+base64.workspace = true
+chrono = { version = "0.4", default-features = false, features = ["clock"] }
+huxley-crypto = { workspace = true, features = ["testing"] }
 huxley-db = { workspace = true, features = ["testing"] }
+openidconnect.workspace = true
+sha2.workspace = true
+url.workspace = true
 huxley-orgs.workspace = true
 huxley-crm.workspace = true
 tokio.workspace = true

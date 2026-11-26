@@ -41,7 +41,8 @@ Mixing the two would be dangerous. Staff permissions are broad and organization-
 - **Magic link:** an emailed single-use link, valid for 15 minutes. It's the default, so contacts needn't keep a password.
 - **Password**, when the account has one: Argon2id, with the same lockout and backoff as staff.
 - **Invitations:** staff invite a contact, which emails a magic link. The first sign-in activates the account.
-- **The client's own identity provider** (Entra or OIDC, matched by email domain) and **MFA** come in later PRs. They add sign-in methods without changing accounts or sessions.
+- **The client's own identity provider** (Entra or OIDC), matched by email domain. It signs in contacts with portal access under the provider's company, linking their identity by subject, and can give contacts with a matching address an account on first sign-in. It reuses the staff OIDC steps (discovery, PKCE, nonce, ID token checks) and starts an ordinary portal session.
+- **MFA** comes in a later PR. It adds a step without changing accounts or sessions.
 
 **Answers never reveal whether an account exists.** "We've sent a link if that address has portal access" is the reply either way.
 

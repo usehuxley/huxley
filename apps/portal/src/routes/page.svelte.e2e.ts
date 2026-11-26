@@ -6,10 +6,10 @@ test('signed-out visitors are sent to sign in', async ({ page }) => {
 	await expect(page.getByRole('heading', { level: 1 })).toHaveText(/^Sign in to /);
 });
 
-test('sign-in offers a link or a password', async ({ page }) => {
+test('sign-in asks for an email, or a password', async ({ page }) => {
 	await page.goto('/login');
 	await expect(page.getByLabel('Work email')).toBeVisible();
-	await expect(page.getByRole('button', { name: 'Email me a sign-in link' })).toBeVisible();
+	await expect(page.getByRole('button', { name: 'Continue' })).toBeVisible();
 	await page.getByRole('button', { name: 'Sign in with a password' }).click();
 	await expect(page.getByLabel('Password')).toBeVisible();
 });

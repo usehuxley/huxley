@@ -14,7 +14,7 @@ async function signIn(page: Page) {
 	await expect(page.getByRole('heading', { level: 1 })).toHaveText('Welcome to Huxley');
 }
 
-/** A client with a contact: the contact's id. */
+/** A client with a contact: their ids. */
 async function setUp(stamp: string) {
 	const api = await request.newContext({
 		baseURL: apiUrl,
@@ -39,7 +39,7 @@ async function setUp(stamp: string) {
 	expect(contact.status(), await contact.text()).toBe(201);
 	const { id } = (await contact.json()) as { id: string };
 	await api.dispose();
-	return id;
+	return { clientId, id };
 }
 
 test.describe('portal access', () => {
@@ -51,7 +51,7 @@ test.describe('portal access', () => {
 
 	test('a contact is invited to the portal, given a role, and disabled', async ({ page }) => {
 		const stamp = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
-		const contact = await setUp(stamp);
+		const { id: contact } = await setUp(stamp);
 		await signIn(page);
 		await page.goto(`/contacts/${contact}`);
 		await expect(page.getByText('No portal access yet.')).toBeVisible();
@@ -69,5 +69,34 @@ test.describe('portal access', () => {
 		await page.getByRole('button', { name: 'Disable portal access' }).click();
 		await expect(page.getByText('Portal access disabled.')).toBeVisible();
 		await expect(page.getByRole('button', { name: 'Re-enable' })).toBeVisible();
+	});
+
+	test('a client’s Entra tenant is added for portal sign-in', async ({ page }) => {
+		const stamp = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+		const { clientId } = await setUp(stamp);
+		await signIn(page);
+		await page.goto(`/clients/${clientId}?tab=portal`);
+		await expect(
+			page.getByText('None: contacts sign in with emailed links or passwords.')
+		).toBeVisible();
+		await page.getByRole('button', { name: 'Add a provider' }).click();
+		const dialog = page.getByRole('dialog');
+		await dialog.getByLabel('Provider name').fill('Portal (Microsoft)');
+		await dialog.getByLabel('Tenant ID').fill('00000000-0000-0000-0000-000000000001');
+		await dialog.getByLabel('Client ID').fill('app-123');
+		await dialog.getByLabel('Client secret').fill('shh');
+		await dialog.getByLabel('Email domains').fill(`portal-${stamp}.example`);
+		await dialog.getByRole('button', { name: 'Save' }).click();
+		await expect(page.getByText('Sign-in provider saved.')).toBeVisible();
+		const list = page.getByRole('list', { name: 'Sign-in providers' });
+		await expect(list.getByText('Portal (Microsoft)')).toBeVisible();
+		await expect(list.getByText(`portal-${stamp}.example`)).toBeVisible();
+
+		// The secret stays set when editing without retyping it.
+		await list.getByRole('button', { name: 'Portal (Microsoft)' }).click();
+		await expect(page.getByRole('dialog').getByText('Set. Leave empty to keep it.')).toBeVisible();
+		await expect(page.getByRole('dialog').getByLabel('Tenant ID')).toHaveValue(
+			'00000000-0000-0000-0000-000000000001'
+		);
 	});
 });

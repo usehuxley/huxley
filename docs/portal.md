@@ -58,20 +58,34 @@ Like every setting, these apply to the organization and everything below it, so 
 ## Signing in
 
 - **A sign-in link**, emailed when they enter their address. It works once, for 15 minutes. Opening the link shows a **Sign in** button rather than signing in straight away, because email security scanners open links too.
+- **Their organization's account**, when the client has a sign-in provider (below). They enter their email, and the portal sends them to their company's sign-in page and back.
 - **A password**, once they've set one in the portal. Five wrong passwords in a row lock the account for a minute. The wait doubles with each further miss, up to about an hour.
 - **Not revealing accounts:** asking for a link answers the same whether or not the address has access, so nobody can find out who your clients are.
 - **Sessions** last up to 14 days, ending after a day unused.
 - **Separation:** the portal has its own session cookie (`hx_portal_session`) and its own API (`/api/portal/v1`). A portal session can't reach the staff API, and a staff session can't reach the portal's.
+
+## Signing in with their organization
+
+Contacts can sign in with their company's own accounts, such as the client's Microsoft Entra tenant. Add it on the client's page, **Portal** tab, **Add a provider** (needs `crm:manage`).
+
+- **Microsoft Entra ID:** register an app in the client's tenant with the redirect URI `https://<portal address>/auth/sso/callback` (the client's portal domain, or `HUXLEY_HTTP__PORTAL_PUBLIC_URL`), and create a client secret. Enter the tenant ID, client ID and secret. Any other OpenID Connect provider works with its issuer URL.
+- **Email domains:** the addresses it signs in, e.g. `contoso.com`. A domain belongs to one provider. When someone enters an address at that domain, the portal goes to their organization's sign-in page instead of emailing a link.
+- **Who gets in:** contacts who already have portal access, at the client or an organization below it. Turn on **Give portal access to contacts with a matching address** to give contacts an account, with the role you choose, the first time they sign in. Nobody without a contact record gets in.
+- **The link to their account** is kept after the first sign-in, so a later change of address doesn't lock them out.
+- **The client secret** is encrypted with the client's key and is never shown again.
+- **Safety:** the sign-in is bound to the browser that started it (a cookie), works once within 10 minutes, and only ever returns to this portal's callback page. ID tokens are verified (signature, issuer, audience, expiry, nonce), with PKCE.
 
 ## API
 
 - Staff:
   - `GET /api/v1/orgs/{id}/portal-accounts`
   - `POST /api/v1/contacts/{id}/portal-access` with `{ role }`
+  - `GET`/`POST /api/v1/orgs/{id}/portal-identity-providers`; `PUT`/`DELETE /api/v1/portal-identity-providers/{id}`
   - `PATCH /api/v1/portal-accounts/{id}` with `{ role, status, version }`
   - `POST /api/v1/portal-accounts/{id}/invitation` (a new sign-in link)
 - The portal's own API, with portal sessions only:
   - `POST /api/portal/v1/auth/link`, `…/auth/redeem`, `…/auth/password`, `…/auth/logout`
+  - `POST /api/portal/v1/auth/sso/start` with `{ email, redirect }` (404 when no provider has the domain); `POST …/auth/sso/callback` with `{ state, code }`
   - `GET /api/portal/v1/branding?host=` (before signing in; also in `/me` after)
   - `GET /api/portal/v1/me`
   - `GET`, `POST /api/portal/v1/tickets` (`status=open|closed`, `scope=mine|company`, `q`); `GET …/tickets/{id}`; `POST …/tickets/{id}/replies`

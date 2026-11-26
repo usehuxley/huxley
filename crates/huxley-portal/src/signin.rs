@@ -82,7 +82,7 @@ pub async fn request_link(
     Ok(Some((id, address, secret)))
 }
 
-async fn start_session(
+pub(crate) async fn start_session(
     conn: &mut PgConnection,
     account_id: Uuid,
     ip: Option<&str>,

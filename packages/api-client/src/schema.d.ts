@@ -75,6 +75,46 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
+	'/api/portal/v1/auth/sso/callback': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/**
+		 * Finishes signing in from the provider's callback. Sets the portal session
+		 *     cookie.
+		 */
+		post: operations['portal_sso_callback'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/portal/v1/auth/sso/start': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/**
+		 * Starts signing in with the identity provider for an email address's
+		 *     domain. 404 when no provider signs that domain in (use a sign-in link).
+		 */
+		post: operations['portal_sso_start'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
 	'/api/portal/v1/branding': {
 		parameters: {
 			query?: never;
@@ -3031,6 +3071,27 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
+	'/api/v1/orgs/{id}/portal-identity-providers': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** A company's portal identity providers. */
+		get: operations['list_portal_identity_providers'];
+		put?: never;
+		/**
+		 * Adds an identity provider that signs the company's contacts in to the
+		 *     portal (and those of the organizations below it).
+		 */
+		post: operations['create_portal_identity_provider'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
 	'/api/v1/orgs/{id}/settings': {
 		parameters: {
 			query?: never;
@@ -3324,6 +3385,22 @@ export interface paths {
 		/** Emails a new sign-in link to an invited or active account. */
 		post: operations['resend_portal_invitation'];
 		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/portal-identity-providers/{id}': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put: operations['update_portal_identity_provider'];
+		post?: never;
+		delete: operations['delete_portal_identity_provider'];
 		options?: never;
 		head?: never;
 		patch?: never;
@@ -8720,6 +8797,42 @@ export interface components {
 			name: string;
 			supportEmail?: string | null;
 		};
+		PortalIdentityProvider: {
+			clientId: string;
+			defaultRole: components['schemas']['PortalRole'];
+			emailDomains: string[];
+			enabled: boolean;
+			hasSecret: boolean;
+			/** Format: uuid */
+			id: string;
+			issuerUrl: string;
+			name: string;
+			/** Format: uuid */
+			orgId: string;
+			/** @description `entra` or `generic`. */
+			preset: string;
+			provision: boolean;
+			trustEmail: boolean;
+			/** Format: int32 */
+			version: number;
+		};
+		PortalIdentityProviderInput: {
+			clientId: string;
+			/** @description Left out: unchanged. Empty: removed. */
+			clientSecret?: string | null;
+			defaultRole?: components['schemas']['PortalRole'] | null;
+			emailDomains: string[];
+			enabled?: boolean;
+			/** @description e.g. `https://login.microsoftonline.com/<tenant id>/v2.0`. */
+			issuerUrl: string;
+			name: string;
+			/** @description `entra` (default) or `generic`. */
+			preset?: string | null;
+			provision?: boolean;
+			trustEmail?: boolean;
+			/** Format: int32 */
+			version?: number | null;
+		};
 		PortalLinkRequest: {
 			email: string;
 		};
@@ -8780,6 +8893,23 @@ export interface components {
 		PortalRole: 'client_user' | 'client_approver' | 'client_admin';
 		PortalSetPassword: {
 			password: string;
+		};
+		PortalSsoCallback: {
+			code: string;
+			state: string;
+		};
+		PortalSsoStart: {
+			email: string;
+			/** @description The portal's callback page, e.g. `https://support.example.com/auth/sso/callback`. */
+			redirect: string;
+		};
+		PortalSsoStarted: {
+			/** @description The provider's name, e.g. "Contoso (Microsoft)". */
+			provider: string;
+			/** @description Keep it in a cookie and send it back with the callback. */
+			state: string;
+			/** @description Where to send the browser. */
+			url: string;
 		};
 		/** @description A ticket in the portal. */
 		PortalTicket: {
@@ -10912,6 +11042,68 @@ export interface operations {
 				};
 			};
 			401: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	portal_sso_callback: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['PortalSsoCallback'];
+			};
+		};
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['PortalMe'];
+				};
+			};
+			401: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	portal_sso_start: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['PortalSsoStart'];
+			};
+		};
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['PortalSsoStarted'];
+				};
+			};
+			404: {
 				headers: {
 					[name: string]: unknown;
 				};
@@ -17208,6 +17400,69 @@ export interface operations {
 			};
 		};
 	};
+	list_portal_identity_providers: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['PortalIdentityProvider'][];
+				};
+			};
+		};
+	};
+	create_portal_identity_provider: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['PortalIdentityProviderInput'];
+			};
+		};
+		responses: {
+			201: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['PortalIdentityProvider'];
+				};
+			};
+			/** @description A domain is taken */
+			409: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
 	list_org_settings: {
 		parameters: {
 			query?: never;
@@ -17813,6 +18068,58 @@ export interface operations {
 				content: {
 					'application/problem+json': components['schemas']['ApiError'];
 				};
+			};
+		};
+	};
+	update_portal_identity_provider: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['PortalIdentityProviderInput'];
+			};
+		};
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['PortalIdentityProvider'];
+				};
+			};
+			409: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	delete_portal_identity_provider: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			204: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content?: never;
 			};
 		};
 	};
