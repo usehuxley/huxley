@@ -115,7 +115,7 @@ pub const REGISTRY: &[Module] = &[
         description: "Changes, CAB approvals, change calendar, and problems.",
         requires: &["servicedesk"],
         phase: 9,
-        released: false,
+        released: true,
     },
     Module {
         key: "projects",
@@ -171,6 +171,7 @@ impl Preset {
             Self::ServiceDesk => vec![
                 "crm",
                 "servicedesk",
+                "change",
                 "workforce",
                 "cmdb",
                 "knowledge",

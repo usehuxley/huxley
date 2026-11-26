@@ -438,6 +438,9 @@ pub enum Step {
     /// Email a dashboard as a CSV, XLSX or PDF.
     #[serde(rename = "core.report.send")]
     ReportSend(ReportSendStep),
+    /// Record a change's approval decision (the `servicedesk` module).
+    #[serde(rename = "core.change.decide")]
+    ChangeDecide(ChangeDecideStep),
     /// Run a dataset → asset mapping rule (the `cmdb` module).
     #[serde(rename = "core.asset.sync")]
     AssetSync(AssetSyncStep),
@@ -824,6 +827,11 @@ step!(ReportSendStep {
     pub report: ReportSend,
 });
 
+step!(ChangeDecideStep {
+    #[serde(rename = "with")]
+    pub decide: ChangeDecide,
+});
+
 step!(AssetSyncStep {
     #[serde(rename = "with")]
     pub sync: AssetSync,
@@ -916,6 +924,7 @@ impl Step {
             KbDraft,
             TimeSuggest,
             ReportSend,
+            ChangeDecide,
             AssetSync,
             AssetWarranty,
             TicketEmailReply,
@@ -979,6 +988,7 @@ impl Step {
             Self::KbDraft(_) => "core.kb.draft",
             Self::TimeSuggest(_) => "core.time.suggest",
             Self::ReportSend(_) => "core.report.send",
+            Self::ChangeDecide(_) => "core.change.decide",
             Self::AssetSync(_) => "core.asset.sync",
             Self::AssetWarranty(_) => "core.asset.set_warranty",
             Self::TicketCreate(_) => "core.ticket.create",
@@ -1609,6 +1619,22 @@ pub struct ReportSend {
     pub subject: Option<Value>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub message: Option<Value>,
+}
+
+/// A change's approval decision to record (`core.change.decide`): the
+/// change ticket (in the run's organization or below, submitted for
+/// approval), `decision` (`approved` or `rejected`, or a boolean), `by`
+/// (who decided, e.g. the approval's `by`) and a `comment`. Raises
+/// `change.approved` or `change.rejected`. Output: the change.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct ChangeDecide {
+    pub ticket_id: Value,
+    pub decision: Value,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub by: Option<Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub comment: Option<Value>,
 }
 
 /// Mapping rules to run (`core.asset.sync`): a dataset's rows become

@@ -465,6 +465,31 @@ export const STEPS: StepSpec[] = [
 		]
 	},
 	{
+		type: 'core.change.decide',
+		label: 'Decide a change',
+		description: 'Record whether a submitted change is approved or rejected, by whom, and why.',
+		group: 'Actions',
+		module: 'servicedesk',
+		template: {
+			with: {
+				ticket_id: '{{ trigger.subject_id }}',
+				decision: 'approved',
+				by: '{{ steps.cab.output.by }}'
+			}
+		},
+		fields: [
+			{ path: 'with.ticket_id', label: 'Change ticket', kind: 'expression' },
+			{
+				path: 'with.decision',
+				label: 'Decision',
+				kind: 'expression',
+				hint: 'approved or rejected'
+			},
+			{ path: 'with.by', label: 'Decided by', kind: 'expression' },
+			{ path: 'with.comment', label: 'Comment', kind: 'expression' }
+		]
+	},
+	{
 		type: 'core.report.send',
 		label: 'Email a report',
 		description:

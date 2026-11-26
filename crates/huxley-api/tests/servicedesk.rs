@@ -50,7 +50,7 @@ async fn setup() -> Option<Setup> {
     // The module is instance-wide: switch it on (other tests may have too).
     let ctx = RequestContext::system(Via::System);
     let mut tx = begin_scoped(&pools.app, &OrgScope::System).await.unwrap();
-    for module in ["crm", "servicedesk"] {
+    for module in ["crm", "servicedesk", "change"] {
         huxley_modules::set_enabled(&mut tx, &ctx, module, true, false)
             .await
             .unwrap();
@@ -2913,4 +2913,251 @@ async fn suggested_time_is_accepted_or_dismissed_by_its_person() {
             .is_none()
     );
     tx.commit().await.unwrap();
+}
+
+/// A server at Acme and an app that runs on it: `(server, app)` ids.
+async fn server_and_app(s: &Setup) -> (String, String) {
+    let ctx = RequestContext::system(Via::System);
+    let mut tx = begin_scoped(&s.pools.app, &OrgScope::System).await.unwrap();
+    huxley_modules::set_enabled(&mut tx, &ctx, "cmdb", true, false)
+        .await
+        .unwrap();
+    tx.commit().await.unwrap();
+    let kind = s.ok(&s.owner, "GET", "/api/v1/asset-types", None).await[0]["id"].clone();
+    let mut ids = Vec::new();
+    for name in ["SRV-01", "Payroll app"] {
+        let a = s
+            .ok(
+                &s.owner,
+                "POST",
+                "/api/v1/assets",
+                Some(json!({ "orgId": s.acme, "typeId": kind, "name": unique(name) })),
+            )
+            .await;
+        ids.push(a["id"].as_str().unwrap().to_owned());
+    }
+    s.ok(
+        &s.owner,
+        "POST",
+        &format!("/api/v1/assets/{}/relationships", ids[1]),
+        Some(json!({ "kind": "runs_on", "toId": ids[0] })),
+    )
+    .await;
+    (ids.remove(0), ids.remove(0))
+}
+
+const HIGH: &str = r#"{ "reach": "everyone", "downtime": "hours", "tested": "partly", "backout": "hard", "familiar": "once" }"#;
+
+#[tokio::test]
+async fn changes_are_assessed_submitted_and_kept_out_of_freezes() {
+    let Some(s) = setup().await else { return };
+    let (server, app) = server_and_app(&s).await;
+    let ticket = s
+        .ticket(
+            &s.owner,
+            json!({ "orgId": s.acme, "type": "change", "title": "Patch SRV-01" }),
+        )
+        .await;
+    let change = format!("{}/change", url(&ticket));
+    let fresh = s.ok(&s.owner, "GET", &change, None).await;
+    assert_eq!(
+        (&fresh["state"], &fresh["changeType"]),
+        (&json!("draft"), &json!("normal"))
+    );
+    // Not a change ticket: refused.
+    let incident = s
+        .ticket(&s.owner, json!({ "orgId": s.acme, "title": "Broken" }))
+        .await;
+    assert_eq!(
+        s.call(&s.owner, "GET", &format!("{}/change", url(&incident)), None)
+            .await
+            .0,
+        StatusCode::UNPROCESSABLE_ENTITY
+    );
+
+    let start = time::OffsetDateTime::now_utc() + time::Duration::days(10);
+    let iso = |t: time::OffsetDateTime| {
+        t.format(&time::format_description::well_known::Rfc3339)
+            .unwrap()
+    };
+    let saved = s
+        .ok(
+            &s.owner,
+            "PUT",
+            &change,
+            Some(json!({
+                "riskAnswers": serde_json::from_str::<Value>(HIGH).unwrap(),
+                "implementationPlan": "Patch and reboot.", "backoutPlan": "Restore the snapshot.",
+                "plannedStart": iso(start), "plannedEnd": iso(start + time::Duration::hours(2)),
+                "affectedAssets": [server], "version": fresh["version"],
+            })),
+        )
+        .await;
+    assert_eq!(
+        (&saved["riskLevel"], &saved["riskScore"]),
+        (&json!("high"), &json!(10)),
+        "{saved}"
+    );
+    let impact = s
+        .ok(&s.owner, "GET", &format!("{change}/impact"), None)
+        .await;
+    assert_eq!(impact["affected"][0]["id"], json!(server));
+    assert_eq!(impact["impacted"][0]["id"], json!(app), "{impact}");
+
+    // A freeze over the window at the MSP blocks it; an emergency goes through.
+    let freeze = s
+        .ok(
+            &s.owner,
+            "POST",
+            "/api/v1/change-freezes",
+            Some(json!({ "orgId": s.provider, "name": "Year end", "startsAt": iso(start - time::Duration::days(1)),
+                         "endsAt": iso(start + time::Duration::days(1)) })),
+        )
+        .await;
+    let (status, problem) = s
+        .call(&s.owner, "POST", &format!("{change}/submit"), None)
+        .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+    assert!(
+        problem["errors"][0]["message"]
+            .as_str()
+            .unwrap()
+            .contains("Year end"),
+        "{problem}"
+    );
+    let calendar = s
+        .ok(
+            &s.owner,
+            "GET",
+            &format!(
+                "/api/v1/changes/calendar?from={}",
+                urlencode(&iso(start - time::Duration::days(2)))
+            ),
+            None,
+        )
+        .await;
+    assert!(
+        calendar["freezes"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|f| f["id"] == freeze["id"]),
+        "{calendar}"
+    );
+    s.ok(
+        &s.owner,
+        "DELETE",
+        &format!("/api/v1/change-freezes/{}", freeze["id"].as_str().unwrap()),
+        None,
+    )
+    .await;
+    change_lifecycle(&s, &ticket, &change).await;
+}
+
+fn urlencode(s: &str) -> String {
+    s.replace(':', "%3A").replace('+', "%2B")
+}
+
+/// Submitted, decided (as the approvals pack would), implemented, reviewed.
+async fn change_lifecycle(s: &Setup, ticket: &Value, change: &str) {
+    let submitted = s
+        .ok(&s.owner, "POST", &format!("{change}/submit"), None)
+        .await;
+    assert_eq!(submitted["change"]["state"], "submitted", "{submitted}");
+    let id = Uuid::parse_str(ticket["id"].as_str().unwrap()).unwrap();
+    let event: Value = sqlx::query_scalar(
+        "SELECT payload FROM events_outbox WHERE event_type = 'change.submitted' AND subject_id = $1",
+    )
+    .bind(id)
+    .fetch_one(&s.pools.owner)
+    .await
+    .unwrap();
+    assert_eq!(
+        (&event["riskLevel"], &event["changeType"]),
+        (&json!("high"), &json!("normal"))
+    );
+    // Submitted: it can't be changed until decided.
+    assert_eq!(
+        s.call(&s.owner, "PUT", change, Some(json!({ "testPlan": "x" })))
+            .await
+            .0,
+        StatusCode::UNPROCESSABLE_ENTITY
+    );
+    let ctx = RequestContext::system(Via::Workflow);
+    let mut tx = begin_scoped(&s.pools.app, &OrgScope::System).await.unwrap();
+    huxley_servicedesk::changes::decide(&mut tx, &ctx, id, true, "Fay (client)", Some("Go ahead"))
+        .await
+        .unwrap();
+    tx.commit().await.unwrap();
+    let approved = s.ok(&s.owner, "GET", change, None).await;
+    assert_eq!(
+        (&approved["state"], &approved["decidedBy"]),
+        (&json!("approved"), &json!("Fay (client)"))
+    );
+    let (status, _) = s
+        .call(
+            &s.owner,
+            "POST",
+            &format!("{change}/review"),
+            Some(json!({ "review": "Too early" })),
+        )
+        .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+    s.ok(
+        &s.owner,
+        "POST",
+        &format!("{change}/implemented"),
+        Some(json!({ "outcome": "successful" })),
+    )
+    .await;
+    let reviewed = s
+        .ok(
+            &s.owner,
+            "POST",
+            &format!("{change}/review"),
+            Some(json!({ "review": "Went to plan." })),
+        )
+        .await;
+    assert_eq!(
+        (&reviewed["state"], &reviewed["outcome"]),
+        (&json!("reviewed"), &json!("successful"))
+    );
+}
+
+#[tokio::test]
+async fn standard_changes_are_pre_approved() {
+    let Some(s) = setup().await else { return };
+    let ticket = s
+        .ticket(
+            &s.owner,
+            json!({ "orgId": s.acme, "type": "change", "title": "Add a mailbox" }),
+        )
+        .await;
+    let change = format!("{}/change", url(&ticket));
+    let start = time::OffsetDateTime::now_utc() + time::Duration::days(3);
+    let iso = |t: time::OffsetDateTime| {
+        t.format(&time::format_description::well_known::Rfc3339)
+            .unwrap()
+    };
+    let low = json!({ "reach": "nobody", "downtime": "none", "tested": "yes", "backout": "easy", "familiar": "often" });
+    s.ok(
+        &s.owner,
+        "PUT",
+        &change,
+        Some(json!({ "changeType": "standard", "riskAnswers": low,
+        "plannedStart": iso(start), "plannedEnd": iso(start + time::Duration::minutes(30)) })),
+    )
+    .await;
+    let done = s
+        .ok(&s.owner, "POST", &format!("{change}/submit"), None)
+        .await;
+    assert_eq!(
+        (&done["change"]["state"], &done["change"]["riskLevel"]),
+        (&json!("approved"), &json!("low")),
+        "{done}"
+    );
+    let questions = s
+        .ok(&s.owner, "GET", "/api/v1/changes/questions", None)
+        .await;
+    assert_eq!(questions.as_array().unwrap().len(), 5);
 }

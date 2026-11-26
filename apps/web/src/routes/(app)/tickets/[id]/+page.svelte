@@ -37,6 +37,7 @@
 	import CsatCard from '#lib/tickets/CsatCard.svelte';
 	import SentimentCard from '#lib/tickets/SentimentCard.svelte';
 	import InsightCard from '#lib/tickets/InsightCard.svelte';
+	import ChangeCard from '#lib/tickets/ChangeCard.svelte';
 	import { OUTCOME } from '#lib/agreements/coverage.ts';
 	import { onMount, untrack } from 'svelte';
 	import type { PageProps } from './$types';
@@ -421,6 +422,15 @@
 				ticketId={ticket.id}
 				contactId={ticket.requesterId ?? undefined}
 			/>
+			{#if data.change}
+				<ChangeCard
+					change={data.change}
+					questions={data.changeQuestions}
+					impact={data.changeImpact}
+					assets={data.changeAssets}
+					{canWrite}
+				/>
+			{/if}
 			<InsightCard insight={data.insight} similar={data.similar} />
 			{#if canWrite && data.recommendations.length > 0 && ticket.statusCategory !== 'resolved' && ticket.statusCategory !== 'closed'}
 				<Card title="Who should take it">

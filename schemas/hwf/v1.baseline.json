@@ -208,6 +208,21 @@
       },
       "type": "object"
     },
+    "ChangeDecide": {
+      "additionalProperties": false,
+      "description": "A change's approval decision to record (`core.change.decide`): the\nchange ticket (in the run's organization or below, submitted for\napproval), `decision` (`approved` or `rejected`, or a boolean), `by`\n(who decided, e.g. the approval's `by`) and a `comment`. Raises\n`change.approved` or `change.rejected`. Output: the change.",
+      "properties": {
+        "by": true,
+        "comment": true,
+        "decision": true,
+        "ticket_id": true
+      },
+      "required": [
+        "ticket_id",
+        "decision"
+      ],
+      "type": "object"
+    },
     "CompanyRef": {
       "additionalProperties": false,
       "description": "Which organization (`core.company.get`): `org_id`, default the run's.\nOutput: `{ company, sites }`.",
@@ -3880,6 +3895,69 @@
             },
             "with": {
               "$ref": "#/$defs/ReportSend"
+            }
+          },
+          "required": [
+            "type",
+            "id",
+            "with"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Record a change's approval decision (the `servicedesk` module).",
+          "properties": {
+            "continue_on_error": {
+              "description": "Record the error as the step's output and carry on.",
+              "type": "boolean"
+            },
+            "description": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "id": {
+              "description": "Unique in the workflow: lowercase letters, digits, underscores.\nOther steps read this step's output as `steps.<id>.output`.",
+              "type": "string"
+            },
+            "if": {
+              "description": "Skip the step unless this expression is true.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "name": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "retry": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/RetryPolicy"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "timeout": {
+              "description": "Fail the attempt after this long, e.g. `30s`.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "type": {
+              "const": "core.change.decide",
+              "type": "string"
+            },
+            "with": {
+              "$ref": "#/$defs/ChangeDecide"
             }
           },
           "required": [

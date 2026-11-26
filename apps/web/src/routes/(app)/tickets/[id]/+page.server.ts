@@ -80,6 +80,21 @@ export const load: PageServerLoad = async (event) => {
 			params: { path: { id: event.params.id }, query: { limit: 5 } }
 		})
 	]);
+	// A change ticket: its change details, the risk questions, its impact
+	// and the client's assets to pick from.
+	const isChange = ticket.data.typeKey === 'change' && user.activeModules.includes('change');
+	const [change, questions, impact, changeAssets] = isChange
+		? await Promise.all([
+				client.GET('/api/v1/tickets/{id}/change', path),
+				client.GET('/api/v1/changes/questions'),
+				client.GET('/api/v1/tickets/{id}/change/impact', path),
+				user.activeModules.includes('cmdb') && user.grantedPermissions.includes('asset:read')
+					? client.GET('/api/v1/assets', {
+							params: { query: { orgId: ticket.data.orgId, inUse: true, limit: 200 } }
+						})
+					: Promise.resolve({ data: undefined })
+			])
+		: [{ data: undefined }, { data: undefined }, { data: undefined }, { data: undefined }];
 	return {
 		ticket: ticket.data,
 		notes: notes.data,
@@ -101,6 +116,11 @@ export const load: PageServerLoad = async (event) => {
 		sentiment: sentiment.data ?? [],
 		recommendations: recommendations.data ?? [],
 		insight: insight.data ?? null,
+		change: change.data ?? null,
+		changeQuestions: questions.data ?? [],
+		changeImpact: impact.data ?? null,
+		changeAssets:
+			(changeAssets.data as { items?: { id: string; name: string }[] } | undefined)?.items ?? [],
 		similar: similar.data ?? null
 	};
 };
@@ -340,6 +360,87 @@ export const actions: Actions = {
 			{ title: formString(form, 'title'), description: formString(form, 'description') },
 			'edit'
 		);
+	},
+	saveChange: async (event) => {
+		const form = await event.request.formData();
+		const answers: Record<string, string> = {};
+		for (const [key, value] of form.entries()) {
+			if (key.startsWith('risk.') && typeof value === 'string' && value)
+				answers[key.slice(5)] = value;
+		}
+		const iso = (v: string) => (v ? new Date(v).toISOString() : null);
+		const { error: problem, response } = await api(event).PUT('/api/v1/tickets/{id}/change', {
+			params: { path: { id: event.params.id } },
+			body: {
+				changeType: formString(form, 'changeType'),
+				riskAnswers: answers,
+				implementationPlan: formString(form, 'implementationPlan'),
+				backoutPlan: formString(form, 'backoutPlan'),
+				testPlan: formString(form, 'testPlan'),
+				plannedStart: iso(formString(form, 'plannedStart')),
+				plannedEnd: iso(formString(form, 'plannedEnd')),
+				affectedAssets: form.getAll('asset').map(String),
+				version: Number(formString(form, 'version'))
+			}
+		});
+		if (response.status !== 200) {
+			return fail(response.status, {
+				change: { message: problemMessage(problem, 'Could not save the change.') }
+			});
+		}
+		return { change: { saved: true } };
+	},
+	submitChange: async (event) => {
+		const {
+			data,
+			error: problem,
+			response
+		} = await api(event).POST('/api/v1/tickets/{id}/change/submit', {
+			params: { path: { id: event.params.id } }
+		});
+		if (!data) {
+			return fail(response.status, {
+				change: { message: problemMessage(problem, 'Could not submit it.') }
+			});
+		}
+		return {
+			change: {
+				submitted: true,
+				conflicts: data.conflicts.map((c) => `${c.reference} · ${c.title}`)
+			}
+		};
+	},
+	implementedChange: async (event) => {
+		const form = await event.request.formData();
+		const { error: problem, response } = await api(event).POST(
+			'/api/v1/tickets/{id}/change/implemented',
+			{
+				params: { path: { id: event.params.id } },
+				body: { outcome: formString(form, 'outcome') }
+			}
+		);
+		if (response.status !== 200) {
+			return fail(response.status, {
+				change: { message: problemMessage(problem, 'Could not record it.') }
+			});
+		}
+		return { change: { saved: true } };
+	},
+	reviewChange: async (event) => {
+		const form = await event.request.formData();
+		const { error: problem, response } = await api(event).POST(
+			'/api/v1/tickets/{id}/change/review',
+			{
+				params: { path: { id: event.params.id } },
+				body: { review: formString(form, 'review') }
+			}
+		);
+		if (response.status !== 200) {
+			return fail(response.status, {
+				change: { message: problemMessage(problem, 'Could not save the review.') }
+			});
+		}
+		return { change: { saved: true } };
 	},
 	insight: async (event) => {
 		const { response } = await api(event).POST('/api/v1/tickets/{id}/insight/refresh', {

@@ -1947,6 +1947,74 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
+	'/api/v1/change-freezes': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** Freezes ending from now on, soonest first. */
+		get: operations['list_change_freezes'];
+		put?: never;
+		/** Adds a freeze window at an organization (for it and those below). */
+		post: operations['add_change_freeze'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/change-freezes/{id}': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		post?: never;
+		delete: operations['delete_change_freeze'];
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/changes/calendar': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** Changes planned and freezes in a window, among what you can see. */
+		get: operations['change_calendar'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/changes/questions': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** The risk questionnaire. */
+		get: operations['change_risk_questions'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
 	'/api/v1/companies': {
 		parameters: {
 			query?: never;
@@ -5271,6 +5339,101 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
+	'/api/v1/tickets/{id}/change': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** A change ticket's change details. */
+		get: operations['get_change'];
+		/**
+		 * Changes a draft or rejected change: its type, risk answers, plans,
+		 *     window and affected assets.
+		 */
+		put: operations['save_change'];
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/tickets/{id}/change/impact': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/**
+		 * The change's affected assets and everything that depends on them,
+		 *     among the assets you can see.
+		 */
+		get: operations['change_impact'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/tickets/{id}/change/implemented': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/** Records that an approved change was carried out, and how it went. */
+		post: operations['change_implemented'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/tickets/{id}/change/review': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/** The post-implementation review. */
+		post: operations['review_change'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/tickets/{id}/change/submit': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/**
+		 * Submits a change for approval (standard changes are approved at once).
+		 *     Refused if its window falls in a freeze, unless it's an emergency.
+		 */
+		post: operations['submit_change'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
 	'/api/v1/tickets/{id}/csat': {
 		parameters: {
 			query?: never;
@@ -7020,6 +7183,13 @@ export interface components {
 			/** Format: int64 */
 			added: number;
 		};
+		AffectedAsset: {
+			/** Format: uuid */
+			id: string;
+			name: string;
+			orgName: string;
+			typeName: string;
+		};
 		AffectedStep: {
 			action: string;
 			problem: string;
@@ -7940,6 +8110,20 @@ export interface components {
 			/** @description Then a status for all of them (a status key, e.g. `in_progress`). */
 			status?: string | null;
 		};
+		CalendarChange: {
+			changeType: string;
+			orgName: string;
+			/** Format: date-time */
+			plannedEnd: string;
+			/** Format: date-time */
+			plannedStart: string;
+			reference: string;
+			riskLevel?: string | null;
+			state: string;
+			/** Format: uuid */
+			ticketId: string;
+			title: string;
+		};
 		CancelRunResponse: {
 			/** @description False if the run had already finished. */
 			cancelled: boolean;
@@ -8125,11 +8309,125 @@ export interface components {
 			breaking: boolean;
 			message: string;
 		};
+		ChangeCalendar: {
+			changes: components['schemas']['CalendarChange'][];
+			freezes: components['schemas']['ChangeFreeze'][];
+		};
+		ChangeConflict: {
+			/** Format: date-time */
+			plannedEnd: string;
+			/** Format: date-time */
+			plannedStart: string;
+			reference: string;
+			/** Format: uuid */
+			ticketId: string;
+			title: string;
+		};
+		ChangeFreeze: {
+			/** Format: date-time */
+			endsAt: string;
+			/** Format: uuid */
+			id: string;
+			name: string;
+			/** Format: uuid */
+			orgId: string;
+			orgName: string;
+			/** Format: date-time */
+			startsAt: string;
+		};
+		ChangeFreezeInput: {
+			/** Format: date-time */
+			endsAt: string;
+			name: string;
+			/** Format: uuid */
+			orgId: string;
+			/** Format: date-time */
+			startsAt: string;
+		};
+		ChangeImpact: {
+			/** @description The assets the change touches. */
+			affected: components['schemas']['AffectedAsset'][];
+			/** @description What depends on them (from the dependency map), nearest first. */
+			impacted: components['schemas']['Impacted'][];
+		};
+		ChangeInput: {
+			affectedAssets?: string[] | null;
+			backoutPlan?: string | null;
+			changeType?: string | null;
+			implementationPlan?: string | null;
+			/** Format: date-time */
+			plannedEnd?: string | null;
+			/** Format: date-time */
+			plannedStart?: string | null;
+			riskAnswers?: {
+				[key: string]: string;
+			} | null;
+			testPlan?: string | null;
+			/**
+			 * Format: int32
+			 * @description The version you read (after the first save).
+			 */
+			version?: number | null;
+		};
+		ChangeOutcome: {
+			/** @description `successful`, `failed` or `backed_out`. */
+			outcome: string;
+		};
 		ChangePasswordRequest: {
 			/** Format: password */
 			currentPassword: string;
 			/** Format: password */
 			newPassword: string;
+		};
+		ChangeRecord: {
+			affectedAssets: string[];
+			backoutPlan: string;
+			/** @description `standard` (pre-approved), `normal` or `emergency`. */
+			changeType: string;
+			/** Format: date-time */
+			decidedAt?: string | null;
+			decidedBy?: string | null;
+			decisionComment?: string | null;
+			implementationPlan: string;
+			/** Format: date-time */
+			implementedAt?: string | null;
+			/** Format: uuid */
+			orgId: string;
+			outcome?: string | null;
+			/** Format: date-time */
+			plannedEnd?: string | null;
+			/** Format: date-time */
+			plannedStart?: string | null;
+			review?: string | null;
+			/** Format: date-time */
+			reviewedAt?: string | null;
+			riskAnswers: {
+				[key: string]: string;
+			};
+			/** @description `low`, `medium` or `high`, once every question is answered. */
+			riskLevel?: string | null;
+			/** Format: int32 */
+			riskScore?: number | null;
+			/**
+			 * @description `draft`, `submitted`, `approved`, `rejected`, `implemented`,
+			 *     `reviewed` or `cancelled`.
+			 */
+			state: string;
+			/** Format: date-time */
+			submittedAt?: string | null;
+			testPlan: string;
+			/** Format: uuid */
+			ticketId: string;
+			/** Format: int32 */
+			version: number;
+		};
+		ChangeReview: {
+			review: string;
+		};
+		ChangeSubmitted: {
+			change: components['schemas']['ChangeRecord'];
+			/** @description Other changes touching the same assets at the same time. */
+			conflicts: components['schemas']['ChangeConflict'][];
 		};
 		Channels: {
 			email: boolean;
@@ -9035,6 +9333,10 @@ export interface components {
 			ui?: {
 				[key: string]: unknown;
 			};
+		};
+		FreezeCreated: {
+			/** Format: uuid */
+			id: string;
 		};
 		FromTickets: {
 			/**
@@ -11045,6 +11347,17 @@ export interface components {
 		ReviewScript: {
 			key: string;
 			language: string;
+		};
+		RiskOption: {
+			key: string;
+			label: string;
+			/** Format: int32 */
+			points: number;
+		};
+		RiskQuestion: {
+			key: string;
+			options: components['schemas']['RiskOption'][];
+			question: string;
 		};
 		Role: {
 			description: string;
@@ -16854,6 +17167,118 @@ export interface operations {
 				};
 				content: {
 					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	list_change_freezes: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ChangeFreeze'][];
+				};
+			};
+		};
+	};
+	add_change_freeze: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['ChangeFreezeInput'];
+			};
+		};
+		responses: {
+			201: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['FreezeCreated'];
+				};
+			};
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	delete_change_freeze: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			204: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content?: never;
+			};
+		};
+	};
+	change_calendar: {
+		parameters: {
+			query?: {
+				/** @description RFC 3339 (default: now). */
+				from?: string;
+				/** @description RFC 3339 (default: four weeks after `from`). */
+				to?: string;
+			};
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ChangeCalendar'];
+				};
+			};
+		};
+	};
+	change_risk_questions: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['RiskQuestion'][];
 				};
 			};
 		};
@@ -24026,6 +24451,160 @@ export interface operations {
 				};
 				content: {
 					'application/json': components['schemas']['Appointment'];
+				};
+			};
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	get_change: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ChangeRecord'];
+				};
+			};
+		};
+	};
+	save_change: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['ChangeInput'];
+			};
+		};
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ChangeRecord'];
+				};
+			};
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	change_impact: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ChangeImpact'];
+				};
+			};
+		};
+	};
+	change_implemented: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['ChangeOutcome'];
+			};
+		};
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ChangeRecord'];
+				};
+			};
+		};
+	};
+	review_change: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['ChangeReview'];
+			};
+		};
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ChangeRecord'];
+				};
+			};
+		};
+	};
+	submit_change: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ChangeSubmitted'];
 				};
 			};
 			422: {

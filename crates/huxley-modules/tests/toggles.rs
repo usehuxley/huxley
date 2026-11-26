@@ -1,9 +1,8 @@
-//! Module toggles against a real PostgreSQL. Everything runs in one
-//! transaction that is rolled back: module settings are instance-wide and
-//! the test database is shared.
+//! Module toggles against a real PostgreSQL, in a database of their own:
+//! module settings are instance-wide.
 
 use huxley_core::{RequestContext, Via};
-use huxley_db::testing::{ensure_root, pools};
+use huxley_db::testing::{ensure_root, isolated};
 use huxley_db::{OrgScope, begin_scoped};
 use huxley_modules::{
     ModuleError, Preset, SetError, apply_preset, enabled_set, is_active, set_enabled, states,
@@ -11,8 +10,12 @@ use huxley_modules::{
 
 #[tokio::test]
 async fn toggles_respect_dependencies_and_are_audited() {
-    let Some(pools) = pools().await else { return };
-    ensure_root(&pools).await;
+    // Its own database: other tests turn modules on concurrently.
+    let Some(db) = isolated("toggles").await else {
+        return;
+    };
+    let pools = &db.pools;
+    ensure_root(pools).await;
     let ctx = RequestContext::system(Via::System);
     let mut tx = begin_scoped(&pools.app, &OrgScope::System).await.unwrap();
     sqlx::query("DELETE FROM module_settings")
@@ -21,26 +24,27 @@ async fn toggles_respect_dependencies_and_are_audited() {
         .unwrap();
 
     // Enabling without dependencies is refused with the missing list.
-    let refused = set_enabled(&mut tx, &ctx, "change", true, false).await;
-    assert!(matches!(
-        refused,
-        Err(SetError::Module(ModuleError::MissingDependencies(ref deps))) if deps == &vec!["crm", "servicedesk"]
-    ));
+    let refused = set_enabled(&mut tx, &ctx, "sales", true, false).await;
+    let Err(SetError::Module(ModuleError::MissingDependencies(mut deps))) = refused else {
+        panic!("{refused:?}")
+    };
+    deps.sort_unstable();
+    assert_eq!(deps, ["contracts", "crm"]);
 
     // Including dependencies turns them on first.
-    let changed = set_enabled(&mut tx, &ctx, "change", true, true)
+    let changed = set_enabled(&mut tx, &ctx, "sales", true, true)
         .await
         .unwrap();
-    assert_eq!(changed, vec!["crm", "servicedesk", "change"]);
-    assert!(enabled_set(&mut tx).await.unwrap().contains("servicedesk"));
+    assert_eq!(changed, vec!["crm", "contracts", "sales"]);
+    assert!(enabled_set(&mut tx).await.unwrap().contains("contracts"));
 
     // Unreleased modules are enabled but not active.
-    assert!(!is_active(&mut tx, "change").await.unwrap());
+    assert!(!is_active(&mut tx, "sales").await.unwrap());
     let change = states(&mut tx)
         .await
         .unwrap()
         .into_iter()
-        .find(|m| m.module.key == "change")
+        .find(|m| m.module.key == "sales")
         .unwrap();
     assert!(change.enabled && !change.active);
 
@@ -51,10 +55,10 @@ async fn toggles_respect_dependencies_and_are_audited() {
         Err(SetError::Module(ModuleError::HasDependents(_)))
     ));
     assert_eq!(
-        set_enabled(&mut tx, &ctx, "change", false, false)
+        set_enabled(&mut tx, &ctx, "sales", false, false)
             .await
             .unwrap(),
-        vec!["change"]
+        vec!["sales"]
     );
 
     // Each change is audited.

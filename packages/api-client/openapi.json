@@ -4938,6 +4938,141 @@
 				}
 			}
 		},
+		"/api/v1/change-freezes": {
+			"get": {
+				"tags": ["changes"],
+				"summary": "Freezes ending from now on, soonest first.",
+				"operationId": "list_change_freezes",
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "array",
+									"items": {
+										"$ref": "#/components/schemas/ChangeFreeze"
+									}
+								}
+							}
+						}
+					}
+				}
+			},
+			"post": {
+				"tags": ["changes"],
+				"summary": "Adds a freeze window at an organization (for it and those below).",
+				"operationId": "add_change_freeze",
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/ChangeFreezeInput"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"201": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/FreezeCreated"
+								}
+							}
+						}
+					},
+					"422": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/change-freezes/{id}": {
+			"delete": {
+				"tags": ["changes"],
+				"operationId": "delete_change_freeze",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"responses": {
+					"204": {}
+				}
+			}
+		},
+		"/api/v1/changes/calendar": {
+			"get": {
+				"tags": ["changes"],
+				"summary": "Changes planned and freezes in a window, among what you can see.",
+				"operationId": "change_calendar",
+				"parameters": [
+					{
+						"name": "from",
+						"in": "query",
+						"description": "RFC 3339 (default: now).",
+						"required": false,
+						"schema": {
+							"type": "string"
+						}
+					},
+					{
+						"name": "to",
+						"in": "query",
+						"description": "RFC 3339 (default: four weeks after `from`).",
+						"required": false,
+						"schema": {
+							"type": "string"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ChangeCalendar"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/changes/questions": {
+			"get": {
+				"tags": ["changes"],
+				"summary": "The risk questionnaire.",
+				"operationId": "change_risk_questions",
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "array",
+									"items": {
+										"$ref": "#/components/schemas/RiskQuestion"
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		},
 		"/api/v1/companies": {
 			"get": {
 				"tags": ["crm"],
@@ -14605,6 +14740,226 @@
 				}
 			}
 		},
+		"/api/v1/tickets/{id}/change": {
+			"get": {
+				"tags": ["changes"],
+				"summary": "A change ticket's change details.",
+				"operationId": "get_change",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ChangeRecord"
+								}
+							}
+						}
+					}
+				}
+			},
+			"put": {
+				"tags": ["changes"],
+				"summary": "Changes a draft or rejected change: its type, risk answers, plans,\nwindow and affected assets.",
+				"operationId": "save_change",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/ChangeInput"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ChangeRecord"
+								}
+							}
+						}
+					},
+					"422": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/tickets/{id}/change/impact": {
+			"get": {
+				"tags": ["changes"],
+				"summary": "The change's affected assets and everything that depends on them,\namong the assets you can see.",
+				"operationId": "change_impact",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ChangeImpact"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/tickets/{id}/change/implemented": {
+			"post": {
+				"tags": ["changes"],
+				"summary": "Records that an approved change was carried out, and how it went.",
+				"operationId": "change_implemented",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/ChangeOutcome"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ChangeRecord"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/tickets/{id}/change/review": {
+			"post": {
+				"tags": ["changes"],
+				"summary": "The post-implementation review.",
+				"operationId": "review_change",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/ChangeReview"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ChangeRecord"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/tickets/{id}/change/submit": {
+			"post": {
+				"tags": ["changes"],
+				"summary": "Submits a change for approval (standard changes are approved at once).\nRefused if its window falls in a freeze, unless it's an emergency.",
+				"operationId": "submit_change",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ChangeSubmitted"
+								}
+							}
+						}
+					},
+					"422": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
 		"/api/v1/tickets/{id}/csat": {
 			"get": {
 				"tags": ["tickets"],
@@ -19270,6 +19625,25 @@
 					}
 				}
 			},
+			"AffectedAsset": {
+				"type": "object",
+				"required": ["id", "name", "typeName", "orgName"],
+				"properties": {
+					"id": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"name": {
+						"type": "string"
+					},
+					"orgName": {
+						"type": "string"
+					},
+					"typeName": {
+						"type": "string"
+					}
+				}
+			},
 			"AffectedStep": {
 				"type": "object",
 				"required": ["stepId", "action", "problem"],
@@ -21605,6 +21979,51 @@
 				},
 				"additionalProperties": false
 			},
+			"CalendarChange": {
+				"type": "object",
+				"required": [
+					"ticketId",
+					"reference",
+					"title",
+					"orgName",
+					"changeType",
+					"state",
+					"plannedStart",
+					"plannedEnd"
+				],
+				"properties": {
+					"changeType": {
+						"type": "string"
+					},
+					"orgName": {
+						"type": "string"
+					},
+					"plannedEnd": {
+						"type": "string",
+						"format": "date-time"
+					},
+					"plannedStart": {
+						"type": "string",
+						"format": "date-time"
+					},
+					"reference": {
+						"type": "string"
+					},
+					"riskLevel": {
+						"type": ["string", "null"]
+					},
+					"state": {
+						"type": "string"
+					},
+					"ticketId": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"title": {
+						"type": "string"
+					}
+				}
+			},
 			"CancelRunResponse": {
 				"type": "object",
 				"required": ["cancelled"],
@@ -22032,6 +22451,176 @@
 					}
 				}
 			},
+			"ChangeCalendar": {
+				"type": "object",
+				"required": ["changes", "freezes"],
+				"properties": {
+					"changes": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/CalendarChange"
+						}
+					},
+					"freezes": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/ChangeFreeze"
+						}
+					}
+				}
+			},
+			"ChangeConflict": {
+				"type": "object",
+				"required": ["ticketId", "reference", "title", "plannedStart", "plannedEnd"],
+				"properties": {
+					"plannedEnd": {
+						"type": "string",
+						"format": "date-time"
+					},
+					"plannedStart": {
+						"type": "string",
+						"format": "date-time"
+					},
+					"reference": {
+						"type": "string"
+					},
+					"ticketId": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"title": {
+						"type": "string"
+					}
+				}
+			},
+			"ChangeFreeze": {
+				"type": "object",
+				"required": ["id", "orgId", "orgName", "name", "startsAt", "endsAt"],
+				"properties": {
+					"endsAt": {
+						"type": "string",
+						"format": "date-time"
+					},
+					"id": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"name": {
+						"type": "string"
+					},
+					"orgId": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"orgName": {
+						"type": "string"
+					},
+					"startsAt": {
+						"type": "string",
+						"format": "date-time"
+					}
+				}
+			},
+			"ChangeFreezeInput": {
+				"type": "object",
+				"required": ["orgId", "name", "startsAt", "endsAt"],
+				"properties": {
+					"endsAt": {
+						"type": "string",
+						"format": "date-time"
+					},
+					"name": {
+						"type": "string"
+					},
+					"orgId": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"startsAt": {
+						"type": "string",
+						"format": "date-time"
+					}
+				},
+				"additionalProperties": false
+			},
+			"ChangeImpact": {
+				"type": "object",
+				"required": ["affected", "impacted"],
+				"properties": {
+					"affected": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/AffectedAsset"
+						},
+						"description": "The assets the change touches."
+					},
+					"impacted": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/Impacted"
+						},
+						"description": "What depends on them (from the dependency map), nearest first."
+					}
+				}
+			},
+			"ChangeInput": {
+				"type": "object",
+				"properties": {
+					"affectedAssets": {
+						"type": ["array", "null"],
+						"items": {
+							"type": "string",
+							"format": "uuid"
+						}
+					},
+					"backoutPlan": {
+						"type": ["string", "null"]
+					},
+					"changeType": {
+						"type": ["string", "null"]
+					},
+					"implementationPlan": {
+						"type": ["string", "null"]
+					},
+					"plannedEnd": {
+						"type": ["string", "null"],
+						"format": "date-time"
+					},
+					"plannedStart": {
+						"type": ["string", "null"],
+						"format": "date-time"
+					},
+					"riskAnswers": {
+						"type": ["object", "null"],
+						"additionalProperties": {
+							"type": "string"
+						},
+						"propertyNames": {
+							"type": "string"
+						}
+					},
+					"testPlan": {
+						"type": ["string", "null"]
+					},
+					"version": {
+						"type": ["integer", "null"],
+						"format": "int32",
+						"description": "The version you read (after the first save)."
+					}
+				},
+				"additionalProperties": false
+			},
+			"ChangeOutcome": {
+				"type": "object",
+				"required": ["outcome"],
+				"properties": {
+					"outcome": {
+						"type": "string",
+						"description": "`successful`, `failed` or `backed_out`."
+					}
+				},
+				"additionalProperties": false
+			},
 			"ChangePasswordRequest": {
 				"type": "object",
 				"required": ["currentPassword", "newPassword"],
@@ -22043,6 +22632,138 @@
 					"newPassword": {
 						"type": "string",
 						"format": "password"
+					}
+				}
+			},
+			"ChangeRecord": {
+				"type": "object",
+				"required": [
+					"ticketId",
+					"orgId",
+					"changeType",
+					"riskAnswers",
+					"implementationPlan",
+					"backoutPlan",
+					"testPlan",
+					"affectedAssets",
+					"state",
+					"version"
+				],
+				"properties": {
+					"affectedAssets": {
+						"type": "array",
+						"items": {
+							"type": "string",
+							"format": "uuid"
+						}
+					},
+					"backoutPlan": {
+						"type": "string"
+					},
+					"changeType": {
+						"type": "string",
+						"description": "`standard` (pre-approved), `normal` or `emergency`."
+					},
+					"decidedAt": {
+						"type": ["string", "null"],
+						"format": "date-time"
+					},
+					"decidedBy": {
+						"type": ["string", "null"]
+					},
+					"decisionComment": {
+						"type": ["string", "null"]
+					},
+					"implementationPlan": {
+						"type": "string"
+					},
+					"implementedAt": {
+						"type": ["string", "null"],
+						"format": "date-time"
+					},
+					"orgId": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"outcome": {
+						"type": ["string", "null"]
+					},
+					"plannedEnd": {
+						"type": ["string", "null"],
+						"format": "date-time"
+					},
+					"plannedStart": {
+						"type": ["string", "null"],
+						"format": "date-time"
+					},
+					"review": {
+						"type": ["string", "null"]
+					},
+					"reviewedAt": {
+						"type": ["string", "null"],
+						"format": "date-time"
+					},
+					"riskAnswers": {
+						"type": "object",
+						"additionalProperties": {
+							"type": "string"
+						},
+						"propertyNames": {
+							"type": "string"
+						}
+					},
+					"riskLevel": {
+						"type": ["string", "null"],
+						"description": "`low`, `medium` or `high`, once every question is answered."
+					},
+					"riskScore": {
+						"type": ["integer", "null"],
+						"format": "int32"
+					},
+					"state": {
+						"type": "string",
+						"description": "`draft`, `submitted`, `approved`, `rejected`, `implemented`,\n`reviewed` or `cancelled`."
+					},
+					"submittedAt": {
+						"type": ["string", "null"],
+						"format": "date-time"
+					},
+					"testPlan": {
+						"type": "string"
+					},
+					"ticketId": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"version": {
+						"type": "integer",
+						"format": "int32"
+					}
+				}
+			},
+			"ChangeReview": {
+				"type": "object",
+				"required": ["review"],
+				"properties": {
+					"review": {
+						"type": "string"
+					}
+				},
+				"additionalProperties": false
+			},
+			"ChangeSubmitted": {
+				"type": "object",
+				"required": ["change", "conflicts"],
+				"properties": {
+					"change": {
+						"$ref": "#/components/schemas/ChangeRecord"
+					},
+					"conflicts": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/ChangeConflict"
+						},
+						"description": "Other changes touching the same assets at the same time."
 					}
 				}
 			},
@@ -24255,6 +24976,16 @@
 					}
 				},
 				"additionalProperties": false
+			},
+			"FreezeCreated": {
+				"type": "object",
+				"required": ["id"],
+				"properties": {
+					"id": {
+						"type": "string",
+						"format": "uuid"
+					}
+				}
 			},
 			"FromTickets": {
 				"type": "object",
@@ -29093,6 +29824,40 @@
 					}
 				}
 			},
+			"RiskOption": {
+				"type": "object",
+				"required": ["key", "label", "points"],
+				"properties": {
+					"key": {
+						"type": "string"
+					},
+					"label": {
+						"type": "string"
+					},
+					"points": {
+						"type": "integer",
+						"format": "int32"
+					}
+				}
+			},
+			"RiskQuestion": {
+				"type": "object",
+				"required": ["key", "question", "options"],
+				"properties": {
+					"key": {
+						"type": "string"
+					},
+					"options": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/RiskOption"
+						}
+					},
+					"question": {
+						"type": "string"
+					}
+				}
+			},
 			"Role": {
 				"type": "object",
 				"required": ["id", "key", "name", "description", "isSystem", "permissions", "requireMfa"],
@@ -33546,6 +34311,10 @@
 		{
 			"name": "servicedesk",
 			"description": "Tickets, service queues and their configuration (the servicedesk module)"
+		},
+		{
+			"name": "changes",
+			"description": "Change management: risk, approvals, freezes and the change calendar"
 		},
 		{
 			"name": "workforce",
