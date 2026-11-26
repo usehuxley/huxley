@@ -1320,6 +1320,30 @@ export type Step =
 			 * Fail the attempt after this long, e.g. `30s`.
 			 */
 			timeout?: string | null;
+			type: 'core.project.scope.decide';
+			with: ScopeDecide;
+	  }
+	| {
+			/**
+			 * Record the error as the step's output and carry on.
+			 */
+			continue_on_error?: boolean;
+			description?: string | null;
+			/**
+			 * Unique in the workflow: lowercase letters, digits, underscores.
+			 * Other steps read this step's output as `steps.<id>.output`.
+			 */
+			id: string;
+			/**
+			 * Skip the step unless this expression is true.
+			 */
+			if?: string | null;
+			name?: string | null;
+			retry?: RetryPolicy | null;
+			/**
+			 * Fail the attempt after this long, e.g. `30s`.
+			 */
+			timeout?: string | null;
 			type: 'core.asset.sync';
 			with: AssetSync;
 	  }
@@ -2335,6 +2359,23 @@ export interface ChangeDecide {
 	comment?: unknown;
 	decision: unknown;
 	ticket_id: unknown;
+}
+/**
+ * A project scope change's decision to record
+ * (`core.project.scope.decide`): `scope_change_id` (submitted, on a
+ * project in the run's organization or below), `decision` (`approved` or
+ * `rejected`, or a boolean), `by` and a `comment`. An approved change's
+ * hours are added to the budget. Raises `project.scope_change_approved`
+ * or `project.scope_change_rejected`. Output: the scope change.
+ *
+ * This interface was referenced by `HuxleyWorkflowFormatV1`'s JSON-Schema
+ * via the `definition` "ScopeDecide".
+ */
+export interface ScopeDecide {
+	by?: unknown;
+	comment?: unknown;
+	decision: unknown;
+	scope_change_id: unknown;
 }
 /**
  * Mapping rules to run (`core.asset.sync`): a dataset's rows become

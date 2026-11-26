@@ -490,6 +490,32 @@ export const STEPS: StepSpec[] = [
 		]
 	},
 	{
+		type: 'core.project.scope.decide',
+		label: 'Decide a scope change',
+		description:
+			'Record whether a project scope change is approved (adding its hours to the budget) or rejected.',
+		group: 'Actions',
+		module: 'projects',
+		template: {
+			with: {
+				scope_change_id: '{{ inputs.scopeChangeId }}',
+				decision: 'approved',
+				by: '{{ steps.client.output.by.name }}'
+			}
+		},
+		fields: [
+			{ path: 'with.scope_change_id', label: 'Scope change', kind: 'expression' },
+			{
+				path: 'with.decision',
+				label: 'Decision',
+				kind: 'expression',
+				hint: 'approved or rejected'
+			},
+			{ path: 'with.by', label: 'Decided by', kind: 'expression' },
+			{ path: 'with.comment', label: 'Comment', kind: 'expression' }
+		]
+	},
+	{
 		type: 'core.report.send',
 		label: 'Email a report',
 		description:

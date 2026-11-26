@@ -1,0 +1,31 @@
+apiVersion: usehuxley.io/v1
+kind: Workflow
+metadata:
+  key: approve-scope-change
+  name: Approve project scope changes (the client)
+  description: >-
+    When a project scope change is submitted, asks the client's approvers
+    in the portal to approve it, then records the decision. An approved
+    change's hours are added to the project's budget.
+spec:
+  triggers:
+    - type: event
+      event: project.scope_change_submitted
+  steps:
+    - id: client
+      type: approval
+      title: "Approve scope change {{ inputs.number }} on {{ inputs.projectName }}: {{ inputs.title }}"
+      message: >-
+        {{ inputs.description ~ ' ' if inputs.description else '' }}It changes the work by {{ inputs.hours }} hour(s){{
+        (', costing ' ~ inputs.amount ~ ' ' ~ (inputs.currency or '')) if inputs.amount is not none else '' }}.
+      approvers: client_approvers
+      expires: 7d
+    - id: decide
+      type: core.project.scope.decide
+      with:
+        scope_change_id: "{{ inputs.scopeChangeId }}"
+        decision: "{{ steps.client.output.decision if steps.client.output else 'rejected' }}"
+        by: "{{ (steps.client.output.by.name ~ ' (client)') if steps.client.output else 'Scope approvals' }}"
+        comment: "{{ steps.client.output.comment if steps.client.output and steps.client.output.comment else '' }}"
+  outputs:
+    decision: "{{ steps.decide.output.state }}"

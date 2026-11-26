@@ -4308,6 +4308,27 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
+	'/api/v1/project-templates/{id}/workflows': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/**
+		 * Workflows for this template's projects: those with a `project.*` event
+		 *     trigger whose filter names the template's id (e.g.
+		 *     `{{ event.payload.templateId == '<id>' }}`).
+		 */
+		get: operations['project_template_workflows'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
 	'/api/v1/projects': {
 		parameters: {
 			query?: never;
@@ -4370,6 +4391,80 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
+	'/api/v1/projects/{id}/scope-changes': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/**
+		 * Drafts a scope change: work added (or removed), in hours and
+		 *     optionally priced.
+		 */
+		post: operations['create_scope_change'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/projects/{id}/scope-changes/{change}': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		/** Changes a draft scope change. */
+		put: operations['update_scope_change'];
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/projects/{id}/scope-changes/{change}/submit': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/**
+		 * Submits a draft for the client's approval (raising
+		 *     `project.scope_change_submitted`).
+		 */
+		post: operations['submit_scope_change'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/projects/{id}/scope-changes/{change}/withdraw': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/** Withdraws a draft or submitted scope change. */
+		post: operations['withdraw_scope_change'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
 	'/api/v1/projects/{id}/tasks': {
 		parameters: {
 			query?: never;
@@ -4385,6 +4480,26 @@ export interface paths {
 		options?: never;
 		head?: never;
 		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/projects/{id}/tasks/{ticket}': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		/**
+		 * Changes a task's phase, estimate, dates, dependencies or client
+		 *     visibility.
+		 */
+		patch: operations['update_project_task'];
 		trace?: never;
 	};
 	'/api/v1/queues': {
@@ -10299,6 +10414,11 @@ export interface components {
 			kind: string;
 		};
 		NewProject: {
+			/**
+			 * Format: uuid
+			 * @description The client's agreement it bills against.
+			 */
+			agreementId?: string | null;
 			/** @description A template task's key → who's assigned it. */
 			assignees?: {
 				[key: string]: string;
@@ -10343,10 +10463,13 @@ export interface components {
 			clientVisible?: boolean;
 			dependsOn?: string[];
 			description?: string;
+			dueOn?: string | null;
 			/** Format: double */
 			estimateHours?: number | null;
 			/** Format: uuid */
 			phaseId?: string | null;
+			/** @description `YYYY-MM-DD`. */
+			startOn?: string | null;
 			title: string;
 		};
 		NewTicket: {
@@ -11055,6 +11178,8 @@ export interface components {
 			milestones: components['schemas']['Milestone'][];
 			name: string;
 			progress: components['schemas']['Progress'];
+			/** @description Scope changes sent to the client (not drafts or withdrawn ones). */
+			scopeChanges: components['schemas']['ScopeChange'][];
 			startOn: string;
 			status: string;
 			/** @description Tasks marked for the client. */
@@ -11255,6 +11380,9 @@ export interface components {
 			total: number;
 		};
 		Project: {
+			/** Format: uuid */
+			agreementId?: string | null;
+			agreementName?: string | null;
 			billingMethod: string;
 			/** Format: double */
 			budgetHours?: number | null;
@@ -11279,6 +11407,7 @@ export interface components {
 			phases: components['schemas']['ProjectPhase'][];
 			portalVisible: boolean;
 			progress: components['schemas']['Progress'];
+			scopeChanges: components['schemas']['ScopeChange'][];
 			startOn: string;
 			status: string;
 			tasks: components['schemas']['ProjectTask'][];
@@ -11295,9 +11424,13 @@ export interface components {
 			version: number;
 		};
 		ProjectChanges: {
+			/** Format: uuid */
+			agreementId?: string | null;
 			billingMethod?: string | null;
 			/** Format: double */
 			budgetHours?: number | null;
+			/** @description Unlink the agreement. */
+			clearAgreement?: boolean;
 			description?: string | null;
 			endOn?: string | null;
 			/** Format: uuid */
@@ -11326,11 +11459,13 @@ export interface components {
 			assigneeUserId?: string | null;
 			clientVisible: boolean;
 			dependsOn: string[];
+			dueOn?: string | null;
 			/** Format: double */
 			estimateHours?: number | null;
 			/** Format: uuid */
 			phaseId?: string | null;
 			reference: string;
+			startOn?: string | null;
 			statusCategory: string;
 			statusName: string;
 			/** Format: uuid */
@@ -11898,6 +12033,52 @@ export interface components {
 			};
 			/** @description An IANA time zone, e.g. `Europe/London`. */
 			timezone: string;
+		};
+		ScopeChange: {
+			/**
+			 * Format: double
+			 * @description What it costs the client, if priced.
+			 */
+			amount?: number | null;
+			comment?: string | null;
+			/** Format: date-time */
+			decidedAt?: string | null;
+			decidedBy?: string | null;
+			description: string;
+			/**
+			 * Format: double
+			 * @description Hours it adds to the budget (negative: removes).
+			 */
+			hours: number;
+			/** Format: uuid */
+			id: string;
+			/**
+			 * Format: int32
+			 * @description Numbered within the project.
+			 */
+			number: number;
+			/** Format: uuid */
+			projectId: string;
+			/** @description `draft`, `submitted`, `approved`, `rejected` or `withdrawn`. */
+			state: string;
+			/** Format: date-time */
+			submittedAt?: string | null;
+			title: string;
+			/** Format: int32 */
+			version: number;
+		};
+		ScopeChangeInput: {
+			/** Format: double */
+			amount?: number | null;
+			description?: string;
+			/** Format: double */
+			hours?: number;
+			title: string;
+			/**
+			 * Format: int32
+			 * @description When changing one: the version you read.
+			 */
+			version?: number | null;
 		};
 		/** @description A permission the client would get. */
 		ScopeView: {
@@ -12511,6 +12692,20 @@ export interface components {
 			/** Format: int32 */
 			response?: number | null;
 		};
+		/**
+		 * @description Changes to a task's place in its project (send what changes; an empty
+		 *     date clears it).
+		 */
+		TaskChanges: {
+			clientVisible?: boolean | null;
+			dependsOn?: string[] | null;
+			dueOn?: string | null;
+			/** Format: double */
+			estimateHours?: number | null;
+			/** Format: uuid */
+			phaseId?: string | null;
+			startOn?: string | null;
+		};
 		/** @enum {string} */
 		TaskStatus: 'queued' | 'running' | 'succeeded' | 'failed';
 		/** @description A script step attempt's task, as the run page shows it. */
@@ -12600,11 +12795,30 @@ export interface components {
 			/** @description Keys of tasks that must be done first. */
 			dependsOn?: string[];
 			description?: string;
+			/**
+			 * Format: int32
+			 * @description Due this many days after it starts.
+			 */
+			durationDays?: number | null;
 			/** Format: double */
 			estimateHours?: number | null;
 			/** @description Unique in the template: what `dependsOn` and assignments name. */
 			key: string;
+			/**
+			 * Format: int32
+			 * @description Starts this many days after the project does.
+			 */
+			startOffsetDays?: number | null;
 			title: string;
+		};
+		/** @description A workflow that runs for one template's projects. */
+		TemplateWorkflow: {
+			/** @description The project event it runs on. */
+			event: string;
+			/** Format: uuid */
+			id: string;
+			name: string;
+			status: string;
 		};
 		TestCaseRequest: {
 			/** @description The HWF document to test (not saved). */
@@ -22445,6 +22659,27 @@ export interface operations {
 			};
 		};
 	};
+	project_template_workflows: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['TemplateWorkflow'][];
+				};
+			};
+		};
+	};
 	list_projects: {
 		parameters: {
 			query?: {
@@ -22578,6 +22813,109 @@ export interface operations {
 			};
 		};
 	};
+	create_scope_change: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['ScopeChangeInput'];
+			};
+		};
+		responses: {
+			201: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ScopeChange'];
+				};
+			};
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	update_scope_change: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+				change: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['ScopeChangeInput'];
+			};
+		};
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ScopeChange'];
+				};
+			};
+		};
+	};
+	submit_scope_change: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+				change: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ScopeChange'];
+				};
+			};
+		};
+	};
+	withdraw_scope_change: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+				change: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ScopeChange'];
+				};
+			};
+		};
+	};
 	add_project_task: {
 		parameters: {
 			query?: never;
@@ -22594,6 +22932,32 @@ export interface operations {
 		};
 		responses: {
 			201: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['Project'];
+				};
+			};
+		};
+	};
+	update_project_task: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+				ticket: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['TaskChanges'];
+			};
+		};
+		responses: {
+			200: {
 				headers: {
 					[name: string]: unknown;
 				};

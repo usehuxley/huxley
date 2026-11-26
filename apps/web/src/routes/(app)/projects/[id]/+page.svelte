@@ -3,6 +3,9 @@
 	import { resolve } from '$app/paths';
 	import { Badge, Button, Card, Field, Input, Select } from '@usehuxley/ui';
 	import { BILLING, HEALTH, STATUSES, label } from '#lib/projects/labels.ts';
+	import Board from '#lib/projects/Board.svelte';
+	import ScopeChanges from '#lib/projects/ScopeChanges.svelte';
+	import Timeline from '#lib/projects/Timeline.svelte';
 	import type { PageProps } from './$types';
 
 	let { data, form }: PageProps = $props();
@@ -37,7 +40,9 @@
 				{p.orgName} · {p.startOn}{p.endOn ? ` to ${p.endOn}` : ''} · {label(
 					BILLING,
 					p.billingMethod
-				)}{p.managerName ? ` · managed by ${p.managerName}` : ''}
+				)}{p.managerName ? ` · managed by ${p.managerName}` : ''}{p.agreementName
+					? ` · billed to ${p.agreementName}`
+					: ''}
 			</p>
 		</div>
 		{#if data.canManage}
@@ -49,6 +54,14 @@
 						name="status"
 						value={p.status}
 						options={STATUSES.map((s) => ({ value: s.value, label: s.label }))}
+					/>
+				</div>
+				<div class="w-48">
+					<Select
+						aria-label="Agreement"
+						name="agreementId"
+						value={p.agreementId ?? ''}
+						options={[{ value: '', label: 'No agreement' }, ...data.agreements]}
 					/>
 				</div>
 				<Button type="submit">Save</Button>
@@ -124,7 +137,26 @@
 		</Card>
 	</div>
 
-	<Card title="Tasks">
+	<nav class="flex gap-1 border-b border-border" aria-label="Views">
+		{#each [['list', 'List'], ['board', 'Board'], ['timeline', 'Timeline']] as [key, name] (key)}
+			<a
+				href="{resolve('/(app)/projects/[id]', { id: p.id })}?view={key}"
+				aria-current={data.view === key ? 'page' : undefined}
+				class="-mb-px border-b-2 px-3 py-1.5 text-sm {data.view === key
+					? 'border-accent font-medium text-fg'
+					: 'border-transparent text-fg-muted hover:text-fg'}"
+			>
+				{name}
+			</a>
+		{/each}
+	</nav>
+	{#if data.view === 'board'}
+		<Board tasks={p.tasks} />
+	{:else if data.view === 'timeline'}
+		<Card><Timeline project={p} /></Card>
+	{/if}
+
+	<Card title="Tasks" class={data.view === 'list' ? '' : 'hidden'}>
 		<div class="flex flex-col gap-4">
 			{#each groups as g (g.id ?? 'other')}
 				{#if g.id !== null || tasksIn(null).length > 0}
@@ -149,11 +181,71 @@
 									<span class="flex flex-wrap items-center gap-2 text-fg-muted">
 										{#if t.waiting}<Badge tone="warning">Waiting on another task</Badge>{/if}
 										<span>{t.assigneeName ?? 'Unassigned'}</span>
+										{#if t.startOn || t.dueOn}
+											<span>{t.startOn ?? '…'} → {t.dueOn ?? '…'}</span>
+										{/if}
 										<span class="tabular-nums">
 											{t.usedHours}{t.estimateHours ? `/${t.estimateHours}` : ''} h
 										</span>
 										<Badge>{t.statusName}</Badge>
 									</span>
+									{#if data.canWrite}
+										<details class="w-full">
+											<summary class="cursor-pointer text-xs text-fg-muted">
+												Edit {t.reference}
+											</summary>
+											<form
+												method="POST"
+												action="?/editTask"
+												class="mt-2 grid gap-2 sm:grid-cols-[10rem_6rem_10rem_10rem_auto_auto] sm:items-end"
+												use:enhance
+											>
+												<input type="hidden" name="ticket" value={t.ticketId} />
+												<Field label="Phase" for="et-phase-{t.ticketId}">
+													<Select
+														id="et-phase-{t.ticketId}"
+														name="phaseId"
+														value={t.phaseId ?? ''}
+														options={[
+															{ value: '', label: 'None' },
+															...p.phases.map((ph) => ({ value: ph.id, label: ph.name }))
+														]}
+													/>
+												</Field>
+												<Field label="Hours" for="et-hours-{t.ticketId}">
+													<Input
+														id="et-hours-{t.ticketId}"
+														name="estimateHours"
+														type="number"
+														min="0"
+														step="0.5"
+														value={t.estimateHours ?? ''}
+													/>
+												</Field>
+												<Field label="Starts" for="et-start-{t.ticketId}">
+													<Input
+														id="et-start-{t.ticketId}"
+														name="startOn"
+														type="date"
+														value={t.startOn ?? ''}
+													/>
+												</Field>
+												<Field label="Due" for="et-due-{t.ticketId}">
+													<Input
+														id="et-due-{t.ticketId}"
+														name="dueOn"
+														type="date"
+														value={t.dueOn ?? ''}
+													/>
+												</Field>
+												<label class="flex h-9 items-center gap-1 text-sm text-fg">
+													<input type="checkbox" name="clientVisible" checked={t.clientVisible} /> Client
+													sees it
+												</label>
+												<Button type="submit" size="sm">Save task</Button>
+											</form>
+										</details>
+									{/if}
 								</li>
 							{:else}
 								<li class="py-1.5 text-sm text-fg-muted">No tasks.</li>
@@ -193,8 +285,14 @@
 						<Input id="nt-hours" name="estimateHours" type="number" min="0" step="0.5" />
 					</Field>
 					<Button type="submit">Add task</Button>
+					<Field label="Starts" for="nt-start">
+						<Input id="nt-start" name="startOn" type="date" />
+					</Field>
+					<Field label="Due" for="nt-due"><Input id="nt-due" name="dueOn" type="date" /></Field>
 				</form>
 			{/if}
 		</div>
 	</Card>
+
+	<ScopeChanges changes={p.scopeChanges} canManage={data.canManage} />
 </div>

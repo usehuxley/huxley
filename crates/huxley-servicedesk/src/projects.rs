@@ -16,6 +16,7 @@ use time::{Date, Duration, OffsetDateTime};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
+use crate::project_scope::{self, ScopeChange};
 use crate::project_templates;
 use crate::tickets::{self, NewTicket};
 use crate::{DeskError, DeskResult};
@@ -70,6 +71,9 @@ pub struct NewProject {
     pub assignees: BTreeMap<String, Uuid>,
     #[serde(default)]
     pub thresholds: Option<Vec<i16>>,
+    /// The client's agreement it bills against.
+    #[serde(default)]
+    pub agreement_id: Option<Uuid>,
 }
 
 #[derive(Debug, Clone, Default, Deserialize, ToSchema)]
@@ -93,6 +97,11 @@ pub struct ProjectChanges {
     pub thresholds: Option<Vec<i16>>,
     #[serde(default)]
     pub portal_visible: Option<bool>,
+    #[serde(default)]
+    pub agreement_id: Option<Uuid>,
+    /// Unlink the agreement.
+    #[serde(default)]
+    pub clear_agreement: bool,
     pub version: i32,
 }
 
@@ -142,6 +151,8 @@ pub struct ProjectTask {
     /// A task it depends on isn't done yet.
     pub waiting: bool,
     pub client_visible: bool,
+    pub start_on: Option<String>,
+    pub due_on: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, ToSchema)]
@@ -171,6 +182,8 @@ struct Row {
     thresholds_fired: Vec<i16>,
     portal_visible: bool,
     template_id: Option<Uuid>,
+    agreement_id: Option<Uuid>,
+    agreement_name: Option<String>,
     version: i32,
 }
 
@@ -197,11 +210,14 @@ pub struct Project {
     pub thresholds_fired: Vec<i16>,
     pub portal_visible: bool,
     pub template_id: Option<Uuid>,
+    pub agreement_id: Option<Uuid>,
+    pub agreement_name: Option<String>,
     pub health: Health,
     pub progress: Progress,
     pub phases: Vec<ProjectPhase>,
     pub milestones: Vec<Milestone>,
     pub tasks: Vec<ProjectTask>,
+    pub scope_changes: Vec<ScopeChange>,
     pub version: i32,
 }
 
@@ -210,8 +226,9 @@ const SELECT: &str = "SELECT p.id, p.org_id, o.name AS org_name, p.name, p.descr
      to_char(p.end_on, 'YYYY-MM-DD') AS end_on, p.budget_hours::float8 AS budget_hours, \
      coalesce((SELECT sum(e.minutes) FROM sd_time_entries e JOIN prj_tasks k ON k.ticket_id = e.ticket_id \
                WHERE k.project_id = p.id), 0)::float8 / 60 AS used_hours, \
-     p.billing_method, p.thresholds, p.thresholds_fired, p.portal_visible, p.template_id, p.version \
-     FROM prj_projects p JOIN organizations o ON o.id = p.org_id LEFT JOIN users u ON u.id = p.manager_user_id";
+     p.billing_method, p.thresholds, p.thresholds_fired, p.portal_visible, p.template_id, p.agreement_id, a.name AS agreement_name, p.version \
+     FROM prj_projects p JOIN organizations o ON o.id = p.org_id LEFT JOIN users u ON u.id = p.manager_user_id \
+     LEFT JOIN contract_agreements a ON a.id = p.agreement_id";
 
 fn burn(budget: Option<f64>, used: f64) -> Option<f64> {
     budget
@@ -301,7 +318,8 @@ async fn details(
                 k.depends_on, \
                 EXISTS (SELECT 1 FROM sd_tickets d JOIN sd_statuses ds ON ds.id = d.status_id \
                          WHERE d.id = ANY(k.depends_on) AND ds.category NOT IN ('resolved', 'closed')) AS waiting, \
-                k.client_visible \
+                k.client_visible, to_char(k.start_on, 'YYYY-MM-DD') AS start_on, \
+                to_char(k.due_on, 'YYYY-MM-DD') AS due_on \
            FROM prj_tasks k JOIN sd_tickets t ON t.id = k.ticket_id JOIN sd_statuses s ON s.id = t.status_id \
            LEFT JOIN users u ON u.id = t.assignee_user_id \
           WHERE k.project_id = $1 ORDER BY k.position, t.number",
@@ -314,9 +332,8 @@ async fn details(
 
 fn assemble(
     row: Row,
-    phases: Vec<ProjectPhase>,
-    milestones: Vec<Milestone>,
-    tasks: Vec<ProjectTask>,
+    (phases, milestones, tasks): (Vec<ProjectPhase>, Vec<Milestone>, Vec<ProjectTask>),
+    scope_changes: Vec<ScopeChange>,
 ) -> Project {
     let progress = Progress {
         done: i64::try_from(
@@ -353,11 +370,14 @@ fn assemble(
         thresholds_fired: row.thresholds_fired,
         portal_visible: row.portal_visible,
         template_id: row.template_id,
+        agreement_id: row.agreement_id,
+        agreement_name: row.agreement_name,
         health,
         progress,
         phases,
         milestones,
         tasks,
+        scope_changes,
         version: row.version,
     }
 }
@@ -368,8 +388,9 @@ pub async fn get(conn: &mut PgConnection, id: Uuid) -> DeskResult<Project> {
         .fetch_optional(&mut *conn)
         .await?
         .ok_or(DeskError::NotFound)?;
-    let (phases, milestones, tasks) = details(&mut *conn, id).await?;
-    Ok(assemble(row, phases, milestones, tasks))
+    let parts = details(&mut *conn, id).await?;
+    let scope = project_scope::list(&mut *conn, id).await?;
+    Ok(assemble(row, parts, scope))
 }
 
 /// Projects in the transaction's scope (optionally one company's), newest
@@ -383,8 +404,9 @@ pub async fn list(conn: &mut PgConnection, org_id: Option<Uuid>) -> DeskResult<V
     .await?;
     let mut out = Vec::with_capacity(rows.len());
     for row in rows {
-        let (phases, milestones, tasks) = details(&mut *conn, row.id).await?;
-        out.push(assemble(row, phases, milestones, tasks));
+        let parts = details(&mut *conn, row.id).await?;
+        let scope = project_scope::list(&mut *conn, row.id).await?;
+        out.push(assemble(row, parts, scope));
     }
     Ok(out)
 }
@@ -402,13 +424,23 @@ fn check_thresholds(t: &[i16]) -> DeskResult<Vec<i16>> {
     Ok(v)
 }
 
-async fn emit(
+pub(crate) async fn emit(
     conn: &mut PgConnection,
     event: &'static str,
     project: Uuid,
     org: Uuid,
-    payload: Json,
+    mut payload: Json,
 ) -> DeskResult<()> {
+    // Workflows for one template's projects filter on it.
+    let template: Option<Option<Uuid>> =
+        sqlx::query_scalar("SELECT template_id FROM prj_projects WHERE id = $1")
+            .bind(project)
+            .fetch_optional(&mut *conn)
+            .await?;
+    if let Some(o) = payload.as_object_mut() {
+        o.insert("projectId".into(), json!(project));
+        o.insert("templateId".into(), json!(template.flatten()));
+    }
     outbox::emit(
         conn,
         DomainEvent {
@@ -423,20 +455,26 @@ async fn emit(
     Ok(())
 }
 
+/// Where a task sits in its project.
+struct TaskPlace {
+    phase: Option<Uuid>,
+    estimate: Option<f64>,
+    position: i32,
+    client_visible: bool,
+    start_on: Option<Date>,
+    due_on: Option<Date>,
+}
+
 /// A task ticket in a project.
-#[allow(clippy::too_many_arguments)]
 async fn task_ticket(
     conn: &mut PgConnection,
     ctx: &RequestContext,
     project: (Uuid, Uuid),
     prefix: &str,
-    title: &str,
-    description: &str,
-    assignee: Option<Uuid>,
-    place: (Option<Uuid>, Option<f64>, i32, bool),
+    (title, description, assignee): (&str, &str, Option<Uuid>),
+    place: TaskPlace,
 ) -> DeskResult<Uuid> {
     let (project_id, org) = project;
-    let (phase, estimate, position, client_visible) = place;
     let ticket = tickets::create(
         conn,
         ctx,
@@ -454,16 +492,19 @@ async fn task_ticket(
     )
     .await?;
     sqlx::query(
-        "INSERT INTO prj_tasks (ticket_id, project_id, org_id, phase_id, estimate_hours, position, client_visible) \
-         VALUES ($1, $2, $3, $4, $5, $6, $7)",
+        "INSERT INTO prj_tasks (ticket_id, project_id, org_id, phase_id, estimate_hours, position, client_visible, \
+                                start_on, due_on) \
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)",
     )
     .bind(ticket.id)
     .bind(project_id)
     .bind(org)
-    .bind(phase)
-    .bind(estimate)
-    .bind(position)
-    .bind(client_visible)
+    .bind(place.phase)
+    .bind(place.estimate)
+    .bind(place.position)
+    .bind(place.client_visible)
+    .bind(place.start_on)
+    .bind(place.due_on)
     .execute(&mut *conn)
     .await?;
     Ok(ticket.id)
@@ -512,24 +553,18 @@ pub async fn create(
             format!("the template has no task {key:?}"),
         ));
     }
-    let budget = input.budget_hours.or_else(|| {
-        template
-            .as_ref()
-            .map(|t| {
-                t.structure
-                    .phases
-                    .iter()
-                    .filter_map(|p| p.budget_hours)
-                    .sum::<f64>()
-            })
-            .filter(|b| *b > 0.0)
-    });
+    let budget = input
+        .budget_hours
+        .or_else(|| template.as_ref().and_then(template_budget));
     let thresholds = check_thresholds(input.thresholds.as_deref().unwrap_or(&[50, 75, 90, 100]))?;
+    if let Some(a) = input.agreement_id {
+        check_agreement(&mut *conn, a, input.org_id).await?;
+    }
     let id = Uuid::now_v7();
     sqlx::query(
         "INSERT INTO prj_projects (id, org_id, name, description, manager_user_id, start_on, end_on, budget_hours, \
-                                   billing_method, template_id, thresholds, created_by) \
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)",
+                                   billing_method, template_id, thresholds, created_by, agreement_id) \
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)",
     )
     .bind(id)
     .bind(input.org_id)
@@ -543,6 +578,7 @@ pub async fn create(
     .bind(input.template_id)
     .bind(&thresholds)
     .bind(ctx.actor.id())
+    .bind(input.agreement_id)
     .execute(&mut *conn)
     .await?;
     if let Some(t) = &template {
@@ -573,6 +609,35 @@ pub async fn create(
     )
     .await?;
     get(conn, id).await
+}
+
+/// A template's phase budgets added up, if any.
+fn template_budget(t: &project_templates::Template) -> Option<f64> {
+    Some(
+        t.structure
+            .phases
+            .iter()
+            .filter_map(|p| p.budget_hours)
+            .sum::<f64>(),
+    )
+    .filter(|b| *b > 0.0)
+}
+
+/// An agreement a project of `org` may bill against: the company's own.
+async fn check_agreement(conn: &mut PgConnection, agreement: Uuid, org: Uuid) -> DeskResult<()> {
+    let at: Option<Uuid> =
+        sqlx::query_scalar("SELECT org_id FROM contract_agreements WHERE id = $1")
+            .bind(agreement)
+            .fetch_optional(conn)
+            .await?;
+    if at == Some(org) {
+        Ok(())
+    } else {
+        Err(DeskError::invalid(
+            "agreementId",
+            "one of the client's agreements",
+        ))
+    }
 }
 
 /// Phases, milestones and tasks from a template.
@@ -616,20 +681,24 @@ async fn lay_out(
     }
     let mut made: BTreeMap<&str, Uuid> = BTreeMap::new();
     for (n, (phase, t)) in structure.tasks().enumerate() {
+        let task_start = t
+            .start_offset_days
+            .map(|d| start + Duration::days(i64::from(d)));
         let ticket = task_ticket(
             conn,
             ctx,
             (id, org),
             &prefix,
-            &t.title,
-            &t.description,
-            assignees.get(&t.key).copied(),
-            (
-                phase_ids.get(phase).copied(),
-                t.estimate_hours,
-                i32::try_from(n).unwrap_or(0),
-                t.client_visible,
-            ),
+            (&t.title, &t.description, assignees.get(&t.key).copied()),
+            TaskPlace {
+                phase: phase_ids.get(phase).copied(),
+                estimate: t.estimate_hours,
+                position: i32::try_from(n).unwrap_or(0),
+                client_visible: t.client_visible,
+                start_on: task_start,
+                due_on: task_start
+                    .and_then(|d| t.duration_days.map(|n| d + Duration::days(i64::from(n)))),
+            },
         )
         .await?;
         made.insert(t.key.as_str(), ticket);
@@ -691,9 +760,17 @@ pub async fn update(
         Some(t) => check_thresholds(t)?,
         None => current.thresholds.clone(),
     };
+    let agreement = if c.clear_agreement {
+        None
+    } else if let Some(a) = c.agreement_id {
+        check_agreement(&mut *conn, a, current.org_id).await?;
+        Some(a)
+    } else {
+        current.agreement_id
+    };
     sqlx::query(
         "UPDATE prj_projects SET name = $2, description = $3, manager_user_id = $4, status = $5, end_on = $6, \
-                budget_hours = $7, billing_method = $8, thresholds = $9, portal_visible = $10, \
+                budget_hours = $7, billing_method = $8, thresholds = $9, portal_visible = $10, agreement_id = $11, \
                 thresholds_fired = (SELECT coalesce(array_agg(f), '{}') FROM unnest(thresholds_fired) f WHERE f = ANY($9)), \
                 version = version + 1, updated_at = now() WHERE id = $1",
     )
@@ -707,6 +784,7 @@ pub async fn update(
     .bind(&billing)
     .bind(&thresholds)
     .bind(c.portal_visible.unwrap_or(current.portal_visible))
+    .bind(agreement)
     .execute(&mut *conn)
     .await?;
     if status != current.status {
@@ -748,6 +826,104 @@ pub struct NewTask {
     pub depends_on: Vec<Uuid>,
     #[serde(default)]
     pub client_visible: bool,
+    /// `YYYY-MM-DD`.
+    #[serde(default)]
+    pub start_on: Option<String>,
+    #[serde(default)]
+    pub due_on: Option<String>,
+}
+
+/// Changes to a task's place in its project (send what changes; an empty
+/// date clears it).
+#[derive(Debug, Clone, Default, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct TaskChanges {
+    #[serde(default)]
+    pub phase_id: Option<Uuid>,
+    #[serde(default)]
+    pub estimate_hours: Option<f64>,
+    #[serde(default)]
+    pub start_on: Option<String>,
+    #[serde(default)]
+    pub due_on: Option<String>,
+    #[serde(default)]
+    pub depends_on: Option<Vec<Uuid>>,
+    #[serde(default)]
+    pub client_visible: Option<bool>,
+}
+
+fn task_dates(start: Option<&str>, due: Option<&str>) -> DeskResult<(Option<Date>, Option<Date>)> {
+    let start = start
+        .filter(|s| !s.is_empty())
+        .map(|s| parse_date(s, "startOn"))
+        .transpose()?;
+    let due = due
+        .filter(|s| !s.is_empty())
+        .map(|s| parse_date(s, "dueOn"))
+        .transpose()?;
+    if let (Some(s), Some(d)) = (start, due)
+        && d < s
+    {
+        return Err(DeskError::invalid("dueOn", "on or after the start"));
+    }
+    Ok((start, due))
+}
+
+/// Changes a task's phase, estimate, dates, dependencies or client
+/// visibility.
+pub async fn update_task(
+    conn: &mut PgConnection,
+    id: Uuid,
+    ticket: Uuid,
+    c: &TaskChanges,
+) -> DeskResult<Project> {
+    let project = get(&mut *conn, id).await?;
+    let task = project
+        .tasks
+        .iter()
+        .find(|t| t.ticket_id == ticket)
+        .ok_or(DeskError::NotFound)?;
+    if c.phase_id
+        .is_some_and(|p| !project.phases.iter().any(|x| x.id == p))
+    {
+        return Err(DeskError::invalid("phaseId", "not a phase of this project"));
+    }
+    if c.estimate_hours
+        .is_some_and(|h| !(0.0..=10_000.0).contains(&h))
+    {
+        return Err(DeskError::invalid("estimateHours", "0 to 10,000"));
+    }
+    let deps = c
+        .depends_on
+        .clone()
+        .unwrap_or_else(|| task.depends_on.clone());
+    if deps
+        .iter()
+        .any(|d| *d == ticket || !project.tasks.iter().any(|t| t.ticket_id == *d))
+    {
+        return Err(DeskError::invalid(
+            "dependsOn",
+            "other tasks of this project",
+        ));
+    }
+    let (start, due) = task_dates(
+        c.start_on.as_deref().or(task.start_on.as_deref()),
+        c.due_on.as_deref().or(task.due_on.as_deref()),
+    )?;
+    sqlx::query(
+        "UPDATE prj_tasks SET phase_id = $2, estimate_hours = $3, start_on = $4, due_on = $5, depends_on = $6, \
+                client_visible = $7 WHERE ticket_id = $1",
+    )
+    .bind(ticket)
+    .bind(c.phase_id.or(task.phase_id))
+    .bind(c.estimate_hours.or(task.estimate_hours))
+    .bind(start)
+    .bind(due)
+    .bind(&deps)
+    .bind(c.client_visible.unwrap_or(task.client_visible))
+    .execute(&mut *conn)
+    .await?;
+    get(conn, id).await
 }
 
 /// Adds a task (a ticket) to a project.
@@ -771,6 +947,7 @@ pub async fn add_task(
     {
         return Err(DeskError::invalid("dependsOn", "tasks of this project"));
     }
+    let (start_on, due_on) = task_dates(input.start_on.as_deref(), input.due_on.as_deref())?;
     let prefix = tickets::prefix_for(&mut *conn, project.org_id).await?;
     let position = i32::try_from(project.tasks.len()).unwrap_or(0);
     let ticket = task_ticket(
@@ -778,15 +955,15 @@ pub async fn add_task(
         ctx,
         (id, project.org_id),
         &prefix,
-        &input.title,
-        &input.description,
-        input.assignee_user_id,
-        (
-            input.phase_id,
-            input.estimate_hours,
+        (&input.title, &input.description, input.assignee_user_id),
+        TaskPlace {
+            phase: input.phase_id,
+            estimate: input.estimate_hours,
             position,
-            input.client_visible,
-        ),
+            client_visible: input.client_visible,
+            start_on,
+            due_on,
+        },
     )
     .await?;
     sqlx::query("UPDATE prj_tasks SET depends_on = $2 WHERE ticket_id = $1")
@@ -947,6 +1124,8 @@ pub struct PortalProject {
     pub milestones: Vec<Milestone>,
     /// Tasks marked for the client.
     pub tasks: Vec<PortalTask>,
+    /// Scope changes sent to the client (not drafts or withdrawn ones).
+    pub scope_changes: Vec<ScopeChange>,
 }
 
 #[derive(Debug, Clone, Serialize, ToSchema)]
@@ -980,6 +1159,11 @@ pub async fn for_portal(conn: &mut PgConnection, org_id: Uuid) -> DeskResult<Vec
                 .milestones
                 .into_iter()
                 .filter(|m| m.client_visible)
+                .collect(),
+            scope_changes: p
+                .scope_changes
+                .into_iter()
+                .filter(|c| matches!(c.state.as_str(), "submitted" | "approved" | "rejected"))
                 .collect(),
             tasks: p
                 .tasks

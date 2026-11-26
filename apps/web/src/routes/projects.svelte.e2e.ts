@@ -69,6 +69,32 @@ test.describe('projects', () => {
 		await expect(
 			page.getByRole('list', { name: 'Milestones' }).getByRole('listitem')
 		).toContainText('Reached');
+		// Dates on the task put it on the timeline; the board shows it to do.
+		await tasks.getByText(/^Edit /).click();
+		await tasks.getByLabel('Starts').fill('2030-01-07');
+		await tasks.getByLabel('Due').fill('2030-01-09');
+		await tasks.getByRole('button', { name: 'Save task' }).click();
+		await expect(tasks.getByRole('listitem')).toContainText('2030-01-07 → 2030-01-09');
+		await page.getByRole('link', { name: 'Board', exact: true }).click();
+		await expect(page.getByRole('region', { name: 'To do column' })).toContainText(
+			`Install agents ${stamp}`
+		);
+		await page.getByRole('link', { name: 'Timeline', exact: true }).click();
+		await expect(
+			page
+				.getByRole('figure', { name: 'Timeline' })
+				.getByRole('link', { name: `Install agents ${stamp}` })
+		).toBeVisible();
+
+		// A scope change, drafted and submitted.
+		await page.getByLabel('Change', { exact: true }).fill(`Extra site ${stamp}`);
+		await page.getByLabel('Hours (+/−)').fill('4');
+		await page.getByRole('button', { name: 'Draft scope change' }).click();
+		const scope = page.getByRole('list', { name: 'Scope changes' });
+		await expect(scope.getByRole('listitem')).toContainText('Draft');
+		await page.getByRole('button', { name: 'Submit scope change 1' }).click();
+		await expect(scope.getByRole('listitem')).toContainText('Waiting for the client');
+
 		await page.goto('/projects');
 		await expect(page.getByRole('link', { name: `Rollout for ${stamp}` })).toBeVisible();
 	});

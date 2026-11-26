@@ -11543,6 +11543,38 @@
 				}
 			}
 		},
+		"/api/v1/project-templates/{id}/workflows": {
+			"get": {
+				"tags": ["projects"],
+				"summary": "Workflows for this template's projects: those with a `project.*` event\ntrigger whose filter names the template's id (e.g.\n`{{ event.payload.templateId == '<id>' }}`).",
+				"operationId": "project_template_workflows",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "array",
+									"items": {
+										"$ref": "#/components/schemas/TemplateWorkflow"
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		},
 		"/api/v1/projects": {
 			"get": {
 				"tags": ["projects"],
@@ -11734,6 +11766,178 @@
 				}
 			}
 		},
+		"/api/v1/projects/{id}/scope-changes": {
+			"post": {
+				"tags": ["projects"],
+				"summary": "Drafts a scope change: work added (or removed), in hours and\noptionally priced.",
+				"operationId": "create_scope_change",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/ScopeChangeInput"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"201": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ScopeChange"
+								}
+							}
+						}
+					},
+					"422": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/projects/{id}/scope-changes/{change}": {
+			"put": {
+				"tags": ["projects"],
+				"summary": "Changes a draft scope change.",
+				"operationId": "update_scope_change",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					},
+					{
+						"name": "change",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/ScopeChangeInput"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ScopeChange"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/projects/{id}/scope-changes/{change}/submit": {
+			"post": {
+				"tags": ["projects"],
+				"summary": "Submits a draft for the client's approval (raising\n`project.scope_change_submitted`).",
+				"operationId": "submit_scope_change",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					},
+					{
+						"name": "change",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ScopeChange"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/projects/{id}/scope-changes/{change}/withdraw": {
+			"post": {
+				"tags": ["projects"],
+				"summary": "Withdraws a draft or submitted scope change.",
+				"operationId": "withdraw_scope_change",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					},
+					{
+						"name": "change",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ScopeChange"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
 		"/api/v1/projects/{id}/tasks": {
 			"post": {
 				"tags": ["projects"],
@@ -11762,6 +11966,54 @@
 				},
 				"responses": {
 					"201": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Project"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/projects/{id}/tasks/{ticket}": {
+			"patch": {
+				"tags": ["projects"],
+				"summary": "Changes a task's phase, estimate, dates, dependencies or client\nvisibility.",
+				"operationId": "update_project_task",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					},
+					{
+						"name": "ticket",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/TaskChanges"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"200": {
 						"content": {
 							"application/json": {
 								"schema": {
@@ -27298,6 +27550,11 @@
 				"type": "object",
 				"required": ["orgId", "name", "startOn"],
 				"properties": {
+					"agreementId": {
+						"type": ["string", "null"],
+						"format": "uuid",
+						"description": "The client's agreement it bills against."
+					},
 					"assignees": {
 						"type": "object",
 						"description": "A template task's key → who's assigned it.",
@@ -27405,6 +27662,9 @@
 					"description": {
 						"type": "string"
 					},
+					"dueOn": {
+						"type": ["string", "null"]
+					},
 					"estimateHours": {
 						"type": ["number", "null"],
 						"format": "double"
@@ -27412,6 +27672,10 @@
 					"phaseId": {
 						"type": ["string", "null"],
 						"format": "uuid"
+					},
+					"startOn": {
+						"type": ["string", "null"],
+						"description": "`YYYY-MM-DD`."
 					},
 					"title": {
 						"type": "string"
@@ -29141,7 +29405,8 @@
 					"startOn",
 					"progress",
 					"milestones",
-					"tasks"
+					"tasks",
+					"scopeChanges"
 				],
 				"properties": {
 					"description": {
@@ -29165,6 +29430,13 @@
 					},
 					"progress": {
 						"$ref": "#/components/schemas/Progress"
+					},
+					"scopeChanges": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/ScopeChange"
+						},
+						"description": "Scope changes sent to the client (not drafts or withdrawn ones)."
 					},
 					"startOn": {
 						"type": "string"
@@ -29682,9 +29954,17 @@
 					"phases",
 					"milestones",
 					"tasks",
+					"scopeChanges",
 					"version"
 				],
 				"properties": {
+					"agreementId": {
+						"type": ["string", "null"],
+						"format": "uuid"
+					},
+					"agreementName": {
+						"type": ["string", "null"]
+					},
 					"billingMethod": {
 						"type": "string"
 					},
@@ -29745,6 +30025,12 @@
 					"progress": {
 						"$ref": "#/components/schemas/Progress"
 					},
+					"scopeChanges": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/ScopeChange"
+						}
+					},
 					"startOn": {
 						"type": "string"
 					},
@@ -29790,12 +30076,20 @@
 				"type": "object",
 				"required": ["version"],
 				"properties": {
+					"agreementId": {
+						"type": ["string", "null"],
+						"format": "uuid"
+					},
 					"billingMethod": {
 						"type": ["string", "null"]
 					},
 					"budgetHours": {
 						"type": ["number", "null"],
 						"format": "double"
+					},
+					"clearAgreement": {
+						"type": "boolean",
+						"description": "Unlink the agreement."
 					},
 					"description": {
 						"type": ["string", "null"]
@@ -29886,6 +30180,9 @@
 							"format": "uuid"
 						}
 					},
+					"dueOn": {
+						"type": ["string", "null"]
+					},
 					"estimateHours": {
 						"type": ["number", "null"],
 						"format": "double"
@@ -29896,6 +30193,9 @@
 					},
 					"reference": {
 						"type": "string"
+					},
+					"startOn": {
+						"type": ["string", "null"]
 					},
 					"statusCategory": {
 						"type": "string"
@@ -31318,6 +31618,98 @@
 					"timezone": {
 						"type": "string",
 						"description": "An IANA time zone, e.g. `Europe/London`."
+					}
+				},
+				"additionalProperties": false
+			},
+			"ScopeChange": {
+				"type": "object",
+				"required": [
+					"id",
+					"projectId",
+					"number",
+					"title",
+					"description",
+					"hours",
+					"state",
+					"version"
+				],
+				"properties": {
+					"amount": {
+						"type": ["number", "null"],
+						"format": "double",
+						"description": "What it costs the client, if priced."
+					},
+					"comment": {
+						"type": ["string", "null"]
+					},
+					"decidedAt": {
+						"type": ["string", "null"],
+						"format": "date-time"
+					},
+					"decidedBy": {
+						"type": ["string", "null"]
+					},
+					"description": {
+						"type": "string"
+					},
+					"hours": {
+						"type": "number",
+						"format": "double",
+						"description": "Hours it adds to the budget (negative: removes)."
+					},
+					"id": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"number": {
+						"type": "integer",
+						"format": "int32",
+						"description": "Numbered within the project."
+					},
+					"projectId": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"state": {
+						"type": "string",
+						"description": "`draft`, `submitted`, `approved`, `rejected` or `withdrawn`."
+					},
+					"submittedAt": {
+						"type": ["string", "null"],
+						"format": "date-time"
+					},
+					"title": {
+						"type": "string"
+					},
+					"version": {
+						"type": "integer",
+						"format": "int32"
+					}
+				}
+			},
+			"ScopeChangeInput": {
+				"type": "object",
+				"required": ["title"],
+				"properties": {
+					"amount": {
+						"type": ["number", "null"],
+						"format": "double"
+					},
+					"description": {
+						"type": "string"
+					},
+					"hours": {
+						"type": "number",
+						"format": "double"
+					},
+					"title": {
+						"type": "string"
+					},
+					"version": {
+						"type": ["integer", "null"],
+						"format": "int32",
+						"description": "When changing one: the version you read."
 					}
 				},
 				"additionalProperties": false
@@ -32788,6 +33180,37 @@
 					}
 				}
 			},
+			"TaskChanges": {
+				"type": "object",
+				"description": "Changes to a task's place in its project (send what changes; an empty\ndate clears it).",
+				"properties": {
+					"clientVisible": {
+						"type": ["boolean", "null"]
+					},
+					"dependsOn": {
+						"type": ["array", "null"],
+						"items": {
+							"type": "string",
+							"format": "uuid"
+						}
+					},
+					"dueOn": {
+						"type": ["string", "null"]
+					},
+					"estimateHours": {
+						"type": ["number", "null"],
+						"format": "double"
+					},
+					"phaseId": {
+						"type": ["string", "null"],
+						"format": "uuid"
+					},
+					"startOn": {
+						"type": ["string", "null"]
+					}
+				},
+				"additionalProperties": false
+			},
 			"TaskStatus": {
 				"type": "string",
 				"enum": ["queued", "running", "succeeded", "failed"]
@@ -33014,6 +33437,11 @@
 					"description": {
 						"type": "string"
 					},
+					"durationDays": {
+						"type": ["integer", "null"],
+						"format": "int32",
+						"description": "Due this many days after it starts."
+					},
 					"estimateHours": {
 						"type": ["number", "null"],
 						"format": "double"
@@ -33022,11 +33450,37 @@
 						"type": "string",
 						"description": "Unique in the template: what `dependsOn` and assignments name."
 					},
+					"startOffsetDays": {
+						"type": ["integer", "null"],
+						"format": "int32",
+						"description": "Starts this many days after the project does."
+					},
 					"title": {
 						"type": "string"
 					}
 				},
 				"additionalProperties": false
+			},
+			"TemplateWorkflow": {
+				"type": "object",
+				"description": "A workflow that runs for one template's projects.",
+				"required": ["id", "name", "status", "event"],
+				"properties": {
+					"event": {
+						"type": "string",
+						"description": "The project event it runs on."
+					},
+					"id": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"name": {
+						"type": "string"
+					},
+					"status": {
+						"type": "string"
+					}
+				}
 			},
 			"TestCaseRequest": {
 				"type": "object",

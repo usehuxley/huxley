@@ -323,4 +323,50 @@ impl Engine {
         tx.commit().await.map_err(internal)?;
         Ok(json!(change))
     }
+
+    /// `core.project.scope.decide`: records the decision on a submitted
+    /// scope change (on a project in the run's organization or below).
+    /// Output: the scope change.
+    pub(crate) async fn scope_decide(&self, org_id: Uuid, input: &Json) -> Result<Json, Json> {
+        self.require_desk(org_id).await?;
+        let mut tx = begin_scoped(self.db(), &OrgScope::System)
+            .await
+            .map_err(internal)?;
+        let on = huxley_modules::is_active_at(&mut tx, "projects", org_id)
+            .await
+            .map_err(internal)?;
+        tx.commit().await.map_err(internal)?;
+        if !on {
+            return Err(error("module_disabled", "Projects are turned off"));
+        }
+        let change = id(input, "scope_change_id")?
+            .ok_or_else(|| error("input", "scope_change_id is required"))?;
+        let approved = match &input["decision"] {
+            Json::Bool(b) => *b,
+            Json::String(s) if s == "approved" => true,
+            Json::String(s) if s == "rejected" => false,
+            _ => return Err(error("input", "decision is approved or rejected")),
+        };
+        let by = input["by"]
+            .as_str()
+            .filter(|s| !s.trim().is_empty())
+            .unwrap_or("Scope approvals");
+        let subtree = self.subtree(org_id).await?;
+        let mut tx = begin_scoped(self.db(), &OrgScope::Orgs(subtree))
+            .await
+            .map_err(internal)?;
+        let ctx = RequestContext::system(Via::Workflow);
+        let decided = huxley_servicedesk::project_scope::decide(
+            &mut tx,
+            &ctx,
+            change,
+            approved,
+            by,
+            input["comment"].as_str(),
+        )
+        .await
+        .map_err(desk_error)?;
+        tx.commit().await.map_err(internal)?;
+        Ok(json!(decided))
+    }
 }

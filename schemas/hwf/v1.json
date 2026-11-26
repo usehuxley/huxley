@@ -677,6 +677,21 @@
       ],
       "type": "object"
     },
+    "ScopeDecide": {
+      "additionalProperties": false,
+      "description": "A project scope change's decision to record\n(`core.project.scope.decide`): `scope_change_id` (submitted, on a\nproject in the run's organization or below), `decision` (`approved` or\n`rejected`, or a boolean), `by` and a `comment`. An approved change's\nhours are added to the budget. Raises `project.scope_change_approved`\nor `project.scope_change_rejected`. Output: the scope change.",
+      "properties": {
+        "by": true,
+        "comment": true,
+        "decision": true,
+        "scope_change_id": true
+      },
+      "required": [
+        "scope_change_id",
+        "decision"
+      ],
+      "type": "object"
+    },
     "SentimentRecord": {
       "additionalProperties": false,
       "description": "A client message's sentiment to record (`core.sentiment.record`): the\nticket (in the run's organization or below), the note judged (none: the\nticket's description), `score` from -2 (very negative) to 2 (very\npositive), and a one-line `reason`. Again for the same message replaces\nit. Output: `{ id, org_id, ticket_id, score }`.",
@@ -3958,6 +3973,69 @@
             },
             "with": {
               "$ref": "#/$defs/ChangeDecide"
+            }
+          },
+          "required": [
+            "type",
+            "id",
+            "with"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Record a project scope change's decision (the `projects` module).",
+          "properties": {
+            "continue_on_error": {
+              "description": "Record the error as the step's output and carry on.",
+              "type": "boolean"
+            },
+            "description": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "id": {
+              "description": "Unique in the workflow: lowercase letters, digits, underscores.\nOther steps read this step's output as `steps.<id>.output`.",
+              "type": "string"
+            },
+            "if": {
+              "description": "Skip the step unless this expression is true.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "name": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "retry": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/RetryPolicy"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "timeout": {
+              "description": "Fail the attempt after this long, e.g. `30s`.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "type": {
+              "const": "core.project.scope.decide",
+              "type": "string"
+            },
+            "with": {
+              "$ref": "#/$defs/ScopeDecide"
             }
           },
           "required": [

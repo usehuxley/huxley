@@ -8,6 +8,8 @@
 
 	let { data, form }: PageProps = $props();
 	type Task = {
+		startOffsetDays: number | null;
+		durationDays: number | null;
 		key: string;
 		title: string;
 		estimateHours: number | null;
@@ -28,7 +30,9 @@
 				title: t.title,
 				estimateHours: t.estimateHours ?? null,
 				dependsOn: [...(t.dependsOn ?? [])],
-				clientVisible: t.clientVisible ?? false
+				clientVisible: t.clientVisible ?? false,
+				startOffsetDays: t.startOffsetDays ?? null,
+				durationDays: t.durationDays ?? null
 			}))
 		}))
 	);
@@ -55,7 +59,15 @@
 							? null
 							: Number(t.estimateHours),
 					dependsOn: t.dependsOn,
-					clientVisible: t.clientVisible
+					clientVisible: t.clientVisible,
+					startOffsetDays:
+						t.startOffsetDays === null || Number.isNaN(t.startOffsetDays)
+							? undefined
+							: Number(t.startOffsetDays),
+					durationDays:
+						t.durationDays === null || Number.isNaN(t.durationDays)
+							? undefined
+							: Number(t.durationDays)
 				}))
 			})),
 			milestones: milestones.map((m) => ({
@@ -108,7 +120,7 @@
 					</Button>
 				</div>
 				{#each phase.tasks as task, j (task.key)}
-					<div class="grid gap-2 sm:grid-cols-[1fr_6rem_12rem_auto_auto] sm:items-end">
+					<div class="grid gap-2 sm:grid-cols-[1fr_5rem_6rem_6rem_10rem_auto_auto] sm:items-end">
 						<Field label="Task" for="tk-{task.key}">
 							<Input id="tk-{task.key}" bind:value={task.title} required />
 						</Field>
@@ -120,6 +132,12 @@
 								step="0.5"
 								bind:value={task.estimateHours}
 							/>
+						</Field>
+						<Field label="Starts on day" for="tks-{task.key}">
+							<Input id="tks-{task.key}" type="number" min="0" bind:value={task.startOffsetDays} />
+						</Field>
+						<Field label="Takes days" for="tkn-{task.key}">
+							<Input id="tkn-{task.key}" type="number" min="0" bind:value={task.durationDays} />
 						</Field>
 						<Field label="After" for="tkd-{task.key}">
 							<select
@@ -160,7 +178,9 @@
 								title: '',
 								estimateHours: null,
 								dependsOn: [],
-								clientVisible: false
+								clientVisible: false,
+								startOffsetDays: null,
+								durationDays: null
 							})}
 					>
 						<Plus size={16} /> Add a task
@@ -219,6 +239,34 @@
 	</div>
 </form>
 {#if initial}
+	<Card
+		title="Workflows"
+		description="Workflows that run for projects made from this template: on project events, filtered to it."
+		class="mt-4"
+	>
+		<div class="flex flex-col gap-2 text-sm">
+			<ul class="flex flex-col gap-1" aria-label="Template workflows">
+				{#each data.workflows as w (w.id)}
+					<li class="flex items-center justify-between gap-2">
+						<a
+							href={resolve('/(app)/workflows/[id]', { id: w.id })}
+							class="text-accent hover:underline"
+						>
+							{w.name}
+						</a>
+						<span class="text-fg-muted">on {w.event} · {w.status}</span>
+					</li>
+				{:else}
+					<li class="text-fg-muted">None yet.</li>
+				{/each}
+			</ul>
+			<form method="POST" action="?/workflow" use:enhance>
+				<Button type="submit" variant="ghost">
+					<Plus size={16} /> New workflow for this template
+				</Button>
+			</form>
+		</div>
+	</Card>
 	<form method="POST" action="?/remove" class="mt-4" use:enhance>
 		<Button type="submit" variant="ghost"><Trash2 size={16} /> Delete template</Button>
 	</form>
