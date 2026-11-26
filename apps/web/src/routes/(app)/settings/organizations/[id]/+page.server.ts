@@ -50,7 +50,7 @@ export const actions: Actions = {
 	healthModel: async (event) => {
 		const form = await event.request.formData();
 		const weights: Record<string, number> = {};
-		for (const key of ['csat', 'nps', 'sla', 'reopens', 'volume', 'renewal']) {
+		for (const key of ['csat', 'nps', 'sentiment', 'sla', 'reopens', 'volume', 'renewal']) {
 			weights[key] = Number(formString(form, key)) || 0;
 		}
 		const {

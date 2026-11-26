@@ -60,6 +60,10 @@ How the steps behave:
 - **Failures:** a refusal, an exhausted budget or a provider error fails the step with `kind: ai`. Provider errors also carry `retryable` and `status`, for retry policies.
 - **No secrets:** AI steps refuse input that contains secrets, or values derived from them, so secrets are never sent to a provider.
 
+Built-in packs that use these steps:
+
+- **AI sentiment** judges the tone of client messages for [client health](health.md#sentiment).
+
 ## Embeddings provider
 
 Searching [tickets by meaning](servicedesk.md#search-by-meaning) turns text into *embeddings*, lists of numbers that are close together for texts about the same thing. Anthropic has no embeddings API, so embeddings have their own provider, often another vendor than the one that answers.

@@ -26,6 +26,7 @@ const WEAK: f64 = 60.0;
 pub const FACTORS: &[(&str, &str, u8)] = &[
     ("csat", "Satisfaction surveys", 3),
     ("nps", "Net promoter score", 2),
+    ("sentiment", "Client sentiment", 2),
     ("sla", "SLA targets met", 3),
     ("reopens", "Tickets staying resolved", 2),
     ("volume", "Ticket volume", 1),
@@ -170,6 +171,9 @@ fn factor(key: &str, score: Option<f64>, detail: String) -> Factor {
 pub async fn factors(conn: &mut PgConnection, company: Uuid, today: Date) -> CxResult<Vec<Factor>> {
     let mut out = Vec::new();
     answers(&mut *conn, company, today, &mut out).await?;
+    out.push(sentiment_factor(
+        &crate::sentiment::trend(&mut *conn, company, today).await?,
+    ));
     desk(&mut *conn, company, today, &mut out).await?;
     renewal(&mut *conn, company, today, &mut out).await?;
     Ok(out)
@@ -231,6 +235,28 @@ async fn answers(
     });
 
     Ok(())
+}
+
+/// The tone of the client's messages (ADR-046).
+fn sentiment_factor(t: &crate::sentiment::Trend) -> Factor {
+    use std::fmt::Write as _;
+    match t.recent.filter(|_| t.recent_n >= crate::sentiment::ENOUGH) {
+        Some(avg) => {
+            let mut detail = format!("average {avg:+.1} on {} messages in 30 days", t.recent_n);
+            if let Some(before) = t.before.filter(|_| t.before_n >= crate::sentiment::ENOUGH) {
+                let _ = write!(detail, ", {before:+.1} the 60 days before");
+            }
+            if t.falling() && !t.worst.is_empty() {
+                let _ = write!(detail, " (e.g. {})", t.worst.join("; "));
+            }
+            factor("sentiment", Some((avg + 2.0) / 4.0 * 100.0), detail)
+        }
+        None => factor(
+            "sentiment",
+            None,
+            format!("{} judged messages in 30 days: too few to tell", t.recent_n),
+        ),
+    }
 }
 
 /// SLA misses, reopened tickets and ticket volume.
@@ -397,6 +423,26 @@ pub fn reasons(factors: &[Factor], weights: &Weights) -> Vec<String> {
         .collect()
 }
 
+/// A company whose messages turned negative.
+#[derive(Debug, Clone, Serialize)]
+pub struct SentimentFalling {
+    pub org_id: Uuid,
+    pub name: String,
+    /// Average, -2 to 2, in the last 30 days and the 60 before.
+    pub recent: f64,
+    pub previous: f64,
+    /// The most negative recent messages: "T-123: reason".
+    pub explanations: Vec<String>,
+}
+
+/// What a computation found.
+#[derive(Debug, Clone, Default, Serialize)]
+pub struct Computed {
+    pub companies: usize,
+    pub declining: Vec<Declining>,
+    pub sentiment_falling: Vec<SentimentFalling>,
+}
+
 /// A company that's declining.
 #[derive(Debug, Clone, Serialize)]
 pub struct Declining {
@@ -409,14 +455,15 @@ pub struct Declining {
 
 /// Scores every client company in `org_id` and below for `today` (again
 /// today replaces today's), and emits `client.health_declining` for those
-/// that dropped [`DECLINE`] points or more from a week before. Returns how
-/// many were scored and those declining.
+/// that dropped [`DECLINE`] points or more from a week before, and
+/// `client.sentiment_declining` for those whose messages turned negative
+/// (at most once a week each).
 pub async fn compute(
     conn: &mut PgConnection,
     ctx: &RequestContext,
     org_id: Uuid,
     today: Date,
-) -> CxResult<(usize, Vec<Declining>)> {
+) -> CxResult<Computed> {
     let companies: Vec<(Uuid, String)> = sqlx::query_as(
         "SELECT o.id, o.name FROM organizations o \
           WHERE o.path <@ (SELECT path FROM organizations WHERE id = $1) AND o.kind = 'client' AND o.status = 'active'",
@@ -425,6 +472,7 @@ pub async fn compute(
     .fetch_all(&mut *conn)
     .await?;
     let mut declining = Vec::new();
+    let mut falling = Vec::new();
     for (company, name) in &companies {
         let w = weights(&mut *conn, *company).await?;
         let fs = factors(&mut *conn, *company, today).await?;
@@ -473,16 +521,82 @@ pub async fn compute(
                 reasons: why,
             });
         }
+        if let Some(f) = flag_sentiment(&mut *conn, *company, name, today).await? {
+            falling.push(f);
+        }
     }
     audit::record(
         &mut *conn,
         ctx,
         AuditRecord::new("health.computed")
             .org(org_id)
-            .details(json!({ "companies": companies.len(), "declining": declining.len() })),
+            .details(json!({
+                "companies": companies.len(), "declining": declining.len(), "sentiment_falling": falling.len(),
+            })),
     )
     .await?;
-    Ok((companies.len(), declining))
+    Ok(Computed {
+        companies: companies.len(),
+        declining,
+        sentiment_falling: falling,
+    })
+}
+
+/// Flags a company whose sentiment is falling, unless flagged in the last
+/// week: emits `client.sentiment_declining` with the explanations.
+async fn flag_sentiment(
+    conn: &mut PgConnection,
+    company: Uuid,
+    name: &str,
+    today: Date,
+) -> CxResult<Option<SentimentFalling>> {
+    let t = crate::sentiment::trend(&mut *conn, company, today).await?;
+    let (Some(recent), Some(previous)) = (t.recent, t.before) else {
+        return Ok(None);
+    };
+    if !t.falling() {
+        return Ok(None);
+    }
+    let flagged: bool = sqlx::query_scalar(
+        "SELECT EXISTS (SELECT 1 FROM cx_health WHERE org_id = $1 AND sentiment_flagged AND computed_on BETWEEN $2 AND $3)",
+    )
+    .bind(company)
+    .bind(today - Duration::days(7))
+    .bind(today)
+    .fetch_one(&mut *conn)
+    .await?;
+    if flagged {
+        return Ok(None);
+    }
+    sqlx::query(
+        "UPDATE cx_health SET sentiment_flagged = true WHERE org_id = $1 AND computed_on = $2",
+    )
+    .bind(company)
+    .bind(today)
+    .execute(&mut *conn)
+    .await?;
+    let f = SentimentFalling {
+        org_id: company,
+        name: name.to_owned(),
+        recent,
+        previous,
+        explanations: t.worst,
+    };
+    outbox::emit(
+        &mut *conn,
+        DomainEvent {
+            event_type: "client.sentiment_declining",
+            org_id: Some(company),
+            subject_type: "organization",
+            subject_id: company,
+            payload: json!({
+                "name": name, "recent": (recent * 10.0).round() / 10.0, "previous": (previous * 10.0).round() / 10.0,
+                "explanations": f.explanations,
+            }),
+        },
+    )
+    .await?;
+    Ok(Some(f))
 }
 
 /// A snapshot: when, the score, the factors and the reasons.

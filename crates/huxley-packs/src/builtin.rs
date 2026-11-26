@@ -96,6 +96,19 @@ const SOURCES: &[Source] = &[
         ],
     },
     Source {
+        manifest: include_str!("../builtin/ai-sentiment/pack.yaml"),
+        files: &[
+            (
+                "workflows/sentiment-judge.yaml",
+                include_str!("../builtin/ai-sentiment/workflows/sentiment-judge.yaml"),
+            ),
+            (
+                "workflows/sentiment-declining.yaml",
+                include_str!("../builtin/ai-sentiment/workflows/sentiment-declining.yaml"),
+            ),
+        ],
+    },
+    Source {
         manifest: include_str!("../builtin/client-health/pack.yaml"),
         files: &[
             (

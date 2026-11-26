@@ -14889,6 +14889,38 @@
 				}
 			}
 		},
+		"/api/v1/tickets/{id}/sentiment": {
+			"get": {
+				"tags": ["servicedesk"],
+				"summary": "A ticket's judged client messages (the AI sentiment pack), oldest first.",
+				"operationId": "get_ticket_sentiment",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "array",
+									"items": {
+										"$ref": "#/components/schemas/SentimentEntry"
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		},
 		"/api/v1/tickets/{id}/status": {
 			"post": {
 				"tags": ["servicedesk"],
@@ -28756,6 +28788,39 @@
 					},
 					"value": {
 						"type": "string"
+					}
+				}
+			},
+			"SentimentEntry": {
+				"type": "object",
+				"required": ["id", "orgId", "ticketId", "score", "reason", "at"],
+				"properties": {
+					"at": {
+						"type": "string",
+						"format": "date-time"
+					},
+					"id": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"noteId": {
+						"type": ["string", "null"],
+						"format": "uuid"
+					},
+					"orgId": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"reason": {
+						"type": "string"
+					},
+					"score": {
+						"type": "integer",
+						"format": "int32"
+					},
+					"ticketId": {
+						"type": "string",
+						"format": "uuid"
 					}
 				}
 			},

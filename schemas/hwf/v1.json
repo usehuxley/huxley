@@ -401,7 +401,7 @@
     },
     "HealthCompute": {
       "additionalProperties": false,
-      "description": "Client health for today (`core.health.compute`): each client company in\nthe run's organization and below gets a score, 0 to 100, from weighted\nfactors (satisfaction, NPS, SLA misses, reopened tickets, ticket volume,\nrenewals), with the reasons; those that dropped 10 points or more from\na week before emit `client.health_declining`. It takes nothing. Output:\n`{ companies, declining: [{ org_id, name, score, previous, reasons }] }`.",
+      "description": "Client health for today (`core.health.compute`): each client company in\nthe run's organization and below gets a score, 0 to 100, from weighted\nfactors (satisfaction, NPS, SLA misses, reopened tickets, ticket volume,\nrenewals, sentiment), with the reasons; those that dropped 10 points or\nmore from a week before emit `client.health_declining`, and those whose\nmessages turned negative emit `client.sentiment_declining` (at most\nweekly). It takes nothing. Output: `{ companies, declining: [{ org_id,\nname, score, previous, reasons }], sentiment_falling: [{ org_id, name,\nrecent, previous, explanations }] }`.",
       "type": "object"
     },
     "HmacAlgorithm": {
@@ -614,6 +614,22 @@
       },
       "required": [
         "max_attempts"
+      ],
+      "type": "object"
+    },
+    "SentimentRecord": {
+      "additionalProperties": false,
+      "description": "A client message's sentiment to record (`core.sentiment.record`): the\nticket (in the run's organization or below), the note judged (none: the\nticket's description), `score` from -2 (very negative) to 2 (very\npositive), and a one-line `reason`. Again for the same message replaces\nit. Output: `{ id, org_id, ticket_id, score }`.",
+      "properties": {
+        "note_id": true,
+        "reason": true,
+        "score": true,
+        "ticket_id": true
+      },
+      "required": [
+        "ticket_id",
+        "score",
+        "reason"
       ],
       "type": "object"
     },
@@ -3258,6 +3274,69 @@
           "required": [
             "type",
             "id"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Record a client message's sentiment (the `cx` module).",
+          "properties": {
+            "continue_on_error": {
+              "description": "Record the error as the step's output and carry on.",
+              "type": "boolean"
+            },
+            "description": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "id": {
+              "description": "Unique in the workflow: lowercase letters, digits, underscores.\nOther steps read this step's output as `steps.<id>.output`.",
+              "type": "string"
+            },
+            "if": {
+              "description": "Skip the step unless this expression is true.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "name": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "retry": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/RetryPolicy"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "timeout": {
+              "description": "Fail the attempt after this long, e.g. `30s`.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "type": {
+              "const": "core.sentiment.record",
+              "type": "string"
+            },
+            "with": {
+              "$ref": "#/$defs/SentimentRecord"
+            }
+          },
+          "required": [
+            "type",
+            "id",
+            "with"
           ],
           "type": "object"
         },

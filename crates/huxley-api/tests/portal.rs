@@ -1530,7 +1530,11 @@ async fn client_health_is_scored_with_reasons_and_declines_are_flagged() {
         .await
         .unwrap();
     let mut tx = begin_scoped(&s.pools.app, &OrgScope::System).await.unwrap();
-    let (scored, declining) = huxley_cx::health::compute(&mut tx, &ctx, s.root, today)
+    let huxley_cx::health::Computed {
+        companies: scored,
+        declining,
+        ..
+    } = huxley_cx::health::compute(&mut tx, &ctx, s.root, today)
         .await
         .unwrap();
     tx.commit().await.unwrap();
@@ -1605,4 +1609,133 @@ async fn health_model(s: &Setup, today: time::Date) {
         )
         .await;
     assert_eq!(health["score"], 100, "{health}");
+}
+
+#[tokio::test]
+async fn falling_sentiment_flags_a_client_with_explanations() {
+    let Some(db) = isolated("sentiment").await else {
+        return;
+    };
+    let s = setup(&db.pools).await;
+    let ctx = RequestContext::system(Via::System);
+    let (_, ada) = s.portal_user(s.acme, "Ada", "client_user").await;
+    let mut tickets = Vec::new();
+    for i in 0..6 {
+        tickets.push(s.resolved_ticket(&ada, &format!("S{i}")).await);
+    }
+    let judged = [
+        (1, "Thankful for the quick fix"),
+        (1, "Pleased with the help"),
+        (0, "A plain request"),
+        (-2, "Third outage this week; threatening to leave"),
+        (-1, "Frustrated by slow replies"),
+        (-1, "Disappointed the printer broke again"),
+    ];
+    let mut tx = begin_scoped(&s.pools.app, &OrgScope::System).await.unwrap();
+    assert!(
+        huxley_cx::sentiment::record(&mut tx, tickets[0], None, 3, "Too happy")
+            .await
+            .is_err()
+    );
+    for (t, (score, reason)) in tickets.iter().zip(judged) {
+        huxley_cx::sentiment::record(&mut tx, *t, None, score, reason)
+            .await
+            .unwrap();
+    }
+    tx.commit().await.unwrap();
+    // The first three were 45 days ago: the client was fine then.
+    sqlx::query(
+        "UPDATE cx_sentiment SET at = now() - interval '45 days' WHERE ticket_id = ANY($1)",
+    )
+    .bind(&tickets[..3])
+    .execute(&s.pools.owner)
+    .await
+    .unwrap();
+
+    let today = time::OffsetDateTime::now_utc().date();
+    let compute = || async {
+        let mut tx = begin_scoped(&s.pools.app, &OrgScope::System).await.unwrap();
+        let c = huxley_cx::health::compute(&mut tx, &ctx, s.root, today)
+            .await
+            .unwrap();
+        tx.commit().await.unwrap();
+        c
+    };
+    let first = compute().await;
+    let acme: Vec<_> = first
+        .sentiment_falling
+        .iter()
+        .filter(|f| f.org_id == s.acme)
+        .collect();
+    assert_eq!(acme.len(), 1, "{first:?}");
+    assert!(
+        (acme[0].recent + 4.0 / 3.0).abs() < 0.01 && (acme[0].previous - 2.0 / 3.0).abs() < 0.01
+    );
+    assert!(
+        acme[0].explanations[0].ends_with(": Third outage this week; threatening to leave"),
+        "{:?}",
+        acme[0].explanations
+    );
+    assert_eq!(acme[0].explanations.len(), 3);
+    // Flagged once a week, however often it's computed.
+    assert!(
+        compute()
+            .await
+            .sentiment_falling
+            .iter()
+            .all(|f| f.org_id != s.acme)
+    );
+    let events: Vec<Value> = sqlx::query_scalar(
+        "SELECT payload FROM events_outbox WHERE event_type = 'client.sentiment_declining' AND subject_id = $1",
+    )
+    .bind(s.acme)
+    .fetch_all(&s.pools.owner)
+    .await
+    .unwrap();
+    assert_eq!(events.len(), 1);
+    assert_eq!(
+        (&events[0]["recent"], &events[0]["previous"]),
+        (&json!(-1.3), &json!(0.7)),
+        "{}",
+        events[0]
+    );
+
+    sentiment_shows(&s, tickets[3]).await;
+}
+
+/// The health card shows sentiment as a factor, and the ticket its judgment.
+async fn sentiment_shows(s: &Setup, ticket: Uuid) {
+    let (_, health, _) = s
+        .call(
+            &s.staff,
+            "GET",
+            &format!("/api/v1/orgs/{}/health", s.acme),
+            Value::Null,
+        )
+        .await;
+    let factor = health["factors"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|f| f["key"] == "sentiment")
+        .unwrap()
+        .clone();
+    assert_eq!(factor["score"], json!(17.0), "{factor}");
+    assert!(
+        factor["detail"].as_str().unwrap().contains("(e.g. "),
+        "{factor}"
+    );
+    let (_, judged, _) = s
+        .call(
+            &s.staff,
+            "GET",
+            &format!("/api/v1/tickets/{ticket}/sentiment"),
+            Value::Null,
+        )
+        .await;
+    assert_eq!(
+        (&judged[0]["score"], judged.as_array().unwrap().len()),
+        (&json!(-2), 1),
+        "{judged}"
+    );
 }

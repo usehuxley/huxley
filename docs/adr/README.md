@@ -49,3 +49,4 @@ Decisions that shape Huxley. Add a new ADR by copying `0000-template.md` with th
 | [043](0043-csat-surveys.md) | Satisfaction surveys are sent by a workflow step and answered by link or in the portal | Accepted |
 | [044](0044-client-health.md) | Client health is a weighted average of the factors that have data | Accepted |
 | [045](0045-dashboard-publishing.md) | Dashboards are published by approving a snapshot for an audience | Accepted |
+| [046](0046-sentiment.md) | Sentiment is judged by a workflow and recorded by a step | Accepted |

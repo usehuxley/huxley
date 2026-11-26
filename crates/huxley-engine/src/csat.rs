@@ -274,7 +274,8 @@ impl Engine {
 impl Engine {
     /// `core.health.compute`: scores the client companies in the run's
     /// organization and below for today. Output: `{ companies, declining:
-    /// [{ org_id, name, score, previous, reasons }] }`.
+    /// [{ org_id, name, score, previous, reasons }], sentiment_falling:
+    /// [{ org_id, name, recent, previous, explanations }] }`.
     pub(crate) async fn health_compute(&self, org_id: Uuid) -> Result<Json, Json> {
         let mut tx = begin_scoped(self.db(), &OrgScope::System)
             .await
@@ -290,10 +291,64 @@ impl Engine {
         }
         let ctx = RequestContext::system(Via::Workflow);
         let today = time::OffsetDateTime::now_utc().date();
-        let (companies, declining) = huxley_cx::health::compute(&mut tx, &ctx, org_id, today)
+        let computed = huxley_cx::health::compute(&mut tx, &ctx, org_id, today)
             .await
             .map_err(internal)?;
         tx.commit().await.map_err(internal)?;
-        Ok(json!({ "companies": companies, "declining": declining }))
+        Ok(json!(computed))
+    }
+}
+
+impl Engine {
+    /// `core.sentiment.record`: stores a client message's sentiment (a
+    /// ticket in the run's organization or below). Output: `{ id, org_id,
+    /// ticket_id, score }`.
+    pub(crate) async fn sentiment_record(&self, org_id: Uuid, input: &Json) -> Result<Json, Json> {
+        let id = |key: &str| -> Result<Option<Uuid>, Json> {
+            match input[key].as_str().map(str::trim).filter(|s| !s.is_empty()) {
+                None => Ok(None),
+                Some(s) => s
+                    .parse()
+                    .map(Some)
+                    .map_err(|_| error("input", format!("{key} isn't an id"))),
+            }
+        };
+        let ticket = id("ticket_id")?.ok_or_else(|| error("input", "ticket_id is required"))?;
+        let note = id("note_id")?;
+        let score = input["score"]
+            .as_i64()
+            .or_else(|| input["score"].as_str().and_then(|s| s.trim().parse().ok()))
+            .ok_or_else(|| error("input", "score is -2 to 2"))?;
+        let reason = input["reason"].as_str().unwrap_or_default();
+        let subtree = self.subtree(org_id).await?;
+        let mut tx = begin_scoped(self.db(), &OrgScope::System)
+            .await
+            .map_err(internal)?;
+        if !huxley_modules::is_active_at(&mut tx, huxley_cx::MODULE, org_id)
+            .await
+            .map_err(internal)?
+        {
+            return Err(error(
+                "module_disabled",
+                "The customer experience module is turned off",
+            ));
+        }
+        tx.commit().await.map_err(internal)?;
+        let mut tx = begin_scoped(self.db(), &OrgScope::Orgs(subtree))
+            .await
+            .map_err(internal)?;
+        let entry = huxley_cx::sentiment::record(&mut tx, ticket, note, score, reason)
+            .await
+            .map_err(|e| match e {
+                huxley_cx::CxError::NotFound => error("not_found", "No such ticket here"),
+                huxley_cx::CxError::Invalid { field, message } => {
+                    error("input", format!("{field}: {message}"))
+                }
+                other => internal(other),
+            })?;
+        tx.commit().await.map_err(internal)?;
+        Ok(
+            json!({ "id": entry.id, "org_id": entry.org_id, "ticket_id": entry.ticket_id, "score": entry.score }),
+        )
     }
 }
