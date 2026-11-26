@@ -26,8 +26,8 @@ This is a long-term project. The plan follows four rules:
 | **M3: Huxley Automate Beta** | 4 | Datasets, MCP server, AI assistant, workflows-as-code, packs |
 | **M4: Service Desk Alpha** | 5–6 | Ticketing, queues, SLA, email ingestion, client 360 + Actions, CMDB, KB, contracts |
 | **M5: Service Desk Beta** | 7–8 | Client portal, TypeScript SDK, AI ticket features, CSAT/NPS, client health, reporting |
-| **M6: Operations Suite** | 9–10 | Change mgmt, problem mgmt, project mgmt, sales/CPQ, inventory, procurement |
-| **M7: 1.0** | 11–12 | Invoice generation + accounting sync (QBO/Xero), scale/HA hardening, stable APIs |
+| **M6: Operations Suite** | 9–10 | Change mgmt, problem mgmt, project mgmt, sales/CPQ with quote approval and presales scoping, inventory, procurement |
+| **M7: 1.0** | 11–13 | Invoice generation + accounting sync (QBO/Xero) with internal approval, expenses, scale/HA hardening, stable APIs |
 
 ---
 
@@ -289,6 +289,12 @@ This is a long-term project. The plan follows four rules:
 - **Inventory** (§8.7): warehouses/locations, stock levels, serial/lot tracking, movements, allocation to tickets/projects, reorder alerts.
 - **Purchase orders**: vendors, POs (consolidated by vendor from sales orders, or manual), approval, receiving into inventory, partial receipts.
 - **Sales orders**: from accepted quotes → generate POs → receive → allocate/fulfill → hand-off to agreements (recurring lines), projects (create from template), and invoice generation.
+- **Internal quote review and approval** before a quote is sent to the client (§8.10):
+  - customizable rules for when review is needed and who reviews (total, margin, discount, categories, new clients, any field)
+  - the approval as a built-in pack workflow on the approval step, so chains, levels and escalations are editable
+  - a review thread with whole-quote and line comments, `@mentions` that notify, and resolvable threads
+  - approve, request changes or reject, with a diff on resubmission
+  - sending blocked until approved, unless overridden with permission (audited); events at each step
 - **Presales scoping for projects** (§8.10), a workspace on the opportunity that assists the final quote:
   - **Discovery:** notes, transcripts, uploaded documents, the client's CMDB environment, and similar past opportunities and projects (by meaning).
   - **Scope of Work builder:** sections from templates, with AI drafts that cite their sources and turn gaps into open questions. Versioned, and attached to and signed with the quote.
@@ -303,6 +309,11 @@ This is a long-term project. The plan follows four rules:
 
 **Exit criteria:**
 - Opportunity → quote → client e-accepts in the portal → sales order → POs to vendors → receive into stock → allocate and fulfill. Recurring lines create or update an agreement, and an onboarding project is created from a template.
+- A quote under its margin floor needs review:
+  - it can't be sent
+  - a reviewer, @mentioned in a line comment, requests changes
+  - the resubmission shows what changed
+  - once approved, it goes to the client
 - A firewall replacement opportunity is scoped:
   - AI drafts the SOW from discovery notes and the client's CMDB, citing its sources
   - the WBS is drafted from it with estimates grounded in past projects
@@ -323,6 +334,7 @@ This is a long-term project. The plan follows four rules:
   - Sales order lines.
   - Agreement recurring charges, with proration and dataset-driven usage quantities.
 - **Billing runs**: generate drafts → review (edit lines, hold, PDF preview) → approve → sync. Billed sources are marked to prevent double billing. Unbilled work-in-progress view.
+- **Internal invoice approval** (§8.11): no invoice goes to a client, the accounting system or any other integration until approved. It uses the same review model as quotes: customizable rules, the approval as an editable workflow, review threads with line comments and `@mentions`, approve, request changes or reject with a diff, and an audited override. Billing runs can be approved in one pass, with exceptions flagged.
 - **Accounting sync packs**: QuickBooks Online and Xero first, built as integrations, with the sync as a system workflow so other platforms can be added. Includes:
   - A mapping UI (companies ↔ customers, products/work types ↔ items, tax codes, classes/tracking categories).
   - Per-invoice sync status, an error queue, and retry.
@@ -331,11 +343,36 @@ This is a long-term project. The plan follows four rules:
 - Portal: invoice list with synced status and links to the accounting system's view/pay page.
 - Finance dashboards: billed vs unbilled, agreement and project profitability, technician utilization vs billable.
 
-**Exit criteria:** a monthly billing run for a set of clients produces correct invoice drafts, verified against fixture scenarios covering agreements, overages, project milestones, and product sales. The invoices sync to QuickBooks Online and Xero sandboxes with correct customer, item, and tax mappings, and payment status flows back into Huxley.
+**Exit criteria:**
+- A monthly billing run for a set of clients produces correct invoice drafts, verified against fixture scenarios covering agreements, overages, project milestones, and product sales. The invoices sync to QuickBooks Online and Xero sandboxes with correct customer, item, and tax mappings, and payment status flows back into Huxley.
+- An invoice changed by hand needs approval: it isn't sent or synced until a reviewer approves it, and comments and @mentions on its lines reach the people named.
 
 ---
 
-### Phase 12: Scale, hardening, migration, 1.0
+### Phase 12: Expenses
+
+- **The `expenses` module** (§8.16):
+  - expense entries with categories, receipts (AI reads the amount, date and vendor for the person to confirm), tax, billable and reimbursable flags
+  - mileage at configurable rates
+- **On tickets and projects:**
+  - expenses logged against an in-progress ticket, a project (a phase or task), a client, or internally, shown beside time
+  - billable expenses have markups and are evaluated against agreement coverage
+  - project cost budgets and burn include expenses
+- **Reports and approval:** expense reports to the person's lead or approver through an approval workflow, with comments, change requests, policy flags (over limit, no receipt), and locking once approved.
+- **Reimbursement:** marked paid, exported, or synced to the accounting system as bills or expense claims through the accounting packs.
+- **Billing:** approved billable expenses become invoice sources in billing runs, marked billed once invoiced.
+- **Card transactions:** imported (CSV or integrations) and matched to entries.
+- Events for automation; expense dashboards (by person, client, project, category).
+
+**Exit criteria:**
+- A technician logs mileage and a parts receipt (read by AI, confirmed) against an in-progress ticket, and a hotel against a project.
+- Their lead approves the report.
+- The reimbursable items are synced to the accounting sandbox as an expense claim.
+- The billable ones, marked up, appear on the client's next invoice draft, and the project's cost burn includes them.
+
+---
+
+### Phase 13: Scale, hardening, migration, 1.0
 
 - **Scale/HA**: Helm chart with KEDA autoscaling, worker pools by job class, PgBouncer, read replicas, partition maintenance automation, retention jobs, published performance benchmarks for small/medium/large reference sizes.
 - **Deployment templates**: DigitalOcean (App Platform/DOKS + managed services, Marketplace image), Azure (Container Apps + Flexible Server + Key Vault, Bicep/Terraform).
