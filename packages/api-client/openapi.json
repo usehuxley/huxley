@@ -11643,6 +11643,56 @@
 				}
 			}
 		},
+		"/api/v1/projects/capacity": {
+			"get": {
+				"tags": ["projects"],
+				"summary": "Each person's hours a week against what's booked: appointments and the\nremaining estimates of their project tasks, spread over the tasks'\ndates. Over-booked weeks are flagged.",
+				"operationId": "project_capacity",
+				"parameters": [
+					{
+						"name": "from",
+						"in": "query",
+						"description": "A day in the first week (`YYYY-MM-DD`; default this week).",
+						"required": false,
+						"schema": {
+							"type": "string"
+						}
+					},
+					{
+						"name": "weeks",
+						"in": "query",
+						"description": "How many weeks (default 6, at most 26).",
+						"required": false,
+						"schema": {
+							"type": "integer",
+							"format": "int32",
+							"minimum": 0
+						}
+					},
+					{
+						"name": "teamId",
+						"in": "query",
+						"description": "One team's members.",
+						"required": false,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Capacity"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
 		"/api/v1/projects/{id}": {
 			"get": {
 				"tags": ["projects"],
@@ -11931,6 +11981,120 @@
 							"application/json": {
 								"schema": {
 									"$ref": "#/components/schemas/ScopeChange"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/projects/{id}/status-reports": {
+			"post": {
+				"tags": ["projects"],
+				"summary": "Writes a status report on a project (by you).",
+				"operationId": "create_project_report",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/NewStatusReport"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"201": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/StatusReport"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/projects/{id}/status-reports/{report}": {
+			"delete": {
+				"tags": ["projects"],
+				"operationId": "delete_project_report",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					},
+					{
+						"name": "report",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"responses": {
+					"204": {}
+				}
+			},
+			"patch": {
+				"tags": ["projects"],
+				"summary": "Shares a status report with the client in the portal, or stops.",
+				"operationId": "share_project_report",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					},
+					{
+						"name": "report",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/ReportSharing"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/StatusReport"
 								}
 							}
 						}
@@ -19085,6 +19249,16 @@
 						}
 					},
 					{
+						"name": "ticketId",
+						"in": "query",
+						"description": "A ticket (or project task) with requirements of its own.",
+						"required": false,
+						"schema": {
+							"type": ["string", "null"],
+							"format": "uuid"
+						}
+					},
+					{
 						"name": "at",
 						"in": "query",
 						"description": "When to check availability (RFC 3339; default now).",
@@ -22839,6 +23013,25 @@
 					}
 				},
 				"additionalProperties": false
+			},
+			"Capacity": {
+				"type": "object",
+				"required": ["weeks", "people"],
+				"properties": {
+					"people": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/PersonCapacity"
+						}
+					},
+					"weeks": {
+						"type": "array",
+						"items": {
+							"type": "string"
+						},
+						"description": "Each week's Monday, `YYYY-MM-DD`."
+					}
+				}
 			},
 			"CatalogBilling": {
 				"type": "string",
@@ -27641,6 +27834,26 @@
 				},
 				"additionalProperties": false
 			},
+			"NewStatusReport": {
+				"type": "object",
+				"required": ["body"],
+				"properties": {
+					"body": {
+						"type": "string"
+					},
+					"clientVisible": {
+						"type": "boolean"
+					},
+					"periodEnd": {
+						"type": ["string", "null"]
+					},
+					"periodStart": {
+						"type": ["string", "null"],
+						"description": "`YYYY-MM-DD`."
+					}
+				},
+				"additionalProperties": false
+			},
 			"NewTask": {
 				"type": "object",
 				"required": ["title"],
@@ -28342,6 +28555,35 @@
 					}
 				}
 			},
+			"PersonCapacity": {
+				"type": "object",
+				"required": ["userId", "name", "weeks", "unscheduledHours", "openTasks"],
+				"properties": {
+					"name": {
+						"type": "string"
+					},
+					"openTasks": {
+						"type": "integer",
+						"format": "int64",
+						"description": "Open project tasks assigned to them."
+					},
+					"unscheduledHours": {
+						"type": "number",
+						"format": "double",
+						"description": "Remaining estimates of open tasks without dates."
+					},
+					"userId": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"weeks": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/PersonWeek"
+						}
+					}
+				}
+			},
 			"PersonCertification": {
 				"type": "object",
 				"required": [
@@ -28460,6 +28702,34 @@
 					"userId": {
 						"type": "string",
 						"format": "uuid"
+					}
+				}
+			},
+			"PersonWeek": {
+				"type": "object",
+				"required": ["capacityHours", "appointmentHours", "projectHours", "bookedHours", "over"],
+				"properties": {
+					"appointmentHours": {
+						"type": "number",
+						"format": "double"
+					},
+					"bookedHours": {
+						"type": "number",
+						"format": "double"
+					},
+					"capacityHours": {
+						"type": "number",
+						"format": "double",
+						"description": "Hours they work that week (schedule, less approved time off)."
+					},
+					"over": {
+						"type": "boolean",
+						"description": "Booked beyond capacity."
+					},
+					"projectHours": {
+						"type": "number",
+						"format": "double",
+						"description": "Remaining estimates of their project tasks falling that week."
 					}
 				}
 			},
@@ -29419,6 +29689,17 @@
 						"type": "string",
 						"format": "uuid"
 					},
+					"latestReport": {
+						"oneOf": [
+							{
+								"$ref": "#/components/schemas/StatusReport",
+								"description": "The latest status report shared with the client."
+							},
+							{
+								"type": "null"
+							}
+						]
+					},
 					"milestones": {
 						"type": "array",
 						"items": {
@@ -29955,6 +30236,7 @@
 					"milestones",
 					"tasks",
 					"scopeChanges",
+					"statusReports",
 					"version"
 				],
 				"properties": {
@@ -30036,6 +30318,13 @@
 					},
 					"status": {
 						"type": "string"
+					},
+					"statusReports": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/StatusReport"
+						},
+						"description": "The latest status reports, newest first."
 					},
 					"tasks": {
 						"type": "array",
@@ -30975,6 +31264,16 @@
 					"note": {
 						"type": ["string", "null"],
 						"description": "Needed when a reviewer reopens one: why."
+					}
+				},
+				"additionalProperties": false
+			},
+			"ReportSharing": {
+				"type": "object",
+				"required": ["clientVisible"],
+				"properties": {
+					"clientVisible": {
+						"type": "boolean"
 					}
 				},
 				"additionalProperties": false
@@ -32805,6 +33104,43 @@
 				},
 				"additionalProperties": false
 			},
+			"StatusReport": {
+				"type": "object",
+				"required": ["id", "projectId", "body", "health", "clientVisible", "author", "createdAt"],
+				"properties": {
+					"author": {
+						"type": "string"
+					},
+					"body": {
+						"type": "string",
+						"description": "Markdown."
+					},
+					"clientVisible": {
+						"type": "boolean"
+					},
+					"createdAt": {
+						"type": "string",
+						"format": "date-time"
+					},
+					"health": {
+						"type": "string"
+					},
+					"id": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"periodEnd": {
+						"type": ["string", "null"]
+					},
+					"periodStart": {
+						"type": ["string", "null"]
+					},
+					"projectId": {
+						"type": "string",
+						"format": "uuid"
+					}
+				}
+			},
 			"StepRunView": {
 				"type": "object",
 				"description": "The latest attempt of a step.",
@@ -33420,6 +33756,22 @@
 				},
 				"additionalProperties": false
 			},
+			"TemplateSkill": {
+				"type": "object",
+				"description": "A skill a template task needs, at a level (1 learning … 4 expert).",
+				"required": ["skillId", "minLevel"],
+				"properties": {
+					"minLevel": {
+						"type": "integer",
+						"format": "int32"
+					},
+					"skillId": {
+						"type": "string",
+						"format": "uuid"
+					}
+				},
+				"additionalProperties": false
+			},
 			"TemplateTask": {
 				"type": "object",
 				"required": ["key", "title"],
@@ -33449,6 +33801,13 @@
 					"key": {
 						"type": "string",
 						"description": "Unique in the template: what `dependsOn` and assignments name."
+					},
+					"skills": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/TemplateSkill"
+						},
+						"description": "Skills it needs, which become the task's requirements."
 					},
 					"startOffsetDays": {
 						"type": ["integer", "null"],

@@ -1344,6 +1344,54 @@ export type Step =
 			 * Fail the attempt after this long, e.g. `30s`.
 			 */
 			timeout?: string | null;
+			type: 'core.project.status';
+			with?: ProjectStatus | null;
+	  }
+	| {
+			/**
+			 * Record the error as the step's output and carry on.
+			 */
+			continue_on_error?: boolean;
+			description?: string | null;
+			/**
+			 * Unique in the workflow: lowercase letters, digits, underscores.
+			 * Other steps read this step's output as `steps.<id>.output`.
+			 */
+			id: string;
+			/**
+			 * Skip the step unless this expression is true.
+			 */
+			if?: string | null;
+			name?: string | null;
+			retry?: RetryPolicy | null;
+			/**
+			 * Fail the attempt after this long, e.g. `30s`.
+			 */
+			timeout?: string | null;
+			type: 'core.project.report';
+			with: ProjectReport;
+	  }
+	| {
+			/**
+			 * Record the error as the step's output and carry on.
+			 */
+			continue_on_error?: boolean;
+			description?: string | null;
+			/**
+			 * Unique in the workflow: lowercase letters, digits, underscores.
+			 * Other steps read this step's output as `steps.<id>.output`.
+			 */
+			id: string;
+			/**
+			 * Skip the step unless this expression is true.
+			 */
+			if?: string | null;
+			name?: string | null;
+			retry?: RetryPolicy | null;
+			/**
+			 * Fail the attempt after this long, e.g. `30s`.
+			 */
+			timeout?: string | null;
 			type: 'core.asset.sync';
 			with: AssetSync;
 	  }
@@ -2376,6 +2424,41 @@ export interface ScopeDecide {
 	comment?: unknown;
 	decision: unknown;
 	scope_change_id: unknown;
+}
+/**
+ * What to gather for status reports (`core.project.status`): one
+ * `project_id`, or every active project in the run's organization and
+ * below; over the last `days` (default 7). Output: `{ projects: [{
+ * project_id, name, client, status, period_start, period_end, health,
+ * health_reasons, budget_hours, used_hours, burn_percent,
+ * hours_in_period, tasks_done, tasks_total, completed, waiting, overdue,
+ * milestones_reached, milestones_upcoming, scope_changes_pending,
+ * manager_recipient }] }`.
+ *
+ * This interface was referenced by `HuxleyWorkflowFormatV1`'s JSON-Schema
+ * via the `definition` "ProjectStatus".
+ */
+export interface ProjectStatus {
+	days?: unknown;
+	project_id?: unknown;
+}
+/**
+ * A status report to save (`core.project.report`): `project_id` (in the
+ * run's organization or below), `body` (Markdown), `client_visible`
+ * (shown in the portal; default false), `period_start` and `period_end`
+ * (`YYYY-MM-DD`), `author` (default "AI status reports"). Raises
+ * `project.status_report`. Output: the report.
+ *
+ * This interface was referenced by `HuxleyWorkflowFormatV1`'s JSON-Schema
+ * via the `definition` "ProjectReport".
+ */
+export interface ProjectReport {
+	author?: unknown;
+	body: unknown;
+	client_visible?: unknown;
+	period_end?: unknown;
+	period_start?: unknown;
+	project_id: unknown;
 }
 /**
  * Mapping rules to run (`core.asset.sync`): a dataset's rows become

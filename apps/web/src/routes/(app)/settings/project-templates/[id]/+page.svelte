@@ -8,6 +8,7 @@
 
 	let { data, form }: PageProps = $props();
 	type Task = {
+		skills: { skillId: string; minLevel: number }[];
 		startOffsetDays: number | null;
 		durationDays: number | null;
 		key: string;
@@ -32,7 +33,8 @@
 				dependsOn: [...(t.dependsOn ?? [])],
 				clientVisible: t.clientVisible ?? false,
 				startOffsetDays: t.startOffsetDays ?? null,
-				durationDays: t.durationDays ?? null
+				durationDays: t.durationDays ?? null,
+				skills: (t.skills ?? []).map((k) => ({ skillId: k.skillId, minLevel: k.minLevel }))
 			}))
 		}))
 	);
@@ -67,7 +69,8 @@
 					durationDays:
 						t.durationDays === null || Number.isNaN(t.durationDays)
 							? undefined
-							: Number(t.durationDays)
+							: Number(t.durationDays),
+					skills: t.skills
 				}))
 			})),
 			milestones: milestones.map((m) => ({
@@ -120,7 +123,9 @@
 					</Button>
 				</div>
 				{#each phase.tasks as task, j (task.key)}
-					<div class="grid gap-2 sm:grid-cols-[1fr_5rem_6rem_6rem_10rem_auto_auto] sm:items-end">
+					<div
+						class="grid gap-2 sm:grid-cols-[1fr_5rem_6rem_6rem_10rem_10rem_auto_auto] sm:items-end"
+					>
 						<Field label="Task" for="tk-{task.key}">
 							<Input id="tk-{task.key}" bind:value={task.title} required />
 						</Field>
@@ -138,6 +143,27 @@
 						</Field>
 						<Field label="Takes days" for="tkn-{task.key}">
 							<Input id="tkn-{task.key}" type="number" min="0" bind:value={task.durationDays} />
+						</Field>
+						<Field label="Needs skill" for="tkk-{task.key}">
+							<select
+								id="tkk-{task.key}"
+								class="h-9 w-full rounded-control border border-border-strong bg-surface px-2 text-sm text-fg"
+								value={task.skills[0] ? `${task.skills[0].skillId}:${task.skills[0].minLevel}` : ''}
+								onchange={(e) => {
+									const v = e.currentTarget.value;
+									const rest = task.skills.slice(1);
+									task.skills = v
+										? [{ skillId: v.split(':')[0], minLevel: Number(v.split(':')[1]) }, ...rest]
+										: rest;
+								}}
+							>
+								<option value="">None</option>
+								{#each data.skills as k (k.value)}
+									{#each [[2, 'working'], [3, 'proficient'], [4, 'expert']] as [lvl, word] (lvl)}
+										<option value="{k.value}:{lvl}">{k.label}, {word}</option>
+									{/each}
+								{/each}
+							</select>
 						</Field>
 						<Field label="After" for="tkd-{task.key}">
 							<select
@@ -180,7 +206,8 @@
 								dependsOn: [],
 								clientVisible: false,
 								startOffsetDays: null,
-								durationDays: null
+								durationDays: null,
+								skills: []
 							})}
 					>
 						<Plus size={16} /> Add a task

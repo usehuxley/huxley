@@ -36,11 +36,29 @@ The project's page shows:
 
 Each budget threshold (50, 75, 90 and 100% by default) raises `project.budget_threshold` once, when time logged on a task first reaches it. If the burn drops back under a threshold (time deleted, or a bigger budget), that threshold can fire again.
 
+## Capacity and who does what
+
+**Projects → Capacity** shows, for each person and week:
+
+- the hours they work: their schedule, less approved time off, or 40 hours a week without a schedule
+- what's booked: appointments, plus the remaining estimates of their open project tasks spread over each task's dates
+- weeks booked beyond capacity, flagged
+
+Tasks without dates are counted as **undated**. Filter by team, and page through the weeks.
+
+Template tasks can **need a skill** at a level, which becomes the task's requirement. For each unassigned task, the project page suggests up to three people who are qualified and available, with their skill match and free hours this week. Assign one with a click.
+
 ## Scope changes
 
 When the work grows (or shrinks), draft a **scope change** on the project: what changes, the hours it adds (negative to remove) and optionally its price. **Submit** sends it for approval, and you can **withdraw** it until it's decided.
 
 Install the **Project scope approvals** pack at the client (or above) to send submitted changes to the client's approvers in the portal. When they approve, the hours are added to the project's budget, and its thresholds are checked again. Change the pack's workflow to add a provider approval first, or to approve small changes automatically.
+
+## Status reports
+
+A project's **Status reports** card lists its reports, newest first. Managers can write one themselves (a line in `**bold**` is a heading, and lines starting with `- ` are a list), and can **share it with the client**, stop sharing it, or delete it.
+
+Install the **AI project status reports** pack to have them drafted for you. Every Monday at 07:00, for each active project, it gathers the last week (tasks done, hours, budget, milestones reached and coming up, overdue and waiting tasks, scope changes waiting for approval) and has your [AI provider](ai.md) draft a summary, highlights, risks and next steps. The draft is saved on the project, not shared, and the project's manager is told. Change the workflow to run on another day, or to email the report.
 
 ## Events
 
@@ -53,6 +71,7 @@ Install the **Project scope approvals** pack at the client (or above) to send su
 | `project.budget_threshold` | A threshold is reached | `name`, `threshold`, `percent`, `usedHours`, `budgetHours` |
 | `project.scope_change_submitted` | A scope change is submitted | `scopeChangeId`, `projectName`, `number`, `title`, `description`, `hours`, `amount`, `currency` |
 | `project.scope_change_approved`, `project.scope_change_rejected` | It's decided | `scopeChangeId`, `projectName`, `number`, `title`, `hours`, `amount`, `by`, `comment` |
+| `project.status_report` | A report is saved | `reportId`, `projectName`, `health`, `clientVisible`, `author` |
 
 Every project event also carries `projectId` and `templateId`.
 
@@ -60,4 +79,4 @@ The event's subject is the project, at the client company. Workflows decide what
 
 ## In the portal
 
-Client approvers and admins see **Projects** in the portal. It lists the company's projects marked for the portal (on by default, apart from cancelled ones), with their progress, the milestones marked for the client (reached or upcoming), the tasks marked for the client, and scope changes sent to them (waiting, approved or rejected). Hours used and the budget never show there.
+Client approvers and admins see **Projects** in the portal. It lists the company's projects marked for the portal (on by default, apart from cancelled ones), with their progress, the milestones marked for the client (reached or upcoming), the tasks marked for the client, scope changes sent to them (waiting, approved or rejected), and the latest status report shared with them. Hours used and the budget never show there.

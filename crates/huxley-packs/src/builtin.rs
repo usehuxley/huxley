@@ -103,6 +103,13 @@ const SOURCES: &[Source] = &[
         )],
     },
     Source {
+        manifest: include_str!("../builtin/project-status-reports/pack.yaml"),
+        files: &[(
+            "workflows/weekly-status-reports.yaml",
+            include_str!("../builtin/project-status-reports/workflows/weekly-status-reports.yaml"),
+        )],
+    },
+    Source {
         manifest: include_str!("../builtin/project-scope-approvals/pack.yaml"),
         files: &[(
             "workflows/approve-scope-change.yaml",

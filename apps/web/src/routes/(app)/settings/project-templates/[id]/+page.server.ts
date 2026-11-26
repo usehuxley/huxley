@@ -6,8 +6,12 @@ import { problemMessage } from '#lib/server/problems.ts';
 import type { Actions, PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async (event) => {
-	if (event.params.id === 'new') return { template: null, workflows: [] };
 	const client = api(event);
+	const skills = ((await client.GET('/api/v1/workforce/skills')).data ?? []).map((k) => ({
+		value: k.id,
+		label: k.name
+	}));
+	if (event.params.id === 'new') return { template: null, workflows: [], skills };
 	const [template, workflows] = await Promise.all([
 		client.GET('/api/v1/project-templates/{id}', { params: { path: { id: event.params.id } } }),
 		client.GET('/api/v1/project-templates/{id}/workflows', {
@@ -15,7 +19,7 @@ export const load: PageServerLoad = async (event) => {
 		})
 	]);
 	if (!template.data) error(404, 'There’s no such template.');
-	return { template: template.data, workflows: workflows.data ?? [] };
+	return { template: template.data, workflows: workflows.data ?? [], skills };
 };
 
 export const actions: Actions = {

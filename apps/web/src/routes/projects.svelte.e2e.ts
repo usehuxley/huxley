@@ -95,7 +95,23 @@ test.describe('projects', () => {
 		await page.getByRole('button', { name: 'Submit scope change 1' }).click();
 		await expect(scope.getByRole('listitem')).toContainText('Waiting for the client');
 
+		// A status report, written and shared.
+		await page.getByLabel('Write a report').fill(`Agents going in ${stamp}.`);
+		await page.getByRole('button', { name: 'Save report' }).click();
+		const report = page.getByRole('article', { name: /^Status report/ });
+		await expect(report).toContainText(`Agents going in ${stamp}.`);
+		await report.getByRole('button', { name: 'Share with the client' }).click();
+		await expect(report).toContainText('Shared with the client');
+
 		await page.goto('/projects');
 		await expect(page.getByRole('link', { name: `Rollout for ${stamp}` })).toBeVisible();
+
+		// Capacity: the task's 8 hours fall in the week of 7 January 2030.
+		await page.getByRole('link', { name: 'Capacity', exact: true }).click();
+		await page.goto('/projects/capacity?from=2030-01-07');
+		const row = page
+			.getByRole('row')
+			.filter({ has: page.getByRole('rowheader', { name: /E2E User/ }) });
+		await expect(row.getByRole('cell').first()).toContainText('8 project');
 	});
 });

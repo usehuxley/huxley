@@ -255,6 +255,8 @@ impl Engine {
             Step::ReportSend(_) => self.report_send(org_id, input).await.into(),
             Step::ChangeDecide(_) => self.change_decide(org_id, input).await.into(),
             Step::ScopeDecide(_) => self.scope_decide(org_id, input).await.into(),
+            Step::ProjectStatus(_) => self.project_status(org_id, input).await.into(),
+            Step::ProjectReport(_) => self.project_report(org_id, input).await.into(),
             Step::AssetSync(_) => self.sync_assets(org_id, input).await.into(),
             Step::AssetWarranty(_) => self.set_warranty(org_id, input).await.into(),
             Step::MailFetch(_)

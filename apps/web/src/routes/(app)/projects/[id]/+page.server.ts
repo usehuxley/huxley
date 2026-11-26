@@ -29,16 +29,72 @@ export const load: PageServerLoad = async (event) => {
 				.filter((a) => a.orgId === project.data.orgId && a.status !== 'cancelled')
 				.map((a) => ({ value: a.id, label: a.name }))
 		: [];
+	const canWrite = user.grantedPermissions.includes('project:write');
+	const suggestions = canWrite ? await suggest(event, project.data) : {};
 	const asked = event.url.searchParams.get('view');
 	return {
 		project: project.data,
 		people: people.people,
 		agreements,
 		view: isView(asked) ? asked : 'list',
-		canWrite: user.grantedPermissions.includes('project:write'),
+		suggestions,
+		canWrite,
 		canManage
 	};
 };
+
+type Suggestion = {
+	userId: string;
+	name: string;
+	skillMatch: number;
+	missing: string[];
+	freeHours: number | null;
+};
+
+/** Who could take each unassigned open task: qualified, available and
+ * skilled first, with their free hours this week. */
+async function suggest(
+	event: Parameters<PageServerLoad>[0],
+	project: { tasks: { ticketId: string; assigneeUserId?: string | null; statusCategory: string }[] }
+): Promise<Record<string, Suggestion[]>> {
+	const open = project.tasks
+		.filter(
+			(t) => !t.assigneeUserId && t.statusCategory !== 'resolved' && t.statusCategory !== 'closed'
+		)
+		.slice(0, 10);
+	if (open.length === 0) return {};
+	const client = api(event);
+	const capacity = await client.GET('/api/v1/projects/capacity', {
+		params: { query: { weeks: 1 } }
+	});
+	const free = new Map(
+		(capacity.data?.people ?? []).map((p) => [
+			p.userId,
+			Math.max(0, (p.weeks[0]?.capacityHours ?? 0) - (p.weeks[0]?.bookedHours ?? 0))
+		])
+	);
+	const fits = await Promise.all(
+		open.map((t) =>
+			client.GET('/api/v1/workforce/fit', { params: { query: { ticketId: t.ticketId } } })
+		)
+	);
+	const out: Record<string, Suggestion[]> = {};
+	open.forEach((t, i) => {
+		const people = (fits[i].data ?? []).filter((f) => f.qualified && f.available);
+		if (people.length === 0) return;
+		out[t.ticketId] = people
+			.map((f) => ({
+				userId: f.userId,
+				name: f.name,
+				skillMatch: Math.round(f.skillMatch * 100),
+				missing: f.missing,
+				freeHours: free.has(f.userId) ? Math.round(free.get(f.userId)! * 10) / 10 : null
+			}))
+			.sort((a, b) => b.skillMatch - a.skillMatch || (b.freeHours ?? 0) - (a.freeHours ?? 0))
+			.slice(0, 3);
+	});
+	return out;
+}
 
 const num = (form: FormData, key: string) => {
 	const v = formString(form, key);
@@ -93,6 +149,52 @@ export const actions: Actions = {
 			return fail(response.status, {
 				message: problemMessage(problem, 'Could not change the task.')
 			});
+		return { saved: true };
+	},
+	assign: async (event) => {
+		const form = await event.request.formData();
+		const client = api(event);
+		const ticket = formString(form, 'ticket');
+		const current = await client.GET('/api/v1/tickets/{id}', { params: { path: { id: ticket } } });
+		if (!current.data) return fail(404, { message: 'There’s no such task.' });
+		const { error: problem, response } = await client.PATCH('/api/v1/tickets/{id}', {
+			params: { path: { id: ticket } },
+			body: { version: current.data.version, assigneeUserId: formString(form, 'userId') }
+		});
+		if (response.status !== 200)
+			return fail(response.status, { message: problemMessage(problem, 'Could not assign it.') });
+		return { saved: true };
+	},
+	report: async (event) => {
+		const form = await event.request.formData();
+		const { error: problem, response } = await api(event).POST(
+			'/api/v1/projects/{id}/status-reports',
+			{
+				params: { path: { id: event.params.id } },
+				body: { body: formString(form, 'body'), clientVisible: form.get('clientVisible') === 'on' }
+			}
+		);
+		if (response.status !== 201)
+			return fail(response.status, {
+				message: problemMessage(problem, 'Could not save the report.')
+			});
+		return { saved: true };
+	},
+	shareReport: async (event) => {
+		const form = await event.request.formData();
+		const { response } = await api(event).PATCH('/api/v1/projects/{id}/status-reports/{report}', {
+			params: { path: { id: event.params.id, report: formString(form, 'report') } },
+			body: { clientVisible: formString(form, 'visible') === 'true' }
+		});
+		if (response.status !== 200)
+			return fail(response.status, { message: 'Could not change sharing.' });
+		return { saved: true };
+	},
+	deleteReport: async (event) => {
+		const form = await event.request.formData();
+		await api(event).DELETE('/api/v1/projects/{id}/status-reports/{report}', {
+			params: { path: { id: event.params.id, report: formString(form, 'report') } }
+		});
 		return { saved: true };
 	},
 	status: async (event) => {

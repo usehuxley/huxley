@@ -620,6 +620,32 @@
       ],
       "type": "string"
     },
+    "ProjectReport": {
+      "additionalProperties": false,
+      "description": "A status report to save (`core.project.report`): `project_id` (in the\nrun's organization or below), `body` (Markdown), `client_visible`\n(shown in the portal; default false), `period_start` and `period_end`\n(`YYYY-MM-DD`), `author` (default \"AI status reports\"). Raises\n`project.status_report`. Output: the report.",
+      "properties": {
+        "author": true,
+        "body": true,
+        "client_visible": true,
+        "period_end": true,
+        "period_start": true,
+        "project_id": true
+      },
+      "required": [
+        "project_id",
+        "body"
+      ],
+      "type": "object"
+    },
+    "ProjectStatus": {
+      "additionalProperties": false,
+      "description": "What to gather for status reports (`core.project.status`): one\n`project_id`, or every active project in the run's organization and\nbelow; over the last `days` (default 7). Output: `{ projects: [{\nproject_id, name, client, status, period_start, period_end, health,\nhealth_reasons, budget_hours, used_hours, burn_percent,\nhours_in_period, tasks_done, tasks_total, completed, waiting, overdue,\nmilestones_reached, milestones_upcoming, scope_changes_pending,\nmanager_recipient }] }`.",
+      "properties": {
+        "days": true,
+        "project_id": true
+      },
+      "type": "object"
+    },
     "ReportSend": {
       "additionalProperties": false,
       "description": "A report to email (`core.report.send`): a shared dashboard (at the\nrun's organization, above or below it) or a prebuilt one by key, with\nthe numbers of the run's organization and below over `range` (default:\nthe dashboard's), as `format` (`csv`, `xlsx` or `pdf`, the default),\nattached to an email to `to` (`user:<id>`, `team:<id>` or `role:<key>`\nentries) with an optional `subject` and `message`. Output: `{ sent,\nfile_name }`.",
@@ -4036,6 +4062,138 @@
             },
             "with": {
               "$ref": "#/$defs/ScopeDecide"
+            }
+          },
+          "required": [
+            "type",
+            "id",
+            "with"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Gather what happened on projects, for a status report.",
+          "properties": {
+            "continue_on_error": {
+              "description": "Record the error as the step's output and carry on.",
+              "type": "boolean"
+            },
+            "description": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "id": {
+              "description": "Unique in the workflow: lowercase letters, digits, underscores.\nOther steps read this step's output as `steps.<id>.output`.",
+              "type": "string"
+            },
+            "if": {
+              "description": "Skip the step unless this expression is true.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "name": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "retry": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/RetryPolicy"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "timeout": {
+              "description": "Fail the attempt after this long, e.g. `30s`.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "type": {
+              "const": "core.project.status",
+              "type": "string"
+            },
+            "with": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/ProjectStatus"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "type",
+            "id"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Save a project status report.",
+          "properties": {
+            "continue_on_error": {
+              "description": "Record the error as the step's output and carry on.",
+              "type": "boolean"
+            },
+            "description": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "id": {
+              "description": "Unique in the workflow: lowercase letters, digits, underscores.\nOther steps read this step's output as `steps.<id>.output`.",
+              "type": "string"
+            },
+            "if": {
+              "description": "Skip the step unless this expression is true.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "name": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "retry": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/RetryPolicy"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "timeout": {
+              "description": "Fail the attempt after this long, e.g. `30s`.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "type": {
+              "const": "core.project.report",
+              "type": "string"
+            },
+            "with": {
+              "$ref": "#/$defs/ProjectReport"
             }
           },
           "required": [
