@@ -36,7 +36,45 @@ test.describe('scripts', () => {
 		await expect(versions).toContainText('simpler');
 		await versions.getByRole('link', { name: 'Version 1' }).click();
 		await expect(page.getByLabel('Version 1 source')).toContainText('json.load');
-		await expect(page.getByLabel('Script source')).toHaveValue('print("version two")\n');
+		await expect(page.getByLabel('Script source')).toContainText('print("version two")');
+	});
+
+	test('the code editor highlights PowerShell and completes parameters', async ({ browser }) => {
+		const page = await signIn(browser);
+		// Nothing the page does breaks its Content Security Policy (the
+		// editor's styles carry the page's nonce).
+		const blocked: string[] = [];
+		page.on('console', (m) => {
+			if (m.text().includes('Content Security Policy')) blocked.push(m.text());
+		});
+		await page.getByRole('link', { name: 'Scripts' }).click();
+		await page.getByLabel('Name').fill(`Pinger ${Date.now().toString(36)}`);
+		await page.getByLabel('Language').selectOption('pwsh');
+		await page.getByRole('button', { name: 'Create' }).click();
+		const source = page.locator('[data-language="powershell"] .cm-content');
+		await expect(source).toBeVisible();
+		// Highlighted: keywords and variables get their own spans.
+		await expect(source.locator('span').first()).toBeVisible();
+		// The new script's parameter, offered while typing.
+		await source.click();
+		await page.keyboard.press('ControlOrMeta+End');
+		await page.keyboard.press('Enter');
+		await page.keyboard.type('$Na');
+		const options = page.getByRole('listbox');
+		const option = options.getByRole('option', { name: /\$name/i });
+		await expect(option).toBeVisible();
+		// Clicked: Enter right as the list opens is ignored (CodeMirror waits a
+		// moment, so a fast typist's Enter isn't swallowed).
+		await option.click();
+		// "$Na" became the parameter, on the line after the greeting.
+		await expect(source).toContainText('"$name');
+		// Broken parameters JSON is flagged as you type.
+		const params = page.locator('#parameters .cm-content');
+		await params.click();
+		await page.keyboard.press('ControlOrMeta+End');
+		await page.keyboard.type(',');
+		await expect(page.locator('#parameters .cm-lintRange-error')).toHaveCount(1);
+		expect(blocked).toEqual([]);
 	});
 
 	test('an admin enrols a script runner', async ({ browser }) => {
