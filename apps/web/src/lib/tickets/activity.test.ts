@@ -11,7 +11,9 @@ group('ticket activity', () => {
 		expect(describe('note', { kind: 'internal' })).toBe('added an internal note');
 		expect(describe('link', { linked: 'T-2', as: 'parent' })).toBe('made T-2 its parent');
 		expect(describe('link', { linked: 'T-3', as: 'problem' })).toBe('linked T-3 as its problem');
-		expect(describe('link', { linked: 'T-4', as: 'incident' })).toBe('linked T-4 as an incident it causes');
+		expect(describe('link', { linked: 'T-4', as: 'incident' })).toBe(
+			'linked T-4 as an incident it causes'
+		);
 		expect(describe('link', { linked: 'T-3', as: 'related' })).toBe('linked T-3');
 		expect(describe('link', { unlinked: 'T-3' })).toBe('unlinked T-3');
 		expect(describe('merge', { merged: 'T-4' })).toBe('merged T-4 into this ticket');
