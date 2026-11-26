@@ -440,7 +440,7 @@ async fn built_in_integrations_are_added_from_the_catalog() {
         .iter()
         .find(|e| e["key"] == "msgraph")
         .unwrap();
-    assert_eq!(graph["actions"], 17);
+    assert_eq!(graph["actions"], 18);
 
     let add = |org: Uuid| json!({ "orgId": org });
     let (status, added) = call(
