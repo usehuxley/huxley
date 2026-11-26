@@ -25,6 +25,11 @@ export const load: PageServerLoad = async (event) => {
 			client.GET('/api/v1/servicedesk/sla-policies')
 		]);
 	if (org.response.status === 404) error(404, 'Organization not found.');
+	const { user } = await event.parent();
+	const healthModel =
+		user.activeModules.includes('cx') && user.grantedPermissions.includes('crm:manage')
+			? (await client.GET('/api/v1/orgs/{id}/health-model', { params: { path: { id } } })).data
+			: undefined;
 	if (!org.data || !fields.data || !tags.data) error(503, 'Could not load the organization.');
 	return {
 		org: org.data,
@@ -36,11 +41,33 @@ export const load: PageServerLoad = async (event) => {
 		modules: modules.data ?? [],
 		variables: variables.data ?? null,
 		sla: sla.data ?? null,
-		slaPolicies: policies.data ?? []
+		slaPolicies: policies.data ?? [],
+		healthModel: healthModel ?? null
 	};
 };
 
 export const actions: Actions = {
+	healthModel: async (event) => {
+		const form = await event.request.formData();
+		const weights: Record<string, number> = {};
+		for (const key of ['csat', 'nps', 'sla', 'reopens', 'volume', 'renewal']) {
+			weights[key] = Number(formString(form, key)) || 0;
+		}
+		const {
+			data,
+			error: problem,
+			response
+		} = await api(event).PUT('/api/v1/orgs/{id}/health-model', {
+			params: { path: { id: event.params.id } },
+			body: { weights }
+		});
+		if (!data) {
+			return fail(response.status, {
+				health: problemMessage(problem, 'Could not save the weights.')
+			});
+		}
+		return { health: 'Weights saved. Scores use them from the next run.' };
+	},
 	fields: async (event) => {
 		const form = await event.request.formData();
 		const path = { entity_type: 'organization', id: event.params.id };

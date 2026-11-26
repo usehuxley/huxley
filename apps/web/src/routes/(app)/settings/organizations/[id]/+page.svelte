@@ -1,4 +1,5 @@
 <script lang="ts">
+	import HealthModelCard from '#lib/orgs/HealthModelCard.svelte';
 	import { enhance, type SubmitFunction } from '$app/forms';
 	import { resolve } from '$app/paths';
 	import { ArrowLeft, X } from '@lucide/svelte';
@@ -158,6 +159,12 @@
 			canManage={data.user.grantedPermissions.includes('org:settings:manage')}
 			{notify}
 		/>
+		{#if data.healthModel}
+			<HealthModelCard
+				weights={data.healthModel.weights}
+				message={form && 'health' in form ? (form.health as string) : null}
+			/>
+		{/if}
 	</Card>
 
 	{#if data.variables}

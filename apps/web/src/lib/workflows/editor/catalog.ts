@@ -465,6 +465,16 @@ export const STEPS: StepSpec[] = [
 		]
 	},
 	{
+		type: 'core.health.compute',
+		label: 'Score client health',
+		description:
+			'Score each client here and below for today, from satisfaction, NPS, SLA misses, reopened tickets, ticket volume and renewals; declining clients raise an event.',
+		group: 'Actions',
+		module: 'cx',
+		template: {},
+		fields: []
+	},
+	{
 		type: 'core.ticket.email_reply',
 		label: 'Email a reply',
 		description:

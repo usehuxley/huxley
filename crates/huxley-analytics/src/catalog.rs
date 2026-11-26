@@ -335,11 +335,26 @@ pub const NPS: Source = Source {
     ]),
 };
 
+pub const HEALTH: Source = Source {
+    key: Cow::Borrowed("health"),
+    label: Cow::Borrowed("Client health"),
+    description: Cow::Borrowed("Each client's daily health score, 0 to 100."),
+    module: Some("cx"),
+    permission: "crm:read",
+    time_field: Cow::Borrowed("computed_on"),
+    from: Cow::Borrowed("cx_health h JOIN organizations o ON o.id = h.org_id"),
+    fields: Cow::Borrowed(&[
+        CLIENT,
+        f("score", "Health score", Kind::Number, "h.score"),
+        f("computed_on", "Day", Kind::Date, "h.computed_on"),
+    ]),
+};
+
 /// Dataset sources' keys: `dataset:<dataset key>`.
 pub const DATASET_PREFIX: &str = "dataset:";
 
 /// Every source, in display order.
-pub const SOURCES: &[Source] = &[TICKETS, TIME_ENTRIES, ASSETS, RUNS, CSAT, NPS];
+pub const SOURCES: &[Source] = &[TICKETS, TIME_ENTRIES, ASSETS, RUNS, CSAT, NPS, HEALTH];
 
 pub fn source(key: &str) -> Option<&'static Source> {
     SOURCES.iter().find(|s| s.key == key)

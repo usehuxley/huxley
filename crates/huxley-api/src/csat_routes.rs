@@ -36,6 +36,11 @@ pub fn staff_routes() -> Router<AppState> {
     Router::new()
         .route("/tickets/{id}/csat", get(ticket_csat))
         .route("/contacts/{id}/nps", get(contact_nps))
+        .route("/orgs/{id}/health", get(org_health))
+        .route(
+            "/orgs/{id}/health-model",
+            get(get_health_model).put(set_health_model),
+        )
 }
 
 fn db_err(e: impl std::fmt::Display) -> ApiError {
@@ -326,4 +331,75 @@ pub async fn contact_nps(
         .map_err(cx_error)?;
     tx.commit().await.map_err(db_err)?;
     Ok(Json(survey))
+}
+
+/// A client company's health: its latest score, factors and reasons, and
+/// its scores over the last 90 days. `null` before it's first scored.
+#[utoipa::path(get, path = "/api/v1/orgs/{id}/health", operation_id = "get_client_health", tag = "crm",
+    params(("id" = Uuid, Path)), responses((status = 200, body = Option<huxley_cx::health::Health>)))]
+pub async fn org_health(
+    State(state): State<AppState>,
+    authed: Authed,
+    Path(id): Path<Uuid>,
+) -> ApiResult<Json<Option<huxley_cx::health::Health>>> {
+    authed.require_at(&state, permissions::CRM_READ, id).await?;
+    let mut tx = begin_scoped(&state.db, &OrgScope::System)
+        .await
+        .map_err(db_err)?;
+    let health = huxley_cx::health::latest(&mut tx, id)
+        .await
+        .map_err(cx_error)?;
+    tx.commit().await.map_err(db_err)?;
+    Ok(Json(health))
+}
+
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct HealthModel {
+    /// Each factor's weight, 0 (off) to 10: `csat`, `nps`, `sla`,
+    /// `reopens`, `volume`, `renewal`.
+    pub weights: huxley_cx::health::Weights,
+}
+
+/// The weights this organization's clients are scored with (set here or
+/// above, else the defaults).
+#[utoipa::path(get, path = "/api/v1/orgs/{id}/health-model", operation_id = "get_health_model", tag = "crm",
+    params(("id" = Uuid, Path)), responses((status = 200, body = HealthModel)))]
+pub async fn get_health_model(
+    State(state): State<AppState>,
+    authed: Authed,
+    Path(id): Path<Uuid>,
+) -> ApiResult<Json<HealthModel>> {
+    authed.require_at(&state, permissions::CRM_READ, id).await?;
+    let mut tx = begin_scoped(&state.db, &OrgScope::System)
+        .await
+        .map_err(db_err)?;
+    let weights = huxley_cx::health::weights(&mut tx, id)
+        .await
+        .map_err(cx_error)?;
+    tx.commit().await.map_err(db_err)?;
+    Ok(Json(HealthModel { weights }))
+}
+
+/// Sets the weights for this organization's clients (and those below).
+#[utoipa::path(put, path = "/api/v1/orgs/{id}/health-model", operation_id = "set_health_model", tag = "crm",
+    params(("id" = Uuid, Path)), request_body = HealthModel,
+    responses((status = 200, body = HealthModel), (status = 422, body = ApiError, content_type = "application/problem+json")))]
+pub async fn set_health_model(
+    State(state): State<AppState>,
+    authed: Authed,
+    Path(id): Path<Uuid>,
+    Json(body): Json<HealthModel>,
+) -> ApiResult<Json<HealthModel>> {
+    authed
+        .require_at(&state, permissions::CRM_MANAGE, id)
+        .await?;
+    let mut tx = begin_scoped(&state.db, &OrgScope::System)
+        .await
+        .map_err(db_err)?;
+    let weights = huxley_cx::health::set_weights(&mut tx, &authed.user.ctx, id, &body.weights)
+        .await
+        .map_err(cx_error)?;
+    tx.commit().await.map_err(db_err)?;
+    Ok(Json(HealthModel { weights }))
 }

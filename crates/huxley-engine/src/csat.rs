@@ -270,3 +270,30 @@ impl Engine {
         Ok(json!({ "asked": asked, "emailed": emailed, "campaign": campaign }))
     }
 }
+
+impl Engine {
+    /// `core.health.compute`: scores the client companies in the run's
+    /// organization and below for today. Output: `{ companies, declining:
+    /// [{ org_id, name, score, previous, reasons }] }`.
+    pub(crate) async fn health_compute(&self, org_id: Uuid) -> Result<Json, Json> {
+        let mut tx = begin_scoped(self.db(), &OrgScope::System)
+            .await
+            .map_err(internal)?;
+        if !huxley_modules::is_active_at(&mut tx, huxley_cx::MODULE, org_id)
+            .await
+            .map_err(internal)?
+        {
+            return Err(error(
+                "module_disabled",
+                "The customer experience module is turned off",
+            ));
+        }
+        let ctx = RequestContext::system(Via::Workflow);
+        let today = time::OffsetDateTime::now_utc().date();
+        let (companies, declining) = huxley_cx::health::compute(&mut tx, &ctx, org_id, today)
+            .await
+            .map_err(internal)?;
+        tx.commit().await.map_err(internal)?;
+        Ok(json!({ "companies": companies, "declining": declining }))
+    }
+}

@@ -241,6 +241,7 @@ impl Engine {
             Step::TimesheetCheck(_) => self.check_timesheets(input).await.into(),
             Step::CsatSurvey(_) => self.csat_survey(org_id, input).await.into(),
             Step::NpsSend(_) => self.nps_send(org_id, input).await.into(),
+            Step::HealthCompute(_) => self.health_compute(org_id).await.into(),
             Step::AssetSync(_) => self.sync_assets(org_id, input).await.into(),
             Step::AssetWarranty(_) => self.set_warranty(org_id, input).await.into(),
             Step::MailFetch(_)

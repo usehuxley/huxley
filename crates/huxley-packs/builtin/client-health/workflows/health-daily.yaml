@@ -1,0 +1,19 @@
+apiVersion: usehuxley.io/v1
+kind: Workflow
+metadata:
+  key: health-daily
+  name: Score client health
+  description: >-
+    Every morning at 06:00 (and when run by hand), scores each client
+    company's health from its weighted factors, with the reasons.
+spec:
+  triggers:
+    - type: schedule
+      cron: "0 6 * * *"
+    - type: manual
+  steps:
+    - id: score
+      type: core.health.compute
+  outputs:
+    companies: "{{ steps.score.output.companies }}"
+    declining: "{{ steps.score.output.declining | length }}"

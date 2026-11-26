@@ -406,6 +406,9 @@ pub enum Step {
     /// Ask contacts how likely they are to recommend you (the `cx` module).
     #[serde(rename = "core.nps.send")]
     NpsSend(NpsSendStep),
+    /// Score client companies' health for today (the `cx` module).
+    #[serde(rename = "core.health.compute")]
+    HealthCompute(HealthComputeStep),
     /// Run a dataset → asset mapping rule (the `cmdb` module).
     #[serde(rename = "core.asset.sync")]
     AssetSync(AssetSyncStep),
@@ -742,6 +745,11 @@ step!(NpsSendStep {
     pub send: NpsSend,
 });
 
+step!(HealthComputeStep {
+    #[serde(default, rename = "with")]
+    pub compute: HealthCompute,
+});
+
 step!(AssetSyncStep {
     #[serde(rename = "with")]
     pub sync: AssetSync,
@@ -824,6 +832,7 @@ impl Step {
             TimesheetCheck,
             CsatSurvey,
             NpsSend,
+            HealthCompute,
             AssetSync,
             AssetWarranty,
             TicketEmailReply,
@@ -877,6 +886,7 @@ impl Step {
             Self::TimesheetCheck(_) => "core.timesheet.check",
             Self::CsatSurvey(_) => "core.csat.survey",
             Self::NpsSend(_) => "core.nps.send",
+            Self::HealthCompute(_) => "core.health.compute",
             Self::AssetSync(_) => "core.asset.sync",
             Self::AssetWarranty(_) => "core.asset.set_warranty",
             Self::TicketCreate(_) => "core.ticket.create",
@@ -1342,6 +1352,16 @@ pub struct NpsSend {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub limit: Option<Value>,
 }
+
+/// Client health for today (`core.health.compute`): each client company in
+/// the run's organization and below gets a score, 0 to 100, from weighted
+/// factors (satisfaction, NPS, SLA misses, reopened tickets, ticket volume,
+/// renewals), with the reasons; those that dropped 10 points or more from
+/// a week before emit `client.health_declining`. It takes nothing. Output:
+/// `{ companies, declining: [{ org_id, name, score, previous, reasons }] }`.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct HealthCompute {}
 
 /// Mapping rules to run (`core.asset.sync`): a dataset's rows become
 /// assets, matched, updated and created by the rule. Give `mapping_id` for

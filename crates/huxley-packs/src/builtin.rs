@@ -83,6 +83,19 @@ const SOURCES: &[Source] = &[
         ],
     },
     Source {
+        manifest: include_str!("../builtin/client-health/pack.yaml"),
+        files: &[
+            (
+                "workflows/health-daily.yaml",
+                include_str!("../builtin/client-health/workflows/health-daily.yaml"),
+            ),
+            (
+                "workflows/health-declining.yaml",
+                include_str!("../builtin/client-health/workflows/health-declining.yaml"),
+            ),
+        ],
+    },
+    Source {
         manifest: include_str!("../builtin/knowledge-search/pack.yaml"),
         files: &[(
             "workflows/embed-articles.yaml",

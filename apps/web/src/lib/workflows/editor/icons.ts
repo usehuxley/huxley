@@ -61,6 +61,7 @@ const ICONS: Record<string, typeof Globe> = {
 	'core.kb.embed': Sparkles,
 	'core.csat.survey': Smile,
 	'core.nps.send': Smile,
+	'core.health.compute': Smile,
 	'core.asset.sync': Boxes,
 	'core.asset.set_warranty': Boxes,
 	'core.ticket.create': TicketPlus,

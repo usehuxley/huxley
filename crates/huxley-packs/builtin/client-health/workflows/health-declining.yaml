@@ -1,0 +1,23 @@
+apiVersion: usehuxley.io/v1
+kind: Workflow
+metadata:
+  key: health-declining
+  name: Tell account managers about a declining client
+  description: >-
+    When a client's health score drops 10 points or more in a week, tells
+    everyone with the Administrator role there (or above), with the reasons.
+spec:
+  triggers:
+    - type: event
+      event: client.health_declining
+  steps:
+    - id: tell
+      type: core.notify
+      with:
+        to: role:admin
+        kind: ticket.replied
+        title: "{{ inputs.name }}'s health fell from {{ inputs.previous }} to {{ inputs.score }}"
+        message: "{{ inputs.reasons | join('; ') if inputs.reasons else 'No single factor stands out.' }}"
+        url: "/clients/{{ trigger.subject_id }}"
+  outputs:
+    sent: "{{ steps.tell.output.sent }}"
