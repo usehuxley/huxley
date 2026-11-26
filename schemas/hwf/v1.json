@@ -100,6 +100,26 @@
       ],
       "type": "object"
     },
+    "AssetWarranty": {
+      "additionalProperties": false,
+      "description": "A warranty to record (`core.asset.set_warranty`) for an asset at the\nrun's organization or below, as found by a lookup (`source`, e.g.\n`dell`): added, or updated if the lookup recorded one with the same\n`reference`. Dates are `YYYY-MM-DD`; `kind` is `manufacturer` (the\ndefault), `extended`, `support` or `other`. Output: the warranty.",
+      "properties": {
+        "asset_id": true,
+        "ends_on": true,
+        "kind": true,
+        "notes": true,
+        "provider": true,
+        "reference": true,
+        "source": true,
+        "starts_on": true
+      },
+      "required": [
+        "asset_id",
+        "source",
+        "ends_on"
+      ],
+      "type": "object"
+    },
     "Backoff": {
       "oneOf": [
         {
@@ -3018,6 +3038,69 @@
             },
             "with": {
               "$ref": "#/$defs/AssetSync"
+            }
+          },
+          "required": [
+            "type",
+            "id",
+            "with"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Record a warranty a lookup found (the `cmdb` module).",
+          "properties": {
+            "continue_on_error": {
+              "description": "Record the error as the step's output and carry on.",
+              "type": "boolean"
+            },
+            "description": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "id": {
+              "description": "Unique in the workflow: lowercase letters, digits, underscores.\nOther steps read this step's output as `steps.<id>.output`.",
+              "type": "string"
+            },
+            "if": {
+              "description": "Skip the step unless this expression is true.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "name": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "retry": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/RetryPolicy"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "timeout": {
+              "description": "Fail the attempt after this long, e.g. `30s`.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "type": {
+              "const": "core.asset.set_warranty",
+              "type": "string"
+            },
+            "with": {
+              "$ref": "#/$defs/AssetWarranty"
             }
           },
           "required": [

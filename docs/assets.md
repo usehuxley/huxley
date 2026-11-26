@@ -20,6 +20,12 @@ Find them under **Assets**, filtered by client, type and status, or on a client'
 
 The built-in types are Workstation, Server, Network device, Printer, Mobile device, SaaS tenant, License, Domain, Certificate, Application and Other. With `cmdb:configure` you can add types and change any type's fields under **Settings → Asset types** (or through `/api/v1/asset-types`). Each field gets a stored key from its label when it's added; renaming the label later keeps the key, so existing values stay. Choices take one option a line, or `value | Label` to set the stored value. A field is text, long text, number, yes/no, date, a choice or several, a URL or an email, and may be required. Built-in types can be extended but not removed; your own types can be archived.
 
+## Warranties
+
+An asset's **Warranties** card keeps its warranties: the manufacturer's, an extension, or a support contract. Each has a provider, a reference (contract number or service tag), start and end dates, and where it came from (entered by hand, or recorded by a vendor lookup). The asset's *Warranty ends on* follows its latest warranty, and **Assets** can be filtered to warranties ending within 30 or 90 days, already-ended ones included.
+
+Each warranty is announced once when it's 60 days from ending, as `asset.warranty_expiring`, and once when it has ended, as `asset.warranty_expired`, so a workflow can open a renewal ticket or tell the account manager. Changing the end date re-arms both. Retired and disposed assets aren't announced. A vendor lookup workflow records what it finds with the `core.asset.set_warranty` step, which updates its earlier record for the same reference rather than adding another.
+
 ## Syncing from datasets
 
 Assets can be kept in step with another system, such as an RMM's devices or Microsoft 365's tenants, through a [dataset](datasets.md) and a mapping rule under **Settings → Asset sync** (`cmdb:configure`). Each dataset row becomes an asset of the row's organization.
@@ -77,7 +83,7 @@ Technicians have `asset:read` and `asset:write`, and read-only users have `asset
 
 ## Events
 
-`asset.sync_completed` follows each sync with its result. `asset.created`, `asset.updated` (with `change.source` and `change.fields` when a sync changed it), `asset.status_changed` (with `change.from` and `change.to`) and `asset.deleted` carry the asset's `name`, `type`, `status`, `serialNumber`, `hostname` and the `actorId`.
+`asset.warranty_expiring` and `asset.warranty_expired` carry the asset's `name` and the warranty's `kind`, `provider`, `reference` and `endsOn`. `asset.sync_completed` follows each sync with its result. `asset.created`, `asset.updated` (with `change.source` and `change.fields` when a sync changed it), `asset.status_changed` (with `change.from` and `change.to`) and `asset.deleted` carry the asset's `name`, `type`, `status`, `serialNumber`, `hostname` and the `actorId`.
 
 ## API
 
@@ -92,8 +98,9 @@ Technicians have `asset:read` and `asset:write`, and read-only users have `asset
 | `GET`, `POST /api/v1/tickets/{id}/assets`, `DELETE …/assets/{assetId}` | A ticket's assets and the requester's; link (`assetId`), unlink |
 | `GET`, `POST /api/v1/asset-types`, `PUT`, `DELETE /api/v1/asset-types/{id}` | Types and their fields |
 | `GET`, `POST /api/v1/asset-mappings`, `PUT`, `DELETE /api/v1/asset-mappings/{id}` | Dataset → asset mapping rules |
+| `GET`, `POST /api/v1/assets/{id}/warranties`, `PUT`, `DELETE /api/v1/asset-warranties/{id}` | An asset's warranties |
 | `POST /api/v1/asset-mappings/{id}/run?preview=true` | Run a rule now, or preview it: `{ rows, created, updated, unchanged, skipped, problems }` |
 
 ## Coming next
 
-Integration packs for RMMs that fill the datasets, and warranty lookups.
+Integration packs for RMMs that fill the datasets, and vendor warranty lookups (Dell, Lenovo, HP) built on `core.asset.set_warranty`.

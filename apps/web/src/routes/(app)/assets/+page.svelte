@@ -79,6 +79,19 @@
 				options={[{ value: '', label: 'In use' }, ...STATUSES]}
 			/>
 		</div>
+		<div class="w-48">
+			<label for="asset-warranty-filter" class="sr-only">Warranty</label>
+			<Select
+				id="asset-warranty-filter"
+				name="warranty"
+				value={data.warranty}
+				options={[
+					{ value: '', label: 'Any warranty' },
+					{ value: '30', label: 'Warranty ending in 30 days' },
+					{ value: '90', label: 'Warranty ending in 90 days' }
+				]}
+			/>
+		</div>
 		<Button type="submit"><Search size={16} /> Search</Button>
 	</form>
 
@@ -100,6 +113,7 @@
 						<th class="py-2 font-medium">Status</th>
 						<th class="hidden py-2 font-medium md:table-cell">Serial</th>
 						<th class="hidden py-2 font-medium md:table-cell">Used by</th>
+						<th class="hidden py-2 font-medium lg:table-cell">Warranty ends</th>
 					</tr>
 				</thead>
 				<tbody class="divide-y divide-border">
@@ -122,6 +136,7 @@
 								{a.serialNumber}
 							</td>
 							<td class="hidden py-2 text-fg-muted md:table-cell">{a.contactName ?? ''}</td>
+							<td class="hidden py-2 text-fg-muted lg:table-cell">{a.warrantyEndsOn ?? ''}</td>
 						</tr>
 					{/each}
 				</tbody>

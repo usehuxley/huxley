@@ -5,10 +5,18 @@
 //! the API checks `asset:*` permissions and that the module is on.
 
 pub mod assets;
+
+/// Dates as `YYYY-MM-DD` in JSON (and `Option<Date>` with
+/// `#[serde(default, with = "crate::date::option")]`).
+pub(crate) mod date {
+    time::serde::format_description!(ymd, Date, "[year]-[month]-[day]");
+    pub(crate) use ymd::{deserialize, option, serialize};
+}
 pub mod mappings;
 pub mod relationships;
 pub mod tickets;
 pub mod types;
+pub mod warranties;
 
 /// The module's key in the registry.
 pub const MODULE: &str = "cmdb";
