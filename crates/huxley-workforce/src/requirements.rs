@@ -16,7 +16,7 @@ use uuid::Uuid;
 use crate::people::EXPIRING_DAYS;
 use crate::{WorkforceError, WorkforceResult};
 
-pub const TARGETS: &[&str] = &["queue", "ticket_type"];
+pub const TARGETS: &[&str] = &["queue", "ticket_type", "ticket"];
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema, sqlx::FromRow)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -41,7 +41,7 @@ fn check_target(target_type: &str) -> WorkforceResult<()> {
     } else {
         Err(WorkforceError::invalid(
             "targetType",
-            "queue or ticket_type",
+            "queue, ticket_type or ticket",
         ))
     }
 }
@@ -151,25 +151,26 @@ pub struct Fit {
     pub unavailable: Option<String>,
 }
 
-/// How each of `people` (by default every active person) fits work in
-/// `queue` of `ticket_type` at `at` (Unix seconds; none: availability isn't
-/// considered): certifications are hard requirements, then availability,
-/// then how well skill levels are met (partly met counts in part). Best
-/// fits first.
+/// The work `fit` is about: its queue, ticket type and ticket, each of
+/// which may carry requirements.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct Work {
+    pub queue: Option<Uuid>,
+    pub ticket_type: Option<Uuid>,
+    pub ticket: Option<Uuid>,
+}
+
+/// How each of `people` (by default every active person) fits `work` at
+/// `at` (Unix seconds; none: availability isn't considered): certifications
+/// are hard requirements, then availability, then how well skill levels are
+/// met (partly met counts in part). Best fits first.
 pub async fn fit(
     conn: &mut PgConnection,
-    queue: Option<Uuid>,
-    ticket_type: Option<Uuid>,
+    work: Work,
     people: Option<&[Uuid]>,
     at: Option<i64>,
 ) -> WorkforceResult<Vec<Fit>> {
-    let mut needs = Vec::new();
-    if let Some(q) = queue {
-        needs.extend(of(conn, "queue", q).await?);
-    }
-    if let Some(t) = ticket_type {
-        needs.extend(of(conn, "ticket_type", t).await?);
-    }
+    let needs = needs(conn, work).await?;
     let candidates: Vec<(Uuid, String)> = sqlx::query_as(
         "SELECT id, display_name FROM users WHERE status = 'active' AND kind = 'human' \
             AND ($1::uuid[] IS NULL OR id = ANY($1)) ORDER BY lower(display_name)",
@@ -251,6 +252,29 @@ pub async fn fit(
             .then(a.name.to_lowercase().cmp(&b.name.to_lowercase()))
     });
     Ok(fits)
+}
+
+/// Everything `work` requires, from its queue, type and ticket; a skill
+/// asked for twice counts at the higher level.
+pub async fn needs(conn: &mut PgConnection, work: Work) -> WorkforceResult<Vec<Requirement>> {
+    let mut all: Vec<Requirement> = Vec::new();
+    for (target, id) in [
+        ("queue", work.queue),
+        ("ticket_type", work.ticket_type),
+        ("ticket", work.ticket),
+    ] {
+        let Some(id) = id else { continue };
+        for r in of(conn, target, id).await? {
+            match all.iter_mut().find(|a| {
+                (a.skill_id.is_some() && a.skill_id == r.skill_id)
+                    || (a.certification_id.is_some() && a.certification_id == r.certification_id)
+            }) {
+                Some(a) => a.min_level = a.min_level.max(r.min_level),
+                None => all.push(r),
+            }
+        }
+    }
+    Ok(all)
 }
 
 /// Announces certifications expiring within 30 days and those expired,

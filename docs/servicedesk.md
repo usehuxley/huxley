@@ -206,6 +206,25 @@ Dispatch runs as a workflow, so it can be followed, changed or replaced like any
 
 Each dispatch run's output says who was chosen, or why nobody was, and what was considered about each member: their open tickets, skill match, and why anyone was skipped.
 
+### Who should take it
+
+An open ticket's page lists the three people best placed to take it, each with a score out of 100, the reasons and the cautions, and an **Assign** button (ADR-048). The score adds up:
+
+| Part | Points |
+|---|---|
+| Skill match | 40 |
+| Available now | 20 |
+| Load: lighter than the others | 15 |
+| History: tickets resolved in this queue in 90 days | 15 |
+| Familiarity: the client's tickets worked in 180 days | 10 |
+
+- **Skills:** the requirements are the ticket's own, its queue's and its type's (see [What work requires](workforce.md#what-work-requires)).
+- **Certifications:** someone missing a required certification scores at most 30 and comes after everyone qualified.
+- **Candidates** are the queue's members, or without any, the people who may work tickets there.
+- **Without the Workforce module**, skills and availability aren't weighed.
+
+`GET /api/v1/tickets/{id}/recommendations?limit=…` (`ticket:read`) returns the same list, and the `core.dispatch.recommend` step gives it to workflows, for example to assign the top pick or to tell a dispatcher why.
+
 ## Appointments and the dispatch board
 
 **Appointments.** An appointment books someone for work on a ticket at a set time: an onsite visit, or a remote session the requester needs to be at. Book one from the ticket's **Appointments** card with who, the day, the start and how long. A booking can last up to 24 hours, and nobody can be booked twice at once, even across clients. Booking, moving and cancelling show in the ticket's history. Booking needs `ticket:write` on the ticket.

@@ -54,6 +54,7 @@ pub mod portal_ticket_routes;
 pub mod problem;
 mod public_form_routes;
 pub mod rate_limit;
+pub mod recommend_routes;
 mod router;
 mod runner_routes;
 mod script_routes;

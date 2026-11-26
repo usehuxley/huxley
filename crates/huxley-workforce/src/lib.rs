@@ -6,6 +6,7 @@
 pub mod availability;
 pub mod catalog;
 pub mod people;
+pub mod recommend;
 pub mod requirements;
 pub mod timesheets;
 

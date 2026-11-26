@@ -66,6 +66,7 @@ const ICONS: Record<string, typeof Globe> = {
 	'core.sentiment.record': Smile,
 	'core.triage.options': ListChecks,
 	'core.triage.apply': ListChecks,
+	'core.dispatch.recommend': ListChecks,
 	'core.asset.sync': Boxes,
 	'core.asset.set_warranty': Boxes,
 	'core.ticket.create': TicketPlus,

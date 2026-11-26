@@ -5365,6 +5365,28 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
+	'/api/v1/tickets/{id}/recommendations': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/**
+		 * Who should take the ticket, best first: required skills and
+		 *     certifications (its queue's, type's and its own), availability, open
+		 *     load, history in its queue, and familiarity with the client, each with
+		 *     reasons and cautions.
+		 */
+		get: operations['recommend_assignees'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
 	'/api/v1/tickets/{id}/responses': {
 		parameters: {
 			query?: never;
@@ -6580,11 +6602,12 @@ export interface paths {
 			path?: never;
 			cookie?: never;
 		};
-		/** What a queue or ticket type requires. */
+		/** What a queue, ticket type or ticket requires. */
 		get: operations['get_requirements'];
 		/**
-		 * Replaces what a queue or ticket type requires: skills at a minimum
-		 *     level, and certifications (hard requirements). Needs `workforce:manage`.
+		 * Replaces what a queue, ticket type or ticket requires: skills at a
+		 *     minimum level, and certifications (hard requirements). Needs
+		 *     `workforce:manage`, or for a ticket `ticket:write` where it is.
 		 */
 		put: operations['set_requirements'];
 		post?: never;
@@ -10698,6 +10721,37 @@ export interface components {
 		/** @description Only that it was received: nothing about the runs. */
 		Received: {
 			received: boolean;
+		};
+		Recommendation: {
+			/** @description Assigned the ticket now. */
+			assigned: boolean;
+			available: boolean;
+			/** @description What counts against them. */
+			cautions: string[];
+			/**
+			 * Format: int64
+			 * @description The client's tickets they worked in the last 180 days.
+			 */
+			clientTickets: number;
+			name: string;
+			/** Format: int64 */
+			openTickets: number;
+			/** @description Holds every required certification. */
+			qualified: boolean;
+			/**
+			 * Format: int64
+			 * @description Tickets in this queue they resolved in the last 90 days.
+			 */
+			queueResolved: number;
+			/** @description Why they rank where they do. */
+			reasons: string[];
+			/**
+			 * Format: int32
+			 * @description 0 to 100.
+			 */
+			score: number;
+			/** Format: uuid */
+			userId: string;
 		};
 		RecoveryCodesView: {
 			/** @description Shown only now. Each code signs in once if the authenticator is lost. */
@@ -23917,6 +23971,30 @@ export interface operations {
 			};
 		};
 	};
+	recommend_assignees: {
+		parameters: {
+			query?: {
+				/** @description How many (default 5, at most 20). */
+				limit?: number;
+			};
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['Recommendation'][];
+				};
+			};
+		};
+	};
 	ticket_responses: {
 		parameters: {
 			query?: never;
@@ -26346,7 +26424,7 @@ export interface operations {
 			query?: never;
 			header?: never;
 			path: {
-				/** @description `queue` or `ticket_type` */
+				/** @description `queue`, `ticket_type` or `ticket` */
 				target_type: string;
 				target_id: string;
 			};

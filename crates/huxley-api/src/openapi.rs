@@ -260,6 +260,7 @@ use crate::workforce_routes;
         crate::triage_routes::list_evaluations,
         crate::triage_routes::get_evaluation,
         crate::triage_routes::agreement,
+        crate::recommend_routes::recommendations,
         crate::csat_routes::get_health_model,
         crate::csat_routes::set_health_model,
         crate::portal_ticket_routes::rate_ticket,

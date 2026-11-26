@@ -364,6 +364,18 @@
       ],
       "type": "object"
     },
+    "DispatchRecommend": {
+      "additionalProperties": false,
+      "description": "Who should take a ticket (`core.dispatch.recommend`), in the run's\norganization or below: its queue's members (or those who may work\ntickets there), ranked by required skills and certifications,\navailability, open load, history in the queue and familiarity with the\nclient, at most `limit` (default 5). Output: `{ recommendations: [{\nuserId, name, score, qualified, available, reasons, cautions, … }], top\n}`.",
+      "properties": {
+        "limit": true,
+        "ticket_id": true
+      },
+      "required": [
+        "ticket_id"
+      ],
+      "type": "object"
+    },
     "DocumentKind": {
       "enum": [
         "Workflow"
@@ -3457,6 +3469,69 @@
             },
             "with": {
               "$ref": "#/$defs/TriageApply"
+            }
+          },
+          "required": [
+            "type",
+            "id",
+            "with"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Who should take a ticket, with reasons (the `servicedesk` module).",
+          "properties": {
+            "continue_on_error": {
+              "description": "Record the error as the step's output and carry on.",
+              "type": "boolean"
+            },
+            "description": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "id": {
+              "description": "Unique in the workflow: lowercase letters, digits, underscores.\nOther steps read this step's output as `steps.<id>.output`.",
+              "type": "string"
+            },
+            "if": {
+              "description": "Skip the step unless this expression is true.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "name": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "retry": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/RetryPolicy"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "timeout": {
+              "description": "Fail the attempt after this long, e.g. `30s`.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "type": {
+              "const": "core.dispatch.recommend",
+              "type": "string"
+            },
+            "with": {
+              "$ref": "#/$defs/DispatchRecommend"
             }
           },
           "required": [

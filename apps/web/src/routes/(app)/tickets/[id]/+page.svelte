@@ -414,6 +414,43 @@
 				ticketId={ticket.id}
 				contactId={ticket.requesterId ?? undefined}
 			/>
+			{#if canWrite && data.recommendations.length > 0 && ticket.statusCategory !== 'resolved' && ticket.statusCategory !== 'closed'}
+				<Card title="Who should take it">
+					<ul class="flex flex-col gap-3" aria-label="Recommended people">
+						{#each data.recommendations as r (r.userId)}
+							<li class="flex flex-col gap-1">
+								<div class="flex items-center justify-between gap-2">
+									<span class="font-medium text-fg">{r.name}</span>
+									<span class="flex items-center gap-2">
+										<span class="text-xs text-fg-muted tabular-nums" title="Out of 100">
+											{r.score}
+										</span>
+										{#if !r.assigned}
+											<form
+												method="POST"
+												action="?/assign"
+												use:enhance={saved(`Assigned to ${r.name}.`)}
+											>
+												<input type="hidden" name="version" value={ticket.version} />
+												<input type="hidden" name="userId" value={r.userId} />
+												<Button type="submit" variant="ghost" aria-label="Assign to {r.name}">
+													Assign
+												</Button>
+											</form>
+										{/if}
+									</span>
+								</div>
+								<ul class="text-xs text-fg-muted">
+									{#each r.reasons as why (why)}<li>{why}</li>{/each}
+									{#each r.cautions as caution (caution)}<li class="text-warning">
+											{caution}
+										</li>{/each}
+								</ul>
+							</li>
+						{/each}
+					</ul>
+				</Card>
+			{/if}
 			{#if data.assets}
 				<TicketAssetsCard assets={data.assets} />
 			{/if}

@@ -2525,3 +2525,123 @@ async fn answer_samples(s: &Setup, evaluation: &str, hw: &str, nw: &str) {
         .await;
     assert_eq!(listed[0]["id"], json!(evaluation));
 }
+
+#[tokio::test]
+async fn recommendations_rank_people_with_reasons() {
+    let Some(s) = setup().await else { return };
+    let ctx = RequestContext::system(Via::System);
+    let mut tx = begin_scoped(&s.pools.app, &OrgScope::System).await.unwrap();
+    huxley_modules::set_enabled(&mut tx, &ctx, "workforce", true, false)
+        .await
+        .unwrap();
+    tx.commit().await.unwrap();
+    let (ada, ada_email) = user(&s.pools, Some(("technician", s.provider))).await;
+    let (bob, _) = user(&s.pools, Some(("technician", s.provider))).await;
+    let (_, reader_email) = user(&s.pools, Some(("read_only", s.provider))).await;
+    let queue_name = unique("Network");
+    let q = s
+        .ok(
+            &s.owner,
+            "POST",
+            "/api/v1/queues",
+            Some(json!({ "orgId": s.provider, "name": queue_name, "userIds": [ada, bob] })),
+        )
+        .await;
+    let skill = Uuid::now_v7();
+    exec(
+        &s.pools,
+        "INSERT INTO wf_skills (id, name) VALUES ($1, 'Networking ' || $1::text)",
+        &[skill],
+    )
+    .await;
+    exec(
+        &s.pools,
+        "INSERT INTO wf_user_skills (user_id, skill_id, level) VALUES ($1, $3, 4), ($2, $3, 1)",
+        &[ada, bob, skill],
+    )
+    .await;
+    let ticket = s
+        .ticket(
+            &s.owner,
+            json!({ "orgId": s.acme, "title": "VPN down", "queueId": q["id"] }),
+        )
+        .await;
+    // Ada resolved two of this queue's tickets lately; Bob has two open.
+    for (who, resolved) in [(ada, true), (ada, true), (bob, false), (bob, false)] {
+        let t = s.ticket(&s.owner, json!({ "orgId": s.acme, "title": "Other", "queueId": q["id"], "assigneeUserId": who })).await;
+        if resolved {
+            exec(
+                &s.pools,
+                "UPDATE sd_tickets SET resolved_at = now() WHERE id = $1",
+                &[Uuid::parse_str(t["id"].as_str().unwrap()).unwrap()],
+            )
+            .await;
+        }
+    }
+    // A technician says what the ticket needs; a read-only user can't.
+    let needs = format!(
+        "/api/v1/workforce/requirements/ticket/{}",
+        ticket["id"].as_str().unwrap()
+    );
+    let body = json!([{ "skillId": skill, "minLevel": 3 }]);
+    let reader = login(&s.app, &reader_email).await;
+    assert_eq!(
+        s.call(&reader, "PUT", &needs, Some(body.clone())).await.0,
+        StatusCode::FORBIDDEN
+    );
+    let tech = login(&s.app, &ada_email).await;
+    s.ok(&tech, "PUT", &needs, Some(body)).await;
+
+    ranked(&s, &tech, &ticket, (ada, bob), &queue_name).await;
+}
+
+/// Ada (skilled, with history, no load) ranks above Bob (missing the
+/// skill, two open tickets), with the reasons.
+async fn ranked(s: &Setup, tech: &str, ticket: &Value, (ada, bob): (Uuid, Uuid), queue_name: &str) {
+    let recs = s
+        .ok(
+            tech,
+            "GET",
+            &format!("{}/recommendations", url(ticket)),
+            None,
+        )
+        .await;
+    let names: Vec<&str> = recs
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|r| r["userId"].as_str().unwrap())
+        .collect();
+    assert_eq!(names, [ada.to_string(), bob.to_string()], "{recs}");
+    let (first, second) = (&recs[0], &recs[1]);
+    assert!(
+        first["score"].as_i64().unwrap() > second["score"].as_i64().unwrap(),
+        "{recs}"
+    );
+    let reasons: Vec<&str> = first["reasons"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|r| r.as_str().unwrap())
+        .collect();
+    assert!(
+        reasons.contains(&"Meets every skill level it needs"),
+        "{reasons:?}"
+    );
+    assert!(
+        reasons.contains(&format!("Resolved 2 in {queue_name} lately").as_str()),
+        "{reasons:?}"
+    );
+    assert!(
+        reasons.contains(&"0 open tickets (the lightest load)"),
+        "{reasons:?}"
+    );
+    assert_eq!(second["openTickets"], 2);
+    assert!(
+        second["cautions"][0]
+            .as_str()
+            .unwrap()
+            .starts_with("Missing: Networking"),
+        "{second}"
+    );
+}
