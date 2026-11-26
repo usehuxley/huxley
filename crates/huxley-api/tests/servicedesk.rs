@@ -928,6 +928,19 @@ async fn breach(s: &Setup, ticket: Uuid) {
     .await;
 }
 
+/// Drops tickets' SLA clocks: a policy another test left in the shared
+/// database would make them "due soon" at some times of day.
+async fn no_sla_clocks(s: &Setup, tickets: &[Uuid]) {
+    for t in tickets {
+        exec(
+            &s.pools,
+            "DELETE FROM sd_ticket_sla WHERE ticket_id = $1",
+            &[*t],
+        )
+        .await;
+    }
+}
+
 #[tokio::test]
 async fn my_work_puts_what_needs_attention_first() {
     let Some(s) = setup().await else { return };
@@ -989,6 +1002,7 @@ async fn my_work_puts_what_needs_attention_first() {
         )
         .await;
 
+    no_sla_clocks(&s, &[id(&working), id(&fresh)]).await;
     let work = s.ok(&cookie, "GET", "/api/v1/my-work", None).await;
     let titles: Vec<&str> = work["mine"]
         .as_array()
