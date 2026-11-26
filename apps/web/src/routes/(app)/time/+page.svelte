@@ -106,6 +106,66 @@
 		/>
 	{/if}
 
+	{#if data.suggestions.length > 0}
+		<Card
+			title="Suggested from your tickets"
+			description="Drafted when you resolved tickets without logging time. Check the minutes, then log or dismiss."
+		>
+			<ul class="flex flex-col divide-y divide-border" aria-label="Suggested time">
+				{#each data.suggestions as s (s.id)}
+					<li class="flex flex-col gap-2 py-2">
+						<div class="text-sm">
+							<a
+								href={resolve('/(app)/tickets/[id]', { id: s.ticketId })}
+								class="font-medium text-accent hover:underline"
+							>
+								{s.ticketReference} · {s.ticketTitle}
+							</a>
+							{#if s.notes}<p class="text-fg-muted">{s.notes}</p>{/if}
+						</div>
+						<div class="flex flex-wrap items-end gap-2">
+							<form
+								method="POST"
+								action="?/acceptSuggestion"
+								class="flex flex-wrap items-end gap-2"
+								use:enhance
+							>
+								<input type="hidden" name="id" value={s.id} />
+								<Field label="Minutes" for="sugg-min-{s.id}">
+									<Input
+										id="sugg-min-{s.id}"
+										name="minutes"
+										type="number"
+										min="1"
+										max="1440"
+										value={s.minutes}
+										class="w-24"
+									/>
+								</Field>
+								<div class="w-48">
+									<Field label="Work type" for="sugg-type-{s.id}">
+										<Select
+											id="sugg-type-{s.id}"
+											name="workTypeId"
+											options={data.workTypes
+												.filter((w) => w.onTickets)
+												.map((w) => ({ value: w.id, label: w.name }))}
+										/>
+									</Field>
+								</div>
+								<Button type="submit" variant="primary">Log it</Button>
+							</form>
+							<form method="POST" action="?/dismissSuggestion" use:enhance>
+								<input type="hidden" name="id" value={s.id} />
+								<Button type="submit" variant="ghost">Dismiss</Button>
+							</form>
+						</div>
+					</li>
+				{/each}
+			</ul>
+		</Card>
+	{/if}
+
 	<Card
 		title="Log time"
 		description="Time that isn't on a ticket: admin, meetings, training, travel."

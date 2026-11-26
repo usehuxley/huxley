@@ -459,6 +459,16 @@ API (`ticket:read`):
 - `POST /api/v1/tickets/{id}/insight/refresh` (raises `ticket.insight_requested`)
 - `GET /api/v1/tickets/{id}/similar?limit=…`
 
+## Auto-documentation
+
+With the built-in **AI auto-documentation** pack (and an [AI provider](ai.md)), resolving a ticket drafts its paperwork (ADR-051):
+
+- **A resolution note:** an internal note, "Resolution summary (AI draft): …", with the cause and the fix.
+- **A knowledge article**, when the fix would help others: drafted, tagged `ai-draft`, linked to the ticket and **submitted for review** in the [knowledge base](knowledge.md). It's published only when a reviewer approves it.
+- **Suggested time**, when whoever resolved it logged no time on it: **My time** shows it under *Suggested from your tickets*. Check the minutes, pick a work type and **Log it** to make a real time entry, or **Dismiss** it. Suggestions never count toward timesheets or billing until logged.
+
+API: `GET /api/v1/time-suggestions` (yours), `POST /api/v1/time-suggestions/{id}/accept` `{ workTypeId, minutes?, notes? }` (needs `ticket:write` on the ticket), `POST /api/v1/time-suggestions/{id}/dismiss`.
+
 ## Coming next
 
 Sending replies through Microsoft Graph.

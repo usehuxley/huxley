@@ -1,0 +1,67 @@
+apiVersion: usehuxley.io/v1
+kind: Workflow
+metadata:
+  key: document-resolution
+  name: Document resolved tickets with AI
+  description: >-
+    When a ticket is resolved, asks the AI provider for a short resolution
+    note (added as an internal note), whether the fix is worth a knowledge
+    article (drafted into review, linked to the ticket), and how long the
+    work likely took (suggested to whoever resolved it, if they logged no
+    time on it).
+spec:
+  triggers:
+    - type: event
+      event: ticket.status_changed
+      filter: "{{ event.payload.category == 'resolved' }}"
+  steps:
+    - id: ticket
+      type: core.ticket.get
+      with:
+        ticket_id: "{{ trigger.subject_id }}"
+        notes: true
+    - id: judge
+      type: ai.extract
+      with:
+        text: >-
+          {{ (steps.ticket.output.ticket.title ~ '\n\n' ~ (steps.ticket.output.ticket.description or '') ~ '\n\n'
+              ~ (steps.ticket.output.notes[-30:] | map(attribute='body') | join('\n---\n')))[:16000] }}
+        instructions: >-
+          A service desk ticket was just resolved: its title, description, then
+          its notes, oldest first. Write a resolution note of at most 80 words:
+          the cause and the fix, for a technician who meets this again. Decide
+          whether the fix would help others (not one-off, not client-specific
+          secrets); if so, draft a knowledge article: a short title and a
+          Markdown body with symptoms, cause and steps. Estimate the minutes of
+          hands-on work it took (5 to 480). Never include passwords or secrets.
+        schema:
+          type: object
+          properties:
+            resolution_note: { type: string }
+            article_worthwhile: { type: boolean }
+            article_title: { type: string }
+            article_body: { type: string }
+            minutes: { type: integer }
+          required: [resolution_note, article_worthwhile, article_title, article_body, minutes]
+    - id: note
+      type: core.ticket.note
+      with:
+        ticket_id: "{{ trigger.subject_id }}"
+        kind: internal
+        body: "Resolution summary (AI draft): {{ steps.judge.output.resolution_note }}"
+    - id: article
+      type: core.kb.draft
+      if: "{{ steps.judge.output.article_worthwhile }}"
+      with:
+        title: "{{ steps.judge.output.article_title }}"
+        body: "{{ steps.judge.output.article_body }}"
+        ticket_id: "{{ trigger.subject_id }}"
+    - id: time
+      type: core.time.suggest
+      if: "{{ steps.judge.output.minutes > 0 }}"
+      with:
+        ticket_id: "{{ trigger.subject_id }}"
+        minutes: "{{ [[steps.judge.output.minutes, 5] | max, 480] | min }}"
+        notes: "{{ steps.judge.output.resolution_note }}"
+  outputs:
+    article: "{{ steps.article.output.article_id if steps.article.output is defined else none }}"

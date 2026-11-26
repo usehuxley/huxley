@@ -19,6 +19,7 @@ pub mod presence;
 pub mod queues;
 pub mod responses;
 pub mod sla;
+pub mod suggestions;
 pub mod templates;
 pub mod tickets;
 pub mod time;

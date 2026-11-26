@@ -403,6 +403,8 @@ impl<'a> Walker<'a> {
             | Step::DispatchRecommend(_)
             | Step::WorkforceInsights(_)
             | Step::TicketInsight(_)
+            | Step::KbDraft(_)
+            | Step::TimeSuggest(_)
             | Step::AssetSync(_)
             | Step::AssetWarranty(_)
             | Step::TicketEmailReply(_)
@@ -866,6 +868,8 @@ fn with_block(step: &Step) -> Json {
         Step::DispatchRecommend(s) => serde_json::to_value(&s.recommend),
         Step::WorkforceInsights(s) => serde_json::to_value(&s.insights),
         Step::TicketInsight(s) => serde_json::to_value(&s.insight),
+        Step::KbDraft(s) => serde_json::to_value(&s.draft),
+        Step::TimeSuggest(s) => serde_json::to_value(&s.suggest),
         Step::AssetSync(s) => serde_json::to_value(&s.sync),
         Step::AssetWarranty(s) => serde_json::to_value(&s.warranty),
         Step::TicketEmailReply(s) => serde_json::to_value(&s.reply),

@@ -5616,6 +5616,59 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
+	'/api/v1/time-suggestions': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** Time suggested for you (by the AI auto-documentation pack), newest first. */
+		get: operations['my_time_suggestions'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/time-suggestions/{id}/accept': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/**
+		 * Accepts a suggestion as a time entry (change the minutes or notes first
+		 *     if you like).
+		 */
+		post: operations['accept_time_suggestion'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/time-suggestions/{id}/dismiss': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		post: operations['dismiss_time_suggestion'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
 	'/api/v1/timesheets': {
 		parameters: {
 			query?: never;
@@ -6843,6 +6896,16 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
 	schemas: {
+		AcceptTimeSuggestion: {
+			/**
+			 * Format: int32
+			 * @description Change the minutes before accepting.
+			 */
+			minutes?: number | null;
+			notes?: string | null;
+			/** Format: uuid */
+			workTypeId: string;
+		};
 		/** @description One operation. */
 		Action: {
 			/**
@@ -12156,6 +12219,20 @@ export interface components {
 			note?: string | null;
 			/** @description `YYYY-MM-DD`. */
 			startsOn: string;
+		};
+		TimeSuggestion: {
+			/** Format: uuid */
+			id: string;
+			/** Format: int32 */
+			minutes: number;
+			notes: string;
+			/** Format: uuid */
+			ticketId: string;
+			ticketReference: string;
+			ticketTitle: string;
+			/** Format: uuid */
+			userId: string;
+			workedOn: string;
 		};
 		/** @description A person's timesheet for a period, with its days and entries. */
 		Timesheet: {
@@ -24550,6 +24627,77 @@ export interface operations {
 		};
 	};
 	delete_time: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			204: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content?: never;
+			};
+		};
+	};
+	my_time_suggestions: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['TimeSuggestion'][];
+				};
+			};
+		};
+	};
+	accept_time_suggestion: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['AcceptTimeSuggestion'];
+			};
+		};
+		responses: {
+			201: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['TimeEntry'];
+				};
+			};
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	dismiss_time_suggestion: {
 		parameters: {
 			query?: never;
 			header?: never;

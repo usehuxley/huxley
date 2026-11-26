@@ -35,6 +35,8 @@ draft → in review → published
 
 Someone who may publish can also publish a draft directly, without a review.
 
+**AI drafts:** the built-in AI auto-documentation pack drafts articles from resolved tickets, tagged `ai-draft`, linked to the ticket, and submits them for review here. They go through the same review as any article (see [Auto-documentation](servicedesk.md#auto-documentation)).
+
 ## Permissions
 
 | Permission | Lets you |

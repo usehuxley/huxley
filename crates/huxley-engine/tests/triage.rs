@@ -15,6 +15,9 @@ use uuid::Uuid;
 
 const TRIAGE: &str =
     include_str!("../../huxley-packs/builtin/ai-triage/workflows/triage-ticket.yaml");
+const DOCUMENT: &str = include_str!(
+    "../../huxley-packs/builtin/ai-auto-documentation/workflows/document-resolution.yaml"
+);
 const SUMMARIZE: &str =
     include_str!("../../huxley-packs/builtin/ai-ticket-insights/workflows/summarize-ticket.yaml");
 
@@ -35,7 +38,15 @@ async fn mock_anthropic() -> u16 {
                     .cloned()
                     .unwrap_or(Json::Null)
             };
-            let answer = if props["summary"].is_object() {
+            let answer = if props["resolution_note"].is_object() {
+                json!({
+                    "resolution_note": "The VPN client's certificate had expired; renewed it.",
+                    "article_worthwhile": true,
+                    "article_title": "VPN fails after the client certificate expires",
+                    "article_body": "## Symptoms\nThe VPN won't connect.\n\n## Fix\nRenew the certificate.",
+                    "minutes": 45,
+                })
+            } else if props["summary"].is_object() {
                 json!({
                     "summary": "One person's VPN won't connect since this morning.",
                     "people": ["Ada", "ada"], "devices": ["LAPTOP-42"], "applications": ["GlobalProtect"],
@@ -238,6 +249,79 @@ async fn a_ticket_gets_a_summary_with_its_entities() {
         next.as_deref(),
         Some("Check the VPN gateway's certificate.")
     );
+}
+
+#[tokio::test]
+async fn a_resolved_ticket_is_documented() {
+    let Some(db) = isolated("autodoc").await else {
+        return;
+    };
+    let pools = db.pools.clone();
+    let (provider, _, _, ticket) = world(&pools).await;
+    let ctx = RequestContext::system(Via::System);
+    let tech = Uuid::now_v7();
+    let mut tx = begin_scoped(&pools.app, &OrgScope::System).await.unwrap();
+    huxley_modules::set_enabled(&mut tx, &ctx, "knowledge", true, false)
+        .await
+        .unwrap();
+    sqlx::query("INSERT INTO users (id, email, display_name) VALUES ($1, $2, 'Tess')")
+        .bind(tech)
+        .bind(format!("{}@example.com", unique("tess").replace(' ', ".")))
+        .execute(&mut *tx)
+        .await
+        .unwrap();
+    sqlx::query("UPDATE sd_tickets SET assignee_user_id = $2 WHERE id = $1")
+        .bind(ticket)
+        .bind(tech)
+        .execute(&mut *tx)
+        .await
+        .unwrap();
+    tx.commit().await.unwrap();
+    let engine = engine_with_ai(&pools, provider).await;
+    let (status, error) = run_pack(
+        &engine,
+        &pools,
+        provider,
+        ticket,
+        DOCUMENT,
+        "ticket.status_changed",
+    )
+    .await;
+    assert_eq!(status, RunStatus::Succeeded, "{error:?}");
+    let note: String = sqlx::query_scalar(
+        "SELECT body FROM sd_ticket_notes WHERE ticket_id = $1 AND kind = 'internal'",
+    )
+    .bind(ticket)
+    .fetch_one(&pools.owner)
+    .await
+    .unwrap();
+    assert_eq!(
+        note,
+        "Resolution summary (AI draft): The VPN client's certificate had expired; renewed it."
+    );
+    let (title, state, tags): (String, String, Vec<String>) = sqlx::query_as(
+        "SELECT a.title, a.status, a.tags FROM kb_articles a JOIN kb_article_tickets l ON l.article_id = a.id \
+          WHERE l.ticket_id = $1",
+    )
+    .bind(ticket)
+    .fetch_one(&pools.owner)
+    .await
+    .unwrap();
+    assert_eq!(
+        (title.as_str(), state.as_str()),
+        (
+            "VPN fails after the client certificate expires",
+            "in_review"
+        )
+    );
+    assert_eq!(tags, ["ai-draft"]);
+    let (who, minutes): (Uuid, i32) =
+        sqlx::query_as("SELECT user_id, minutes FROM sd_time_suggestions WHERE ticket_id = $1 AND status = 'pending'")
+            .bind(ticket)
+            .fetch_one(&pools.owner)
+            .await
+            .unwrap();
+    assert_eq!((who, minutes), (tech, 45));
 }
 
 /// Runs a pack workflow as `event` about `ticket` would, until it finishes.

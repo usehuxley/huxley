@@ -2814,3 +2814,103 @@ async fn tickets_show_their_insight_and_similar_tickets() {
         );
     }
 }
+
+#[tokio::test]
+async fn suggested_time_is_accepted_or_dismissed_by_its_person() {
+    let Some(s) = setup().await else { return };
+    let (tech, tech_email) = user(&s.pools, Some(("technician", s.provider))).await;
+    let tech_cookie = login(&s.app, &tech_email).await;
+    let other = login(
+        &s.app,
+        &user(&s.pools, Some(("technician", s.provider))).await.1,
+    )
+    .await;
+    let first = s
+        .ticket(
+            &s.owner,
+            json!({ "orgId": s.acme, "title": "Mailbox full", "assigneeUserId": tech }),
+        )
+        .await;
+    let second = s
+        .ticket(
+            &s.owner,
+            json!({ "orgId": s.acme, "title": "Mouse dead", "assigneeUserId": tech }),
+        )
+        .await;
+    let mut tx = begin_scoped(&s.pools.app, &OrgScope::System).await.unwrap();
+    for t in [&first, &second] {
+        let id = Uuid::parse_str(t["id"].as_str().unwrap()).unwrap();
+        let made = huxley_servicedesk::suggestions::suggest(&mut tx, id, None, 30, "Cleared it")
+            .await
+            .unwrap();
+        assert!(made.is_some());
+        // Waiting already: not suggested twice.
+        assert!(
+            huxley_servicedesk::suggestions::suggest(&mut tx, id, None, 30, "x")
+                .await
+                .unwrap()
+                .is_none()
+        );
+    }
+    tx.commit().await.unwrap();
+    let waiting = s
+        .ok(&tech_cookie, "GET", "/api/v1/time-suggestions", None)
+        .await;
+    assert_eq!(waiting.as_array().unwrap().len(), 2, "{waiting}");
+    assert_eq!(
+        s.ok(&other, "GET", "/api/v1/time-suggestions", None).await,
+        json!([])
+    );
+    let work_type = s.ok(&s.owner, "GET", "/api/v1/work-types", None).await[0]["id"].clone();
+    let (a, b) = (
+        waiting[0]["id"].as_str().unwrap(),
+        waiting[1]["id"].as_str().unwrap(),
+    );
+    // Someone else can't take yours.
+    let (status, _) = s
+        .call(
+            &other,
+            "POST",
+            &format!("/api/v1/time-suggestions/{a}/accept"),
+            Some(json!({ "workTypeId": work_type })),
+        )
+        .await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+    let entry = s
+        .ok(
+            &tech_cookie,
+            "POST",
+            &format!("/api/v1/time-suggestions/{a}/accept"),
+            Some(json!({ "workTypeId": work_type, "minutes": 40 })),
+        )
+        .await;
+    assert_eq!(
+        (&entry["minutes"], &entry["notes"]),
+        (&json!(40), &json!("Cleared it")),
+        "{entry}"
+    );
+    let (status, _) = s
+        .call(
+            &tech_cookie,
+            "POST",
+            &format!("/api/v1/time-suggestions/{b}/dismiss"),
+            None,
+        )
+        .await;
+    assert_eq!(status, StatusCode::NO_CONTENT);
+    assert_eq!(
+        s.ok(&tech_cookie, "GET", "/api/v1/time-suggestions", None)
+            .await,
+        json!([])
+    );
+    // Time logged now: no more suggestions for that ticket.
+    let mut tx = begin_scoped(&s.pools.app, &OrgScope::System).await.unwrap();
+    let id = Uuid::parse_str(entry["ticketId"].as_str().unwrap()).unwrap();
+    assert!(
+        huxley_servicedesk::suggestions::suggest(&mut tx, id, None, 30, "again")
+            .await
+            .unwrap()
+            .is_none()
+    );
+    tx.commit().await.unwrap();
+}

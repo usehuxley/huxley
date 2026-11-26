@@ -1224,6 +1224,54 @@ export type Step =
 			 * Fail the attempt after this long, e.g. `30s`.
 			 */
 			timeout?: string | null;
+			type: 'core.kb.draft';
+			with: KbDraft;
+	  }
+	| {
+			/**
+			 * Record the error as the step's output and carry on.
+			 */
+			continue_on_error?: boolean;
+			description?: string | null;
+			/**
+			 * Unique in the workflow: lowercase letters, digits, underscores.
+			 * Other steps read this step's output as `steps.<id>.output`.
+			 */
+			id: string;
+			/**
+			 * Skip the step unless this expression is true.
+			 */
+			if?: string | null;
+			name?: string | null;
+			retry?: RetryPolicy | null;
+			/**
+			 * Fail the attempt after this long, e.g. `30s`.
+			 */
+			timeout?: string | null;
+			type: 'core.time.suggest';
+			with: TimeSuggest;
+	  }
+	| {
+			/**
+			 * Record the error as the step's output and carry on.
+			 */
+			continue_on_error?: boolean;
+			description?: string | null;
+			/**
+			 * Unique in the workflow: lowercase letters, digits, underscores.
+			 * Other steps read this step's output as `steps.<id>.output`.
+			 */
+			id: string;
+			/**
+			 * Skip the step unless this expression is true.
+			 */
+			if?: string | null;
+			name?: string | null;
+			retry?: RetryPolicy | null;
+			/**
+			 * Fail the attempt after this long, e.g. `30s`.
+			 */
+			timeout?: string | null;
 			type: 'core.asset.sync';
 			with: AssetSync;
 	  }
@@ -2171,6 +2219,38 @@ export interface TicketInsight {
 	next_step?: unknown;
 	summary: unknown;
 	ticket_id: unknown;
+}
+/**
+ * A knowledge article to draft (`core.kb.draft`): its `title` and `body`
+ * (Markdown), at `org_id` (default the run's organization), tagged
+ * `ai-draft`, submitted for review unless `submit` is false, and linked
+ * to `ticket_id` if given. Output: `{ article_id, status }`.
+ *
+ * This interface was referenced by `HuxleyWorkflowFormatV1`'s JSON-Schema
+ * via the `definition` "KbDraft".
+ */
+export interface KbDraft {
+	body: unknown;
+	org_id?: unknown;
+	submit?: unknown;
+	ticket_id?: unknown;
+	title: unknown;
+}
+/**
+ * A time entry to suggest (`core.time.suggest`): `minutes` on `ticket_id`
+ * for `user_id` (default the ticket's assignee) with `notes`, unless they
+ * logged time on it already or a suggestion is waiting. They accept it
+ * (a real entry) or dismiss it from My time. Output: `{ suggestion }`
+ * (null: skipped).
+ *
+ * This interface was referenced by `HuxleyWorkflowFormatV1`'s JSON-Schema
+ * via the `definition` "TimeSuggest".
+ */
+export interface TimeSuggest {
+	minutes: unknown;
+	notes?: unknown;
+	ticket_id: unknown;
+	user_id?: unknown;
 }
 /**
  * Mapping rules to run (`core.asset.sync`): a dataset's rows become

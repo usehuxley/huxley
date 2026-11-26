@@ -12,6 +12,7 @@
 mod action;
 mod ai;
 pub mod approval;
+mod autodoc;
 mod callback;
 mod cmdb;
 mod crm;
