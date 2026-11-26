@@ -253,6 +253,7 @@ impl Engine {
             Step::KbDraft(_) => self.kb_draft(org_id, input).await.into(),
             Step::TimeSuggest(_) => self.time_suggest(org_id, input).await.into(),
             Step::ReportSend(_) => self.report_send(org_id, input).await.into(),
+            Step::ChangeDecide(_) => self.change_decide(org_id, input).await.into(),
             Step::AssetSync(_) => self.sync_assets(org_id, input).await.into(),
             Step::AssetWarranty(_) => self.set_warranty(org_id, input).await.into(),
             Step::MailFetch(_)

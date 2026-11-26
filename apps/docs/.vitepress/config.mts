@@ -95,6 +95,7 @@ export default defineConfig({
 					{ text: 'Client portal', link: '/portal' },
 					{ text: 'Satisfaction and NPS', link: '/csat' },
 					{ text: 'Client health', link: '/health' },
+					{ text: 'Change management', link: '/changes' },
 					{ text: 'Reporting data', link: '/analytics' },
 					{ text: 'ConnectWise Automate', link: '/cwautomate' },
 					{ text: 'ImmyBot', link: '/immybot' }

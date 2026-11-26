@@ -1296,6 +1296,30 @@ export type Step =
 			 * Fail the attempt after this long, e.g. `30s`.
 			 */
 			timeout?: string | null;
+			type: 'core.change.decide';
+			with: ChangeDecide;
+	  }
+	| {
+			/**
+			 * Record the error as the step's output and carry on.
+			 */
+			continue_on_error?: boolean;
+			description?: string | null;
+			/**
+			 * Unique in the workflow: lowercase letters, digits, underscores.
+			 * Other steps read this step's output as `steps.<id>.output`.
+			 */
+			id: string;
+			/**
+			 * Skip the step unless this expression is true.
+			 */
+			if?: string | null;
+			name?: string | null;
+			retry?: RetryPolicy | null;
+			/**
+			 * Fail the attempt after this long, e.g. `30s`.
+			 */
+			timeout?: string | null;
 			type: 'core.asset.sync';
 			with: AssetSync;
 	  }
@@ -2295,6 +2319,22 @@ export interface ReportSend {
 	range?: unknown;
 	subject?: unknown;
 	to: unknown;
+}
+/**
+ * A change's approval decision to record (`core.change.decide`): the
+ * change ticket (in the run's organization or below, submitted for
+ * approval), `decision` (`approved` or `rejected`, or a boolean), `by`
+ * (who decided, e.g. the approval's `by`) and a `comment`. Raises
+ * `change.approved` or `change.rejected`. Output: the change.
+ *
+ * This interface was referenced by `HuxleyWorkflowFormatV1`'s JSON-Schema
+ * via the `definition` "ChangeDecide".
+ */
+export interface ChangeDecide {
+	by?: unknown;
+	comment?: unknown;
+	decision: unknown;
+	ticket_id: unknown;
 }
 /**
  * Mapping rules to run (`core.asset.sync`): a dataset's rows become

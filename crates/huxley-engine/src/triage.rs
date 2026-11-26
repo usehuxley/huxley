@@ -274,3 +274,40 @@ impl Engine {
         Ok(json!(saved))
     }
 }
+
+impl Engine {
+    /// `core.change.decide`: records the approval decision on a submitted
+    /// change (in the run's organization or below). Output: the change.
+    pub(crate) async fn change_decide(&self, org_id: Uuid, input: &Json) -> Result<Json, Json> {
+        self.require_desk(org_id).await?;
+        let ticket =
+            id(input, "ticket_id")?.ok_or_else(|| error("input", "ticket_id is required"))?;
+        let approved = match &input["decision"] {
+            Json::Bool(b) => *b,
+            Json::String(s) if s == "approved" => true,
+            Json::String(s) if s == "rejected" => false,
+            _ => return Err(error("input", "decision is approved or rejected")),
+        };
+        let by = input["by"]
+            .as_str()
+            .filter(|s| !s.trim().is_empty())
+            .unwrap_or("Change approvals");
+        let subtree = self.subtree(org_id).await?;
+        let mut tx = begin_scoped(self.db(), &OrgScope::Orgs(subtree))
+            .await
+            .map_err(internal)?;
+        let ctx = RequestContext::system(Via::Workflow);
+        let change = huxley_servicedesk::changes::decide(
+            &mut tx,
+            &ctx,
+            ticket,
+            approved,
+            by,
+            input["comment"].as_str(),
+        )
+        .await
+        .map_err(desk_error)?;
+        tx.commit().await.map_err(internal)?;
+        Ok(json!(change))
+    }
+}

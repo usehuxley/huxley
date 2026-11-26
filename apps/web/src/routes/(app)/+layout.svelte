@@ -8,24 +8,25 @@
 		BookOpen,
 		Boxes,
 		Building2,
+		CalendarCheck,
 		CalendarDays,
+		CalendarRange,
 		ChartColumn,
 		CircleCheck,
 		CircleUserRound,
-		Clock,
 		ClipboardList,
+		Clock,
 		Database,
 		FileCode,
 		House,
 		ListTodo,
+		Package,
 		Plug,
 		Settings,
 		Sparkles,
 		Ticket,
 		UsersRound,
-		Workflow,
-		Package,
-		CalendarCheck
+		Workflow
 	} from '@lucide/svelte';
 	import { AppShell, Button, CommandPalette, type Command, type NavItem } from '@usehuxley/ui';
 	import OrgSwitcher from '#lib/orgs/OrgSwitcher.svelte';
@@ -71,6 +72,10 @@
 		data.user.grantedPermissions.includes('ticket:read')
 			? [{ href: '/tickets', label: 'Tickets', icon: Ticket }]
 			: [{ href: '/tickets', label: 'Tickets', icon: Ticket, soon: true }]),
+		...(data.user.activeModules.includes('servicedesk') &&
+		data.user.grantedPermissions.includes('ticket:read')
+			? [{ href: '/changes', label: 'Changes', icon: CalendarRange }]
+			: []),
 		...(data.user.activeModules.includes('crm') && data.user.grantedPermissions.includes('crm:read')
 			? [{ href: '/clients', label: 'Clients', icon: Building2 }]
 			: [{ href: '/clients', label: 'Clients', icon: Building2, soon: true }]),

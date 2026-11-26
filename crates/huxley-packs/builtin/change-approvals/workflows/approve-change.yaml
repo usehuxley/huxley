@@ -1,0 +1,49 @@
+apiVersion: usehuxley.io/v1
+kind: Workflow
+metadata:
+  key: approve-change
+  name: Approve changes (CAB, then the client)
+  description: >-
+    When a change is submitted, asks the change advisory board (everyone
+    with the Administrator role; change the approvers to your CAB team) to
+    approve it. A high-risk normal change then goes to the client's
+    approvers in the portal. The first rejection rejects it.
+spec:
+  triggers:
+    - type: event
+      event: change.submitted
+  steps:
+    - id: cab
+      type: approval
+      title: "Approve change {{ inputs.reference }}: {{ inputs.title }}"
+      message: >-
+        {{ inputs.riskLevel | capitalize }} risk (score {{ inputs.riskScore }}), {{ inputs.changeType }} change,
+        planned {{ inputs.plannedStart }} to {{ inputs.plannedEnd }}; {{ inputs.affectedAssets }} affected asset(s){{
+        ', and ' ~ inputs.conflicts ~ ' overlapping change(s) on the same assets' if inputs.conflicts else '' }}.
+      approvers: role:admin
+      expires: 3d
+    - id: client
+      type: approval
+      if: "{{ steps.cab.output.decision == 'approved' and inputs.riskLevel == 'high' and inputs.changeType == 'normal' }}"
+      title: "Approve change {{ inputs.reference }}: {{ inputs.title }}"
+      message: >-
+        Your IT provider plans a high-risk change from {{ inputs.plannedStart }} to {{ inputs.plannedEnd }},
+        affecting {{ inputs.affectedAssets }} of your systems. It has been approved by their change board.
+      approvers: client_approvers
+      expires: 5d
+    - id: decide
+      type: core.change.decide
+      with:
+        ticket_id: "{{ trigger.subject_id }}"
+        decision: >-
+          {{ 'approved' if steps.cab.output.decision == 'approved'
+             and (steps.client is not defined or not steps.client.output or steps.client.output.decision == 'approved')
+             else 'rejected' }}
+        by: >-
+          {{ (steps.client.output.by.name ~ ' (client)') if steps.client is defined and steps.client.output
+             else steps.cab.output.by.name }}
+        comment: >-
+          {{ steps.client.output.comment if steps.client is defined and steps.client.output and steps.client.output.comment
+             else (steps.cab.output.comment or '') }}
+  outputs:
+    decision: "{{ steps.decide.output.state }}"
