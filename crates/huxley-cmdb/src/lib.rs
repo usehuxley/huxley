@@ -5,6 +5,7 @@
 //! the API checks `asset:*` permissions and that the module is on.
 
 pub mod assets;
+pub mod mappings;
 pub mod relationships;
 pub mod tickets;
 pub mod types;

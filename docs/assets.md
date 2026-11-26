@@ -20,6 +20,22 @@ Find them under **Assets**, filtered by client, type and status, or on a client'
 
 The built-in types are Workstation, Server, Network device, Printer, Mobile device, SaaS tenant, License, Domain, Certificate, Application and Other. With `cmdb:configure` you can add types and change any type's fields under **Settings → Asset types** (or through `/api/v1/asset-types`). Each field gets a stored key from its label when it's added; renaming the label later keeps the key, so existing values stay. Choices take one option a line, or `value | Label` to set the stored value. A field is text, long text, number, yes/no, date, a choice or several, a URL or an email, and may be required. Built-in types can be extended but not removed; your own types can be archived.
 
+## Syncing from datasets
+
+Assets can be kept in step with another system, such as an RMM's devices or Microsoft 365's tenants, through a [dataset](datasets.md) and a mapping rule under **Settings → Asset sync** (`cmdb:configure`). Each dataset row becomes an asset of the row's organization.
+
+A rule has:
+
+- **A source name**, such as `rmm`. It's where the asset's id in that system is kept (`externalIds.rmm`), and how its fields are marked.
+- **Match keys, in order:** the id in the source, serial number, hostname or name, each read from a column. The first key that finds exactly one asset of the row's organization wins. If a key finds more than one, the row is skipped as ambiguous.
+- **Fields to fill in:** columns for the name, hostname, serial number, manufacturer, model and id in the source, and the type's own fields. Empty values never clear anything.
+- **What happens to values changed by hand:** *keep them*, so the source fills only what nobody changed, or *replace them* with the source's value.
+- **Whether to create assets** of a type you choose for rows that match none. A new asset is named from its name, hostname or serial number column.
+
+**Preview** shows what a sync would do without keeping anything. **Sync now** runs it. Both report rows created, updated, unchanged and skipped, with the first problems and why. To sync on a schedule, add a `core.asset.sync` step after the step that fills the dataset, in the same workflow.
+
+Every asset field remembers where its value came from: `manual`, or the source. The asset page marks synced fields with their source, and lists the asset's ids in other systems and when it was last synced.
+
 ## Relationships and impact
 
 Relate assets with typed relationships, read as *this asset … that one*:
@@ -61,7 +77,7 @@ Technicians have `asset:read` and `asset:write`, and read-only users have `asset
 
 ## Events
 
-`asset.created`, `asset.updated`, `asset.status_changed` (with `change.from` and `change.to`) and `asset.deleted` carry the asset's `name`, `type`, `status`, `serialNumber`, `hostname` and the `actorId`.
+`asset.sync_completed` follows each sync with its result. `asset.created`, `asset.updated` (with `change.source` and `change.fields` when a sync changed it), `asset.status_changed` (with `change.from` and `change.to`) and `asset.deleted` carry the asset's `name`, `type`, `status`, `serialNumber`, `hostname` and the `actorId`.
 
 ## API
 
@@ -75,7 +91,9 @@ Technicians have `asset:read` and `asset:write`, and read-only users have `asset
 | `GET /api/v1/assets/{id}/tickets` | The tickets it's linked to |
 | `GET`, `POST /api/v1/tickets/{id}/assets`, `DELETE …/assets/{assetId}` | A ticket's assets and the requester's; link (`assetId`), unlink |
 | `GET`, `POST /api/v1/asset-types`, `PUT`, `DELETE /api/v1/asset-types/{id}` | Types and their fields |
+| `GET`, `POST /api/v1/asset-mappings`, `PUT`, `DELETE /api/v1/asset-mappings/{id}` | Dataset → asset mapping rules |
+| `POST /api/v1/asset-mappings/{id}/run?preview=true` | Run a rule now, or preview it: `{ rows, created, updated, unchanged, skipped, problems }` |
 
 ## Coming next
 
-Syncing assets from datasets (RMM, Microsoft 365) by matching rules, and warranty lookups.
+Integration packs for RMMs that fill the datasets, and warranty lookups.

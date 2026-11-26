@@ -50,6 +50,12 @@ export const SETTINGS_SECTIONS = [
 		module: 'cmdb'
 	},
 	{
+		key: 'asset-sync',
+		label: 'Asset sync',
+		permission: 'cmdb:configure',
+		module: 'cmdb'
+	},
+	{
 		key: 'mailboxes',
 		label: 'Mailboxes',
 		permission: 'servicedesk:configure',

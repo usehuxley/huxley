@@ -2060,6 +2060,7 @@ name = "huxley-cmdb"
 version = "0.1.0"
 dependencies = [
  "huxley-core",
+ "huxley-datasets",
  "huxley-db",
  "huxley-entity",
  "huxley-orgs",
@@ -2182,6 +2183,7 @@ dependencies = [
  "bytes",
  "getrandom 0.4.3",
  "huxley-ai",
+ "huxley-cmdb",
  "huxley-core",
  "huxley-crm",
  "huxley-crypto",

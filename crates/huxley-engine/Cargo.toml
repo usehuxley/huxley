@@ -26,6 +26,7 @@ bytes.workspace = true
 huxley-mail.workspace = true
 huxley-servicedesk.workspace = true
 huxley-knowledge.workspace = true
+huxley-cmdb.workspace = true
 huxley-datasets.workspace = true
 huxley-modules.workspace = true
 huxley-ai.workspace = true

@@ -397,6 +397,9 @@ pub enum Step {
     /// `knowledge` module).
     #[serde(rename = "core.kb.embed")]
     KbEmbed(KbEmbedStep),
+    /// Run a dataset → asset mapping rule (the `cmdb` module).
+    #[serde(rename = "core.asset.sync")]
+    AssetSync(AssetSyncStep),
     /// Email a public note to the ticket's requester (the `servicedesk`
     /// module).
     #[serde(rename = "core.ticket.email_reply")]
@@ -710,6 +713,11 @@ step!(KbEmbedStep {
     pub embed: KbEmbed,
 });
 
+step!(AssetSyncStep {
+    #[serde(rename = "with")]
+    pub sync: AssetSync,
+});
+
 step!(AiPromptStep {
     #[serde(rename = "with")]
     pub ai: AiPrompt,
@@ -779,6 +787,7 @@ impl Step {
             MailFetch,
             TicketEmbed,
             KbEmbed,
+            AssetSync,
             TicketEmailReply,
             TicketCreate,
             TicketGet,
@@ -827,6 +836,7 @@ impl Step {
             Self::MailFetch(_) => "core.mail.fetch",
             Self::TicketEmbed(_) => "core.ticket.embed",
             Self::KbEmbed(_) => "core.kb.embed",
+            Self::AssetSync(_) => "core.asset.sync",
             Self::TicketCreate(_) => "core.ticket.create",
             Self::TicketGet(_) => "core.ticket.get",
             Self::TicketFind(_) => "core.ticket.find",
@@ -1235,6 +1245,16 @@ pub struct TicketEmbed {
 pub struct KbEmbed {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub limit: Option<Value>,
+}
+
+/// A mapping rule to run (`core.asset.sync`): the dataset's rows become
+/// assets, matched, updated and created by the rule (`mapping_id`). Run it
+/// after the step that fills the dataset. Output: `{ rows, created,
+/// updated, unchanged, skipped, problems: [{ row, reason }] }`.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct AssetSync {
+    pub mapping_id: Value,
 }
 
 /// Contacts to find (`core.contact.find`): by `email`, by `external_id`

@@ -175,4 +175,73 @@ test.describe('assets', () => {
 		await expect(page.getByLabel('Details')).toContainText('Lobby');
 		await expect(page.getByLabel('Details')).toContainText('Unlocked');
 	});
+
+	test('a dataset is mapped to assets, previewed and synced', async ({ page }) => {
+		const stamp = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+		const client = await setUp(stamp);
+		const api = await request.newContext({
+			baseURL: apiUrl,
+			extraHTTPHeaders: { 'x-requested-with': 'huxley' }
+		});
+		await api.post('/api/v1/auth/login', { data: { email: ownerEmail, password: ownerPassword } });
+		const ds = await api.post('/api/v1/datasets', {
+			data: {
+				orgId: client,
+				dataset: {
+					key: `rmm-${stamp}`,
+					name: `RMM ${stamp}`,
+					primaryKey: ['device_id'],
+					columns: [
+						{ name: 'device_id', type: 'text' },
+						{ name: 'hostname', type: 'text' }
+					]
+				}
+			}
+		});
+		expect(ds.status(), await ds.text()).toBe(201);
+		const { id: dsId } = (await ds.json()) as { id: string };
+		const rows = await api.post(`/api/v1/datasets/${dsId}/rows`, {
+			data: {
+				orgId: client,
+				rows: [
+					{ device_id: `a-${stamp}`, hostname: `PC-A-${stamp}` },
+					{ device_id: `b-${stamp}`, hostname: `PC-B-${stamp}` }
+				]
+			}
+		});
+		expect(rows.status(), await rows.text()).toBe(200);
+		await api.dispose();
+
+		await signIn(page);
+		await page.goto('/settings/asset-sync');
+		await expect(async () => {
+			await page.getByRole('button', { name: 'New mapping' }).click();
+			await expect(page.getByRole('dialog')).toBeVisible({ timeout: 1000 });
+		}).toPass({ timeout: 15_000 });
+		const dialog = page.getByRole('dialog');
+		await dialog.locator('#map-name').fill(`RMM ${stamp}`);
+		await dialog.getByLabel('Dataset').selectOption({ label: `RMM ${stamp}` });
+		await dialog.getByLabel('New assets are').selectOption({ label: 'Workstation' });
+		await dialog
+			.getByRole('group', { name: 'Match key 1' })
+			.getByLabel('Column')
+			.selectOption('device_id');
+		await dialog.locator('#mf-name').selectOption('hostname');
+		await dialog.locator('#mf-hostname').selectOption('hostname');
+		await dialog.locator('#mf-external_id').selectOption('device_id');
+		await dialog.getByRole('button', { name: 'Save' }).click();
+		await expect(page.getByText('Mapping saved.')).toBeVisible();
+
+		const mappings = page.getByRole('list', { name: 'Asset mappings' });
+		await mappings.getByRole('button', { name: `Preview RMM ${stamp}` }).click();
+		await expect(page.getByText('Preview: 2 rows: 2 new').first()).toBeVisible();
+		await mappings.getByRole('button', { name: `Sync RMM ${stamp} now` }).click();
+		await expect(page.getByText('Synced: 2 rows: 2 new').first()).toBeVisible();
+
+		// The asset shows where its values came from.
+		await page.goto(`/assets?q=PC-A-${stamp}`);
+		await page.getByRole('link', { name: `PC-A-${stamp}` }).click();
+		await expect(page.getByTestId('asset-sync')).toContainText(`rmm: a-${stamp}`);
+		await expect(page.getByLabel('Details')).toContainText('rmm');
+	});
 });
