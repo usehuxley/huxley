@@ -382,6 +382,39 @@ export const STEPS: StepSpec[] = [
 		]
 	},
 	{
+		type: 'core.asset.set_warranty',
+		label: 'Record a warranty',
+		description:
+			'Record a warranty a vendor lookup found for an asset; the same reference is updated, not repeated.',
+		group: 'Data',
+		module: 'cmdb',
+		template: { with: { asset_id: '', source: '', ends_on: '' } },
+		fields: [
+			{ path: 'with.asset_id', label: 'Asset', kind: 'expression', hint: 'The asset’s id' },
+			{
+				path: 'with.source',
+				label: 'Lookup',
+				kind: 'expression',
+				hint: 'Its short name, e.g. dell'
+			},
+			{ path: 'with.ends_on', label: 'Ends on', kind: 'expression', hint: 'YYYY-MM-DD' },
+			{ path: 'with.starts_on', label: 'Starts on', kind: 'expression', hint: 'YYYY-MM-DD' },
+			{
+				path: 'with.kind',
+				label: 'Kind',
+				kind: 'expression',
+				hint: 'manufacturer, extended, support or other'
+			},
+			{ path: 'with.provider', label: 'Provider', kind: 'expression' },
+			{
+				path: 'with.reference',
+				label: 'Reference',
+				kind: 'expression',
+				hint: 'Contract number or service tag'
+			}
+		]
+	},
+	{
 		type: 'core.kb.embed',
 		label: 'Embed articles',
 		description:

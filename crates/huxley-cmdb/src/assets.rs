@@ -43,7 +43,11 @@ pub struct Asset {
     pub site_name: Option<String>,
     pub contact_id: Option<Uuid>,
     pub contact_name: Option<String>,
+    #[serde(with = "crate::date::option")]
+    #[schema(value_type = Option<String>, format = Date)]
     pub purchased_on: Option<Date>,
+    #[serde(with = "crate::date::option")]
+    #[schema(value_type = Option<String>, format = Date)]
     pub warranty_ends_on: Option<Date>,
     pub notes: String,
     /// The type's fields.
@@ -84,6 +88,8 @@ pub struct Filter {
     pub status: Option<String>,
     /// Leave out retired and disposed assets.
     pub in_use: bool,
+    /// Only assets whose warranty ends within this many days (or has ended).
+    pub warranty_within_days: Option<i32>,
     pub limit: i64,
     pub offset: i64,
 }
@@ -102,7 +108,8 @@ pub async fn list(conn: &mut PgConnection, filter: &Filter) -> CmdbResult<(Vec<A
              AND ($2::uuid IS NULL OR a.org_id = $2) \
              AND ($3::uuid IS NULL OR a.type_id = $3) \
              AND ($4::text IS NULL OR a.status = $4) \
-             AND (NOT $5 OR a.status NOT IN ('retired', 'disposed'))";
+             AND (NOT $5 OR a.status NOT IN ('retired', 'disposed')) \
+             AND ($8::int IS NULL OR (a.warranty_ends_on IS NOT NULL AND a.warranty_ends_on <= current_date + $8::int))";
     let rows: Vec<Asset> = sqlx::query_as(sqlx::AssertSqlSafe(format!(
         "{SELECT} {wh} ORDER BY lower(a.name), a.id LIMIT $6 OFFSET $7"
     )))
@@ -113,6 +120,7 @@ pub async fn list(conn: &mut PgConnection, filter: &Filter) -> CmdbResult<(Vec<A
     .bind(filter.in_use)
     .bind(filter.limit.clamp(1, 500))
     .bind(filter.offset.max(0))
+    .bind(filter.warranty_within_days)
     .fetch_all(&mut *conn)
     .await?;
     let total: i64 = sqlx::query_scalar(sqlx::AssertSqlSafe(format!(
@@ -123,6 +131,10 @@ pub async fn list(conn: &mut PgConnection, filter: &Filter) -> CmdbResult<(Vec<A
     .bind(filter.type_id)
     .bind(status)
     .bind(filter.in_use)
+    // $6 and $7 aren't used by the count; bound so $8 keeps its place.
+    .bind(0_i64)
+    .bind(0_i64)
+    .bind(filter.warranty_within_days)
     .fetch_one(conn)
     .await?;
     Ok((rows, total))
@@ -163,9 +175,11 @@ pub struct AssetInput {
     /// Who uses or owns it: a contact of the asset's organization.
     #[serde(default)]
     pub contact_id: Option<Uuid>,
-    #[serde(default)]
+    #[serde(default, with = "crate::date::option")]
+    #[schema(value_type = Option<String>, format = Date)]
     pub purchased_on: Option<Date>,
-    #[serde(default)]
+    #[serde(default, with = "crate::date::option")]
+    #[schema(value_type = Option<String>, format = Date)]
     pub warranty_ends_on: Option<Date>,
     #[serde(default)]
     pub notes: Option<String>,

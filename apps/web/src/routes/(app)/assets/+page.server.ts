@@ -10,6 +10,7 @@ export const load: PageServerLoad = async (event) => {
 	const typeId = params.get('type') ?? '';
 	const status = params.get('status') ?? '';
 	const orgId = params.get('org') ?? '';
+	const warranty = params.get('warranty') ?? '';
 	const page = Math.max(1, Number(params.get('page')) || 1);
 	const client = api(event);
 	const [assets, types, orgs] = await Promise.all([
@@ -21,6 +22,7 @@ export const load: PageServerLoad = async (event) => {
 					status: status || undefined,
 					orgId: orgId || undefined,
 					inUse: !status,
+					warrantyWithinDays: warranty ? Number(warranty) : undefined,
 					limit: PER_PAGE,
 					offset: (page - 1) * PER_PAGE
 				}
@@ -37,6 +39,7 @@ export const load: PageServerLoad = async (event) => {
 		typeId,
 		status,
 		orgId,
+		warranty,
 		page,
 		pages: Math.max(1, Math.ceil(assets.data.total / PER_PAGE)),
 		total: assets.data.total,

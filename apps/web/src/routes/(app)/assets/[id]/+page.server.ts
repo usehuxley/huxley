@@ -7,12 +7,13 @@ import type { Actions, PageServerLoad } from './$types';
 export const load: PageServerLoad = async (event) => {
 	const client = api(event);
 	const path = { params: { path: { id: event.params.id } } };
-	const [asset, impact, types, map, tickets] = await Promise.all([
+	const [asset, impact, types, map, tickets, warranties] = await Promise.all([
 		client.GET('/api/v1/assets/{id}', path),
 		client.GET('/api/v1/assets/{id}/impact', path),
 		client.GET('/api/v1/asset-types'),
 		client.GET('/api/v1/assets/{id}/map', path),
-		client.GET('/api/v1/assets/{id}/tickets', path)
+		client.GET('/api/v1/assets/{id}/tickets', path),
+		client.GET('/api/v1/assets/{id}/warranties', path)
 	]);
 	if (!asset.data) error(asset.response.status === 404 ? 404 : 503, 'Could not load the asset.');
 	// Assets it can relate to: those of its organization (search narrows).
@@ -35,12 +36,39 @@ export const load: PageServerLoad = async (event) => {
 		impact: impact.data ?? [],
 		map: map.data ?? null,
 		tickets: tickets.data ?? [],
+		warranties: warranties.data ?? [],
 		type: (types.data ?? []).find((t) => t.id === asset.data.typeId) ?? null,
 		candidates
 	};
 };
 
 export const actions: Actions = {
+	addWarranty: async (event) => {
+		const form = await event.request.formData();
+		const optional = (name: string) => formString(form, name).trim() || null;
+		const { error: problem, response } = await api(event).POST('/api/v1/assets/{id}/warranties', {
+			params: { path: { id: event.params.id } },
+			body: {
+				kind: formString(form, 'kind') || 'manufacturer',
+				provider: optional('provider'),
+				reference: optional('reference'),
+				startsOn: optional('startsOn'),
+				endsOn: formString(form, 'endsOn')
+			}
+		});
+		if (response.status !== 201)
+			return fail(response.status, { message: problemMessage(problem, 'Could not add it.') });
+		return { message: 'Warranty added.' };
+	},
+	removeWarranty: async (event) => {
+		const id = formString(await event.request.formData(), 'warrantyId');
+		const { error: problem, response } = await api(event).DELETE('/api/v1/asset-warranties/{id}', {
+			params: { path: { id } }
+		});
+		if (response.status !== 204)
+			return fail(response.status, { message: problemMessage(problem, 'Could not remove it.') });
+		return { message: 'Warranty removed.' };
+	},
 	relate: async (event) => {
 		const form = await event.request.formData();
 		const { error: problem, response } = await api(event).POST(

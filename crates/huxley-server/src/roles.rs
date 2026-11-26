@@ -82,6 +82,11 @@ fn spawn_scheduler(
         huxley_workforce::run_sweeper(wf_db, wf_stop).await;
         Ok(())
     });
+    let (cmdb_db, cmdb_stop) = (db.clone(), shutdown.clone());
+    tasks.spawn(async move {
+        huxley_cmdb::warranties::run_sweeper(cmdb_db, cmdb_stop).await;
+        Ok(())
+    });
 }
 
 /// Starts the HTTP API and its real-time notification listener.

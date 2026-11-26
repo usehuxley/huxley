@@ -2,7 +2,7 @@
 	import { enhance, type SubmitFunction } from '$app/forms';
 	import { resolve } from '$app/paths';
 	import { Pencil, X } from '@lucide/svelte';
-	import { Badge, Button, Card, Field, Select, toast } from '@usehuxley/ui';
+	import { Badge, Button, Card, Field, Input, Select, toast } from '@usehuxley/ui';
 	import { KINDS, relationLabel, statusLabel, statusTone } from '#lib/assets/form.ts';
 	import DependencyMap from '#lib/assets/DependencyMap.svelte';
 	import type { PageProps } from './$types';
@@ -20,6 +20,15 @@
 					: undefined) ?? 'Done.';
 			toast.push({ title: message, tone: result.type === 'success' ? 'success' : 'danger' });
 		};
+	const WARRANTY_KINDS: Record<string, string> = {
+		manufacturer: 'Manufacturer',
+		extended: 'Extended',
+		support: 'Support contract',
+		other: 'Other'
+	};
+	/** Days from today to a YYYY-MM-DD date (negative: past). */
+	const daysLeft = (date: string) =>
+		Math.round((Date.parse(date) - Date.parse(new Date().toISOString().slice(0, 10))) / 86_400_000);
 	const show = (v: unknown): string =>
 		v === true
 			? 'Yes'
@@ -216,6 +225,82 @@
 							</li>
 						{/each}
 					</ul>
+				{/if}
+			</Card>
+			<Card title="Warranties">
+				{#if data.warranties.length === 0}
+					<p class="text-sm text-fg-muted">None recorded.</p>
+				{:else}
+					<ul class="flex flex-col gap-2 text-sm" aria-label="Warranties">
+						{#each data.warranties as w (w.id)}
+							{@const left = daysLeft(w.endsOn)}
+							<li class="flex items-start justify-between gap-2">
+								<div class="min-w-0">
+									<p class="text-fg">
+										{WARRANTY_KINDS[w.kind] ?? w.kind}{w.provider ? ` · ${w.provider}` : ''}
+										{#if w.source !== 'manual'}<span
+												class="ml-1 rounded bg-surface-sunken px-1 text-[0.65rem] text-fg-subtle"
+											>
+												{w.source}
+											</span>{/if}
+									</p>
+									<p
+										class="text-xs {left < 0
+											? 'text-danger'
+											: left <= 60
+												? 'text-warning'
+												: 'text-fg-subtle'}"
+									>
+										{left < 0 ? 'Ended' : 'Ends'}
+										{w.endsOn}{left >= 0 && left <= 60 ? ` (in ${left} days)` : ''}{w.reference
+											? ` · ${w.reference}`
+											: ''}
+									</p>
+								</div>
+								{#if a.canWrite}
+									<form method="POST" action="?/removeWarranty" use:enhance={done}>
+										<input type="hidden" name="warrantyId" value={w.id} />
+										<button
+											type="submit"
+											class="text-fg-subtle hover:text-fg"
+											aria-label="Remove the warranty ending {w.endsOn}"
+										>
+											<X size={14} />
+										</button>
+									</form>
+								{/if}
+							</li>
+						{/each}
+					</ul>
+				{/if}
+				{#if a.canWrite}
+					<form
+						method="POST"
+						action="?/addWarranty"
+						use:enhance={done}
+						class="mt-4 grid gap-2 text-sm"
+					>
+						<Field label="Kind" for="w-kind">
+							<Select
+								id="w-kind"
+								name="kind"
+								options={Object.entries(WARRANTY_KINDS).map(([value, label]) => ({ value, label }))}
+							/>
+						</Field>
+						<Field label="Provider" for="w-provider">
+							<Input id="w-provider" name="provider" maxlength={200} />
+						</Field>
+						<Field label="Reference" for="w-reference" hint="Contract number or service tag">
+							<Input id="w-reference" name="reference" maxlength={200} />
+						</Field>
+						<Field label="Starts" for="w-starts">
+							<Input id="w-starts" name="startsOn" type="date" />
+						</Field>
+						<Field label="Ends" for="w-ends">
+							<Input id="w-ends" name="endsOn" type="date" required />
+						</Field>
+						<div><Button type="submit" size="sm">Add warranty</Button></div>
+					</form>
 				{/if}
 			</Card>
 			{#if data.tickets.length > 0}

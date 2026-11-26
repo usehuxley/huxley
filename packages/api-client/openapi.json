@@ -744,6 +744,73 @@
 				}
 			}
 		},
+		"/api/v1/asset-warranties/{id}": {
+			"put": {
+				"tags": ["cmdb"],
+				"summary": "Changes a warranty (`asset:write`). A new end date re-arms its\nexpiry announcements.",
+				"operationId": "update_warranty",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/WarrantyInput"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Warranty"
+								}
+							}
+						}
+					},
+					"422": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			},
+			"delete": {
+				"tags": ["cmdb"],
+				"summary": "Removes a warranty (`asset:write`).",
+				"operationId": "delete_warranty",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"responses": {
+					"204": {}
+				}
+			}
+		},
 		"/api/v1/assets": {
 			"get": {
 				"tags": ["cmdb"],
@@ -792,6 +859,16 @@
 						"required": false,
 						"schema": {
 							"type": "boolean"
+						}
+					},
+					{
+						"name": "warrantyWithinDays",
+						"in": "query",
+						"description": "Only assets whose warranty ends within this many days (or has ended).",
+						"required": false,
+						"schema": {
+							"type": ["integer", "null"],
+							"format": "int32"
 						}
 					},
 					{
@@ -1120,6 +1197,84 @@
 									"items": {
 										"$ref": "#/components/schemas/AssetTicket"
 									}
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/assets/{id}/warranties": {
+			"get": {
+				"tags": ["cmdb"],
+				"summary": "An asset's warranties, latest ending first.",
+				"operationId": "list_warranties",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "array",
+									"items": {
+										"$ref": "#/components/schemas/Warranty"
+									}
+								}
+							}
+						}
+					}
+				}
+			},
+			"post": {
+				"tags": ["cmdb"],
+				"summary": "Adds a warranty to an asset (`asset:write`).",
+				"operationId": "add_warranty",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/WarrantyInput"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"201": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Warranty"
+								}
+							}
+						}
+					},
+					"422": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
 								}
 							}
 						}
@@ -25008,6 +25163,87 @@
 						"description": "A JSON pointer into the spec, e.g. `/paths/~1users/get`."
 					}
 				}
+			},
+			"Warranty": {
+				"type": "object",
+				"required": [
+					"id",
+					"assetId",
+					"kind",
+					"provider",
+					"reference",
+					"endsOn",
+					"notes",
+					"source",
+					"updatedAt"
+				],
+				"properties": {
+					"assetId": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"endsOn": {
+						"type": "string",
+						"format": "date"
+					},
+					"id": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"kind": {
+						"type": "string"
+					},
+					"notes": {
+						"type": "string"
+					},
+					"provider": {
+						"type": "string"
+					},
+					"reference": {
+						"type": "string"
+					},
+					"source": {
+						"type": "string",
+						"description": "`manual`, or the lookup that recorded it."
+					},
+					"startsOn": {
+						"type": ["string", "null"],
+						"format": "date"
+					},
+					"updatedAt": {
+						"type": "string",
+						"format": "date-time"
+					}
+				}
+			},
+			"WarrantyInput": {
+				"type": "object",
+				"required": ["endsOn"],
+				"properties": {
+					"endsOn": {
+						"type": "string",
+						"format": "date"
+					},
+					"kind": {
+						"type": ["string", "null"],
+						"description": "`manufacturer` (the default), `extended`, `support` or `other`."
+					},
+					"notes": {
+						"type": ["string", "null"]
+					},
+					"provider": {
+						"type": ["string", "null"]
+					},
+					"reference": {
+						"type": ["string", "null"],
+						"description": "A contract number, service tag or order reference."
+					},
+					"startsOn": {
+						"type": ["string", "null"],
+						"format": "date"
+					}
+				},
+				"additionalProperties": false
 			},
 			"WorkType": {
 				"type": "object",
