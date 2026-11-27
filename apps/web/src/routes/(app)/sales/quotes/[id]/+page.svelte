@@ -282,6 +282,11 @@
 					{#if q.decidedBy}<Badge>
 							{q.status === 'accepted' ? 'Accepted' : 'Declined'} by {q.decidedBy}
 						</Badge>{/if}
+					{#if q.salesOrderId}
+						<a href={resolve('/(app)/sales/orders/[id]', { id: q.salesOrderId })}>
+							<Badge tone="info">Sales order →</Badge>
+						</a>
+					{/if}
 					{#if dirty}<Badge tone="warning">Unsaved changes</Badge>{/if}
 				</div>
 			</div>

@@ -10,6 +10,7 @@
 
 pub mod leads;
 pub mod opportunities;
+pub mod orders;
 pub mod quotes;
 pub mod review;
 pub mod signing;

@@ -15555,6 +15555,390 @@
 				}
 			}
 		},
+		"/api/v1/sales-orders": {
+			"get": {
+				"tags": ["sales"],
+				"summary": "Sales orders you can see, newest first.",
+				"operationId": "list_sales_orders",
+				"parameters": [
+					{
+						"name": "status",
+						"in": "query",
+						"required": false,
+						"schema": {
+							"$ref": "#/components/schemas/SalesOrderStatus"
+						}
+					},
+					{
+						"name": "orgId",
+						"in": "query",
+						"required": false,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					},
+					{
+						"name": "q",
+						"in": "query",
+						"description": "Title, client, or `SO-` number.",
+						"required": false,
+						"schema": {
+							"type": "string"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "array",
+									"items": {
+										"$ref": "#/components/schemas/SalesOrder"
+									}
+								}
+							}
+						}
+					}
+				}
+			},
+			"post": {
+				"tags": ["sales"],
+				"summary": "The sales order for an accepted quote (made if it hasn't one; accepting\na quote makes it anyway).",
+				"operationId": "create_sales_order",
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/CreateSalesOrderRequest"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"201": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/SalesOrder"
+								}
+							}
+						}
+					},
+					"409": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/sales-orders/{id}": {
+			"get": {
+				"tags": ["sales"],
+				"summary": "An order with its lines: delivered, set aside and on order.",
+				"operationId": "get_sales_order",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/SalesOrder"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/sales-orders/{id}/agreement": {
+			"post": {
+				"tags": ["sales"],
+				"summary": "Hands the order's recurring lines to a new agreement for the client.",
+				"operationId": "sales_order_agreement",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/SalesOrderAgreementRequest"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/SalesOrder"
+								}
+							}
+						}
+					},
+					"409": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/sales-orders/{id}/allocate": {
+			"post": {
+				"tags": ["sales"],
+				"summary": "Sets aside what's in stock for the order's one-time product lines.",
+				"operationId": "allocate_sales_order",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/SalesOrderAllocated"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/sales-orders/{id}/cancel": {
+			"post": {
+				"tags": ["sales"],
+				"summary": "Cancels an open order nothing was delivered from, releasing what it set aside.",
+				"operationId": "cancel_sales_order",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/SalesOrderVersion"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/SalesOrder"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/sales-orders/{id}/close": {
+			"post": {
+				"tags": ["sales"],
+				"summary": "Closes a fulfilled order.",
+				"operationId": "close_sales_order",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/SalesOrderVersion"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/SalesOrder"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/sales-orders/{id}/fulfil": {
+			"post": {
+				"tags": ["sales"],
+				"summary": "Delivers what's ready: stocked lines use what's set aside for them,\nservices and unstocked lines are delivered in full.",
+				"operationId": "fulfil_sales_order",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/SalesOrderVersion"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/SalesOrder"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/sales-orders/{id}/project": {
+			"post": {
+				"tags": ["sales"],
+				"summary": "Starts the order's project for the client, laid out from a template if given.",
+				"operationId": "sales_order_project",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/SalesOrderProjectRequest"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/SalesOrder"
+								}
+							}
+						}
+					},
+					"409": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/sales-orders/{id}/purchase": {
+			"post": {
+				"tags": ["sales"],
+				"summary": "Drafts purchase orders, per vendor, for what the order is still short.",
+				"operationId": "purchase_for_sales_order",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/SalesOrderPurchased"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
 		"/api/v1/sales/reasons": {
 			"get": {
 				"tags": ["sales"],
@@ -28163,6 +28547,18 @@
 				},
 				"additionalProperties": false
 			},
+			"CreateSalesOrderRequest": {
+				"type": "object",
+				"required": ["quoteId"],
+				"properties": {
+					"quoteId": {
+						"type": "string",
+						"format": "uuid",
+						"description": "An accepted quote."
+					}
+				},
+				"additionalProperties": false
+			},
 			"CreateScriptRequest": {
 				"type": "object",
 				"required": ["orgId", "script"],
@@ -30422,7 +30818,7 @@
 			},
 			"InventoryRefType": {
 				"type": "string",
-				"enum": ["ticket", "project"]
+				"enum": ["ticket", "project", "sales_order"]
 			},
 			"InventoryReorderInput": {
 				"type": "object",
@@ -36348,6 +36744,11 @@
 						"type": "integer",
 						"format": "int32"
 					},
+					"salesOrderId": {
+						"type": ["string", "null"],
+						"format": "uuid",
+						"description": "The sales order it became, once accepted."
+					},
 					"sentAt": {
 						"type": ["string", "null"],
 						"format": "date-time"
@@ -37673,6 +38074,301 @@
 						"type": ["string", "null"]
 					}
 				}
+			},
+			"SalesOrder": {
+				"type": "object",
+				"required": [
+					"id",
+					"orgId",
+					"orgName",
+					"number",
+					"title",
+					"currency",
+					"status",
+					"oneTime",
+					"monthly",
+					"version",
+					"createdAt",
+					"updatedAt",
+					"lines"
+				],
+				"properties": {
+					"agreementId": {
+						"type": ["string", "null"],
+						"format": "uuid"
+					},
+					"agreementName": {
+						"type": ["string", "null"]
+					},
+					"closedAt": {
+						"type": ["string", "null"],
+						"format": "date-time"
+					},
+					"createdAt": {
+						"type": "string",
+						"format": "date-time"
+					},
+					"createdByName": {
+						"type": ["string", "null"]
+					},
+					"currency": {
+						"type": "string"
+					},
+					"id": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"lines": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/SalesOrderLine"
+						}
+					},
+					"monthly": {
+						"type": "string"
+					},
+					"notes": {
+						"type": ["string", "null"]
+					},
+					"number": {
+						"type": "integer",
+						"format": "int64"
+					},
+					"oneTime": {
+						"type": "string"
+					},
+					"opportunityId": {
+						"type": ["string", "null"],
+						"format": "uuid"
+					},
+					"orgId": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"orgName": {
+						"type": "string"
+					},
+					"projectId": {
+						"type": ["string", "null"],
+						"format": "uuid"
+					},
+					"projectName": {
+						"type": ["string", "null"]
+					},
+					"quoteId": {
+						"type": ["string", "null"],
+						"format": "uuid"
+					},
+					"quoteNumber": {
+						"type": ["integer", "null"],
+						"format": "int64"
+					},
+					"status": {
+						"$ref": "#/components/schemas/SalesOrderStatus"
+					},
+					"title": {
+						"type": "string"
+					},
+					"updatedAt": {
+						"type": "string",
+						"format": "date-time"
+					},
+					"version": {
+						"type": "integer",
+						"format": "int32"
+					}
+				}
+			},
+			"SalesOrderAgreementRequest": {
+				"type": "object",
+				"properties": {
+					"activate": {
+						"type": "boolean",
+						"description": "Active straight away (default: a draft to finish on the agreement)."
+					},
+					"autoRenew": {
+						"type": "boolean"
+					},
+					"kind": {
+						"$ref": "#/components/schemas/AgreementKind"
+					},
+					"name": {
+						"type": ["string", "null"],
+						"description": "Default: the order's title."
+					},
+					"startsOn": {
+						"type": ["string", "null"],
+						"description": "`YYYY-MM-DD`; default today."
+					}
+				},
+				"additionalProperties": false
+			},
+			"SalesOrderAllocated": {
+				"type": "object",
+				"description": "What an allocation pass did.",
+				"required": ["made", "short"],
+				"properties": {
+					"made": {
+						"type": "integer",
+						"description": "Allocations made.",
+						"minimum": 0
+					},
+					"short": {
+						"type": "array",
+						"items": {
+							"type": "string"
+						},
+						"description": "Lines still short afterwards: `name: how many`."
+					}
+				}
+			},
+			"SalesOrderLine": {
+				"type": "object",
+				"required": [
+					"id",
+					"name",
+					"description",
+					"billing",
+					"quantity",
+					"unit",
+					"unitPrice",
+					"discountPct",
+					"unitCost",
+					"total",
+					"fulfilled",
+					"allocated",
+					"onOrder"
+				],
+				"properties": {
+					"allocated": {
+						"type": "string",
+						"description": "Set aside for this order (per item)."
+					},
+					"billing": {
+						"$ref": "#/components/schemas/QuoteBilling"
+					},
+					"description": {
+						"type": "string"
+					},
+					"discountPct": {
+						"type": "string"
+					},
+					"fulfilled": {
+						"type": "string"
+					},
+					"id": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"itemId": {
+						"type": ["string", "null"],
+						"format": "uuid",
+						"description": "The stocked item it's drawn from (the nearest organization above the\nclient that stocks the product), if any."
+					},
+					"name": {
+						"type": "string"
+					},
+					"onOrder": {
+						"type": "string",
+						"description": "On purchase orders bought for this order, still to arrive (per item)."
+					},
+					"productId": {
+						"type": ["string", "null"],
+						"format": "uuid"
+					},
+					"quantity": {
+						"type": "string"
+					},
+					"sku": {
+						"type": ["string", "null"]
+					},
+					"total": {
+						"type": "string"
+					},
+					"tracking": {
+						"oneOf": [
+							{
+								"$ref": "#/components/schemas/Tracking"
+							},
+							{
+								"type": "null"
+							}
+						]
+					},
+					"unit": {
+						"type": "string"
+					},
+					"unitCost": {
+						"type": "string",
+						"description": "What was quoted as its cost (what it's bought at, by default)."
+					},
+					"unitPrice": {
+						"type": "string"
+					}
+				}
+			},
+			"SalesOrderProjectRequest": {
+				"type": "object",
+				"properties": {
+					"managerUserId": {
+						"type": ["string", "null"],
+						"format": "uuid"
+					},
+					"name": {
+						"type": ["string", "null"],
+						"description": "Default: the order's title."
+					},
+					"startOn": {
+						"type": ["string", "null"],
+						"description": "`YYYY-MM-DD`; default today."
+					},
+					"templateId": {
+						"type": ["string", "null"],
+						"format": "uuid"
+					}
+				},
+				"additionalProperties": false
+			},
+			"SalesOrderPurchased": {
+				"type": "object",
+				"description": "What a purchasing pass did.",
+				"required": ["orders", "unmatched"],
+				"properties": {
+					"orders": {
+						"type": "array",
+						"items": {
+							"type": "string",
+							"format": "uuid"
+						},
+						"description": "Purchase orders drafted."
+					},
+					"unmatched": {
+						"type": "array",
+						"items": {
+							"type": "string"
+						},
+						"description": "Lines short with no vendor to buy from (the catalog product's vendor\nmatches none): `name: how many`."
+					}
+				}
+			},
+			"SalesOrderStatus": {
+				"type": "string",
+				"enum": ["open", "fulfilled", "closed", "cancelled"]
+			},
+			"SalesOrderVersion": {
+				"type": "object",
+				"required": ["version"],
+				"properties": {
+					"note": {
+						"type": ["string", "null"],
+						"description": "Why (cancelling), or a closing note."
+					},
+					"version": {
+						"type": "integer",
+						"format": "int32"
+					}
+				},
+				"additionalProperties": false
 			},
 			"SalesReason": {
 				"type": "object",

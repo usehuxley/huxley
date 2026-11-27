@@ -2637,6 +2637,7 @@ dependencies = [
  "huxley-crm",
  "huxley-db",
  "huxley-expr",
+ "huxley-inventory",
  "huxley-notify",
  "huxley-orgs",
  "rust_decimal",

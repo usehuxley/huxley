@@ -286,4 +286,102 @@ test.describe('quotes', () => {
 			await api.dispose();
 		}
 	});
+
+	test('an accepted quote becomes an order, delivered from stock and handed to an agreement', async ({
+		page
+	}) => {
+		const stamp = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+		const api = await request.newContext({
+			baseURL: apiUrl,
+			extraHTTPHeaders: { 'x-requested-with': 'huxley' }
+		});
+		const json = async <T>(res: Promise<import('@playwright/test').APIResponse>) => {
+			const r = await res;
+			expect(r.ok(), await r.text()).toBeTruthy();
+			return (await r.json()) as T;
+		};
+		await api.post('/api/v1/auth/login', { data: { email: ownerEmail, password: ownerPassword } });
+		for (const module of ['contracts', 'sales', 'inventory']) {
+			await api.put(`/api/v1/modules/${module}`, { data: { enabled: true } });
+		}
+		const orgs = await json<{ id: string; parentId: string | null }[]>(api.get('/api/v1/orgs'));
+		const root = orgs.find((o) => o.parentId === null)!.id;
+		const product = await json<{ id: string }>(
+			api.post('/api/v1/catalog/products', {
+				data: {
+					orgId: root,
+					product: {
+						sku: `NUC-${stamp}`,
+						name: `Mini PC ${stamp}`,
+						kind: 'product',
+						cost: '400',
+						price: '600'
+					}
+				}
+			})
+		);
+		const item = await json<{ id: string }>(
+			api.post('/api/v1/inventory/items', {
+				data: { orgId: root, item: { productId: product.id } }
+			})
+		);
+		const shelf = await json<{ id: string }>(
+			api.post('/api/v1/inventory/locations', {
+				data: { orgId: root, location: { name: `Shelf ${stamp}`, kind: 'warehouse' } }
+			})
+		);
+		await json(
+			api.post('/api/v1/inventory/movements', {
+				data: { kind: 'receive', itemId: item.id, locationId: shelf.id, quantity: 2 }
+			})
+		);
+		const client = await json<{ id: string }>(
+			api.post('/api/v1/orgs', { data: { parentId: root, kind: 'client', name: `Hooli ${stamp}` } })
+		);
+		const quote = await json<{ id: string; version: number }>(
+			api.post('/api/v1/quotes', {
+				data: {
+					orgId: client.id,
+					quote: {
+						title: `Kiosks ${stamp}`,
+						lines: [
+							{ productId: product.id, quantity: 2 },
+							{ name: 'Managed kiosk', billing: 'monthly', quantity: 2, unitPrice: '30' }
+						]
+					}
+				}
+			})
+		);
+		const sent = await json<{ version: number }>(
+			api.post(`/api/v1/quotes/${quote.id}/send`, { data: { version: quote.version } })
+		);
+		await json(
+			api.post(`/api/v1/quotes/${quote.id}/decision`, {
+				data: { accept: true, name: 'Gavin Belson', version: sent.version }
+			})
+		);
+		await api.dispose();
+
+		await signIn(page);
+		await openFromMenu(page, 'Orders');
+		await expect(page.getByRole('heading', { level: 1 })).toHaveText('Orders');
+		await page.getByRole('link', { name: `Kiosks ${stamp}` }).click();
+		await expect(page.getByRole('heading', { level: 1 })).toHaveText(`Kiosks ${stamp}`);
+		const lines = page.getByRole('region', { name: 'Lines' });
+		await expect(lines).toContainText('Short');
+
+		await page.getByRole('button', { name: 'Set aside stock' }).click();
+		await expect(lines).toContainText('Ready');
+		await page.getByRole('button', { name: 'Deliver what’s ready' }).click();
+		await expect(lines.getByText('Delivered', { exact: true })).toBeVisible();
+		await expect(lines).toContainText('For the agreement');
+
+		await page.getByRole('button', { name: 'Make the agreement' }).click();
+		const agreement = page.getByRole('dialog', { name: 'Make the agreement' });
+		await agreement.getByRole('button', { name: 'Make it' }).click();
+		await expect(page.getByText('Fulfilled', { exact: true })).toBeVisible();
+		await expect(page.getByText(`Agreement: Kiosks ${stamp}`)).toBeVisible();
+		await page.getByRole('button', { name: 'Close', exact: true }).click();
+		await expect(page.getByText('Closed', { exact: true })).toBeVisible();
+	});
 });

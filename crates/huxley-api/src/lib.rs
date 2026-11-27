@@ -66,6 +66,7 @@ pub mod rate_limit;
 pub mod recommend_routes;
 mod router;
 mod runner_routes;
+pub mod sales_order_routes;
 pub mod sales_routes;
 mod script_routes;
 pub mod search_routes;
