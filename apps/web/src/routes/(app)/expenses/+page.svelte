@@ -38,6 +38,7 @@
 		</div>
 		{#if data.canWrite}
 			<div class="ml-auto flex gap-2">
+				<Button href={resolve('/(app)/expenses/cards')}>Card charges</Button>
 				<Button href={resolve('/(app)/expenses/reports')}>Reports</Button>
 				<Button variant="primary" onclick={() => (open = true)}>
 					<Plus size={16} /> Log an expense

@@ -87,3 +87,4 @@ Decisions that shape Huxley. Add a new ADR by copying `0000-template.md` with th
 | [081](0081-expense-reports.md) | Expense reports go to the person's team leads through an approval workflow | Accepted |
 | [082](0082-expense-billing.md) | Approved billable expenses are billing sources; projects keep an expense budget | Accepted |
 | [083](0083-reimbursement.md) | Expenses are paid back as a bill to the person through the accounting packs | Accepted |
+| [084](0084-card-transactions.md) | Card charges are imported, deduplicated by bank ID, and matched to the cardholder's expenses | Accepted |

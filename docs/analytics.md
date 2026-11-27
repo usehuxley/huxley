@@ -17,6 +17,7 @@ Each source is a curated view of one kind of record. You can query a source if y
 | `sales_activities` | Tasks, calls, meetings, notes and logged emails on deals and leads. | sales | `sales:read` | `client` (text), `kind` (text), `owner` (text), `done` (bool), `direction` (text), `minutes` (number), `due_at` (time), `created_at` (time) |
 | `invoices` | Invoices and credit memos: client, status, totals, what's still owed and how overdue (from the accounting system, once synced). | billing | `billing:read` | `client` (text), `number` (text), `kind` (text), `status` (text), `currency` (text), `sent` (bool), `total` (number), `owed` (number), `overdue` (bool), `paid` (bool), `aging` (text), `synced` (bool), `issued_on` (date), `due_on` (date), `created_at` (time) |
 | `invoice_lines` | What was billed, line by line: time, products, recurring charges, project fees and manual lines. | billing | `billing:read` | `client` (text), `kind` (text), `product` (text), `description` (text), `status` (text), `sent` (bool), `edited` (bool), `quantity` (number), `amount` (number), `issued_on` (date) |
+| `expenses` | Expenses and mileage: who spent, for which client, project and category, whether billable or paid back, and their status. | expenses | `expense:read` | `client` (text), `person` (text), `category` (text), `project` (text), `status` (text), `billable` (bool), `reimbursable` (bool), `mileage` (bool), `currency` (text), `amount` (number), `tax` (number), `billed_amount` (number), `distance` (number), `spent_on` (date) |
 
 ### Datasets
 
@@ -84,6 +85,7 @@ The answer has `columns` (key, label, kind) and `rows` (arrays in column order).
   - **Client overview**
   - **Time and utilization**
   - **Sales** (while the sales module is on): the open and weighted pipeline, by stage and expected close, what was won in the range, why deals were lost, and activity.
+  - **Expenses** (while expenses are on): spent, to bill and to pay back, by person, category, client and project.
   - **Finance** (while invoicing is on):
     - billed in the range, per month, by kind of line and by client;
     - what's still owed and overdue now, by age;

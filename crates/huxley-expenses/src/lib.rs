@@ -13,6 +13,7 @@
 //!
 //! Money is `numeric(18,4)` with an explicit currency, as decimal strings.
 
+pub mod cards;
 pub mod categories;
 pub mod entries;
 pub mod rates;

@@ -573,6 +573,42 @@ pub const INVOICE_LINES: Source = Source {
     ]),
 };
 
+pub const EXPENSES: Source = Source {
+    key: Cow::Borrowed("expenses"),
+    label: Cow::Borrowed("Expenses"),
+    description: Cow::Borrowed(
+        "Expenses and mileage: who spent, for which client, project and category, whether billable or paid back, and their status.",
+    ),
+    module: Some("expenses"),
+    permission: "expense:read",
+    time_field: Cow::Borrowed("spent_on"),
+    from: Cow::Borrowed(
+        "exp_entries x JOIN organizations o ON o.id = x.org_id JOIN users u ON u.id = x.user_id \
+        JOIN exp_categories c ON c.id = x.category_id LEFT JOIN prj_projects p ON p.id = x.project_id",
+    ),
+    fields: Cow::Borrowed(&[
+        CLIENT,
+        f("person", "Person", Kind::Text, "u.display_name"),
+        f("category", "Category", Kind::Text, "c.name"),
+        f("project", "Project", Kind::Text, "p.name"),
+        f("status", "Status", Kind::Text, "x.status"),
+        f("billable", "Billable", Kind::Bool, "x.billable"),
+        f("reimbursable", "Paid back", Kind::Bool, "x.reimbursable"),
+        f("mileage", "Mileage", Kind::Bool, "(c.kind = 'mileage')"),
+        f("currency", "Currency", Kind::Text, "x.currency"),
+        f("amount", "Amount", Kind::Number, "x.amount"),
+        f("tax", "Tax", Kind::Number, "x.tax"),
+        f(
+            "billed_amount",
+            "Billed (marked up)",
+            Kind::Number,
+            "(CASE WHEN x.billable THEN round(x.amount * (1 + x.markup_pct / 100), 2) ELSE 0 END)",
+        ),
+        f("distance", "Distance", Kind::Number, "x.distance"),
+        f("spent_on", "Spent", Kind::Date, "x.spent_on"),
+    ]),
+};
+
 pub const DATASET_PREFIX: &str = "dataset:";
 
 /// Every source, in display order.
@@ -590,6 +626,7 @@ pub const SOURCES: &[Source] = &[
     SALES_ACTIVITIES,
     INVOICES,
     INVOICE_LINES,
+    EXPENSES,
 ];
 
 pub fn source(key: &str) -> Option<&'static Source> {

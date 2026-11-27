@@ -5674,6 +5674,193 @@
 				}
 			}
 		},
+		"/api/v1/card-transactions": {
+			"get": {
+				"tags": ["expenses"],
+				"summary": "Card transactions, newest first: everyone's where you approve or read\nexpenses; otherwise those on your card.",
+				"operationId": "list_card_transactions",
+				"parameters": [
+					{
+						"name": "status",
+						"in": "query",
+						"description": "`unmatched`, `matched` or `ignored`.",
+						"required": false,
+						"schema": {
+							"type": "string"
+						}
+					},
+					{
+						"name": "userId",
+						"in": "query",
+						"description": "Whose card (the API sets it to you unless you see everyone's).",
+						"required": false,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "array",
+									"items": {
+										"$ref": "#/components/schemas/CardTransaction"
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/card-transactions/import": {
+			"post": {
+				"tags": ["expenses"],
+				"summary": "Imports card transactions (rows already imported, by their bank ID, are\nskipped) and matches them to expenses where they clearly fit.",
+				"operationId": "import_card_transactions",
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/CardImportRequest"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Imported"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/card-transactions/{id}/log": {
+			"post": {
+				"tags": ["expenses"],
+				"summary": "Logs a transaction on your card as your expense (not to be paid back), matched to it.",
+				"operationId": "log_card_transaction",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/LogInput"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/CardTransaction"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/card-transactions/{id}/match": {
+			"post": {
+				"tags": ["expenses"],
+				"summary": "Matches a transaction to an expense.",
+				"operationId": "match_card_transaction",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/CardMatchRequest"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/CardTransaction"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/card-transactions/{id}/status": {
+			"post": {
+				"tags": ["expenses"],
+				"summary": "Ignores a transaction, or unmatches it.",
+				"operationId": "set_card_transaction_status",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/CardStatusRequest"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/CardTransaction"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
 		"/api/v1/catalog/products": {
 			"get": {
 				"tags": ["catalog"],
@@ -29948,6 +30135,149 @@
 					}
 				}
 			},
+			"CardImportRequest": {
+				"type": "object",
+				"required": ["orgId", "rows"],
+				"properties": {
+					"orgId": {
+						"type": "string",
+						"format": "uuid",
+						"description": "The MSP whose cards they are."
+					},
+					"rows": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/CardRow"
+						}
+					}
+				},
+				"additionalProperties": false
+			},
+			"CardMatchRequest": {
+				"type": "object",
+				"required": ["expenseId"],
+				"properties": {
+					"expenseId": {
+						"type": "string",
+						"format": "uuid"
+					}
+				},
+				"additionalProperties": false
+			},
+			"CardRow": {
+				"type": "object",
+				"description": "One row to import.",
+				"required": ["postedOn", "description", "amount"],
+				"properties": {
+					"amount": {
+						"type": "string"
+					},
+					"cardLast4": {
+						"type": ["string", "null"]
+					},
+					"currency": {
+						"type": ["string", "null"]
+					},
+					"description": {
+						"type": "string"
+					},
+					"externalId": {
+						"type": ["string", "null"],
+						"description": "The bank's ID for it: importing it again is skipped."
+					},
+					"merchant": {
+						"type": ["string", "null"]
+					},
+					"postedOn": {
+						"type": "string",
+						"format": "date"
+					},
+					"userId": {
+						"type": ["string", "null"],
+						"format": "uuid",
+						"description": "Whose card (default: none)."
+					}
+				},
+				"additionalProperties": false
+			},
+			"CardStatusRequest": {
+				"type": "object",
+				"required": ["ignored"],
+				"properties": {
+					"ignored": {
+						"type": "boolean",
+						"description": "Ignore it (true), or unmatch it (false)."
+					}
+				},
+				"additionalProperties": false
+			},
+			"CardTransaction": {
+				"type": "object",
+				"required": [
+					"id",
+					"orgId",
+					"postedOn",
+					"description",
+					"amount",
+					"currency",
+					"status",
+					"createdAt"
+				],
+				"properties": {
+					"amount": {
+						"type": "string"
+					},
+					"cardLast4": {
+						"type": ["string", "null"]
+					},
+					"createdAt": {
+						"type": "string",
+						"format": "date-time"
+					},
+					"currency": {
+						"type": "string"
+					},
+					"description": {
+						"type": "string"
+					},
+					"expenseDescription": {
+						"type": ["string", "null"]
+					},
+					"expenseId": {
+						"type": ["string", "null"],
+						"format": "uuid"
+					},
+					"externalId": {
+						"type": ["string", "null"]
+					},
+					"id": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"merchant": {
+						"type": ["string", "null"]
+					},
+					"orgId": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"postedOn": {
+						"type": "string",
+						"format": "date"
+					},
+					"status": {
+						"type": "string",
+						"description": "`unmatched`, `matched` or `ignored`."
+					},
+					"userId": {
+						"type": ["string", "null"],
+						"format": "uuid"
+					},
+					"userName": {
+						"type": ["string", "null"]
+					}
+				}
+			},
 			"CatalogBilling": {
 				"type": "string",
 				"description": "How often it's charged.",
@@ -34050,6 +34380,26 @@
 				},
 				"additionalProperties": false
 			},
+			"Imported": {
+				"type": "object",
+				"required": ["imported", "skipped", "matched"],
+				"properties": {
+					"imported": {
+						"type": "integer",
+						"minimum": 0
+					},
+					"matched": {
+						"type": "integer",
+						"description": "Of the imported, how many were matched to an expense.",
+						"minimum": 0
+					},
+					"skipped": {
+						"type": "integer",
+						"description": "Rows imported before (by their bank ID).",
+						"minimum": 0
+					}
+				}
+			},
 			"InstallRequest": {
 				"type": "object",
 				"required": ["orgId", "version"],
@@ -36167,6 +36517,34 @@
 						"type": "string"
 					}
 				}
+			},
+			"LogInput": {
+				"type": "object",
+				"required": ["categoryId"],
+				"properties": {
+					"categoryId": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"description": {
+						"type": ["string", "null"],
+						"description": "Default: the transaction's description."
+					},
+					"orgId": {
+						"type": ["string", "null"],
+						"format": "uuid"
+					},
+					"projectId": {
+						"type": ["string", "null"],
+						"format": "uuid"
+					},
+					"ticketId": {
+						"type": ["string", "null"],
+						"format": "uuid",
+						"description": "Where it goes: a ticket, project, client or the MSP (default: the MSP)."
+					}
+				},
+				"additionalProperties": false
 			},
 			"LoginMfaRequest": {
 				"type": "object",

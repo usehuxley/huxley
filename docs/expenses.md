@@ -72,6 +72,28 @@ On an approved report's page, someone with `expense:approve` can do either (ADR-
 
 The events are `expense_report.sync_requested` (for the sync packs), `expense_report.synced`, `expense_report.sync_failed` and `expense_report.reimbursed`. Sync packs report back with `core.expense.sync_result`.
 
+## Card charges
+
+**Expenses → Card charges** lists company card charges (ADR-084).
+
+Someone with `expense:approve` imports them from the bank's CSV file:
+- Required columns: date, description and amount.
+- Optional columns: merchant, currency, card, transaction id, and the cardholder's email.
+
+Charges imported before (by their transaction id) are skipped. Imports can also come through the API (`POST /api/v1/card-transactions/import`), for example from a bank integration's workflow.
+
+Each new charge is matched to the cardholder's expense when one expense has the same amount and currency within three days and no charge yet.
+
+Cardholders see their own charges. **Log as my expense** turns an unmatched charge into an expense that isn't to be paid back, since the company paid. A charge can also be **ignored**, and a match can be undone. The `card_transactions.imported` event carries how many were imported and matched.
+
+## Reporting
+
+The prebuilt **Expenses** dashboard (with `expense:read`) shows:
+- what was spent in the range, what's to be billed, and what's to be paid back;
+- spending by person, category, client and project.
+
+The `expenses` analytics source has the details.
+
 ## Settings
 
 In **Settings → Expenses** (`expense:configure`):

@@ -2278,6 +2278,97 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
+	'/api/v1/card-transactions': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/**
+		 * Card transactions, newest first: everyone's where you approve or read
+		 *     expenses; otherwise those on your card.
+		 */
+		get: operations['list_card_transactions'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/card-transactions/import': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/**
+		 * Imports card transactions (rows already imported, by their bank ID, are
+		 *     skipped) and matches them to expenses where they clearly fit.
+		 */
+		post: operations['import_card_transactions'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/card-transactions/{id}/log': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/** Logs a transaction on your card as your expense (not to be paid back), matched to it. */
+		post: operations['log_card_transaction'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/card-transactions/{id}/match': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/** Matches a transaction to an expense. */
+		post: operations['match_card_transaction'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/card-transactions/{id}/status': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/** Ignores a transaction, or unmatches it. */
+		post: operations['set_card_transaction_status'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
 	'/api/v1/catalog/products': {
 		parameters: {
 			query?: never;
@@ -10910,6 +11001,63 @@ export interface components {
 			/** @description Each week's Monday, `YYYY-MM-DD`. */
 			weeks: string[];
 		};
+		CardImportRequest: {
+			/**
+			 * Format: uuid
+			 * @description The MSP whose cards they are.
+			 */
+			orgId: string;
+			rows: components['schemas']['CardRow'][];
+		};
+		CardMatchRequest: {
+			/** Format: uuid */
+			expenseId: string;
+		};
+		/** @description One row to import. */
+		CardRow: {
+			amount: string;
+			cardLast4?: string | null;
+			currency?: string | null;
+			description: string;
+			/** @description The bank's ID for it: importing it again is skipped. */
+			externalId?: string | null;
+			merchant?: string | null;
+			/** Format: date */
+			postedOn: string;
+			/**
+			 * Format: uuid
+			 * @description Whose card (default: none).
+			 */
+			userId?: string | null;
+		};
+		CardStatusRequest: {
+			/** @description Ignore it (true), or unmatch it (false). */
+			ignored: boolean;
+		};
+		CardTransaction: {
+			amount: string;
+			cardLast4?: string | null;
+			/** Format: date-time */
+			createdAt: string;
+			currency: string;
+			description: string;
+			expenseDescription?: string | null;
+			/** Format: uuid */
+			expenseId?: string | null;
+			externalId?: string | null;
+			/** Format: uuid */
+			id: string;
+			merchant?: string | null;
+			/** Format: uuid */
+			orgId: string;
+			/** Format: date */
+			postedOn: string;
+			/** @description `unmatched`, `matched` or `ignored`. */
+			status: string;
+			/** Format: uuid */
+			userId?: string | null;
+			userName?: string | null;
+		};
 		/**
 		 * @description How often it's charged.
 		 * @enum {string}
@@ -12601,6 +12749,13 @@ export interface components {
 			/** @description The OpenAPI 3.x or Swagger 2.0 document, as JSON or YAML text. */
 			spec: string;
 		};
+		Imported: {
+			imported: number;
+			/** @description Of the imported, how many were matched to an expense. */
+			matched: number;
+			/** @description Rows imported before (by their bank ID). */
+			skipped: number;
+		};
 		InstallRequest: {
 			/** Format: uuid */
 			orgId: string;
@@ -13449,6 +13604,21 @@ export interface components {
 		LocalSetting: {
 			locked: boolean;
 			value: string;
+		};
+		LogInput: {
+			/** Format: uuid */
+			categoryId: string;
+			/** @description Default: the transaction's description. */
+			description?: string | null;
+			/** Format: uuid */
+			orgId?: string | null;
+			/** Format: uuid */
+			projectId?: string | null;
+			/**
+			 * Format: uuid
+			 * @description Where it goes: a ticket, project, client or the MSP (default: the MSP).
+			 */
+			ticketId?: string | null;
 		};
 		LoginMfaRequest: {
 			/** @description From the `mfaRequired` response. */
@@ -23153,6 +23323,128 @@ export interface operations {
 					[name: string]: unknown;
 				};
 				content?: never;
+			};
+		};
+	};
+	list_card_transactions: {
+		parameters: {
+			query?: {
+				/** @description `unmatched`, `matched` or `ignored`. */
+				status?: string;
+				/** @description Whose card (the API sets it to you unless you see everyone's). */
+				userId?: string;
+			};
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['CardTransaction'][];
+				};
+			};
+		};
+	};
+	import_card_transactions: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['CardImportRequest'];
+			};
+		};
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['Imported'];
+				};
+			};
+		};
+	};
+	log_card_transaction: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['LogInput'];
+			};
+		};
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['CardTransaction'];
+				};
+			};
+		};
+	};
+	match_card_transaction: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['CardMatchRequest'];
+			};
+		};
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['CardTransaction'];
+				};
+			};
+		};
+	};
+	set_card_transaction_status: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['CardStatusRequest'];
+			};
+		};
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['CardTransaction'];
+				};
 			};
 		};
 	};

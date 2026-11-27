@@ -39,6 +39,20 @@ pub fn routes(upload_limit: usize) -> Router<AppState> {
             "/expenses/{id}/apply-reading",
             axum::routing::post(apply_reading),
         )
+        .route("/card-transactions", get(list_cards))
+        .route(
+            "/card-transactions/import",
+            axum::routing::post(import_cards),
+        )
+        .route(
+            "/card-transactions/{id}/match",
+            axum::routing::post(match_card),
+        )
+        .route(
+            "/card-transactions/{id}/status",
+            axum::routing::post(card_status),
+        )
+        .route("/card-transactions/{id}/log", axum::routing::post(log_card))
         .route("/expense-reports", get(list_reports).post(submit_report))
         .route("/expense-reports/{id}", get(get_report))
         .route("/expense-reports/export.csv", get(export_reports))
@@ -735,5 +749,167 @@ pub async fn export_reports(
             ),
         ],
         csv,
+    ))
+}
+
+// ---- card transactions (ADR-084) ----
+
+use huxley_expenses::cards::{self, CardFilter, CardRow, CardTransaction, Imported, LogInput};
+
+/// Whether the caller sees everyone's card transactions (`expense:approve`
+/// or `expense:read` somewhere); the scope to read them in.
+async fn card_scope(state: &AppState, authed: &Authed) -> ApiResult<Option<OrgScope>> {
+    for p in [permissions::EXPENSE_APPROVE, permissions::EXPENSE_READ] {
+        let scope = authed.module_scope(state, p, MODULE).await?;
+        if !matches!(&scope, OrgScope::Orgs(o) if o.is_empty()) {
+            return Ok(Some(scope));
+        }
+    }
+    Ok(None)
+}
+
+/// A transaction the caller may act on: theirs, or with `expense:approve`
+/// at its organization. Returns whether it's on their card.
+async fn card_access(state: &AppState, authed: &Authed, id: Uuid) -> ApiResult<bool> {
+    let (user, org) = scoped(state, &OrgScope::System, async |tx| {
+        cards::owner_of(tx, id).await
+    })
+    .await?
+    .ok_or_else(ApiError::not_found)?;
+    require_module_at(state, MODULE, org).await?;
+    if user == Some(me(authed)) {
+        return Ok(true);
+    }
+    authed
+        .require_at(state, permissions::EXPENSE_APPROVE, org)
+        .await
+        .map_err(|_| ApiError::not_found())?;
+    Ok(false)
+}
+
+/// Card transactions, newest first: everyone's where you approve or read
+/// expenses; otherwise those on your card.
+#[utoipa::path(get, path = "/api/v1/card-transactions", operation_id = "list_card_transactions", tag = "expenses",
+    params(CardFilter), responses((status = 200, body = Vec<CardTransaction>)))]
+pub async fn list_cards(
+    State(state): State<AppState>,
+    authed: Authed,
+    Query(mut filter): Query<CardFilter>,
+) -> ApiResult<Json<Vec<CardTransaction>>> {
+    require_module(&state, MODULE).await?;
+    let scope = if let Some(scope) = card_scope(&state, &authed).await? {
+        scope
+    } else {
+        filter.user_id = Some(me(&authed));
+        OrgScope::System
+    };
+    Ok(Json(
+        scoped(&state, &scope, async |tx| cards::list(tx, &filter).await).await?,
+    ))
+}
+
+#[derive(Debug, serde::Deserialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct CardImportRequest {
+    /// The MSP whose cards they are.
+    pub org_id: Uuid,
+    pub rows: Vec<CardRow>,
+}
+
+/// Imports card transactions (rows already imported, by their bank ID, are
+/// skipped) and matches them to expenses where they clearly fit.
+#[utoipa::path(post, path = "/api/v1/card-transactions/import", operation_id = "import_card_transactions", tag = "expenses",
+    request_body = CardImportRequest, responses((status = 200, body = Imported)))]
+pub async fn import_cards(
+    State(state): State<AppState>,
+    authed: Authed,
+    Json(body): Json<CardImportRequest>,
+) -> ApiResult<Json<Imported>> {
+    at(&state, &authed, body.org_id, permissions::EXPENSE_APPROVE).await?;
+    let ctx = authed.user.ctx.clone();
+    Ok(Json(
+        scoped(&state, &OrgScope::System, async |tx| {
+            cards::import(tx, &ctx, body.org_id, &body.rows).await
+        })
+        .await?,
+    ))
+}
+
+#[derive(Debug, serde::Deserialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct CardMatchRequest {
+    pub expense_id: Uuid,
+}
+
+/// Matches a transaction to an expense.
+#[utoipa::path(post, path = "/api/v1/card-transactions/{id}/match", operation_id = "match_card_transaction",
+    tag = "expenses", params(("id" = Uuid, Path)), request_body = CardMatchRequest, responses((status = 200, body = CardTransaction)))]
+pub async fn match_card(
+    State(state): State<AppState>,
+    authed: Authed,
+    Path(id): Path<Uuid>,
+    Json(body): Json<CardMatchRequest>,
+) -> ApiResult<Json<CardTransaction>> {
+    card_access(&state, &authed, id).await?;
+    let ctx = authed.user.ctx.clone();
+    Ok(Json(
+        scoped(&state, &OrgScope::System, async |tx| {
+            cards::match_to(tx, &ctx, id, body.expense_id).await
+        })
+        .await?,
+    ))
+}
+
+#[derive(Debug, serde::Deserialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct CardStatusRequest {
+    /// Ignore it (true), or unmatch it (false).
+    pub ignored: bool,
+}
+
+/// Ignores a transaction, or unmatches it.
+#[utoipa::path(post, path = "/api/v1/card-transactions/{id}/status", operation_id = "set_card_transaction_status",
+    tag = "expenses", params(("id" = Uuid, Path)), request_body = CardStatusRequest, responses((status = 200, body = CardTransaction)))]
+pub async fn card_status(
+    State(state): State<AppState>,
+    authed: Authed,
+    Path(id): Path<Uuid>,
+    Json(body): Json<CardStatusRequest>,
+) -> ApiResult<Json<CardTransaction>> {
+    card_access(&state, &authed, id).await?;
+    let ctx = authed.user.ctx.clone();
+    Ok(Json(
+        scoped(&state, &OrgScope::System, async |tx| {
+            cards::set_status(tx, &ctx, id, body.ignored).await
+        })
+        .await?,
+    ))
+}
+
+/// Logs a transaction on your card as your expense (not to be paid back), matched to it.
+#[utoipa::path(post, path = "/api/v1/card-transactions/{id}/log", operation_id = "log_card_transaction", tag = "expenses",
+    params(("id" = Uuid, Path)), request_body = LogInput, responses((status = 200, body = CardTransaction)))]
+pub async fn log_card(
+    State(state): State<AppState>,
+    authed: Authed,
+    Path(id): Path<Uuid>,
+    Json(body): Json<LogInput>,
+) -> ApiResult<Json<CardTransaction>> {
+    if !card_access(&state, &authed, id).await? {
+        return Err(ApiError::conflict(
+            "only the cardholder logs it as their expense",
+        ));
+    }
+    let org = body.org_id;
+    if let Some(org) = org {
+        at(&state, &authed, org, permissions::EXPENSE_WRITE).await?;
+    }
+    let ctx = authed.user.ctx.clone();
+    let user = me(&authed);
+    Ok(Json(
+        scoped(&state, &OrgScope::System, async |tx| {
+            cards::log_as_expense(tx, &ctx, user, id, &body).await
+        })
+        .await?,
     ))
 }
