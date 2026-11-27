@@ -84,21 +84,21 @@ test.describe('settings (as the bootstrap owner)', () => {
 		await page.goto('/settings/modules');
 		await expect(page.getByText('No modules on: automation engine only.')).toBeVisible();
 
-		const row = page.getByRole('listitem').filter({ hasText: 'Sales and quoting' });
+		const row = page.getByRole('listitem').filter({ hasText: 'Invoicing' });
 		await expect(row.getByText('also turns on Clients and contacts, Contracts')).toBeVisible();
 		await row.getByRole('button', { name: 'Turn on' }).click();
 		await expect(
-			page.getByText('Turned on: Clients and contacts, Contracts, Sales and quoting')
+			page.getByText('Turned on: Clients and contacts, Contracts, Invoicing')
 		).toBeVisible();
-		await expect(row.getByText('On: arrives in Phase 10')).toBeVisible();
+		await expect(row.getByText('On: arrives in Phase 11')).toBeVisible();
 
-		// Contracts can't be turned off while Sales and quoting needs it.
+		// Contracts can't be turned off while Invoicing needs it.
 		const contracts = page.getByRole('listitem').filter({ hasText: 'Agreements (coverage' });
 		await contracts.getByRole('button', { name: 'Turn off' }).click();
 		await expect(page.getByText(/other enabled modules depend on it/i)).toBeVisible();
 
 		await row.getByRole('button', { name: 'Turn off' }).click();
-		await expect(page.getByText('Turned off: Sales and quoting')).toBeVisible();
+		await expect(page.getByText('Turned off: Invoicing')).toBeVisible();
 
 		// Leave the instance as it was: every module off.
 		await contracts.getByRole('button', { name: 'Turn off' }).click();

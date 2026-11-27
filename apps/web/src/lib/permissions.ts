@@ -74,6 +74,12 @@ export const SETTINGS_SECTIONS = [
 		module: 'cmdb'
 	},
 	{
+		key: 'sales',
+		label: 'Sales pipeline',
+		permission: 'sales:configure',
+		module: 'sales'
+	},
+	{
 		key: 'mailboxes',
 		label: 'Mailboxes',
 		permission: 'servicedesk:configure',

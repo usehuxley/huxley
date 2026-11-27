@@ -3428,6 +3428,79 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
+	'/api/v1/leads': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** Leads you can see, newest first. */
+		get: operations['list_leads'];
+		put?: never;
+		/** Captures a lead. */
+		post: operations['create_lead'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/leads/{id}': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get: operations['get_lead'];
+		/** Changes a lead (send the version you read). */
+		put: operations['update_lead'];
+		post?: never;
+		delete: operations['delete_lead'];
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/leads/{id}/convert': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/**
+		 * Converts a lead into a client (new or existing), a contact and an
+		 *     opportunity. Needs `crm:manage` where the lead is, and at an existing
+		 *     client given.
+		 */
+		post: operations['convert_lead'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/leads/{id}/disqualify': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/** Marks a lead not worth pursuing. */
+		post: operations['disqualify_lead'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
 	'/api/v1/mailboxes': {
 		parameters: {
 			query?: never;
@@ -3698,6 +3771,74 @@ export interface paths {
 		 *     token can't approve anything.
 		 */
 		post: operations['authorization'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/opportunities': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** Opportunities you can see: open ones by close date, then closed ones. */
+		get: operations['list_opportunities'];
+		put?: never;
+		post: operations['create_opportunity'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/opportunities/{id}': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get: operations['get_opportunity'];
+		/** Changes an opportunity's details (send the version you read). */
+		put: operations['update_opportunity'];
+		post?: never;
+		delete: operations['delete_opportunity'];
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/opportunities/{id}/history': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** Its moves between stages, oldest first. */
+		get: operations['opportunity_history'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/opportunities/{id}/move': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/** Moves an opportunity to a stage; a won or lost stage closes it. */
+		post: operations['move_opportunity'];
 		delete?: never;
 		options?: never;
 		head?: never;
@@ -4883,6 +5024,90 @@ export interface paths {
 		put?: never;
 		post?: never;
 		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/sales/reasons': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** Why opportunities are won and lost. */
+		get: operations['list_sales_reasons'];
+		put?: never;
+		post: operations['create_sales_reason'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/sales/reasons/{id}': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		post?: never;
+		delete: operations['archive_sales_reason'];
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/sales/stages': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** The pipeline's stages, in order. */
+		get: operations['list_sales_stages'];
+		put?: never;
+		/** Adds a stage at the end. */
+		post: operations['create_sales_stage'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/sales/stages/order': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put: operations['reorder_sales_stages'];
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/sales/stages/{id}': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put: operations['update_sales_stage'];
+		post?: never;
+		/** Archives a stage no open opportunity is at. */
+		delete: operations['archive_sales_stage'];
 		options?: never;
 		head?: never;
 		patch?: never;
@@ -9185,6 +9410,26 @@ export interface components {
 			/** Format: date-time */
 			updatedAt: string;
 		};
+		ConvertInput: {
+			/** @description Make a contact from the lead's person (default yes, if it has a name). */
+			createContact?: boolean;
+			opportunity: components['schemas']['OpportunityInput'];
+			/**
+			 * Format: uuid
+			 * @description An existing client to attach it to; otherwise a new one is made from
+			 *     the lead's company name, under the lead's organization.
+			 */
+			orgId?: string | null;
+			/** Format: int32 */
+			version: number;
+		};
+		/** @description What converting made. */
+		Converted: {
+			/** Format: uuid */
+			contactId?: string | null;
+			lead: components['schemas']['Lead'];
+			opportunity: components['schemas']['Opportunity'];
+		};
 		CopyDashboard: {
 			/** @description Its name (default: "Copy of …"). */
 			name?: string | null;
@@ -9252,6 +9497,14 @@ export interface components {
 			/** Format: uuid */
 			orgId: string;
 		};
+		CreateLeadRequest: {
+			lead: components['schemas']['LeadInput'];
+			/**
+			 * Format: uuid
+			 * @description The provider organization capturing it.
+			 */
+			orgId: string;
+		};
 		CreateLinkRequest: {
 			/** Format: date-time */
 			expiresAt?: string | null;
@@ -9268,6 +9521,14 @@ export interface components {
 			/**
 			 * Format: uuid
 			 * @description The organization it belongs to (usually your MSP).
+			 */
+			orgId: string;
+		};
+		CreateOpportunityRequest: {
+			opportunity: components['schemas']['OpportunityInput'];
+			/**
+			 * Format: uuid
+			 * @description The client it would sell to.
 			 */
 			orgId: string;
 		};
@@ -9571,6 +9832,11 @@ export interface components {
 		};
 		/** @enum {string} */
 		Direction: 'asc' | 'desc';
+		DisqualifyRequest: {
+			reason: string;
+			/** Format: int32 */
+			version: number;
+		};
 		DraftedArticle: {
 			/** Format: uuid */
 			articleId: string;
@@ -9763,6 +10029,11 @@ export interface components {
 			/** Format: uuid */
 			userId: string;
 		};
+		/**
+		 * @description Which forecast an open opportunity counts in.
+		 * @enum {string}
+		 */
+		ForecastCategory: 'pipeline' | 'best_case' | 'commit' | 'omitted';
 		Form: {
 			/**
 			 * @description Offered as an Action on a `client`, `contact` or `ticket`: run from
@@ -10214,6 +10485,60 @@ export interface components {
 		Kind: 'text' | 'number' | 'bool' | 'date' | 'time';
 		/** @enum {string} */
 		Language: 'pwsh' | 'python' | 'javascript';
+		Lead: {
+			companyName: string;
+			/** Format: date-time */
+			convertedAt?: string | null;
+			/** Format: uuid */
+			convertedContactId?: string | null;
+			/** Format: uuid */
+			convertedOpportunityId?: string | null;
+			/** Format: uuid */
+			convertedOrgId?: string | null;
+			/** Format: date-time */
+			createdAt: string;
+			disqualifiedReason?: string | null;
+			email?: string | null;
+			firstName?: string | null;
+			/** Format: uuid */
+			id: string;
+			lastName?: string | null;
+			notes: string;
+			/**
+			 * Format: uuid
+			 * @description The provider organization that captured it.
+			 */
+			orgId: string;
+			/** Format: uuid */
+			ownerId?: string | null;
+			ownerName?: string | null;
+			phone?: string | null;
+			source?: string | null;
+			status: components['schemas']['LeadStatus'];
+			/** Format: date-time */
+			updatedAt: string;
+			/** Format: int32 */
+			version: number;
+		};
+		LeadInput: {
+			companyName: string;
+			email?: string | null;
+			firstName?: string | null;
+			lastName?: string | null;
+			notes?: string;
+			/** Format: uuid */
+			ownerId?: string | null;
+			phone?: string | null;
+			source?: string | null;
+			status?: components['schemas']['LeadStatus'] | null;
+			/**
+			 * Format: int32
+			 * @description The version you read (updates only).
+			 */
+			version?: number | null;
+		};
+		/** @enum {string} */
+		LeadStatus: 'new' | 'working' | 'disqualified' | 'converted';
 		LinkArticle: {
 			/** Format: uuid */
 			articleId: string;
@@ -10526,6 +10851,16 @@ export interface components {
 			/** @description The admin wants it on. */
 			enabled: boolean;
 		};
+		/** @description A move to another stage. Closing it may say why. */
+		MoveInput: {
+			/** Format: uuid */
+			reasonId?: string | null;
+			reasonNote?: string | null;
+			/** Format: uuid */
+			stageId: string;
+			/** Format: int32 */
+			version: number;
+		};
 		MoveOrgRequest: {
 			/** Format: uuid */
 			parentId: string;
@@ -10814,6 +11149,101 @@ export interface components {
 			| 'is_null'
 			| 'not_null'
 			| 'within';
+		Opportunity: {
+			/** @description Expected one-time value. */
+			amount: string;
+			/** Format: date */
+			closeDate?: string | null;
+			/** Format: date-time */
+			closedAt?: string | null;
+			/** Format: uuid */
+			contactId?: string | null;
+			contactName?: string | null;
+			/** Format: date-time */
+			createdAt: string;
+			currency: string;
+			description: string;
+			forecast: components['schemas']['ForecastCategory'];
+			/** Format: uuid */
+			id: string;
+			/** Format: uuid */
+			leadId?: string | null;
+			name: string;
+			/**
+			 * Format: int64
+			 * @description `OPP-` and this number.
+			 */
+			number: number;
+			/**
+			 * Format: uuid
+			 * @description The client it would sell to.
+			 */
+			orgId: string;
+			orgName: string;
+			/** Format: uuid */
+			ownerId?: string | null;
+			ownerName?: string | null;
+			/**
+			 * Format: int32
+			 * @description The chance of winning: the override, else the stage's.
+			 */
+			probability: number;
+			/**
+			 * Format: int32
+			 * @description Set when the stage's probability is overridden.
+			 */
+			probabilityOverride?: number | null;
+			/** Format: uuid */
+			reasonId?: string | null;
+			reasonName?: string | null;
+			reasonNote?: string | null;
+			/** @description Expected monthly recurring value. */
+			recurring: string;
+			source?: string | null;
+			/** Format: uuid */
+			stageId: string;
+			stageKind: components['schemas']['SalesStageKind'];
+			stageName: string;
+			status: components['schemas']['OpportunityStatus'];
+			/** Format: date-time */
+			updatedAt: string;
+			/** Format: int32 */
+			version: number;
+			/** @description (One-time + 12 × recurring) × probability. */
+			weighted: string;
+		};
+		OpportunityInput: {
+			amount?: string | null;
+			/** Format: date */
+			closeDate?: string | null;
+			/** Format: uuid */
+			contactId?: string | null;
+			currency?: string;
+			description?: string;
+			forecast?: components['schemas']['ForecastCategory'];
+			name: string;
+			/** Format: uuid */
+			ownerId?: string | null;
+			/**
+			 * Format: int32
+			 * @description Overrides the stage's probability.
+			 */
+			probability?: number | null;
+			recurring?: string | null;
+			source?: string | null;
+			/**
+			 * Format: uuid
+			 * @description The stage to start at (new ones only; move it to change it).
+			 */
+			stageId?: string | null;
+			/**
+			 * Format: int32
+			 * @description The version you read (updates only).
+			 */
+			version?: number | null;
+		};
+		/** @enum {string} */
+		OpportunityStatus: 'open' | 'won' | 'lost';
 		/**
 		 * @description `provider`: the owning company, an MSP brand, or a division. `client`: a
 		 *     customer of a provider, or a site/sub-org of one.
@@ -12245,6 +12675,39 @@ export interface components {
 			source: components['schemas']['RunnerSource'];
 			version?: string | null;
 		};
+		SalesReason: {
+			/** Format: uuid */
+			id: string;
+			kind: components['schemas']['SalesReasonKind'];
+			name: string;
+		};
+		SalesReasonInput: {
+			kind: components['schemas']['SalesReasonKind'];
+			name: string;
+		};
+		/** @enum {string} */
+		SalesReasonKind: 'won' | 'lost';
+		SalesStage: {
+			/** Format: uuid */
+			id: string;
+			kind: components['schemas']['SalesStageKind'];
+			name: string;
+			/** Format: int32 */
+			position: number;
+			/**
+			 * Format: int32
+			 * @description The chance of winning at this stage, 0 to 100.
+			 */
+			probability: number;
+		};
+		SalesStageInput: {
+			kind: components['schemas']['SalesStageKind'];
+			name: string;
+			/** Format: int32 */
+			probability: number;
+		};
+		/** @enum {string} */
+		SalesStageKind: 'open' | 'won' | 'lost';
 		SaveDraftRequest: {
 			document: {
 				[key: string]: unknown;
@@ -12705,6 +13168,21 @@ export interface components {
 		SsoCallbackRequest: {
 			code: string;
 			state: string;
+		};
+		StageChange: {
+			actorName?: string | null;
+			/** Format: date-time */
+			at: string;
+			/** Format: uuid */
+			fromStageId?: string | null;
+			fromStageName?: string | null;
+			/** Format: uuid */
+			toStageId: string;
+			toStageName: string;
+		};
+		StageOrder: {
+			/** @description Every stage, in the new order. */
+			ids: string[];
 		};
 		StartConversation: {
 			context?: components['schemas']['ContextRef'] | null;
@@ -21115,6 +21593,200 @@ export interface operations {
 			};
 		};
 	};
+	list_leads: {
+		parameters: {
+			query?: {
+				status?: components['schemas']['LeadStatus'];
+				ownerId?: string;
+				/** @description In the company, the person or the email. */
+				q?: string;
+			};
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['Lead'][];
+				};
+			};
+		};
+	};
+	create_lead: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['CreateLeadRequest'];
+			};
+		};
+		responses: {
+			201: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['Lead'];
+				};
+			};
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	get_lead: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['Lead'];
+				};
+			};
+		};
+	};
+	update_lead: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['LeadInput'];
+			};
+		};
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['Lead'];
+				};
+			};
+			409: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	delete_lead: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			204: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content?: never;
+			};
+			409: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	convert_lead: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['ConvertInput'];
+			};
+		};
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['Converted'];
+				};
+			};
+			409: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	disqualify_lead: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['DisqualifyRequest'];
+			};
+		};
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['Lead'];
+				};
+			};
+		};
+	};
 	list_mailboxes: {
 		parameters: {
 			query?: never;
@@ -21576,6 +22248,195 @@ export interface operations {
 				};
 			};
 			400: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	list_opportunities: {
+		parameters: {
+			query?: {
+				status?: components['schemas']['OpportunityStatus'];
+				stageId?: string;
+				ownerId?: string;
+				/** @description One client's. */
+				orgId?: string;
+				/** @description In the name, the client's name or the number. */
+				q?: string;
+				/** @description Closing on or before (`YYYY-MM-DD`). */
+				closeBefore?: string;
+				/** @description At most this many (default 500). */
+				limit?: number;
+			};
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['Opportunity'][];
+				};
+			};
+		};
+	};
+	create_opportunity: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['CreateOpportunityRequest'];
+			};
+		};
+		responses: {
+			201: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['Opportunity'];
+				};
+			};
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	get_opportunity: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['Opportunity'];
+				};
+			};
+		};
+	};
+	update_opportunity: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['OpportunityInput'];
+			};
+		};
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['Opportunity'];
+				};
+			};
+			409: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	delete_opportunity: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			204: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content?: never;
+			};
+		};
+	};
+	opportunity_history: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['StageChange'][];
+				};
+			};
+		};
+	};
+	move_opportunity: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['MoveInput'];
+			};
+		};
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['Opportunity'];
+				};
+			};
+			409: {
 				headers: {
 					[name: string]: unknown;
 				};
@@ -23966,6 +24827,200 @@ export interface operations {
 				};
 			};
 			404: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	list_sales_reasons: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['SalesReason'][];
+				};
+			};
+		};
+	};
+	create_sales_reason: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['SalesReasonInput'];
+			};
+		};
+		responses: {
+			201: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['SalesReason'];
+				};
+			};
+		};
+	};
+	archive_sales_reason: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			204: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content?: never;
+			};
+		};
+	};
+	list_sales_stages: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['SalesStage'][];
+				};
+			};
+		};
+	};
+	create_sales_stage: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['SalesStageInput'];
+			};
+		};
+		responses: {
+			201: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['SalesStage'];
+				};
+			};
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	reorder_sales_stages: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['StageOrder'];
+			};
+		};
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['SalesStage'][];
+				};
+			};
+		};
+	};
+	update_sales_stage: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['SalesStageInput'];
+			};
+		};
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['SalesStage'];
+				};
+			};
+			409: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	archive_sales_stage: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			204: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content?: never;
+			};
+			409: {
 				headers: {
 					[name: string]: unknown;
 				};

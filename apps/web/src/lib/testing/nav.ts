@@ -14,6 +14,8 @@ const SPACE_OF: Record<string, string> = {
 	Datasets: 'Engine',
 	Dashboards: 'Business',
 	Catalog: 'Business',
+	Pipeline: 'Business',
+	Leads: 'Business',
 	People: 'Business',
 	Timesheets: 'Business'
 };
