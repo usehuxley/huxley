@@ -1397,6 +1397,54 @@ export type Step =
 			 * Fail the attempt after this long, e.g. `30s`.
 			 */
 			timeout?: string | null;
+			type: 'core.scope.context';
+			with: ScopeContext;
+	  }
+	| {
+			/**
+			 * Record the error as the step's output and carry on.
+			 */
+			continue_on_error?: boolean;
+			description?: string | null;
+			/**
+			 * Unique in the workflow: lowercase letters, digits, underscores.
+			 * Other steps read this step's output as `steps.<id>.output`.
+			 */
+			id: string;
+			/**
+			 * Skip the step unless this expression is true.
+			 */
+			if?: string | null;
+			name?: string | null;
+			retry?: RetryPolicy | null;
+			/**
+			 * Fail the attempt after this long, e.g. `30s`.
+			 */
+			timeout?: string | null;
+			type: 'core.scope.write';
+			with: ScopeWrite;
+	  }
+	| {
+			/**
+			 * Record the error as the step's output and carry on.
+			 */
+			continue_on_error?: boolean;
+			description?: string | null;
+			/**
+			 * Unique in the workflow: lowercase letters, digits, underscores.
+			 * Other steps read this step's output as `steps.<id>.output`.
+			 */
+			id: string;
+			/**
+			 * Skip the step unless this expression is true.
+			 */
+			if?: string | null;
+			name?: string | null;
+			retry?: RetryPolicy | null;
+			/**
+			 * Fail the attempt after this long, e.g. `30s`.
+			 */
+			timeout?: string | null;
 			type: 'core.calendar.sync';
 			with?: CalendarSync | null;
 	  }
@@ -2555,6 +2603,34 @@ export interface QuoteReview {
  */
 export interface SalesLogEmail {
 	email_id: unknown;
+}
+/**
+ * A scope to draft (`core.scope.context`): `scope_id`. Output: `{ text,
+ * sections, sources }`: the opportunity, its discovery numbered [1], [2]…,
+ * the client's environment, agreements and past approved scopes, as text
+ * for the AI; the sections to write (`key: title: guidance`, skipping
+ * those people edited); and what each source number stands for.
+ *
+ * This interface was referenced by `HuxleyWorkflowFormatV1`'s JSON-Schema
+ * via the `definition` "ScopeContext".
+ */
+export interface ScopeContext {
+	scope_id: unknown;
+}
+/**
+ * A drafted Scope of Work to keep (`core.scope.write`): `scope_id`;
+ * `sections` (`[{ key, body, sources: [n] }]`) and `questions`
+ * (`[{ section, question }]`) as the AI wrote them; or `error`, when
+ * drafting failed. Sections people edited are left alone. Output: `{ written }`.
+ *
+ * This interface was referenced by `HuxleyWorkflowFormatV1`'s JSON-Schema
+ * via the `definition` "ScopeWrite".
+ */
+export interface ScopeWrite {
+	error?: unknown;
+	questions?: unknown;
+	scope_id: unknown;
+	sections?: unknown;
 }
 /**
  * Whose calendars to sync (`core.calendar.sync`): everyone set up (from

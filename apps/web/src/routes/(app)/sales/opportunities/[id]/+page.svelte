@@ -182,6 +182,18 @@
 					</dd>
 				</dl>
 			</Card>
+			<Card title="Scope of work">
+				<p class="text-sm text-fg-muted">
+					Scope the work from discovery, with an AI draft to start from, before quoting it.
+				</p>
+				<Button
+					href={resolve('/(app)/sales/opportunities/[id]/scope', { id: o.id })}
+					size="sm"
+					class="mt-3"
+				>
+					Open scoping
+				</Button>
+			</Card>
 			<Card title="Quotes">
 				{#snippet actions()}
 					{#if data.canWrite}

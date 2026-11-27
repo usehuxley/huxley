@@ -244,6 +244,22 @@ pub async fn quote_pdf(
         .map_err(|e| ApiError::internal(&e))
 }
 
+/// The Scope of Work a quote carries, as a table for its PDF.
+fn scope_table(q: &Quote) -> Option<huxley_analytics::export::Table> {
+    use huxley_analytics::export::{Cell, Table};
+    let sow = q.scope.as_ref()?;
+    Some(Table {
+        title: format!("Scope of work (version {})", sow.number),
+        columns: vec![String::new(), String::new()],
+        rows: sow
+            .sections
+            .iter()
+            .map(|x| vec![Cell::Text(x.title.clone()), Cell::Text(x.body.clone())])
+            .collect(),
+        note: None,
+    })
+}
+
 fn render_pdf(q: &Quote) -> Vec<u8> {
     use huxley_analytics::export::{Cell, Table, pdf};
     use huxley_sales::quotes::{Billing, LineKind};
@@ -317,6 +333,7 @@ fn render_pdf(q: &Quote) -> Vec<u8> {
             note: Some("Not in the totals unless taken.".into()),
         });
     }
+    tables.extend(scope_table(q));
     let t = &q.totals;
     tables.push(Table {
         title: "Totals".into(),

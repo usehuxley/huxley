@@ -23,9 +23,16 @@ export const load: PageServerLoad = async (event) => {
 	]);
 	if (found.response.status === 404) error(404, 'Quote not found.');
 	if (!found.data) error(503, 'Could not load the quote.');
-	const contacts = await client.GET('/api/v1/orgs/{id}/contacts', {
-		params: { path: { id: found.data.orgId }, query: { limit: 200 } }
-	});
+	const [contacts, scope] = await Promise.all([
+		client.GET('/api/v1/orgs/{id}/contacts', {
+			params: { path: { id: found.data.orgId }, query: { limit: 200 } }
+		}),
+		found.data.opportunityId
+			? client.GET('/api/v1/opportunities/{id}/scope', {
+					params: { path: { id: found.data.opportunityId } }
+				})
+			: null
+	]);
 	const approvalId = review.data?.canDecide ? review.data.approvalId : null;
 	const approval = approvalId
 		? (await client.GET('/api/v1/approvals/{id}', { params: { path: { id: approvalId } } })).data
@@ -57,6 +64,10 @@ export const load: PageServerLoad = async (event) => {
 			unit: p.unit
 		})),
 		contacts: (contacts.data?.items ?? []).map((c) => ({ value: c.id, label: c.name })),
+		scopeVersions: (scope?.data?.versions ?? []).map((v) => ({
+			value: v.id,
+			label: `Version ${v.number}`
+		})),
 		canWrite: user.grantedPermissions.includes('sales:write')
 	};
 };

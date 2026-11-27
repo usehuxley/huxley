@@ -411,6 +411,8 @@ impl<'a> Walker<'a> {
             | Step::ScopeDecide(_)
             | Step::QuoteReview(_)
             | Step::SalesLogEmail(_)
+            | Step::ScopeContext(_)
+            | Step::ScopeWrite(_)
             | Step::CalendarSync(_)
             | Step::CalendarWrite(_)
             | Step::ProjectStatus(_)
@@ -885,6 +887,8 @@ fn with_block(step: &Step) -> Json {
         Step::ScopeDecide(s) => serde_json::to_value(&s.decide),
         Step::QuoteReview(s) => serde_json::to_value(&s.review),
         Step::SalesLogEmail(s) => serde_json::to_value(&s.log),
+        Step::ScopeContext(s) => serde_json::to_value(&s.scope),
+        Step::ScopeWrite(s) => serde_json::to_value(&s.write),
         Step::CalendarSync(s) => serde_json::to_value(&s.sync),
         Step::CalendarWrite(s) => serde_json::to_value(&s.write),
         Step::ProjectStatus(s) => serde_json::to_value(&s.status),

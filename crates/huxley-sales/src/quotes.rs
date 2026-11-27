@@ -189,6 +189,10 @@ pub struct Quote {
     pub lines: Vec<Line>,
     #[sqlx(skip)]
     pub totals: Totals,
+    /// The approved Scope of Work it carries (and is signed with).
+    pub scope_version_id: Option<Uuid>,
+    #[sqlx(skip)]
+    pub scope: Option<crate::scoping::ScopeOfWork>,
 }
 
 #[derive(Debug, Clone, Deserialize, ToSchema)]
@@ -256,6 +260,9 @@ pub struct QuoteInput {
     /// Every line, in order (replaces them all).
     #[serde(default)]
     pub lines: Vec<LineInput>,
+    /// An approved version of the opportunity's Scope of Work, to carry.
+    #[serde(default)]
+    pub scope_version_id: Option<Uuid>,
     /// The version you read (updates only).
     #[serde(default)]
     pub version: Option<i32>,
@@ -309,7 +316,7 @@ const SELECT: &str = "SELECT q.id, q.org_id, g.name AS org_name, q.number, q.opp
         q.contact_id, nullif(btrim(coalesce(c.first_name, '') || ' ' || coalesce(c.last_name, '')), '') AS contact_name, \
         c.email AS contact_email, q.owner_id, u.display_name AS owner_name, q.intro, q.terms, \
         q.sent_at, q.decided_at, q.decided_by, q.decline_reason, q.review_status, \
-        (SELECT so.id FROM sales_orders so WHERE so.quote_id = q.id) AS sales_order_id, q.version, \
+        (SELECT so.id FROM sales_orders so WHERE so.quote_id = q.id) AS sales_order_id, q.scope_version_id, q.version, \
         q.created_at, q.updated_at \
    FROM sales_quotes q \
    JOIN organizations g ON g.id = q.org_id \
@@ -383,8 +390,11 @@ pub async fn get(conn: &mut PgConnection, id: Uuid) -> SalesResult<Quote> {
         .fetch_optional(&mut *conn)
         .await?
         .ok_or(SalesError::NotFound)?;
-    q.lines = lines_of(conn, id).await?;
+    q.lines = lines_of(&mut *conn, id).await?;
     q.totals = totals(&q.lines);
+    if let Some(v) = q.scope_version_id {
+        q.scope = crate::scoping::version_of(conn, v, None).await.ok();
+    }
     Ok(q)
 }
 
@@ -620,6 +630,15 @@ struct Header {
 }
 
 async fn check(conn: &mut PgConnection, org_id: Uuid, input: &QuoteInput) -> SalesResult<Header> {
+    if let Some(v) = input.scope_version_id {
+        let Some(opportunity) = input.opportunity_id else {
+            return Err(SalesError::invalid(
+                "scopeVersionId",
+                "only a quote on an opportunity carries its scope",
+            ));
+        };
+        crate::scoping::version_of(&mut *conn, v, Some(opportunity)).await?;
+    }
     for (field, value) in [("intro", &input.intro), ("terms", &input.terms)] {
         if value.chars().count() > 20000 {
             return Err(SalesError::invalid(field, "at most 20000 characters"));
@@ -695,8 +714,8 @@ pub async fn create(
     let id = huxley_core::new_id();
     sqlx::query(
         "INSERT INTO sales_quotes (id, org_id, opportunity_id, title, currency, valid_until, contact_id, \
-            owner_id, intro, terms, created_by) \
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)",
+            owner_id, intro, terms, created_by, scope_version_id) \
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)",
     )
     .bind(id)
     .bind(org_id)
@@ -709,6 +728,7 @@ pub async fn create(
     .bind(&input.intro)
     .bind(&input.terms)
     .bind(ctx.actor.id())
+    .bind(input.scope_version_id)
     .execute(&mut *conn)
     .await?;
     set_lines(&mut *conn, id, org_id, &input.lines).await?;
@@ -752,7 +772,7 @@ pub async fn update(
     sqlx::query(
         "UPDATE sales_quotes SET opportunity_id = $2, title = $3, currency = $4, valid_until = $5, \
             contact_id = $6, owner_id = $7, intro = $8, terms = $9, status = 'draft', \
-            revision = revision + $10, version = version + 1, updated_at = now() \
+            revision = revision + $10, scope_version_id = $11, version = version + 1, updated_at = now() \
           WHERE id = $1",
     )
     .bind(id)
@@ -765,6 +785,7 @@ pub async fn update(
     .bind(&input.intro)
     .bind(&input.terms)
     .bind(i32::from(next_revision))
+    .bind(input.scope_version_id)
     .execute(&mut *conn)
     .await?;
     set_lines(&mut *conn, id, current.org_id, &input.lines).await?;

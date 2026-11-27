@@ -159,6 +159,19 @@
 		</dl>
 	</Card>
 
+	{#if q.scope}
+		<Card title="Scope of work">
+			<div class="flex flex-col gap-4 text-sm" aria-label="Scope of work">
+				{#each q.scope.sections as x, i (i)}
+					<section>
+						<h2 class="font-semibold text-fg">{x.title}</h2>
+						<p class="mt-1 whitespace-pre-wrap text-fg">{x.body}</p>
+					</section>
+				{/each}
+			</div>
+		</Card>
+	{/if}
+
 	{#if q.terms}
 		<Card title="Terms"><p class="text-sm whitespace-pre-wrap text-fg">{q.terms}</p></Card>
 	{/if}

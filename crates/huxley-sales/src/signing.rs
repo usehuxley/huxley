@@ -90,6 +90,8 @@ pub struct PortalQuote {
     pub decided_by: Option<String>,
     pub lines: Vec<PortalQuoteLine>,
     pub totals: PortalQuoteTotals,
+    /// The Scope of Work it carries, agreed to with it.
+    pub scope: Option<crate::scoping::ScopeOfWork>,
 }
 
 impl PortalQuote {
@@ -134,6 +136,7 @@ impl PortalQuote {
                 monthly: q.totals.monthly,
                 first_year: q.totals.first_year,
             },
+            scope: q.scope,
         }
     }
 }

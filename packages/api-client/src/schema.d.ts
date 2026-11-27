@@ -4135,6 +4135,24 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
+	'/api/v1/opportunities/{id}/scope': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** The opportunity's scope (404 until it's started). */
+		get: operations['opportunity_scope'];
+		put?: never;
+		/** Starts scoping an opportunity (or returns the scope it has). */
+		post: operations['open_scope'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
 	'/api/v1/orgs': {
 		parameters: {
 			query?: never;
@@ -5994,6 +6012,174 @@ export interface paths {
 		post?: never;
 		/** Archives a stage no open opportunity is at. */
 		delete: operations['archive_sales_stage'];
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/scope-templates': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** The kinds of engagement a scope can follow, and their sections. */
+		get: operations['list_scope_templates'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/scope-versions/{id}': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** An approved version of a Scope of Work. */
+		get: operations['get_scope_version'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/scopes/{id}': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get: operations['get_scope'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/scopes/{id}/approve': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/** Approves the Scope of Work as it stands, keeping it as the next version. */
+		post: operations['approve_scope'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/scopes/{id}/draft': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/** Asks for an AI draft (the Presales scoping pack writes it). */
+		post: operations['request_scope_draft'];
+		/** Stops waiting for a draft. */
+		delete: operations['cancel_scope_draft'];
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/scopes/{id}/questions': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		post: operations['add_scope_question'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/scopes/{id}/questions/{question}': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/** Answers an open question, and resolves it (or opens it again). */
+		post: operations['answer_scope_question'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/scopes/{id}/sections/{key}': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		/** Writes a section (it's then yours: drafting leaves it alone). */
+		put: operations['edit_scope_section'];
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/scopes/{id}/sources': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/** Adds discovery: a note, a call transcript, or a document's text. */
+		post: operations['add_scope_source'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/scopes/{id}/sources/{source}': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		post?: never;
+		delete: operations['delete_scope_source'];
 		options?: never;
 		head?: never;
 		patch?: never;
@@ -9101,6 +9287,13 @@ export interface components {
 			title: string;
 			/** @description The workflow's name, if the run is of a saved workflow. */
 			workflowName?: string | null;
+		};
+		ApproveScope: {
+			/**
+			 * Format: int32
+			 * @description The version you read.
+			 */
+			version: number;
 		};
 		ArchiveOrgRequest: {
 			/** Format: int32 */
@@ -12266,6 +12459,10 @@ export interface components {
 			templateId?: string | null;
 			thresholds?: number[] | null;
 		};
+		NewQuestion: {
+			question: string;
+			sectionKey?: string | null;
+		};
 		/** @description A new script. */
 		NewScript: {
 			description?: string | null;
@@ -12444,6 +12641,10 @@ export interface components {
 			| 'is_null'
 			| 'not_null'
 			| 'within';
+		OpenScope: {
+			/** @description A scope template's key. */
+			template: string;
+		};
 		Opportunity: {
 			/** @description Expected one-time value. */
 			amount: string;
@@ -13189,6 +13390,7 @@ export interface components {
 			ownerName?: string | null;
 			/** Format: int32 */
 			revision: number;
+			scope?: components['schemas']['ScopeOfWork'] | null;
 			/** Format: date-time */
 			sentAt?: string | null;
 			status: components['schemas']['QuoteStatus'];
@@ -13827,6 +14029,10 @@ export interface components {
 			/** @description For time buckets and named ranges (default `UTC`). */
 			timezone?: string | null;
 		};
+		QuestionAnswer: {
+			answer?: string | null;
+			resolved: boolean;
+		};
 		Queue: {
 			/** Format: date-time */
 			archivedAt?: string | null;
@@ -13930,6 +14136,12 @@ export interface components {
 			 * @description The sales order it became, once accepted.
 			 */
 			salesOrderId?: string | null;
+			scope?: components['schemas']['ScopeOfWork'] | null;
+			/**
+			 * Format: uuid
+			 * @description The approved Scope of Work it carries (and is signed with).
+			 */
+			scopeVersionId?: string | null;
 			/** Format: date-time */
 			sentAt?: string | null;
 			status: components['schemas']['QuoteStatus'];
@@ -13959,6 +14171,11 @@ export interface components {
 			opportunityId?: string | null;
 			/** Format: uuid */
 			ownerId?: string | null;
+			/**
+			 * Format: uuid
+			 * @description An approved version of the opportunity's Scope of Work, to carry.
+			 */
+			scopeVersionId?: string | null;
 			terms?: string;
 			title: string;
 			/** Format: date */
@@ -14742,6 +14959,28 @@ export interface components {
 			/** @description An IANA time zone, e.g. `Europe/London`. */
 			timezone: string;
 		};
+		Scope: {
+			draftError?: string | null;
+			/** Format: date-time */
+			draftRequestedAt?: string | null;
+			draftState: components['schemas']['ScopeDraftState'];
+			/** Format: date-time */
+			draftedAt?: string | null;
+			/** Format: uuid */
+			id: string;
+			/** Format: uuid */
+			opportunityId: string;
+			opportunityName: string;
+			/** Format: uuid */
+			orgId: string;
+			questions: components['schemas']['ScopeQuestion'][];
+			sections: components['schemas']['ScopeSection'][];
+			sources: components['schemas']['ScopeSource'][];
+			template: string;
+			/** Format: int32 */
+			version: number;
+			versions: components['schemas']['ScopeVersion'][];
+		};
 		ScopeChange: {
 			/**
 			 * Format: double
@@ -14787,6 +15026,85 @@ export interface components {
 			 * @description When changing one: the version you read.
 			 */
 			version?: number | null;
+		};
+		ScopeCitation: {
+			/** @description `note`, `transcript`, `document`, `environment`, `agreements` or `past_work`. */
+			kind: string;
+			label: string;
+		};
+		/** @enum {string} */
+		ScopeDraftState: 'idle' | 'requested' | 'failed';
+		/** @description An approved version's sections (for a quote). */
+		ScopeOfWork: {
+			/** Format: int32 */
+			number: number;
+			sections: components['schemas']['ScopeOfWorkSection'][];
+			/** Format: uuid */
+			versionId: string;
+		};
+		ScopeOfWorkSection: {
+			body: string;
+			title: string;
+		};
+		ScopeQuestion: {
+			answer?: string | null;
+			fromAi: boolean;
+			/** Format: uuid */
+			id: string;
+			question: string;
+			/** Format: date-time */
+			resolvedAt?: string | null;
+			sectionKey?: string | null;
+		};
+		ScopeSection: {
+			body: string;
+			citations: components['schemas']['ScopeCitation'][];
+			/** @description The text is the AI's, untouched since. */
+			drafted: boolean;
+			key: string;
+			title: string;
+			/** Format: date-time */
+			updatedAt: string;
+		};
+		ScopeSource: {
+			body: string;
+			/** Format: date-time */
+			createdAt: string;
+			createdByName?: string | null;
+			/** Format: uuid */
+			id: string;
+			/** @description `note`, `transcript` or `document`. */
+			kind: string;
+			title: string;
+		};
+		ScopeSourceInput: {
+			/** @description The text (a document's, pasted or extracted). */
+			body: string;
+			/** @description `note`, `transcript` or `document`. */
+			kind: string;
+			title: string;
+		};
+		/** @description A kind of engagement, and the sections its Scope of Work has. */
+		ScopeTemplate: {
+			description: string;
+			key: string;
+			name: string;
+			sections: components['schemas']['ScopeTemplateSection'][];
+		};
+		ScopeTemplateSection: {
+			/** @description What belongs in it (for people, and for the AI). */
+			guidance: string;
+			key: string;
+			title: string;
+		};
+		ScopeVersion: {
+			/** Format: date-time */
+			createdAt: string;
+			createdByName?: string | null;
+			/** Format: uuid */
+			id: string;
+			/** Format: int32 */
+			number: number;
 		};
 		/** @description A permission the client would get. */
 		ScopeView: {
@@ -14836,6 +15154,10 @@ export interface components {
 			 */
 			subtitle: string;
 			title: string;
+		};
+		SectionBody: {
+			/** @description Markdown. */
+			body: string;
 		};
 		SelectOption: {
 			label: string;
@@ -25244,6 +25566,52 @@ export interface operations {
 			};
 		};
 	};
+	opportunity_scope: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['Scope'];
+				};
+			};
+		};
+	};
+	open_scope: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['OpenScope'];
+			};
+		};
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['Scope'];
+				};
+			};
+		};
+	};
 	list_orgs: {
 		parameters: {
 			query?: never;
@@ -29024,6 +29392,258 @@ export interface operations {
 				};
 				content: {
 					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	list_scope_templates: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ScopeTemplate'][];
+				};
+			};
+		};
+	};
+	get_scope_version: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ScopeOfWork'];
+				};
+			};
+		};
+	};
+	get_scope: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['Scope'];
+				};
+			};
+		};
+	};
+	approve_scope: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['ApproveScope'];
+			};
+		};
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['Scope'];
+				};
+			};
+		};
+	};
+	request_scope_draft: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['Scope'];
+				};
+			};
+		};
+	};
+	cancel_scope_draft: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['Scope'];
+				};
+			};
+		};
+	};
+	add_scope_question: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['NewQuestion'];
+			};
+		};
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['Scope'];
+				};
+			};
+		};
+	};
+	answer_scope_question: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+				question: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['QuestionAnswer'];
+			};
+		};
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['Scope'];
+				};
+			};
+		};
+	};
+	edit_scope_section: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+				key: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['SectionBody'];
+			};
+		};
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['Scope'];
+				};
+			};
+		};
+	};
+	add_scope_source: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['ScopeSourceInput'];
+			};
+		};
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['Scope'];
+				};
+			};
+		};
+	};
+	delete_scope_source: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+				source: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['Scope'];
 				};
 			};
 		};
