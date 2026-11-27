@@ -26,8 +26,12 @@ export async function openFromMenu(page: Page, item: string) {
 		.getByRole('navigation', { name: 'Spaces' })
 		.getByRole('link', { name: space, exact: true })
 		.click();
-	await page
+	const link = page
 		.getByRole('complementary', { name: `${space} menu` })
-		.getByRole('link', { name: item, exact: true })
-		.click();
+		.getByRole('link', { name: item, exact: true });
+	const href = await link.getAttribute('href');
+	await link.click();
+	// Wait for the page itself: the one before may have similar fields.
+	await page.waitForURL((url) => url.pathname === href);
+	await page.waitForLoadState();
 }
