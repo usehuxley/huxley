@@ -28,6 +28,14 @@ Two **policy flags** show on entries:
 
 You can change or delete your expenses while they're drafts, or after they've been sent back. Ticket and project pages show everyone's expenses there, with what was spent and what's to be billed.
 
+## Reading receipts
+
+With the **Receipt reading** pack installed (from **Packs**), adding a receipt has your AI provider read it (ADR-080). It reads the total, the tax, the currency, the date and the vendor.
+
+What it read shows under the entry. **Use these** takes it into your draft, and nothing changes until you do. Anything it couldn't read is left as you entered it. When a receipt can't be read, the entry says so.
+
+The `expense.receipt_added` event triggers the reading, and the `core.expense.read_receipt` step does it.
+
 ## Settings
 
 In **Settings → Expenses** (`expense:configure`):

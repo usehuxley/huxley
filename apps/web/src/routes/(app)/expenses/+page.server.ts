@@ -1,5 +1,5 @@
 import { error } from '@sveltejs/kit';
-import { deleteExpense, logExpense, uploadReceipt } from '#lib/expenses/server.ts';
+import { applyReading, deleteExpense, logExpense, uploadReceipt } from '#lib/expenses/server.ts';
 import { api } from '#lib/server/api.ts';
 import type { Actions, PageServerLoad } from './$types';
 
@@ -45,5 +45,6 @@ export const load: PageServerLoad = async (event) => {
 export const actions: Actions = {
 	logExpense: (event) => logExpense(event, 'org', null),
 	uploadReceipt: (event) => uploadReceipt(event),
+	applyReading: (event) => applyReading(event),
 	deleteExpense: (event) => deleteExpense(event)
 };

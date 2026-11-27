@@ -250,6 +250,7 @@ pub async fn test_provider(
         prompt: "Reply with the single word: ready".into(),
         schema: None,
         max_tokens: 1000,
+        attachment: None,
     };
     let purpose = Purpose {
         feature: "provider_test",

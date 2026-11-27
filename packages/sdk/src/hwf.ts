@@ -1469,6 +1469,30 @@ export type Step =
 			 * Fail the attempt after this long, e.g. `30s`.
 			 */
 			timeout?: string | null;
+			type: 'core.expense.read_receipt';
+			with: ExpenseReadReceipt;
+	  }
+	| {
+			/**
+			 * Record the error as the step's output and carry on.
+			 */
+			continue_on_error?: boolean;
+			description?: string | null;
+			/**
+			 * Unique in the workflow: lowercase letters, digits, underscores.
+			 * Other steps read this step's output as `steps.<id>.output`.
+			 */
+			id: string;
+			/**
+			 * Skip the step unless this expression is true.
+			 */
+			if?: string | null;
+			name?: string | null;
+			retry?: RetryPolicy | null;
+			/**
+			 * Fail the attempt after this long, e.g. `30s`.
+			 */
+			timeout?: string | null;
 			type: 'core.sales.log_email';
 			with: SalesLogEmail;
 	  }
@@ -2805,6 +2829,21 @@ export interface InvoiceUnpaid {
 export interface InvoiceStatus {
 	statuses: unknown;
 	target: unknown;
+}
+/**
+ * An expense whose receipt to read (`core.expense.read_receipt`):
+ * `expense_id` (from `expense.receipt_added`), and optionally a `model`.
+ * The organization's AI provider reads the receipt (a photo or PDF) for
+ * the amount, tax, currency, date, vendor and what was bought; what it
+ * read is kept beside the entry for the person to confirm, never applied
+ * by itself. Output: the reading (anything unread is null).
+ *
+ * This interface was referenced by `HuxleyWorkflowFormatV1`'s JSON-Schema
+ * via the `definition` "ExpenseReadReceipt".
+ */
+export interface ExpenseReadReceipt {
+	expense_id: unknown;
+	model?: unknown;
 }
 /**
  * An email to log (`core.sales.log_email`): `email_id`, from a mailbox's

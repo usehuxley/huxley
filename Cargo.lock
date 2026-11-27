@@ -2331,6 +2331,7 @@ dependencies = [
  "huxley-db",
  "huxley-email",
  "huxley-entity",
+ "huxley-expenses",
  "huxley-expr",
  "huxley-hwf",
  "huxley-integrations",

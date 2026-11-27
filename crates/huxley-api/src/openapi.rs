@@ -512,6 +512,7 @@ use crate::workforce_routes;
         crate::expense_routes::delete,
         crate::expense_routes::put_receipt,
         crate::expense_routes::receipt,
+        crate::expense_routes::apply_reading,
         crate::billing_routes::sent_invoice,
         crate::billing_routes::void_invoice,
         crate::billing_routes::credit_invoice,

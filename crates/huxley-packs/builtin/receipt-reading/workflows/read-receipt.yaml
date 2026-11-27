@@ -1,0 +1,22 @@
+apiVersion: usehuxley.io/v1
+kind: Workflow
+metadata:
+  key: read-receipt
+  name: Read receipts with AI
+  description: >-
+    When a receipt (a photo or PDF) is added to an expense, has the
+    organization's AI provider read the total, tax, currency, date, vendor
+    and what was bought. What it read shows on the expense for the person
+    to confirm with one click; nothing changes until they do.
+spec:
+  triggers:
+    - type: event
+      event: expense.receipt_added
+  steps:
+    - id: read
+      type: core.expense.read_receipt
+      with:
+        expense_id: "{{ inputs.expenseId }}"
+  outputs:
+    amount: "{{ steps.read.output.amount }}"
+    vendor: "{{ steps.read.output.vendor }}"

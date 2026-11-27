@@ -4,6 +4,7 @@
 use bytes::Bytes;
 use huxley_core::RequestContext;
 use huxley_db::audit::{self, AuditRecord};
+use huxley_db::outbox::{self, DomainEvent};
 use huxley_storage::Storage;
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
@@ -77,6 +78,11 @@ pub struct Expense {
     pub phase_name: Option<String>,
     pub has_receipt: bool,
     pub receipt_name: Option<String>,
+    /// What AI read from the receipt, for the person to confirm (ADR-080).
+    #[schema(value_type = Option<Reading>)]
+    #[sqlx(json(nullable))]
+    pub reading: Option<Reading>,
+    pub reading_error: Option<String>,
     pub status: Status,
     /// Policy flags: `over_limit`, `no_receipt`.
     #[sqlx(skip)]
@@ -110,11 +116,26 @@ const SELECT: &str = "SELECT e.id, e.org_id, o.name AS org_name, e.user_id, u.di
         CASE WHEN e.billable THEN round(e.amount * (1 + e.markup_pct / 100), 2) ELSE 0 END AS bill_amount, \
         e.reimbursable, e.ticket_id, (t.number_prefix || '-' || t.number) AS ticket_ref, \
         e.project_id, p.name AS project_name, e.phase_id, ph.name AS phase_name, \
-        (e.receipt_key IS NOT NULL) AS has_receipt, e.receipt_name, e.status, e.version, e.created_at, \
+        (e.receipt_key IS NOT NULL) AS has_receipt, e.receipt_name, e.reading, e.reading_error, e.status, e.version, e.created_at, \
         c.limit_amount, c.receipt_required \
    FROM exp_entries e JOIN organizations o ON o.id = e.org_id JOIN users u ON u.id = e.user_id \
    JOIN exp_categories c ON c.id = e.category_id LEFT JOIN sd_tickets t ON t.id = e.ticket_id \
    LEFT JOIN prj_projects p ON p.id = e.project_id LEFT JOIN prj_phases ph ON ph.id = e.phase_id";
+
+/// What was read from a receipt. Anything it couldn't read is null.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct Reading {
+    /// The total paid, tax included, as a decimal string.
+    pub amount: Option<String>,
+    pub tax: Option<String>,
+    pub currency: Option<String>,
+    /// `YYYY-MM-DD`.
+    pub spent_on: Option<String>,
+    pub vendor: Option<String>,
+    /// What was bought, briefly.
+    pub description: Option<String>,
+}
 
 #[derive(Debug, Default, Deserialize, IntoParams)]
 #[serde(rename_all = "camelCase")]
@@ -583,6 +604,26 @@ pub async fn put_receipt(
             .details(json!({ "name": name, "bytes": size })),
     )
     .await?;
+    sqlx::query(
+        "UPDATE exp_entries SET reading = NULL, reading_error = NULL, read_at = NULL WHERE id = $1",
+    )
+    .bind(id)
+    .execute(&mut *conn)
+    .await?;
+    outbox::emit(
+        &mut *conn,
+        DomainEvent {
+            event_type: "expense.receipt_added",
+            org_id: Some(e.org_id),
+            subject_type: "expense",
+            subject_id: id,
+            payload: json!({
+                "expenseId": id, "userId": e.user_id, "category": e.category_name, "description": e.description,
+                "contentType": content_type, "link": "/expenses",
+            }),
+        },
+    )
+    .await?;
     if let Some(old) = old {
         let _ = storage.delete(&old).await;
     }
@@ -629,6 +670,122 @@ pub fn totals(entries: &[Expense]) -> Totals {
         cost: entries.iter().map(|e| e.amount).sum(),
         billable: entries.iter().map(|e| e.bill_amount).sum(),
     }
+}
+
+/// A receipt to read: `(content type, bytes)`, or none if there isn't one.
+pub async fn receipt_for_reading(
+    conn: &mut PgConnection,
+    storage: &Storage,
+    id: Uuid,
+) -> ExpenseResult<Option<(String, Bytes)>> {
+    let row: Option<(Option<String>, Option<String>)> =
+        sqlx::query_as("SELECT receipt_key, receipt_type FROM exp_entries WHERE id = $1")
+            .bind(id)
+            .fetch_optional(conn)
+            .await?;
+    let (key, kind) = row.ok_or(ExpenseError::NotFound)?;
+    let (Some(key), Some(kind)) = (key, kind) else {
+        return Ok(None);
+    };
+    Ok(Some((kind, storage.get(&key).await?)))
+}
+
+/// Keeps what was read from an entry's receipt (or why it couldn't be).
+pub async fn record_reading(
+    conn: &mut PgConnection,
+    id: Uuid,
+    reading: Result<&Reading, &str>,
+) -> ExpenseResult<Expense> {
+    let (value, error) = match reading {
+        Ok(r) => (Some(serde_json::to_value(r).unwrap_or_default()), None),
+        Err(e) => (None, Some(e.chars().take(1000).collect::<String>())),
+    };
+    let done = sqlx::query(
+        "UPDATE exp_entries SET reading = $2, reading_error = $3, read_at = now() WHERE id = $1",
+    )
+    .bind(id)
+    .bind(value)
+    .bind(error)
+    .execute(&mut *conn)
+    .await?;
+    if done.rows_affected() == 0 {
+        return Err(ExpenseError::NotFound);
+    }
+    get(conn, id).await
+}
+
+/// Takes what was read from the receipt into a draft: the amount, tax,
+/// currency, day and vendor it found (keeping what it didn't).
+pub async fn apply_reading(
+    conn: &mut PgConnection,
+    ctx: &RequestContext,
+    id: Uuid,
+) -> ExpenseResult<Expense> {
+    let e = editable(&mut *conn, id, None).await?;
+    let r = e
+        .reading
+        .clone()
+        .ok_or_else(|| ExpenseError::Conflict("nothing has been read from the receipt".into()))?;
+    let money = |v: Option<&String>, field: &str| -> ExpenseResult<Option<Decimal>> {
+        v.map(|s| {
+            s.trim()
+                .parse::<Decimal>()
+                .map_err(|_| ExpenseError::invalid(field, "not a number"))
+        })
+        .transpose()
+    };
+    let amount = money(r.amount.as_ref(), "amount")?
+        .filter(|a| *a >= Decimal::ZERO)
+        .unwrap_or(e.amount);
+    let tax = money(r.tax.as_ref(), "tax")?
+        .filter(|t| *t >= Decimal::ZERO && *t <= amount)
+        .unwrap_or(e.tax.min(amount));
+    let currency = r
+        .currency
+        .as_deref()
+        .and_then(|c| crate::currency(Some(c)).ok())
+        .unwrap_or_else(|| e.currency.clone());
+    let format = time::macros::format_description!("[year]-[month]-[day]");
+    let day = r
+        .spent_on
+        .as_deref()
+        .and_then(|d| Date::parse(d, format).ok())
+        .filter(|d| check_day(*d).is_ok())
+        .unwrap_or(e.spent_on);
+    let vendor = r
+        .vendor
+        .as_deref()
+        .map(str::trim)
+        .filter(|v| !v.is_empty())
+        .map(|v| v.chars().take(200).collect::<String>())
+        .or_else(|| e.vendor.clone());
+    if e.kind == Kind::Mileage {
+        return Err(ExpenseError::Conflict(
+            "mileage has no receipt to read".into(),
+        ));
+    }
+    sqlx::query(
+        "UPDATE exp_entries SET amount = $2, tax = $3, currency = $4, spent_on = $5, vendor = $6, version = version + 1, \
+            updated_at = now() WHERE id = $1",
+    )
+    .bind(id)
+    .bind(amount)
+    .bind(tax)
+    .bind(&currency)
+    .bind(day)
+    .bind(&vendor)
+    .execute(&mut *conn)
+    .await?;
+    audit::record(
+        &mut *conn,
+        ctx,
+        AuditRecord::new("expense.reading_applied")
+            .org(e.org_id)
+            .target("expense", id)
+            .details(json!({ "amount": amount.normalize().to_string(), "vendor": vendor })),
+    )
+    .await?;
+    get(conn, id).await
 }
 
 #[cfg(test)]

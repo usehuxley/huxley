@@ -5,7 +5,13 @@ import { problemMessage } from '#lib/server/problems.ts';
 import { actionsFor } from '#lib/forms/actions.server.ts';
 import { parseDuration } from '#lib/tickets/duration.ts';
 import { assignees, fieldErrors } from '#lib/tickets/server.ts';
-import { deleteExpense, expensesFor, logExpense, uploadReceipt } from '#lib/expenses/server.ts';
+import {
+	applyReading,
+	deleteExpense,
+	expensesFor,
+	logExpense,
+	uploadReceipt
+} from '#lib/expenses/server.ts';
 import { addPart, closePart, partsFor } from '#lib/inventory/server.ts';
 import type { Actions, PageServerLoad } from './$types';
 
@@ -164,6 +170,7 @@ export const actions: Actions = {
 	addPart: (event) => addPart(event, 'ticket', event.params.id),
 	logExpense: (event) => logExpense(event, 'ticket', event.params.id),
 	uploadReceipt: (event) => uploadReceipt(event),
+	applyReading: (event) => applyReading(event),
 	deleteExpense: (event) => deleteExpense(event),
 	closePart: (event) => closePart(event),
 	linkAsset: async (event) => {

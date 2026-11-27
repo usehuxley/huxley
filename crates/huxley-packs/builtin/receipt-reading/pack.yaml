@@ -1,0 +1,9 @@
+apiVersion: usehuxley.io/v1
+kind: Pack
+key: huxley/receipt-reading
+name: Receipt reading
+version: 1.0.0
+publisher: Huxley
+description: When a receipt is added to an expense, AI reads its amount, tax, date and vendor for the person to confirm (it never changes the expense by itself). Uses the organization's AI provider.
+contents:
+  workflows: [read-receipt]

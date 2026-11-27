@@ -89,6 +89,7 @@ impl Engine {
                 prompt: text_of(input, "prompt")?.to_owned(),
                 schema: None,
                 max_tokens: max_tokens(input)?,
+                attachment: None,
             },
             "ai.classify" => {
                 let labels: Vec<String> = input["labels"]
@@ -121,6 +122,7 @@ impl Engine {
                         "additionalProperties": false
                     })),
                     max_tokens: 0,
+                    attachment: None,
                 }
             }
             _ => {
@@ -140,6 +142,7 @@ impl Engine {
                     prompt: text_of(input, "text")?.to_owned(),
                     schema: Some(strict(schema)),
                     max_tokens: 0,
+                    attachment: None,
                 }
             }
         };

@@ -459,6 +459,9 @@ pub enum Step {
     /// Record what the accounting system says is paid and due (the `billing` module).
     #[serde(rename = "core.invoice.status")]
     InvoiceStatus(InvoiceStatusStep),
+    /// Read an expense's receipt with AI (the `expenses` module).
+    #[serde(rename = "core.expense.read_receipt")]
+    ExpenseReadReceipt(ExpenseReadReceiptStep),
     /// Log an email on the contacts and leads it's to or from (the `sales` module).
     #[serde(rename = "core.sales.log_email")]
     SalesLogEmail(SalesLogEmailStep),
@@ -911,6 +914,11 @@ step!(InvoiceStatusStep {
     pub status: InvoiceStatus,
 });
 
+step!(ExpenseReadReceiptStep {
+    #[serde(rename = "with")]
+    pub read: ExpenseReadReceipt,
+});
+
 step!(SalesLogEmailStep {
     #[serde(rename = "with")]
     pub log: SalesLogEmail,
@@ -1060,6 +1068,7 @@ impl Step {
             InvoiceSyncResult,
             InvoiceUnpaid,
             InvoiceStatus,
+            ExpenseReadReceipt,
             SalesLogEmail,
             ScopeContext,
             ScopeWrite,
@@ -1139,6 +1148,7 @@ impl Step {
             Self::InvoiceSyncResult(_) => "core.invoice.sync_result",
             Self::InvoiceUnpaid(_) => "core.invoice.unpaid",
             Self::InvoiceStatus(_) => "core.invoice.status",
+            Self::ExpenseReadReceipt(_) => "core.expense.read_receipt",
             Self::SalesLogEmail(_) => "core.sales.log_email",
             Self::ScopeContext(_) => "core.scope.context",
             Self::ScopeWrite(_) => "core.scope.write",
@@ -1898,6 +1908,20 @@ pub struct InvoiceUnpaid {
 pub struct InvoiceStatus {
     pub target: Value,
     pub statuses: Value,
+}
+
+/// An expense whose receipt to read (`core.expense.read_receipt`):
+/// `expense_id` (from `expense.receipt_added`), and optionally a `model`.
+/// The organization's AI provider reads the receipt (a photo or PDF) for
+/// the amount, tax, currency, date, vendor and what was bought; what it
+/// read is kept beside the entry for the person to confirm, never applied
+/// by itself. Output: the reading (anything unread is null).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct ExpenseReadReceipt {
+    pub expense_id: Value,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub model: Option<Value>,
 }
 
 /// An email to log (`core.sales.log_email`): `email_id`, from a mailbox's
