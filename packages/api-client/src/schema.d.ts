@@ -5837,7 +5837,10 @@ export interface paths {
 		};
 		get?: never;
 		put?: never;
-		/** Starts the order's project for the client, laid out from a template if given. */
+		/**
+		 * Starts the order's project for the client, laid out from a template if
+		 *     given, else from the opportunity's scoped work breakdown, if any.
+		 */
 		post: operations['sales_order_project'];
 		delete?: never;
 		options?: never;
@@ -6059,6 +6062,26 @@ export interface paths {
 			cookie?: never;
 		};
 		get: operations['get_scope'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/scopes/{id}/actuals': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/**
+		 * The estimate against the hours logged on the project the deal became
+		 *     (null until its sales order starts one).
+		 */
+		get: operations['scope_actuals'];
 		put?: never;
 		post?: never;
 		delete?: never;
@@ -12544,6 +12567,7 @@ export interface components {
 			orgId: string;
 			/** @description `YYYY-MM-DD`. */
 			startOn: string;
+			structure?: components['schemas']['Structure'] | null;
 			/** Format: uuid */
 			templateId?: string | null;
 			thresholds?: number[] | null;
@@ -15072,6 +15096,21 @@ export interface components {
 			/** Format: int32 */
 			version: number;
 			versions: components['schemas']['ScopeVersion'][];
+		};
+		ScopeActualTask: {
+			actual: string;
+			estimated?: string | null;
+			title: string;
+		};
+		/** @description How the project the deal became is tracking against its estimate. */
+		ScopeActuals: {
+			actual: string;
+			estimated: string;
+			/** Format: uuid */
+			projectId: string;
+			projectName: string;
+			projectStatus: string;
+			tasks: components['schemas']['ScopeActualTask'][];
 		};
 		/** @description The quote made, and what to look at. */
 		ScopeAssembled: {
@@ -29630,6 +29669,27 @@ export interface operations {
 				};
 				content: {
 					'application/json': components['schemas']['Scope'];
+				};
+			};
+		};
+	};
+	scope_actuals: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ScopeActuals'] | null;
 				};
 			};
 		};

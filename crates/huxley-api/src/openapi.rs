@@ -465,6 +465,7 @@ use crate::workforce_routes;
         crate::scope_routes::request_estimate,
         crate::scope_routes::cancel_estimate,
         crate::scope_routes::assemble_quote,
+        crate::scope_routes::scope_actuals,
         crate::sales_routes::list_stages,
         crate::sales_routes::sales_forecast,
         crate::sales_routes::list_quotas,

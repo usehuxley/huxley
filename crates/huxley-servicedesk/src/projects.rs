@@ -75,6 +75,10 @@ pub struct NewProject {
     /// The client's agreement it bills against.
     #[serde(default)]
     pub agreement_id: Option<Uuid>,
+    /// Lay it out from this (a template's shape) when there's no template:
+    /// a sales scope's work breakdown, say.
+    #[serde(default)]
+    pub structure: Option<project_templates::Structure>,
 }
 
 #[derive(Debug, Clone, Default, Deserialize, ToSchema)]
@@ -550,19 +554,26 @@ pub async fn create(
         Some(t) => Some(project_templates::get(&mut *conn, t).await?),
         None => None,
     };
+    let structure = template
+        .as_ref()
+        .map(|t| t.structure.clone())
+        .or_else(|| input.structure.clone());
     if let Some(key) = input.assignees.keys().find(|k| {
-        !template
+        !structure
             .as_ref()
-            .is_some_and(|t| t.structure.tasks().any(|(_, x)| &x.key == *k))
+            .is_some_and(|st| st.tasks().any(|(_, x)| &x.key == *k))
     }) {
         return Err(DeskError::invalid(
             "assignees",
             format!("the template has no task {key:?}"),
         ));
     }
-    let budget = input
-        .budget_hours
-        .or_else(|| template.as_ref().and_then(template_budget));
+    let budget = input.budget_hours.or_else(|| {
+        template
+            .as_ref()
+            .and_then(template_budget)
+            .or_else(|| structure.as_ref().and_then(structure_budget))
+    });
     let thresholds = check_thresholds(input.thresholds.as_deref().unwrap_or(&[50, 75, 90, 100]))?;
     if let Some(a) = input.agreement_id {
         check_agreement(&mut *conn, a, input.org_id).await?;
@@ -588,16 +599,8 @@ pub async fn create(
     .bind(input.agreement_id)
     .execute(&mut *conn)
     .await?;
-    if let Some(t) = &template {
-        lay_out(
-            conn,
-            ctx,
-            (id, input.org_id),
-            start,
-            &t.structure,
-            &input.assignees,
-        )
-        .await?;
+    if let Some(st) = &structure {
+        lay_out(conn, ctx, (id, input.org_id), start, st, &input.assignees).await?;
     }
     audit::record(
         &mut *conn,
@@ -628,6 +631,13 @@ fn template_budget(t: &project_templates::Template) -> Option<f64> {
             .sum::<f64>(),
     )
     .filter(|b| *b > 0.0)
+}
+
+/// A laid-out structure's budget: its phases' budgets, else its tasks' estimates.
+fn structure_budget(st: &project_templates::Structure) -> Option<f64> {
+    let phases: f64 = st.phases.iter().filter_map(|p| p.budget_hours).sum();
+    let tasks: f64 = st.tasks().filter_map(|(_, t)| t.estimate_hours).sum();
+    Some(if phases > 0.0 { phases } else { tasks }).filter(|b| *b > 0.0)
 }
 
 /// An agreement a project of `org` may bill against: the company's own.
