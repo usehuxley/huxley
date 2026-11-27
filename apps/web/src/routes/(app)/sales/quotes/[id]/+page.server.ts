@@ -11,10 +11,11 @@ type QuoteInput = components['schemas']['QuoteInput'];
 export const load: PageServerLoad = async (event) => {
 	const client = api(event);
 	const id = event.params.id;
-	const [found, revisions, products] = await Promise.all([
+	const [found, revisions, products, signature] = await Promise.all([
 		client.GET('/api/v1/quotes/{id}', { params: { path: { id } } }),
 		client.GET('/api/v1/quotes/{id}/revisions', { params: { path: { id } } }),
-		client.GET('/api/v1/catalog/products', { params: { query: { active: true } } })
+		client.GET('/api/v1/catalog/products', { params: { query: { active: true } } }),
+		client.GET('/api/v1/quotes/{id}/signature', { params: { path: { id } } })
 	]);
 	if (found.response.status === 404) error(404, 'Quote not found.');
 	if (!found.data) error(503, 'Could not load the quote.');
@@ -24,6 +25,7 @@ export const load: PageServerLoad = async (event) => {
 	const { user } = await event.parent();
 	return {
 		quote: found.data,
+		signature: signature.data ?? null,
 		revisions: (revisions.data ?? []).map((r) => ({
 			revision: r.revision,
 			sentAt: r.sentAt,

@@ -207,7 +207,8 @@ pub struct PortalMe {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub branding: Option<huxley_portal::branding::Branding>,
     /// The portal's parts that are on for their company: `servicedesk`
-    /// (tickets), `knowledge` (help articles), `cmdb` (devices).
+    /// (tickets), `knowledge` (help articles), `cmdb` (devices), `projects`,
+    /// `sales` (quotes).
     pub modules: Vec<&'static str>,
 }
 
@@ -217,6 +218,7 @@ const PORTAL_MODULES: &[&str] = &[
     huxley_knowledge::MODULE,
     huxley_cmdb::MODULE,
     crate::project_routes::MODULE,
+    huxley_sales::MODULE,
 ];
 
 impl From<PortalPrincipal> for PortalMe {

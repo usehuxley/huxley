@@ -23,11 +23,15 @@ An opportunity's page has its details, the stage strip (click a stage to move it
 
 **Business → Quotes**, or **New quote** on an opportunity, starts one. The quote page is the builder:
 
-- **Add from the catalog** fills in the SKU, name, unit, cost and price; or add a **line** of your own, or a **section** heading. Lines can be one-time or recurring (monthly, quarterly, annual), with a quantity, unit price, discount and unit cost. Tick **Option** for something the client may take or leave.
+- **Add from the catalog** fills in the SKU, name, unit, cost and price; or add a **line** of your own, or a **section** heading. Lines can be one-time or recurring (monthly, quarterly, annual), with a quantity, unit price, discount and unit cost. Tick **Option** for something the client may take or leave; options count once the client takes them.
 - **Totals** update as you type: one-time, monthly, the first year (one-time + 12 months) and the **margin** on it. Options count once the client takes them.
 - **Save** keeps the quote. **Mark sent** records that it went out and keeps what was sent as a **revision**. Changing a sent quote starts the next revision; send it again when it's ready.
 - **Accepted** or **Declined** records the client's answer: who, and the options taken or why not. Accepting wins its opportunity.
 - **PDF** downloads the quote with its sections, options and totals.
+
+### Clients answer in the portal
+
+A sent quote shows in the client portal under **Quotes** for its contact, and for the company's approvers and admins (ADR-065). They see it as sent, without costs, tick the options they want, type their name, **sign** on the pad and accept, or decline and say why. The quote's page then shows the signature, who signed, when, from where, and a fingerprint (SHA-256) of the revision they agreed to. Accepting wins the opportunity. A quote past its *valid until* date can't be accepted.
 
 ## Settings
 

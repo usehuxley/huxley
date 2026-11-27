@@ -575,6 +575,56 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
+	'/api/portal/v1/quotes': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** Quotes for you or your company, newest first. Empty when sales is off. */
+		get: operations['portal_quotes'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/portal/v1/quotes/{id}': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get: operations['portal_quote'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/portal/v1/quotes/{id}/answer': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/** Accepts (signed, with the options taken) or declines a quote. */
+		post: operations['portal_answer_quote'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
 	'/api/portal/v1/requests': {
 		parameters: {
 			query?: never;
@@ -4838,6 +4888,43 @@ export interface paths {
 		put?: never;
 		/** Marks a draft sent, keeping what was sent as its revision. */
 		post: operations['send_quote'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/quotes/{id}/signature': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/**
+		 * How the client answered in the portal: who, what (the revision's
+		 *     SHA-256), from where and when. 404 if not answered there.
+		 */
+		get: operations['quote_signature'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/quotes/{id}/signature.png': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** The signature drawn when the quote was accepted in the portal. */
+		get: operations['quote_signature_image'];
+		put?: never;
+		post?: never;
 		delete?: never;
 		options?: never;
 		head?: never;
@@ -11707,6 +11794,25 @@ export interface components {
 		};
 		/** @enum {string} */
 		PortalAccountStatus: 'invited' | 'active' | 'disabled';
+		/** @description The client's answer from the portal. */
+		PortalAnswer: {
+			accept: boolean;
+			/** @description That they agree to the quote and its terms (accepting). */
+			agree?: boolean;
+			/** @description Their name, typed: the signature in words. */
+			name: string;
+			/** @description The options taken (accepting). */
+			options?: string[];
+			/** @description Why not (declining). */
+			reason?: string | null;
+			/**
+			 * Format: int32
+			 * @description The revision they're answering.
+			 */
+			revision: number;
+			/** @description The signature drawn, as a `data:image/png;base64,` URL (accepting). */
+			signature?: string | null;
+		};
 		/** @description An approval as a client contact sees it in the portal. */
 		PortalApproval: {
 			comment?: string | null;
@@ -11865,7 +11971,8 @@ export interface components {
 			branding?: components['schemas']['PortalBranding'] | null;
 			/**
 			 * @description The portal's parts that are on for their company: `servicedesk`
-			 *     (tickets), `knowledge` (help articles), `cmdb` (devices).
+			 *     (tickets), `knowledge` (help articles), `cmdb` (devices), `projects`,
+			 *     `sales` (quotes).
 			 */
 			modules: string[];
 			/** @description Portal permissions, e.g. `portal.ticket:read:company`. */
@@ -11977,6 +12084,55 @@ export interface components {
 			status: string;
 			/** @description Tasks marked for the client. */
 			tasks: components['schemas']['PortalTask'][];
+		};
+		/** @description A quote as the client sees it. */
+		PortalQuote: {
+			contactName?: string | null;
+			currency: string;
+			/** Format: date-time */
+			decidedAt?: string | null;
+			decidedBy?: string | null;
+			/** @description Past its "valid until" date: it can't be accepted. */
+			expired: boolean;
+			/** Format: uuid */
+			id: string;
+			intro: string;
+			lines: components['schemas']['PortalQuoteLine'][];
+			/** Format: int64 */
+			number: number;
+			ownerName?: string | null;
+			/** Format: int32 */
+			revision: number;
+			/** Format: date-time */
+			sentAt?: string | null;
+			status: components['schemas']['QuoteStatus'];
+			terms: string;
+			title: string;
+			totals: components['schemas']['PortalQuoteTotals'];
+			/** Format: date */
+			validUntil?: string | null;
+		};
+		/** @description A line as the client sees it: no cost. */
+		PortalQuoteLine: {
+			billing: components['schemas']['QuoteBilling'];
+			description: string;
+			discountPct: string;
+			/** Format: uuid */
+			id: string;
+			kind: components['schemas']['QuoteLineKind'];
+			name: string;
+			optional: boolean;
+			quantity: string;
+			selected: boolean;
+			sku?: string | null;
+			total: string;
+			unit: string;
+			unitPrice: string;
+		};
+		PortalQuoteTotals: {
+			firstYear: string;
+			monthly: string;
+			oneTime: string;
 		};
 		PortalRating: {
 			comment?: string | null;
@@ -12612,7 +12768,7 @@ export interface components {
 			 */
 			productId?: string | null;
 			quantity?: string | null;
-			/** @description Whether an option is in (default yes). */
+			/** @description Whether an option is taken (default no: options count once the client takes them). */
 			selected?: boolean | null;
 			sku?: string | null;
 			taxable?: boolean | null;
@@ -13255,6 +13411,21 @@ export interface components {
 		SignInStart: {
 			/** @description Send the browser here; the provider returns it to the callback. */
 			authorizeUrl: string;
+		};
+		/** @description How a quote was answered in the portal, for staff. */
+		Signature: {
+			accepted: boolean;
+			contactName?: string | null;
+			documentSha256: string;
+			/** @description A signature was drawn (fetch it from `…/signature.png`). */
+			hasImage: boolean;
+			ip?: string | null;
+			name: string;
+			/** Format: int32 */
+			revision: number;
+			/** Format: date-time */
+			signedAt: string;
+			userAgent?: string | null;
 		};
 		SimilarTickets: {
 			/**
@@ -15848,6 +16019,88 @@ export interface operations {
 				};
 				content: {
 					'application/json': components['schemas']['PortalProject'][];
+				};
+			};
+		};
+	};
+	portal_quotes: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['PortalQuote'][];
+				};
+			};
+		};
+	};
+	portal_quote: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['PortalQuote'];
+				};
+			};
+		};
+	};
+	portal_answer_quote: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['PortalAnswer'];
+			};
+		};
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['PortalQuote'];
+				};
+			};
+			/** @description Already answered, changed since, or expired */
+			409: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
 				};
 			};
 		};
@@ -24850,6 +25103,57 @@ export interface operations {
 				};
 				content: {
 					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	quote_signature: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['Signature'];
+				};
+			};
+			404: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	quote_signature_image: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			/** @description The signature */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'image/png': number[];
 				};
 			};
 		};

@@ -13,6 +13,7 @@ use huxley_authz::permissions;
 use huxley_db::OrgScope;
 use huxley_sales::MODULE;
 use huxley_sales::quotes::{self, DecisionInput, Quote, QuoteInput, Revision};
+use huxley_sales::signing::{self, Signature};
 use serde::Deserialize;
 use utoipa::ToSchema;
 use uuid::Uuid;
@@ -33,6 +34,8 @@ pub(crate) fn routes() -> Router<AppState> {
         .route("/{id}/decision", post(decide_quote))
         .route("/{id}/revisions", get(quote_revisions))
         .route("/{id}/pdf", get(quote_pdf))
+        .route("/{id}/signature", get(quote_signature))
+        .route("/{id}/signature.png", get(quote_signature_image))
 }
 
 async fn quote_access(
@@ -324,4 +327,42 @@ fn render_pdf(q: &Quote) -> Vec<u8> {
             .unwrap_or_default()
     );
     pdf(&format!("Quote Q-{}: {}", q.number, q.title), &sub, &tables)
+}
+
+/// How the client answered in the portal: who, what (the revision's
+/// SHA-256), from where and when. 404 if not answered there.
+#[utoipa::path(get, path = "/api/v1/quotes/{id}/signature", operation_id = "quote_signature", tag = "sales",
+    params(("id" = Uuid, Path)), responses((status = 200, body = Signature), (status = 404, body = ApiError, content_type = "application/problem+json")))]
+pub async fn quote_signature(
+    State(state): State<AppState>,
+    authed: Authed,
+    Path(id): Path<Uuid>,
+) -> ApiResult<Json<Signature>> {
+    let scope = quote_access(&state, &authed, id, permissions::SALES_READ).await?;
+    scoped(&state, &scope, async |tx| signing::signature(tx, id).await)
+        .await?
+        .map(Json)
+        .ok_or_else(ApiError::not_found)
+}
+
+/// The signature drawn when the quote was accepted in the portal.
+#[utoipa::path(get, path = "/api/v1/quotes/{id}/signature.png", operation_id = "quote_signature_image", tag = "sales",
+    params(("id" = Uuid, Path)),
+    responses((status = 200, description = "The signature", content_type = "image/png", body = Vec<u8>)))]
+pub async fn quote_signature_image(
+    State(state): State<AppState>,
+    authed: Authed,
+    Path(id): Path<Uuid>,
+) -> ApiResult<Response> {
+    let scope = quote_access(&state, &authed, id, permissions::SALES_READ).await?;
+    let png = scoped(&state, &scope, async |tx| {
+        signing::signature_image(tx, id).await
+    })
+    .await?
+    .ok_or_else(ApiError::not_found)?;
+    Response::builder()
+        .header(axum::http::header::CONTENT_TYPE, "image/png")
+        .header(axum::http::header::CACHE_CONTROL, "private, max-age=3600")
+        .body(axum::body::Body::from(png))
+        .map_err(|e| ApiError::internal(&e))
 }
