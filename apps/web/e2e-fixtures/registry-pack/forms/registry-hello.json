@@ -1,0 +1,1 @@
+{ "name": "Registry hello", "schema": { "type": "object", "properties": { "name": { "type": "string", "title": "Your name" } } } }

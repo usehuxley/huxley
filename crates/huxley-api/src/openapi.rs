@@ -718,6 +718,8 @@ use crate::workforce_routes;
         crate::pack_routes::list_installed,
         crate::pack_routes::export,
         crate::pack_routes::list_builtin,
+        crate::pack_routes::browse_registries,
+        crate::pack_routes::review_from_registry,
         crate::pack_routes::review_builtin,
         crate::workflow_routes::save_as_template,
         crate::workflow_routes::preview_expression,

@@ -15,6 +15,7 @@ use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
 pub mod builtin;
+pub mod registry;
 
 /// The largest pack, unpacked.
 pub const MAX_BYTES: usize = 20 * 1024 * 1024;
@@ -53,7 +54,13 @@ pub enum PackError {
     BadSignature,
     #[error("bad key: {0}")]
     BadKey(String),
+    /// A registry index that doesn't fit, or a download that doesn't match it.
+    #[error("{0}")]
+    Index(String),
 }
+
+/// `apiVersion` of packs and registry indexes.
+pub const API_VERSION: &str = "usehuxley.io/v1";
 
 pub type PackResult<T> = Result<T, PackError>;
 
@@ -142,7 +149,7 @@ pub struct Pack {
     builtin: bool,
 }
 
-fn sha256_hex(bytes: &[u8]) -> String {
+pub(crate) fn sha256_hex(bytes: &[u8]) -> String {
     use std::fmt::Write as _;
     let mut out = String::with_capacity(64);
     for b in digest(&SHA256, bytes).as_ref() {
@@ -399,7 +406,7 @@ fn verify(manifest: &[u8], signature: &Signature) -> PackResult<()> {
         .map_err(|_| PackError::BadSignature)
 }
 
-fn public_key_bytes(key: &str) -> PackResult<Vec<u8>> {
+pub(crate) fn public_key_bytes(key: &str) -> PackResult<Vec<u8>> {
     let raw = key
         .trim()
         .strip_prefix(KEY_PREFIX)
@@ -459,7 +466,7 @@ impl SigningKey {
         Ok(Self { pkcs8 })
     }
 
-    fn pair(&self) -> Ed25519KeyPair {
+    pub(crate) fn pair(&self) -> Ed25519KeyPair {
         Ed25519KeyPair::from_pkcs8(&self.pkcs8).expect("checked when loaded")
     }
 

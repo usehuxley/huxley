@@ -21,8 +21,9 @@ export const load: PageServerLoad = async (event) => {
 	}
 	if (!data) error(503, 'Could not load packs.');
 	// What can be exported from here (lists you can't see come back empty).
-	const [builtin, integrations, workflows, forms, scripts] = await Promise.all([
+	const [builtin, registries, integrations, workflows, forms, scripts] = await Promise.all([
 		client.GET('/api/v1/packs/builtin'),
+		client.GET('/api/v1/packs/registry', { params: { query: { orgId } } }),
 		client.GET('/api/v1/integrations'),
 		client.GET('/api/v1/workflows'),
 		client.GET('/api/v1/forms'),
@@ -35,6 +36,7 @@ export const load: PageServerLoad = async (event) => {
 	return {
 		installed: data,
 		builtin: builtin.data ?? [],
+		registries: registries.data ?? [],
 		orgId,
 		orgs: orgs.map((o) => ({ id: o.id, name: o.name })),
 		exportable: {
@@ -84,6 +86,26 @@ export const actions: Actions = {
 			response
 		} = await api(event).POST('/api/v1/packs/builtin/{owner}/{name}', {
 			params: { path: { owner, name }, query: { orgId } }
+		});
+		if (!data) {
+			return fail(response.status, { message: problemMessage(problem, 'Could not review it.') });
+		}
+		return { review: data, orgId };
+	},
+	reviewRegistry: async (event) => {
+		const form = await event.request.formData();
+		const orgId = formString(form, 'orgId');
+		const {
+			data,
+			error: problem,
+			response
+		} = await api(event).POST('/api/v1/packs/registry/review', {
+			params: { query: { orgId } },
+			body: {
+				registry: Number(formString(form, 'registry')),
+				key: formString(form, 'key'),
+				version: formString(form, 'version')
+			}
 		});
 		if (!data) {
 			return fail(response.status, { message: problemMessage(problem, 'Could not review it.') });

@@ -74,6 +74,8 @@ pub struct DatasetsConfig {
 pub struct PacksConfig {
     /// Public keys (`hxpk_…`) whose signed packs are shown as trusted.
     pub trusted_keys: Vec<String>,
+    /// Pack registries to browse in Settings → Packs (ADR-093).
+    pub registries: Vec<huxley_packs::registry::RegistryConfig>,
 }
 
 /// The runner gateway (ADR-025): where script runners connect with mTLS.

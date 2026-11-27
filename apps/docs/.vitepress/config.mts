@@ -116,7 +116,10 @@ export default defineConfig({
 			},
 			{
 				text: 'Sharing',
-				items: [{ text: 'Packs', link: '/packs' }]
+				items: [
+					{ text: 'Packs', link: '/packs' },
+					{ text: 'Writing packs', link: '/pack-authoring' }
+				]
 			}
 		],
 		search: { provider: 'local' },

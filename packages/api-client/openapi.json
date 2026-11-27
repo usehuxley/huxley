@@ -14827,6 +14827,95 @@
 				}
 			}
 		},
+		"/api/v1/packs/registry": {
+			"get": {
+				"tags": ["packs"],
+				"summary": "The packs in the configured registries (`packs.registries`), with what\n`orgId` has installed.",
+				"operationId": "browse_pack_registries",
+				"parameters": [
+					{
+						"name": "orgId",
+						"in": "query",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "array",
+									"items": {
+										"$ref": "#/components/schemas/RegistryListing"
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/packs/registry/review": {
+			"post": {
+				"tags": ["packs"],
+				"summary": "Downloads a pack from a registry, checks it against the index, and\nreturns what installing it in `orgId` would do, as an upload does.",
+				"operationId": "review_registry_pack",
+				"parameters": [
+					{
+						"name": "orgId",
+						"in": "query",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/RegistryReviewRequest"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"201": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Review"
+								}
+							}
+						}
+					},
+					"404": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					},
+					"502": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
 		"/api/v1/packs/uploads": {
 			"post": {
 				"tags": ["packs"],
@@ -34758,6 +34847,36 @@
 					}
 				}
 			},
+			"IndexedVersion": {
+				"type": "object",
+				"required": ["version", "url", "sha256", "size", "contents"],
+				"properties": {
+					"contents": {
+						"$ref": "#/components/schemas/Contents"
+					},
+					"sha256": {
+						"type": "string",
+						"description": "SHA-256 of the file (hex): a download that doesn't match is refused."
+					},
+					"signedBy": {
+						"type": ["string", "null"],
+						"description": "The key (`hxpk_…`) that signed it, if any."
+					},
+					"size": {
+						"type": "integer",
+						"format": "int64",
+						"minimum": 0
+					},
+					"url": {
+						"type": "string",
+						"description": "The `.hxpack`: absolute, or relative to the index."
+					},
+					"version": {
+						"type": "string"
+					}
+				},
+				"additionalProperties": false
+			},
 			"InstallRequest": {
 				"type": "object",
 				"required": ["orgId", "version"],
@@ -42718,6 +42837,88 @@
 						"description": "Present when this was the user's first second factor. Shown once."
 					}
 				}
+			},
+			"RegistryListing": {
+				"type": "object",
+				"description": "A registry and its packs, or why it couldn't be read.",
+				"required": ["registry", "name", "url", "signed", "packs"],
+				"properties": {
+					"error": {
+						"type": ["string", "null"]
+					},
+					"name": {
+						"type": "string"
+					},
+					"packs": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/RegistryPack"
+						}
+					},
+					"registry": {
+						"type": "integer",
+						"description": "Its position in `packs.registries` (for reviewing from it).",
+						"minimum": 0
+					},
+					"signed": {
+						"type": "boolean",
+						"description": "The registry has a key: its index's signature was checked."
+					},
+					"url": {
+						"type": "string"
+					}
+				}
+			},
+			"RegistryPack": {
+				"type": "object",
+				"description": "A pack in a registry, with what the organization has installed.",
+				"required": ["key", "name", "description", "publisher", "versions", "trusted"],
+				"properties": {
+					"description": {
+						"type": "string"
+					},
+					"installed": {
+						"type": ["string", "null"],
+						"description": "The version installed in the organization, if any."
+					},
+					"key": {
+						"type": "string"
+					},
+					"name": {
+						"type": "string"
+					},
+					"publisher": {
+						"type": "string"
+					},
+					"trusted": {
+						"type": "boolean",
+						"description": "The newest version is signed by a key this instance trusts."
+					},
+					"versions": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/IndexedVersion"
+						},
+						"description": "Newest first."
+					}
+				}
+			},
+			"RegistryReviewRequest": {
+				"type": "object",
+				"required": ["registry", "key", "version"],
+				"properties": {
+					"key": {
+						"type": "string"
+					},
+					"registry": {
+						"type": "integer",
+						"minimum": 0
+					},
+					"version": {
+						"type": "string"
+					}
+				},
+				"additionalProperties": false
 			},
 			"RemoteOption": {
 				"type": "object",

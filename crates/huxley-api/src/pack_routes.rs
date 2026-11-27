@@ -31,6 +31,8 @@ pub fn routes() -> Router<AppState> {
         .route("/builtin/{owner}/{name}", post(review_builtin))
         .route("/uploads/{id}", get(review))
         .route("/uploads/{id}/install", post(install))
+        .route("/registry", get(browse_registries))
+        .route("/registry/review", post(review_from_registry))
         .layer(DefaultBodyLimit::max(huxley_packs::MAX_BYTES + 1024))
 }
 
@@ -400,6 +402,156 @@ pub async fn review_builtin(
         huxley_packs::builtin::bytes(&format!("{owner}/{name}")).ok_or_else(ApiError::not_found)?;
     let pack = Pack::read(bytes).map_err(pack_err)?;
     let id = store_upload(&state, &authed, bytes).await?;
+    let review = review_for(&state, id, &pack, query.org_id).await?;
+    Ok((StatusCode::CREATED, Json(review)))
+}
+
+/// A pack in a registry, with what the organization has installed.
+#[derive(Debug, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct RegistryPack {
+    pub key: String,
+    pub name: String,
+    pub description: String,
+    pub publisher: String,
+    /// Newest first.
+    pub versions: Vec<huxley_packs::registry::IndexedVersion>,
+    /// The version installed in the organization, if any.
+    pub installed: Option<String>,
+    /// The newest version is signed by a key this instance trusts.
+    pub trusted: bool,
+}
+
+/// A registry and its packs, or why it couldn't be read.
+#[derive(Debug, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct RegistryListing {
+    /// Its position in `packs.registries` (for reviewing from it).
+    pub registry: usize,
+    pub name: String,
+    pub url: String,
+    /// The registry has a key: its index's signature was checked.
+    pub signed: bool,
+    pub error: Option<String>,
+    pub packs: Vec<RegistryPack>,
+}
+
+/// The packs in the configured registries (`packs.registries`), with what
+/// `orgId` has installed.
+#[utoipa::path(get, path = "/api/v1/packs/registry", operation_id = "browse_pack_registries", tag = "packs",
+    params(OrgQuery), responses((status = 200, body = Vec<RegistryListing>)))]
+pub async fn browse_registries(
+    State(state): State<AppState>,
+    authed: Authed,
+    Query(query): Query<OrgQuery>,
+) -> ApiResult<Json<Vec<RegistryListing>>> {
+    authed
+        .require_at(&state, permissions::PACK_INSTALL, query.org_id)
+        .await?;
+    let mut tx = begin_scoped(&state.db, &OrgScope::System)
+        .await
+        .map_err(db_err)?;
+    let installed: std::collections::HashMap<String, String> =
+        sqlx::query_as::<_, (String, String)>(
+            "SELECT pack_key, version FROM pack_installs WHERE org_id = $1",
+        )
+        .bind(query.org_id)
+        .fetch_all(&mut *tx)
+        .await
+        .map_err(db_err)?
+        .into_iter()
+        .collect();
+    tx.commit().await.map_err(db_err)?;
+    let registries = &state.pack_registries;
+    let mut out = Vec::new();
+    for (n, config) in registries.configs.iter().enumerate() {
+        let signed = config.key.as_deref().is_some_and(|k| !k.trim().is_empty());
+        match registries.index(n).await {
+            Ok(index) => out.push(RegistryListing {
+                registry: n,
+                name: index.name.clone(),
+                url: config.url.clone(),
+                signed,
+                error: None,
+                packs: index
+                    .packs
+                    .iter()
+                    .map(|p| RegistryPack {
+                        key: p.key.clone(),
+                        name: p.name.clone(),
+                        description: p.description.clone(),
+                        publisher: p.publisher.clone(),
+                        trusted: p.versions[0]
+                            .signed_by
+                            .as_deref()
+                            .is_some_and(|k| state.trusted_pack_keys.iter().any(|t| t.trim() == k)),
+                        installed: installed.get(&p.key).cloned(),
+                        versions: p.versions.clone(),
+                    })
+                    .collect(),
+            }),
+            Err(error) => out.push(RegistryListing {
+                registry: n,
+                name: config.url.clone(),
+                url: config.url.clone(),
+                signed,
+                error: Some(error),
+                packs: Vec::new(),
+            }),
+        }
+    }
+    Ok(Json(out))
+}
+
+#[derive(Debug, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct RegistryReviewRequest {
+    pub registry: usize,
+    pub key: String,
+    pub version: String,
+}
+
+/// Downloads a pack from a registry, checks it against the index, and
+/// returns what installing it in `orgId` would do, as an upload does.
+#[utoipa::path(post, path = "/api/v1/packs/registry/review", operation_id = "review_registry_pack", tag = "packs",
+    params(OrgQuery), request_body = RegistryReviewRequest,
+    responses((status = 201, body = Review),
+              (status = 404, body = ApiError, content_type = "application/problem+json"),
+              (status = 502, body = ApiError, content_type = "application/problem+json")))]
+pub async fn review_from_registry(
+    State(state): State<AppState>,
+    authed: Authed,
+    Query(query): Query<OrgQuery>,
+    Json(body): Json<RegistryReviewRequest>,
+) -> ApiResult<(StatusCode, Json<Review>)> {
+    authed
+        .require_at(&state, permissions::PACK_INSTALL, query.org_id)
+        .await?;
+    let registries = &state.pack_registries;
+    let unavailable = |e: String| {
+        ApiError::new(
+            StatusCode::BAD_GATEWAY,
+            "registry",
+            "Pack registry unavailable",
+        )
+        .with_detail(e)
+    };
+    let index = registries.index(body.registry).await.map_err(unavailable)?;
+    let (_, version) = crate::pack_registry::find(&index, &body.key, &body.version)
+        .ok_or_else(ApiError::not_found)?;
+    let bytes = registries
+        .download(body.registry, version)
+        .await
+        .map_err(unavailable)?;
+    let pack = Pack::read(&bytes).map_err(pack_err)?;
+    // The index and the pack must agree on what it is.
+    if pack.manifest.key != body.key || pack.manifest.version != body.version {
+        return Err(unavailable(format!(
+            "the download is {} {}, not {} {}",
+            pack.manifest.key, pack.manifest.version, body.key, body.version
+        )));
+    }
+    let id = store_upload(&state, &authed, &bytes).await?;
     let review = review_for(&state, id, &pack, query.org_id).await?;
     Ok((StatusCode::CREATED, Json(review)))
 }

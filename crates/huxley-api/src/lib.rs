@@ -46,6 +46,7 @@ pub mod notification_routes;
 pub mod oauth_routes;
 pub mod openapi;
 pub mod org_routes;
+pub mod pack_registry;
 mod pack_routes;
 pub mod packs;
 pub mod passkey_routes;
@@ -172,6 +173,8 @@ pub struct AppState {
     pub runner_gateway_url: Option<String>,
     /// Public keys (`packs.trusted_keys`) whose signed packs are trusted.
     pub trusted_pack_keys: Arc<Vec<String>>,
+    /// Pack registries to browse (`packs.registries`, ADR-093).
+    pub pack_registries: Arc<pack_registry::PackRegistries>,
     /// The datasets SQL console's login (`datasets.console_url`), if set.
     pub datasets_console: Option<PgPool>,
     /// Reporting queries' read replica, if any (else `db`).
@@ -215,6 +218,7 @@ impl AppState {
             engine,
             runner_gateway_url: None,
             trusted_pack_keys: Arc::new(Vec::new()),
+            pack_registries: Arc::new(pack_registry::PackRegistries::new(Vec::new())),
             datasets_console: None,
             read_db: None,
             analytics: Arc::new(huxley_analytics::Cache::default()),
