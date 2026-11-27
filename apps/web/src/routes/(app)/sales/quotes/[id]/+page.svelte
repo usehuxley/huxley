@@ -52,6 +52,7 @@
 	let title = $state('');
 	let validUntil = $state('');
 	let contactId = $state('');
+	let scopeVersionId = $state('');
 	let intro = $state('');
 	let terms = $state('');
 	let rows = $state<Row[]>([]);
@@ -63,6 +64,7 @@
 		title = saved.title;
 		validUntil = saved.validUntil ?? '';
 		contactId = saved.contactId ?? '';
+		scopeVersionId = saved.scopeVersionId ?? '';
 		intro = saved.intro;
 		terms = saved.terms;
 		rows = saved.lines.map((l) => ({
@@ -190,6 +192,7 @@
 			currency: q.currency,
 			validUntil: validUntil || null,
 			contactId: contactId || null,
+			scopeVersionId: scopeVersionId || null,
 			ownerId: q.ownerId ?? null,
 			intro,
 			terms,
@@ -590,6 +593,34 @@
 					</div>
 				{/if}
 			</section>
+
+			{#if data.scopeVersions.length > 0 || q.scope}
+				<Card title="Scope of work">
+					<Field
+						label="Carries"
+						for="scopeVersionId"
+						hint="An approved version of the opportunity's scope: the client signs it with the quote."
+					>
+						<Select
+							id="scopeVersionId"
+							bind:value={scopeVersionId}
+							onchange={change}
+							disabled={!editable}
+							options={[{ value: '', label: 'No scope of work' }, ...data.scopeVersions]}
+						/>
+					</Field>
+					{#if q.scope}
+						<div class="mt-3 flex flex-col gap-3 text-sm" aria-label="Scope of work">
+							{#each q.scope.sections as x, i (i)}
+								<div>
+									<p class="font-semibold text-fg">{x.title}</p>
+									<p class="whitespace-pre-wrap text-fg-muted">{x.body}</p>
+								</div>
+							{/each}
+						</div>
+					{/if}
+				</Card>
+			{/if}
 
 			<Card title="Wording">
 				<div class="grid gap-4 md:grid-cols-2">

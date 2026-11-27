@@ -19,6 +19,21 @@ An opportunity's page has its details, the stage strip (click a stage to move it
 - **Weighted value** is (one-time + 12 × monthly) × probability.
 - **Forecast** puts it in pipeline, best case or commit (or leaves it out).
 
+## Scoping
+
+An opportunity's **Open scoping** opens a workspace where the work is scoped before it's quoted (ADR-072).
+
+1. **Start** with the kind of engagement: a project, a managed services onboarding, a migration or an assessment. Each has its own sections, for example objectives, in scope, out of scope, deliverables, assumptions, client responsibilities, acceptance criteria, timeline and change control.
+2. **Discovery:** add meeting notes, call transcripts, and documents' text, such as an RFP or a site survey.
+3. **Draft with AI** writes each section nobody has edited, using your AI provider through the **Presales scoping** pack (install it from **Packs** and publish its workflow). It reads:
+   - the discovery;
+   - the client's people, sites and devices in Huxley, and its agreements;
+   - approved scopes of past won work of the same kind, for structure only.
+
+   It cites what it drew on, and it never invents facts: what it can't find out becomes an **open question** to ask the client. Sections you've written are left alone, and answered questions inform the next draft.
+4. **Edit** any section. It's yours from then on.
+5. **Approve** keeps the scope as a numbered version. A quote on the opportunity can **carry** an approved version (on the quote page). The client then sees it in the portal, signs it with the quote (it's part of what's agreed to), and it appears in the quote's PDF.
+
 ## Quotes
 
 **Business → Quotes**, or **New quote** on an opportunity, starts one. The quote page is the builder:

@@ -75,3 +75,4 @@ Decisions that shape Huxley. Add a new ADR by copying `0000-template.md` with th
 | [069](0069-sales-orders.md) | Accepted quotes become sales orders, fulfilled through inventory and purchasing and handed off by the API | Accepted |
 | [070](0070-sales-activities.md) | Sales activities live with their records, and sales email is logged from a mailbox by a workflow | Accepted |
 | [071](0071-forecasting.md) | The forecast is first-year value by forecast category against monthly or quarterly quotas, and sales reporting uses the analytics sources | Accepted |
+| [072](0072-presales-scoping.md) | Presales scoping drafts a templated Scope of Work with a workflow, keeps people's edits, and travels with the quote | Accepted |

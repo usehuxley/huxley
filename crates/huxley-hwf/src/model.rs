@@ -450,6 +450,12 @@ pub enum Step {
     /// Log an email on the contacts and leads it's to or from (the `sales` module).
     #[serde(rename = "core.sales.log_email")]
     SalesLogEmail(SalesLogEmailStep),
+    /// Gather a scope's discovery for drafting (the `sales` module).
+    #[serde(rename = "core.scope.context")]
+    ScopeContext(ScopeContextStep),
+    /// Keep a drafted Scope of Work (the `sales` module).
+    #[serde(rename = "core.scope.write")]
+    ScopeWrite(ScopeWriteStep),
     /// Sync people's busy time from their calendars (the `workforce` module).
     #[serde(rename = "core.calendar.sync")]
     CalendarSync(CalendarSyncStep),
@@ -872,6 +878,16 @@ step!(SalesLogEmailStep {
     pub log: SalesLogEmail,
 });
 
+step!(ScopeContextStep {
+    #[serde(rename = "with")]
+    pub scope: ScopeContext,
+});
+
+step!(ScopeWriteStep {
+    #[serde(rename = "with")]
+    pub write: ScopeWrite,
+});
+
 step!(CalendarSyncStep {
     #[serde(rename = "with", default, skip_serializing_if = "Option::is_none")]
     pub sync: Option<CalendarSync>,
@@ -993,6 +1009,8 @@ impl Step {
             ScopeDecide,
             QuoteReview,
             SalesLogEmail,
+            ScopeContext,
+            ScopeWrite,
             CalendarSync,
             CalendarWrite,
             ProjectStatus,
@@ -1064,6 +1082,8 @@ impl Step {
             Self::ScopeDecide(_) => "core.project.scope.decide",
             Self::QuoteReview(_) => "core.quote.review",
             Self::SalesLogEmail(_) => "core.sales.log_email",
+            Self::ScopeContext(_) => "core.scope.context",
+            Self::ScopeWrite(_) => "core.scope.write",
             Self::CalendarSync(_) => "core.calendar.sync",
             Self::CalendarWrite(_) => "core.calendar.write",
             Self::ProjectStatus(_) => "core.project.status",
@@ -1759,6 +1779,33 @@ pub struct QuoteReview {
 #[serde(deny_unknown_fields)]
 pub struct SalesLogEmail {
     pub email_id: Value,
+}
+
+/// A scope to draft (`core.scope.context`): `scope_id`. Output: `{ text,
+/// sections, sources }`: the opportunity, its discovery numbered [1], [2]…,
+/// the client's environment, agreements and past approved scopes, as text
+/// for the AI; the sections to write (`key: title: guidance`, skipping
+/// those people edited); and what each source number stands for.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct ScopeContext {
+    pub scope_id: Value,
+}
+
+/// A drafted Scope of Work to keep (`core.scope.write`): `scope_id`;
+/// `sections` (`[{ key, body, sources: [n] }]`) and `questions`
+/// (`[{ section, question }]`) as the AI wrote them; or `error`, when
+/// drafting failed. Sections people edited are left alone. Output: `{ written }`.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct ScopeWrite {
+    pub scope_id: Value,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sections: Option<Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub questions: Option<Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub error: Option<Value>,
 }
 
 /// Whose calendars to sync (`core.calendar.sync`): everyone set up (from

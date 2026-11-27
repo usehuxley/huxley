@@ -324,6 +324,75 @@ impl Engine {
         Ok(json!(change))
     }
 
+    /// The scope a scoping step names, checked to be in the run's
+    /// organization or below and the sales module on there.
+    async fn scope_in(&self, org_id: Uuid, input: &Json) -> Result<Uuid, Json> {
+        let mut tx = begin_scoped(self.db(), &OrgScope::System)
+            .await
+            .map_err(internal)?;
+        let on = huxley_modules::is_active_at(&mut tx, huxley_sales::MODULE, org_id)
+            .await
+            .map_err(internal)?;
+        if !on {
+            return Err(error("module_disabled", "Sales is turned off"));
+        }
+        let scope = id(input, "scope_id")?.ok_or_else(|| error("input", "scope_id is required"))?;
+        let under: bool = sqlx::query_scalar(
+            "SELECT EXISTS (SELECT 1 FROM sales_scopes s JOIN organizations so ON so.id = s.org_id \
+               JOIN organizations o ON o.id = $2 WHERE s.id = $1 AND o.path @> so.path)",
+        )
+        .bind(scope)
+        .bind(org_id)
+        .fetch_one(&mut *tx)
+        .await
+        .map_err(internal)?;
+        tx.commit().await.map_err(internal)?;
+        if under {
+            Ok(scope)
+        } else {
+            Err(error("not_found", "no such scope here"))
+        }
+    }
+
+    /// `core.scope.context`: what drafting a scope reads.
+    pub(crate) async fn scope_context(&self, org_id: Uuid, input: &Json) -> Result<Json, Json> {
+        let scope = self.scope_in(org_id, input).await?;
+        let mut tx = begin_scoped(self.db(), &OrgScope::System)
+            .await
+            .map_err(internal)?;
+        let context = huxley_sales::scoping::context(&mut tx, scope)
+            .await
+            .map_err(internal)?;
+        tx.commit().await.map_err(internal)?;
+        Ok(json!(context))
+    }
+
+    /// `core.scope.write`: keeps a drafted Scope of Work (or that drafting failed).
+    pub(crate) async fn scope_write(&self, org_id: Uuid, input: &Json) -> Result<Json, Json> {
+        let scope = self.scope_in(org_id, input).await?;
+        let mut tx = begin_scoped(self.db(), &OrgScope::System)
+            .await
+            .map_err(internal)?;
+        if let Some(why) = input["error"].as_str().filter(|e| !e.trim().is_empty()) {
+            huxley_sales::scoping::draft_failed(&mut tx, scope, why)
+                .await
+                .map_err(internal)?;
+            tx.commit().await.map_err(internal)?;
+            return Ok(json!({ "written": 0 }));
+        }
+        let draft: huxley_sales::scoping::Draft = serde_json::from_value(json!({
+            "sections": input.get("sections").cloned().unwrap_or(Json::Null).as_array().cloned().unwrap_or_default(),
+            "questions": input.get("questions").cloned().unwrap_or(Json::Null).as_array().cloned().unwrap_or_default(),
+        }))
+        .map_err(|e| error("input", format!("the draft isn't readable: {e}")))?;
+        let ctx = RequestContext::system(Via::Workflow);
+        let written = huxley_sales::scoping::write_draft(&mut tx, &ctx, scope, &draft)
+            .await
+            .map_err(internal)?;
+        tx.commit().await.map_err(internal)?;
+        Ok(json!({ "written": written }))
+    }
+
     /// `core.sales.log_email`: logs a sales mailbox's email on the contacts
     /// and leads it's to or from.
     pub(crate) async fn sales_log_email(&self, org_id: Uuid, input: &Json) -> Result<Json, Json> {

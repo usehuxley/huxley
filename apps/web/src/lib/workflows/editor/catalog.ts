@@ -552,6 +552,37 @@ export const STEPS: StepSpec[] = [
 		fields: [{ path: 'with.email_id', label: 'Email', kind: 'expression' }]
 	},
 	{
+		type: 'core.scope.context',
+		label: 'Read a scope to draft',
+		description:
+			"Gather an opportunity scope's discovery, the client's environment and past scopes, as text for AI.",
+		group: 'Actions',
+		module: 'sales',
+		template: { with: { scope_id: '{{ trigger.subject_id }}' } },
+		fields: [{ path: 'with.scope_id', label: 'Scope', kind: 'expression' }]
+	},
+	{
+		type: 'core.scope.write',
+		label: 'Keep a drafted scope',
+		description:
+			'Store the sections and open questions AI drafted (sections people edited are left alone).',
+		group: 'Actions',
+		module: 'sales',
+		template: {
+			with: {
+				scope_id: '{{ trigger.subject_id }}',
+				sections: '{{ steps.draft.output.sections }}',
+				questions: '{{ steps.draft.output.questions }}'
+			}
+		},
+		fields: [
+			{ path: 'with.scope_id', label: 'Scope', kind: 'expression' },
+			{ path: 'with.sections', label: 'Sections', kind: 'expression' },
+			{ path: 'with.questions', label: 'Open questions', kind: 'expression' },
+			{ path: 'with.error', label: 'Error (drafting failed)', kind: 'expression' }
+		]
+	},
+	{
 		type: 'core.calendar.sync',
 		label: 'Sync calendars',
 		description: "Read people's busy time from Microsoft 365 or their calendar feeds.",

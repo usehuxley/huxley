@@ -1201,3 +1201,155 @@ async fn quotas_are_set_by_month_or_quarter() {
             .any(|q| q["userId"] == json!(rep))
     );
 }
+
+#[tokio::test]
+async fn a_scope_is_written_approved_and_carried_by_the_quote() {
+    let Some(s) = setup().await else { return };
+    let (_, o) = s
+        .call(
+            &s.owner,
+            "POST",
+            "/api/v1/opportunities",
+            Some(json!({ "orgId": s.acme, "opportunity": { "name": unique("Rollout") } })),
+        )
+        .await;
+    let opp = o["id"].as_str().unwrap().to_owned();
+    let (status, scope) = s
+        .call(
+            &s.owner,
+            "POST",
+            &format!("/api/v1/opportunities/{opp}/scope"),
+            Some(json!({ "template": "project" })),
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK, "{scope}");
+    assert_eq!(scope["sections"].as_array().unwrap().len(), 9);
+    let id = scope["id"].as_str().unwrap().to_owned();
+    let path = |p: &str| format!("/api/v1/scopes/{id}{p}");
+
+    s.call(
+        &s.owner,
+        "POST",
+        &path("/sources"),
+        Some(json!({ "kind": "note", "title": "Site visit", "body": "Two floors, 30 desks." })),
+    )
+    .await;
+    s.call(
+        &s.owner,
+        "PUT",
+        &path("/sections/in_scope"),
+        Some(json!({ "body": "- 30 desks across two floors" })),
+    )
+    .await;
+    let (_, scope) = s
+        .call(
+            &s.owner,
+            "POST",
+            &path("/questions"),
+            Some(json!({ "sectionKey": "timeline", "question": "Go-live date?" })),
+        )
+        .await;
+    let q = scope["questions"][0]["id"].as_str().unwrap().to_owned();
+    let (_, scope) = s
+        .call(
+            &s.owner,
+            "POST",
+            &path(&format!("/questions/{q}")),
+            Some(json!({ "answer": "March", "resolved": true })),
+        )
+        .await;
+    assert!(scope["questions"][0]["resolvedAt"].is_string());
+
+    let (status, approved) = s
+        .call(
+            &s.owner,
+            "POST",
+            &path("/approve"),
+            Some(json!({ "version": scope["version"] })),
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK, "{approved}");
+    let version = approved["versions"][0]["id"].clone();
+    assert_eq!(approved["versions"][0]["number"], 1);
+
+    // A quote on the opportunity carries it; another opportunity's can't.
+    let q = s
+        .quote(json!({ "orgId": s.acme, "quote": { "title": "Rollout", "opportunityId": opp, "scopeVersionId": version,
+            "lines": [{ "name": "Desk setup", "quantity": 30, "unitPrice": "50" }] } }))
+        .await;
+    assert_eq!(q["scope"]["sections"][0]["title"], "In scope");
+    assert_eq!(
+        q["scope"]["sections"][0]["body"],
+        "- 30 desks across two floors"
+    );
+    let (status, _) = s
+        .call(&s.owner, "POST", "/api/v1/quotes", Some(json!({ "orgId": s.acme, "quote": { "title": "Other", "scopeVersionId": version } })))
+        .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+    // What's sent includes the scope, so it's agreed to with the quote.
+    let qid = q["id"].as_str().unwrap();
+    s.call(
+        &s.owner,
+        "POST",
+        &format!("/api/v1/quotes/{qid}/send"),
+        Some(json!({ "version": q["version"] })),
+    )
+    .await;
+    let (_, revs) = s
+        .call(
+            &s.owner,
+            "GET",
+            &format!("/api/v1/quotes/{qid}/revisions"),
+            None,
+        )
+        .await;
+    assert_eq!(revs[0]["snapshot"]["scope"]["number"], 1);
+}
+
+#[tokio::test]
+async fn a_scope_draft_needs_discovery_and_can_be_called_off() {
+    let Some(s) = setup().await else { return };
+    let (_, o) = s
+        .call(
+            &s.owner,
+            "POST",
+            "/api/v1/opportunities",
+            Some(json!({ "orgId": s.acme, "opportunity": { "name": unique("Audit") } })),
+        )
+        .await;
+    let opp = o["id"].as_str().unwrap().to_owned();
+    let (status, _) = s
+        .call(
+            &s.owner,
+            "GET",
+            &format!("/api/v1/opportunities/{opp}/scope"),
+            None,
+        )
+        .await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+    let (_, scope) = s
+        .call(
+            &s.owner,
+            "POST",
+            &format!("/api/v1/opportunities/{opp}/scope"),
+            Some(json!({ "template": "assessment" })),
+        )
+        .await;
+    let id = scope["id"].as_str().unwrap().to_owned();
+    let path = |p: &str| format!("/api/v1/scopes/{id}{p}");
+    // No draft without discovery.
+    let (status, _) = s.call(&s.owner, "POST", &path("/draft"), None).await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+    s.call(
+        &s.owner,
+        "POST",
+        &path("/sources"),
+        Some(json!({ "kind": "note", "title": "Site visit", "body": "Two floors, 30 desks." })),
+    )
+    .await;
+    let (status, drafting) = s.call(&s.owner, "POST", &path("/draft"), None).await;
+    assert_eq!(status, StatusCode::OK, "{drafting}");
+    assert_eq!(drafting["draftState"], "requested");
+    let (_, scope) = s.call(&s.owner, "DELETE", &path("/draft"), None).await;
+    assert_eq!(scope["draftState"], "idle");
+}

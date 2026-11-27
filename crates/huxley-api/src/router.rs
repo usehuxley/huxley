@@ -39,6 +39,7 @@ fn business_routes() -> Router<AppState> {
         .merge(crate::purchasing_routes::routes())
         .merge(crate::sales_order_routes::routes())
         .merge(crate::activity_routes::routes())
+        .merge(crate::scope_routes::routes())
 }
 
 pub fn router(state: AppState) -> Router {

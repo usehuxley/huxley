@@ -1,0 +1,76 @@
+apiVersion: usehuxley.io/v1
+kind: Workflow
+metadata:
+  key: draft-scope
+  name: Draft a Scope of Work with AI
+  description: >-
+    When someone asks for a draft on an opportunity's scoping page, reads its
+    discovery (notes, transcripts, documents), the client's environment and
+    agreements, and past approved scopes, and drafts each section the
+    template has that nobody has edited yet. It cites what it drew on and
+    lists what it couldn't find out as open questions, never inventing facts.
+spec:
+  triggers:
+    - type: event
+      event: scope.draft_requested
+  steps:
+    - id: context
+      type: core.scope.context
+      with:
+        scope_id: "{{ trigger.subject_id }}"
+    - id: draft
+      type: ai.extract
+      with:
+        text: "{{ steps.context.output.text }}"
+        instructions: >-
+          You are a presales engineer at an IT managed service provider,
+          writing a Scope of Work for a client from the discovery above. Write
+          these sections (key: title: what belongs in it):
+          {{ steps.context.output.sections | join('; ') }}.
+          Write each in plain, specific Markdown (short paragraphs or bullet
+          lists), using the client's numbers and names from discovery. Use
+          only facts from the numbered sources; cite each section's sources
+          by their numbers. Past scopes are for structure and style only,
+          never facts about this client. Where discovery doesn't say
+          something a section needs (counts, dates, who does what, what's
+          excluded), don't guess: write what is known, and add an open
+          question for the presales engineer to ask the client. Return only
+          the sections listed, by key.
+        schema:
+          type: object
+          additionalProperties: false
+          properties:
+            sections:
+              type: array
+              items:
+                type: object
+                additionalProperties: false
+                properties:
+                  key: { type: string }
+                  body: { type: string }
+                  sources: { type: array, items: { type: integer } }
+                required: [key, body, sources]
+            questions:
+              type: array
+              items:
+                type: object
+                additionalProperties: false
+                properties:
+                  section: { type: string }
+                  question: { type: string }
+                required: [section, question]
+          required: [sections, questions]
+    - id: write
+      type: core.scope.write
+      with:
+        scope_id: "{{ trigger.subject_id }}"
+        sections: "{{ steps.draft.output.sections }}"
+        questions: "{{ steps.draft.output.questions }}"
+  on_error:
+    - id: failed
+      type: core.scope.write
+      with:
+        scope_id: "{{ trigger.subject_id }}"
+        error: "{{ error.message or 'Drafting failed' }}"
+  outputs:
+    written: "{{ steps.write.output.written }}"

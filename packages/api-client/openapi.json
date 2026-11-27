@@ -11317,6 +11317,72 @@
 				}
 			}
 		},
+		"/api/v1/opportunities/{id}/scope": {
+			"get": {
+				"tags": ["sales"],
+				"summary": "The opportunity's scope (404 until it's started).",
+				"operationId": "opportunity_scope",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Scope"
+								}
+							}
+						}
+					}
+				}
+			},
+			"post": {
+				"tags": ["sales"],
+				"summary": "Starts scoping an opportunity (or returns the scope it has).",
+				"operationId": "open_scope",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/OpenScope"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Scope"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
 		"/api/v1/orgs": {
 			"get": {
 				"tags": ["orgs"],
@@ -16624,6 +16690,388 @@
 							"application/problem+json": {
 								"schema": {
 									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/scope-templates": {
+			"get": {
+				"tags": ["sales"],
+				"summary": "The kinds of engagement a scope can follow, and their sections.",
+				"operationId": "list_scope_templates",
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "array",
+									"items": {
+										"$ref": "#/components/schemas/ScopeTemplate"
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/scope-versions/{id}": {
+			"get": {
+				"tags": ["sales"],
+				"summary": "An approved version of a Scope of Work.",
+				"operationId": "get_scope_version",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ScopeOfWork"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/scopes/{id}": {
+			"get": {
+				"tags": ["sales"],
+				"operationId": "get_scope",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Scope"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/scopes/{id}/approve": {
+			"post": {
+				"tags": ["sales"],
+				"summary": "Approves the Scope of Work as it stands, keeping it as the next version.",
+				"operationId": "approve_scope",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/ApproveScope"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Scope"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/scopes/{id}/draft": {
+			"post": {
+				"tags": ["sales"],
+				"summary": "Asks for an AI draft (the Presales scoping pack writes it).",
+				"operationId": "request_scope_draft",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Scope"
+								}
+							}
+						}
+					}
+				}
+			},
+			"delete": {
+				"tags": ["sales"],
+				"summary": "Stops waiting for a draft.",
+				"operationId": "cancel_scope_draft",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Scope"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/scopes/{id}/questions": {
+			"post": {
+				"tags": ["sales"],
+				"operationId": "add_scope_question",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/NewQuestion"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Scope"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/scopes/{id}/questions/{question}": {
+			"post": {
+				"tags": ["sales"],
+				"summary": "Answers an open question, and resolves it (or opens it again).",
+				"operationId": "answer_scope_question",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					},
+					{
+						"name": "question",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/QuestionAnswer"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Scope"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/scopes/{id}/sections/{key}": {
+			"put": {
+				"tags": ["sales"],
+				"summary": "Writes a section (it's then yours: drafting leaves it alone).",
+				"operationId": "edit_scope_section",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					},
+					{
+						"name": "key",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string"
+						}
+					}
+				],
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/SectionBody"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Scope"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/scopes/{id}/sources": {
+			"post": {
+				"tags": ["sales"],
+				"summary": "Adds discovery: a note, a call transcript, or a document's text.",
+				"operationId": "add_scope_source",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/ScopeSourceInput"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Scope"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/scopes/{id}/sources/{source}": {
+			"delete": {
+				"tags": ["sales"],
+				"operationId": "delete_scope_source",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					},
+					{
+						"name": "source",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Scope"
 								}
 							}
 						}
@@ -25358,6 +25806,18 @@
 					}
 				}
 			},
+			"ApproveScope": {
+				"type": "object",
+				"required": ["version"],
+				"properties": {
+					"version": {
+						"type": "integer",
+						"format": "int32",
+						"description": "The version you read."
+					}
+				},
+				"additionalProperties": false
+			},
 			"ArchiveOrgRequest": {
 				"type": "object",
 				"required": ["version"],
@@ -33002,6 +33462,19 @@
 				},
 				"additionalProperties": false
 			},
+			"NewQuestion": {
+				"type": "object",
+				"required": ["question"],
+				"properties": {
+					"question": {
+						"type": "string"
+					},
+					"sectionKey": {
+						"type": ["string", "null"]
+					}
+				},
+				"additionalProperties": false
+			},
 			"NewScript": {
 				"type": "object",
 				"description": "A new script.",
@@ -33374,6 +33847,17 @@
 					"not_null",
 					"within"
 				]
+			},
+			"OpenScope": {
+				"type": "object",
+				"required": ["template"],
+				"properties": {
+					"template": {
+						"type": "string",
+						"description": "A scope template's key."
+					}
+				},
+				"additionalProperties": false
 			},
 			"Opportunity": {
 				"type": "object",
@@ -35250,6 +35734,17 @@
 						"type": "integer",
 						"format": "int32"
 					},
+					"scope": {
+						"oneOf": [
+							{
+								"$ref": "#/components/schemas/ScopeOfWork",
+								"description": "The Scope of Work it carries, agreed to with it."
+							},
+							{
+								"type": "null"
+							}
+						]
+					},
 					"sentAt": {
 						"type": ["string", "null"],
 						"format": "date-time"
@@ -36936,6 +37431,19 @@
 				},
 				"additionalProperties": false
 			},
+			"QuestionAnswer": {
+				"type": "object",
+				"required": ["resolved"],
+				"properties": {
+					"answer": {
+						"type": ["string", "null"]
+					},
+					"resolved": {
+						"type": "boolean"
+					}
+				},
+				"additionalProperties": false
+			},
 			"Queue": {
 				"type": "object",
 				"required": [
@@ -37183,6 +37691,21 @@
 						"format": "uuid",
 						"description": "The sales order it became, once accepted."
 					},
+					"scope": {
+						"oneOf": [
+							{
+								"$ref": "#/components/schemas/ScopeOfWork"
+							},
+							{
+								"type": "null"
+							}
+						]
+					},
+					"scopeVersionId": {
+						"type": ["string", "null"],
+						"format": "uuid",
+						"description": "The approved Scope of Work it carries (and is signed with)."
+					},
 					"sentAt": {
 						"type": ["string", "null"],
 						"format": "date-time"
@@ -37246,6 +37769,11 @@
 					"ownerId": {
 						"type": ["string", "null"],
 						"format": "uuid"
+					},
+					"scopeVersionId": {
+						"type": ["string", "null"],
+						"format": "uuid",
+						"description": "An approved version of the opportunity's Scope of Work, to carry."
 					},
 					"terms": {
 						"type": "string"
@@ -39186,6 +39714,84 @@
 				},
 				"additionalProperties": false
 			},
+			"Scope": {
+				"type": "object",
+				"required": [
+					"id",
+					"orgId",
+					"opportunityId",
+					"opportunityName",
+					"template",
+					"draftState",
+					"version",
+					"sources",
+					"sections",
+					"questions",
+					"versions"
+				],
+				"properties": {
+					"draftError": {
+						"type": ["string", "null"]
+					},
+					"draftRequestedAt": {
+						"type": ["string", "null"],
+						"format": "date-time"
+					},
+					"draftState": {
+						"$ref": "#/components/schemas/ScopeDraftState"
+					},
+					"draftedAt": {
+						"type": ["string", "null"],
+						"format": "date-time"
+					},
+					"id": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"opportunityId": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"opportunityName": {
+						"type": "string"
+					},
+					"orgId": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"questions": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/ScopeQuestion"
+						}
+					},
+					"sections": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/ScopeSection"
+						}
+					},
+					"sources": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/ScopeSource"
+						}
+					},
+					"template": {
+						"type": "string"
+					},
+					"version": {
+						"type": "integer",
+						"format": "int32"
+					},
+					"versions": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/ScopeVersion"
+						}
+					}
+				}
+			},
 			"ScopeChange": {
 				"type": "object",
 				"required": [
@@ -39277,6 +39883,215 @@
 					}
 				},
 				"additionalProperties": false
+			},
+			"ScopeCitation": {
+				"type": "object",
+				"required": ["label", "kind"],
+				"properties": {
+					"kind": {
+						"type": "string",
+						"description": "`note`, `transcript`, `document`, `environment`, `agreements` or `past_work`."
+					},
+					"label": {
+						"type": "string"
+					}
+				}
+			},
+			"ScopeDraftState": {
+				"type": "string",
+				"enum": ["idle", "requested", "failed"]
+			},
+			"ScopeOfWork": {
+				"type": "object",
+				"description": "An approved version's sections (for a quote).",
+				"required": ["versionId", "number", "sections"],
+				"properties": {
+					"number": {
+						"type": "integer",
+						"format": "int32"
+					},
+					"sections": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/ScopeOfWorkSection"
+						}
+					},
+					"versionId": {
+						"type": "string",
+						"format": "uuid"
+					}
+				}
+			},
+			"ScopeOfWorkSection": {
+				"type": "object",
+				"required": ["title", "body"],
+				"properties": {
+					"body": {
+						"type": "string"
+					},
+					"title": {
+						"type": "string"
+					}
+				}
+			},
+			"ScopeQuestion": {
+				"type": "object",
+				"required": ["id", "question", "fromAi"],
+				"properties": {
+					"answer": {
+						"type": ["string", "null"]
+					},
+					"fromAi": {
+						"type": "boolean"
+					},
+					"id": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"question": {
+						"type": "string"
+					},
+					"resolvedAt": {
+						"type": ["string", "null"],
+						"format": "date-time"
+					},
+					"sectionKey": {
+						"type": ["string", "null"]
+					}
+				}
+			},
+			"ScopeSection": {
+				"type": "object",
+				"required": ["key", "title", "body", "citations", "drafted", "updatedAt"],
+				"properties": {
+					"body": {
+						"type": "string"
+					},
+					"citations": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/ScopeCitation"
+						}
+					},
+					"drafted": {
+						"type": "boolean",
+						"description": "The text is the AI's, untouched since."
+					},
+					"key": {
+						"type": "string"
+					},
+					"title": {
+						"type": "string"
+					},
+					"updatedAt": {
+						"type": "string",
+						"format": "date-time"
+					}
+				}
+			},
+			"ScopeSource": {
+				"type": "object",
+				"required": ["id", "kind", "title", "body", "createdAt"],
+				"properties": {
+					"body": {
+						"type": "string"
+					},
+					"createdAt": {
+						"type": "string",
+						"format": "date-time"
+					},
+					"createdByName": {
+						"type": ["string", "null"]
+					},
+					"id": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"kind": {
+						"type": "string",
+						"description": "`note`, `transcript` or `document`."
+					},
+					"title": {
+						"type": "string"
+					}
+				}
+			},
+			"ScopeSourceInput": {
+				"type": "object",
+				"required": ["kind", "title", "body"],
+				"properties": {
+					"body": {
+						"type": "string",
+						"description": "The text (a document's, pasted or extracted)."
+					},
+					"kind": {
+						"type": "string",
+						"description": "`note`, `transcript` or `document`."
+					},
+					"title": {
+						"type": "string"
+					}
+				},
+				"additionalProperties": false
+			},
+			"ScopeTemplate": {
+				"type": "object",
+				"description": "A kind of engagement, and the sections its Scope of Work has.",
+				"required": ["key", "name", "description", "sections"],
+				"properties": {
+					"description": {
+						"type": "string"
+					},
+					"key": {
+						"type": "string"
+					},
+					"name": {
+						"type": "string"
+					},
+					"sections": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/ScopeTemplateSection"
+						}
+					}
+				}
+			},
+			"ScopeTemplateSection": {
+				"type": "object",
+				"required": ["key", "title", "guidance"],
+				"properties": {
+					"guidance": {
+						"type": "string",
+						"description": "What belongs in it (for people, and for the AI)."
+					},
+					"key": {
+						"type": "string"
+					},
+					"title": {
+						"type": "string"
+					}
+				}
+			},
+			"ScopeVersion": {
+				"type": "object",
+				"required": ["id", "number", "createdAt"],
+				"properties": {
+					"createdAt": {
+						"type": "string",
+						"format": "date-time"
+					},
+					"createdByName": {
+						"type": ["string", "null"]
+					},
+					"id": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"number": {
+						"type": "integer",
+						"format": "int32"
+					}
+				}
 			},
 			"ScopeView": {
 				"type": "object",
@@ -39403,6 +40218,17 @@
 						"type": "string"
 					}
 				}
+			},
+			"SectionBody": {
+				"type": "object",
+				"required": ["body"],
+				"properties": {
+					"body": {
+						"type": "string",
+						"description": "Markdown."
+					}
+				},
+				"additionalProperties": false
 			},
 			"SelectOption": {
 				"type": "object",

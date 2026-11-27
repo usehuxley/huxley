@@ -15,6 +15,7 @@ pub mod opportunities;
 pub mod orders;
 pub mod quotes;
 pub mod review;
+pub mod scoping;
 pub mod signing;
 pub mod stages;
 
