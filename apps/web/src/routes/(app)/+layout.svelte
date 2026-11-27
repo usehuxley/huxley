@@ -5,110 +5,149 @@
 	import { onMount } from 'svelte';
 	import {
 		Bell,
-		BookOpen,
-		Boxes,
+		Briefcase,
 		Building2,
-		CalendarCheck,
-		CalendarDays,
-		CalendarRange,
-		ChartColumn,
-		CircleCheck,
 		CircleUserRound,
-		ClipboardList,
-		Clock,
-		Database,
-		FileCode,
-		FolderKanban,
 		House,
-		ListTodo,
-		Package,
-		Plug,
+		Inbox,
 		Settings,
-		Sparkles,
-		Ticket,
-		UsersRound,
 		Workflow
 	} from '@lucide/svelte';
-	import { AppShell, Button, CommandPalette, type Command, type NavItem } from '@usehuxley/ui';
+	import {
+		Button,
+		CommandPalette,
+		ThemeToggle,
+		Workbench,
+		type Command,
+		type Space,
+		type SpaceMenuItem
+	} from '@usehuxley/ui';
 	import OrgSwitcher from '#lib/orgs/OrgSwitcher.svelte';
 	import { visibleSections } from '#lib/permissions.ts';
 	import type { LayoutProps } from './$types';
 
 	let { children, data }: LayoutProps = $props();
 
-	// Modules arrive phase by phase (see docs/IMPLEMENTATION_PLAN.md).
+	let can = (p: string) => data.user.grantedPermissions.includes(p);
+	let on = (m: string) => data.user.activeModules.includes(m);
 	let canSeeSettings = $derived(
 		visibleSections(data.user.grantedPermissions, data.user.activeModules).length > 0
 	);
-	let nav: NavItem[] = $derived([
-		{ href: '/', label: 'Home', icon: House },
-		...(data.user.activeModules.includes('servicedesk') &&
-		data.user.grantedPermissions.includes('ticket:read')
-			? [
-					{ href: '/my-work', label: 'My work', icon: ListTodo },
-					{ href: '/time', label: 'My time', icon: Clock },
-					{ href: '/dispatch', label: 'Dispatch', icon: CalendarDays }
+
+	function item(show: boolean, href: string, label: string): SpaceMenuItem[] {
+		return show ? [{ href, label }] : [];
+	}
+
+	// Five spaces, each with its own menu. Modules arrive phase by phase
+	// (docs/IMPLEMENTATION_PLAN.md) and appear only when on and permitted.
+	let spaces: Space[] = $derived.by(() => {
+		const desk = on('servicedesk') && can('ticket:read');
+		const all: Space[] = [
+			{
+				id: 'home',
+				label: 'Home',
+				icon: House,
+				href: '/',
+				paths: ['/', '/my-work', '/time', '/approvals', '/notifications', '/assistant', '/profile'],
+				menu: [
+					{
+						items: [
+							{ href: '/', label: 'Home' },
+							...item(desk, '/my-work', 'My work'),
+							...item(desk, '/time', 'My time'),
+							{ href: '/approvals', label: 'Approvals' },
+							{ href: '/notifications', label: 'Notifications' },
+							...item(can('ai:use'), '/assistant', 'Assistant')
+						]
+					}
 				]
-			: []),
-		...(data.user.grantedPermissions.includes('workflow:read')
-			? [{ href: '/workflows', label: 'Workflows', icon: Workflow }]
-			: []),
-		...(data.user.grantedPermissions.includes('script:read')
-			? [{ href: '/scripts', label: 'Scripts', icon: FileCode }]
-			: []),
-		...(data.user.grantedPermissions.includes('integration:read')
-			? [{ href: '/integrations', label: 'Integrations', icon: Plug }]
-			: []),
-		...(data.user.grantedPermissions.includes('dataset:read')
-			? [{ href: '/datasets', label: 'Datasets', icon: Database }]
-			: []),
-		...(data.user.grantedPermissions.includes('ai:use')
-			? [{ href: '/assistant', label: 'Assistant', icon: Sparkles }]
-			: []),
-		{ href: '/approvals', label: 'Approvals', icon: CircleCheck },
-		...(data.user.grantedPermissions.some((p) => p === 'form:submit' || p === 'form:manage')
-			? [{ href: '/forms', label: 'Forms', icon: ClipboardList }]
-			: []),
-		...(data.user.activeModules.includes('servicedesk') &&
-		data.user.grantedPermissions.includes('ticket:read')
-			? [{ href: '/tickets', label: 'Tickets', icon: Ticket }]
-			: [{ href: '/tickets', label: 'Tickets', icon: Ticket, soon: true }]),
-		...(data.user.activeModules.includes('projects') &&
-		data.user.grantedPermissions.includes('project:read')
-			? [{ href: '/projects', label: 'Projects', icon: FolderKanban }]
-			: []),
-		...(data.user.activeModules.includes('change') &&
-		data.user.grantedPermissions.includes('ticket:read')
-			? [{ href: '/changes', label: 'Changes', icon: CalendarRange }]
-			: []),
-		...(data.user.activeModules.includes('crm') && data.user.grantedPermissions.includes('crm:read')
-			? [{ href: '/clients', label: 'Clients', icon: Building2 }]
-			: [{ href: '/clients', label: 'Clients', icon: Building2, soon: true }]),
-		...(data.user.activeModules.includes('workforce') &&
-		data.user.grantedPermissions.includes('workforce:read')
-			? [{ href: '/people', label: 'People', icon: UsersRound }]
-			: []),
-		...(data.user.activeModules.includes('workforce') &&
-		data.user.grantedPermissions.some((p) => p === 'timesheet:approve' || p === 'workforce:manage')
-			? [{ href: '/timesheets', label: 'Timesheets', icon: CalendarCheck }]
-			: []),
-		...(data.user.activeModules.includes('cmdb') &&
-		data.user.grantedPermissions.includes('asset:read')
-			? [{ href: '/assets', label: 'Assets', icon: Boxes }]
-			: [{ href: '/assets', label: 'Assets', icon: Boxes, soon: true }]),
-		...(data.user.activeModules.includes('knowledge') &&
-		data.user.grantedPermissions.includes('kb:read')
-			? [{ href: '/knowledge', label: 'Knowledge', icon: BookOpen }]
-			: [{ href: '/knowledge', label: 'Knowledge', icon: BookOpen, soon: true }]),
-		...(data.user.activeModules.includes('contracts') &&
-		data.user.grantedPermissions.includes('catalog:read')
-			? [{ href: '/catalog', label: 'Catalog', icon: Package }]
-			: []),
-		...(data.user.grantedPermissions.includes('dashboard:read')
-			? [{ href: '/dashboards', label: 'Dashboards', icon: ChartColumn }]
-			: []),
-		...(canSeeSettings ? [{ href: '/settings', label: 'Settings', icon: Settings }] : [])
-	]);
+			},
+			{
+				id: 'desk',
+				label: 'Desk',
+				icon: Inbox,
+				href: '/tickets',
+				paths: ['/tickets', '/dispatch', '/changes'],
+				menu: [
+					{
+						items: [
+							...item(desk, '/tickets', 'Tickets'),
+							...item(desk, '/dispatch', 'Dispatch'),
+							...item(on('change') && can('ticket:read'), '/changes', 'Changes')
+						]
+					}
+				]
+			},
+			{
+				id: 'clients',
+				label: 'Clients',
+				icon: Building2,
+				href: '/clients',
+				paths: ['/clients', '/contacts', '/assets', '/knowledge'],
+				menu: [
+					{
+						items: [
+							...item(on('crm') && can('crm:read'), '/clients', 'Clients'),
+							...item(on('cmdb') && can('asset:read'), '/assets', 'Assets'),
+							...item(on('knowledge') && can('kb:read'), '/knowledge', 'Knowledge')
+						]
+					}
+				]
+			},
+			{
+				id: 'engine',
+				label: 'Engine',
+				icon: Workflow,
+				href: '/workflows',
+				paths: [
+					'/workflows',
+					'/runs',
+					'/forms',
+					'/scripts',
+					'/integrations',
+					'/datasets',
+					'/vault'
+				],
+				menu: [
+					{
+						items: [
+							...item(can('workflow:read'), '/workflows', 'Workflows'),
+							...item(can('form:submit') || can('form:manage'), '/forms', 'Forms'),
+							...item(can('script:read'), '/scripts', 'Scripts'),
+							...item(can('integration:read'), '/integrations', 'Integrations'),
+							...item(can('dataset:read'), '/datasets', 'Datasets')
+						]
+					}
+				]
+			},
+			{
+				id: 'business',
+				label: 'Business',
+				icon: Briefcase,
+				href: '/projects',
+				paths: ['/projects', '/catalog', '/dashboards', '/people', '/timesheets'],
+				menu: [
+					{
+						items: [
+							...item(on('projects') && can('project:read'), '/projects', 'Projects'),
+							...item(on('contracts') && can('catalog:read'), '/catalog', 'Catalog'),
+							...item(can('dashboard:read'), '/dashboards', 'Dashboards'),
+							...item(on('workforce') && can('workforce:read'), '/people', 'People'),
+							...item(
+								on('workforce') && (can('timesheet:approve') || can('workforce:manage')),
+								'/timesheets',
+								'Timesheets'
+							)
+						]
+					}
+				]
+			}
+		];
+		// A space with nothing in it is left off; the rest open on their first page.
+		return all
+			.filter((s) => s.id === 'home' || (s.menu?.[0]?.items.length ?? 0) > 0)
+			.map((s) => ({ ...s, href: s.menu?.[0]?.items[0]?.href ?? s.href }));
+	});
 
 	const commands: Command[] = [
 		{ id: 'home', label: 'Go to Home', group: 'Navigate', run: () => goto(resolve('/(app)')) },
@@ -221,14 +260,32 @@
 	});
 </script>
 
-<AppShell
+<Workbench
 	brand="Huxley"
-	{nav}
+	{spaces}
 	currentPath={page.url.pathname}
+	currentSearch={page.url.search}
 	onSearch={() => (paletteOpen = true)}
 >
+	{#snippet railEnd()}
+		{#if canSeeSettings}
+			<a
+				href={resolve('/(app)/settings')}
+				class="grid size-10 place-items-center rounded-lg text-rail-fg hover:bg-rail-raised hover:text-rail-fg-active {page.url.pathname.startsWith(
+					'/settings'
+				)
+					? 'bg-rail-raised text-rail-fg-active'
+					: ''}"
+				aria-label="Settings"
+				aria-current={page.url.pathname.startsWith('/settings') ? 'page' : undefined}
+			>
+				<Settings size={19} />
+			</a>
+		{/if}
+	{/snippet}
 	{#snippet topbar()}
 		<OrgSwitcher current={data.currentOrg} />
+		<span class="hidden sm:contents"><ThemeToggle /></span>
 		<a
 			href={resolve('/(app)/notifications')}
 			class="relative rounded-control p-2 text-fg-muted hover:bg-surface-sunken hover:text-fg"
@@ -263,7 +320,7 @@
 		</form>
 	{/snippet}
 	{@render children()}
-</AppShell>
+</Workbench>
 
 <CommandPalette
 	{commands}

@@ -1,4 +1,5 @@
 import { expect, request, test, type Page } from '@playwright/test';
+import { openFromMenu } from '../lib/testing/nav.ts';
 
 // Full-stack: needs the API with a bootstrapped owner and HUXLEY_API_URL.
 // Runs only where the servicedesk module is on (the e2e job's service-desk
@@ -59,7 +60,7 @@ test.describe('service desk', () => {
 		await expect(page.getByRole('link', { name: queue })).toBeVisible();
 
 		// Raise it from the Tickets page.
-		await page.getByRole('link', { name: 'Tickets', exact: true }).click();
+		await openFromMenu(page, 'Tickets');
 		await expect(page.getByRole('heading', { level: 1 })).toHaveText('Tickets');
 		await page.getByRole('link', { name: 'New ticket' }).click();
 		await page.getByLabel('Client').selectOption({ label: client });

@@ -57,7 +57,7 @@ test.describe('with the API', () => {
 		await page.getByRole('button', { name: 'Sign in', exact: true }).click();
 
 		await expect(page.getByRole('heading', { level: 1 })).toHaveText('Welcome to Huxley');
-		await expect(page.getByRole('navigation', { name: 'Main navigation' })).toBeVisible();
+		await expect(page.getByRole('navigation', { name: 'Spaces' })).toBeVisible();
 		await expect(page.getByText('Operational')).toBeVisible();
 
 		await page.getByRole('button', { name: 'Sign out' }).click();

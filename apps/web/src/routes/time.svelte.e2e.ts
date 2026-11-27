@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { openFromMenu } from '../lib/testing/nav.ts';
 
 // Full-stack: needs the API and the servicedesk module on (the e2e job's
 // service-desk preset).
@@ -25,7 +26,7 @@ test.describe('my time', () => {
 	test('non-ticket time is logged for the week, with a timer', async ({ page }) => {
 		const note = `Intune course ${Date.now().toString(36)}`;
 		await signIn(page);
-		await page.getByRole('link', { name: 'My time' }).click();
+		await openFromMenu(page, 'My time');
 		await expect(page.getByRole('heading', { level: 1 })).toHaveText('My time');
 
 		// The timer fills the time spent (at least a minute).

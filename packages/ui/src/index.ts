@@ -14,6 +14,9 @@ export { default as Select, type SelectOption } from './components/Select.svelte
 export { default as Tabs, type TabItem } from './components/Tabs.svelte';
 export { default as ThemeToggle, type ThemePreference } from './components/ThemeToggle.svelte';
 export { default as Toaster } from './components/Toaster.svelte';
+export { default as Workbench } from './components/Workbench.svelte';
+export type { Space, SpaceMenuGroup, SpaceMenuItem } from './workbench';
+export { tray, clockTone, clockUsed, type TrayItem, type TrayKind } from './tray.svelte';
 export { toast, type Toast, type ToastTone } from './toast.svelte';
 export { default as FormRenderer } from './form/FormRenderer.svelte';
 export {

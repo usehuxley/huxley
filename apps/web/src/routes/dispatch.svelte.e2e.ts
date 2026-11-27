@@ -1,4 +1,5 @@
 import { expect, request, test, type APIRequestContext, type Page } from '@playwright/test';
+import { openFromMenu } from '../lib/testing/nav.ts';
 
 // Full-stack dispatch: needs the API (with a worker, so the pack's workflow
 // runs) and the servicedesk module on (the e2e job's service-desk preset).
@@ -100,7 +101,7 @@ test.describe('dispatch', () => {
 		}).toPass({ timeout: 20_000 });
 
 		// It's in My work, new, and the queue has nothing left waiting.
-		await page.getByRole('link', { name: 'My work' }).click();
+		await openFromMenu(page, 'My work');
 		await expect(page.getByRole('heading', { level: 1 })).toHaveText('My work');
 		const mine = page.getByRole('list', { name: 'Assigned to me' });
 		await expect(

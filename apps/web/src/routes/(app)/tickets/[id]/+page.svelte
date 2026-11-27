@@ -15,7 +15,7 @@
 		Square,
 		X
 	} from '@lucide/svelte';
-	import { Badge, Button, Card, Dialog, Field, Input, Select, toast } from '@usehuxley/ui';
+	import { Badge, Button, Card, Dialog, Field, Input, Select, toast, tray } from '@usehuxley/ui';
 	import { describe } from '#lib/tickets/activity.ts';
 	import { clockLines } from '#lib/tickets/sla.ts';
 	import {
@@ -50,6 +50,22 @@
 	let canWrite = $derived(data.user.grantedPermissions.includes('ticket:write'));
 	let priority = $derived(priorityOf(ticket.priority));
 	let clocks = $derived(clockLines(ticket));
+
+	// Keep the ticket in the work tray, with its resolution clock as a ring.
+	$effect(() => {
+		const t = ticket;
+		tray.open({
+			key: `ticket:${t.id}`,
+			kind: 'ticket',
+			href: `/tickets/${t.id}`,
+			title: `${t.reference} ${t.title}`,
+			subtitle: t.orgName ?? undefined,
+			clock:
+				t.resolutionDueAt && t.resolutionMet == null
+					? { from: t.createdAt, due: t.resolutionDueAt, paused: t.slaPaused }
+					: null
+		});
+	});
 	let statuses = $derived(data.type?.statuses ?? []);
 	let statusName = (key: string) => statuses.find((s) => s.key === key)?.name ?? key;
 	let hasResolution = $derived(data.notes.some((n) => n.kind === 'resolution'));

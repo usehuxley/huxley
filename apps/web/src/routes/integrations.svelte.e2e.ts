@@ -1,4 +1,5 @@
 import { expect, test, type Browser, type Page } from '@playwright/test';
+import { openFromMenu } from '../lib/testing/nav.ts';
 
 // Full-stack: needs the API and a bootstrapped owner.
 const ownerEmail = process.env.E2E_EMAIL;
@@ -42,7 +43,7 @@ test.describe('integrations', () => {
 
 	test('import an OpenAPI spec and see its actions', async ({ browser }) => {
 		const page = await signIn(browser);
-		await page.getByRole('link', { name: 'Integrations' }).click();
+		await openFromMenu(page, 'Integrations');
 		await expect(page.getByRole('heading', { level: 1 })).toHaveText('Integrations');
 
 		const title = `Devices ${Date.now().toString(36)}`;

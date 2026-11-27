@@ -1,4 +1,5 @@
 import { expect, request, test, type Page } from '@playwright/test';
+import { openFromMenu } from '../lib/testing/nav.ts';
 
 // Full-stack: needs the knowledge module on (the e2e job's service-desk
 // preset). The owner writes, reviews and publishes.
@@ -57,7 +58,7 @@ test.describe('knowledge base', () => {
 		const stamp = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
 		const title = `Reset MFA ${stamp}`;
 		await signIn(page);
-		await page.getByRole('link', { name: 'Knowledge' }).click();
+		await openFromMenu(page, 'Knowledge');
 		await expect(page.getByRole('heading', { level: 1 })).toHaveText('Knowledge');
 		await page.getByRole('link', { name: 'New article' }).click();
 

@@ -2,7 +2,7 @@
 	import { enhance } from '$app/forms';
 	import { resolve } from '$app/paths';
 	import { ArrowLeft } from '@lucide/svelte';
-	import { Button, Card } from '@usehuxley/ui';
+	import { Button, Card, tray } from '@usehuxley/ui';
 	import RunStatusBadge from '#lib/workflows/RunStatusBadge.svelte';
 	import ScriptTask from '#lib/workflows/ScriptTask.svelte';
 	import type { PageProps } from './$types';
@@ -16,6 +16,17 @@
 	let live = $state.raw<{ base: Run; run: Run } | null>(null);
 	let run = $derived(live?.base === data.run ? live.run : data.run);
 	let active = $derived(run.status === 'queued' || run.status === 'running');
+
+	$effect(() => {
+		tray.open({
+			key: `run:${run.id}`,
+			kind: 'run',
+			href: `/runs/${run.id}`,
+			title: data.workflow ? `Run: ${data.workflow.name}` : 'Run',
+			subtitle: run.status,
+			state: active ? 'running' : run.status === 'failed' ? 'failed' : 'done'
+		});
+	});
 	let canRerunFrom = $derived(data.user.grantedPermissions.includes('workflow:write'));
 	let canCancel = $derived(
 		data.user.grantedPermissions.includes(run.workflowVersion ? 'workflow:run' : 'workflow:write')

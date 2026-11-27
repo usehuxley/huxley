@@ -23,7 +23,7 @@ test.describe('settings (as the bootstrap owner)', () => {
 
 		await signIn(page);
 		await page
-			.getByRole('navigation', { name: 'Main navigation' })
+			.getByRole('navigation', { name: 'Spaces' })
 			.getByRole('link', { name: 'Settings' })
 			.click();
 		await expect(page).toHaveURL(/\/settings\/organizations$/);

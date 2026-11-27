@@ -1,4 +1,5 @@
 import { expect, request, test, type Page } from '@playwright/test';
+import { openFromMenu } from '../lib/testing/nav.ts';
 
 // Full-stack: needs the API with a bootstrapped owner and HUXLEY_API_URL,
 // and the workforce module on (the e2e job's service-desk preset).
@@ -72,7 +73,7 @@ test.describe('workforce', () => {
 		await expect(page.getByText(`Microsoft ${cert}`)).toBeVisible();
 
 		// My own skill (self-assessed) and certification.
-		await page.getByRole('link', { name: 'People', exact: true }).click();
+		await openFromMenu(page, 'People');
 		await page
 			.getByRole('table', { name: 'People' })
 			.getByRole('link', { name: 'E2E User' })
