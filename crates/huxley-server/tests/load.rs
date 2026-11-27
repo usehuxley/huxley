@@ -19,9 +19,17 @@ use serde_json::json;
 
 use common::{Database, worker};
 
-const RUNS: usize = 40;
 const ITEMS: usize = 50;
 const CONCURRENCY: usize = 16;
+
+/// Runs to start (`BENCH_RUNS`, default 40) and worker processes
+/// (`BENCH_WORKERS`, default 1): the reference sizes use more of both.
+fn setting(name: &str, default: usize) -> usize {
+    std::env::var(name)
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(default)
+}
 
 /// Per run: a foreach whose iterations each schedule a step job (a 1 ms
 /// wait: the cheapest side-effecting step) and evaluate a transform.
@@ -52,7 +60,7 @@ async fn steps_per_second() {
     };
     let config = DatabaseConfig {
         url: SecretString::from(db.url.clone()),
-        max_connections: 8,
+        max_connections: 16,
         acquire_timeout_secs: 10,
         statement_timeout_ms: 10_000,
         read_url: None,
@@ -80,11 +88,12 @@ async fn steps_per_second() {
         .unwrap();
     tx.commit().await.unwrap();
 
-    let mut process = worker(&db.url, CONCURRENCY);
+    let (runs, workers) = (setting("BENCH_RUNS", 40), setting("BENCH_WORKERS", 1));
+    let mut processes: Vec<_> = (0..workers).map(|_| worker(&db.url, CONCURRENCY)).collect();
     tokio::time::sleep(Duration::from_secs(1)).await;
     let started = Instant::now();
     let mut tx = begin_scoped(&pools.app, &OrgScope::System).await.unwrap();
-    for _ in 0..RUNS {
+    for _ in 0..runs {
         engine
             .start_run(
                 &mut tx,
@@ -116,8 +125,10 @@ async fn steps_per_second() {
         tokio::time::sleep(Duration::from_millis(50)).await;
     }
     let elapsed = started.elapsed().as_secs_f64();
-    let _ = process.kill();
-    let _ = process.wait();
+    for process in &mut processes {
+        let _ = process.kill();
+        let _ = process.wait();
+    }
 
     let (steps, jobs_steps): (i64, i64) = sqlx::query_as(
         "SELECT count(*), count(*) FILTER (WHERE step_type = 'wait') FROM step_runs",
@@ -133,8 +144,8 @@ async fn steps_per_second() {
     #[allow(clippy::cast_precision_loss)]
     let rate = steps as f64 / elapsed;
     println!(
-        "{RUNS} runs, {steps} steps ({jobs_steps} via step jobs) in {elapsed:.1}s: {rate:.0} steps/s \
-         with one worker process at concurrency {CONCURRENCY}"
+        "{runs} runs, {steps} steps ({jobs_steps} via step jobs) in {elapsed:.1}s: {rate:.0} steps/s \
+         with {workers} worker process(es) at concurrency {CONCURRENCY}"
     );
     pools.owner.close().await;
     pools.app.close().await;

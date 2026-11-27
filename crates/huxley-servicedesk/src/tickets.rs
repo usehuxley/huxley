@@ -218,8 +218,14 @@ pub struct TicketFilter {
 #[serde(rename_all = "camelCase")]
 pub struct TicketPage {
     pub items: Vec<Ticket>,
+    /// How many match, counted up to 10,000 (see `total_capped`).
     pub total: i64,
+    /// More than 10,000 match: `total` stops there.
+    pub total_capped: bool,
 }
+
+/// Counting stops here: a list's count costs as much as the rows it counts.
+const COUNT_CAP: i64 = 10_000;
 
 /// Tickets visible in the transaction's scope, most urgent first, then
 /// oldest first.
@@ -266,41 +272,100 @@ pub async fn list(conn: &mut PgConnection, filter: &TicketFilter) -> DeskResult<
                 .collect::<DeskResult<_>>()?,
         ),
     };
-    let filter_sql = "WHERE s.category = ANY($1) \
-        AND ($2::uuid IS NULL OR t.org_id = $2) AND ($3::uuid IS NULL OR t.queue_id = $3) \
-        AND (NOT $4 OR (t.assignee_user_id IS NULL AND t.assignee_team_id IS NULL)) \
-        AND ($5::uuid IS NULL OR t.assignee_user_id = $5) \
-        AND ($6::text IS NULL OR t.title ILIKE $6 OR t.number = $7) \
-        AND ($8::text[] IS NULL OR t.priority = ANY($8))";
-    let total: i64 = sqlx::query_scalar(sqlx::AssertSqlSafe(format!(
-        "SELECT count(*) FROM sd_tickets t JOIN sd_statuses s ON s.id = t.status_id {filter_sql}"
-    )))
-    .bind(categories)
-    .bind(filter.org_id)
-    .bind(filter.queue_id)
-    .bind(unassigned)
-    .bind(assignee)
-    .bind(&pattern)
-    .bind(number)
-    .bind(&priorities)
-    .fetch_one(&mut *conn)
-    .await?;
-    let items = sqlx::query_as(sqlx::AssertSqlSafe(format!(
-        "{SELECT} {filter_sql} ORDER BY t.priority, t.created_at LIMIT $9 OFFSET $10"
-    )))
-    .bind(categories)
-    .bind(filter.org_id)
-    .bind(filter.queue_id)
-    .bind(unassigned)
-    .bind(assignee)
-    .bind(&pattern)
-    .bind(number)
-    .bind(&priorities)
-    .bind(filter.limit.unwrap_or(50).clamp(1, 200))
-    .bind(filter.offset.unwrap_or(0).max(0))
-    .fetch_all(conn)
-    .await?;
-    Ok(TicketPage { items, total })
+    let conditions = Conditions {
+        categories: categories.iter().map(|c| (*c).to_owned()).collect(),
+        org: filter.org_id,
+        queue: filter.queue_id,
+        unassigned,
+        assignee,
+        pattern,
+        number,
+        priorities,
+    };
+    // Only the filters given, so every combination gets a plan of its own:
+    // `($n IS NULL OR …)` filters left prepared statements' generic plans
+    // joining every ticket before filtering (docs/performance.md).
+    let mut count = sqlx::QueryBuilder::<sqlx::Postgres>::new(
+        "SELECT count(*) FROM (SELECT 1 FROM sd_tickets t",
+    );
+    conditions.push(&mut count);
+    count
+        .push(" LIMIT ")
+        .push_bind(COUNT_CAP + 1)
+        .push(") AS matching");
+    let counted: i64 = count.build_query_scalar().fetch_one(&mut *conn).await?;
+    // The page first, from the tickets alone (an index gives it in order),
+    // then the names, statuses and SLAs for just those tickets.
+    let mut page = sqlx::QueryBuilder::<sqlx::Postgres>::new(
+        "WITH page AS (SELECT t.id, t.priority, t.created_at FROM sd_tickets t",
+    );
+    conditions.push(&mut page);
+    page.push(" ORDER BY t.priority, t.created_at, t.id LIMIT ")
+        .push_bind(filter.limit.unwrap_or(50).clamp(1, 200))
+        .push(" OFFSET ")
+        .push_bind(filter.offset.unwrap_or(0).max(0))
+        .push(") ")
+        .push(SELECT)
+        // By primary key: joining `page` let the planner join every ticket
+        // first and keep 50.
+        .push(
+            " WHERE t.id = ANY(ARRAY(SELECT id FROM page)) ORDER BY t.priority, t.created_at, t.id",
+        );
+    let items = page.build_query_as::<Ticket>().fetch_all(conn).await?;
+    Ok(TicketPage {
+        items,
+        total: counted.min(COUNT_CAP),
+        total_capped: counted > COUNT_CAP,
+    })
+}
+
+/// A ticket list's filters, as SQL conditions on `sd_tickets t`.
+struct Conditions {
+    categories: Vec<String>,
+    org: Option<Uuid>,
+    queue: Option<Uuid>,
+    unassigned: bool,
+    assignee: Option<Uuid>,
+    pattern: Option<String>,
+    number: Option<i64>,
+    priorities: Option<Vec<String>>,
+}
+
+impl Conditions {
+    fn push(&self, q: &mut sqlx::QueryBuilder<sqlx::Postgres>) {
+        q.push(" WHERE t.status_id = ANY(ARRAY(SELECT id FROM sd_statuses WHERE category = ANY(")
+            .push_bind(self.categories.clone())
+            .push(")))");
+        // closed_at is set exactly when a ticket is in a closed status;
+        // saying so lets the open-ticket indexes serve the list.
+        if !self.categories.iter().any(|c| c == "closed") {
+            q.push(" AND t.closed_at IS NULL");
+        }
+        if let Some(org) = self.org {
+            q.push(" AND t.org_id = ").push_bind(org);
+        }
+        if let Some(queue) = self.queue {
+            q.push(" AND t.queue_id = ").push_bind(queue);
+        }
+        if self.unassigned {
+            q.push(" AND t.assignee_user_id IS NULL AND t.assignee_team_id IS NULL");
+        }
+        if let Some(user) = self.assignee {
+            q.push(" AND t.assignee_user_id = ").push_bind(user);
+        }
+        if let Some(pattern) = &self.pattern {
+            q.push(" AND (t.title ILIKE ").push_bind(pattern.clone());
+            if let Some(number) = self.number {
+                q.push(" OR t.number = ").push_bind(number);
+            }
+            q.push(")");
+        }
+        if let Some(priorities) = &self.priorities {
+            q.push(" AND t.priority = ANY(")
+                .push_bind(priorities.clone())
+                .push(")");
+        }
+    }
 }
 
 fn level(field: &str, value: Option<i16>) -> DeskResult<i16> {

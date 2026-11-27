@@ -18,7 +18,11 @@ pub const DUE_SOON: Duration = Duration::hours(4);
 /// Tickets shown per queue.
 const PER_QUEUE: i64 = 5;
 
-const OPEN: &str = "s.category IN ('new', 'open', 'pending')";
+/// Open tickets, on the ticket itself: `closed_at IS NULL` lets the
+/// open-ticket indexes serve these queries, and the status ids keep the
+/// join to statuses out of the filter (docs/performance.md).
+const OPEN: &str = "t.closed_at IS NULL AND t.status_id = ANY(ARRAY( \
+    SELECT id FROM sd_statuses WHERE category IN ('new', 'open', 'pending')))";
 
 #[derive(Debug, Clone, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
@@ -90,7 +94,8 @@ fn rank(reason: Option<&str>) -> u8 {
 /// `user`'s work, as of `now`, from what the transaction's scope can see.
 pub async fn of(conn: &mut PgConnection, user: Uuid, now: OffsetDateTime) -> DeskResult<MyWork> {
     let mut mine: Vec<Ticket> = sqlx::query_as(sqlx::AssertSqlSafe(format!(
-        "{SELECT} WHERE t.assignee_user_id = $1 AND {OPEN} LIMIT 500"
+        "WITH pick AS (SELECT t.id FROM sd_tickets t WHERE t.assignee_user_id = $1 AND {OPEN} LIMIT 500) \
+         {SELECT} WHERE t.id = ANY(ARRAY(SELECT id FROM pick))"
     )))
     .bind(user)
     .fetch_all(&mut *conn)
@@ -129,26 +134,27 @@ pub async fn of(conn: &mut PgConnection, user: Uuid, now: OffsetDateTime) -> Des
     });
 
     let team: Vec<Ticket> = sqlx::query_as(sqlx::AssertSqlSafe(format!(
-        "{SELECT} WHERE t.assignee_user_id IS NULL AND {OPEN} \
+        "WITH pick AS (SELECT t.id FROM sd_tickets t WHERE t.assignee_user_id IS NULL AND {OPEN} \
            AND t.assignee_team_id IN (SELECT team_id FROM team_members WHERE user_id = $1) \
-         ORDER BY t.priority, t.created_at LIMIT 200"
+           ORDER BY t.priority, t.created_at, t.id LIMIT 200) \
+         {SELECT} WHERE t.id = ANY(ARRAY(SELECT id FROM pick)) ORDER BY t.priority, t.created_at, t.id"
     )))
     .bind(user)
     .fetch_all(&mut *conn)
     .await?;
 
-    let queues: Vec<(Uuid, String, i64)> = sqlx::query_as(
+    let queues: Vec<(Uuid, String, i64)> = sqlx::query_as(sqlx::AssertSqlSafe(format!(
         "SELECT q.id, q.name, \
-                (SELECT count(*) FROM sd_tickets t JOIN sd_statuses s ON s.id = t.status_id \
+                (SELECT count(*) FROM sd_tickets t \
                   WHERE t.queue_id = q.id AND t.assignee_user_id IS NULL AND t.assignee_team_id IS NULL \
-                    AND s.category IN ('new', 'open', 'pending')) \
+                    AND {OPEN}) \
            FROM sd_queues q \
           WHERE q.archived_at IS NULL AND EXISTS ( \
                 SELECT 1 FROM sd_queue_members m \
                  WHERE m.queue_id = q.id AND (m.user_id = $1 OR m.team_id IN \
                        (SELECT team_id FROM team_members WHERE user_id = $1))) \
-          ORDER BY lower(q.name)",
-    )
+          ORDER BY lower(q.name)"
+    )))
     .bind(user)
     .fetch_all(&mut *conn)
     .await?;
@@ -158,9 +164,10 @@ pub async fn of(conn: &mut PgConnection, user: Uuid, now: OffsetDateTime) -> Des
             Vec::new()
         } else {
             sqlx::query_as(sqlx::AssertSqlSafe(format!(
-                "{SELECT} WHERE t.queue_id = $1 AND t.assignee_user_id IS NULL \
-                   AND t.assignee_team_id IS NULL AND {OPEN} \
-                 ORDER BY t.priority, t.created_at LIMIT {PER_QUEUE}"
+                "WITH pick AS (SELECT t.id FROM sd_tickets t WHERE t.queue_id = $1 \
+                   AND t.assignee_user_id IS NULL AND t.assignee_team_id IS NULL AND {OPEN} \
+                   ORDER BY t.priority, t.created_at, t.id LIMIT {PER_QUEUE}) \
+                 {SELECT} WHERE t.id = ANY(ARRAY(SELECT id FROM pick)) ORDER BY t.priority, t.created_at, t.id"
             )))
             .bind(queue_id)
             .fetch_all(&mut *conn)

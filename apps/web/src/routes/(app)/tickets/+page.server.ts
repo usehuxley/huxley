@@ -47,6 +47,7 @@ export const load: PageServerLoad = async (event) => {
 	return {
 		tickets: tickets.data.items,
 		total: tickets.data.total,
+		totalCapped: tickets.data.totalCapped,
 		queues: queues.data ?? [],
 		views: views.data ?? [],
 		...people,
