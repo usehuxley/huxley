@@ -34,6 +34,18 @@ From the [implementation plan](docs/IMPLEMENTATION_PLAN.md):
 - UI uses `@usehuxley/ui`, works with the keyboard, in light and dark themes, and at phone width.
 - User-facing behavior is documented.
 
+## Integrations and packs
+
+Integrations and automations are the easiest way to help: they ship as packs (ADR-028).
+
+- **Built-in packs** live in `crates/huxley-packs/builtin/<name>/` (a `pack.yaml` and its content folders) and are listed in `crates/huxley-packs/src/builtin.rs`. Huxley ships them inside the binary, trusted by construction. Built-in packs are for integrations most MSPs use and for the automations Huxley's own modules need.
+- **An integration** is an OpenAPI document, with an overlay for what the vendor's document gets wrong or leaves out: auth schemes, pagination, friendly names. Start from the vendor's published spec rather than writing one, and keep the overlay small. Add a test that imports it, against a mock of the vendor's API: see `crates/huxley-engine/tests/` for examples.
+- **Workflows** in a pack must validate (`huxley workflows validate`), and must use the integration's operations rather than raw HTTP where one exists.
+- Read [Writing packs](docs/pack-authoring.md) first: what to include, what never to include (credentials, customer data), and how versions and upgrades work.
+- A change to a built-in pack bumps its `version` (semver), so instances see the upgrade and review it.
+
+Packs that only some MSPs need are better published as signed packs, from your own registry (`huxley pack index`, see [Packs](docs/packs.md#hosting-a-registry)), than added as built-ins.
+
 ## Dependencies
 
 - Rust and npm dependencies must use permissive, MIT-compatible licenses (ADR-012). `cargo deny check` enforces this for Rust.

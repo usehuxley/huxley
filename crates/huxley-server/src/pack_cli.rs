@@ -46,6 +46,22 @@ pub enum PackCommand {
         #[arg(long)]
         trust: Vec<String>,
     },
+    /// Write a registry index (index.json) for the .hxpack files in a
+    /// folder, to host the folder as a pack registry (ADR-093). Each pack
+    /// is checked as an install would check it.
+    Index {
+        dir: PathBuf,
+        /// Where the folder is served, e.g. `https://packs.example.com`.
+        #[arg(long)]
+        base_url: String,
+        /// The registry's name, shown to admins.
+        #[arg(long, default_value = "Packs")]
+        name: String,
+        /// Sign the index with this key file (writes index.json.sig);
+        /// instances configured with the key refuse anything else.
+        #[arg(long)]
+        key: Option<PathBuf>,
+    },
 }
 
 pub fn run(command: PackCommand) -> anyhow::Result<()> {
@@ -59,7 +75,56 @@ pub fn run(command: PackCommand) -> anyhow::Result<()> {
             out,
         } => sign(file, &key, publisher, out),
         PackCommand::Inspect { file, trust } => inspect(&file, &trust),
+        PackCommand::Index {
+            dir,
+            base_url,
+            name,
+            key,
+        } => index(&dir, &base_url, &name, key.as_deref()),
     }
+}
+
+fn index(dir: &Path, base_url: &str, name: &str, key: Option<&Path>) -> anyhow::Result<()> {
+    let mut files = Vec::new();
+    for entry in
+        std::fs::read_dir(dir).with_context(|| format!("failed to read {}", dir.display()))?
+    {
+        let path = entry?.path();
+        if path.extension().and_then(|e| e.to_str()) != Some("hxpack") {
+            continue;
+        }
+        let file = path
+            .file_name()
+            .and_then(|f| f.to_str())
+            .context("pack file names must be UTF-8")?
+            .to_owned();
+        files.push((file, std::fs::read(&path)?));
+    }
+    files.sort_by(|a, b| a.0.cmp(&b.0));
+    let index = huxley_packs::registry::build_index(name, base_url, &files)?;
+    let bytes = serde_json::to_vec_pretty(&index)?;
+    std::fs::write(dir.join("index.json"), &bytes)?;
+    let versions: usize = index.packs.iter().map(|p| p.versions.len()).sum();
+    println!(
+        "Wrote {}: {} packs, {versions} versions.",
+        dir.join("index.json").display(),
+        index.packs.len()
+    );
+    if let Some(key) = key {
+        let key = SigningKey::from_text(
+            &std::fs::read_to_string(key)
+                .with_context(|| format!("failed to read {}", key.display()))?,
+        )?;
+        std::fs::write(
+            dir.join("index.json.sig"),
+            huxley_packs::registry::sign_index(&bytes, &key, name)?,
+        )?;
+        println!(
+            "Signed it: instances that set this registry's key to {} accept it.",
+            key.public()
+        );
+    }
+    Ok(())
 }
 
 fn keygen(out: &Path) -> anyhow::Result<()> {

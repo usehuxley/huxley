@@ -2401,6 +2401,7 @@ dependencies = [
  "huxley-workforce",
  "jiff 0.2.46",
  "opentelemetry",
+ "reqwest 0.13.5",
  "ring",
  "rust_decimal",
  "secrecy",

@@ -249,6 +249,23 @@ jobs:
           psql -h localhost -U huxley -d huxley -v ON_ERROR_STOP=1 \
             -c "CREATE ROLE huxley_console LOGIN PASSWORD 'console-e2e'" \
             -c "GRANT huxley_datasets_reader TO huxley_console"
+      # A pack registry for the registry e2e test (ADR-093): the fixture
+      # pack, built, signed and indexed with the CLI, its index signed with
+      # the same throwaway key, and served on 127.0.0.1.
+      - name: Serve a pack registry
+        run: |
+          set -euo pipefail
+          registry="$RUNNER_TEMP/registry"
+          mkdir -p "$registry"
+          ./target/debug/huxley pack keygen --out "$RUNNER_TEMP/registry.key"
+          ./target/debug/huxley pack build apps/web/e2e-fixtures/registry-pack \
+            --out "$registry/hello-1.0.0.hxpack" --key "$RUNNER_TEMP/registry.key"
+          ./target/debug/huxley pack index "$registry" --base-url http://127.0.0.1:8099 \
+            --name "E2E packs" --key "$RUNNER_TEMP/registry.key"
+          nohup python3 -m http.server 8099 --bind 127.0.0.1 --directory "$registry" > registry.log 2>&1 &
+          key=$(grep -o 'hxpk_[A-Za-z0-9_-]*' "$registry/index.json.sig" | head -1)
+          echo "HUXLEY_PACKS__REGISTRIES=[{url=\"http://127.0.0.1:8099/index.json\", key=\"$key\"}]" >> "$GITHUB_ENV"
+          echo "E2E_PACK_REGISTRY=1" >> "$GITHUB_ENV"
       - name: Start the API
         env:
           HUXLEY_DATASETS__CONSOLE_URL: postgres://huxley_console:console-e2e@localhost:5432/huxley

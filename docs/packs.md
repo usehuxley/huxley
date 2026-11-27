@@ -36,6 +36,46 @@ Or set `HUXLEY_PACKS__TRUSTED_KEYS='["hxpk_…"]'` in the environment.
 
 The API is `POST /api/v1/packs/uploads?orgId=` (the raw file; it returns the review), `POST /api/v1/packs/uploads/{id}/install`, and `GET /api/v1/packs?orgId=`.
 
+## From a registry
+
+A **pack registry** is a folder of packs on a web server, with an index listing them (ADR-093). An MSP might host one for its own packs, and a community registry can host shared ones. Configure the registries an instance browses:
+
+```toml
+[[packs.registries]]
+url = "https://packs.contoso.example/index.json"
+key = "hxpk_…"   # optional: the registry's key; then its index must be signed by it
+```
+
+Or `HUXLEY_PACKS__REGISTRIES='[{url="https://packs.contoso.example/index.json", key="hxpk_…"}]'`.
+
+Each registry gets a card in **Settings → Packs** listing its packs. For each one it shows:
+
+- the versions it offers, newest first;
+- who published it, and whether it's signed by a key this instance trusts;
+- what's installed in the organization, and when a newer version is available.
+
+**Review** downloads the version you pick and shows the same review as an upload, so everything above about installing applies. A registry adds two checks of its own:
+
+- **The download must match the index.** The index lists every pack's SHA-256, and a file that doesn't match is refused. So is a file whose manifest names a different pack or version.
+- **The index can be signed.** With `key` set, Huxley fetches `index.json.sig` and refuses the index unless the registry's key signed it, so nobody can swap packs or hashes in transit or on the server. Packs keep their own signatures too. Trust (`packs.trusted_keys`) is about who wrote a pack; the registry key is about where its list came from.
+
+Indexes are cached for five minutes. The API is `GET /api/v1/packs/registry?orgId=` and `POST /api/v1/packs/registry/review?orgId=`, with `{ registry, key, version }`.
+
+### Hosting a registry
+
+Put your signed `.hxpack` files in a folder and index it:
+
+```sh
+huxley pack index ./packs --base-url https://packs.contoso.example --name "Contoso packs" --key registry.key
+```
+
+That checks each pack as an install would, then writes:
+
+- `index.json`: every version of every pack, with its SHA-256, size, signer and contents;
+- `index.json.sig`: the index's signature, written only with `--key`.
+
+Serve the folder over HTTPS from anything that serves static files: object storage, GitHub Pages, nginx. Re-run the command when you add a version, and keep old versions in the folder so instances can still review them.
+
 ## Built-in packs
 
 Huxley's built-in integrations (Microsoft Graph and Slack) are packs too: `huxley/msgraph` and `huxley/slack`. So are `huxley/servicedesk-email`, the service desk's *Poll mailboxes*, *Email to ticket* and *Email replies* workflows, `huxley/servicedesk-dispatch`, its *Dispatch tickets* workflow, `huxley/servicedesk-notifications`, which tells technicians about assignments, replies and SLAs, `huxley/servicedesk-chat`, which posts urgent tickets and missed SLAs to Slack or Teams, `huxley/servicedesk-search`, which embeds tickets for searching by meaning, and `huxley/knowledge-search`, which does the same for published articles, `huxley/cwautomate`, for running commands on ConnectWise Automate computers (see [ConnectWise Automate](cwautomate.md)), `huxley/immybot`, for ImmyBot maintenance and computers (see [ImmyBot](immybot.md)), and `huxley/timesheet-reminders` (see [Timesheets](workforce.md#timesheets)). They ship inside the binary, so they're trusted by construction, and the review labels them **Built in**.
@@ -90,6 +130,8 @@ A pack is one of:
 A broken signature fails. Installing any pack shows what it adds and needs an admin's approval, and packs that aren't trusted say so.
 
 ## Building one
+
+For what makes a good pack (keys, versions, upgrades, what to leave out), see [Writing packs](./pack-authoring.md).
 
 Make a folder with `pack.yaml`, which is the manifest without `files`, and the content folders:
 

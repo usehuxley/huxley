@@ -162,6 +162,9 @@ async fn spawn_api(
     let state = huxley_api::AppState {
         runner_gateway_url: config.runners.public_url.clone(),
         trusted_pack_keys: Arc::new(config.packs.trusted_keys.clone()),
+        pack_registries: Arc::new(huxley_api::pack_registry::PackRegistries::new(
+            config.packs.registries.clone(),
+        )),
         datasets_console: datasets_console(config).await?,
         read_db: match &config.database {
             Some(database) => huxley_db::connect_read(database)?,

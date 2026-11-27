@@ -5389,6 +5389,46 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
+	'/api/v1/packs/registry': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/**
+		 * The packs in the configured registries (`packs.registries`), with what
+		 *     `orgId` has installed.
+		 */
+		get: operations['browse_pack_registries'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/packs/registry/review': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/**
+		 * Downloads a pack from a registry, checks it against the index, and
+		 *     returns what installing it in `orgId` would do, as an upload does.
+		 */
+		post: operations['review_registry_pack'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
 	'/api/v1/packs/uploads': {
 		parameters: {
 			query?: never;
@@ -12908,6 +12948,18 @@ export interface components {
 			/** @description Rows imported before (by their bank ID). */
 			skipped: number;
 		};
+		IndexedVersion: {
+			contents: components['schemas']['Contents'];
+			/** @description SHA-256 of the file (hex): a download that doesn't match is refused. */
+			sha256: string;
+			/** @description The key (`hxpk_…`) that signed it, if any. */
+			signedBy?: string | null;
+			/** Format: int64 */
+			size: number;
+			/** @description The `.hxpack`: absolute, or relative to the index. */
+			url: string;
+			version: string;
+		};
 		InstallRequest: {
 			/** Format: uuid */
 			orgId: string;
@@ -16153,6 +16205,35 @@ export interface components {
 			passkey: components['schemas']['PasskeyView'];
 			/** @description Present when this was the user's first second factor. Shown once. */
 			recoveryCodes?: string[] | null;
+		};
+		/** @description A registry and its packs, or why it couldn't be read. */
+		RegistryListing: {
+			error?: string | null;
+			name: string;
+			packs: components['schemas']['RegistryPack'][];
+			/** @description Its position in `packs.registries` (for reviewing from it). */
+			registry: number;
+			/** @description The registry has a key: its index's signature was checked. */
+			signed: boolean;
+			url: string;
+		};
+		/** @description A pack in a registry, with what the organization has installed. */
+		RegistryPack: {
+			description: string;
+			/** @description The version installed in the organization, if any. */
+			installed?: string | null;
+			key: string;
+			name: string;
+			publisher: string;
+			/** @description The newest version is signed by a key this instance trusts. */
+			trusted: boolean;
+			/** @description Newest first. */
+			versions: components['schemas']['IndexedVersion'][];
+		};
+		RegistryReviewRequest: {
+			key: string;
+			registry: number;
+			version: string;
 		};
 		/** @description A customer, item, tax code or class in the accounting system. */
 		RemoteOption: {
@@ -30124,6 +30205,68 @@ export interface operations {
 				};
 			};
 			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	browse_pack_registries: {
+		parameters: {
+			query: {
+				orgId: string;
+			};
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['RegistryListing'][];
+				};
+			};
+		};
+	};
+	review_registry_pack: {
+		parameters: {
+			query: {
+				orgId: string;
+			};
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['RegistryReviewRequest'];
+			};
+		};
+		responses: {
+			201: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['Review'];
+				};
+			};
+			404: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+			502: {
 				headers: {
 					[name: string]: unknown;
 				};

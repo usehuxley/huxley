@@ -1,0 +1,9 @@
+apiVersion: usehuxley.io/v1
+kind: Pack
+key: e2e/hello
+name: Hello pack
+version: 1.0.0
+publisher: E2E
+description: A greeting form, served from a test pack registry.
+contents:
+  forms: [registry-hello]

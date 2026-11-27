@@ -213,6 +213,89 @@
 		</Card>
 	{/if}
 
+	{#each data.registries as registry (registry.registry)}
+		<Card
+			title={registry.name}
+			description="A pack registry ({registry.url}). Reviewing downloads the pack and checks it against the registry's index; you see what it adds before anything changes."
+		>
+			{#snippet actions()}
+				{#if registry.signed}<Badge tone="success">Signed index</Badge>{/if}
+			{/snippet}
+			{#if registry.error}
+				<p role="alert" class="text-sm text-danger">Couldn't read it: {registry.error}</p>
+			{:else if registry.packs.length === 0}
+				<p class="text-sm text-fg-muted">It has no packs.</p>
+			{:else}
+				<ul class="flex flex-col divide-y divide-border" aria-label="{registry.name} packs">
+					{#each registry.packs as pack (pack.key)}
+						{@const newest = pack.versions[0]}
+						<li
+							class="flex flex-wrap items-center justify-between gap-4 py-3 text-sm first:pt-0 last:pb-0"
+						>
+							<div class="min-w-0">
+								<p class="font-medium text-fg">{pack.name}</p>
+								<p class="text-xs text-fg-muted">
+									<span class="font-mono">{pack.key}</span>{pack.publisher
+										? ` · by ${pack.publisher}`
+										: ''}
+								</p>
+								{#if pack.description}<p class="mt-1 text-xs text-fg-muted">
+										{pack.description}
+									</p>{/if}
+							</div>
+							<div class="flex flex-wrap items-center gap-2">
+								{#if pack.installed === newest?.version}
+									<Badge>Installed</Badge>
+								{:else if pack.installed}
+									<Badge tone="info">
+										{pack.installed} installed · {newest?.version} available
+									</Badge>
+								{/if}
+								<Badge tone={pack.trusted ? 'success' : newest?.signedBy ? 'warning' : 'neutral'}>
+									{pack.trusted
+										? 'Signed, trusted'
+										: newest?.signedBy
+											? 'Signed by an unknown key'
+											: 'Unsigned'}
+								</Badge>
+								<form
+									method="POST"
+									action="?/reviewRegistry"
+									use:enhance
+									class="flex items-center gap-2"
+								>
+									<input type="hidden" name="orgId" value={data.orgId} />
+									<input type="hidden" name="registry" value={registry.registry} />
+									<input type="hidden" name="key" value={pack.key} />
+									<label class="sr-only" for="version-{registry.registry}-{pack.key}">
+										Version
+									</label>
+									<select
+										id="version-{registry.registry}-{pack.key}"
+										name="version"
+										class="h-8 rounded-control border border-border-strong bg-surface px-2 text-sm text-fg"
+									>
+										{#each pack.versions as v (v.version)}
+											<option value={v.version}>{v.version}</option>
+										{/each}
+									</select>
+									<Button
+										type="submit"
+										variant="secondary"
+										size="sm"
+										aria-label="Review {pack.name}"
+									>
+										Review
+									</Button>
+								</form>
+							</div>
+						</li>
+					{/each}
+				</ul>
+			{/if}
+		</Card>
+	{/each}
+
 	<Card
 		title="Install a pack"
 		description="Upload a .hxpack file. You'll see what it adds before anything changes."
