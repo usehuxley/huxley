@@ -462,6 +462,9 @@ pub enum Step {
     /// Read an expense's receipt with AI (the `expenses` module).
     #[serde(rename = "core.expense.read_receipt")]
     ExpenseReadReceipt(ExpenseReadReceiptStep),
+    /// Record an expense report's decision (the `expenses` module).
+    #[serde(rename = "core.expense.report_decide")]
+    ExpenseReportDecide(ExpenseReportDecideStep),
     /// Log an email on the contacts and leads it's to or from (the `sales` module).
     #[serde(rename = "core.sales.log_email")]
     SalesLogEmail(SalesLogEmailStep),
@@ -919,6 +922,11 @@ step!(ExpenseReadReceiptStep {
     pub read: ExpenseReadReceipt,
 });
 
+step!(ExpenseReportDecideStep {
+    #[serde(rename = "with")]
+    pub decide: ExpenseReportDecide,
+});
+
 step!(SalesLogEmailStep {
     #[serde(rename = "with")]
     pub log: SalesLogEmail,
@@ -1069,6 +1077,7 @@ impl Step {
             InvoiceUnpaid,
             InvoiceStatus,
             ExpenseReadReceipt,
+            ExpenseReportDecide,
             SalesLogEmail,
             ScopeContext,
             ScopeWrite,
@@ -1149,6 +1158,7 @@ impl Step {
             Self::InvoiceUnpaid(_) => "core.invoice.unpaid",
             Self::InvoiceStatus(_) => "core.invoice.status",
             Self::ExpenseReadReceipt(_) => "core.expense.read_receipt",
+            Self::ExpenseReportDecide(_) => "core.expense.report_decide",
             Self::SalesLogEmail(_) => "core.sales.log_email",
             Self::ScopeContext(_) => "core.scope.context",
             Self::ScopeWrite(_) => "core.scope.write",
@@ -1922,6 +1932,24 @@ pub struct ExpenseReadReceipt {
     pub expense_id: Value,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub model: Option<Value>,
+}
+
+/// An expense report's decision (`core.expense.report_decide`): `report_id`
+/// (from `expense_report.submitted`), `decision` (`approved`,
+/// `changes_requested` or `rejected`, or a boolean), `by` and a `comment`.
+/// Approved locks its expenses; otherwise they go back to the person to
+/// change and submit again. Raises `expense_report.approved`,
+/// `.changes_requested` or `.rejected` and tells the person. Output: the
+/// report.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct ExpenseReportDecide {
+    pub report_id: Value,
+    pub decision: Value,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub by: Option<Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub comment: Option<Value>,
 }
 
 /// An email to log (`core.sales.log_email`): `email_id`, from a mailbox's

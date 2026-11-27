@@ -36,6 +36,19 @@ What it read shows under the entry. **Use these** takes it into your draft, and 
 
 The `expense.receipt_added` event triggers the reading, and the `core.expense.read_receipt` step does it.
 
+## Reports and approval
+
+On **Business → Expenses**, **Submit for approval** bundles your drafts, and any expenses sent back to you, into an **expense report** (ADR-081). One report covers one MSP.
+
+With the **Expense approval** pack installed, the report goes to the leads of your teams (administrators, if your teams have no lead). They see the totals, what's to be paid back, and any policy flags, and decide on the report's page:
+- **Approve** locks its expenses.
+- **Ask for changes** sends them back to you to change and submit again.
+- **Reject** sends them back too, and closes the report.
+
+You're told either way. Comments on a report reach whoever submitted it, and anyone @mentioned.
+
+The events are `expense_report.submitted`, `expense_report.approved`, `expense_report.changes_requested` and `expense_report.rejected`. The `core.expense.report_decide` step records a decision.
+
 ## Settings
 
 In **Settings → Expenses** (`expense:configure`):

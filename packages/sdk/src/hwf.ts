@@ -1493,6 +1493,30 @@ export type Step =
 			 * Fail the attempt after this long, e.g. `30s`.
 			 */
 			timeout?: string | null;
+			type: 'core.expense.report_decide';
+			with: ExpenseReportDecide;
+	  }
+	| {
+			/**
+			 * Record the error as the step's output and carry on.
+			 */
+			continue_on_error?: boolean;
+			description?: string | null;
+			/**
+			 * Unique in the workflow: lowercase letters, digits, underscores.
+			 * Other steps read this step's output as `steps.<id>.output`.
+			 */
+			id: string;
+			/**
+			 * Skip the step unless this expression is true.
+			 */
+			if?: string | null;
+			name?: string | null;
+			retry?: RetryPolicy | null;
+			/**
+			 * Fail the attempt after this long, e.g. `30s`.
+			 */
+			timeout?: string | null;
 			type: 'core.sales.log_email';
 			with: SalesLogEmail;
 	  }
@@ -2844,6 +2868,24 @@ export interface InvoiceStatus {
 export interface ExpenseReadReceipt {
 	expense_id: unknown;
 	model?: unknown;
+}
+/**
+ * An expense report's decision (`core.expense.report_decide`): `report_id`
+ * (from `expense_report.submitted`), `decision` (`approved`,
+ * `changes_requested` or `rejected`, or a boolean), `by` and a `comment`.
+ * Approved locks its expenses; otherwise they go back to the person to
+ * change and submit again. Raises `expense_report.approved`,
+ * `.changes_requested` or `.rejected` and tells the person. Output: the
+ * report.
+ *
+ * This interface was referenced by `HuxleyWorkflowFormatV1`'s JSON-Schema
+ * via the `definition` "ExpenseReportDecide".
+ */
+export interface ExpenseReportDecide {
+	by?: unknown;
+	comment?: unknown;
+	decision: unknown;
+	report_id: unknown;
 }
 /**
  * An email to log (`core.sales.log_email`): `email_id`, from a mailbox's

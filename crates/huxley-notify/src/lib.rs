@@ -62,6 +62,8 @@ pub mod kinds {
     pub const QUOTE_REVIEWED: &str = "quote.reviewed";
     pub const INVOICE_MENTIONED: &str = "invoice.mentioned";
     pub const INVOICE_REVIEWED: &str = "invoice.reviewed";
+    pub const EXPENSE_MENTIONED: &str = "expense.mentioned";
+    pub const EXPENSE_REVIEWED: &str = "expense.reviewed";
     pub const SALES_TASK: &str = "sales.task";
 
     pub const ALL: &[Kind] = &[
@@ -176,6 +178,22 @@ pub mod kinds {
             email: true,
             mandatory: false,
             module: Some("billing"),
+        },
+        Kind {
+            key: EXPENSE_MENTIONED,
+            description: "Someone commented on an expense report of yours, or mentioned you on one",
+            in_app: true,
+            email: true,
+            mandatory: false,
+            module: Some("expenses"),
+        },
+        Kind {
+            key: EXPENSE_REVIEWED,
+            description: "An expense report of yours was approved, sent back or rejected",
+            in_app: true,
+            email: true,
+            mandatory: false,
+            module: Some("expenses"),
         },
         Kind {
             key: SALES_TASK,

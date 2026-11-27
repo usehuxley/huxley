@@ -121,6 +121,62 @@ impl Engine {
     }
 }
 
+impl Engine {
+    /// `core.expense.report_decide`: records the decision on a submitted
+    /// expense report (one in the run's organization or below).
+    pub(crate) async fn expense_report_decide(
+        &self,
+        org_id: Uuid,
+        input: &Json,
+    ) -> Result<Json, Json> {
+        use huxley_expenses::reports::{self, Decision};
+        let report =
+            id(input, "report_id")?.ok_or_else(|| error("input", "report_id is required"))?;
+        let bad = || {
+            error(
+                "input",
+                "decision is approved, changes_requested or rejected",
+            )
+        };
+        let decision = match &input["decision"] {
+            Json::Bool(true) => Decision::Approved,
+            Json::Bool(false) => Decision::Rejected,
+            Json::String(s) => Decision::parse(s).ok_or_else(bad)?,
+            _ => return Err(bad()),
+        };
+        let by = input["by"]
+            .as_str()
+            .filter(|s| !s.trim().is_empty())
+            .unwrap_or("Expense approval");
+        let subtree = self.subtree(org_id).await?;
+        let mut tx = begin_scoped(self.db(), &OrgScope::Orgs(subtree))
+            .await
+            .map_err(internal)?;
+        let ctx = huxley_core::RequestContext::system(huxley_core::Via::Workflow);
+        let r = reports::decide(
+            &mut tx,
+            &ctx,
+            report,
+            decision,
+            by,
+            input["comment"].as_str(),
+        )
+        .await
+        .map_err(|e| match e {
+            huxley_expenses::ExpenseError::NotFound => {
+                error("not_found", "no such expense report here")
+            }
+            huxley_expenses::ExpenseError::Conflict(m) => error("conflict", &m),
+            huxley_expenses::ExpenseError::Invalid { field, message } => {
+                error("input", format!("{field}: {message}"))
+            }
+            other => internal(other),
+        })?;
+        tx.commit().await.map_err(internal)?;
+        Ok(json!(r))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     #[test]

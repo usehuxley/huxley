@@ -8282,6 +8282,168 @@
 				}
 			}
 		},
+		"/api/v1/expense-reports": {
+			"get": {
+				"tags": ["expenses"],
+				"summary": "Expense reports, newest first: everyone's where you approve or read\nexpenses; otherwise yours.",
+				"operationId": "list_expense_reports",
+				"parameters": [
+					{
+						"name": "userId",
+						"in": "query",
+						"required": false,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					},
+					{
+						"name": "status",
+						"in": "query",
+						"required": false,
+						"schema": {
+							"$ref": "#/components/schemas/ExpenseReportStatus"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "array",
+									"items": {
+										"$ref": "#/components/schemas/ExpenseReport"
+									}
+								}
+							}
+						}
+					}
+				}
+			},
+			"post": {
+				"tags": ["expenses"],
+				"summary": "Submits expenses of yours (drafts, or ones sent back) as a report, for\napproval. Raises `expense_report.submitted` (the Expense approval pack).",
+				"operationId": "submit_expense_report",
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/SubmitInput"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"201": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ExpenseReport"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/expense-reports/{id}": {
+			"get": {
+				"tags": ["expenses"],
+				"operationId": "get_expense_report",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ReportView"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/expense-reports/{id}/comments": {
+			"get": {
+				"tags": ["expenses"],
+				"operationId": "expense_report_comments",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "array",
+									"items": {
+										"$ref": "#/components/schemas/ExpenseReportComment"
+									}
+								}
+							}
+						}
+					}
+				}
+			},
+			"post": {
+				"tags": ["expenses"],
+				"summary": "Comments on a report or one of its expenses (whoever submitted it, and\nanyone @mentioned, are told).",
+				"operationId": "add_expense_report_comment",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/ExpenseReportCommentInput"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"201": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ExpenseReportComment"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
 		"/api/v1/expenses": {
 			"get": {
 				"tags": ["expenses"],
@@ -32658,6 +32820,11 @@
 					"reimbursable": {
 						"type": "boolean"
 					},
+					"reportId": {
+						"type": ["string", "null"],
+						"format": "uuid",
+						"description": "The report it was submitted in."
+					},
 					"spentOn": {
 						"type": "string",
 						"format": "date"
@@ -32845,6 +33012,156 @@
 					}
 				},
 				"additionalProperties": false
+			},
+			"ExpenseReport": {
+				"type": "object",
+				"required": [
+					"id",
+					"orgId",
+					"userId",
+					"userName",
+					"number",
+					"title",
+					"status",
+					"reviewers",
+					"submittedAt",
+					"version",
+					"entries",
+					"totals",
+					"flags"
+				],
+				"properties": {
+					"comment": {
+						"type": ["string", "null"]
+					},
+					"decidedAt": {
+						"type": ["string", "null"],
+						"format": "date-time"
+					},
+					"decidedBy": {
+						"type": ["string", "null"]
+					},
+					"entries": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/Expense"
+						}
+					},
+					"flags": {
+						"type": "object",
+						"description": "Policy flags across its entries, counted: `{ over_limit: 1, … }`.",
+						"additionalProperties": {
+							"type": "integer",
+							"format": "int64"
+						},
+						"propertyNames": {
+							"type": "string"
+						}
+					},
+					"id": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"number": {
+						"type": "integer",
+						"format": "int64"
+					},
+					"orgId": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"reviewers": {
+						"type": "array",
+						"items": {
+							"type": "string"
+						}
+					},
+					"status": {
+						"$ref": "#/components/schemas/ExpenseReportStatus"
+					},
+					"submittedAt": {
+						"type": "string",
+						"format": "date-time"
+					},
+					"title": {
+						"type": "string"
+					},
+					"totals": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/Total"
+						}
+					},
+					"userId": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"userName": {
+						"type": "string"
+					},
+					"version": {
+						"type": "integer",
+						"format": "int32"
+					}
+				}
+			},
+			"ExpenseReportComment": {
+				"type": "object",
+				"required": ["id", "body", "mentions", "createdAt"],
+				"properties": {
+					"authorName": {
+						"type": ["string", "null"]
+					},
+					"body": {
+						"type": "string"
+					},
+					"createdAt": {
+						"type": "string",
+						"format": "date-time"
+					},
+					"entryId": {
+						"type": ["string", "null"],
+						"format": "uuid"
+					},
+					"id": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"mentions": {
+						"type": "array",
+						"items": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				}
+			},
+			"ExpenseReportCommentInput": {
+				"type": "object",
+				"required": ["body"],
+				"properties": {
+					"body": {
+						"type": "string"
+					},
+					"entryId": {
+						"type": ["string", "null"],
+						"format": "uuid",
+						"description": "One of its entries, or none for the whole report."
+					},
+					"mentions": {
+						"type": "array",
+						"items": {
+							"type": "string",
+							"format": "uuid"
+						},
+						"description": "People @mentioned: they're told."
+					}
+				},
+				"additionalProperties": false
+			},
+			"ExpenseReportStatus": {
+				"type": "string",
+				"enum": ["submitted", "approved", "changes_requested", "rejected", "reimbursed"]
 			},
 			"ExpenseStatus": {
 				"type": "string",
@@ -41642,6 +41959,29 @@
 				},
 				"additionalProperties": false
 			},
+			"ReportView": {
+				"allOf": [
+					{
+						"$ref": "#/components/schemas/ExpenseReport"
+					},
+					{
+						"type": "object",
+						"required": ["canDecide"],
+						"properties": {
+							"approvalId": {
+								"type": ["string", "null"],
+								"format": "uuid",
+								"description": "The approval workflow's open approval, if any."
+							},
+							"canDecide": {
+								"type": "boolean",
+								"description": "The caller is one of its approvers."
+							}
+						}
+					}
+				],
+				"description": "A report, with the open approval for the caller to decide."
+			},
 			"Requirement": {
 				"type": "object",
 				"properties": {
@@ -45215,6 +45555,24 @@
 				},
 				"additionalProperties": false
 			},
+			"SubmitInput": {
+				"type": "object",
+				"required": ["entryIds"],
+				"properties": {
+					"entryIds": {
+						"type": "array",
+						"items": {
+							"type": "string",
+							"format": "uuid"
+						},
+						"description": "The entries: your drafts, or ones sent back."
+					},
+					"title": {
+						"type": ["string", "null"]
+					}
+				},
+				"additionalProperties": false
+			},
 			"SubmitRequest": {
 				"type": "object",
 				"required": ["answers"],
@@ -47018,6 +47376,23 @@
 					}
 				},
 				"additionalProperties": false
+			},
+			"Total": {
+				"type": "object",
+				"description": "A total in one currency.",
+				"required": ["currency", "amount", "reimbursable"],
+				"properties": {
+					"amount": {
+						"type": "string"
+					},
+					"currency": {
+						"type": "string"
+					},
+					"reimbursable": {
+						"type": "string",
+						"description": "What's to be paid back."
+					}
+				}
 			},
 			"TotpEnrollmentView": {
 				"type": "object",

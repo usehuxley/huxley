@@ -640,6 +640,32 @@ export const STEPS: StepSpec[] = [
 		]
 	},
 	{
+		type: 'core.expense.report_decide',
+		label: 'Decide an expense report',
+		description:
+			'Record whether a submitted expense report is approved (its expenses are locked), sent back for changes, or rejected.',
+		group: 'Actions',
+		module: 'expenses',
+		template: {
+			with: {
+				report_id: '{{ inputs.reportId }}',
+				decision: '{{ steps.review.output.decision }}',
+				by: '{{ steps.review.output.by.name }}'
+			}
+		},
+		fields: [
+			{ path: 'with.report_id', label: 'Report', kind: 'expression' },
+			{
+				path: 'with.decision',
+				label: 'Decision',
+				kind: 'expression',
+				hint: 'approved, changes_requested or rejected'
+			},
+			{ path: 'with.by', label: 'Decided by', kind: 'expression' },
+			{ path: 'with.comment', label: 'Comment', kind: 'expression' }
+		]
+	},
+	{
 		type: 'core.sales.log_email',
 		label: 'Log a sales email',
 		description:

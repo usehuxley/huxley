@@ -1,0 +1,34 @@
+apiVersion: usehuxley.io/v1
+kind: Workflow
+metadata:
+  key: approve-expenses
+  name: Approve expense reports
+  description: >-
+    When someone submits an expense report, asks their team leads (or
+    administrators, if they lead no team's member) to approve it, ask for
+    changes or reject it, and records the decision: approved expenses are
+    locked, the rest go back to the person. Add a step for a second
+    approval above an amount, or change who approves.
+spec:
+  triggers:
+    - type: event
+      event: expense_report.submitted
+  steps:
+    - id: review
+      type: approval
+      title: "Expenses {{ inputs.reference }} from {{ inputs.person }}: {{ inputs.title }}"
+      message: >-
+        {{ inputs.entries }} expense{{ 's' if inputs.entries != 1 else '' }}, {{ inputs.total }}.{{
+        ' Flagged: ' ~ (inputs.flags | join(', ')) ~ '.' if inputs.flags else '' }}
+      approvers: "{{ inputs.reviewers }}"
+      changes: true
+      expires: 7d
+    - id: decide
+      type: core.expense.report_decide
+      with:
+        report_id: "{{ inputs.reportId }}"
+        decision: "{{ steps.review.output.decision }}"
+        by: "{{ steps.review.output.by.name }}"
+        comment: "{{ steps.review.output.comment or '' }}"
+  outputs:
+    decision: "{{ steps.review.output.decision }}"

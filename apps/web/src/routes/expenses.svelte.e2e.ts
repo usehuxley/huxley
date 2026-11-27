@@ -106,4 +106,47 @@ test.describe('expenses', () => {
 		});
 		await expect(internal).not.toContainText('No receipt');
 	});
+
+	test('drafts are submitted as a report, which waits for approval', async ({ page }) => {
+		const stamp = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+		const api = await request.newContext({
+			baseURL: apiUrl,
+			extraHTTPHeaders: { 'x-requested-with': 'huxley' }
+		});
+		await api.post('/api/v1/auth/login', { data: { email: ownerEmail, password: ownerPassword } });
+		await ok(api.put('/api/v1/modules/expenses', { data: { enabled: true } }));
+		const orgs = await ok<{ id: string; parentId: string | null }[]>(api.get('/api/v1/orgs'));
+		const root = orgs.find((o) => o.parentId === null)!.id;
+		const categories = await ok<{ id: string; name: string }[]>(
+			api.get('/api/v1/expense-categories')
+		);
+		const meals = categories.find((c) => c.name === 'Meals')!.id;
+		await ok(
+			api.post('/api/v1/expenses', {
+				data: {
+					categoryId: meals,
+					spentOn: new Date().toISOString().slice(0, 10),
+					description: `Team lunch ${stamp}`,
+					amount: '42',
+					orgId: root
+				}
+			})
+		);
+		await api.dispose();
+
+		await signIn(page);
+		await page.goto('/expenses');
+		const submit = page.locator('form[action="?/submitReport"]');
+		await expect(submit).toContainText(`Team lunch ${stamp}`);
+		await submit.getByRole('textbox', { name: 'Title' }).fill(`Lunches ${stamp}`);
+		await submit.getByRole('button', { name: 'Submit' }).click();
+		await expect(page.getByRole('heading', { level: 1 })).toHaveText(`Lunches ${stamp}`);
+		await expect(page.getByText('Waiting for approval', { exact: true })).toBeVisible();
+		await expect(page.getByText('1 no receipt')).toBeVisible();
+		// Submitted: no longer deletable.
+		await expect(page.getByRole('button', { name: `Delete Team lunch ${stamp}` })).toBeHidden();
+		await page.getByLabel('Add a comment').fill('Receipt to follow');
+		await page.getByRole('button', { name: 'Comment' }).click();
+		await expect(page.getByRole('list', { name: 'Comments' })).toContainText('Receipt to follow');
+	});
 });

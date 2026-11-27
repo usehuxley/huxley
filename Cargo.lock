@@ -2395,6 +2395,7 @@ dependencies = [
  "bytes",
  "huxley-core",
  "huxley-db",
+ "huxley-notify",
  "huxley-storage",
  "rust_decimal",
  "serde",
