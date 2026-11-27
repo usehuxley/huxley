@@ -932,8 +932,9 @@ Decisions are cached per request.
 |---|---|
 | **Docker Compose** (reference) | `huxley` (roles=all), `web`, `portal`, `runner-pwsh`, `runner-python`, `postgres`, `valkey` (optional), `caddy` (TLS), optional `otel-collector` profile. One-command install script with generated secrets. |
 | **Kubernetes / Helm** | Separate deployments per role, HPA/KEDA, external Postgres/Valkey, Ingress, cert-manager. |
-| **DigitalOcean** | Droplet + Compose (small), or App Platform / DOKS + Managed PostgreSQL + Managed Caching + Spaces. 1-Click/Marketplace image later. |
-| **Azure** | Azure Container Apps (recommended) or AKS + Azure Database for PostgreSQL Flexible Server + Azure Cache for Redis + Blob Storage + Key Vault (KEK) + Entra (OIDC). Bicep/Terraform templates. |
+| **DigitalOcean** | Droplet + Compose (small), or App Platform / DOKS + Managed PostgreSQL + Spaces. Terraform template. 1-Click/Marketplace image later. |
+| **Azure** | Azure Container Apps (recommended) or AKS + Azure Database for PostgreSQL Flexible Server + Blob Storage + Key Vault (KEK) + Entra (OIDC). Terraform template. |
+| **AWS** | ECS Fargate (recommended) or EKS + RDS for PostgreSQL + S3 + KMS (KEK) + Secrets Manager + ALB, optionally CloudFront. Terraform template. |
 
 Configuration uses 12-factor environment variables plus an optional `huxley.toml`. All secrets accept `*_FILE` variants for Docker and k8s secrets.
 

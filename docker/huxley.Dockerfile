@@ -27,4 +27,5 @@ EXPOSE 8080
 HEALTHCHECK --interval=15s --timeout=5s --start-period=10s --retries=3 \
     CMD ["/usr/local/bin/huxley", "healthcheck"]
 ENTRYPOINT ["/usr/local/bin/huxley"]
-CMD ["serve", "--roles", "all"]
+# Roles default to all; HUXLEY_ROLES (or --roles) picks them.
+CMD ["serve"]

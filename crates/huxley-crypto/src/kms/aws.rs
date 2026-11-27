@@ -23,7 +23,7 @@ use crate::CryptoError;
 const AWS: &str = "AWS KMS";
 const WRAP_PREFIX: &[u8] = b"awskms1:";
 /// Bound into every wrap as KMS encryption context (and shown in
-/// CloudTrail), on top of the data-key frame.
+/// `CloudTrail`), on top of the data-key frame.
 const CONTEXT_KEY: &str = "huxley";
 const CONTEXT_VALUE: &str = "data-key";
 

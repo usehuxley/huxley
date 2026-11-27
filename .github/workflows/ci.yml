@@ -130,6 +130,21 @@ jobs:
             exit 1
           fi
 
+  terraform:
+    name: Cloud templates
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Format, then validate each template
+        run: |
+          set -euo pipefail
+          tf() { docker run --rm -v "$PWD:/w" -w "/w/$1" -e TF_IN_AUTOMATION=1 hashicorp/terraform:1.10.5 "${@:2}"; }
+          tf deploy/terraform fmt -check -recursive -diff
+          for dir in aws azure digitalocean; do
+            tf "deploy/terraform/$dir" init -backend=false -input=false -lockfile=readonly
+            tf "deploy/terraform/$dir" validate
+          done
+
   js:
     name: Frontend (check, lint, tests, e2e)
     runs-on: ubuntu-24.04

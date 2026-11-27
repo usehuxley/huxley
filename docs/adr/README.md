@@ -95,3 +95,4 @@ Decisions that shape Huxley. Add a new ADR by copying `0000-template.md` with th
 | [089](0089-kubernetes-worker-pools-pgbouncer.md) | A Helm chart with worker pools by job class, KEDA, and PgBouncer | Accepted |
 | [090](0090-client-address-and-shared-rate-limits.md) | Configurable client address behind CDNs; rate limits shared in PostgreSQL | Accepted |
 | [091](0091-metrics-dashboards-alerts.md) | Application metrics over OpenTelemetry, with Grafana dashboards and tested alert rules | Accepted |
+| [092](0092-cloud-templates.md) | Terraform templates for AWS, Azure and DigitalOcean; AWS KMS for the key-encryption key | Accepted |

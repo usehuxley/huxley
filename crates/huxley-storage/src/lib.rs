@@ -10,6 +10,10 @@
 //!   `aws_secret_access_key`, `aws_region`, `aws_endpoint`,
 //!   `azure_storage_account_name`, `azure_storage_access_key`. Supports
 //!   `HUXLEY_STORAGE__OPTIONS__<NAME>_FILE` like every other setting.
+//!   The provider's own environment variables count too (`AWS_*` for
+//!   `s3://`, `AZURE_*` and `IDENTITY_ENDPOINT` for `az://`), so an ECS
+//!   task role, EKS IRSA or Pod Identity, an instance role, or an Azure
+//!   managed identity needs no settings; `options` win.
 
 use std::collections::BTreeMap;
 use std::sync::Arc;
@@ -19,6 +23,35 @@ use object_store::path::Path;
 use object_store::{ObjectStore, ObjectStoreExt as _, PutPayload};
 use secrecy::{ExposeSecret as _, SecretString};
 use serde::Deserialize;
+
+/// `options`, plus the provider's environment variables (`AWS_*` for S3,
+/// `AZURE_*` for Azure) under names not already set, as `object_store`'s
+/// `from_env` reads them: cloud runtimes hand out role credentials that way
+/// (`AWS_CONTAINER_CREDENTIALS_RELATIVE_URI` on ECS, `AWS_WEB_IDENTITY_TOKEN_FILE`
+/// on EKS). Names the provider doesn't know are ignored by it.
+fn with_env(
+    scheme: &str,
+    mut options: BTreeMap<String, String>,
+    env: impl Iterator<Item = (String, String)>,
+) -> BTreeMap<String, String> {
+    let prefix = match scheme {
+        "s3" | "s3a" => "AWS_",
+        "az" | "abfs" | "abfss" | "azure" => "AZURE_",
+        _ => return options,
+    };
+    for (key, value) in env {
+        if key.starts_with(prefix) {
+            options.entry(key.to_ascii_lowercase()).or_insert(value);
+        } else if prefix == "AZURE_" && key == "IDENTITY_ENDPOINT" {
+            // Managed identity on Container Apps and App Service (it reads
+            // IDENTITY_HEADER itself).
+            options
+                .entry("azure_msi_endpoint".to_owned())
+                .or_insert(value);
+        }
+    }
+    options
+}
 
 /// Storage settings.
 #[derive(Debug, Clone, Deserialize)]
@@ -113,10 +146,15 @@ impl Storage {
                 description: format!("local filesystem at {}", dir.display()),
             });
         }
-        let options = config
-            .options
-            .iter()
-            .map(|(k, v)| (k.to_ascii_lowercase(), v.expose_secret().to_owned()));
+        let options = with_env(
+            url.scheme(),
+            config
+                .options
+                .iter()
+                .map(|(k, v)| (k.to_ascii_lowercase(), v.expose_secret().to_owned()))
+                .collect(),
+            std::env::vars(),
+        );
         let (store, prefix) = object_store::parse_url_opts(&url, options)
             .map_err(|e| StorageError::InvalidUrl(e.to_string()))?;
         Ok(Self {
@@ -209,6 +247,37 @@ impl Storage {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn provider_environment_fills_in_what_options_leave_out() {
+        let env = || {
+            [
+                (
+                    "AWS_CONTAINER_CREDENTIALS_RELATIVE_URI",
+                    "/v2/credentials/abc",
+                ),
+                ("AWS_REGION", "eu-west-1"),
+                ("AZURE_STORAGE_ACCOUNT_NAME", "huxley"),
+                ("IDENTITY_ENDPOINT", "http://localhost:42356/msi/token"),
+                ("HOME", "/root"),
+            ]
+            .into_iter()
+            .map(|(k, v)| (k.to_owned(), v.to_owned()))
+        };
+        let set = BTreeMap::from([("aws_region".to_owned(), "us-east-1".to_owned())]);
+        let s3 = with_env("s3", set.clone(), env());
+        assert_eq!(s3["aws_region"], "us-east-1", "options win");
+        assert_eq!(
+            s3["aws_container_credentials_relative_uri"],
+            "/v2/credentials/abc"
+        );
+        assert!(!s3.contains_key("azure_storage_account_name") && !s3.contains_key("home"));
+        assert_eq!(
+            with_env("az", BTreeMap::new(), env())["azure_storage_account_name"],
+            "huxley"
+        );
+        assert!(with_env("file", BTreeMap::new(), env()).is_empty());
+    }
 
     #[tokio::test]
     async fn prefixes_are_deleted_whole() {

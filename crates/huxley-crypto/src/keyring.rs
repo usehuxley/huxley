@@ -149,7 +149,8 @@ impl Kek {
             Self::Local(k) => Ok(k.key.seal(&wrap_aad(dek_id, org_id), dek)),
             Self::Vault(k) => k.wrap(&kms::frame(dek_id, org_id, dek)).await,
             Self::Azure(k) => k.wrap(&kms::frame(dek_id, org_id, dek)).await,
-            Self::Aws(k) => k.wrap(&kms::frame(dek_id, org_id, dek)).await,
+            // The AWS SDK's futures are large: boxed, so callers' aren't.
+            Self::Aws(k) => Box::pin(k.wrap(&kms::frame(dek_id, org_id, dek))).await,
         }
     }
 
@@ -163,7 +164,7 @@ impl Kek {
             Self::Local(k) => k.key.open(&wrap_aad(dek_id, org_id), wrapped),
             Self::Vault(k) => kms::unframe(dek_id, org_id, &k.unwrap(wrapped).await?),
             Self::Azure(k) => kms::unframe(dek_id, org_id, &k.unwrap(wrapped).await?),
-            Self::Aws(k) => kms::unframe(dek_id, org_id, &k.unwrap(wrapped).await?),
+            Self::Aws(k) => kms::unframe(dek_id, org_id, &Box::pin(k.unwrap(wrapped)).await?),
         }
     }
 }

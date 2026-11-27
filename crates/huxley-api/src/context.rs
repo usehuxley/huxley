@@ -65,7 +65,7 @@ fn forwarded_client(parts: &Parts, config: &crate::ApiConfig) -> Option<IpAddr> 
 }
 
 /// The client address in a CDN's header. Most carry just the address;
-/// some an `address:port` (`[v6]:port` too). CloudFront's
+/// some an `address:port` (`[v6]:port` too). `CloudFront`'s
 /// `CloudFront-Viewer-Address` always ends in `:port`, and writes IPv6
 /// without brackets (`2001:db8::1:46532`), so its port is always cut off:
 /// `2001:db8::1:443` is a valid address by itself.
