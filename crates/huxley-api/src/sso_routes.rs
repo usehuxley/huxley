@@ -163,7 +163,7 @@ pub async fn callback(
     ClientInfo(ctx): ClientInfo,
     Json(body): Json<SsoCallbackRequest>,
 ) -> ApiResult<Response> {
-    crate::auth_routes::rate_limit(&state, &ctx)?;
+    crate::auth_routes::rate_limit(&state, &ctx).await?;
     let sign_in = state
         .sso
         .callback(&ctx, &body.state, &body.code)

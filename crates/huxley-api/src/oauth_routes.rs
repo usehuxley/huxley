@@ -207,9 +207,9 @@ async fn client_info(state: &AppState, headers: HeaderMap) -> huxley_core::Reque
     ctx
 }
 
-fn rate_limited(state: &AppState, ctx: &huxley_core::RequestContext) -> Option<Response> {
+async fn rate_limited(state: &AppState, ctx: &huxley_core::RequestContext) -> Option<Response> {
     let ip = ctx.ip?;
-    (!state.oauth_limiter.check(ip)).then(|| {
+    (!state.oauth_limiter.check(ip).await).then(|| {
         oauth_error(
             StatusCode::TOO_MANY_REQUESTS,
             "slow_down",
@@ -235,7 +235,7 @@ async fn register(State(state): State<AppState>, headers: HeaderMap, body: Strin
         return not_configured();
     }
     let ctx = client_info(&state, headers).await;
-    if let Some(limited) = rate_limited(&state, &ctx) {
+    if let Some(limited) = rate_limited(&state, &ctx).await {
         return limited;
     }
     let Ok(metadata) = serde_json::from_str::<Registration>(&body) else {
@@ -338,7 +338,7 @@ async fn token(
         return not_configured();
     }
     let ctx = client_info(&state, headers.clone()).await;
-    if let Some(limited) = rate_limited(&state, &ctx) {
+    if let Some(limited) = rate_limited(&state, &ctx).await {
         return limited;
     }
     let Ok(Form(request)) = form else {
@@ -447,7 +447,7 @@ async fn revoke(
     form: Result<Form<RevokeRequest>, axum::extract::rejection::FormRejection>,
 ) -> Response {
     let ctx = client_info(&state, headers.clone()).await;
-    if let Some(limited) = rate_limited(&state, &ctx) {
+    if let Some(limited) = rate_limited(&state, &ctx).await {
         return limited;
     }
     let Ok(Form(request)) = form else {

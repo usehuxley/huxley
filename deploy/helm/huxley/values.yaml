@@ -89,6 +89,18 @@ telemetry:
 extraEnv: []
 extraEnvFrom: []
 
+# Where the client's address comes from (ADR-090). Sign-in rate limits and
+# the audit log key on it.
+clientIp:
+  # Proxies in front of the pods that append to X-Forwarded-For: 1 for the
+  # ingress alone, 2 with a CDN in front of it (if your ingress appends to,
+  # rather than replaces, the header it gets).
+  proxyHops: 1
+  # Or a header your CDN sets to the client's address: CF-Connecting-IP
+  # (Cloudflare), X-Azure-ClientIP (Azure Front Door), True-Client-IP.
+  # Only with the origin locked to the CDN: see docs/operations.md.
+  header: ""
+
 podSecurityContext:
   runAsNonRoot: true
   seccompProfile: { type: RuntimeDefault }

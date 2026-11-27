@@ -191,7 +191,7 @@ pub async fn start_sso(
     ClientInfo(ctx): ClientInfo,
     Json(body): Json<PortalSsoStart>,
 ) -> ApiResult<Json<PortalSsoStarted>> {
-    crate::auth_routes::rate_limit(&state, &ctx)?;
+    crate::auth_routes::rate_limit(&state, &ctx).await?;
     let mut tx = begin_scoped(&state.db, &OrgScope::System)
         .await
         .map_err(db_err)?;
@@ -236,7 +236,7 @@ pub async fn finish_sso(
     ClientInfo(ctx): ClientInfo,
     Json(body): Json<PortalSsoCallback>,
 ) -> ApiResult<Response> {
-    crate::auth_routes::rate_limit(&state, &ctx)?;
+    crate::auth_routes::rate_limit(&state, &ctx).await?;
     let mut tx = begin_scoped(&state.db, &OrgScope::System)
         .await
         .map_err(db_err)?;

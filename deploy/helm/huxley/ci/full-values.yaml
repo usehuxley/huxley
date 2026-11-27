@@ -22,3 +22,5 @@ ingress:
   tls:
     - secretName: huxley-tls
       hosts: [huxley.example.com, portal.example.com]
+clientIp:
+  header: CF-Connecting-IP

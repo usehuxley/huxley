@@ -10,7 +10,7 @@ dev_kek := "ZGV2LW9ubHkta2V5LWRvLW5vdC11c2UtaW4tcHJvZCE="
 default:
     @just --list
 
-# Start local dependencies (Postgres, Valkey, Mailpit, OTel + Grafana)
+# Start local dependencies (Postgres, Mailpit, OTel + Grafana)
 dev-up:
     docker compose -f docker-compose.dev.yml up -d --wait
 

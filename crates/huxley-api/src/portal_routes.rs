@@ -273,7 +273,7 @@ pub async fn request_link(
     ClientInfo(ctx): ClientInfo,
     Json(body): Json<PortalLinkRequest>,
 ) -> ApiResult<(StatusCode, Json<PortalLinkResponse>)> {
-    crate::auth_routes::rate_limit(&state, &ctx)?;
+    crate::auth_routes::rate_limit(&state, &ctx).await?;
     let mut tx = begin_scoped(&state.db, &OrgScope::System)
         .await
         .map_err(db_err)?;
@@ -366,7 +366,7 @@ pub async fn redeem_link(
     ClientInfo(ctx): ClientInfo,
     Json(body): Json<PortalRedeemRequest>,
 ) -> ApiResult<Response> {
-    crate::auth_routes::rate_limit(&state, &ctx)?;
+    crate::auth_routes::rate_limit(&state, &ctx).await?;
     let mut tx = begin_scoped(&state.db, &OrgScope::System)
         .await
         .map_err(db_err)?;
@@ -422,7 +422,7 @@ pub async fn password_sign_in(
     ClientInfo(ctx): ClientInfo,
     Json(body): Json<PortalPasswordSignIn>,
 ) -> ApiResult<Response> {
-    crate::auth_routes::rate_limit(&state, &ctx)?;
+    crate::auth_routes::rate_limit(&state, &ctx).await?;
     let mut tx = begin_scoped(&state.db, &OrgScope::System)
         .await
         .map_err(db_err)?;
@@ -459,7 +459,7 @@ pub async fn complete_mfa(
     ClientInfo(ctx): ClientInfo,
     Json(body): Json<PortalMfaCode>,
 ) -> ApiResult<Response> {
-    crate::auth_routes::rate_limit(&state, &ctx)?;
+    crate::auth_routes::rate_limit(&state, &ctx).await?;
     let mut tx = begin_scoped(&state.db, &OrgScope::System)
         .await
         .map_err(db_err)?;

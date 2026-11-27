@@ -44,9 +44,9 @@ pub struct Received {
     pub received: bool,
 }
 
-fn limited(state: &AppState, ctx: &huxley_core::RequestContext) -> ApiResult<()> {
+async fn limited(state: &AppState, ctx: &huxley_core::RequestContext) -> ApiResult<()> {
     if let Some(ip) = ctx.ip
-        && !state.public_limiter.check(ip)
+        && !state.public_limiter.check(ip).await
     {
         return Err(ApiError::new(
             StatusCode::TOO_MANY_REQUESTS,
@@ -83,7 +83,7 @@ pub async fn form(
     ClientInfo(ctx): ClientInfo,
     Path(token): Path<String>,
 ) -> ApiResult<Json<PublicForm>> {
-    limited(&state, &ctx)?;
+    limited(&state, &ctx).await?;
     let mut tx = begin_scoped(&state.db, &OrgScope::System)
         .await
         .map_err(db_err)?;
@@ -110,7 +110,7 @@ pub async fn submit(
     Path(token): Path<String>,
     Json(body): Json<PublicSubmission>,
 ) -> ApiResult<(StatusCode, Json<Received>)> {
-    limited(&state, &ctx)?;
+    limited(&state, &ctx).await?;
     let mut tx = begin_scoped(&state.db, &OrgScope::System)
         .await
         .map_err(db_err)?;

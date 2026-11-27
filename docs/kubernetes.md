@@ -77,6 +77,10 @@ Two things don't go through it:
 
 To use your own pooler (RDS Proxy, Azure's built-in PgBouncer, or PgBouncer you run yourself), set `HUXLEY_DATABASE__URL` to the pooler, `HUXLEY_DATABASE__DIRECT_URL` to PostgreSQL, and `HUXLEY_DATABASE__POOLED=true`. Then make the pooler run `SET ROLE huxley_app` and set the statement timeout on its server connections. The pooler needs PgBouncer 1.21 or later, or another pooler that supports prepared statements in transaction mode.
 
+## Behind a CDN
+
+Set `clientIp.header` (for example `CF-Connecting-IP`), or `clientIp.proxyHops: 2` if your ingress appends to `X-Forwarded-For`. Then follow [Behind a CDN](./operations.md#behind-a-cdn): lock the origin to the CDN, bypass the cache for dynamic paths, and mind the timeouts.
+
 ## Read replicas
 
 `database.readReplicaHost` sends reporting queries (dashboards, analytics) to a replica, using the same user and password.

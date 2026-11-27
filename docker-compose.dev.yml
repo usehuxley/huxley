@@ -22,10 +22,6 @@ services:
       interval: 2s
       retries: 30
 
-  valkey:
-    image: valkey/valkey:8
-    ports: ["127.0.0.1:6379:6379"]
-
   # Catches outgoing email. UI at http://localhost:8025
   mailpit:
     image: axllent/mailpit:latest

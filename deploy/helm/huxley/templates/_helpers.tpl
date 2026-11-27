@@ -101,6 +101,12 @@ app.kubernetes.io/component: {{ .component }}
 {{- end }}
 - name: HUXLEY_HTTP__TRUST_FORWARDED_FOR
   value: "true"
+- name: HUXLEY_HTTP__PROXY_HOPS
+  value: {{ .Values.clientIp.proxyHops | quote }}
+{{- with .Values.clientIp.header }}
+- name: HUXLEY_HTTP__CLIENT_IP_HEADER
+  value: {{ . | quote }}
+{{- end }}
 - name: HUXLEY_AUTH__PUBLIC_URL
   value: {{ printf "%s://%s" .Values.scheme .Values.host | quote }}
 - name: HUXLEY_HTTP__PORTAL_PUBLIC_URL
