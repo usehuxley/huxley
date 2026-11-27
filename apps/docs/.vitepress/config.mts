@@ -96,6 +96,7 @@ export default defineConfig({
 					{ text: 'Sales and quoting', link: '/sales' },
 					{ text: 'Inventory', link: '/inventory' },
 					{ text: 'Purchasing', link: '/purchasing' },
+					{ text: 'Invoicing', link: '/billing' },
 					{ text: 'Client portal', link: '/portal' },
 					{ text: 'Satisfaction and NPS', link: '/csat' },
 					{ text: 'Client health', link: '/health' },

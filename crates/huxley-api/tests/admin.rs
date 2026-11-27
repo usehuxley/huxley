@@ -348,7 +348,7 @@ async fn module_toggles_need_permission_and_gate_disabled_modules() {
         Crypto::new(pools.app.clone(), huxley_crypto::testing::key_ring()),
         ApiConfig::default(),
     );
-    let gate = huxley_api::module_routes::require_module(&state, "billing").await;
+    let gate = huxley_api::module_routes::require_module(&state, "expenses").await;
     let err = gate.expect_err("unreleased module must be gated");
     assert_eq!(err.kind, "https://usehuxley.io/problems/module-disabled");
 }

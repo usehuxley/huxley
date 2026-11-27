@@ -2012,6 +2012,7 @@ dependencies = [
  "huxley-analytics",
  "huxley-auth",
  "huxley-authz",
+ "huxley-billing",
  "huxley-cmdb",
  "huxley-contracts",
  "huxley-core",
@@ -2116,6 +2117,23 @@ dependencies = [
  "thiserror 2.0.21",
  "time",
  "tokio",
+ "utoipa",
+ "uuid",
+]
+
+[[package]]
+name = "huxley-billing"
+version = "0.1.0"
+dependencies = [
+ "huxley-contracts",
+ "huxley-core",
+ "huxley-db",
+ "rust_decimal",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "thiserror 2.0.21",
+ "time",
  "utoipa",
  "uuid",
 ]

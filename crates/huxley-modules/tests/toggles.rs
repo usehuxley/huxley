@@ -38,13 +38,21 @@ async fn toggles_respect_dependencies_and_are_audited() {
     assert_eq!(changed, vec!["crm", "contracts", "billing"]);
     assert!(enabled_set(&mut tx).await.unwrap().contains("contracts"));
 
+    assert!(is_active(&mut tx, "billing").await.unwrap());
+
     // Unreleased modules are enabled but not active.
-    assert!(!is_active(&mut tx, "billing").await.unwrap());
+    assert_eq!(
+        set_enabled(&mut tx, &ctx, "expenses", true, false)
+            .await
+            .unwrap(),
+        vec!["expenses"]
+    );
+    assert!(!is_active(&mut tx, "expenses").await.unwrap());
     let change = states(&mut tx)
         .await
         .unwrap()
         .into_iter()
-        .find(|m| m.module.key == "billing")
+        .find(|m| m.module.key == "expenses")
         .unwrap();
     assert!(change.enabled && !change.active);
 

@@ -86,6 +86,12 @@ export const SETTINGS_SECTIONS = [
 		module: 'inventory'
 	},
 	{
+		key: 'billing',
+		label: 'Billing',
+		permission: 'billing:configure',
+		module: 'billing'
+	},
+	{
 		key: 'mailboxes',
 		label: 'Mailboxes',
 		permission: 'servicedesk:configure',

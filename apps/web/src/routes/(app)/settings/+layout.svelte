@@ -22,6 +22,7 @@
 		mailboxes: resolve('/(app)/settings/mailboxes'),
 		sales: resolve('/(app)/settings/sales'),
 		inventory: resolve('/(app)/settings/inventory'),
+		billing: resolve('/(app)/settings/billing'),
 		skills: resolve('/(app)/settings/skills'),
 		calendars: resolve('/(app)/settings/calendars'),
 		responses: resolve('/(app)/settings/responses'),

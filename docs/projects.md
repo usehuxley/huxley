@@ -16,6 +16,8 @@ Turn on **Projects** (Settings → Modules). It needs CRM and the service desk. 
 
 **Projects → New project**: the client, a name, the start (and optionally the end), the billing method (time and materials, fixed fee, fixed fee by milestone, not to exceed, or covered by an agreement), the client's **agreement** it bills against, and a template. Choosing a template lists its tasks so you can pick **who does what**. The budget defaults to the template's phase budgets added up.
 
+The project page's **Billing** card changes the billing method and sets the **fee**: the fixed fee, or the not-to-exceed cap. On a milestone-billed project, the Milestones card sets what each milestone bills when it's reached. See [Invoicing](./billing.md).
+
 Creating it lays everything out. Phases and milestones are dated from the start, and every task becomes a ticket of the **Project task** type, assigned as you chose. Assignees see their tasks in **My Work** and log time on them like any ticket. You can add more tasks on the project's page.
 
 ## Views

@@ -14,6 +14,7 @@ mod assistant_routes;
 pub mod audit_routes;
 pub mod auth_routes;
 pub mod authz;
+pub mod billing_routes;
 pub mod calendar_routes;
 pub mod catalog_routes;
 pub mod change_routes;

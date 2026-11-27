@@ -41,6 +41,7 @@ huxley-cmdb.workspace = true
 huxley-contracts.workspace = true
 huxley-sales.workspace = true
 huxley-inventory.workspace = true
+huxley-billing.workspace = true
 huxley-portal.workspace = true
 huxley-email.workspace = true
 huxley-mail.workspace = true
