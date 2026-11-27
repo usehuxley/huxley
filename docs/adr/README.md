@@ -80,3 +80,4 @@ Decisions that shape Huxley. Add a new ADR by copying `0000-template.md` with th
 | [074](0074-scope-to-project.md) | A won deal's project is laid out from its scoped work breakdown, and the scope tracks estimate against actual | Accepted |
 | [075](0075-invoicing.md) | Invoices are generated per client and currency from marked sources, drafts until approved, corrected by credit memos | Accepted |
 | [076](0076-invoice-review.md) | Invoices are reviewed on the quote review model, and an approved review approves the invoice | Accepted |
+| [077](0077-accounting-sync.md) | Accounting sync: Huxley prepares and tracks, a pack's system workflow creates | Accepted |

@@ -152,6 +152,13 @@ impl Setup {
 }
 
 impl Setup {
+    /// GETs as the owner, expecting 200.
+    async fn get(&self, uri: &str) -> Value {
+        let (status, v) = self.call(&self.owner, "GET", uri, None).await;
+        assert_eq!(status, StatusCode::OK, "GET {uri}: {v}");
+        v
+    }
+
     /// Bills time at this hourly rate by default (USD, 30 days).
     async fn rate(&self, rate: &str) {
         self.ok(
@@ -537,6 +544,113 @@ async fn a_run_is_approved_in_one_pass_and_hand_edits_go_to_review() {
         )
         .await;
     assert_eq!(status, StatusCode::CONFLICT);
+}
+
+#[tokio::test]
+async fn approved_invoices_ask_the_accounting_system_once_mapped() {
+    let Some(s) = setup().await else { return };
+    s.rate("100").await;
+    s.time("2035-06-06", 60).await;
+    let (status, _) = s
+        .call(
+            &s.owner,
+            "GET",
+            &format!("/api/v1/billing/mappings?orgId={}", s.provider),
+            None,
+        )
+        .await;
+    assert_eq!(status, StatusCode::CONFLICT, "no accounting system yet");
+    s.ok(
+        &s.owner,
+        "PUT",
+        "/api/v1/billing/sync-settings",
+        json!({ "orgId": s.provider, "target": "QuickBooks" }),
+        StatusCode::OK,
+    )
+    .await;
+    let got = s
+        .get(&format!(
+            "/api/v1/billing/sync-settings?orgId={}",
+            s.provider
+        ))
+        .await;
+    assert_eq!(got["target"], "quickbooks");
+    assert_eq!(got["onApproval"], true);
+    // No pack, so no lists to choose from.
+    let options = s
+        .get(&format!(
+            "/api/v1/billing/mappings/options?orgId={}&kind=customer",
+            s.provider
+        ))
+        .await;
+    assert_eq!(options, json!([]));
+
+    // Approved before the client is matched: it fails, saying why.
+    let inv = s.run("2035-06-01", "2035-06-30").await.remove(0);
+    let id = inv["id"].as_str().unwrap().to_owned();
+    s.ok(
+        &s.owner,
+        "POST",
+        &format!("/api/v1/invoices/{id}/approve"),
+        json!({ "version": inv["version"] }),
+        StatusCode::OK,
+    )
+    .await;
+    let sync = s.get(&format!("/api/v1/invoices/{id}/sync")).await;
+    assert_eq!(sync["status"], "failed");
+    assert!(
+        sync["error"]
+            .as_str()
+            .unwrap()
+            .contains("isn't matched to a customer"),
+        "{sync}"
+    );
+    let queue = s.get("/api/v1/billing/sync-queue").await;
+    assert!(
+        queue
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|q| q["invoiceId"] == json!(id))
+    );
+
+    // Matched (client and a default item), the retry asks the accounting system.
+    for (kind, local) in [
+        ("customer", s.acme.to_string()),
+        ("item", "default".to_owned()),
+    ] {
+        let m = s
+            .ok(&s.owner, "PUT", "/api/v1/billing/mappings",
+                json!({ "orgId": s.provider, "mapping": { "kind": kind, "localKey": local, "remoteId": "58", "remoteName": "Acme Corp" } }),
+                StatusCode::OK)
+            .await;
+        assert_eq!(m["remoteName"], "Acme Corp");
+    }
+    let all = s
+        .get(&format!("/api/v1/billing/mappings?orgId={}", s.provider))
+        .await;
+    assert_eq!(all.as_array().unwrap().len(), 2);
+    let retried = s
+        .ok(
+            &s.owner,
+            "POST",
+            &format!("/api/v1/invoices/{id}/sync"),
+            json!(null),
+            StatusCode::OK,
+        )
+        .await;
+    assert_eq!(retried["status"], "pending");
+    assert_eq!(retried["attempts"], 2);
+    let payload: Value = sqlx::query_scalar(
+        "SELECT payload FROM events_outbox WHERE event_type = 'invoice.sync_requested' AND subject_id = $1",
+    )
+    .bind(Uuid::parse_str(&id).unwrap())
+    .fetch_one(&s.pools.owner)
+    .await
+    .unwrap();
+    assert_eq!(payload["customer"]["id"], "58");
+    assert_eq!(payload["lines"][0]["item"]["name"], "Acme Corp");
+    assert_eq!(payload["total"], "100");
 }
 
 #[tokio::test]

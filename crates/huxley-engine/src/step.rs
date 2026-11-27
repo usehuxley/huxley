@@ -257,6 +257,7 @@ impl Engine {
             Step::ScopeDecide(_) => self.scope_decide(org_id, input).await.into(),
             Step::QuoteReview(_) => self.quote_review(org_id, input).await.into(),
             Step::InvoiceReview(_) => self.invoice_review(org_id, input).await.into(),
+            Step::InvoiceSyncResult(_) => self.invoice_sync_result(org_id, input).await.into(),
             Step::SalesLogEmail(_) => self.sales_log_email(org_id, input).await.into(),
             Step::ScopeContext(_) => self.scope_context(org_id, input).await.into(),
             Step::ScopeWrite(_) => self.scope_write(org_id, input).await.into(),

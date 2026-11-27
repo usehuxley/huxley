@@ -75,6 +75,7 @@ const ICONS: Record<string, typeof Globe> = {
 	'core.project.scope.decide': ListChecks,
 	'core.quote.review': ListChecks,
 	'core.invoice.review': ListChecks,
+	'core.invoice.sync_result': ListChecks,
 	'core.sales.log_email': ListChecks,
 	'core.scope.context': ListChecks,
 	'core.scope.write': ListChecks,

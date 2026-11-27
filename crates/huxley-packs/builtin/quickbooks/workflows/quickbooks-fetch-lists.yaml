@@ -1,0 +1,78 @@
+apiVersion: usehuxley.io/v1
+kind: Workflow
+metadata:
+  key: quickbooks-fetch-lists
+  name: Fetch QuickBooks lists
+  description: >-
+    Every night (or when run by hand), reads QuickBooks' customers, items,
+    tax codes and classes into their datasets, replacing what was there, so
+    they can be matched to clients, products and tax codes under Billing →
+    Accounting. Up to 1,000 of each. Uses the connection named quickbooks;
+    run it at your MSP.
+spec:
+  triggers:
+    - type: schedule
+      interval: 24h
+    - type: manual
+  steps:
+    - id: customers
+      type: integration.action
+      action: quickbooks/query
+      connection: quickbooks
+      with:
+        query: select Id, DisplayName, Active from Customer startposition 1 maxresults 1000
+        minorversion: 75
+    - id: save_customers
+      type: dataset.upsert
+      with:
+        dataset: quickbooks-customers
+        rows: "{{ steps.customers.output.QueryResponse.Customer or [] }}"
+        replace: true
+        map: { id: Id, name: DisplayName, active: Active }
+    - id: items
+      type: integration.action
+      action: quickbooks/query
+      connection: quickbooks
+      with:
+        query: select Id, Name, Active from Item startposition 1 maxresults 1000
+        minorversion: 75
+    - id: save_items
+      type: dataset.upsert
+      with:
+        dataset: quickbooks-items
+        rows: "{{ steps.items.output.QueryResponse.Item or [] }}"
+        replace: true
+        map: { id: Id, name: Name, active: Active }
+    - id: tax_codes
+      type: integration.action
+      action: quickbooks/query
+      connection: quickbooks
+      with:
+        query: select Id, Name, Active from TaxCode startposition 1 maxresults 1000
+        minorversion: 75
+    - id: save_tax_codes
+      type: dataset.upsert
+      with:
+        dataset: quickbooks-tax-codes
+        rows: "{{ steps.tax_codes.output.QueryResponse.TaxCode or [] }}"
+        replace: true
+        map: { id: Id, name: Name, active: Active }
+    # Classes may be turned off in QuickBooks: an empty list then.
+    - id: classes
+      type: integration.action
+      action: quickbooks/query
+      connection: quickbooks
+      continue_on_error: true
+      with:
+        query: select Id, FullyQualifiedName, Active from Class startposition 1 maxresults 1000
+        minorversion: 75
+    - id: save_classes
+      type: dataset.upsert
+      with:
+        dataset: quickbooks-classes
+        rows: "{{ (steps.classes.output.QueryResponse.Class if steps.classes.output and steps.classes.output.QueryResponse else none) or [] }}"
+        replace: true
+        map: { id: Id, name: FullyQualifiedName, active: Active }
+  outputs:
+    customers: "{{ (steps.customers.output.QueryResponse.Customer or []) | length }}"
+    items: "{{ (steps.items.output.QueryResponse.Item or []) | length }}"

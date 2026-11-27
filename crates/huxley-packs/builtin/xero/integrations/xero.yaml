@@ -1,0 +1,154 @@
+openapi: 3.0.3
+info:
+  title: Xero
+  version: "2.0"
+  description: >-
+    Invoices, credit notes, contacts, items, tax rates and tracking
+    categories in a Xero organisation, through a Xero app (Web app, client
+    ID and secret) with offline access and the accounting scopes. Add
+    Huxley's OAuth redirect URL to the app's redirect URIs and sign in.
+    Every accounting call names the organisation (its tenant ID, from
+    listConnections) in the xero-tenant-id header: the pack's workflows take
+    it from the organization variable xero_tenant_id.
+servers:
+  - url: https://api.xero.com
+components:
+  securitySchemes:
+    xero:
+      type: oauth2
+      description: A Xero app; sign in as a user of the organisation with the Standard or Adviser role.
+      flows:
+        authorizationCode:
+          authorizationUrl: https://login.xero.com/identity/connect/authorize
+          tokenUrl: https://identity.xero.com/connect/token
+          scopes:
+            offline_access: Stay signed in (refresh tokens)
+            accounting.transactions: Invoices and credit notes
+            accounting.contacts: Contacts
+            accounting.settings: Items, tax rates and tracking categories
+  parameters:
+    tenant: { name: xero-tenant-id, in: header, required: true, description: The organisation's tenant ID, schema: { type: string } }
+  schemas:
+    LineItem:
+      type: object
+      properties:
+        Description: { type: string }
+        Quantity: { type: number }
+        UnitAmount: { type: number }
+        ItemCode: { type: string }
+        AccountCode: { type: string }
+        TaxType: { type: string }
+        Tracking:
+          type: array
+          items: { type: object, properties: { Name: { type: string }, Option: { type: string } } }
+    Document:
+      type: object
+      description: An invoice (Type ACCREC) or a credit note (Type ACCRECCREDIT).
+      properties:
+        Type: { type: string }
+        Contact: { type: object, properties: { ContactID: { type: string } } }
+        LineItems: { type: array, items: { $ref: "#/components/schemas/LineItem" } }
+        Date: { type: string, format: date }
+        DueDate: { type: string, format: date }
+        InvoiceNumber: { type: string }
+        CreditNoteNumber: { type: string }
+        Reference: { type: string }
+        CurrencyCode: { type: string }
+        Status: { type: string, enum: [DRAFT, SUBMITTED, AUTHORISED] }
+        LineAmountTypes: { type: string, enum: [Exclusive, Inclusive, NoTax] }
+security: [{ xero: [] }]
+paths:
+  /connections:
+    get:
+      operationId: listConnections
+      summary: The organisations the sign-in can reach (their tenant IDs)
+      tags: [Connections]
+      responses:
+        "200":
+          description: Connections
+          content: { application/json: { schema: { type: array, items: { type: object, additionalProperties: true } } } }
+  /api.xro/2.0/Invoices:
+    get:
+      operationId: listInvoices
+      summary: List invoices (a page of 100), e.g. by IDs for their status and amount due
+      tags: [Invoices]
+      parameters:
+        - { $ref: "#/components/parameters/tenant" }
+        - { name: IDs, in: query, description: Comma-separated invoice IDs, schema: { type: string } }
+        - { name: page, in: query, schema: { type: integer } }
+      responses:
+        "200":
+          description: The invoices
+          content: { application/json: { schema: { type: object, additionalProperties: true } } }
+    put:
+      operationId: createInvoices
+      summary: Create invoices
+      tags: [Invoices]
+      parameters: [{ $ref: "#/components/parameters/tenant" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, properties: { Invoices: { type: array, items: { $ref: "#/components/schemas/Document" } } } }
+      responses:
+        "200":
+          description: The invoices, with their InvoiceID and InvoiceNumber
+          content: { application/json: { schema: { type: object, additionalProperties: true } } }
+  /api.xro/2.0/CreditNotes:
+    put:
+      operationId: createCreditNotes
+      summary: Create credit notes
+      tags: [Credit notes]
+      parameters: [{ $ref: "#/components/parameters/tenant" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, properties: { CreditNotes: { type: array, items: { $ref: "#/components/schemas/Document" } } } }
+      responses:
+        "200":
+          description: The credit notes, with their CreditNoteID and CreditNoteNumber
+          content: { application/json: { schema: { type: object, additionalProperties: true } } }
+  /api.xro/2.0/Contacts:
+    get:
+      operationId: listContacts
+      summary: List contacts
+      tags: [Contacts]
+      parameters:
+        - { $ref: "#/components/parameters/tenant" }
+        - { name: summaryOnly, in: query, description: Leave out details, schema: { type: boolean } }
+        - { name: page, in: query, description: A page of 100 (all, without it), schema: { type: integer } }
+      responses:
+        "200":
+          description: The contacts
+          content: { application/json: { schema: { type: object, additionalProperties: true } } }
+  /api.xro/2.0/Items:
+    get:
+      operationId: listItems
+      summary: List items
+      tags: [Items]
+      parameters: [{ $ref: "#/components/parameters/tenant" }]
+      responses:
+        "200":
+          description: The items
+          content: { application/json: { schema: { type: object, additionalProperties: true } } }
+  /api.xro/2.0/TaxRates:
+    get:
+      operationId: listTaxRates
+      summary: List tax rates
+      tags: [Tax rates]
+      parameters: [{ $ref: "#/components/parameters/tenant" }]
+      responses:
+        "200":
+          description: The tax rates
+          content: { application/json: { schema: { type: object, additionalProperties: true } } }
+  /api.xro/2.0/TrackingCategories:
+    get:
+      operationId: listTrackingCategories
+      summary: List tracking categories and their options
+      tags: [Tracking]
+      parameters: [{ $ref: "#/components/parameters/tenant" }]
+      responses:
+        "200":
+          description: The tracking categories
+          content: { application/json: { schema: { type: object, additionalProperties: true } } }

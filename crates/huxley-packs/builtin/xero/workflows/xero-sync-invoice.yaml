@@ -1,0 +1,112 @@
+apiVersion: usehuxley.io/v1
+kind: Workflow
+metadata:
+  key: xero-sync-invoice
+  name: Sync invoices to Xero
+  description: >-
+    When an invoice or credit memo is to be synced to Xero (target xero in
+    Settings → Billing), creates it in Xero, authorised, with its mapped
+    contact, items, tax rates and tracking option, and records Xero's ID and
+    number on it (the invoice is then sent). If Xero refuses it, the reason
+    goes to the sync error queue under Billing → Accounting, where it can be
+    retried. Uses the connection named xero and the organization variable
+    xero_tenant_id.
+spec:
+  triggers:
+    - type: event
+      event: invoice.sync_requested
+      filter: "{{ event.payload.target == 'xero' }}"
+  steps:
+    - id: begin
+      type: set_var
+      vars: { lines: [] }
+    # Xero line items: optional tax rates and tracking are left out, not
+    # null. A tracking option's ID is "Category::Option". ('}' ~ '}'
+    # because a literal pair of braces would end the expression.)
+    - id: each
+      type: foreach
+      items: "{{ inputs.lines }}"
+      as: line
+      steps:
+        - id: add
+          type: set_var
+          vars:
+            lines: >-
+              {{ run.vars.lines + [('{"Description":' ~ (line.description | to_json)
+                ~ ',"Quantity":' ~ line.quantity ~ ',"UnitAmount":' ~ line.unitPrice
+                ~ ',"ItemCode":' ~ (line.item.id | to_json)
+                ~ ((',"TaxType":' ~ (line.taxCode.id | to_json)) if line.taxCode else '')
+                ~ ((',"Tracking":[{"Name":' ~ (inputs['class'].id.split('::')[0] | to_json)
+                    ~ ',"Option":' ~ (inputs['class'].id.split('::')[1] | to_json) ~ '}]')
+                   if (inputs['class'] and '::' in inputs['class'].id) else '')
+                ~ '}') | from_json] }}
+    - id: kind
+      type: if
+      condition: "{{ inputs.kind == 'credit_memo' }}"
+      then:
+        - id: note
+          type: integration.action
+          action: xero/createCreditNotes
+          connection: xero
+          with:
+            xero-tenant-id: "{{ vars.xero_tenant_id }}"
+            body:
+              CreditNotes:
+                - Type: ACCRECCREDIT
+                  Contact: { ContactID: "{{ inputs.customer.id }}" }
+                  LineItems: "{{ run.vars.lines }}"
+                  Date: "{{ inputs.issuedOn }}"
+                  CreditNoteNumber: "{{ inputs.reference }}"
+                  Reference: "{{ 'From Huxley ' ~ inputs.reference }}"
+                  CurrencyCode: "{{ inputs.currency }}"
+                  Status: AUTHORISED
+                  LineAmountTypes: Exclusive
+        - id: note_synced
+          type: core.invoice.sync_result
+          with:
+            invoice_id: "{{ inputs.invoiceId }}"
+            ok: true
+            remote_id: "{{ steps.note.output.CreditNotes[0].CreditNoteID }}"
+            remote_number: "{{ steps.note.output.CreditNotes[0].CreditNoteNumber }}"
+            remote_url: "https://go.xero.com/AccountsReceivable/ViewCreditNote.aspx?creditNoteID={{ steps.note.output.CreditNotes[0].CreditNoteID }}"
+      else:
+        - id: invoice
+          type: integration.action
+          action: xero/createInvoices
+          connection: xero
+          with:
+            xero-tenant-id: "{{ vars.xero_tenant_id }}"
+            body:
+              Invoices:
+                - Type: ACCREC
+                  Contact: { ContactID: "{{ inputs.customer.id }}" }
+                  LineItems: "{{ run.vars.lines }}"
+                  Date: "{{ inputs.issuedOn }}"
+                  DueDate: "{{ inputs.dueOn }}"
+                  InvoiceNumber: "{{ inputs.reference }}"
+                  Reference: "{{ 'From Huxley ' ~ inputs.reference }}"
+                  CurrencyCode: "{{ inputs.currency }}"
+                  Status: AUTHORISED
+                  LineAmountTypes: Exclusive
+        - id: invoice_synced
+          type: core.invoice.sync_result
+          with:
+            invoice_id: "{{ inputs.invoiceId }}"
+            ok: true
+            remote_id: "{{ steps.invoice.output.Invoices[0].InvoiceID }}"
+            remote_number: "{{ steps.invoice.output.Invoices[0].InvoiceNumber }}"
+            remote_url: "https://go.xero.com/AccountsReceivable/View.aspx?InvoiceID={{ steps.invoice.output.Invoices[0].InvoiceID }}"
+  on_error:
+    - id: failed
+      type: core.invoice.sync_result
+      with:
+        invoice_id: "{{ inputs.invoiceId }}"
+        ok: false
+        # Xero says why in the response's Elements (or its Message).
+        error: >-
+          {{ ('Xero: ' ~ (error.body.Elements[0].ValidationErrors | map(attribute='Message') | join('; ')))
+             if (error.body and error.body.Elements and error.body.Elements[0].ValidationErrors)
+             else (('Xero: ' ~ error.body.Message) if (error.body and error.body.Message)
+                   else (error.message or 'Xero refused it')) }}
+  outputs:
+    synced: "{{ inputs.reference }}"

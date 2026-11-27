@@ -19,6 +19,10 @@ use huxley_billing::review::{
     self, Comment, CommentInput, ReviewState, Rule, RuleInput, RunApproval,
 };
 use huxley_billing::settings::{self, Settings};
+use huxley_billing::sync::{
+    self, Mapping, MappingInput, MappingKind, QueueFilter, RemoteOption, Settings as SyncSettings,
+    Sync,
+};
 use huxley_billing::{BillingError, MODULE};
 use huxley_db::{OrgScope, begin_scoped};
 use rust_decimal::Decimal;
@@ -57,6 +61,18 @@ pub fn routes() -> Router<AppState> {
             post(resolve_comment),
         )
         .route("/billing/runs/{id}/approve", post(approve_run))
+        .route(
+            "/billing/sync-settings",
+            get(get_sync_settings).put(put_sync_settings),
+        )
+        .route("/billing/mappings", get(list_mappings).put(put_mapping))
+        .route("/billing/mappings/options", get(mapping_options))
+        .route(
+            "/billing/mappings/{id}",
+            axum::routing::delete(delete_mapping),
+        )
+        .route("/billing/sync-queue", get(sync_queue))
+        .route("/invoices/{id}/sync", get(invoice_sync).post(request_sync))
         .route("/billing/review-rules", get(list_rules).post(create_rule))
         .route(
             "/billing/review-rules/{id}",
@@ -729,4 +745,211 @@ fn render_pdf(i: &Invoice) -> Vec<u8> {
         &sub.join(" · "),
         &tables,
     )
+}
+
+// ---- accounting sync (ADR-077) ----
+
+/// The provider's accounting sync settings (none until it's set up).
+#[utoipa::path(get, path = "/api/v1/billing/sync-settings", operation_id = "get_accounting_sync_settings", tag = "billing",
+    params(OrgParams), responses((status = 200, body = Option<SyncSettings>)))]
+pub async fn get_sync_settings(
+    State(state): State<AppState>,
+    authed: Authed,
+    Query(p): Query<OrgParams>,
+) -> ApiResult<Json<Option<SyncSettings>>> {
+    let scope = access_at(&state, &authed, p.org_id, permissions::BILLING_READ).await?;
+    Ok(Json(
+        scoped(&state, &scope, async |tx| {
+            sync::settings(tx, p.org_id).await
+        })
+        .await?,
+    ))
+}
+
+#[derive(Debug, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct SyncSettingsRequest {
+    pub org_id: Uuid,
+    pub target: String,
+    #[serde(default = "yes")]
+    pub enabled: bool,
+    #[serde(default = "yes")]
+    pub on_approval: bool,
+}
+
+const fn yes() -> bool {
+    true
+}
+
+#[utoipa::path(put, path = "/api/v1/billing/sync-settings", operation_id = "put_accounting_sync_settings", tag = "billing",
+    request_body = SyncSettingsRequest, responses((status = 200, body = SyncSettings)))]
+pub async fn put_sync_settings(
+    State(state): State<AppState>,
+    authed: Authed,
+    Json(body): Json<SyncSettingsRequest>,
+) -> ApiResult<Json<SyncSettings>> {
+    let scope = access_at(&state, &authed, body.org_id, permissions::BILLING_CONFIGURE).await?;
+    let ctx = authed.user.ctx.clone();
+    let s = SyncSettings {
+        target: body.target,
+        enabled: body.enabled,
+        on_approval: body.on_approval,
+    };
+    Ok(Json(
+        scoped(&state, &scope, async |tx| {
+            sync::set_settings(tx, &ctx, body.org_id, &s).await
+        })
+        .await?,
+    ))
+}
+
+/// The provider's sync target (409 when it has none).
+async fn target_of(state: &AppState, scope: &OrgScope, provider: Uuid) -> ApiResult<String> {
+    scoped(state, scope, async |tx| sync::settings(tx, provider).await)
+        .await?
+        .map(|s| s.target)
+        .ok_or_else(|| {
+            ApiError::conflict("no accounting system is set up: choose one in Settings → Billing")
+        })
+}
+
+/// The provider's mappings to its accounting system.
+#[utoipa::path(get, path = "/api/v1/billing/mappings", operation_id = "list_accounting_mappings", tag = "billing",
+    params(OrgParams), responses((status = 200, body = Vec<Mapping>)))]
+pub async fn list_mappings(
+    State(state): State<AppState>,
+    authed: Authed,
+    Query(p): Query<OrgParams>,
+) -> ApiResult<Json<Vec<Mapping>>> {
+    let scope = access_at(&state, &authed, p.org_id, permissions::BILLING_READ).await?;
+    let target = target_of(&state, &scope, p.org_id).await?;
+    Ok(Json(
+        scoped(&state, &scope, async |tx| {
+            sync::mappings(tx, p.org_id, &target).await
+        })
+        .await?,
+    ))
+}
+
+#[derive(Debug, Deserialize, IntoParams)]
+#[serde(rename_all = "camelCase")]
+#[into_params(parameter_in = Query)]
+pub struct OptionsParams {
+    pub org_id: Uuid,
+    pub kind: MappingKind,
+}
+
+/// The accounting system's customers, items, tax codes or classes, from the
+/// sync pack's datasets.
+#[utoipa::path(get, path = "/api/v1/billing/mappings/options", operation_id = "accounting_mapping_options", tag = "billing",
+    params(OptionsParams), responses((status = 200, body = Vec<RemoteOption>)))]
+pub async fn mapping_options(
+    State(state): State<AppState>,
+    authed: Authed,
+    Query(p): Query<OptionsParams>,
+) -> ApiResult<Json<Vec<RemoteOption>>> {
+    let scope = access_at(&state, &authed, p.org_id, permissions::BILLING_READ).await?;
+    let target = target_of(&state, &scope, p.org_id).await?;
+    Ok(Json(
+        scoped(&state, &scope, async |tx| {
+            sync::remote_options(tx, p.org_id, &target, p.kind).await
+        })
+        .await?,
+    ))
+}
+
+#[derive(Debug, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct MappingRequest {
+    pub org_id: Uuid,
+    pub mapping: MappingInput,
+}
+
+/// Matches something of Huxley's to the accounting system's (replacing any match).
+#[utoipa::path(put, path = "/api/v1/billing/mappings", operation_id = "put_accounting_mapping", tag = "billing",
+    request_body = MappingRequest, responses((status = 200, body = Mapping)))]
+pub async fn put_mapping(
+    State(state): State<AppState>,
+    authed: Authed,
+    Json(body): Json<MappingRequest>,
+) -> ApiResult<Json<Mapping>> {
+    let scope = access_at(&state, &authed, body.org_id, permissions::BILLING_CONFIGURE).await?;
+    let target = target_of(&state, &scope, body.org_id).await?;
+    let ctx = authed.user.ctx.clone();
+    Ok(Json(
+        scoped(&state, &scope, async |tx| {
+            sync::set_mapping(tx, &ctx, body.org_id, &target, &body.mapping).await
+        })
+        .await?,
+    ))
+}
+
+#[utoipa::path(delete, path = "/api/v1/billing/mappings/{id}", operation_id = "delete_accounting_mapping", tag = "billing",
+    params(("id" = Uuid, Path), OrgParams), responses((status = 204)))]
+pub async fn delete_mapping(
+    State(state): State<AppState>,
+    authed: Authed,
+    Path(id): Path<Uuid>,
+    Query(p): Query<OrgParams>,
+) -> ApiResult<StatusCode> {
+    let scope = access_at(&state, &authed, p.org_id, permissions::BILLING_CONFIGURE).await?;
+    let ctx = authed.user.ctx.clone();
+    scoped(&state, &scope, async |tx| {
+        sync::delete_mapping(tx, &ctx, p.org_id, id).await
+    })
+    .await?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+/// Invoice syncs in a status: the error queue (failed) by default.
+#[utoipa::path(get, path = "/api/v1/billing/sync-queue", operation_id = "accounting_sync_queue", tag = "billing",
+    params(QueueFilter), responses((status = 200, body = Vec<Sync>)))]
+pub async fn sync_queue(
+    State(state): State<AppState>,
+    authed: Authed,
+    Query(filter): Query<QueueFilter>,
+) -> ApiResult<Json<Vec<Sync>>> {
+    require_module(&state, MODULE).await?;
+    let scope = authed
+        .module_scope(&state, permissions::BILLING_READ, MODULE)
+        .await?;
+    Ok(Json(
+        scoped(&state, &scope, async |tx| sync::queue(tx, &filter).await).await?,
+    ))
+}
+
+/// The invoice's accounting sync (none if it was never asked for).
+#[utoipa::path(get, path = "/api/v1/invoices/{id}/sync", operation_id = "invoice_sync", tag = "billing",
+    params(("id" = Uuid, Path)), responses((status = 200, body = Option<Sync>)))]
+pub async fn invoice_sync(
+    State(state): State<AppState>,
+    authed: Authed,
+    Path(id): Path<Uuid>,
+) -> ApiResult<Json<Option<Sync>>> {
+    let scope = at_invoice(&state, &authed, id, permissions::BILLING_READ).await?;
+    Ok(Json(
+        scoped(&state, &scope, async |tx| sync::state(tx, id).await).await?,
+    ))
+}
+
+/// Syncs an approved invoice to the accounting system, or tries again.
+/// Raises `invoice.sync_requested` for the sync pack's workflow; an unmapped
+/// client or item fails it straight away, with the reason.
+#[utoipa::path(post, path = "/api/v1/invoices/{id}/sync", operation_id = "request_invoice_sync", tag = "billing",
+    params(("id" = Uuid, Path)),
+    responses((status = 200, body = Sync), (status = 409, body = ApiError, content_type = "application/problem+json")))]
+pub async fn request_sync(
+    State(state): State<AppState>,
+    authed: Authed,
+    Path(id): Path<Uuid>,
+) -> ApiResult<Json<Sync>> {
+    at_invoice(&state, &authed, id, permissions::BILLING_WRITE).await?;
+    let ctx = authed.user.ctx.clone();
+    // The provider's settings and mappings sit above the client.
+    Ok(Json(
+        scoped(&state, &OrgScope::System, async |tx| {
+            sync::request(tx, &ctx, id).await
+        })
+        .await?,
+    ))
 }

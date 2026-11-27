@@ -568,6 +568,29 @@ export const STEPS: StepSpec[] = [
 		]
 	},
 	{
+		type: 'core.invoice.sync_result',
+		label: 'Record an invoice sync',
+		description:
+			"Record how syncing an invoice to the accounting system went: its ID there when it synced (the invoice is then sent), or why it didn't (it joins the sync error queue).",
+		group: 'Actions',
+		module: 'billing',
+		template: {
+			with: {
+				invoice_id: '{{ inputs.invoiceId }}',
+				ok: true,
+				remote_id: ''
+			}
+		},
+		fields: [
+			{ path: 'with.invoice_id', label: 'Invoice', kind: 'expression' },
+			{ path: 'with.ok', label: 'Synced', kind: 'expression', hint: 'true or false' },
+			{ path: 'with.remote_id', label: 'ID in the accounting system', kind: 'expression' },
+			{ path: 'with.remote_number', label: 'Number there', kind: 'expression' },
+			{ path: 'with.remote_url', label: 'Link (https)', kind: 'expression' },
+			{ path: 'with.error', label: 'Why it failed', kind: 'expression' }
+		]
+	},
+	{
 		type: 'core.sales.log_email',
 		label: 'Log a sales email',
 		description:

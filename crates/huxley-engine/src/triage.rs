@@ -608,6 +608,63 @@ impl Engine {
         Ok(json!(state))
     }
 
+    /// `core.invoice.sync_result`: records how an invoice's accounting sync
+    /// went (an invoice in the run's organization or below). Output: the sync.
+    pub(crate) async fn invoice_sync_result(
+        &self,
+        org_id: Uuid,
+        input: &Json,
+    ) -> Result<Json, Json> {
+        let mut tx = begin_scoped(self.db(), &OrgScope::System)
+            .await
+            .map_err(internal)?;
+        let on = huxley_modules::is_active_at(&mut tx, huxley_billing::MODULE, org_id)
+            .await
+            .map_err(internal)?;
+        tx.commit().await.map_err(internal)?;
+        if !on {
+            return Err(error("module_disabled", "Invoicing is turned off"));
+        }
+        let invoice =
+            id(input, "invoice_id")?.ok_or_else(|| error("input", "invoice_id is required"))?;
+        let text = |k: &str| match &input[k] {
+            Json::String(s) if !s.trim().is_empty() => Some(s.clone()),
+            Json::Number(n) => Some(n.to_string()),
+            _ => None,
+        };
+        let ok = match &input["ok"] {
+            Json::Bool(b) => *b,
+            Json::String(s) => s == "true",
+            _ => return Err(error("input", "ok is true or false")),
+        };
+        let outcome = huxley_billing::sync::Outcome {
+            ok,
+            remote_id: text("remote_id"),
+            remote_number: text("remote_number"),
+            remote_url: text("remote_url"),
+            error: text("error"),
+        };
+        let subtree = self.subtree(org_id).await?;
+        let mut tx = begin_scoped(self.db(), &OrgScope::Orgs(subtree))
+            .await
+            .map_err(internal)?;
+        let ctx = RequestContext::system(Via::Workflow);
+        let sync = huxley_billing::sync::record(&mut tx, &ctx, invoice, &outcome)
+            .await
+            .map_err(|e| match e {
+                huxley_billing::BillingError::NotFound => {
+                    error("not_found", "no such invoice here")
+                }
+                huxley_billing::BillingError::Conflict(m) => error("conflict", &m),
+                huxley_billing::BillingError::Invalid { field, message } => {
+                    error("input", format!("{field}: {message}"))
+                }
+                other => internal(other),
+            })?;
+        tx.commit().await.map_err(internal)?;
+        Ok(json!(sync))
+    }
+
     /// `core.project.scope.decide`: records the decision on a submitted
     /// scope change (on a project in the run's organization or below).
     /// Output: the scope change.

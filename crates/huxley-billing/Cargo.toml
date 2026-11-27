@@ -11,6 +11,7 @@ publish = false
 [dependencies]
 huxley-contracts.workspace = true
 huxley-core.workspace = true
+huxley-datasets.workspace = true
 huxley-db.workspace = true
 huxley-expr.workspace = true
 huxley-notify.workspace = true

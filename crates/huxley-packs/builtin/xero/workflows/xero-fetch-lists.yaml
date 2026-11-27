@@ -1,0 +1,92 @@
+apiVersion: usehuxley.io/v1
+kind: Workflow
+metadata:
+  key: xero-fetch-lists
+  name: Fetch Xero lists
+  description: >-
+    Every night (or when run by hand), reads Xero's customer contacts,
+    items, tax rates and tracking options into their datasets, replacing
+    what was there, so they can be matched to clients, products, tax codes
+    and classes under Billing → Accounting. Uses the connection named xero
+    and the organization variable xero_tenant_id; run it at your MSP.
+spec:
+  triggers:
+    - type: schedule
+      interval: 24h
+    - type: manual
+  steps:
+    - id: contacts
+      type: integration.action
+      action: xero/listContacts
+      connection: xero
+      with:
+        xero-tenant-id: "{{ vars.xero_tenant_id }}"
+        summaryOnly: true
+    - id: save_contacts
+      type: dataset.upsert
+      with:
+        dataset: xero-customers
+        rows: "{{ steps.contacts.output.Contacts or [] }}"
+        replace: true
+        map: { id: ContactID, name: Name, active: IsCustomer }
+    - id: items
+      type: integration.action
+      action: xero/listItems
+      connection: xero
+      with:
+        xero-tenant-id: "{{ vars.xero_tenant_id }}"
+    # Lines name items by their code.
+    - id: save_items
+      type: dataset.upsert
+      with:
+        dataset: xero-items
+        rows: "{{ (steps.items.output.Items or []) | selectattr('Code') | list }}"
+        replace: true
+        map: { id: Code, name: Name, active: IsSold }
+    - id: taxes
+      type: integration.action
+      action: xero/listTaxRates
+      connection: xero
+      with:
+        xero-tenant-id: "{{ vars.xero_tenant_id }}"
+    - id: save_taxes
+      type: dataset.upsert
+      with:
+        dataset: xero-tax-codes
+        rows: "{{ steps.taxes.output.TaxRates or [] }}"
+        replace: true
+        map: { id: TaxType, name: Name }
+    - id: tracking
+      type: integration.action
+      action: xero/listTrackingCategories
+      connection: xero
+      with:
+        xero-tenant-id: "{{ vars.xero_tenant_id }}"
+    - id: begin
+      type: set_var
+      vars: { options: [] }
+    - id: options
+      type: foreach
+      items: "{{ steps.tracking.output.TrackingCategories or [] }}"
+      as: category
+      steps:
+        - id: each_option
+          type: foreach
+          items: "{{ category.Options or [] }}"
+          as: option
+          steps:
+            - id: add_option
+              type: set_var
+              vars:
+                options: >-
+                  {{ run.vars.options + [{'id': category.Name ~ '::' ~ option.Name,
+                     'name': category.Name ~ ': ' ~ option.Name, 'active': option.Status == 'ACTIVE'}] }}
+    - id: save_tracking
+      type: dataset.upsert
+      with:
+        dataset: xero-classes
+        rows: "{{ run.vars.options }}"
+        replace: true
+  outputs:
+    contacts: "{{ (steps.contacts.output.Contacts or []) | length }}"
+    items: "{{ (steps.items.output.Items or []) | length }}"
