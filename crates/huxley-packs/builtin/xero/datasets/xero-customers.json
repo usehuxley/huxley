@@ -1,0 +1,10 @@
+{
+  "name": "Xero contacts",
+  "description": "Xero contacts, fetched by Fetch Xero lists, for matching under Billing → Accounting.",
+  "columns": [
+    { "name": "id", "type": "text" },
+    { "name": "name", "type": "text" },
+    { "name": "active", "type": "boolean" }
+  ],
+  "primaryKey": ["id"]
+}

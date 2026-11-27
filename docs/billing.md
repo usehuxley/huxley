@@ -64,7 +64,7 @@ On a run's invoices (**Billing runs → Invoices**), **Approve the run** approve
 
 ## Accounting sync
 
-Approved invoices and credit memos go to your accounting system (ADR-077). Huxley prepares each one with your matches. The accounting system's pack (**QuickBooks Online**, or **Xero**) creates it there through a system workflow, so other systems can be added the same way.
+Approved invoices and credit memos go to your accounting system (ADR-077). Huxley prepares each one with your matches. The accounting system's pack ([QuickBooks Online](./quickbooks.md) or [Xero](./xero.md)) creates it there through a system workflow, so other systems can be added the same way.
 
 1. Install the pack from **Packs** at your MSP, connect it, and run its **Fetch lists** workflow once. After that it runs nightly.
 2. In **Settings → Billing → Accounting sync**, set the accounting system (`quickbooks` or `xero`). Choose whether invoices sync **as soon as they're approved**, or only when you sync them.

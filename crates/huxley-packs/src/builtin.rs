@@ -299,6 +299,39 @@ const SOURCES: &[Source] = &[
         ],
     },
     Source {
+        manifest: include_str!("../builtin/xero/pack.yaml"),
+        files: &[
+            (
+                "integrations/xero.yaml",
+                include_str!("../builtin/xero/integrations/xero.yaml"),
+            ),
+            (
+                "workflows/xero-sync-invoice.yaml",
+                include_str!("../builtin/xero/workflows/xero-sync-invoice.yaml"),
+            ),
+            (
+                "workflows/xero-fetch-lists.yaml",
+                include_str!("../builtin/xero/workflows/xero-fetch-lists.yaml"),
+            ),
+            (
+                "datasets/xero-customers.json",
+                include_str!("../builtin/xero/datasets/xero-customers.json"),
+            ),
+            (
+                "datasets/xero-items.json",
+                include_str!("../builtin/xero/datasets/xero-items.json"),
+            ),
+            (
+                "datasets/xero-tax-codes.json",
+                include_str!("../builtin/xero/datasets/xero-tax-codes.json"),
+            ),
+            (
+                "datasets/xero-classes.json",
+                include_str!("../builtin/xero/datasets/xero-classes.json"),
+            ),
+        ],
+    },
+    Source {
         manifest: include_str!("../builtin/immybot/pack.yaml"),
         files: &[
             (

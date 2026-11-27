@@ -104,7 +104,8 @@ export default defineConfig({
 					{ text: 'Reporting data', link: '/analytics' },
 					{ text: 'ConnectWise Automate', link: '/cwautomate' },
 					{ text: 'ImmyBot', link: '/immybot' },
-					{ text: 'QuickBooks Online', link: '/quickbooks' }
+					{ text: 'QuickBooks Online', link: '/quickbooks' },
+					{ text: 'Xero', link: '/xero' }
 				]
 			},
 			{

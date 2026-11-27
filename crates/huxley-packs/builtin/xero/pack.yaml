@@ -1,0 +1,11 @@
+apiVersion: usehuxley.io/v1
+kind: Pack
+key: huxley/xero
+name: Xero
+version: 1.0.0
+publisher: Huxley
+description: "Xero accounting sync: approved invoices and credit memos are created in Xero, authorised, with their mapped contacts, items, tax rates and tracking options, and Xero's contacts, items, tax rates and tracking options are fetched for mapping."
+contents:
+  integrations: [xero]
+  workflows: [xero-sync-invoice, xero-fetch-lists]
+  datasets: [xero-customers, xero-items, xero-tax-codes, xero-classes]
