@@ -54,6 +54,10 @@ pub fn routes() -> Router<AppState> {
         )
         .route("/projects/{id}/milestones/{milestone}", post(set_milestone))
         .route(
+            "/projects/{id}/milestones/{milestone}/amount",
+            axum::routing::put(set_milestone_amount),
+        )
+        .route(
             "/project-templates",
             get(list_templates).post(create_template),
         )
@@ -238,6 +242,35 @@ pub async fn set_milestone(
     Ok(Json(
         system(&state, async |tx| {
             projects::set_milestone(tx, &ctx, id, milestone, body.reached).await
+        })
+        .await?,
+    ))
+}
+
+#[derive(Debug, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct MilestoneAmount {
+    /// What reaching it bills; none clears it.
+    #[serde(default)]
+    pub amount: Option<f64>,
+}
+
+/// Sets what reaching a milestone bills (milestone-billed projects).
+#[utoipa::path(put, path = "/api/v1/projects/{id}/milestones/{milestone}/amount", operation_id = "set_project_milestone_amount",
+    tag = "projects", params(("id" = Uuid, Path), ("milestone" = Uuid, Path)), request_body = MilestoneAmount,
+    responses((status = 200, body = Project)))]
+pub async fn set_milestone_amount(
+    State(state): State<AppState>,
+    authed: Authed,
+    Path((id, milestone)): Path<(Uuid, Uuid)>,
+    Json(body): Json<MilestoneAmount>,
+) -> ApiResult<Json<Project>> {
+    let org = org_of(&state, "prj_projects", id).await?;
+    allowed(&state, &authed, org, permissions::PROJECT_MANAGE).await?;
+    let ctx = authed.user.ctx.clone();
+    Ok(Json(
+        system(&state, async |tx| {
+            projects::set_milestone_amount(tx, &ctx, id, milestone, body.amount).await
         })
         .await?,
     ))

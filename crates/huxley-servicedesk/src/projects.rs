@@ -107,6 +107,12 @@ pub struct ProjectChanges {
     /// Unlink the agreement.
     #[serde(default)]
     pub clear_agreement: bool,
+    /// The fixed fee (or not-to-exceed cap) it bills.
+    #[serde(default)]
+    pub fee_amount: Option<f64>,
+    /// Remove the fee.
+    #[serde(default)]
+    pub clear_fee: bool,
     pub version: i32,
 }
 
@@ -137,6 +143,8 @@ pub struct Milestone {
     #[serde(with = "time::serde::rfc3339::option")]
     pub reached_at: Option<OffsetDateTime>,
     pub client_visible: bool,
+    /// What reaching it bills (milestone-billed projects).
+    pub amount: Option<f64>,
 }
 
 #[derive(Debug, Clone, Serialize, ToSchema, sqlx::FromRow)]
@@ -183,6 +191,7 @@ struct Row {
     budget_hours: Option<f64>,
     used_hours: f64,
     billing_method: String,
+    fee_amount: Option<f64>,
     thresholds: Vec<i16>,
     thresholds_fired: Vec<i16>,
     portal_visible: bool,
@@ -211,6 +220,8 @@ pub struct Project {
     /// Used against budget, in percent.
     pub burn_percent: Option<f64>,
     pub billing_method: String,
+    /// What it bills: the fixed fee, or a not-to-exceed cap.
+    pub fee_amount: Option<f64>,
     pub thresholds: Vec<i16>,
     pub thresholds_fired: Vec<i16>,
     pub portal_visible: bool,
@@ -233,7 +244,8 @@ const SELECT: &str = "SELECT p.id, p.org_id, o.name AS org_name, p.name, p.descr
      to_char(p.end_on, 'YYYY-MM-DD') AS end_on, p.budget_hours::float8 AS budget_hours, \
      coalesce((SELECT sum(e.minutes) FROM sd_time_entries e JOIN prj_tasks k ON k.ticket_id = e.ticket_id \
                WHERE k.project_id = p.id), 0)::float8 / 60 AS used_hours, \
-     p.billing_method, p.thresholds, p.thresholds_fired, p.portal_visible, p.template_id, p.agreement_id, a.name AS agreement_name, p.version \
+     p.billing_method, p.fee_amount::float8 AS fee_amount, p.thresholds, p.thresholds_fired, p.portal_visible, p.template_id, \
+     p.agreement_id, a.name AS agreement_name, p.version \
      FROM prj_projects p JOIN organizations o ON o.id = p.org_id LEFT JOIN users u ON u.id = p.manager_user_id \
      LEFT JOIN contract_agreements a ON a.id = p.agreement_id";
 
@@ -311,7 +323,7 @@ async fn details(
     .fetch_all(&mut *conn)
     .await?;
     let milestones: Vec<Milestone> = sqlx::query_as(
-        "SELECT id, name, to_char(due_on, 'YYYY-MM-DD') AS due_on, reached_at, client_visible \
+        "SELECT id, name, to_char(due_on, 'YYYY-MM-DD') AS due_on, reached_at, client_visible, amount::float8 AS amount \
            FROM prj_milestones WHERE project_id = $1 ORDER BY position, due_on",
     )
     .bind(id)
@@ -374,6 +386,7 @@ fn assemble(
         budget_hours: row.budget_hours,
         used_hours: (row.used_hours * 100.0).round() / 100.0,
         billing_method: row.billing_method,
+        fee_amount: row.fee_amount,
         thresholds: row.thresholds,
         thresholds_fired: row.thresholds_fired,
         portal_visible: row.portal_visible,
@@ -789,6 +802,9 @@ pub async fn update(
         Some(t) => check_thresholds(t)?,
         None => current.thresholds.clone(),
     };
+    if c.fee_amount.is_some_and(|f| !f.is_finite() || f < 0.0) {
+        return Err(DeskError::invalid("feeAmount", "zero or more"));
+    }
     let agreement = if c.clear_agreement {
         None
     } else if let Some(a) = c.agreement_id {
@@ -800,6 +816,7 @@ pub async fn update(
     sqlx::query(
         "UPDATE prj_projects SET name = $2, description = $3, manager_user_id = $4, status = $5, end_on = $6, \
                 budget_hours = $7, billing_method = $8, thresholds = $9, portal_visible = $10, agreement_id = $11, \
+                fee_amount = $12::float8::numeric, \
                 thresholds_fired = (SELECT coalesce(array_agg(f), '{}') FROM unnest(thresholds_fired) f WHERE f = ANY($9)), \
                 version = version + 1, updated_at = now() WHERE id = $1",
     )
@@ -814,6 +831,7 @@ pub async fn update(
     .bind(&thresholds)
     .bind(c.portal_visible.unwrap_or(current.portal_visible))
     .bind(agreement)
+    .bind(if c.clear_fee { None } else { c.fee_amount.or(current.fee_amount) })
     .execute(&mut *conn)
     .await?;
     if status != current.status {
@@ -1042,6 +1060,38 @@ pub async fn set_milestone(
             .org(org)
             .target("project", id)
             .details(json!({ "milestone": name, "reached": reached })),
+    )
+    .await?;
+    get(conn, id).await
+}
+
+/// Sets what reaching a milestone bills (none: nothing).
+pub async fn set_milestone_amount(
+    conn: &mut PgConnection,
+    ctx: &RequestContext,
+    id: Uuid,
+    milestone: Uuid,
+    amount: Option<f64>,
+) -> DeskResult<Project> {
+    if amount.is_some_and(|a| !a.is_finite() || a < 0.0) {
+        return Err(DeskError::invalid("amount", "zero or more"));
+    }
+    let org: Option<Uuid> = sqlx::query_scalar(
+        "UPDATE prj_milestones SET amount = $3::float8::numeric WHERE id = $1 AND project_id = $2 RETURNING org_id",
+    )
+    .bind(milestone)
+    .bind(id)
+    .bind(amount)
+    .fetch_optional(&mut *conn)
+    .await?;
+    let org = org.ok_or(DeskError::NotFound)?;
+    audit::record(
+        &mut *conn,
+        ctx,
+        AuditRecord::new("project.milestone_amount")
+            .org(org)
+            .target("project", id)
+            .details(json!({ "milestone": milestone, "amount": amount })),
     )
     .await?;
     get(conn, id).await

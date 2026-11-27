@@ -90,7 +90,6 @@ test.describe('settings (as the bootstrap owner)', () => {
 		await expect(
 			page.getByText('Turned on: Clients and contacts, Contracts, Invoicing')
 		).toBeVisible();
-		await expect(row.getByText('On: arrives in Phase 11')).toBeVisible();
 
 		// Contracts can't be turned off while Invoicing needs it.
 		const contracts = page.getByRole('listitem').filter({ hasText: 'Agreements (coverage' });

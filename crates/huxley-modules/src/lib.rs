@@ -147,6 +147,14 @@ pub const REGISTRY: &[Module] = &[
         description: "Invoice generation and accounting sync.",
         requires: &["contracts"],
         phase: 11,
+        released: true,
+    },
+    Module {
+        key: "expenses",
+        name: "Expenses",
+        description: "Expenses with receipts, mileage, reimbursement and billing.",
+        requires: &["crm"],
+        phase: 12,
         released: false,
     },
 ];

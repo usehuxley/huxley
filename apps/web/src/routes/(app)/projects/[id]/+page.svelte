@@ -137,7 +137,50 @@
 					<li class="text-fg-muted">None.</li>
 				{/each}
 			</ul>
+			{#if data.canManage && p.billingMethod === 'milestone' && p.milestones.length}
+				<div class="mt-3 flex flex-col gap-2 border-t border-border pt-3">
+					<p class="text-xs font-bold text-fg-subtle">What each bills when reached</p>
+					{#each p.milestones as m (m.id)}
+						<form
+							method="POST"
+							action="?/milestoneAmount"
+							class="flex items-center gap-2"
+							use:enhance
+						>
+							<input type="hidden" name="milestone" value={m.id} />
+							<span class="flex-1 text-sm text-fg">{m.name}</span>
+							<Input
+								name="amount"
+								inputmode="decimal"
+								value={m.amount ?? ''}
+								class="w-28"
+								aria-label="Amount for {m.name}"
+							/>
+							<Button type="submit" size="sm" variant="ghost">Save</Button>
+						</form>
+					{/each}
+				</div>
+			{/if}
 		</Card>
+		{#if data.canManage}
+			<Card title="Billing">
+				<form method="POST" action="?/billing" class="flex flex-col gap-3" use:enhance>
+					<input type="hidden" name="version" value={p.version} />
+					<Field label="Billed as" for="billing-method">
+						<Select
+							id="billing-method"
+							name="billingMethod"
+							value={p.billingMethod}
+							options={BILLING.map((b) => ({ value: b.value, label: b.label }))}
+						/>
+					</Field>
+					<Field label="Fee (fixed fee or not-to-exceed cap)" for="fee-amount">
+						<Input id="fee-amount" name="feeAmount" inputmode="decimal" value={p.feeAmount ?? ''} />
+					</Field>
+					<Button type="submit" size="sm">Save billing</Button>
+				</form>
+			</Card>
+		{/if}
 	</div>
 	{#if data.parts}
 		<PartsCard parts={data.parts} />

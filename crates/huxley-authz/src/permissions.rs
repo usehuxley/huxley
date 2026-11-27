@@ -113,6 +113,10 @@ permissions! {
     PROCUREMENT_READ = "procurement:read", Org, "View vendors and purchase orders";
     PROCUREMENT_WRITE = "procurement:write", Org, "Keep vendors, draft and submit purchase orders, mark them ordered, and receive deliveries";
     PROCUREMENT_APPROVE = "procurement:approve", Org, "Approve or send back purchase orders over the approval threshold, and set the threshold";
+    BILLING_READ = "billing:read", Org, "View invoices, billing runs and what's still unbilled";
+    BILLING_WRITE = "billing:write", Org, "Run billing, edit, hold and void draft invoices, and make credit memos";
+    BILLING_APPROVE = "billing:approve", Org, "Approve invoices for sending and syncing";
+    BILLING_CONFIGURE = "billing:configure", Org, "Keep billing settings: the default hourly rate, currency and payment terms";
 }
 
 /// Wildcard granting every permission.

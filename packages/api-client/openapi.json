@@ -4954,6 +4954,157 @@
 				}
 			}
 		},
+		"/api/v1/billing/runs": {
+			"get": {
+				"tags": ["billing"],
+				"operationId": "list_billing_runs",
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "array",
+									"items": {
+										"$ref": "#/components/schemas/BillingRun"
+									}
+								}
+							}
+						}
+					}
+				}
+			},
+			"post": {
+				"tags": ["billing"],
+				"summary": "Runs billing: draft invoices for what's billable in the period.",
+				"operationId": "start_billing_run",
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/BillingRunInput"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"201": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/BillingRun"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/billing/settings": {
+			"get": {
+				"tags": ["billing"],
+				"summary": "The provider's billing settings.",
+				"operationId": "get_billing_settings",
+				"parameters": [
+					{
+						"name": "orgId",
+						"in": "query",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/BillingSettings"
+								}
+							}
+						}
+					}
+				}
+			},
+			"put": {
+				"tags": ["billing"],
+				"operationId": "put_billing_settings",
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/SettingsRequest"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/BillingSettings"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/billing/unbilled": {
+			"get": {
+				"tags": ["billing"],
+				"summary": "What's billable below a provider in a period, per client.",
+				"operationId": "get_unbilled",
+				"parameters": [
+					{
+						"name": "orgId",
+						"in": "query",
+						"description": "The provider.",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					},
+					{
+						"name": "from",
+						"in": "query",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "date"
+						}
+					},
+					{
+						"name": "to",
+						"in": "query",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "date"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "array",
+									"items": {
+										"$ref": "#/components/schemas/UnbilledClient"
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		},
 		"/api/v1/canned-responses": {
 			"get": {
 				"tags": ["servicedesk"],
@@ -9259,6 +9410,347 @@
 				}
 			}
 		},
+		"/api/v1/invoices": {
+			"get": {
+				"tags": ["billing"],
+				"summary": "Invoices and credit memos you can see, newest first.",
+				"operationId": "list_invoices",
+				"parameters": [
+					{
+						"name": "status",
+						"in": "query",
+						"required": false,
+						"schema": {
+							"$ref": "#/components/schemas/InvoiceStatus"
+						}
+					},
+					{
+						"name": "orgId",
+						"in": "query",
+						"required": false,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					},
+					{
+						"name": "runId",
+						"in": "query",
+						"required": false,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					},
+					{
+						"name": "q",
+						"in": "query",
+						"description": "`INV-12`, a number, or the client's name.",
+						"required": false,
+						"schema": {
+							"type": "string"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "array",
+									"items": {
+										"$ref": "#/components/schemas/Invoice"
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/invoices/{id}": {
+			"get": {
+				"tags": ["billing"],
+				"operationId": "get_invoice",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Invoice"
+								}
+							}
+						}
+					}
+				}
+			},
+			"put": {
+				"tags": ["billing"],
+				"summary": "Changes a draft's lines, notes and due date (send the version you read).",
+				"operationId": "update_invoice",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/InvoiceInput"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Invoice"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/invoices/{id}/approve": {
+			"post": {
+				"tags": ["billing"],
+				"summary": "Approves a draft: it can then be sent or synced.",
+				"operationId": "approve_invoice",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/VersionRequest"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Invoice"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/invoices/{id}/credit": {
+			"post": {
+				"tags": ["billing"],
+				"summary": "Makes a credit memo draft against an invoice that's been sent.",
+				"operationId": "credit_invoice",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/CreditRequest"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"201": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Invoice"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/invoices/{id}/hold": {
+			"post": {
+				"tags": ["billing"],
+				"operationId": "hold_invoice",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/HoldRequest"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Invoice"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/invoices/{id}/pdf": {
+			"get": {
+				"tags": ["billing"],
+				"summary": "The invoice (or credit memo) as a PDF.",
+				"operationId": "invoice_pdf",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/pdf": {
+								"schema": {
+									"type": "array",
+									"items": {
+										"type": "integer",
+										"format": "int32",
+										"minimum": 0
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/invoices/{id}/sent": {
+			"post": {
+				"tags": ["billing"],
+				"summary": "Marks an approved invoice sent (it's then locked).",
+				"operationId": "mark_invoice_sent",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Invoice"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/invoices/{id}/void": {
+			"post": {
+				"tags": ["billing"],
+				"summary": "Voids a draft or approved invoice: what it billed can be billed again.",
+				"operationId": "void_invoice",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/VersionRequest"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Invoice"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
 		"/api/v1/jobs/dead": {
 			"get": {
 				"tags": ["workflows"],
@@ -13507,6 +13999,54 @@
 						"application/json": {
 							"schema": {
 								"$ref": "#/components/schemas/MilestoneState"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Project"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/projects/{id}/milestones/{milestone}/amount": {
+			"put": {
+				"tags": ["projects"],
+				"summary": "Sets what reaching a milestone bills (milestone-billed projects).",
+				"operationId": "set_project_milestone_amount",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					},
+					{
+						"name": "milestone",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/MilestoneAmount"
 							}
 						}
 					},
@@ -27315,6 +27855,115 @@
 					"type": "string"
 				}
 			},
+			"BillableLine": {
+				"type": "object",
+				"description": "One thing to bill, and the sources it bills.",
+				"required": ["kind", "description", "quantity", "unit", "unitPrice", "currency"],
+				"properties": {
+					"currency": {
+						"type": "string"
+					},
+					"description": {
+						"type": "string"
+					},
+					"kind": {
+						"$ref": "#/components/schemas/InvoiceLineKind"
+					},
+					"productId": {
+						"type": ["string", "null"],
+						"format": "uuid"
+					},
+					"quantity": {
+						"type": "string"
+					},
+					"unit": {
+						"type": "string"
+					},
+					"unitPrice": {
+						"type": "string"
+					}
+				}
+			},
+			"BillingRun": {
+				"type": "object",
+				"required": ["id", "orgId", "periodStart", "periodEnd", "invoices", "createdAt"],
+				"properties": {
+					"createdAt": {
+						"type": "string",
+						"format": "date-time"
+					},
+					"createdByName": {
+						"type": ["string", "null"]
+					},
+					"id": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"invoices": {
+						"type": "integer",
+						"format": "int32"
+					},
+					"orgId": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"periodEnd": {
+						"type": "string",
+						"format": "date"
+					},
+					"periodStart": {
+						"type": "string",
+						"format": "date"
+					}
+				}
+			},
+			"BillingRunInput": {
+				"type": "object",
+				"required": ["orgId", "from", "to"],
+				"properties": {
+					"clients": {
+						"type": ["array", "null"],
+						"items": {
+							"type": "string",
+							"format": "uuid"
+						},
+						"description": "Only these clients (default: every client below the provider)."
+					},
+					"from": {
+						"type": "string",
+						"format": "date"
+					},
+					"orgId": {
+						"type": "string",
+						"format": "uuid",
+						"description": "The provider running it."
+					},
+					"to": {
+						"type": "string",
+						"format": "date"
+					}
+				},
+				"additionalProperties": false
+			},
+			"BillingSettings": {
+				"type": "object",
+				"required": ["currency", "paymentDays", "approvedTimeOnly"],
+				"properties": {
+					"approvedTimeOnly": {
+						"type": "boolean"
+					},
+					"currency": {
+						"type": "string"
+					},
+					"hourlyRate": {
+						"type": ["string", "null"]
+					},
+					"paymentDays": {
+						"type": "integer",
+						"format": "int32"
+					}
+				}
+			},
 			"Binding": {
 				"type": "object",
 				"required": ["key", "label", "kind"],
@@ -29805,6 +30454,23 @@
 					}
 				]
 			},
+			"CreditRequest": {
+				"type": "object",
+				"properties": {
+					"lineIds": {
+						"type": "array",
+						"items": {
+							"type": "string",
+							"format": "uuid"
+						},
+						"description": "The lines to credit (default: all)."
+					},
+					"reason": {
+						"type": ["string", "null"]
+					}
+				},
+				"additionalProperties": false
+			},
 			"CsatSurvey": {
 				"type": "object",
 				"description": "A survey and its answer.",
@@ -31250,6 +31916,19 @@
 					}
 				}
 			},
+			"HoldRequest": {
+				"type": "object",
+				"required": ["onHold"],
+				"properties": {
+					"onHold": {
+						"type": "boolean"
+					},
+					"reason": {
+						"type": ["string", "null"]
+					}
+				},
+				"additionalProperties": false
+			},
 			"Holiday": {
 				"type": "object",
 				"description": "A day a policy's clocks don't count.",
@@ -32099,6 +32778,223 @@
 					}
 				},
 				"additionalProperties": false
+			},
+			"Invoice": {
+				"type": "object",
+				"required": [
+					"id",
+					"orgId",
+					"orgName",
+					"number",
+					"kind",
+					"status",
+					"onHold",
+					"currency",
+					"total",
+					"version",
+					"createdAt",
+					"lines"
+				],
+				"properties": {
+					"approvedAt": {
+						"type": ["string", "null"],
+						"format": "date-time"
+					},
+					"approvedByName": {
+						"type": ["string", "null"]
+					},
+					"createdAt": {
+						"type": "string",
+						"format": "date-time"
+					},
+					"creditOf": {
+						"type": ["string", "null"],
+						"format": "uuid"
+					},
+					"currency": {
+						"type": "string"
+					},
+					"dueOn": {
+						"type": ["string", "null"],
+						"format": "date"
+					},
+					"holdReason": {
+						"type": ["string", "null"]
+					},
+					"id": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"issuedOn": {
+						"type": ["string", "null"],
+						"format": "date"
+					},
+					"kind": {
+						"type": "string",
+						"description": "`invoice` or `credit_memo`."
+					},
+					"lines": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/InvoiceLine"
+						}
+					},
+					"notes": {
+						"type": ["string", "null"]
+					},
+					"number": {
+						"type": "integer",
+						"format": "int64"
+					},
+					"onHold": {
+						"type": "boolean"
+					},
+					"orgId": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"orgName": {
+						"type": "string"
+					},
+					"periodEnd": {
+						"type": ["string", "null"],
+						"format": "date"
+					},
+					"periodStart": {
+						"type": ["string", "null"],
+						"format": "date"
+					},
+					"runId": {
+						"type": ["string", "null"],
+						"format": "uuid"
+					},
+					"status": {
+						"$ref": "#/components/schemas/InvoiceStatus"
+					},
+					"total": {
+						"type": "string"
+					},
+					"version": {
+						"type": "integer",
+						"format": "int32"
+					}
+				}
+			},
+			"InvoiceInput": {
+				"type": "object",
+				"required": ["lines", "version"],
+				"properties": {
+					"dueOn": {
+						"type": ["string", "null"],
+						"format": "date"
+					},
+					"lines": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/InvoiceLineInput"
+						}
+					},
+					"notes": {
+						"type": ["string", "null"]
+					},
+					"version": {
+						"type": "integer",
+						"format": "int32"
+					}
+				},
+				"additionalProperties": false
+			},
+			"InvoiceLine": {
+				"type": "object",
+				"required": [
+					"id",
+					"kind",
+					"description",
+					"quantity",
+					"unit",
+					"unitPrice",
+					"amount",
+					"edited",
+					"sources"
+				],
+				"properties": {
+					"amount": {
+						"type": "string"
+					},
+					"description": {
+						"type": "string"
+					},
+					"edited": {
+						"type": "boolean"
+					},
+					"id": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"kind": {
+						"$ref": "#/components/schemas/InvoiceLineKind"
+					},
+					"productId": {
+						"type": ["string", "null"],
+						"format": "uuid"
+					},
+					"quantity": {
+						"type": "string"
+					},
+					"sources": {
+						"type": "integer",
+						"format": "int64",
+						"description": "How many sources it bills (time entries, order lines…)."
+					},
+					"taxCode": {
+						"type": ["string", "null"]
+					},
+					"unit": {
+						"type": "string"
+					},
+					"unitPrice": {
+						"type": "string"
+					}
+				}
+			},
+			"InvoiceLineInput": {
+				"type": "object",
+				"required": ["description", "quantity", "unitPrice"],
+				"properties": {
+					"description": {
+						"type": "string"
+					},
+					"id": {
+						"type": ["string", "null"],
+						"format": "uuid",
+						"description": "An existing line (keeps what it bills); new lines leave it out."
+					},
+					"productId": {
+						"type": ["string", "null"],
+						"format": "uuid"
+					},
+					"quantity": {
+						"type": "string"
+					},
+					"taxCode": {
+						"type": ["string", "null"]
+					},
+					"unit": {
+						"type": ["string", "null"]
+					},
+					"unitPrice": {
+						"type": "string"
+					}
+				},
+				"additionalProperties": false
+			},
+			"InvoiceLineKind": {
+				"type": "string",
+				"enum": ["time", "product", "recurring", "project", "manual"]
+			},
+			"InvoiceStatus": {
+				"type": "string",
+				"enum": ["draft", "approved", "sent", "void"]
 			},
 			"ItemDetail": {
 				"type": "object",
@@ -33390,6 +34286,11 @@
 				"type": "object",
 				"required": ["id", "name", "clientVisible"],
 				"properties": {
+					"amount": {
+						"type": ["number", "null"],
+						"format": "double",
+						"description": "What reaching it bills (milestone-billed projects)."
+					},
 					"clientVisible": {
 						"type": "boolean"
 					},
@@ -33408,6 +34309,17 @@
 						"format": "date-time"
 					}
 				}
+			},
+			"MilestoneAmount": {
+				"type": "object",
+				"properties": {
+					"amount": {
+						"type": ["number", "null"],
+						"format": "double",
+						"description": "What reaching it bills; none clears it."
+					}
+				},
+				"additionalProperties": false
 			},
 			"MilestoneState": {
 				"type": "object",
@@ -36654,6 +37566,11 @@
 					"endOn": {
 						"type": ["string", "null"]
 					},
+					"feeAmount": {
+						"type": ["number", "null"],
+						"format": "double",
+						"description": "What it bills: the fixed fee, or a not-to-exceed cap."
+					},
 					"health": {
 						"$ref": "#/components/schemas/Health"
 					},
@@ -36769,11 +37686,20 @@
 						"type": "boolean",
 						"description": "Unlink the agreement."
 					},
+					"clearFee": {
+						"type": "boolean",
+						"description": "Remove the fee."
+					},
 					"description": {
 						"type": ["string", "null"]
 					},
 					"endOn": {
 						"type": ["string", "null"]
+					},
+					"feeAmount": {
+						"type": ["number", "null"],
+						"format": "double",
+						"description": "The fixed fee (or not-to-exceed cap) it bills."
 					},
 					"managerUserId": {
 						"type": ["string", "null"],
@@ -41149,6 +42075,23 @@
 					"days"
 				]
 			},
+			"SettingsRequest": {
+				"allOf": [
+					{
+						"$ref": "#/components/schemas/BillingSettings"
+					},
+					{
+						"type": "object",
+						"required": ["orgId"],
+						"properties": {
+							"orgId": {
+								"type": "string",
+								"format": "uuid"
+							}
+						}
+					}
+				]
+			},
 			"ShownCall": {
 				"type": "object",
 				"description": "A tool call as the user sees it.",
@@ -44142,6 +45085,53 @@
 				],
 				"description": "Who vouches for a pack."
 			},
+			"UnbilledClient": {
+				"type": "object",
+				"required": [
+					"orgId",
+					"orgName",
+					"currency",
+					"time",
+					"products",
+					"recurring",
+					"projects",
+					"total",
+					"lines"
+				],
+				"properties": {
+					"currency": {
+						"type": "string"
+					},
+					"lines": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/BillableLine"
+						}
+					},
+					"orgId": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"orgName": {
+						"type": "string"
+					},
+					"products": {
+						"type": "string"
+					},
+					"projects": {
+						"type": "string"
+					},
+					"recurring": {
+						"type": "string"
+					},
+					"time": {
+						"type": "string"
+					},
+					"total": {
+						"type": "string"
+					}
+				}
+			},
 			"UnqualifiedWork": {
 				"type": "object",
 				"required": ["requirement", "tickets", "people"],
@@ -44776,6 +45766,17 @@
 					}
 				]
 			},
+			"VersionRequest": {
+				"type": "object",
+				"required": ["version"],
+				"properties": {
+					"version": {
+						"type": "integer",
+						"format": "int32"
+					}
+				},
+				"additionalProperties": false
+			},
 			"VersionSource": {
 				"type": "object",
 				"required": ["version", "source", "parameters"],
@@ -45258,6 +46259,10 @@
 		{
 			"name": "purchasing",
 			"description": "Vendors and purchase orders: approval, ordering and receiving into inventory (the inventory module)"
+		},
+		{
+			"name": "billing",
+			"description": "Invoicing: billing settings, unbilled work, billing runs, invoices and credit memos (the billing module)"
 		},
 		{
 			"name": "vault",

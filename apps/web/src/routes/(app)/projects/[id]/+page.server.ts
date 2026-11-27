@@ -107,6 +107,35 @@ const num = (form: FormData, key: string) => {
 export const actions: Actions = {
 	addPart: (event) => addPart(event, 'project', event.params.id),
 	closePart: (event) => closePart(event),
+	billing: async (event) => {
+		const form = await event.request.formData();
+		const fee = formString(form, 'feeAmount').trim();
+		const method = formString(form, 'billingMethod');
+		const { data, response } = await api(event).PATCH('/api/v1/projects/{id}', {
+			params: { path: { id: event.params.id } },
+			body: {
+				version: Number(formString(form, 'version')),
+				billingMethod: method || null,
+				feeAmount: fee ? Number(fee) : null,
+				clearFee: !fee
+			}
+		});
+		if (!data) return fail(response.status, { message: 'Could not save billing.' });
+		return { saved: 'billing' };
+	},
+	milestoneAmount: async (event) => {
+		const form = await event.request.formData();
+		const amount = formString(form, 'amount').trim();
+		const { data, response } = await api(event).PUT(
+			'/api/v1/projects/{id}/milestones/{milestone}/amount',
+			{
+				params: { path: { id: event.params.id, milestone: formString(form, 'milestone') } },
+				body: { amount: amount ? Number(amount) : null }
+			}
+		);
+		if (!data) return fail(response.status, { message: 'Could not save the amount.' });
+		return { saved: 'milestone' };
+	},
 	milestone: async (event) => {
 		const form = await event.request.formData();
 		const { response } = await api(event).POST('/api/v1/projects/{id}/milestones/{milestone}', {

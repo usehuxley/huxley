@@ -1996,6 +1996,57 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
+	'/api/v1/billing/runs': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get: operations['list_billing_runs'];
+		put?: never;
+		/** Runs billing: draft invoices for what's billable in the period. */
+		post: operations['start_billing_run'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/billing/settings': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** The provider's billing settings. */
+		get: operations['get_billing_settings'];
+		put: operations['put_billing_settings'];
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/billing/unbilled': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** What's billable below a provider in a period, per client. */
+		get: operations['get_unbilled'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
 	'/api/v1/canned-responses': {
 		parameters: {
 			query?: never;
@@ -3360,6 +3411,141 @@ export interface paths {
 		get: operations['list_inventory_units'];
 		put?: never;
 		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/invoices': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** Invoices and credit memos you can see, newest first. */
+		get: operations['list_invoices'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/invoices/{id}': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get: operations['get_invoice'];
+		/** Changes a draft's lines, notes and due date (send the version you read). */
+		put: operations['update_invoice'];
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/invoices/{id}/approve': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/** Approves a draft: it can then be sent or synced. */
+		post: operations['approve_invoice'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/invoices/{id}/credit': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/** Makes a credit memo draft against an invoice that's been sent. */
+		post: operations['credit_invoice'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/invoices/{id}/hold': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		post: operations['hold_invoice'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/invoices/{id}/pdf': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** The invoice (or credit memo) as a PDF. */
+		get: operations['invoice_pdf'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/invoices/{id}/sent': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/** Marks an approved invoice sent (it's then locked). */
+		post: operations['mark_invoice_sent'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/invoices/{id}/void': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/** Voids a draft or approved invoice: what it billed can be billed again. */
+		post: operations['void_invoice'];
 		delete?: never;
 		options?: never;
 		head?: never;
@@ -4855,6 +5041,23 @@ export interface paths {
 		put?: never;
 		/** Marks a milestone reached (raising `project.milestone_reached`) or not. */
 		post: operations['set_project_milestone'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/projects/{id}/milestones/{milestone}/amount': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		/** Sets what reaching a milestone bills (milestone-billed projects). */
+		put: operations['set_project_milestone_amount'];
+		post?: never;
 		delete?: never;
 		options?: never;
 		head?: never;
@@ -9892,6 +10095,52 @@ export interface components {
 		BTreeMap: {
 			[key: string]: number;
 		};
+		/** @description One thing to bill, and the sources it bills. */
+		BillableLine: {
+			currency: string;
+			description: string;
+			kind: components['schemas']['InvoiceLineKind'];
+			/** Format: uuid */
+			productId?: string | null;
+			quantity: string;
+			unit: string;
+			unitPrice: string;
+		};
+		BillingRun: {
+			/** Format: date-time */
+			createdAt: string;
+			createdByName?: string | null;
+			/** Format: uuid */
+			id: string;
+			/** Format: int32 */
+			invoices: number;
+			/** Format: uuid */
+			orgId: string;
+			/** Format: date */
+			periodEnd: string;
+			/** Format: date */
+			periodStart: string;
+		};
+		BillingRunInput: {
+			/** @description Only these clients (default: every client below the provider). */
+			clients?: string[] | null;
+			/** Format: date */
+			from: string;
+			/**
+			 * Format: uuid
+			 * @description The provider running it.
+			 */
+			orgId: string;
+			/** Format: date */
+			to: string;
+		};
+		BillingSettings: {
+			approvedTimeOnly: boolean;
+			currency: string;
+			hourlyRate?: string | null;
+			/** Format: int32 */
+			paymentDays: number;
+		};
 		Binding: {
 			default?: string | null;
 			help?: string | null;
@@ -10933,6 +11182,11 @@ export interface components {
 			/** @description Send as `Authorization: Bearer <token>`. Shown only now. */
 			tokenSecret: string;
 		};
+		CreditRequest: {
+			/** @description The lines to credit (default: all). */
+			lineIds?: string[];
+			reason?: string | null;
+		};
 		/** @description A survey and its answer. */
 		CsatSurvey: {
 			/**
@@ -11526,6 +11780,10 @@ export interface components {
 			status: string;
 			version: string;
 		};
+		HoldRequest: {
+			onHold: boolean;
+			reason?: string | null;
+		};
 		/** @description A day a policy's clocks don't count. */
 		Holiday: {
 			/** @description `YYYY-MM-DD`, in the calendar's time zone. */
@@ -11869,6 +12127,88 @@ export interface components {
 		InvitePortalContact: {
 			role: components['schemas']['PortalRole'];
 		};
+		Invoice: {
+			/** Format: date-time */
+			approvedAt?: string | null;
+			approvedByName?: string | null;
+			/** Format: date-time */
+			createdAt: string;
+			/** Format: uuid */
+			creditOf?: string | null;
+			currency: string;
+			/** Format: date */
+			dueOn?: string | null;
+			holdReason?: string | null;
+			/** Format: uuid */
+			id: string;
+			/** Format: date */
+			issuedOn?: string | null;
+			/** @description `invoice` or `credit_memo`. */
+			kind: string;
+			lines: components['schemas']['InvoiceLine'][];
+			notes?: string | null;
+			/** Format: int64 */
+			number: number;
+			onHold: boolean;
+			/** Format: uuid */
+			orgId: string;
+			orgName: string;
+			/** Format: date */
+			periodEnd?: string | null;
+			/** Format: date */
+			periodStart?: string | null;
+			/** Format: uuid */
+			runId?: string | null;
+			status: components['schemas']['InvoiceStatus'];
+			total: string;
+			/** Format: int32 */
+			version: number;
+		};
+		InvoiceInput: {
+			/** Format: date */
+			dueOn?: string | null;
+			lines: components['schemas']['InvoiceLineInput'][];
+			notes?: string | null;
+			/** Format: int32 */
+			version: number;
+		};
+		InvoiceLine: {
+			amount: string;
+			description: string;
+			edited: boolean;
+			/** Format: uuid */
+			id: string;
+			kind: components['schemas']['InvoiceLineKind'];
+			/** Format: uuid */
+			productId?: string | null;
+			quantity: string;
+			/**
+			 * Format: int64
+			 * @description How many sources it bills (time entries, order lines…).
+			 */
+			sources: number;
+			taxCode?: string | null;
+			unit: string;
+			unitPrice: string;
+		};
+		InvoiceLineInput: {
+			description: string;
+			/**
+			 * Format: uuid
+			 * @description An existing line (keeps what it bills); new lines leave it out.
+			 */
+			id?: string | null;
+			/** Format: uuid */
+			productId?: string | null;
+			quantity: string;
+			taxCode?: string | null;
+			unit?: string | null;
+			unitPrice: string;
+		};
+		/** @enum {string} */
+		InvoiceLineKind: 'time' | 'product' | 'recurring' | 'project' | 'manual';
+		/** @enum {string} */
+		InvoiceStatus: 'draft' | 'approved' | 'sent' | 'void';
 		/** @description An item, and where it is. */
 		ItemDetail: {
 			item: components['schemas']['InventoryItem'];
@@ -12418,6 +12758,11 @@ export interface components {
 		 */
 		MfaTrust: 'never' | 'amr' | 'always';
 		Milestone: {
+			/**
+			 * Format: double
+			 * @description What reaching it bills (milestone-billed projects).
+			 */
+			amount?: number | null;
 			clientVisible: boolean;
 			dueOn?: string | null;
 			/** Format: uuid */
@@ -12425,6 +12770,13 @@ export interface components {
 			name: string;
 			/** Format: date-time */
 			reachedAt?: string | null;
+		};
+		MilestoneAmount: {
+			/**
+			 * Format: double
+			 * @description What reaching it bills; none clears it.
+			 */
+			amount?: number | null;
 		};
 		MilestoneState: {
 			reached: boolean;
@@ -13743,6 +14095,11 @@ export interface components {
 			burnPercent?: number | null;
 			description: string;
 			endOn?: string | null;
+			/**
+			 * Format: double
+			 * @description What it bills: the fixed fee, or a not-to-exceed cap.
+			 */
+			feeAmount?: number | null;
 			health: components['schemas']['Health'];
 			/** Format: uuid */
 			id: string;
@@ -13783,8 +14140,15 @@ export interface components {
 			budgetHours?: number | null;
 			/** @description Unlink the agreement. */
 			clearAgreement?: boolean;
+			/** @description Remove the fee. */
+			clearFee?: boolean;
 			description?: string | null;
 			endOn?: string | null;
+			/**
+			 * Format: double
+			 * @description The fixed fee (or not-to-exceed cap) it bills.
+			 */
+			feeAmount?: number | null;
 			/** Format: uuid */
 			managerUserId?: string | null;
 			name?: string | null;
@@ -15501,6 +15865,10 @@ export interface components {
 			| 'toggle'
 			| 'percent'
 			| 'days';
+		SettingsRequest: components['schemas']['BillingSettings'] & {
+			/** Format: uuid */
+			orgId: string;
+		};
 		/** @description A tool call as the user sees it. */
 		ShownCall: {
 			id: string;
@@ -16792,6 +17160,18 @@ export interface components {
 					/** @enum {string} */
 					status: 'unsigned';
 			  };
+		UnbilledClient: {
+			currency: string;
+			lines: components['schemas']['BillableLine'][];
+			/** Format: uuid */
+			orgId: string;
+			orgName: string;
+			products: string;
+			projects: string;
+			recurring: string;
+			time: string;
+			total: string;
+		};
 		UnqualifiedWork: {
 			people: string[];
 			/** @description The requirement that wasn't met. */
@@ -17051,6 +17431,10 @@ export interface components {
 			document: {
 				[key: string]: unknown;
 			};
+		};
+		VersionRequest: {
+			/** Format: int32 */
+			version: number;
 		};
 		VersionSource: {
 			parameters: {
@@ -21137,6 +21521,116 @@ export interface operations {
 			};
 		};
 	};
+	list_billing_runs: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['BillingRun'][];
+				};
+			};
+		};
+	};
+	start_billing_run: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['BillingRunInput'];
+			};
+		};
+		responses: {
+			201: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['BillingRun'];
+				};
+			};
+		};
+	};
+	get_billing_settings: {
+		parameters: {
+			query: {
+				orgId: string;
+			};
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['BillingSettings'];
+				};
+			};
+		};
+	};
+	put_billing_settings: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['SettingsRequest'];
+			};
+		};
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['BillingSettings'];
+				};
+			};
+		};
+	};
+	get_unbilled: {
+		parameters: {
+			query: {
+				/** @description The provider. */
+				orgId: string;
+				from: string;
+				to: string;
+			};
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['UnbilledClient'][];
+				};
+			};
+		};
+	};
 	list_responses: {
 		parameters: {
 			query?: never;
@@ -24261,6 +24755,219 @@ export interface operations {
 			};
 		};
 	};
+	list_invoices: {
+		parameters: {
+			query?: {
+				status?: components['schemas']['InvoiceStatus'];
+				orgId?: string;
+				runId?: string;
+				/** @description `INV-12`, a number, or the client's name. */
+				q?: string;
+			};
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['Invoice'][];
+				};
+			};
+		};
+	};
+	get_invoice: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['Invoice'];
+				};
+			};
+		};
+	};
+	update_invoice: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['InvoiceInput'];
+			};
+		};
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['Invoice'];
+				};
+			};
+		};
+	};
+	approve_invoice: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['VersionRequest'];
+			};
+		};
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['Invoice'];
+				};
+			};
+		};
+	};
+	credit_invoice: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['CreditRequest'];
+			};
+		};
+		responses: {
+			201: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['Invoice'];
+				};
+			};
+		};
+	};
+	hold_invoice: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['HoldRequest'];
+			};
+		};
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['Invoice'];
+				};
+			};
+		};
+	};
+	invoice_pdf: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/pdf': number[];
+				};
+			};
+		};
+	};
+	mark_invoice_sent: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['Invoice'];
+				};
+			};
+		};
+	};
+	void_invoice: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['VersionRequest'];
+			};
+		};
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['Invoice'];
+				};
+			};
+		};
+	};
 	list_dead_jobs: {
 		parameters: {
 			query?: never;
@@ -27331,6 +28038,32 @@ export interface operations {
 		requestBody: {
 			content: {
 				'application/json': components['schemas']['MilestoneState'];
+			};
+		};
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['Project'];
+				};
+			};
+		};
+	};
+	set_project_milestone_amount: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+				milestone: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['MilestoneAmount'];
 			};
 		};
 		responses: {
