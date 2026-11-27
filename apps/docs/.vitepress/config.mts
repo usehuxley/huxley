@@ -59,7 +59,8 @@ export default defineConfig({
 					{ text: 'Introduction', link: '/' },
 					{ text: 'Your first workflow', link: '/getting-started' },
 					{ text: 'Search', link: '/search' },
-					{ text: 'Running Huxley', link: '/operations' }
+					{ text: 'Running Huxley', link: '/operations' },
+					{ text: 'Provisioning (SCIM)', link: '/scim' }
 				]
 			},
 			{

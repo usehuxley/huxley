@@ -7475,6 +7475,43 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
+	'/api/v1/security/sso/providers/{id}/scim': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get: operations['get_scim'];
+		put?: never;
+		post?: never;
+		/** Turns SCIM off: the token stops working. Provisioned users and teams stay. */
+		delete: operations['disable_scim'];
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/security/sso/providers/{id}/scim/token': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/**
+		 * Turns SCIM on with a new token, replacing any old one (which stops
+		 *     working). The token is shown once.
+		 */
+		post: operations['new_scim_token'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
 	'/api/v1/service-accounts': {
 		parameters: {
 			query?: never;
@@ -16811,6 +16848,31 @@ export interface components {
 			};
 			/** @description An IANA time zone, e.g. `Europe/London`. */
 			timezone: string;
+		};
+		/**
+		 * @description SCIM provisioning for a provider (ADR-088): whether it's on, the base
+		 *     URL to give the identity provider, and what it has provisioned.
+		 */
+		ScimSettings: components['schemas']['ScimStatus'] & {
+			/** @description The SCIM base URL (needs `auth.public_url`). */
+			url?: string | null;
+		};
+		/** @description SCIM settings for a provider, as shown to admins. */
+		ScimStatus: {
+			enabled: boolean;
+			/** Format: int64 */
+			groups: number;
+			/** Format: date-time */
+			lastUsedAt?: string | null;
+			/** Format: date-time */
+			tokenCreatedAt?: string | null;
+			/** Format: int64 */
+			users: number;
+		};
+		/** @description A new SCIM token: shown once. */
+		ScimToken: {
+			token: string;
+			url?: string | null;
 		};
 		Scope: {
 			draftError?: string | null;
@@ -34101,6 +34163,94 @@ export interface operations {
 				content?: never;
 			};
 			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	get_scim: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				/** @description Provider id */
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ScimSettings'];
+				};
+			};
+			404: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	disable_scim: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				/** @description Provider id */
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			204: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content?: never;
+			};
+			404: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	new_scim_token: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				/** @description Provider id */
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ScimToken'];
+				};
+			};
+			404: {
 				headers: {
 					[name: string]: unknown;
 				};
