@@ -176,6 +176,12 @@ pub const TIME_ENTRIES: Source = Source {
         f("minutes", "Minutes", Kind::Number, "e.minutes"),
         f("billable", "Billable", Kind::Bool, "e.billable"),
         f(
+            "billed",
+            "Billed",
+            Kind::Bool,
+            "EXISTS (SELECT 1 FROM billing_billed bb WHERE bb.source_type = 'time_entry' AND bb.source_id = e.id)",
+        ),
+        f(
             "ticket",
             "Ticket",
             Kind::Text,
@@ -477,6 +483,96 @@ pub const SALES_ACTIVITIES: Source = Source {
     ]),
 };
 
+/// An invoice's total.
+const INVOICE_TOTAL: &str = "(SELECT coalesce(sum(round(l.quantity * l.unit_price, 2)), 0) \
+    FROM billing_invoice_lines l WHERE l.invoice_id = i.id)";
+
+pub const INVOICES: Source = Source {
+    key: Cow::Borrowed("invoices"),
+    label: Cow::Borrowed("Invoices"),
+    description: Cow::Borrowed(
+        "Invoices and credit memos: client, status, totals, what's still owed and how overdue (from the accounting system, once synced).",
+    ),
+    module: Some("billing"),
+    permission: "billing:read",
+    time_field: Cow::Borrowed("issued_on"),
+    from: Cow::Borrowed(
+        "billing_invoices i JOIN organizations o ON o.id = i.org_id \
+        LEFT JOIN billing_invoice_syncs sy ON sy.invoice_id = i.id",
+    ),
+    fields: Cow::Borrowed(&[
+        CLIENT,
+        f("number", "Number", Kind::Text, "('INV-' || i.number)"),
+        f("kind", "Kind", Kind::Text, "i.kind"),
+        f("status", "Status", Kind::Text, "i.status"),
+        f("currency", "Currency", Kind::Text, "i.currency"),
+        f("sent", "Sent", Kind::Bool, "(i.status = 'sent')"),
+        f("total", "Total", Kind::Number, INVOICE_TOTAL),
+        f(
+            "owed",
+            "Still owed",
+            Kind::Number,
+            "(CASE WHEN i.status = 'sent' AND i.kind = 'invoice' THEN coalesce(sy.amount_due, \
+              (SELECT coalesce(sum(round(l.quantity * l.unit_price, 2)), 0) FROM billing_invoice_lines l \
+                WHERE l.invoice_id = i.id)) ELSE 0 END)",
+        ),
+        f(
+            "overdue",
+            "Overdue",
+            Kind::Bool,
+            "(i.status = 'sent' AND i.kind = 'invoice' AND i.due_on < current_date \
+              AND coalesce(sy.amount_due, 1) <> 0)",
+        ),
+        f("paid", "Paid", Kind::Bool, "(sy.amount_due = 0)"),
+        f(
+            "aging",
+            "Aging",
+            Kind::Text,
+            "(CASE WHEN i.status <> 'sent' OR i.kind <> 'invoice' OR coalesce(sy.amount_due, 1) = 0 THEN 'Settled' \
+              WHEN i.due_on IS NULL OR i.due_on >= current_date THEN 'Not yet due' \
+              WHEN current_date - i.due_on <= 30 THEN '1–30 days' \
+              WHEN current_date - i.due_on <= 60 THEN '31–60 days' \
+              WHEN current_date - i.due_on <= 90 THEN '61–90 days' ELSE 'Over 90 days' END)",
+        ),
+        f("synced", "Synced", Kind::Bool, "(sy.status = 'synced')"),
+        f("issued_on", "Issued", Kind::Date, "i.issued_on"),
+        f("due_on", "Due", Kind::Date, "i.due_on"),
+        f("created_at", "Created", Kind::Time, "i.created_at"),
+    ]),
+};
+
+pub const INVOICE_LINES: Source = Source {
+    key: Cow::Borrowed("invoice_lines"),
+    label: Cow::Borrowed("Invoice lines"),
+    description: Cow::Borrowed(
+        "What was billed, line by line: time, products, recurring charges, project fees and manual lines.",
+    ),
+    module: Some("billing"),
+    permission: "billing:read",
+    time_field: Cow::Borrowed("issued_on"),
+    from: Cow::Borrowed(
+        "billing_invoice_lines l JOIN billing_invoices i ON i.id = l.invoice_id \
+        JOIN organizations o ON o.id = l.org_id LEFT JOIN catalog_products p ON p.id = l.product_id",
+    ),
+    fields: Cow::Borrowed(&[
+        CLIENT,
+        f("kind", "Kind", Kind::Text, "l.kind"),
+        f("product", "Product", Kind::Text, "p.name"),
+        f("description", "Description", Kind::Text, "l.description"),
+        f("status", "Invoice status", Kind::Text, "i.status"),
+        f("sent", "Sent", Kind::Bool, "(i.status = 'sent')"),
+        f("edited", "Changed by hand", Kind::Bool, "l.edited"),
+        f("quantity", "Quantity", Kind::Number, "l.quantity"),
+        f(
+            "amount",
+            "Amount",
+            Kind::Number,
+            "round(l.quantity * l.unit_price, 2)",
+        ),
+        f("issued_on", "Issued", Kind::Date, "i.issued_on"),
+    ]),
+};
+
 pub const DATASET_PREFIX: &str = "dataset:";
 
 /// Every source, in display order.
@@ -492,6 +588,8 @@ pub const SOURCES: &[Source] = &[
     OPPORTUNITIES,
     QUOTES,
     SALES_ACTIVITIES,
+    INVOICES,
+    INVOICE_LINES,
 ];
 
 pub fn source(key: &str) -> Option<&'static Source> {

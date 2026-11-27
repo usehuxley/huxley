@@ -844,7 +844,99 @@ pub fn builtin() -> Vec<Dashboard> {
             ],
         ),
         sales(),
+        finance(),
     ]
+}
+
+/// The prebuilt finance dashboard (ADR-078): billed in the range, what's
+/// owed and overdue now, aging, billed by kind and client, and billable
+/// time billed or not.
+fn finance() -> Dashboard {
+    let sent = json!([{ "field": "sent", "op": "eq", "value": true }]);
+    let total = json!([{ "fn": "sum", "field": "total" }]);
+    let owed = json!([{ "fn": "sum", "field": "owed" }]);
+    let amount = json!([{ "fn": "sum", "field": "amount" }]);
+    Dashboard {
+        module: Some("billing"),
+        ..prebuilt(
+            "finance",
+            "Finance",
+            "What was billed in the range, by kind and client; what's owed and overdue now, by age; and billable time, billed or not.",
+            vec![
+                widget(
+                    "billed",
+                    "Billed",
+                    Viz::Number,
+                    4,
+                    false,
+                    json!({ "source": "invoices", "measures": total, "filters": sent }),
+                ),
+                widget(
+                    "owed",
+                    "Still owed",
+                    Viz::Number,
+                    4,
+                    true,
+                    json!({ "source": "invoices", "measures": owed }),
+                ),
+                widget(
+                    "overdue",
+                    "Overdue",
+                    Viz::Number,
+                    4,
+                    true,
+                    json!({ "source": "invoices", "measures": owed,
+                        "filters": [{ "field": "overdue", "op": "eq", "value": true }] }),
+                ),
+                widget(
+                    "per-month",
+                    "Billed per month",
+                    Viz::Line,
+                    12,
+                    false,
+                    json!({ "source": "invoices", "measures": total, "filters": sent,
+                        "dimensions": [{ "field": "issued_on", "granularity": "month" }], "limit": 24 }),
+                ),
+                widget(
+                    "aging",
+                    "Owed by age",
+                    Viz::Bar,
+                    6,
+                    true,
+                    json!({ "source": "invoices", "measures": owed, "dimensions": [{ "field": "aging" }],
+                        "filters": [{ "field": "aging", "op": "neq", "value": "Settled" }] }),
+                ),
+                widget(
+                    "by-kind",
+                    "Billed by kind",
+                    Viz::Bar,
+                    6,
+                    false,
+                    json!({ "source": "invoice_lines", "measures": amount, "dimensions": [{ "field": "kind" }],
+                        "filters": sent }),
+                ),
+                widget(
+                    "by-client",
+                    "Billed by client",
+                    Viz::Table,
+                    6,
+                    false,
+                    json!({ "source": "invoices", "measures": total, "dimensions": [{ "field": "client" }],
+                        "filters": sent, "sort": [{ "by": "sum_total", "dir": "desc" }], "limit": 25 }),
+                ),
+                widget(
+                    "time-billed",
+                    "Billable hours, billed or not",
+                    Viz::Bar,
+                    6,
+                    false,
+                    json!({ "source": "time_entries", "measures": [{ "fn": "sum", "field": "hours" }],
+                        "dimensions": [{ "field": "billed" }],
+                        "filters": [{ "field": "billable", "op": "eq", "value": true }] }),
+                ),
+            ],
+        )
+    }
 }
 
 /// The prebuilt sales dashboard: the open pipeline as it stands, and what
