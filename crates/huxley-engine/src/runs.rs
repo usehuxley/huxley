@@ -89,19 +89,23 @@ const SUMMARY: &str = "id, org_id, workflow_id, workflow_version, status, trigge
 
 /// Runs in the caller's scope, newest first.
 pub async fn list(conn: &mut PgConnection, filter: &RunFilter) -> sqlx::Result<Vec<RunSummary>> {
-    sqlx::query_as(sqlx::AssertSqlSafe(format!(
-        "SELECT {SUMMARY} FROM runs \
-          WHERE ($1::uuid IS NULL OR workflow_id = $1) \
-            AND ($2::run_status IS NULL OR status = $2) \
-            AND ($3::uuid IS NULL OR id < $3) \
-          ORDER BY id DESC LIMIT $4"
-    )))
-    .bind(filter.workflow_id)
-    .bind(filter.status)
-    .bind(filter.before)
-    .bind(filter.limit.clamp(1, 200))
-    .fetch_all(conn)
-    .await
+    // Only the filters given: with `($n IS NULL OR id < $n)` a generic plan
+    // can't prune the monthly partitions, and pages scan all of them
+    // (docs/performance.md).
+    let mut q =
+        sqlx::QueryBuilder::<sqlx::Postgres>::new(format!("SELECT {SUMMARY} FROM runs WHERE true"));
+    if let Some(workflow) = filter.workflow_id {
+        q.push(" AND workflow_id = ").push_bind(workflow);
+    }
+    if let Some(status) = filter.status {
+        q.push(" AND status = ").push_bind(status);
+    }
+    if let Some(before) = filter.before {
+        q.push(" AND id < ").push_bind(before);
+    }
+    q.push(" ORDER BY id DESC LIMIT ")
+        .push_bind(filter.limit.clamp(1, 200));
+    q.build_query_as().fetch_all(conn).await
 }
 
 /// A run with its steps, or `None` if it isn't in the caller's scope.
