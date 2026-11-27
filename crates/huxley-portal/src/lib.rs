@@ -92,13 +92,15 @@ pub enum Perm {
     /// See and answer every quote sent to the company (anyone sees and
     /// answers quotes addressed to them).
     Quotes,
+    /// See the company's invoices, what's owed, and pay them.
+    Invoices,
 }
 
 impl Role {
     pub fn can(self, perm: Perm) -> bool {
         match perm {
             Perm::TicketsOwn => true,
-            Perm::Approve | Perm::Projects | Perm::Quotes => {
+            Perm::Approve | Perm::Projects | Perm::Quotes | Perm::Invoices => {
                 matches!(self, Self::ClientApprover | Self::ClientAdmin)
             }
             Perm::TicketsCompany | Perm::Assets | Perm::ManageContacts | Perm::Dashboards => {
@@ -118,6 +120,7 @@ impl Role {
             (Perm::Dashboards, "portal.dashboard:read"),
             (Perm::Projects, "portal.project:read"),
             (Perm::Quotes, "portal.quote:read"),
+            (Perm::Invoices, "portal.invoice:read"),
         ]
         .into_iter()
         .filter(|(p, _)| self.can(*p))
@@ -172,7 +175,8 @@ mod tests {
                 "portal.contacts:manage",
                 "portal.dashboard:read",
                 "portal.project:read",
-                "portal.quote:read"
+                "portal.quote:read",
+                "portal.invoice:read"
             ]
         );
     }

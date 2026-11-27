@@ -3,7 +3,7 @@
 	import { resolve } from '$app/paths';
 	import { RefreshCw } from '@lucide/svelte';
 	import { Badge, Button, Card, EmptyState, toast } from '@usehuxley/ui';
-	import { invRef } from '#lib/billing/labels.ts';
+	import { invRef, money } from '#lib/billing/labels.ts';
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
@@ -113,6 +113,45 @@
 					</li>
 				{/each}
 			</ul>
+		</Card>
+	{/if}
+
+	{#if data.receivables.length}
+		<Card
+			title="Receivables"
+			description="What clients owe, from the accounting system's status of their synced invoices."
+		>
+			<table class="w-full text-left text-sm" aria-label="Receivables">
+				<thead class="border-b border-border text-xs font-bold text-fg-subtle">
+					<tr>
+						<th scope="col" class="px-2 py-2">Client</th>
+						<th scope="col" class="px-2 py-2 text-right">Owed</th>
+						<th scope="col" class="px-2 py-2 text-right">Overdue</th>
+						<th scope="col" class="px-2 py-2">Oldest overdue</th>
+					</tr>
+				</thead>
+				<tbody>
+					{#each data.receivables as r (r.orgId)}
+						<tr class="border-b border-border last:border-0">
+							<td class="px-2 py-1.5 text-fg">
+								{r.orgName}
+								{#if r.creditHold}<Badge tone="danger">Credit hold</Badge>{/if}
+							</td>
+							<td class="px-2 py-1.5 text-right font-mono tabular-nums">
+								{money(r.balance, r.currency)}
+							</td>
+							<td
+								class="px-2 py-1.5 text-right font-mono tabular-nums {Number(r.overdue) > 0
+									? 'text-danger'
+									: ''}"
+							>
+								{money(r.overdue, r.currency)}
+							</td>
+							<td class="px-2 py-1.5 text-fg-muted">{r.oldestDue ?? ''}</td>
+						</tr>
+					{/each}
+				</tbody>
+			</table>
 		</Card>
 	{/if}
 

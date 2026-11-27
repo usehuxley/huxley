@@ -304,6 +304,8 @@ async fn lists_are_fetched_and_approved_invoices_sync_to_xero() {
         target: "xero".into(),
         enabled: true,
         on_approval: true,
+        credit_hold_days: None,
+        credit_hold_amount: None,
     };
     sync::set_settings(&mut tx, &ctx, h.provider, &settings)
         .await

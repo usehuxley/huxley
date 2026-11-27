@@ -522,6 +522,19 @@
       ],
       "type": "object"
     },
+    "InvoiceStatus": {
+      "additionalProperties": false,
+      "description": "What the accounting system says of invoices synced to `target`\n(`core.invoice.status`): `statuses`, a list of `{ remote_id, amount_due,\namount_paid, status, pay_url }` (anything left out stays as it was).\nAn invoice whose amount due reaches zero raises `invoice.paid`; its\nclient's balance and overdue amount are worked out again, and past the\ncredit hold limits `company.credit_hold` is raised. Output: `{ updated,\nunknown, paid }`.",
+      "properties": {
+        "statuses": true,
+        "target": true
+      },
+      "required": [
+        "target",
+        "statuses"
+      ],
+      "type": "object"
+    },
     "InvoiceSyncResult": {
       "additionalProperties": false,
       "description": "How an invoice's accounting sync went (`core.invoice.sync_result`), from\na sync pack's workflow on `invoice.sync_requested`: `invoice_id`, `ok`,\nand when it synced the accounting system's `remote_id` (and optionally\n`remote_number` and an https `remote_url` to view it); when it didn't,\nthe `error`. Synced, an approved invoice is marked sent and\n`invoice.synced` raised; failed, it joins the sync error queue and\n`invoice.sync_failed` is raised. Output: the invoice's sync.",
@@ -536,6 +549,18 @@
       "required": [
         "invoice_id",
         "ok"
+      ],
+      "type": "object"
+    },
+    "InvoiceUnpaid": {
+      "additionalProperties": false,
+      "description": "Synced invoices still open (`core.invoice.unpaid`): those synced to\n`target` (e.g. `quickbooks`) that aren't known to be paid, least\nrecently checked first (`needsLink` on the first check, when there's no\npay link yet), up to `limit` (default 200, at most 500).\nOutput: `{ invoices: [{ invoiceId, remoteId, reference, needsLink }] }`.",
+      "properties": {
+        "limit": true,
+        "target": true
+      },
+      "required": [
+        "target"
       ],
       "type": "object"
     },
@@ -4372,6 +4397,132 @@
             },
             "with": {
               "$ref": "#/$defs/InvoiceSyncResult"
+            }
+          },
+          "required": [
+            "type",
+            "id",
+            "with"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "List synced invoices still open in the accounting system (the `billing` module).",
+          "properties": {
+            "continue_on_error": {
+              "description": "Record the error as the step's output and carry on.",
+              "type": "boolean"
+            },
+            "description": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "id": {
+              "description": "Unique in the workflow: lowercase letters, digits, underscores.\nOther steps read this step's output as `steps.<id>.output`.",
+              "type": "string"
+            },
+            "if": {
+              "description": "Skip the step unless this expression is true.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "name": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "retry": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/RetryPolicy"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "timeout": {
+              "description": "Fail the attempt after this long, e.g. `30s`.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "type": {
+              "const": "core.invoice.unpaid",
+              "type": "string"
+            },
+            "with": {
+              "$ref": "#/$defs/InvoiceUnpaid"
+            }
+          },
+          "required": [
+            "type",
+            "id",
+            "with"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Record what the accounting system says is paid and due (the `billing` module).",
+          "properties": {
+            "continue_on_error": {
+              "description": "Record the error as the step's output and carry on.",
+              "type": "boolean"
+            },
+            "description": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "id": {
+              "description": "Unique in the workflow: lowercase letters, digits, underscores.\nOther steps read this step's output as `steps.<id>.output`.",
+              "type": "string"
+            },
+            "if": {
+              "description": "Skip the step unless this expression is true.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "name": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "retry": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/RetryPolicy"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "timeout": {
+              "description": "Fail the attempt after this long, e.g. `30s`.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "type": {
+              "const": "core.invoice.status",
+              "type": "string"
+            },
+            "with": {
+              "$ref": "#/$defs/InvoiceStatus"
             }
           },
           "required": [

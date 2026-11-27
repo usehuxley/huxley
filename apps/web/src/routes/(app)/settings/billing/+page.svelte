@@ -132,6 +132,32 @@
 						Sync each invoice as soon as it's approved
 					</label>
 				</div>
+				<Field
+					label="Credit hold after (days overdue)"
+					for="hold-days-{p.orgId}"
+					hint="A client with an invoice this late goes on credit hold"
+				>
+					<Input
+						id="hold-days-{p.orgId}"
+						name="creditHoldDays"
+						type="number"
+						min={1}
+						max={365}
+						value={p.sync?.creditHoldDays ?? ''}
+					/>
+				</Field>
+				<Field
+					label="Or when overdue passes"
+					for="hold-amount-{p.orgId}"
+					hint="An amount, in all; leave both empty for no credit holds"
+				>
+					<Input
+						id="hold-amount-{p.orgId}"
+						name="creditHoldAmount"
+						inputmode="decimal"
+						value={p.sync?.creditHoldAmount ?? ''}
+					/>
+				</Field>
 				<div class="sm:col-span-2"><Button type="submit" variant="primary">Save</Button></div>
 			</form>
 		</Card>

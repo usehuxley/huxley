@@ -665,6 +665,69 @@ impl Engine {
         Ok(json!(sync))
     }
 
+    /// Fails unless invoicing is on for the run's organization.
+    async fn require_billing(&self, org_id: Uuid) -> Result<(), Json> {
+        let mut tx = begin_scoped(self.db(), &OrgScope::System)
+            .await
+            .map_err(internal)?;
+        let on = huxley_modules::is_active_at(&mut tx, huxley_billing::MODULE, org_id)
+            .await
+            .map_err(internal)?;
+        tx.commit().await.map_err(internal)?;
+        if on {
+            Ok(())
+        } else {
+            Err(error("module_disabled", "Invoicing is turned off"))
+        }
+    }
+
+    /// `core.invoice.unpaid`: synced invoices (in the run's organization or
+    /// below) still open in the accounting system.
+    pub(crate) async fn invoice_unpaid(&self, org_id: Uuid, input: &Json) -> Result<Json, Json> {
+        self.require_billing(org_id).await?;
+        let target = input["target"]
+            .as_str()
+            .filter(|t| !t.trim().is_empty())
+            .ok_or_else(|| error("input", "target is required, e.g. quickbooks"))?;
+        let limit = input["limit"].as_i64().unwrap_or(200);
+        let subtree = self.subtree(org_id).await?;
+        let mut tx = begin_scoped(self.db(), &OrgScope::Orgs(subtree))
+            .await
+            .map_err(internal)?;
+        let invoices = huxley_billing::status::unpaid(&mut tx, target.trim(), limit)
+            .await
+            .map_err(internal)?;
+        tx.commit().await.map_err(internal)?;
+        Ok(json!({ "invoices": invoices }))
+    }
+
+    /// `core.invoice.status`: records what the accounting system says of
+    /// invoices (in the run's organization or below).
+    pub(crate) async fn invoice_status(&self, org_id: Uuid, input: &Json) -> Result<Json, Json> {
+        self.require_billing(org_id).await?;
+        let target = input["target"]
+            .as_str()
+            .filter(|t| !t.trim().is_empty())
+            .ok_or_else(|| error("input", "target is required, e.g. quickbooks"))?;
+        let statuses: Vec<huxley_billing::status::StatusInput> =
+            serde_json::from_value(input["statuses"].clone()).map_err(|e| {
+                error(
+                    "input",
+                    format!("statuses is a list of {{ remote_id, amount_due, amount_paid, status, pay_url }}: {e}"),
+                )
+            })?;
+        let subtree = self.subtree(org_id).await?;
+        let mut tx = begin_scoped(self.db(), &OrgScope::Orgs(subtree))
+            .await
+            .map_err(internal)?;
+        let ctx = RequestContext::system(Via::Workflow);
+        let recorded = huxley_billing::status::record(&mut tx, &ctx, target.trim(), &statuses)
+            .await
+            .map_err(internal)?;
+        tx.commit().await.map_err(internal)?;
+        Ok(json!(recorded))
+    }
+
     /// `core.project.scope.decide`: records the decision on a submitted
     /// scope change (on a project in the run's organization or below).
     /// Output: the scope change.

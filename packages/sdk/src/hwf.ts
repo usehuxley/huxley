@@ -1421,6 +1421,54 @@ export type Step =
 			 * Fail the attempt after this long, e.g. `30s`.
 			 */
 			timeout?: string | null;
+			type: 'core.invoice.unpaid';
+			with: InvoiceUnpaid;
+	  }
+	| {
+			/**
+			 * Record the error as the step's output and carry on.
+			 */
+			continue_on_error?: boolean;
+			description?: string | null;
+			/**
+			 * Unique in the workflow: lowercase letters, digits, underscores.
+			 * Other steps read this step's output as `steps.<id>.output`.
+			 */
+			id: string;
+			/**
+			 * Skip the step unless this expression is true.
+			 */
+			if?: string | null;
+			name?: string | null;
+			retry?: RetryPolicy | null;
+			/**
+			 * Fail the attempt after this long, e.g. `30s`.
+			 */
+			timeout?: string | null;
+			type: 'core.invoice.status';
+			with: InvoiceStatus;
+	  }
+	| {
+			/**
+			 * Record the error as the step's output and carry on.
+			 */
+			continue_on_error?: boolean;
+			description?: string | null;
+			/**
+			 * Unique in the workflow: lowercase letters, digits, underscores.
+			 * Other steps read this step's output as `steps.<id>.output`.
+			 */
+			id: string;
+			/**
+			 * Skip the step unless this expression is true.
+			 */
+			if?: string | null;
+			name?: string | null;
+			retry?: RetryPolicy | null;
+			/**
+			 * Fail the attempt after this long, e.g. `30s`.
+			 */
+			timeout?: string | null;
 			type: 'core.sales.log_email';
 			with: SalesLogEmail;
 	  }
@@ -2727,6 +2775,36 @@ export interface InvoiceSyncResult {
 	remote_id?: unknown;
 	remote_number?: unknown;
 	remote_url?: unknown;
+}
+/**
+ * Synced invoices still open (`core.invoice.unpaid`): those synced to
+ * `target` (e.g. `quickbooks`) that aren't known to be paid, least
+ * recently checked first (`needsLink` on the first check, when there's no
+ * pay link yet), up to `limit` (default 200, at most 500).
+ * Output: `{ invoices: [{ invoiceId, remoteId, reference, needsLink }] }`.
+ *
+ * This interface was referenced by `HuxleyWorkflowFormatV1`'s JSON-Schema
+ * via the `definition` "InvoiceUnpaid".
+ */
+export interface InvoiceUnpaid {
+	limit?: unknown;
+	target: unknown;
+}
+/**
+ * What the accounting system says of invoices synced to `target`
+ * (`core.invoice.status`): `statuses`, a list of `{ remote_id, amount_due,
+ * amount_paid, status, pay_url }` (anything left out stays as it was).
+ * An invoice whose amount due reaches zero raises `invoice.paid`; its
+ * client's balance and overdue amount are worked out again, and past the
+ * credit hold limits `company.credit_hold` is raised. Output: `{ updated,
+ * unknown, paid }`.
+ *
+ * This interface was referenced by `HuxleyWorkflowFormatV1`'s JSON-Schema
+ * via the `definition` "InvoiceStatus".
+ */
+export interface InvoiceStatus {
+	statuses: unknown;
+	target: unknown;
 }
 /**
  * An email to log (`core.sales.log_email`): `email_id`, from a mailbox's

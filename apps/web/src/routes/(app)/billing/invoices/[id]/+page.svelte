@@ -341,6 +341,19 @@
 							{/if}
 						</p>
 						{#if data.sync.error}<p class="mt-1 text-xs text-danger">{data.sync.error}</p>{/if}
+						{#if data.sync.amountDue != null}
+							<p class="mt-1 text-xs text-fg-muted">
+								{#if Number(data.sync.amountDue) === 0}
+									Paid{data.sync.paidOn ? ` on ${data.sync.paidOn}` : ''}.
+								{:else}
+									{money(data.sync.amountDue, i.currency)} still owed{data.sync.amountPaid &&
+									Number(data.sync.amountPaid) > 0
+										? ` (${money(data.sync.amountPaid, i.currency)} paid)`
+										: ''}.
+								{/if}
+								{#if data.sync.payUrl}The client's pay link is in their portal.{/if}
+							</p>
+						{/if}
 					{:else}
 						<p class="text-fg-muted">Not synced to the accounting system.</p>
 					{/if}

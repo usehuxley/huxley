@@ -25,3 +25,7 @@ When an invoice is to be synced, the workflow creates an authorised **invoice** 
 Xero's ID and number are recorded on the invoice, with a link to open it in Xero, and the invoice is marked sent. If Xero refuses it, its validation messages go to the sync error queue.
 
 Items need a sales account in Xero, since lines carry the item code and not an account code. Xero calculates tax. Huxley doesn't.
+
+## Payment status
+
+Publish **Update invoice status from Xero**. Every hour it reads what's still due on synced invoices that aren't paid, and records it. The first time, it also fetches each invoice's online invoice link for the client portal. See [payment status and credit hold](./billing.md#payment-status-and-credit-hold).

@@ -654,6 +654,107 @@ async fn approved_invoices_ask_the_accounting_system_once_mapped() {
 }
 
 #[tokio::test]
+async fn paid_status_comes_back_and_overdue_clients_go_on_credit_hold() {
+    let Some(s) = setup().await else { return };
+    s.rate("100").await;
+    s.time("2035-08-08", 60).await;
+    s.ok(
+        &s.owner,
+        "PUT",
+        "/api/v1/billing/sync-settings",
+        json!({ "orgId": s.provider, "target": "ledger", "creditHoldDays": 10 }),
+        StatusCode::OK,
+    )
+    .await;
+    for (kind, local) in [
+        ("customer", s.acme.to_string()),
+        ("item", "default".to_owned()),
+    ] {
+        s.ok(&s.owner, "PUT", "/api/v1/billing/mappings",
+            json!({ "orgId": s.provider, "mapping": { "kind": kind, "localKey": local, "remoteId": "x" } }), StatusCode::OK)
+            .await;
+    }
+    let inv = s.run("2035-08-01", "2035-08-31").await.remove(0);
+    let id = Uuid::parse_str(inv["id"].as_str().unwrap()).unwrap();
+    s.ok(
+        &s.owner,
+        "POST",
+        &format!("/api/v1/invoices/{id}/approve"),
+        json!({ "version": inv["version"] }),
+        StatusCode::OK,
+    )
+    .await;
+    // The sync pack created it; it fell due three weeks ago.
+    let remote = unique("L");
+    let ctx = RequestContext::system(Via::System);
+    let mut tx = begin_scoped(&s.pools.app, &OrgScope::System).await.unwrap();
+    let synced = huxley_billing::sync::Outcome {
+        ok: true,
+        remote_id: Some(remote.clone()),
+        ..Default::default()
+    };
+    huxley_billing::sync::record(&mut tx, &ctx, id, &synced)
+        .await
+        .unwrap();
+    sqlx::query("UPDATE billing_invoices SET due_on = current_date - 21 WHERE id = $1")
+        .bind(id)
+        .execute(&mut *tx)
+        .await
+        .unwrap();
+    let open = huxley_billing::status::unpaid(&mut tx, "ledger", 50)
+        .await
+        .unwrap();
+    assert!(open.iter().any(|u| u.invoice_id == id && u.needs_link));
+    let due: huxley_billing::status::StatusInput = serde_json::from_value(
+        json!({ "remote_id": remote, "amount_due": "100", "amount_paid": 0 }),
+    )
+    .unwrap();
+    huxley_billing::status::record(&mut tx, &ctx, "ledger", &[due])
+        .await
+        .unwrap();
+    tx.commit().await.unwrap();
+    let owing = s.get("/api/v1/billing/receivables").await;
+    let acme = owing
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|c| c["orgId"] == json!(s.acme))
+        .cloned()
+        .unwrap();
+    assert_eq!(acme["overdue"], "100");
+    assert_eq!(acme["creditHold"], true);
+
+    // Paid: off hold, and invoice.paid raised.
+    let mut tx = begin_scoped(&s.pools.app, &OrgScope::System).await.unwrap();
+    let paid: huxley_billing::status::StatusInput = serde_json::from_value(
+        json!({ "remote_id": remote, "amount_due": 0, "pay_url": "https://pay.example/l" }),
+    )
+    .unwrap();
+    let r = huxley_billing::status::record(&mut tx, &ctx, "ledger", &[paid])
+        .await
+        .unwrap();
+    assert_eq!(r.paid, vec![id]);
+    let status = huxley_billing::status::client_status(&mut tx, s.acme)
+        .await
+        .unwrap()
+        .unwrap();
+    assert!(!status.credit_hold);
+    assert!(status.balance.is_zero());
+    tx.commit().await.unwrap();
+    let held: Vec<String> = sqlx::query_scalar(
+        "SELECT event_type FROM events_outbox WHERE subject_id = $1 AND event_type LIKE 'company.credit_hold%' ORDER BY id",
+    )
+    .bind(s.acme)
+    .fetch_all(&s.pools.owner)
+    .await
+    .unwrap();
+    assert_eq!(
+        held,
+        ["company.credit_hold", "company.credit_hold_released"]
+    );
+}
+
+#[tokio::test]
 async fn an_invoice_prints() {
     let Some(s) = setup().await else { return };
     s.rate("90").await;

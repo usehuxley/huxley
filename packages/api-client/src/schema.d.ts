@@ -358,6 +358,40 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
+	'/api/portal/v1/invoices': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** The company's invoices, newest first. Empty when invoicing is off. */
+		get: operations['portal_invoices'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/portal/v1/invoices/{id}/pdf': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** One of the company's invoices, as a PDF. */
+		get: operations['portal_invoice_pdf'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
 	'/api/portal/v1/me': {
 		parameters: {
 			query?: never;
@@ -2045,6 +2079,26 @@ export interface paths {
 		put?: never;
 		post?: never;
 		delete: operations['delete_accounting_mapping'];
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/billing/receivables': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/**
+		 * Clients with something owing (from their synced invoices' status in the
+		 *     accounting system), most overdue first; with any credit hold.
+		 */
+		get: operations['billing_receivables'];
+		put?: never;
+		post?: never;
+		delete?: never;
 		options?: never;
 		head?: never;
 		patch?: never;
@@ -9376,6 +9430,13 @@ export interface components {
 			remoteName?: string | null;
 		};
 		AccountingSyncSettings: {
+			/** @description …or this much is overdue in all (ADR-078). */
+			creditHoldAmount?: string | null;
+			/**
+			 * Format: int32
+			 * @description A client goes on credit hold when an invoice is this many days overdue…
+			 */
+			creditHoldDays?: number | null;
 			enabled?: boolean;
 			/** @description Sync each invoice as soon as it's approved (otherwise by hand). */
 			onApproval?: boolean;
@@ -10898,6 +10959,20 @@ export interface components {
 			reasons: string[];
 			/** Format: int32 */
 			score?: number | null;
+		};
+		/** @description A client's position from its synced invoices. */
+		ClientStatus: {
+			balance: string;
+			creditHold: boolean;
+			currency: string;
+			/** Format: date-time */
+			holdSince?: string | null;
+			/** Format: date */
+			oldestDue?: string | null;
+			/** Format: uuid */
+			orgId: string;
+			orgName: string;
+			overdue: string;
 		};
 		Column: {
 			/** @description Lowercase letters, digits and underscores, starting with a letter. */
@@ -12606,6 +12681,9 @@ export interface components {
 		/** @enum {string} */
 		InvoiceStatus: 'draft' | 'approved' | 'sent' | 'void';
 		InvoiceSync: {
+			/** @description What's still owed, from the accounting system (ADR-078). */
+			amountDue?: string | null;
+			amountPaid?: string | null;
 			/** Format: int32 */
 			attempts: number;
 			error?: string | null;
@@ -12617,8 +12695,13 @@ export interface components {
 			/** Format: uuid */
 			orgId: string;
 			orgName: string;
+			/** Format: date */
+			paidOn?: string | null;
+			/** @description Where the client views and pays it. */
+			payUrl?: string | null;
 			remoteId?: string | null;
 			remoteNumber?: string | null;
+			remoteStatus?: string | null;
 			remoteUrl?: string | null;
 			/** Format: date-time */
 			requestedAt: string;
@@ -14135,6 +14218,26 @@ export interface components {
 			trustEmail?: boolean;
 			/** Format: int32 */
 			version?: number | null;
+		};
+		/** @description An invoice in the client portal. */
+		PortalInvoice: {
+			/** @description What's still owed, when the accounting system has said. */
+			amountDue?: string | null;
+			currency: string;
+			/** Format: date */
+			dueOn?: string | null;
+			/** Format: uuid */
+			id: string;
+			/** Format: date */
+			issuedOn?: string | null;
+			kind: string;
+			/** Format: int64 */
+			number: number;
+			/** @description Where to view and pay it. */
+			payUrl?: string | null;
+			/** @description `paid`, `overdue`, `due` or `credit`. */
+			state: string;
+			total: string;
 		};
 		PortalLinkRequest: {
 			email: string;
@@ -16771,6 +16874,9 @@ export interface components {
 			timezone?: string | null;
 		};
 		SyncSettingsRequest: {
+			creditHoldAmount?: string | null;
+			/** Format: int32 */
+			creditHoldDays?: number | null;
 			enabled?: boolean;
 			onApproval?: boolean;
 			/** Format: uuid */
@@ -18599,6 +18705,46 @@ export interface operations {
 				};
 				content: {
 					'application/json': components['schemas']['PortalDevice'];
+				};
+			};
+		};
+	};
+	portal_invoices: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['PortalInvoice'][];
+				};
+			};
+		};
+	};
+	portal_invoice_pdf: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/pdf': unknown;
 				};
 			};
 		};
@@ -22060,6 +22206,25 @@ export interface operations {
 					[name: string]: unknown;
 				};
 				content?: never;
+			};
+		};
+	};
+	billing_receivables: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ClientStatus'][];
+				};
 			};
 		};
 	};
