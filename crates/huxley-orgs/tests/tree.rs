@@ -222,6 +222,10 @@ async fn tampering_with_an_audit_record_breaks_the_chain() {
     let root = ensure_root(&pools).await;
     let org = create(&pools, root, OrgKind::Provider, &unique("Tampered")).await;
 
+    // Sealed into the chain first (ADR-086).
+    let mut conn = pools.owner.acquire().await.unwrap();
+    huxley_db::audit::seal(&mut conn).await.unwrap();
+    drop(conn);
     // Tamper inside a transaction that is rolled back, so other tests sharing
     // the database never see the damage.
     let mut tx = pools.owner.begin().await.unwrap();
@@ -259,4 +263,56 @@ async fn the_application_role_cannot_rewrite_audit_history() {
         .execute(&pools.app)
         .await;
     assert!(result.is_err(), "app role must not delete audit_events");
+}
+
+/// Two transactions that write audit records and lock the same row in the
+/// opposite order (ADR-086): audit writes no longer hold a shared lock until
+/// commit, so neither waits on the other's audit record.
+#[tokio::test]
+async fn audited_transactions_locking_rows_in_opposite_orders_both_commit() {
+    let Some(pools) = pools().await else { return };
+    let root = ensure_root(&pools).await;
+    let org = create(&pools, root, OrgKind::Provider, &unique("Contended")).await;
+    let ctx = RequestContext::system(Via::System);
+    let mut a = begin_scoped(&pools.app, &OrgScope::System).await.unwrap();
+    huxley_db::audit::record(
+        &mut a,
+        &ctx,
+        huxley_db::audit::AuditRecord::new("test.first"),
+    )
+    .await
+    .unwrap();
+    let mut b = begin_scoped(&pools.app, &OrgScope::System).await.unwrap();
+    sqlx::query("UPDATE organizations SET name = name WHERE id = $1")
+        .bind(org.id)
+        .execute(&mut *b)
+        .await
+        .unwrap();
+    // A now waits for B's row lock…
+    let waiting = tokio::spawn(async move {
+        sqlx::query("UPDATE organizations SET name = name WHERE id = $1")
+            .bind(org.id)
+            .execute(&mut *a)
+            .await
+            .map(|_| a)
+    });
+    tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+    // …and B's audit record doesn't wait for A's.
+    huxley_db::audit::record(
+        &mut b,
+        &ctx,
+        huxley_db::audit::AuditRecord::new("test.second"),
+    )
+    .await
+    .expect("no deadlock");
+    b.commit().await.unwrap();
+    let a = waiting
+        .await
+        .unwrap()
+        .expect("A gets the row once B commits");
+    a.commit().await.unwrap();
+    assert!(matches!(
+        verify_chain(&pools.owner).await.unwrap(),
+        ChainStatus::Intact { .. }
+    ));
 }

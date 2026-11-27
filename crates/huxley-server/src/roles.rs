@@ -68,6 +68,11 @@ fn spawn_scheduler(
         .with_storage(storage.clone())
         .with_public_url(config.auth.public_url.clone())
         .with_portal_url(config.http.api.portal_public_url.clone());
+    let (seal_db, seal_stop) = (db.clone(), shutdown.clone());
+    tasks.spawn(async move {
+        run_audit_sealer(seal_db, seal_stop).await;
+        Ok(())
+    });
     let (retention_engine, retention_stop) = (engine.clone(), shutdown.clone());
     tasks.spawn(async move {
         huxley_engine::retention::run_sweeper(retention_engine, retention_stop).await;
@@ -98,6 +103,25 @@ fn spawn_scheduler(
         huxley_contracts::renewals::run_sweeper(contracts_db, contracts_stop).await;
         Ok(())
     });
+}
+
+/// Seals audit records into the hash chain every second (ADR-086). Any
+/// number of processes may run it: one seals at a time.
+async fn run_audit_sealer(db: huxley_db::sqlx::PgPool, shutdown: CancellationToken) {
+    loop {
+        tokio::select! {
+            () = shutdown.cancelled() => return,
+            () = tokio::time::sleep(Duration::from_secs(1)) => {}
+        }
+        let sealed = async {
+            let mut conn = db.acquire().await?;
+            huxley_db::audit::seal(&mut conn).await
+        }
+        .await;
+        if let Err(e) = sealed {
+            tracing::warn!(error = %e, "sealing the audit log failed");
+        }
+    }
 }
 
 /// Starts the HTTP API and its real-time notification listener.
