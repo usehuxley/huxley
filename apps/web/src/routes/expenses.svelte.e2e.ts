@@ -149,4 +149,55 @@ test.describe('expenses', () => {
 		await page.getByRole('button', { name: 'Comment' }).click();
 		await expect(page.getByRole('list', { name: 'Comments' })).toContainText('Receipt to follow');
 	});
+
+	test('card charges are imported from a CSV and matched', async ({ page }) => {
+		const stamp = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+		const today = new Date().toISOString().slice(0, 10);
+		const api = await request.newContext({
+			baseURL: apiUrl,
+			extraHTTPHeaders: { 'x-requested-with': 'huxley' }
+		});
+		await api.post('/api/v1/auth/login', { data: { email: ownerEmail, password: ownerPassword } });
+		await ok(api.put('/api/v1/modules/expenses', { data: { enabled: true } }));
+		const orgs = await ok<{ id: string; parentId: string | null }[]>(api.get('/api/v1/orgs'));
+		const root = orgs.find((o) => o.parentId === null)!.id;
+		const categories = await ok<{ id: string; name: string }[]>(
+			api.get('/api/v1/expense-categories')
+		);
+		await ok(
+			api.post('/api/v1/expenses', {
+				data: {
+					categoryId: categories.find((c) => c.name === 'Meals')!.id,
+					spentOn: today,
+					description: `Client lunch ${stamp}`,
+					amount: '37.25',
+					orgId: root
+				}
+			})
+		);
+		await api.dispose();
+
+		await signIn(page);
+		await page.goto('/expenses/cards');
+		const csv = [
+			'Date,Description,Amount,Transaction ID,Cardholder Email',
+			`${today},"BISTRO ${stamp}",37.25,${stamp}-1,${ownerEmail}`,
+			`${today},"PARKING ${stamp}",12.00,${stamp}-2,${ownerEmail}`
+		].join('\n');
+		await page.getByLabel('Card charges CSV').setInputFiles({
+			name: 'bank.csv',
+			mimeType: 'text/csv',
+			buffer: Buffer.from(csv)
+		});
+		await page.getByRole('button', { name: 'Import' }).click();
+		await expect(page.getByText('2 imported (1 matched to expenses).')).toBeVisible();
+		const list = page.getByRole('list', { name: 'Card charges' });
+		await expect(list.getByRole('listitem').filter({ hasText: `BISTRO ${stamp}` })).toContainText(
+			`matched to “Client lunch ${stamp}”`
+		);
+		const parking = list.getByRole('listitem').filter({ hasText: `PARKING ${stamp}` });
+		await parking.getByLabel(`Category for PARKING ${stamp}`).selectOption({ label: 'Other' });
+		await parking.getByRole('button', { name: 'Log as my expense' }).click();
+		await expect(parking).toContainText('Matched');
+	});
 });

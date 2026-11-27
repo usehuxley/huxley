@@ -578,3 +578,121 @@ async fn approved_reports_are_exported_and_paid_back() {
         .await;
     assert_eq!(entry["status"], "reimbursed");
 }
+
+#[tokio::test]
+async fn card_charges_are_imported_matched_and_logged() {
+    let Some(s) = setup().await else { return };
+    let (tech_id, tech_email) = user(&s.pools, Some(("technician", s.provider))).await;
+    let tech = login(&s.app, &tech_email).await;
+    let today = time::OffsetDateTime::now_utc().date();
+    let travel = s.category("Travel and lodging").await;
+    let hotel = s
+        .ok(
+            &tech,
+            "POST",
+            "/api/v1/expenses",
+            json!({ "categoryId": travel, "spentOn": (today - time::Duration::days(1)).to_string(),
+                    "description": "Hotel", "amount": "212.40", "orgId": s.acme }),
+            StatusCode::CREATED,
+        )
+        .await;
+    let bank = unique("txn");
+    let rows = json!([
+        { "postedOn": today.to_string(), "description": "MARRIOTT 0042", "amount": "212.40",
+          "externalId": format!("{bank}-1"), "userId": tech_id, "cardLast4": "4242" },
+        { "postedOn": today.to_string(), "description": "SHELL OIL", "merchant": "Shell", "amount": "61.08",
+          "externalId": format!("{bank}-2"), "userId": tech_id }
+    ]);
+    let (status, _) = s
+        .call(
+            &tech,
+            "POST",
+            "/api/v1/card-transactions/import",
+            Some(json!({ "orgId": s.provider, "rows": rows })),
+        )
+        .await;
+    assert_eq!(status, StatusCode::FORBIDDEN, "technicians don't import");
+    let done = s
+        .ok(
+            &s.owner,
+            "POST",
+            "/api/v1/card-transactions/import",
+            json!({ "orgId": s.provider, "rows": rows }),
+            StatusCode::OK,
+        )
+        .await;
+    assert_eq!(done, json!({ "imported": 2, "skipped": 0, "matched": 1 }));
+    let again = s
+        .ok(
+            &s.owner,
+            "POST",
+            "/api/v1/card-transactions/import",
+            json!({ "orgId": s.provider, "rows": rows }),
+            StatusCode::OK,
+        )
+        .await;
+    assert_eq!(again["skipped"], 2);
+    // The technician sees their card's charges: the hotel matched, fuel to log.
+    let (_, mine) = s
+        .call(&tech, "GET", "/api/v1/card-transactions", None)
+        .await;
+    let mine = mine.as_array().unwrap();
+    assert_eq!(mine.len(), 2);
+    let marriott = mine
+        .iter()
+        .find(|t| t["description"] == "MARRIOTT 0042")
+        .unwrap();
+    assert_eq!(marriott["expenseId"], hotel["id"]);
+    let fuel = mine.iter().find(|t| t["status"] == "unmatched").unwrap();
+    let mileage = s.category("Other").await;
+    let logged = s
+        .ok(
+            &tech,
+            "POST",
+            &format!(
+                "/api/v1/card-transactions/{}/log",
+                fuel["id"].as_str().unwrap()
+            ),
+            json!({ "categoryId": mileage }),
+            StatusCode::OK,
+        )
+        .await;
+    assert_eq!(logged["status"], "matched");
+    let expense = s
+        .ok(
+            &tech,
+            "GET",
+            &format!("/api/v1/expenses/{}", logged["expenseId"].as_str().unwrap()),
+            json!(null),
+            StatusCode::OK,
+        )
+        .await;
+    assert_eq!(expense["amount"], "61.08");
+    assert_eq!(expense["vendor"], "Shell");
+    assert_eq!(expense["reimbursable"], false, "the company paid");
+}
+
+#[tokio::test]
+async fn the_expenses_dashboard_answers_every_widget() {
+    let Some(s) = setup().await else { return };
+    let dash = s
+        .ok(
+            &s.owner,
+            "GET",
+            "/api/v1/dashboards/expenses",
+            json!(null),
+            StatusCode::OK,
+        )
+        .await;
+    for w in dash["widgets"].as_array().unwrap() {
+        let (status, answer) = s
+            .call(
+                &s.owner,
+                "POST",
+                "/api/v1/analytics/query",
+                Some(w["spec"].clone()),
+            )
+            .await;
+        assert_eq!(status, StatusCode::OK, "{}: {answer}", w["id"]);
+    }
+}

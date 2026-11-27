@@ -845,7 +845,89 @@ pub fn builtin() -> Vec<Dashboard> {
         ),
         sales(),
         finance(),
+        expenses(),
     ]
+}
+
+/// The prebuilt expenses dashboard (ADR-084): spent in the range, by
+/// person, client, project and category, and what's to be billed and paid
+/// back. Drafts are left out.
+fn expenses() -> Dashboard {
+    let filed = json!([{ "field": "status", "op": "neq", "value": "draft" }]);
+    let amount = json!([{ "fn": "sum", "field": "amount" }]);
+    Dashboard {
+        module: Some("expenses"),
+        ..prebuilt(
+            "expenses",
+            "Expenses",
+            "Expenses submitted in the range: by person, client, project and category, and what's billable and paid back.",
+            vec![
+                widget(
+                    "spent",
+                    "Spent",
+                    Viz::Number,
+                    4,
+                    false,
+                    json!({ "source": "expenses", "measures": amount, "filters": filed }),
+                ),
+                widget(
+                    "billable",
+                    "To bill (marked up)",
+                    Viz::Number,
+                    4,
+                    false,
+                    json!({ "source": "expenses", "measures": [{ "fn": "sum", "field": "billed_amount" }],
+                        "filters": filed }),
+                ),
+                widget(
+                    "pay-back",
+                    "To pay back",
+                    Viz::Number,
+                    4,
+                    false,
+                    json!({ "source": "expenses", "measures": amount,
+                        "filters": [{ "field": "reimbursable", "op": "eq", "value": true },
+                                    { "field": "status", "op": "in", "value": ["submitted", "approved"] }] }),
+                ),
+                widget(
+                    "by-person",
+                    "By person",
+                    Viz::Bar,
+                    6,
+                    false,
+                    json!({ "source": "expenses", "measures": amount, "dimensions": [{ "field": "person" }],
+                        "filters": filed, "limit": 20 }),
+                ),
+                widget(
+                    "by-category",
+                    "By category",
+                    Viz::Bar,
+                    6,
+                    false,
+                    json!({ "source": "expenses", "measures": amount, "dimensions": [{ "field": "category" }],
+                        "filters": filed }),
+                ),
+                widget(
+                    "by-client",
+                    "By client",
+                    Viz::Table,
+                    6,
+                    false,
+                    json!({ "source": "expenses", "measures": amount, "dimensions": [{ "field": "client" }],
+                        "filters": filed, "sort": [{ "by": "sum_amount", "dir": "desc" }], "limit": 25 }),
+                ),
+                widget(
+                    "by-project",
+                    "By project",
+                    Viz::Table,
+                    6,
+                    false,
+                    json!({ "source": "expenses", "measures": amount, "dimensions": [{ "field": "project" }],
+                        "filters": filed, "sort": [{ "by": "sum_amount", "dir": "desc" }], "limit": 25 }),
+                ),
+            ],
+        )
+    }
 }
 
 /// The prebuilt finance dashboard (ADR-078): billed in the range, what's
