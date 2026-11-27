@@ -47,7 +47,14 @@ async fn setup() -> Option<Setup> {
     let root = ensure_root(&pools).await;
     let ctx = RequestContext::system(Via::System);
     let mut tx = begin_scoped(&pools.app, &OrgScope::System).await.unwrap();
-    for module in ["crm", "servicedesk", "projects", "expenses"] {
+    for module in [
+        "crm",
+        "servicedesk",
+        "projects",
+        "contracts",
+        "billing",
+        "expenses",
+    ] {
         huxley_modules::set_enabled(&mut tx, &ctx, module, true, false)
             .await
             .unwrap();
@@ -185,6 +192,36 @@ impl Setup {
             status,
             serde_json::from_slice(&bytes).unwrap_or(Value::Null),
         )
+    }
+
+    /// Approves a report, as its approval workflow would.
+    async fn approve(&self, report: &str) {
+        let mut tx = begin_scoped(&self.pools.app, &OrgScope::System)
+            .await
+            .unwrap();
+        let ctx = RequestContext::system(Via::System);
+        let id = Uuid::parse_str(report).unwrap();
+        huxley_expenses::reports::decide(
+            &mut tx,
+            &ctx,
+            id,
+            huxley_expenses::reports::Decision::Approved,
+            "Lead",
+            None,
+        )
+        .await
+        .unwrap();
+        tx.commit().await.unwrap();
+    }
+
+    /// What's unbilled for Acme today.
+    async fn unbilled(&self, today: &str) -> Value {
+        let uri = format!(
+            "/api/v1/billing/unbilled?orgId={}&from={today}&to={today}&clients={}",
+            self.provider, self.acme
+        );
+        self.ok(&self.owner, "GET", &uri, json!(null), StatusCode::OK)
+            .await
     }
 
     async fn category(&self, name: &str) -> String {
@@ -346,4 +383,112 @@ async fn entries_are_their_owners_and_categories_are_configured() {
         .call(&a, "DELETE", &format!("/api/v1/expenses/{id}"), None)
         .await;
     assert_eq!(status, StatusCode::NO_CONTENT);
+}
+
+#[tokio::test]
+async fn approved_billable_expenses_are_invoiced_and_count_on_the_project() {
+    let Some(s) = setup().await else { return };
+    let (_, tech_email) = user(&s.pools, Some(("technician", s.provider))).await;
+    let tech = login(&s.app, &tech_email).await;
+    let today = time::OffsetDateTime::now_utc().date().to_string();
+    let project = s
+        .ok(
+            &s.owner,
+            "POST",
+            "/api/v1/projects",
+            json!({ "orgId": s.acme, "name": unique("Rollout"), "startOn": today }),
+            StatusCode::CREATED,
+        )
+        .await;
+    let travel = s.category("Travel and lodging").await;
+    let meals = s.category("Meals").await;
+    let mut ids = Vec::new();
+    for (category, what, amount, billable) in [
+        (&travel, "Hotel", "180", true),
+        (&meals, "Dinner", "40", false),
+    ] {
+        let e = s
+            .ok(&tech, "POST", "/api/v1/expenses",
+                json!({ "categoryId": category, "spentOn": today, "description": what, "amount": amount,
+                        "billable": billable, "markupPct": "10", "projectId": project["id"] }),
+                StatusCode::CREATED)
+            .await;
+        ids.push(e["id"].clone());
+    }
+    let report = s
+        .ok(
+            &tech,
+            "POST",
+            "/api/v1/expense-reports",
+            json!({ "entryIds": ids }),
+            StatusCode::CREATED,
+        )
+        .await;
+    // Submitted expenses count on the project's cost.
+    let p = s
+        .ok(
+            &s.owner,
+            "GET",
+            &format!("/api/v1/projects/{}", project["id"].as_str().unwrap()),
+            json!(null),
+            StatusCode::OK,
+        )
+        .await;
+    assert_eq!(p["expenseCost"], 220.0);
+    // Not billed until approved.
+    let rate = json!({ "orgId": s.provider, "hourlyRate": "100", "currency": "USD", "paymentDays": 30, "approvedTimeOnly": false });
+    s.ok(
+        &s.owner,
+        "PUT",
+        "/api/v1/billing/settings",
+        rate,
+        StatusCode::OK,
+    )
+    .await;
+    let before = s.unbilled(&today).await;
+    assert!(
+        before
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|u| u["expenses"] == "0"),
+        "{before}"
+    );
+    s.approve(report["id"].as_str().unwrap()).await;
+    // Approved: the hotel, marked up, is billable; the dinner isn't.
+    let after = s.unbilled(&today).await;
+    let acme = &after[0];
+    assert_eq!(acme["expenses"], "198");
+    let line = acme["lines"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|l| l["kind"] == "expense")
+        .unwrap();
+    assert!(
+        line["description"]
+            .as_str()
+            .unwrap()
+            .starts_with("Travel and lodging: Hotel")
+    );
+    let run = s
+        .ok(
+            &s.owner,
+            "POST",
+            "/api/v1/billing/runs",
+            json!({ "orgId": s.provider, "from": today, "to": today, "clients": [s.acme] }),
+            StatusCode::CREATED,
+        )
+        .await;
+    assert_eq!(run["invoices"], 1);
+    // Billed once.
+    let again = s.unbilled(&today).await;
+    assert!(
+        again
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|u| u["expenses"] == "0"),
+        "{again}"
+    );
 }

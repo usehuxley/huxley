@@ -78,7 +78,50 @@ pub async fn candidates(
     out.extend(products(&mut *conn, client).await?);
     out.extend(recurring(&mut *conn, client, from, to).await?);
     out.extend(projects(&mut *conn, client, to, &settings.currency).await?);
+    out.extend(expenses(&mut *conn, client, to).await?);
     Ok(out)
+}
+
+/// Approved billable expenses up to `to`, marked up, one line each.
+/// Expenses on fixed-fee or milestone projects are in the fee.
+async fn expenses(
+    conn: &mut PgConnection,
+    client: Uuid,
+    to: Date,
+) -> BillingResult<Vec<Candidate>> {
+    let rows: Vec<(Uuid, String, String, Date, Decimal, String)> = sqlx::query_as(
+        "SELECT e.id, c.name, e.description, e.spent_on, round(e.amount * (1 + e.markup_pct / 100), 2), e.currency \
+           FROM exp_entries e JOIN exp_categories c ON c.id = e.category_id \
+           LEFT JOIN prj_projects p ON p.id = e.project_id \
+          WHERE e.org_id = $1 AND e.billable AND e.status IN ('approved', 'reimbursed') AND e.spent_on <= $2 \
+            AND (p.id IS NULL OR p.billing_method NOT IN ('fixed_fee', 'milestone')) \
+            AND NOT EXISTS (SELECT 1 FROM billing_billed b WHERE b.source_type = 'expense' AND b.source_id = e.id) \
+          ORDER BY e.spent_on, e.created_at",
+    )
+    .bind(client)
+    .bind(to)
+    .fetch_all(conn)
+    .await?;
+    Ok(rows
+        .into_iter()
+        .map(
+            |(id, category, description, day, price, currency)| Candidate {
+                kind: LineKind::Expense,
+                description: format!("{category}: {description} ({day})"),
+                quantity: Decimal::ONE,
+                unit: "each".into(),
+                unit_price: price,
+                product_id: None,
+                currency,
+                sources: vec![Source {
+                    kind: "expense",
+                    id,
+                    period: None,
+                    amount: price,
+                }],
+            },
+        )
+        .collect())
 }
 
 async fn time(
@@ -490,6 +533,9 @@ pub struct Unbilled {
     pub projects: Decimal,
     #[serde(serialize_with = "crate::plain")]
     #[schema(value_type = String)]
+    pub expenses: Decimal,
+    #[serde(serialize_with = "crate::plain")]
+    #[schema(value_type = String)]
     pub total: Decimal,
     pub lines: Vec<Candidate>,
 }
@@ -535,6 +581,7 @@ pub async fn unbilled(
                 products: sum(LineKind::Product),
                 recurring: sum(LineKind::Recurring),
                 projects: sum(LineKind::Project),
+                expenses: sum(LineKind::Expense),
                 total: lines.iter().map(Candidate::amount).sum(),
                 lines,
             });

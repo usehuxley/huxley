@@ -20,6 +20,7 @@ A **billing run** looks at a period and finds, for each client:
   - A fixed-fee project's fee, once the project is completed.
   - A milestone project's milestones, once reached, each at its amount.
   - Set fees and milestone amounts on the project page, in its **Billing** card.
+- **Expenses:** approved billable expenses, marked up, one line each. Those on fixed-fee or milestone projects are in the fee. See [Expenses](./expenses.md).
 
 Each source is billed once. Voiding an invoice makes its sources billable again.
 

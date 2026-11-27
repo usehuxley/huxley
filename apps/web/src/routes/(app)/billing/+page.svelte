@@ -74,6 +74,7 @@
 							<th scope="col" class="px-3 py-2.5 text-right">Products</th>
 							<th scope="col" class="px-3 py-2.5 text-right">Recurring</th>
 							<th scope="col" class="px-3 py-2.5 text-right">Projects</th>
+							<th scope="col" class="px-3 py-2.5 text-right">Expenses</th>
 							<th scope="col" class="px-3 py-2.5 text-right">Total</th>
 						</tr>
 					</thead>
@@ -102,6 +103,9 @@
 								<td class="px-3 py-2.5 text-right font-mono tabular-nums">
 									{money(u.projects, u.currency)}
 								</td>
+								<td class="px-3 py-2.5 text-right font-mono tabular-nums">
+									{money(u.expenses, u.currency)}
+								</td>
 								<td class="px-3 py-2.5 text-right font-mono font-semibold tabular-nums">
 									{money(u.total, u.currency)}
 								</td>
@@ -110,7 +114,7 @@
 					</tbody>
 					<tfoot>
 						<tr class="border-t border-border">
-							<th scope="row" colspan="6" class="px-3 py-2.5 text-right font-semibold text-fg">
+							<th scope="row" colspan="7" class="px-3 py-2.5 text-right font-semibold text-fg">
 								Total
 							</th>
 							<td class="px-3 py-2.5 text-right font-mono font-semibold tabular-nums">

@@ -178,6 +178,22 @@
 					<Field label="Fee (fixed fee or not-to-exceed cap)" for="fee-amount">
 						<Input id="fee-amount" name="feeAmount" inputmode="decimal" value={p.feeAmount ?? ''} />
 					</Field>
+					<Field label="Expense budget" for="cost-budget">
+						<Input
+							id="cost-budget"
+							name="costBudget"
+							inputmode="decimal"
+							value={p.costBudget ?? ''}
+						/>
+					</Field>
+					<p class="text-xs text-fg-muted">
+						Expenses so far: {p.expenseCost.toLocaleString(undefined, {
+							style: 'currency',
+							currency: 'USD'
+						})}{p.costBurnPercent != null
+							? ` (${Math.round(p.costBurnPercent)}% of the budget)`
+							: ''}
+					</p>
 					<Button type="submit" size="sm">Save billing</Button>
 				</form>
 			</Card>

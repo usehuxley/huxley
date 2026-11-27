@@ -46,6 +46,7 @@ pub enum LineKind {
     Product,
     Recurring,
     Project,
+    Expense,
     Manual,
 }
 
@@ -56,6 +57,7 @@ impl LineKind {
             Self::Product => "product",
             Self::Recurring => "recurring",
             Self::Project => "project",
+            Self::Expense => "expense",
             Self::Manual => "manual",
         }
     }

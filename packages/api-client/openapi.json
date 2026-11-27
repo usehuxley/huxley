@@ -35044,7 +35044,7 @@
 			},
 			"InvoiceLineKind": {
 				"type": "string",
-				"enum": ["time", "product", "recurring", "project", "manual"]
+				"enum": ["time", "product", "recurring", "project", "expense", "manual"]
 			},
 			"InvoiceReviewReason": {
 				"type": "object",
@@ -39975,6 +39975,7 @@
 					"startOn",
 					"usedHours",
 					"billingMethod",
+					"expenseCost",
 					"thresholds",
 					"thresholdsFired",
 					"portalVisible",
@@ -40007,11 +40008,26 @@
 						"format": "double",
 						"description": "Used against budget, in percent."
 					},
+					"costBudget": {
+						"type": ["number", "null"],
+						"format": "double",
+						"description": "Its expense budget (cost)."
+					},
+					"costBurnPercent": {
+						"type": ["number", "null"],
+						"format": "double",
+						"description": "Expenses against the cost budget, in percent."
+					},
 					"description": {
 						"type": "string"
 					},
 					"endOn": {
 						"type": ["string", "null"]
+					},
+					"expenseCost": {
+						"type": "number",
+						"format": "double",
+						"description": "Expenses on it (submitted, approved or paid back)."
 					},
 					"feeAmount": {
 						"type": ["number", "null"],
@@ -40133,9 +40149,18 @@
 						"type": "boolean",
 						"description": "Unlink the agreement."
 					},
+					"clearCostBudget": {
+						"type": "boolean",
+						"description": "Remove the expense budget."
+					},
 					"clearFee": {
 						"type": "boolean",
 						"description": "Remove the fee."
+					},
+					"costBudget": {
+						"type": ["number", "null"],
+						"format": "double",
+						"description": "The expense budget (cost)."
 					},
 					"description": {
 						"type": ["string", "null"]
@@ -47721,11 +47746,15 @@
 					"products",
 					"recurring",
 					"projects",
+					"expenses",
 					"total",
 					"lines"
 				],
 				"properties": {
 					"currency": {
+						"type": "string"
+					},
+					"expenses": {
 						"type": "string"
 					},
 					"lines": {

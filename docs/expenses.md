@@ -49,6 +49,17 @@ You're told either way. Comments on a report reach whoever submitted it, and any
 
 The events are `expense_report.submitted`, `expense_report.approved`, `expense_report.changes_requested` and `expense_report.rejected`. The `core.expense.report_decide` step records a decision.
 
+## Billing and project cost
+
+Once their report is approved, **billable** expenses go on the client's next invoice (ADR-082):
+- Each expense is one line ("Travel and lodging: Hotel (2026-11-20)"), at its amount marked up.
+- Each is billed once. Voiding the invoice makes it billable again.
+- Expenses on fixed-fee or milestone projects are part of the fee and aren't billed separately.
+- **Business → Billing** shows unbilled expenses beside time, products, recurring charges and projects.
+- In the accounting sync, expense lines map like the other kinds (`kind:expense`, or the default item).
+
+A project's **Billing** card has an **expense budget**. The project shows what's been spent: expenses submitted, approved or paid back, against that budget.
+
 ## Settings
 
 In **Settings → Expenses** (`expense:configure`):
