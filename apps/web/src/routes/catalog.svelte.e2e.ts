@@ -1,4 +1,5 @@
 import { expect, request, test, type Page } from '@playwright/test';
+import { openFromMenu } from '../lib/testing/nav.ts';
 
 // Full-stack: needs the API and the service-desk preset (crm). The
 // contracts module is optional: the test turns it on.
@@ -54,7 +55,7 @@ test.describe('product catalog', () => {
 		await api.dispose();
 
 		await signIn(page);
-		await page.getByRole('link', { name: 'Catalog' }).click();
+		await openFromMenu(page, 'Catalog');
 		await expect(page.getByRole('heading', { level: 1 })).toHaveText('Catalog');
 
 		// A service, by hand.

@@ -1,4 +1,5 @@
 import { expect, test, type Browser, type Page } from '@playwright/test';
+import { openFromMenu } from '../lib/testing/nav.ts';
 
 const ownerEmail = process.env.E2E_EMAIL;
 const ownerPassword = process.env.E2E_PASSWORD;
@@ -27,7 +28,7 @@ test.describe('scripts', () => {
 	test('every saved change is a version', async ({ browser }) => {
 		const page = await signIn(browser);
 		const name = `Greeter ${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
-		await page.getByRole('link', { name: 'Scripts' }).click();
+		await openFromMenu(page, 'Scripts');
 		await hydrated(page);
 		await page.getByLabel('Name').fill(name);
 		await page.getByLabel('Language').selectOption('python');
@@ -57,7 +58,7 @@ test.describe('scripts', () => {
 		page.on('console', (m) => {
 			if (m.text().includes('Content Security Policy')) blocked.push(m.text());
 		});
-		await page.getByRole('link', { name: 'Scripts' }).click();
+		await openFromMenu(page, 'Scripts');
 		await hydrated(page);
 		await page
 			.getByLabel('Name')

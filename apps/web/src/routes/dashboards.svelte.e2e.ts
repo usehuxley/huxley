@@ -1,4 +1,5 @@
 import { expect, request, test, type Page } from '@playwright/test';
+import { openFromMenu } from '../lib/testing/nav.ts';
 
 // Full-stack: needs the API and the service-desk preset (tickets). Set
 // SCREENSHOT_DIR to keep screenshots of the dashboards.
@@ -53,7 +54,7 @@ test.describe('dashboards', () => {
 		await api.dispose();
 
 		await signIn(page);
-		await page.getByRole('link', { name: 'Dashboards' }).first().click();
+		await openFromMenu(page, 'Dashboards');
 		await page.getByRole('link', { name: /Service desk overview/ }).click();
 		await expect(page.getByRole('heading', { level: 1 })).toHaveText('Service desk overview');
 		// Narrowed to the new client: three open tickets, by priority.

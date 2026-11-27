@@ -11,7 +11,8 @@
 		Input,
 		Select,
 		Tabs,
-		toast
+		toast,
+		tray
 	} from '@usehuxley/ui';
 	import { lintJson, lintWorkflowYaml } from '#lib/workflows/yaml-lint.ts';
 	import RunStatusBadge from '#lib/workflows/RunStatusBadge.svelte';
@@ -20,6 +21,16 @@
 
 	let { data, form }: PageProps = $props();
 	let workflow = $derived(data.workflow);
+
+	$effect(() => {
+		tray.open({
+			key: `workflow:${workflow.id}`,
+			kind: 'workflow',
+			href: `/workflows/${workflow.id}`,
+			title: workflow.name,
+			subtitle: 'Workflow'
+		});
+	});
 	let granted = $derived(data.user.grantedPermissions);
 	let canWrite = $derived(granted.includes('workflow:write'));
 	let canPublish = $derived(granted.includes('workflow:publish'));

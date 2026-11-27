@@ -1,4 +1,5 @@
 import { expect, test, type Browser, type Page } from '@playwright/test';
+import { openFromMenu } from '../lib/testing/nav.ts';
 
 const ownerEmail = process.env.E2E_EMAIL;
 const ownerPassword = process.env.E2E_PASSWORD;
@@ -19,7 +20,7 @@ test.describe('datasets', () => {
 	test('a dataset is created, filled, browsed and set to sync', async ({ browser }) => {
 		const page = await signIn(browser);
 		const name = `Staff ${Date.now().toString(36)}`;
-		await page.getByRole('link', { name: 'Datasets' }).click();
+		await openFromMenu(page, 'Datasets');
 		// Typing before the page hydrates is undone when it does.
 		await page.locator('html[data-hydrated]').waitFor({ state: 'attached' });
 		await page.getByLabel('Name', { exact: true }).fill(name);

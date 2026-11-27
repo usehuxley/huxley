@@ -1,4 +1,5 @@
 import { expect, request, test, type Browser, type Page } from '@playwright/test';
+import { openFromMenu } from '../lib/testing/nav.ts';
 
 // Full-stack: needs the API and the service-desk preset (workforce, tickets).
 const ownerEmail = process.env.E2E_EMAIL;
@@ -101,7 +102,7 @@ test.describe('timesheets', () => {
 
 		// The workforce manager reviews it (Tim has no team lead).
 		const owner = await signIn(browser, ownerEmail!, ownerPassword!);
-		await owner.getByRole('link', { name: 'Timesheets' }).click();
+		await openFromMenu(owner, 'Timesheets');
 		await owner.getByRole('link', { name: `Tim ${stamp}` }).click();
 		await expect(owner.getByRole('heading', { level: 1 })).toHaveText(`Tim ${stamp}’s timesheet`);
 		await expect(owner.getByRole('list', { name: 'Entries' })).toContainText('Mailbox migration');

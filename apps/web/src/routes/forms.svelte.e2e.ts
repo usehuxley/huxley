@@ -1,4 +1,5 @@
 import { expect, test, type Browser, type Page } from '@playwright/test';
+import { openFromMenu } from '../lib/testing/nav.ts';
 
 // Full-stack: needs the API (with its workers) and a bootstrapped owner.
 const ownerEmail = process.env.E2E_EMAIL;
@@ -24,7 +25,7 @@ test.describe('forms', () => {
 		const formKey = `laptop-request-${suffix}`;
 
 		// Create the form and give it two fields.
-		await page.getByRole('link', { name: 'Forms' }).click();
+		await openFromMenu(page, 'Forms');
 		await page.getByLabel('Name').fill(formName);
 		await page.getByRole('button', { name: 'Create' }).click();
 		await expect(page.getByRole('heading', { level: 1 })).toHaveText('Edit form');

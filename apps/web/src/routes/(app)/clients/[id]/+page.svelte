@@ -3,7 +3,18 @@
 	import { enhance, type SubmitFunction } from '$app/forms';
 	import { resolve } from '$app/paths';
 	import { Globe, MapPin, Phone, Plus, Search, Sparkles, UserPlus } from '@lucide/svelte';
-	import { Badge, Button, Card, Dialog, Field, Input, Select, Tabs, toast } from '@usehuxley/ui';
+	import {
+		Badge,
+		Button,
+		Card,
+		Dialog,
+		Field,
+		Input,
+		Select,
+		Tabs,
+		toast,
+		tray
+	} from '@usehuxley/ui';
 	import VaultPanel from '#lib/vault/VaultPanel.svelte';
 	import AgreementsPanel from '#lib/agreements/AgreementsPanel.svelte';
 	import PortalPanel from '#lib/portal/PortalPanel.svelte';
@@ -19,6 +30,16 @@
 	const initialTab = () => data.tab;
 	let tab = $state(initialTab());
 	let company = $derived(data.company);
+
+	$effect(() => {
+		tray.open({
+			key: `client:${data.org.id}`,
+			kind: 'client',
+			href: `/clients/${data.org.id}`,
+			title: data.org.name,
+			subtitle: 'Client'
+		});
+	});
 	let primarySite = $derived(data.sites.find((s) => s.isPrimary) ?? null);
 
 	let relationship = $state('');

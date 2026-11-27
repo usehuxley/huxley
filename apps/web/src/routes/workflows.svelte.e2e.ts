@@ -1,4 +1,5 @@
 import { expect, request, test, type Browser, type Page } from '@playwright/test';
+import { openFromMenu } from '../lib/testing/nav.ts';
 
 // Full-stack: needs the API (with its workers) and a bootstrapped owner.
 const ownerEmail = process.env.E2E_EMAIL;
@@ -56,7 +57,7 @@ test.describe('workflows', () => {
 
 	test('build, publish and run a workflow', async ({ browser }) => {
 		const page = await signIn(browser);
-		await page.getByRole('link', { name: 'Workflows' }).click();
+		await openFromMenu(page, 'Workflows');
 		await expect(page.getByRole('heading', { level: 1 })).toHaveText('Workflows');
 
 		const key = `greeter-${Date.now().toString(36)}`;
@@ -376,7 +377,7 @@ spec:
 		const run = page.url();
 		await expect(page.getByText('Waiting').first()).toBeVisible({ timeout: 20_000 });
 
-		await page.getByRole('link', { name: 'Approvals' }).click();
+		await openFromMenu(page, 'Approvals');
 		const card = page.getByRole('region', { name: 'Waiting for you' });
 		await expect(card).toContainText(`Buy licenses for ${key}?`);
 		await card.getByLabel('Comment (optional)').last().fill('Go ahead');
