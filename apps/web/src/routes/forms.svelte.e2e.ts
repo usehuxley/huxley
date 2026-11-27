@@ -119,7 +119,7 @@ spec:
 
 		// The JSON behind it.
 		await page.getByRole('button', { name: 'JSON', exact: true }).click();
-		const schema = JSON.parse(await page.getByLabel('Schema').inputValue()) as {
+		const schema = JSON.parse(await page.locator('input[name="schema"]').inputValue()) as {
 			required: string[];
 			properties: Record<string, unknown>;
 		};
