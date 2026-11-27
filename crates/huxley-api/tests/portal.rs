@@ -1739,3 +1739,140 @@ async fn sentiment_shows(s: &Setup, ticket: Uuid) {
         "{judged}"
     );
 }
+
+const DOT_PNG: &str = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=";
+
+impl Setup {
+    /// A quote for `org`, sent: its id.
+    async fn sent_quote(&self, org: Uuid, title: &str, contact: Option<&str>) -> String {
+        let (status, q, _) = self
+            .call(
+                &self.staff,
+                "POST",
+                "/api/v1/quotes",
+                json!({ "orgId": org, "quote": { "title": title, "contactId": contact, "lines": [
+                    { "name": "Laptop", "quantity": 2, "unitCost": "800", "unitPrice": "1000" },
+                    { "name": "Dock", "optional": true, "unitCost": "120", "unitPrice": "200" }
+                ] } }),
+            )
+            .await;
+        assert_eq!(status, StatusCode::CREATED, "{q}");
+        let id = q["id"].as_str().unwrap().to_owned();
+        let (status, _, _) = self
+            .call(
+                &self.staff,
+                "POST",
+                &format!("/api/v1/quotes/{id}/send"),
+                json!({ "version": q["version"] }),
+            )
+            .await;
+        assert_eq!(status, StatusCode::OK);
+        id
+    }
+}
+
+#[tokio::test]
+async fn clients_sign_quotes_in_the_portal() {
+    let Some(db) = isolated("portal_quotes").await else {
+        return;
+    };
+    let s = setup(&db.pools).await;
+    let ctx = RequestContext::system(Via::System);
+    let mut tx = begin_scoped(&s.pools.app, &OrgScope::System).await.unwrap();
+    for module in ["contracts", "sales"] {
+        huxley_modules::set_enabled(&mut tx, &ctx, module, true, false)
+            .await
+            .unwrap();
+    }
+    tx.commit().await.unwrap();
+    let (ada, ada_contact) = s.portal_user(s.acme, "Ada", "client_user").await;
+    let (bob, _) = s.portal_user(s.acme, "Bob", "client_approver").await;
+    let hers = s
+        .sent_quote(s.acme, "Laptops for Ada", Some(&ada_contact))
+        .await;
+    let company = s.sent_quote(s.acme, "Printers", None).await;
+    let other = s.sent_quote(s.globex, "Not yours", None).await;
+
+    // Ada sees what's addressed to her, without costs; Bob sees the company's.
+    let (_, mine, _) = s
+        .call(&ada, "GET", "/api/portal/v1/quotes", Value::Null)
+        .await;
+    let titles: Vec<&str> = mine
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|q| q["title"].as_str().unwrap())
+        .collect();
+    assert_eq!(titles, ["Laptops for Ada"]);
+    assert!(mine[0]["lines"][0].get("unitCost").is_none());
+    assert!(mine[0]["totals"].get("marginPct").is_none());
+    let (_, all, _) = s
+        .call(&bob, "GET", "/api/portal/v1/quotes", Value::Null)
+        .await;
+    assert_eq!(all.as_array().unwrap().len(), 2);
+    for (who, id) in [(&ada, &company), (&bob, &other)] {
+        let (status, _, _) = s
+            .call(
+                who,
+                "GET",
+                &format!("/api/portal/v1/quotes/{id}"),
+                Value::Null,
+            )
+            .await;
+        assert_eq!(status, StatusCode::NOT_FOUND);
+    }
+
+    // Accepting needs agreement and a drawn signature.
+    let answer = format!("/api/portal/v1/quotes/{hers}/answer");
+    let dock = mine[0]["lines"][1]["id"].clone();
+    let base = json!({ "accept": true, "name": "Ada Client", "options": [dock], "revision": 1 });
+    let mut no_sig = base.clone();
+    no_sig["agree"] = json!(true);
+    let (status, problem, _) = s.call(&ada, "POST", &answer, no_sig).await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{problem}");
+    let mut signed = base.clone();
+    signed["signature"] = json!(DOT_PNG);
+    let (status, _, _) = s.call(&ada, "POST", &answer, signed.clone()).await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+    signed["agree"] = json!(true);
+    let (status, accepted, _) = s.call(&ada, "POST", &answer, signed.clone()).await;
+    assert_eq!(status, StatusCode::OK, "{accepted}");
+    assert_eq!(accepted["status"], "accepted");
+    assert_eq!(accepted["totals"]["oneTime"], "2200");
+    let (status, _, _) = s.call(&ada, "POST", &answer, signed).await;
+    assert_eq!(status, StatusCode::CONFLICT);
+
+    // Staff see who signed, what, and the drawing.
+    let (status, sig, _) = s
+        .call(
+            &s.staff,
+            "GET",
+            &format!("/api/v1/quotes/{hers}/signature"),
+            Value::Null,
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK, "{sig}");
+    assert_eq!(sig["name"], "Ada Client");
+    assert_eq!(sig["contactName"], "Ada Client");
+    assert_eq!(sig["hasImage"], true);
+    assert_eq!(sig["documentSha256"].as_str().unwrap().len(), 64);
+    let req = Request::get(format!("/api/v1/quotes/{hers}/signature.png"))
+        .header("x-requested-with", "huxley")
+        .header("cookie", &s.staff)
+        .body(Body::empty())
+        .unwrap();
+    let res = s.app.clone().oneshot(req).await.unwrap();
+    assert_eq!(res.headers()["content-type"], "image/png");
+
+    // Bob declines the company's quote, saying why.
+    let (status, declined, _) = s
+        .call(
+            &bob,
+            "POST",
+            &format!("/api/portal/v1/quotes/{company}/answer"),
+            json!({ "accept": false, "name": "Bob Client", "reason": "Not this year", "revision": 1 }),
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK, "{declined}");
+    assert_eq!(declined["status"], "declined");
+}

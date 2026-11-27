@@ -106,7 +106,7 @@
 			monthly = 0,
 			cost = 0;
 		for (const r of rows) {
-			if (r.kind !== 'item' || (r.optional && !r.selected)) continue;
+			if (r.kind !== 'item' || r.optional) continue;
 			const total = lineTotal(r);
 			const c = n(r.quantity) * n(r.unitCost);
 			const m = perMonth(r.billing, total);
@@ -201,7 +201,7 @@
 				unitPrice: r.unitPrice || '0',
 				discountPct: r.discountPct || '0',
 				optional: r.optional,
-				selected: r.selected
+				selected: !r.optional
 			}))
 		})
 	);
@@ -479,9 +479,8 @@
 										/>
 									</td>
 									<td
-										class="px-2 py-2.5 text-right font-mono font-semibold tabular-nums {r.optional &&
-										!r.selected
-											? 'text-fg-subtle line-through'
+										class="px-2 py-2.5 text-right font-mono font-semibold tabular-nums {r.optional
+											? 'text-fg-subtle'
 											: 'text-fg'}"
 									>
 										{money(lineTotal(r), q.currency)}{#if r.billing !== 'one_time'}<span
@@ -593,6 +592,40 @@
 					<p class="mt-3 text-xs text-fg-subtle">Options count once the client takes them.</p>
 				{/if}
 			</Card>
+			{#if data.signature}
+				<Card title={data.signature.accepted ? 'Signed in the portal' : 'Declined in the portal'}>
+					{#if data.signature.hasImage}
+						<img
+							src="{resolve('/(app)/sales/quotes/[id]', { id: q.id })}/signature.png"
+							alt="Signature of {data.signature.name}"
+							class="mb-3 h-20 w-full rounded-control border border-border bg-white object-contain"
+						/>
+					{/if}
+					<dl
+						class="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs"
+						aria-label="Signature record"
+					>
+						<dt class="text-fg-muted">Name</dt>
+						<dd class="font-semibold text-fg">{data.signature.name}</dd>
+						{#if data.signature.contactName}
+							<dt class="text-fg-muted">Contact</dt>
+							<dd>{data.signature.contactName}</dd>
+						{/if}
+						<dt class="text-fg-muted">When</dt>
+						<dd>{new Date(data.signature.signedAt).toLocaleString()}</dd>
+						<dt class="text-fg-muted">Revision</dt>
+						<dd>{data.signature.revision}</dd>
+						{#if data.signature.ip}
+							<dt class="text-fg-muted">From</dt>
+							<dd class="font-mono">{data.signature.ip}</dd>
+						{/if}
+						<dt class="text-fg-muted">Document</dt>
+						<dd class="font-mono break-all" title="SHA-256 of the revision answered">
+							{data.signature.documentSha256.slice(0, 16)}…
+						</dd>
+					</dl>
+				</Card>
+			{/if}
 			<Card title="Revisions">
 				{#if data.revisions.length === 0}
 					<p class="text-sm text-fg-muted">Not sent yet. Each send keeps what was sent.</p>

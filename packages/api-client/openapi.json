@@ -1144,6 +1144,113 @@
 				}
 			}
 		},
+		"/api/portal/v1/quotes": {
+			"get": {
+				"tags": ["portal"],
+				"summary": "Quotes for you or your company, newest first. Empty when sales is off.",
+				"operationId": "portal_quotes",
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "array",
+									"items": {
+										"$ref": "#/components/schemas/PortalQuote"
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/portal/v1/quotes/{id}": {
+			"get": {
+				"tags": ["portal"],
+				"operationId": "portal_quote",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/PortalQuote"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/portal/v1/quotes/{id}/answer": {
+			"post": {
+				"tags": ["portal"],
+				"summary": "Accepts (signed, with the options taken) or declines a quote.",
+				"operationId": "portal_answer_quote",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/PortalAnswer"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/PortalQuote"
+								}
+							}
+						}
+					},
+					"409": {
+						"description": "Already answered, changed since, or expired",
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					},
+					"422": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
 		"/api/portal/v1/requests": {
 			"get": {
 				"tags": ["portal"],
@@ -13291,6 +13398,79 @@
 							"application/problem+json": {
 								"schema": {
 									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/quotes/{id}/signature": {
+			"get": {
+				"tags": ["sales"],
+				"summary": "How the client answered in the portal: who, what (the revision's\nSHA-256), from where and when. 404 if not answered there.",
+				"operationId": "quote_signature",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Signature"
+								}
+							}
+						}
+					},
+					"404": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/quotes/{id}/signature.png": {
+			"get": {
+				"tags": ["sales"],
+				"summary": "The signature drawn when the quote was accepted in the portal.",
+				"operationId": "quote_signature_image",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "The signature",
+						"content": {
+							"image/png": {
+								"schema": {
+									"type": "array",
+									"items": {
+										"type": "integer",
+										"format": "int32",
+										"minimum": 0
+									}
 								}
 							}
 						}
@@ -30890,6 +31070,46 @@
 				"type": "string",
 				"enum": ["invited", "active", "disabled"]
 			},
+			"PortalAnswer": {
+				"type": "object",
+				"description": "The client's answer from the portal.",
+				"required": ["accept", "name", "revision"],
+				"properties": {
+					"accept": {
+						"type": "boolean"
+					},
+					"agree": {
+						"type": "boolean",
+						"description": "That they agree to the quote and its terms (accepting)."
+					},
+					"name": {
+						"type": "string",
+						"description": "Their name, typed: the signature in words."
+					},
+					"options": {
+						"type": "array",
+						"items": {
+							"type": "string",
+							"format": "uuid"
+						},
+						"description": "The options taken (accepting)."
+					},
+					"reason": {
+						"type": ["string", "null"],
+						"description": "Why not (declining)."
+					},
+					"revision": {
+						"type": "integer",
+						"format": "int32",
+						"description": "The revision they're answering."
+					},
+					"signature": {
+						"type": ["string", "null"],
+						"description": "The signature drawn, as a `data:image/png;base64,` URL (accepting)."
+					}
+				},
+				"additionalProperties": false
+			},
 			"PortalApproval": {
 				"type": "object",
 				"description": "An approval as a client contact sees it in the portal.",
@@ -31349,7 +31569,7 @@
 								"items": {
 									"type": "string"
 								},
-								"description": "The portal's parts that are on for their company: `servicedesk`\n(tickets), `knowledge` (help articles), `cmdb` (devices)."
+								"description": "The portal's parts that are on for their company: `servicedesk`\n(tickets), `knowledge` (help articles), `cmdb` (devices), `projects`,\n`sales` (quotes)."
 							},
 							"permissions": {
 								"type": "array",
@@ -31655,6 +31875,161 @@
 							"$ref": "#/components/schemas/PortalTask"
 						},
 						"description": "Tasks marked for the client."
+					}
+				}
+			},
+			"PortalQuote": {
+				"type": "object",
+				"description": "A quote as the client sees it.",
+				"required": [
+					"id",
+					"number",
+					"title",
+					"status",
+					"revision",
+					"currency",
+					"expired",
+					"intro",
+					"terms",
+					"lines",
+					"totals"
+				],
+				"properties": {
+					"contactName": {
+						"type": ["string", "null"]
+					},
+					"currency": {
+						"type": "string"
+					},
+					"decidedAt": {
+						"type": ["string", "null"],
+						"format": "date-time"
+					},
+					"decidedBy": {
+						"type": ["string", "null"]
+					},
+					"expired": {
+						"type": "boolean",
+						"description": "Past its \"valid until\" date: it can't be accepted."
+					},
+					"id": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"intro": {
+						"type": "string"
+					},
+					"lines": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/PortalQuoteLine"
+						}
+					},
+					"number": {
+						"type": "integer",
+						"format": "int64"
+					},
+					"ownerName": {
+						"type": ["string", "null"]
+					},
+					"revision": {
+						"type": "integer",
+						"format": "int32"
+					},
+					"sentAt": {
+						"type": ["string", "null"],
+						"format": "date-time"
+					},
+					"status": {
+						"$ref": "#/components/schemas/QuoteStatus"
+					},
+					"terms": {
+						"type": "string"
+					},
+					"title": {
+						"type": "string"
+					},
+					"totals": {
+						"$ref": "#/components/schemas/PortalQuoteTotals"
+					},
+					"validUntil": {
+						"type": ["string", "null"],
+						"format": "date"
+					}
+				}
+			},
+			"PortalQuoteLine": {
+				"type": "object",
+				"description": "A line as the client sees it: no cost.",
+				"required": [
+					"id",
+					"kind",
+					"name",
+					"description",
+					"billing",
+					"quantity",
+					"unit",
+					"unitPrice",
+					"discountPct",
+					"total",
+					"optional",
+					"selected"
+				],
+				"properties": {
+					"billing": {
+						"$ref": "#/components/schemas/QuoteBilling"
+					},
+					"description": {
+						"type": "string"
+					},
+					"discountPct": {
+						"type": "string"
+					},
+					"id": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"kind": {
+						"$ref": "#/components/schemas/QuoteLineKind"
+					},
+					"name": {
+						"type": "string"
+					},
+					"optional": {
+						"type": "boolean"
+					},
+					"quantity": {
+						"type": "string"
+					},
+					"selected": {
+						"type": "boolean"
+					},
+					"sku": {
+						"type": ["string", "null"]
+					},
+					"total": {
+						"type": "string"
+					},
+					"unit": {
+						"type": "string"
+					},
+					"unitPrice": {
+						"type": "string"
+					}
+				}
+			},
+			"PortalQuoteTotals": {
+				"type": "object",
+				"required": ["oneTime", "monthly", "firstYear"],
+				"properties": {
+					"firstYear": {
+						"type": "string"
+					},
+					"monthly": {
+						"type": "string"
+					},
+					"oneTime": {
+						"type": "string"
 					}
 				}
 			},
@@ -33304,7 +33679,7 @@
 					},
 					"selected": {
 						"type": ["boolean", "null"],
-						"description": "Whether an option is in (default yes)."
+						"description": "Whether an option is taken (default no: options count once the client takes them)."
 					},
 					"sku": {
 						"type": ["string", "null"]
@@ -34901,6 +35276,43 @@
 					"authorizeUrl": {
 						"type": "string",
 						"description": "Send the browser here; the provider returns it to the callback."
+					}
+				}
+			},
+			"Signature": {
+				"type": "object",
+				"description": "How a quote was answered in the portal, for staff.",
+				"required": ["revision", "accepted", "name", "hasImage", "documentSha256", "signedAt"],
+				"properties": {
+					"accepted": {
+						"type": "boolean"
+					},
+					"contactName": {
+						"type": ["string", "null"]
+					},
+					"documentSha256": {
+						"type": "string"
+					},
+					"hasImage": {
+						"type": "boolean",
+						"description": "A signature was drawn (fetch it from `…/signature.png`)."
+					},
+					"ip": {
+						"type": ["string", "null"]
+					},
+					"name": {
+						"type": "string"
+					},
+					"revision": {
+						"type": "integer",
+						"format": "int32"
+					},
+					"signedAt": {
+						"type": "string",
+						"format": "date-time"
+					},
+					"userAgent": {
+						"type": ["string", "null"]
 					}
 				}
 			},

@@ -222,7 +222,7 @@ pub struct LineInput {
     pub taxable: Option<bool>,
     #[serde(default)]
     pub optional: bool,
-    /// Whether an option is in (default yes).
+    /// Whether an option is taken (default no: options count once the client takes them).
     #[serde(default)]
     pub selected: Option<bool>,
 }
@@ -523,7 +523,7 @@ async fn ready(conn: &mut PgConnection, i: usize, l: &LineInput) -> SalesResult<
             .or_else(|| product.as_ref().map(|p| p.taxable))
             .unwrap_or(true),
         optional: l.optional,
-        selected: !l.optional || l.selected.unwrap_or(true),
+        selected: !l.optional || l.selected.unwrap_or(false),
     })
 }
 

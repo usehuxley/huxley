@@ -51,6 +51,7 @@ pub mod portal_device_routes;
 pub mod portal_kb_routes;
 pub mod portal_people_routes;
 pub mod portal_project_routes;
+pub mod portal_quote_routes;
 pub mod portal_routes;
 pub mod portal_sso_routes;
 pub mod portal_ticket_routes;

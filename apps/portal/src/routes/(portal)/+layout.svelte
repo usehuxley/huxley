@@ -7,6 +7,7 @@
 		ChartColumn,
 		CircleCheck,
 		ClipboardList,
+		FileText,
 		FolderKanban,
 		House,
 		Ticket,
@@ -30,7 +31,8 @@
 			{ href: '/approvals', label: 'Approvals', icon: CircleCheck, module: 'approvals' },
 			{ href: '/people', label: 'People', icon: UsersRound, module: 'people' },
 			{ href: '/dashboards', label: 'Reports', icon: ChartColumn, module: 'dashboards' },
-			{ href: '/projects', label: 'Projects', icon: FolderKanban, module: 'projects' }
+			{ href: '/projects', label: 'Projects', icon: FolderKanban, module: 'projects' },
+			{ href: '/quotes', label: 'Quotes', icon: FileText, module: 'quotes' }
 		]
 			.filter((item) =>
 				item.module === 'approvals'
@@ -42,7 +44,10 @@
 							: item.module === 'projects'
 								? data.me.permissions.includes('portal.project:read') &&
 									data.me.modules.includes('projects')
-								: item.module === null || data.me.modules.includes(item.module)
+								: item.module === 'quotes'
+									? data.me.permissions.includes('portal.quote:read') &&
+										data.me.modules.includes('sales')
+									: item.module === null || data.me.modules.includes(item.module)
 			)
 			.map((item) => ({ href: item.href, label: item.label, icon: item.icon }))
 	);
