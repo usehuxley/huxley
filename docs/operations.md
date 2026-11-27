@@ -91,3 +91,26 @@ The script runner gateway (port 8443, mutual TLS) is internal. Never route it th
 
 Sign-in attempts (`HUXLEY_HTTP__LOGIN_ATTEMPTS_PER_MINUTE`, 20 by default), public form submissions and OAuth client requests are limited per client address each minute. The counters live in PostgreSQL, so every API replica enforces the same limit (ADR-090). Accounts are also locked after repeated failed sign-ins, whatever the address.
 
+## Protecting secrets
+
+Secrets Huxley stores (connection credentials, MFA secrets, vault entries, AI keys, SSO client secrets) are encrypted with per-organization data keys. The data keys are encrypted ("wrapped") by a **key-encryption key** (KEK) (ADR-018). The KEK can be one of:
+
+| Where | Settings | Notes |
+|---|---|---|
+| **Configuration** | `HUXLEY_CRYPTO__KEK` (or `_FILE`): 32 random bytes, base64. Make one with `huxley admin generate-kek`. | The simplest. Keep it in your secret store, and back it up with the database. |
+| **HashiCorp Vault / OpenBao** | `HUXLEY_CRYPTO__VAULT__ADDRESS`, `__MOUNT` (default `transit`), `__KEY` (default `huxley`), plus a token, AppRole or Kubernetes auth. | Transit with an `aes256-gcm96` key. Runs anywhere, including on-premises. |
+| **Azure Key Vault** | `HUXLEY_CRYPTO__AZURE_KEY_VAULT__VAULT_URL`, `__KEY` (an RSA key), plus a client secret, workload identity or managed identity. | Signs in like the Azure SDK. |
+| **AWS KMS** | `HUXLEY_CRYPTO__AWS_KMS__KEY_ID` (key id, ARN or `alias/…`), `__REGION` (or `AWS_REGION`). | A symmetric KMS key. Credentials come from the AWS default chain (ECS task role, EKS Pod Identity or IRSA, EC2 instance role), or `__ACCESS_KEY_ID` and `__SECRET_ACCESS_KEY` outside AWS. |
+
+With a key service, the KEK never leaves it: Huxley asks it to wrap and unwrap data keys. Each wrap is tied to its data key and organization, so a wrapped key copied to another row is refused.
+
+**What an AWS role needs:** `kms:Encrypt` and `kms:Decrypt` on the key. Every request carries the encryption context `huxley=data-key`, so you can require it in the key policy (`kms:EncryptionContext:huxley`), and CloudTrail shows it. Turn on automatic key rotation; old wraps keep decrypting.
+
+### Changing where the KEK lives
+
+1. Configure both the old KEK and the new one, and set `HUXLEY_CRYPTO__ACTIVE` to the new one (`kek`, `vault`, `azure_key_vault` or `aws_kms`).
+2. Run `huxley admin rewrap-keys`. It re-wraps every data key with the active KEK. The secrets themselves aren't re-encrypted.
+3. Remove the old KEK.
+
+To retire a configured KEK, list it in `HUXLEY_CRYPTO__RETIRED_KEKS` while you rewrap.
+

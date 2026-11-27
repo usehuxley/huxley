@@ -57,12 +57,32 @@ fn forwarded_client(parts: &Parts, config: &crate::ApiConfig) -> Option<IpAddr> 
         .client_ip_header
         .as_deref()
         .filter(|name| !name.trim().is_empty())
-        .and_then(|name| header(parts, name.trim()))
-        .and_then(|v| v.trim().parse().ok())
+        .and_then(|name| header(parts, name.trim()).and_then(|v| header_ip(name.trim(), v)))
     {
         return Some(ip);
     }
     nth_from_right(header(parts, "x-forwarded-for")?, config.proxy_hops)
+}
+
+/// The client address in a CDN's header. Most carry just the address;
+/// some an `address:port` (`[v6]:port` too). `CloudFront`'s
+/// `CloudFront-Viewer-Address` always ends in `:port`, and writes IPv6
+/// without brackets (`2001:db8::1:46532`), so its port is always cut off:
+/// `2001:db8::1:443` is a valid address by itself.
+fn header_ip(name: &str, value: &str) -> Option<IpAddr> {
+    let value = value.trim();
+    if name.eq_ignore_ascii_case("cloudfront-viewer-address") {
+        let (address, _port) = value.rsplit_once(':')?;
+        return address
+            .trim_start_matches('[')
+            .trim_end_matches(']')
+            .parse()
+            .ok();
+    }
+    value
+        .parse()
+        .ok()
+        .or_else(|| value.parse::<SocketAddr>().ok().map(|a| a.ip()))
 }
 
 /// The entry `hops` from the right of an `X-Forwarded-For` value: each
@@ -137,6 +157,38 @@ mod tests {
             extract(&parts, &trusting(1, None)).ip,
             Some(ip("198.51.100.7"))
         );
+    }
+
+    #[test]
+    fn cdn_headers_with_ports_are_read() {
+        let cf = "CloudFront-Viewer-Address";
+        assert_eq!(
+            header_ip(cf, "198.51.100.10:46532"),
+            Some(ip("198.51.100.10"))
+        );
+        assert_eq!(header_ip(cf, "2001:db8::1:443"), Some(ip("2001:db8::1")));
+        assert_eq!(
+            header_ip(cf, "2001:db8:85a3::8a2e:370:7334:46532"),
+            Some(ip("2001:db8:85a3::8a2e:370:7334"))
+        );
+        assert_eq!(
+            header_ip(cf, "198.51.100.10"),
+            None,
+            "CloudFront always adds the port"
+        );
+        assert_eq!(
+            header_ip("CF-Connecting-IP", "2001:db8::1"),
+            Some(ip("2001:db8::1"))
+        );
+        assert_eq!(
+            header_ip("True-Client-IP", "198.51.100.7:1234"),
+            Some(ip("198.51.100.7"))
+        );
+        assert_eq!(
+            header_ip("X-Client", "[2001:db8::2]:8080"),
+            Some(ip("2001:db8::2"))
+        );
+        assert_eq!(header_ip("X-Client", "nonsense"), None);
     }
 
     #[test]

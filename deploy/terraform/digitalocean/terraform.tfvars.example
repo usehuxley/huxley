@@ -1,0 +1,18 @@
+# cp terraform.tfvars.example terraform.tfvars, then edit.
+# Needs DIGITALOCEAN_TOKEN (and SPACES_ACCESS_KEY_ID / SPACES_SECRET_ACCESS_KEY
+# for App Platform's Spaces bucket) in the environment.
+name        = "huxley"
+host        = "huxley.example.com"
+portal_host = "portal.example.com"
+
+# Managed (default):
+shape      = "app_platform"
+region     = "nyc3"
+app_region = "nyc"
+# Build the images (docker/*.Dockerfile) and push them to your DigitalOcean
+# Container Registry as huxley, web and portal:
+image = { registry_type = "DOCR", tag = "0.1.0" }
+
+# Or one server running the Compose deployment (small installs):
+# shape   = "droplet"
+# droplet = { ssh_keys = ["12:34:…"], ssh_sources = ["203.0.113.0/24"] }

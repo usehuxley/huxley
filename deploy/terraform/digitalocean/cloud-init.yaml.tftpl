@@ -1,0 +1,24 @@
+#cloud-config
+# Installs Docker, fetches Huxley's Compose deployment, writes its settings,
+# generates its secrets (deploy/compose/install.sh), and starts it.
+package_update: true
+packages: [docker.io, docker-compose-v2, git]
+write_files:
+  # Moved into place after the clone; install.sh keeps an existing .env.
+  - path: /opt/huxley.env
+    permissions: "0600"
+    content: |
+      HUXLEY_DOMAIN=${host}
+      HUXLEY_PORTAL_DOMAIN=${portal_host}
+      HUXLEY_VERSION=latest
+      HUXLEY_ENVIRONMENT=production
+      HUXLEY_OTLP_ENDPOINT=
+      HUXLEY_SMTP_URL=${smtp_url}
+      HUXLEY_EMAIL_FROM=${email_from}
+      HUXLEY_CLIENT_IP_HEADER=
+runcmd:
+  - systemctl enable --now docker
+  - git clone --depth 1 --branch ${ref} ${repo} /opt/huxley
+  - mv /opt/huxley.env /opt/huxley/deploy/compose/.env
+  - cd /opt/huxley/deploy/compose && sh install.sh
+  - cd /opt/huxley/deploy/compose && docker compose up -d --build

@@ -28,3 +28,11 @@ Thumbs.db
 junit.xml
 # Local attachment storage (storage.url default)
 /data/
+
+# Terraform: providers, state and your variables stay local (lock files are
+# committed: they pin providers).
+.terraform/
+*.tfstate
+*.tfstate.*
+terraform.tfvars
+*.auto.tfvars

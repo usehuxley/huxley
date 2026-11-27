@@ -61,6 +61,7 @@ export default defineConfig({
 					{ text: 'Search', link: '/search' },
 					{ text: 'Running Huxley', link: '/operations' },
 					{ text: 'Kubernetes', link: '/kubernetes' },
+					{ text: 'Cloud templates', link: '/cloud' },
 					{ text: 'Observability', link: '/observability' },
 					{ text: 'Provisioning (SCIM)', link: '/scim' }
 				]

@@ -1,0 +1,12 @@
+# cp terraform.tfvars.example terraform.tfvars, then edit.
+name        = "huxley"
+location    = "westeurope"
+host        = "huxley.example.com"
+portal_host = "portal.example.com"
+
+# Build the images (docker/*.Dockerfile) and push them, e.g. to ACR:
+image_registry = "contoso.azurecr.io/huxley"
+image_tag      = "0.1.0"
+acr_id         = "/subscriptions/…/resourceGroups/…/providers/Microsoft.ContainerRegistry/registries/contoso"
+
+# smtp_url = "smtp://user:pass@smtp.example.com:587"

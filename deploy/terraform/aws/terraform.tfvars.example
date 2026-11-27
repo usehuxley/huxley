@@ -1,0 +1,17 @@
+# cp terraform.tfvars.example terraform.tfvars, then edit.
+name            = "huxley"
+region          = "us-east-1"
+host            = "huxley.example.com"
+portal_host     = "portal.example.com"
+certificate_arn = "arn:aws:acm:us-east-1:111122223333:certificate/00000000-0000-0000-0000-000000000000"
+
+# Build the images (docker/*.Dockerfile) and push them, e.g. to ECR:
+image_registry = "111122223333.dkr.ecr.us-east-1.amazonaws.com/huxley"
+image_tag      = "0.1.0"
+
+# cloudfront = {
+#   enabled         = true
+#   certificate_arn = "arn:aws:acm:us-east-1:111122223333:certificate/…" # us-east-1
+# }
+
+# smtp_url_secret_arn = "arn:aws:secretsmanager:us-east-1:111122223333:secret:huxley-smtp-…"

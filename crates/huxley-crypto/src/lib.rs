@@ -62,6 +62,8 @@ pub struct CryptoConfig {
     pub vault: Option<VaultConfig>,
     /// A KEK held in Azure Key Vault.
     pub azure_key_vault: Option<AzureKeyVaultConfig>,
+    /// A KEK held in AWS KMS.
+    pub aws_kms: Option<kms::AwsKmsConfig>,
     /// Which configured KEK wraps new data keys. Needed only when more than
     /// one is configured, e.g. while moving from `kek` to a key service; the
     /// others stay readable until `huxley admin rewrap-keys` has run.
@@ -78,6 +80,8 @@ pub enum KekSource {
     Vault,
     /// `crypto.azure_key_vault`.
     AzureKeyVault,
+    /// `crypto.aws_kms`.
+    AwsKms,
 }
 
 impl KekSource {
@@ -86,6 +90,7 @@ impl KekSource {
             Self::Local => "kek",
             Self::Vault => "vault",
             Self::AzureKeyVault => "azure_key_vault",
+            Self::AwsKms => "aws_kms",
         }
     }
 }
@@ -103,6 +108,10 @@ impl CryptoConfig {
         if let Some(azure) = &self.azure_key_vault {
             let kek = kms::AzureKek::new(azure)?;
             configured.push((KekSource::AzureKeyVault, keyring::Kek::Azure(Box::new(kek))));
+        }
+        if let Some(aws) = &self.aws_kms {
+            let kek = kms::AwsKmsKek::new(aws)?;
+            configured.push((KekSource::AwsKms, keyring::Kek::Aws(Box::new(kek))));
         }
         let index = match (self.active, configured.len()) {
             (Some(source), _) => configured

@@ -9,6 +9,8 @@ repository.workspace = true
 publish = false
 
 [dependencies]
+aws-config = { version = "1", default-features = false, features = ["behavior-version-latest", "rt-tokio", "default-https-client"] }
+aws-sdk-kms = { version = "1", default-features = false, features = ["behavior-version-latest", "rt-tokio", "default-https-client"] }
 base64.workspace = true
 getrandom.workspace = true
 huxley-core.workspace = true

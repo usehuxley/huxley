@@ -13,7 +13,10 @@ type ApiEvent = Pick<RequestEvent, 'fetch' | 'cookies' | 'getClientAddress' | 'r
 export function api(event: ApiEvent) {
 	const headers: Record<string, string> = {
 		'x-requested-with': 'huxley',
-		'x-forwarded-for': event.getClientAddress()
+		'x-forwarded-for': event.getClientAddress(),
+		// The same, for deployments where the API reads it from a header a
+		// router sets (HUXLEY_HTTP__CLIENT_IP_HEADER; the Azure template).
+		'x-huxley-client-ip': event.getClientAddress()
 	};
 	const token = event.cookies.get(PORTAL_COOKIE);
 	if (token) headers.cookie = `${PORTAL_COOKIE}=${token}`;
