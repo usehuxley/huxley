@@ -99,7 +99,7 @@ pub async fn get_survey(
     ClientInfo(ctx): ClientInfo,
     Path(token): Path<String>,
 ) -> ApiResult<Json<PublicSurvey>> {
-    crate::auth_routes::rate_limit(&state, &ctx)?;
+    crate::auth_routes::rate_limit(&state, &ctx).await?;
     let survey = by_token(&state, &token).await?;
     Ok(Json(public(&state, survey).await?))
 }
@@ -114,7 +114,7 @@ pub async fn answer_survey(
     Path(token): Path<String>,
     Json(body): Json<PortalRating>,
 ) -> ApiResult<Json<PublicSurvey>> {
-    crate::auth_routes::rate_limit(&state, &ctx)?;
+    crate::auth_routes::rate_limit(&state, &ctx).await?;
     let survey = by_token(&state, &token).await?;
     let mut tx = begin_scoped(&state.db, &OrgScope::System)
         .await
@@ -219,7 +219,7 @@ pub async fn get_nps(
     ClientInfo(ctx): ClientInfo,
     Path(token): Path<String>,
 ) -> ApiResult<Json<PublicNps>> {
-    crate::auth_routes::rate_limit(&state, &ctx)?;
+    crate::auth_routes::rate_limit(&state, &ctx).await?;
     let survey = nps_by_token(&state, &token).await?;
     Ok(Json(public_nps(&state, survey).await?))
 }
@@ -234,7 +234,7 @@ pub async fn answer_nps(
     Path(token): Path<String>,
     Json(body): Json<NpsAnswer>,
 ) -> ApiResult<Json<PublicNps>> {
-    crate::auth_routes::rate_limit(&state, &ctx)?;
+    crate::auth_routes::rate_limit(&state, &ctx).await?;
     let survey = nps_by_token(&state, &token).await?;
     let mut tx = begin_scoped(&state.db, &OrgScope::System)
         .await

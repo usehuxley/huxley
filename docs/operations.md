@@ -35,3 +35,59 @@ Each record is the same as in an export: the actor, action, organization, target
 A new stream sends what's recorded from then on, unless you tick the option to send the whole audit log. If the destination fails, the stream keeps its place, backs off (up to 10 minutes), and catches up when the destination is back. The settings page shows the error and how many records are waiting. Delivery is at least once, so deduplicate on `id` if your SIEM needs to.
 
 Streams go out through the same egress policy as workflow steps. A destination on a private network has to be allowed with `engine.egress.private_hosts` or `allow_private`.
+
+## Behind a CDN
+
+Huxley can sit behind Cloudflare, Azure Front Door, or a similar CDN or WAF, in front of Caddy (Compose) or your ingress (Kubernetes). Five things need setting.
+
+### 1. Lock the origin to the CDN
+
+Only the CDN should be able to reach Huxley. Otherwise anyone can go around it, and around its WAF, and claim any client address.
+
+- **Cloudflare:** run Cloudflare Tunnel, or turn on Authenticated Origin Pulls and allow only Cloudflare's IP ranges.
+- **Azure Front Door:** use Private Link to the origin, or allow only the `AzureFrontDoor.Backend` service tag and check that the `X-Azure-FDID` header carries your Front Door's ID.
+
+### 2. Tell Huxley where the client's address is
+
+Sign-in rate limits and the audit log record the client's address. Behind a CDN, the nearest proxy reports the CDN's edge server, so set one of these:
+
+- **The CDN's header (simplest):** `HUXLEY_HTTP__CLIENT_IP_HEADER` set to `CF-Connecting-IP` (Cloudflare), `X-Azure-ClientIP` (Front Door) or `True-Client-IP` (Akamai and others).
+  - **Compose:** set `HUXLEY_CLIENT_IP_HEADER` in `.env`.
+  - **Helm:** set `clientIp.header`.
+  - This works whatever your proxy does with `X-Forwarded-For`.
+- **Hop counting:** `HUXLEY_HTTP__PROXY_HOPS=2`, so the client is two entries from the right of `X-Forwarded-For` (CDN edge, then your proxy). In Helm, set `clientIp.proxyHops`. This only works if your proxy appends to the `X-Forwarded-For` it receives, rather than replacing it: Caddy needs `trusted_proxies`, and ingress-nginx needs `use-forwarded-headers`.
+
+Either way, `HUXLEY_HTTP__TRUST_FORWARDED_FOR` must be on (it is in Compose and Helm). Both rely on step 1: a header is only as trustworthy as the path it came through.
+
+### 3. Don't cache what's dynamic
+
+Bypass the cache for `/api/*`, `/hooks/*`, `/scim/*`, `/mcp*`, `/callbacks/*`, `/oauth/*` and `/.well-known/oauth-*`, and for every page of the staff app and portal: they're per user. Static assets under `/_app/immutable/` can be cached for as long as you like, since their names change with every build.
+
+### 4. Mind the timeouts
+
+| | Origin response timeout |
+|---|---|
+| Cloudflare | 100 seconds (Enterprise: configurable) |
+| Azure Front Door | 60 seconds by default, up to 240 |
+
+Live updates (server-sent events) send a keep-alive every 15 seconds, so they stay open. **Synchronous webhooks** (`response: sync`) can wait up to 5 minutes for a run. Behind a CDN, keep their `timeout` under its limit, or use `async`.
+
+Uploads go up to `storage.max_upload_mb` (25 MB by default), within both CDNs' limits.
+
+### 5. Let the WAF through where it must
+
+Managed WAF rules sometimes block legitimate traffic. Add exceptions as needed:
+
+- `/hooks/*`: webhook payloads from other systems, often JSON with HTML or SQL-looking text.
+- `/scim/*`: your identity provider.
+- `/mcp`: AI clients.
+- `/api/v1/integrations` imports: OpenAPI documents.
+
+Don't put the WAF's bot challenges on these paths: the callers are machines.
+
+The script runner gateway (port 8443, mutual TLS) is internal. Never route it through the CDN.
+
+## Rate limits
+
+Sign-in attempts (`HUXLEY_HTTP__LOGIN_ATTEMPTS_PER_MINUTE`, 20 by default), public form submissions and OAuth client requests are limited per client address each minute. The counters live in PostgreSQL, so every API replica enforces the same limit (ADR-090). Accounts are also locked after repeated failed sign-ins, whatever the address.
+

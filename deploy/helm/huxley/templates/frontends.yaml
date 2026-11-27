@@ -35,11 +35,16 @@ spec:
               value: {{ printf "http://%s-api:8080" (include "huxley.fullname" $) | quote }}
             - name: ORIGIN
               value: {{ printf "%s://%s" $.Values.scheme $host | quote }}
-            # Behind the ingress: the client address is the last hop it adds.
+            # Where the client's address comes from (clientIp).
+            {{- if $.Values.clientIp.header }}
+            - name: ADDRESS_HEADER
+              value: {{ $.Values.clientIp.header | quote }}
+            {{- else }}
             - name: ADDRESS_HEADER
               value: X-Forwarded-For
             - name: XFF_DEPTH
-              value: "1"
+              value: {{ $.Values.clientIp.proxyHops | quote }}
+            {{- end }}
             {{- with $values.bodySizeLimit }}
             - name: BODY_SIZE_LIMIT
               value: {{ . | quote }}

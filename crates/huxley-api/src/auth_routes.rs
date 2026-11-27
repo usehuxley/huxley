@@ -220,9 +220,12 @@ pub enum LoginResponse {
     },
 }
 
-pub(crate) fn rate_limit(state: &AppState, ctx: &huxley_core::RequestContext) -> ApiResult<()> {
+pub(crate) async fn rate_limit(
+    state: &AppState,
+    ctx: &huxley_core::RequestContext,
+) -> ApiResult<()> {
     if let Some(ip) = ctx.ip
-        && !state.login_limiter.check(ip)
+        && !state.login_limiter.check(ip).await
     {
         return Err(ApiError::new(
             StatusCode::TOO_MANY_REQUESTS,
@@ -270,7 +273,7 @@ pub async fn login(
     ClientInfo(ctx): ClientInfo,
     Json(body): Json<LoginRequest>,
 ) -> ApiResult<Response> {
-    rate_limit(&state, &ctx)?;
+    rate_limit(&state, &ctx).await?;
     let outcome = state
         .auth
         .login(&ctx, &body.email, &body.password)
@@ -346,7 +349,7 @@ pub async fn login_mfa(
     ClientInfo(ctx): ClientInfo,
     Json(body): Json<LoginMfaRequest>,
 ) -> ApiResult<Response> {
-    rate_limit(&state, &ctx)?;
+    rate_limit(&state, &ctx).await?;
     let factor = match (
         body.code.as_deref(),
         body.recovery_code.as_deref(),
@@ -387,7 +390,7 @@ pub async fn login_mfa_passkey_options(
     ClientInfo(ctx): ClientInfo,
     Json(body): Json<MfaChallengeRequest>,
 ) -> ApiResult<Response> {
-    rate_limit(&state, &ctx)?;
+    rate_limit(&state, &ctx).await?;
     let ceremony = state
         .auth
         .begin_mfa_passkey(&body.challenge)
@@ -410,7 +413,7 @@ pub async fn login_passkey_options(
     State(state): State<AppState>,
     ClientInfo(ctx): ClientInfo,
 ) -> ApiResult<Response> {
-    rate_limit(&state, &ctx)?;
+    rate_limit(&state, &ctx).await?;
     let ceremony = state
         .auth
         .begin_passkey_login()
@@ -436,7 +439,7 @@ pub async fn login_passkey(
     ClientInfo(ctx): ClientInfo,
     Json(body): Json<PasskeyAnswer>,
 ) -> ApiResult<Response> {
-    rate_limit(&state, &ctx)?;
+    rate_limit(&state, &ctx).await?;
     let success = state
         .auth
         .finish_passkey_login(&ctx, body.ceremony, &body.credential)
@@ -481,7 +484,7 @@ pub async fn request_password_reset(
     ClientInfo(ctx): ClientInfo,
     Json(body): Json<PasswordResetRequest>,
 ) -> ApiResult<StatusCode> {
-    rate_limit(&state, &ctx)?;
+    rate_limit(&state, &ctx).await?;
     state
         .auth
         .request_password_reset(&ctx, &body.email)
@@ -504,7 +507,7 @@ pub async fn confirm_password_reset(
     ClientInfo(ctx): ClientInfo,
     Json(body): Json<ConfirmPasswordResetRequest>,
 ) -> ApiResult<StatusCode> {
-    rate_limit(&state, &ctx)?;
+    rate_limit(&state, &ctx).await?;
     state
         .auth
         .reset_password(&ctx, &body.token, &body.new_password)
@@ -542,7 +545,7 @@ pub async fn verify_email(
     ClientInfo(ctx): ClientInfo,
     Json(body): Json<VerifyEmailRequest>,
 ) -> ApiResult<StatusCode> {
-    rate_limit(&state, &ctx)?;
+    rate_limit(&state, &ctx).await?;
     state
         .auth
         .verify_email(&ctx, &body.token)

@@ -40,7 +40,7 @@ Prerequisites: Rust 1.99 (installed automatically from `rust-toolchain.toml`), N
 
 ```sh
 just setup     # pnpm install + Playwright browser
-just dev-up    # Postgres, Valkey, Mailpit, OpenTelemetry + Grafana
+just dev-up    # Postgres, Mailpit, OpenTelemetry + Grafana
 
 just server    # API on :8080 (applies migrations on start)
 just bootstrap # once: root organization + first user (prints a password)

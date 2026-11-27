@@ -113,10 +113,21 @@ use crate::rate_limit::RateLimiter;
 #[derive(Debug, Clone, Deserialize)]
 #[serde(default)]
 pub struct ApiConfig {
-    /// Trust the rightmost `X-Forwarded-For` entry as the client address. Enable
-    /// only when every request reaches the API through a proxy you control
-    /// (Caddy and the web apps in the compose stack).
+    /// Take the client address from `X-Forwarded-For` (see `proxy_hops`).
+    /// Enable only when every request reaches the API through proxies you
+    /// control (Caddy and the web apps in the compose stack).
     pub trust_forwarded_for: bool,
+    /// How many proxies in front of Huxley append to `X-Forwarded-For`
+    /// (ADR-090): 1 for a reverse proxy or ingress alone, 2 with a CDN
+    /// (Cloudflare, Azure Front Door) in front of it. The client is that
+    /// many entries from the right. Needs `trust_forwarded_for`.
+    pub proxy_hops: usize,
+    /// A header your CDN sets to the client's address (`CF-Connecting-IP`,
+    /// `X-Azure-ClientIP`, `True-Client-IP`), used before
+    /// `X-Forwarded-For` when present. Only when the origin accepts traffic
+    /// from the CDN alone, or anyone could set it. Needs
+    /// `trust_forwarded_for`.
+    pub client_ip_header: Option<String>,
     /// Mark the session cookie `Secure`. Disable only for local HTTP development.
     pub cookie_secure: bool,
     /// Sign-in attempts allowed per client address per minute.
@@ -131,6 +142,8 @@ impl Default for ApiConfig {
     fn default() -> Self {
         Self {
             trust_forwarded_for: false,
+            proxy_hops: 1,
+            client_ip_header: None,
             cookie_secure: true,
             login_attempts_per_minute: 20,
             portal_public_url: None,
@@ -181,9 +194,12 @@ pub const OAUTH_REQUESTS_PER_MINUTE: u32 = 30;
 impl AppState {
     pub fn new(db: PgPool, auth: AuthService, crypto: Crypto, config: ApiConfig) -> Self {
         let login_limiter = Arc::new(RateLimiter::new(
+            db.clone(),
+            "login",
             config.login_attempts_per_minute,
             Duration::from_secs(60),
         ));
+        let (public_db, oauth_db) = (db.clone(), db.clone());
         // Workflows started from the API render callback URLs too.
         let engine = huxley_engine::Engine::new(db.clone(), crypto.clone())
             .with_public_url(auth.config().public_url.clone())
@@ -206,10 +222,14 @@ impl AppState {
             config: Arc::new(config),
             login_limiter,
             public_limiter: Arc::new(RateLimiter::new(
+                public_db,
+                "public_forms",
                 PUBLIC_FORMS_PER_MINUTE,
                 Duration::from_secs(60),
             )),
             oauth_limiter: Arc::new(RateLimiter::new(
+                oauth_db,
+                "oauth",
                 OAUTH_REQUESTS_PER_MINUTE,
                 Duration::from_secs(60),
             )),

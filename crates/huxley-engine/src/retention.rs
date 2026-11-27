@@ -193,6 +193,10 @@ impl Engine {
         .execute(&mut *tx)
         .await?
         .rows_affected();
+        // Rate limit counters past any window (ADR-090).
+        sqlx::query("DELETE FROM rate_limit_hits WHERE window_start < now() - interval '1 hour'")
+            .execute(&mut *tx)
+            .await?;
         sqlx::query(
             "UPDATE retention_settings SET last_swept_at = now(), last_sweep = $1 WHERE id",
         )
