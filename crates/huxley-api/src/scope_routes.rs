@@ -8,7 +8,7 @@ use axum::routing::{delete, get, post, put};
 use axum::{Json, Router};
 use huxley_authz::permissions;
 use huxley_db::OrgScope;
-use huxley_sales::estimate::{self, Assembled, Estimate, ItemInput, Risk, TaskInput};
+use huxley_sales::estimate::{self, Actuals, Assembled, Estimate, ItemInput, Risk, TaskInput};
 use huxley_sales::opportunities;
 use huxley_sales::scoping::{self, Scope, ScopeOfWork, SourceInput, Template};
 use serde::Deserialize;
@@ -49,6 +49,7 @@ pub fn routes() -> Router<AppState> {
         .route("/scopes/{id}/estimate/items", put(set_items))
         .route("/scopes/{id}/estimate/risk", put(set_risk))
         .route("/scopes/{id}/quote", post(assemble_quote))
+        .route("/scopes/{id}/actuals", get(scope_actuals))
 }
 
 async fn at_scope(
@@ -458,6 +459,24 @@ pub async fn assemble_quote(
     Ok(Json(
         scoped(&state, &OrgScope::System, async |tx| {
             estimate::assemble(tx, &ctx, id).await
+        })
+        .await?,
+    ))
+}
+
+/// The estimate against the hours logged on the project the deal became
+/// (null until its sales order starts one).
+#[utoipa::path(get, path = "/api/v1/scopes/{id}/actuals", operation_id = "scope_actuals", tag = "sales",
+    params(("id" = Uuid, Path)), responses((status = 200, body = Option<Actuals>)))]
+pub async fn scope_actuals(
+    State(state): State<AppState>,
+    authed: Authed,
+    Path(id): Path<Uuid>,
+) -> ApiResult<Json<Option<Actuals>>> {
+    at_scope(&state, &authed, id, permissions::SALES_READ).await?;
+    Ok(Json(
+        scoped(&state, &OrgScope::System, async |tx| {
+            estimate::actuals(tx, id).await
         })
         .await?,
     ))

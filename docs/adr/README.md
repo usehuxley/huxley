@@ -77,3 +77,4 @@ Decisions that shape Huxley. Add a new ADR by copying `0000-template.md` with th
 | [071](0071-forecasting.md) | The forecast is first-year value by forecast category against monthly or quarterly quotas, and sales reporting uses the analytics sources | Accepted |
 | [072](0072-presales-scoping.md) | Presales scoping drafts a templated Scope of Work with a workflow, keeps people's edits, and travels with the quote | Accepted |
 | [073](0073-presales-estimates.md) | Estimates are three-point hours by priced role plus a sized bill of materials, drafted by the scoping pack and assembled into the quote | Accepted |
+| [074](0074-scope-to-project.md) | A won deal's project is laid out from its scoped work breakdown, and the scope tracks estimate against actual | Accepted |

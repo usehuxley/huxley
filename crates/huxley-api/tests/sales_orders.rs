@@ -519,3 +519,121 @@ async fn a_cancelled_order_gives_back_what_it_set_aside() {
         .await;
     assert_eq!(status, StatusCode::FORBIDDEN);
 }
+
+#[tokio::test]
+async fn a_won_deal_starts_its_project_from_the_scoped_work_breakdown() {
+    let Some(s) = setup().await else { return };
+    let (status, opp) = s
+        .call(
+            &s.owner,
+            "POST",
+            "/api/v1/opportunities",
+            Some(json!({ "orgId": s.acme, "opportunity": { "name": unique("Rollout") } })),
+        )
+        .await;
+    assert_eq!(status, StatusCode::CREATED, "{opp}");
+    let opp = opp["id"].as_str().unwrap().to_owned();
+    let (_, scope) = s
+        .call(
+            &s.owner,
+            "POST",
+            &format!("/api/v1/opportunities/{opp}/scope"),
+            Some(json!({ "template": "project" })),
+        )
+        .await;
+    let scope = scope["id"].as_str().unwrap().to_owned();
+    s.ok(
+        &s.owner,
+        "PUT",
+        &format!("/api/v1/scopes/{scope}/estimate/tasks"),
+        json!([
+            { "phase": "Prepare", "name": "Survey the site", "hoursLow": "2", "hoursLikely": "2", "hoursHigh": "2" },
+            { "phase": "Build", "name": "Install", "hoursLow": "6", "hoursLikely": "10", "hoursHigh": "14", "milestone": true,
+              "deliverable": "Installed kit" }
+        ]),
+        StatusCode::OK,
+    )
+    .await;
+    let (_, none) = s
+        .call(
+            &s.owner,
+            "GET",
+            &format!("/api/v1/scopes/{scope}/actuals"),
+            None,
+        )
+        .await;
+    assert_eq!(none, Value::Null);
+
+    // Won: the quote on the opportunity is accepted, and its order starts the project.
+    let order = s.win(&opp).await;
+    let (status, started) = s.act(&order, "project", json!({})).await;
+    assert_eq!(status, StatusCode::OK, "{started}");
+    let project = started["projectId"].as_str().unwrap();
+    let (_, p) = s
+        .call(
+            &s.owner,
+            "GET",
+            &format!("/api/v1/projects/{project}"),
+            None,
+        )
+        .await;
+    let phases: Vec<&str> = p["phases"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|x| x["name"].as_str().unwrap())
+        .collect();
+    assert_eq!(phases, ["Prepare", "Build"]);
+    assert_eq!(p["tasks"].as_array().unwrap().len(), 2);
+    assert_eq!(p["milestones"][0]["name"], "Install");
+
+    // The scope compares its estimate with what's logged on the project.
+    let (_, actuals) = s
+        .call(
+            &s.owner,
+            "GET",
+            &format!("/api/v1/scopes/{scope}/actuals"),
+            None,
+        )
+        .await;
+    assert_eq!(actuals["projectId"], json!(project));
+    // 2 × 1.2 = 2.4 and 10 × 1.2 = 12 hours estimated; nothing logged yet.
+    assert_eq!(actuals["estimated"], "14.4");
+    assert_eq!(actuals["actual"], "0");
+}
+
+impl Setup {
+    /// Wins an opportunity: a quote on it, sent and accepted. Its order.
+    async fn win(&self, opp: &str) -> Value {
+        let q = self
+            .ok(
+                &self.owner,
+                "POST",
+                "/api/v1/quotes",
+                json!({ "orgId": self.acme, "quote": { "title": "Rollout", "opportunityId": opp,
+                "lines": [{ "name": "Install", "quantity": 1, "unitPrice": "2000" }] } }),
+                StatusCode::CREATED,
+            )
+            .await;
+        let id = q["id"].as_str().unwrap();
+        let sent = self
+            .ok(
+                &self.owner,
+                "POST",
+                &format!("/api/v1/quotes/{id}/send"),
+                json!({ "version": q["version"] }),
+                StatusCode::OK,
+            )
+            .await;
+        let accepted = self
+            .ok(
+                &self.owner,
+                "POST",
+                &format!("/api/v1/quotes/{id}/decision"),
+                json!({ "accept": true, "name": "Rosa Park", "version": sent["version"] }),
+                StatusCode::OK,
+            )
+            .await;
+        self.order(accepted["salesOrderId"].as_str().unwrap()).await
+    }
+}

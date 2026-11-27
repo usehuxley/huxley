@@ -44,6 +44,8 @@ Below the Scope of Work, the **Estimate** turns it into effort and things to buy
 - **Estimate with AI** drafts both with the Presales scoping pack. The work breakdown comes from the Scope of Work, grounded in your project templates and the hours actually logged on past projects' tasks. The materials are sized from the client's environment and matched to your catalog. Rows you edited are kept.
 - **Build the quote** makes a draft quote on the opportunity. It has labour lines per role (the hours with contingency, rounded up to the half hour, at the role's price), then the materials, and it carries the latest approved Scope of Work.
 
+Once the deal is won and its order starts the project, **Estimate against actual** on the scoping page compares each task's estimated hours with the hours logged on it. Past projects' actual hours also inform the next estimate.
+
 Before building, the estimate lists what to settle:
 
 - an unapproved scope, or open questions;
@@ -116,7 +118,7 @@ The order page shows each line's state: short, on order, ready, delivered, or wa
 - **Order what's short** drafts purchase orders, one per vendor, for what's still missing. The lines are bought for the order and set aside for it when they arrive. Products whose catalog vendor matches no vendor are listed so you can order them by hand. This takes `procurement:write`; see [Purchasing](purchasing.md).
 - **Deliver what's ready** uses what's set aside: it leaves stock and counts as delivered. Services and unstocked lines are delivered with the order.
 - **Make the agreement** hands the recurring lines to a new agreement for the client, as its billing lines. The agreement starts as a draft, unless you make it active. This takes `agreement:manage`.
-- **Start a project** creates the client's project, laid out from a project template if you pick one. This takes `project:manage`.
+- **Start a project** creates the client's project. With a project template picked, it's laid out from the template. Without one, it's laid out from the opportunity's scoped work breakdown: its phases, its tasks with their expected hours (with contingency), and its milestones. This takes `project:manage`.
 
 When every line is delivered, the order is **fulfilled**, and `sales_order.fulfilled` is raised for billing. **Close** it then. **Cancel order** works on an open order nothing has been delivered from. It gives back the stock set aside for it; purchase orders made for it stay as they are.
 

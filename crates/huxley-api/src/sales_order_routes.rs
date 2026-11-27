@@ -321,7 +321,8 @@ pub struct SalesOrderProjectRequest {
     pub manager_user_id: Option<Uuid>,
 }
 
-/// Starts the order's project for the client, laid out from a template if given.
+/// Starts the order's project for the client, laid out from a template if
+/// given, else from the opportunity's scoped work breakdown, if any.
 #[utoipa::path(post, path = "/api/v1/sales-orders/{id}/project", operation_id = "sales_order_project", tag = "sales",
     params(("id" = Uuid, Path)), request_body = SalesOrderProjectRequest,
     responses((status = 200, body = Order), (status = 409, body = ApiError, content_type = "application/problem+json")))]
@@ -346,7 +347,13 @@ pub async fn order_project(
             if o.project_id.is_some() {
                 return Err(huxley_sales::SalesError::Conflict("it already has a project".into()));
             }
+            // Without a template, the scope's work breakdown lays it out.
+            let structure = match (body.template_id, o.opportunity_id) {
+                (None, Some(opp)) => wbs_structure(tx, opp).await?,
+                _ => None,
+            };
             let input: huxley_servicedesk::projects::NewProject = serde_json::from_value(serde_json::json!({
+                "structure": structure,
                 "orgId": org,
                 "name": body.name.clone().filter(|n| !n.trim().is_empty()).unwrap_or_else(|| o.title.clone()),
                 "description": format!("From SO-{}.", o.number),
@@ -402,4 +409,50 @@ pub async fn cancel_order(
         })
         .await?,
     ))
+}
+
+/// A project layout from an opportunity's scoped work breakdown: phases in
+/// order, each task with its expected hours (with contingency), milestones
+/// from the tasks marked as such.
+async fn wbs_structure(
+    tx: &mut sqlx::PgConnection,
+    opportunity: Uuid,
+) -> Result<Option<serde_json::Value>, huxley_sales::SalesError> {
+    let Some(scope) = huxley_sales::scoping::of_opportunity(&mut *tx, opportunity).await? else {
+        return Ok(None);
+    };
+    let e = huxley_sales::estimate::get(tx, scope).await?;
+    if e.tasks.is_empty() {
+        return Ok(None);
+    }
+    let factor =
+        rust_decimal::Decimal::ONE + e.contingency_pct / rust_decimal::Decimal::ONE_HUNDRED;
+    let mut phases: Vec<(String, Vec<serde_json::Value>)> = Vec::new();
+    for (i, t) in e.tasks.iter().enumerate() {
+        let hours: f64 = (t.expected * factor)
+            .round_dp(1)
+            .to_string()
+            .parse()
+            .unwrap_or(0.0);
+        let task = serde_json::json!({
+            "key": format!("t{}", i + 1),
+            "title": t.name,
+            "description": t.deliverable.as_ref().map(|d| format!("Delivers: {d}")).unwrap_or_default(),
+            "estimateHours": hours,
+        });
+        match phases.iter_mut().find(|(p, _)| *p == t.phase) {
+            Some((_, tasks)) => tasks.push(task),
+            None => phases.push((t.phase.clone(), vec![task])),
+        }
+    }
+    let milestones: Vec<serde_json::Value> = e
+        .tasks
+        .iter()
+        .filter(|t| t.milestone)
+        .map(|t| serde_json::json!({ "name": t.name, "offsetDays": 0 }))
+        .collect();
+    Ok(Some(serde_json::json!({
+        "phases": phases.into_iter().map(|(name, tasks)| serde_json::json!({ "name": name, "tasks": tasks })).collect::<Vec<_>>(),
+        "milestones": milestones,
+    })))
 }

@@ -16183,7 +16183,7 @@
 		"/api/v1/sales-orders/{id}/project": {
 			"post": {
 				"tags": ["sales"],
-				"summary": "Starts the order's project for the client, laid out from a template if given.",
+				"summary": "Starts the order's project for the client, laid out from a template if\ngiven, else from the opportunity's scoped work breakdown, if any.",
 				"operationId": "sales_order_project",
 				"parameters": [
 					{
@@ -16768,6 +16768,42 @@
 							"application/json": {
 								"schema": {
 									"$ref": "#/components/schemas/Scope"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/scopes/{id}/actuals": {
+			"get": {
+				"tags": ["sales"],
+				"summary": "The estimate against the hours logged on the project the deal became\n(null until its sales order starts one).",
+				"operationId": "scope_actuals",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"oneOf": [
+										{
+											"$ref": "#/components/schemas/ScopeActuals"
+										},
+										{
+											"type": "null"
+										}
+									]
 								}
 							}
 						}
@@ -33682,6 +33718,17 @@
 						"type": "string",
 						"description": "`YYYY-MM-DD`."
 					},
+					"structure": {
+						"oneOf": [
+							{
+								"$ref": "#/components/schemas/Structure",
+								"description": "Lay it out from this (a template's shape) when there's no template:\na sales scope's work breakdown, say."
+							},
+							{
+								"type": "null"
+							}
+						]
+					},
 					"templateId": {
 						"type": ["string", "null"],
 						"format": "uuid"
@@ -40032,6 +40079,50 @@
 						"type": "array",
 						"items": {
 							"$ref": "#/components/schemas/ScopeVersion"
+						}
+					}
+				}
+			},
+			"ScopeActualTask": {
+				"type": "object",
+				"required": ["title", "actual"],
+				"properties": {
+					"actual": {
+						"type": "string"
+					},
+					"estimated": {
+						"type": ["string", "null"]
+					},
+					"title": {
+						"type": "string"
+					}
+				}
+			},
+			"ScopeActuals": {
+				"type": "object",
+				"description": "How the project the deal became is tracking against its estimate.",
+				"required": ["projectId", "projectName", "projectStatus", "tasks", "estimated", "actual"],
+				"properties": {
+					"actual": {
+						"type": "string"
+					},
+					"estimated": {
+						"type": "string"
+					},
+					"projectId": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"projectName": {
+						"type": "string"
+					},
+					"projectStatus": {
+						"type": "string"
+					},
+					"tasks": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/ScopeActualTask"
 						}
 					}
 				}

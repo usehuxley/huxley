@@ -958,3 +958,69 @@ pub async fn assemble(
         warnings: e.warnings,
     })
 }
+
+// ---- estimates against actuals ----
+
+/// How the project the deal became is tracking against its estimate.
+#[derive(Debug, Clone, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+#[schema(as = ScopeActuals)]
+pub struct Actuals {
+    pub project_id: Uuid,
+    pub project_name: String,
+    pub project_status: String,
+    pub tasks: Vec<ActualTask>,
+    #[serde(serialize_with = "crate::plain")]
+    #[schema(value_type = String)]
+    pub estimated: Decimal,
+    #[serde(serialize_with = "crate::plain")]
+    #[schema(value_type = String)]
+    pub actual: Decimal,
+}
+
+#[derive(Debug, Clone, Serialize, ToSchema, sqlx::FromRow)]
+#[serde(rename_all = "camelCase")]
+#[schema(as = ScopeActualTask)]
+pub struct ActualTask {
+    pub title: String,
+    #[serde(serialize_with = "crate::plain_opt")]
+    #[schema(value_type = Option<String>)]
+    pub estimated: Option<Decimal>,
+    #[serde(serialize_with = "crate::plain")]
+    #[schema(value_type = String)]
+    pub actual: Decimal,
+}
+
+/// The estimate against the hours logged, once the deal's sales order has
+/// started its project. Run in system scope.
+pub async fn actuals(conn: &mut PgConnection, scope: Uuid) -> SalesResult<Option<Actuals>> {
+    let project: Option<(Uuid, String, String)> = sqlx::query_as(
+        "SELECT p.id, p.name, p.status FROM sales_scopes sc \
+           JOIN sales_orders so ON so.opportunity_id = sc.opportunity_id \
+           JOIN prj_projects p ON p.id = so.project_id \
+          WHERE sc.id = $1 ORDER BY so.created_at DESC LIMIT 1",
+    )
+    .bind(scope)
+    .fetch_optional(&mut *conn)
+    .await?;
+    let Some((project_id, project_name, project_status)) = project else {
+        return Ok(None);
+    };
+    let tasks: Vec<ActualTask> = sqlx::query_as(
+        "SELECT t.title, pt.estimate_hours AS estimated, \
+                round(coalesce((SELECT sum(minutes) FROM sd_time_entries WHERE ticket_id = pt.ticket_id), 0) / 60.0, 2) AS actual \
+           FROM prj_tasks pt JOIN sd_tickets t ON t.id = pt.ticket_id \
+          WHERE pt.project_id = $1 ORDER BY pt.position, t.created_at",
+    )
+    .bind(project_id)
+    .fetch_all(conn)
+    .await?;
+    Ok(Some(Actuals {
+        project_id,
+        project_name,
+        project_status,
+        estimated: tasks.iter().filter_map(|t| t.estimated).sum(),
+        actual: tasks.iter().map(|t| t.actual).sum(),
+        tasks,
+    }))
+}

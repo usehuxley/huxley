@@ -324,6 +324,48 @@
 						</form>
 					</Card>
 				{/each}
+				{#if data.actuals}
+					<Card title="Estimate against actual">
+						<p class="text-sm text-fg-muted">
+							The project
+							<a
+								href={resolve('/(app)/projects/[id]', { id: data.actuals.projectId })}
+								class="text-accent hover:underline"
+							>
+								{data.actuals.projectName}
+							</a>
+							({data.actuals.projectStatus}): {Number(data.actuals.actual)} of
+							{Number(data.actuals.estimated)} estimated hours logged.
+						</p>
+						<table class="mt-3 w-full text-left text-sm" aria-label="Estimate against actual">
+							<thead class="text-xs font-bold text-fg-subtle">
+								<tr>
+									<th scope="col" class="py-1">Task</th>
+									<th scope="col" class="py-1 text-right">Estimated</th>
+									<th scope="col" class="py-1 text-right">Logged</th>
+								</tr>
+							</thead>
+							<tbody>
+								{#each data.actuals.tasks as t, i (i)}
+									<tr class="border-t border-border">
+										<td class="py-1">{t.title}</td>
+										<td class="py-1 text-right font-mono tabular-nums">
+											{t.estimated != null ? Number(t.estimated) : '—'}
+										</td>
+										<td
+											class="py-1 text-right font-mono tabular-nums {t.estimated != null &&
+											Number(t.actual) > Number(t.estimated)
+												? 'text-danger'
+												: ''}"
+										>
+											{Number(t.actual)}
+										</td>
+									</tr>
+								{/each}
+							</tbody>
+						</table>
+					</Card>
+				{/if}
 				{#if data.estimate}
 					<EstimatePanel
 						estimate={data.estimate}

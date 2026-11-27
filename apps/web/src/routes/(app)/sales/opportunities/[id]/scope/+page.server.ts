@@ -16,17 +16,19 @@ export const load: PageServerLoad = async (event) => {
 	]);
 	if (!opp.data) error(opp.response.status === 404 ? 404 : 503, 'Opportunity not found.');
 	const { user } = await event.parent();
-	const [estimate, catalog] = scope.data
+	const [estimate, catalog, actuals] = scope.data
 		? await Promise.all([
 				client.GET('/api/v1/scopes/{id}/estimate', { params: { path: { id: scope.data.id } } }),
-				client.GET('/api/v1/catalog/products', { params: { query: { active: true } } })
+				client.GET('/api/v1/catalog/products', { params: { query: { active: true } } }),
+				client.GET('/api/v1/scopes/{id}/actuals', { params: { path: { id: scope.data.id } } })
 			])
-		: [null, null];
+		: [null, null, null];
 	const all = catalog?.data ?? [];
 	return {
 		opportunity: { id: opp.data.id, name: opp.data.name, orgName: opp.data.orgName },
 		scope: scope.data ?? null,
 		estimate: estimate?.data ?? null,
+		actuals: actuals?.data ?? null,
 		roles: all
 			.filter((p) => p.kind === 'service' && p.unit.toLowerCase().startsWith('hour'))
 			.map((p) => ({ value: p.id, label: p.name })),
