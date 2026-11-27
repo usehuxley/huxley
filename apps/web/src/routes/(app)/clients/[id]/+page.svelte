@@ -37,7 +37,8 @@
 			kind: 'client',
 			href: `/clients/${data.org.id}`,
 			title: data.org.name,
-			subtitle: 'Client'
+			subtitle: 'Client',
+			color: tileColor(data.org.name)
 		});
 	});
 	let primarySite = $derived(data.sites.find((s) => s.isPrimary) ?? null);
@@ -73,6 +74,14 @@
 			: {}
 	);
 
+	// A steady colour per client, for its initial: dark enough for white text.
+	const TILES = ['#0f7c8a', '#5a4fb5', '#b4561e', '#2d6a3e', '#8a2f5b', '#2f6db3', '#6b5a1e'];
+	function tileColor(name: string) {
+		let h = 0;
+		for (const c of name) h = (h * 31 + c.charCodeAt(0)) >>> 0;
+		return TILES[h % TILES.length];
+	}
+
 	const saved =
 		(done: string, close?: () => void): SubmitFunction =>
 		() =>
@@ -93,11 +102,18 @@
 	<title>{data.org.name} · Clients · Huxley</title>
 </svelte:head>
 
-<div class="mx-auto flex max-w-5xl flex-col gap-6">
+<div class="mx-auto flex max-w-6xl flex-col gap-6">
 	<div>
 		<a href={resolve('/(app)/clients')} class="text-sm text-fg-muted hover:text-fg">← Clients</a>
-		<div class="mt-2 flex flex-wrap items-center gap-3">
-			<h1 class="text-2xl font-semibold text-fg">{data.org.name}</h1>
+		<div class="mt-3 flex flex-wrap items-center gap-3">
+			<span
+				class="grid size-12 flex-none place-items-center rounded-xl text-xl font-extrabold text-white"
+				style="background:{tileColor(data.org.name)}"
+				aria-hidden="true"
+			>
+				{data.org.name.trim().charAt(0).toUpperCase()}
+			</span>
+			<h1 class="text-[26px] font-extrabold tracking-tight text-fg">{data.org.name}</h1>
 			<Badge tone={statusTone(company.status)}>{label(STATUSES, company.status)}</Badge>
 			<Badge>{label(RELATIONSHIPS, company.relationship)}</Badge>
 			{#if data.user.grantedPermissions.includes('ai:use')}
