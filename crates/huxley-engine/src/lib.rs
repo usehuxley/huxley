@@ -108,6 +108,9 @@ pub struct Engine {
     /// The client portal's address (`http.portal_public_url`), for links in
     /// mail to contacts when their company has no portal domain.
     portal_url: Option<String>,
+    /// LISTEN connections, straight to PostgreSQL (`database.direct_url`);
+    /// the main pool when unset.
+    listen_db: Option<PgPool>,
 }
 
 impl Engine {
@@ -127,7 +130,15 @@ impl Engine {
             public_url: None,
             mailer: None,
             portal_url: None,
+            listen_db: None,
         }
+    }
+
+    /// Uses `pool` for LISTEN connections (ADR-089).
+    #[must_use]
+    pub fn with_listen_pool(mut self, pool: PgPool) -> Self {
+        self.listen_db = Some(pool);
+        self
     }
 
     /// The client portal's address for `org_id`'s contacts: its portal
@@ -222,7 +233,7 @@ impl Engine {
         let mut done = 0;
         while done < limit {
             let Some(job) =
-                worker::claim_one(self, worker, std::time::Duration::from_secs(60)).await?
+                worker::claim_one(self, worker, std::time::Duration::from_secs(60), &[]).await?
             else {
                 break;
             };

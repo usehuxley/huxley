@@ -56,6 +56,8 @@ async fn steps_per_second() {
         acquire_timeout_secs: 10,
         statement_timeout_ms: 10_000,
         read_url: None,
+        direct_url: None,
+        pooled: false,
     };
     let owner = huxley_db::connect_owner(&config).unwrap();
     huxley_db::migrate(&owner).await.unwrap();

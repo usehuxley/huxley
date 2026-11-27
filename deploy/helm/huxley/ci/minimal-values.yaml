@@ -1,0 +1,18 @@
+# The smallest working install: existing secrets and a shared volume.
+database:
+  host: postgres
+  existingSecret: huxley-db
+kek:
+  existingSecret: huxley-kek
+storage:
+  persistence:
+    enabled: true
+workers:
+  pools:
+    - name: all
+      kinds: []
+      concurrency: 8
+      replicas: 1
+      minReplicas: 1
+      maxReplicas: 1
+      resources: {}

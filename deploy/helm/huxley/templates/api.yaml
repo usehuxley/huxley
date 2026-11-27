@@ -1,0 +1,41 @@
+{{- $ports := list (dict "name" "http" "containerPort" 8080) -}}
+{{- $env := list -}}
+{{- if .Values.api.runnerGateway -}}
+{{- $ports = append $ports (dict "name" "runners" "containerPort" 8443) -}}
+{{- $env = append $env (dict "name" "HUXLEY_RUNNERS__BIND" "value" "0.0.0.0:8443") -}}
+{{- end -}}
+{{ include "huxley.serverDeployment" (dict "ctx" . "component" "api" "roles" "api" "replicas" .Values.api.replicas "autoscaled" .Values.api.autoscaling.enabled "resources" .Values.api.resources "ports" $ports "env" $env "probes" true "scheduling" .Values.api) }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "huxley.fullname" . }}-api
+  labels:
+    {{- include "huxley.labels" . | nindent 4 }}
+    app.kubernetes.io/component: api
+spec:
+  selector:
+    {{- include "huxley.selector" (dict "ctx" . "component" "api") | nindent 4 }}
+  ports:
+    - { name: http, port: 8080, targetPort: http }
+    {{- if .Values.api.runnerGateway }}
+    - { name: runners, port: 8443, targetPort: runners }
+    {{- end }}
+{{- if .Values.api.autoscaling.enabled }}
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: {{ include "huxley.fullname" . }}-api
+  labels: {{- include "huxley.labels" . | nindent 4 }}
+spec:
+  scaleTargetRef: { apiVersion: apps/v1, kind: Deployment, name: {{ include "huxley.fullname" . }}-api }
+  minReplicas: {{ .Values.api.autoscaling.minReplicas }}
+  maxReplicas: {{ .Values.api.autoscaling.maxReplicas }}
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target: { type: Utilization, averageUtilization: {{ .Values.api.autoscaling.targetCPU }} }
+{{- end }}
+{{ include "huxley.pdb" (dict "ctx" . "component" "api") }}

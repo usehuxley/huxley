@@ -1,0 +1,40 @@
+{{- if .Values.migrations.enabled }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "huxley.fullname" . }}-migrate
+  labels:
+    {{- include "huxley.labels" . | nindent 4 }}
+    app.kubernetes.io/component: migrate
+  annotations:
+    helm.sh/hook: pre-install,pre-upgrade
+    helm.sh/hook-weight: "0"
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+spec:
+  backoffLimit: 3
+  ttlSecondsAfterFinished: 3600
+  template:
+    metadata:
+      labels:
+        {{- include "huxley.selector" (dict "ctx" . "component" "migrate") | nindent 8 }}
+    spec:
+      restartPolicy: Never
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets: {{ toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext: {{ toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: migrate
+          image: {{ include "huxley.image" (dict "ctx" . "name" "huxley") }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          # Migrations go straight to PostgreSQL (database.direct_url when
+          # PgBouncer is in between).
+          args: ["migrate"]
+          securityContext: {{ toYaml .Values.securityContext | nindent 12 }}
+          env: {{ include "huxley.env" . | nindent 12 }}
+          resources: {{ toYaml .Values.migrations.resources | nindent 12 }}
+          volumeMounts:
+            - { name: tmp, mountPath: /tmp }
+      volumes:
+        - { name: tmp, emptyDir: {} }
+{{- end }}

@@ -1,0 +1,45 @@
+{{- if .Values.ingress.enabled }}
+{{- $name := include "huxley.fullname" . }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ $name }}
+  labels: {{- include "huxley.labels" . | nindent 4 }}
+  annotations:
+    {{- with .Values.ingress.annotations }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  {{- with .Values.ingress.className }}
+  ingressClassName: {{ . }}
+  {{- end }}
+  {{- with .Values.ingress.tls }}
+  tls: {{ toYaml . | nindent 4 }}
+  {{- end }}
+  rules:
+    - host: {{ .Values.host | quote }}
+      http:
+        paths:
+          # The API, webhooks, SCIM, MCP and its OAuth endpoints go to the
+          # Rust server (as the Compose Caddyfile does); the rest to the web
+          # app (/oauth/authorize is its consent page).
+          {{- range list "/api" "/hooks" "/scim" "/callbacks" "/mcp" "/.well-known/oauth-protected-resource" "/.well-known/oauth-authorization-server" }}
+          - path: {{ . }}
+            pathType: Prefix
+            backend: { service: { name: {{ $name }}-api, port: { name: http } } }
+          {{- end }}
+          {{- range list "/oauth/register" "/oauth/token" "/oauth/revoke" }}
+          - path: {{ . }}
+            pathType: Exact
+            backend: { service: { name: {{ $name }}-api, port: { name: http } } }
+          {{- end }}
+          - path: /
+            pathType: Prefix
+            backend: { service: { name: {{ $name }}-web, port: { name: http } } }
+    - host: {{ .Values.portalHost | quote }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend: { service: { name: {{ $name }}-portal, port: { name: http } } }
+{{- end }}

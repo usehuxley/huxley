@@ -45,6 +45,17 @@ pub struct DatabaseConfig {
     /// Without it they use the primary.
     #[serde(default)]
     pub read_url: Option<SecretString>,
+    /// Straight to PostgreSQL (`HUXLEY_DATABASE__DIRECT_URL`) when `url` goes
+    /// through a transaction pooler: LISTEN connections, migrations and admin
+    /// commands use it. Without it they use `url`.
+    #[serde(default)]
+    pub direct_url: Option<SecretString>,
+    /// `url` goes through a transaction-pooling `PgBouncer` (ADR-089). The
+    /// pooler must run `SET ROLE huxley_app` and the statement timeout on
+    /// each server connection (startup parameters don't pass through); the
+    /// server checks it does.
+    #[serde(default)]
+    pub pooled: bool,
 }
 
 fn default_max_connections() -> u32 {
@@ -76,24 +87,89 @@ fn options(config: &DatabaseConfig) -> Result<PgConnectOptions, DbError> {
         .expose_secret()
         .parse()
         .map_err(DbError::InvalidUrl)?;
+    if config.pooled {
+        // PgBouncer refuses unknown startup parameters; it sets the timeout.
+        return Ok(options);
+    }
     Ok(options
         .application_name("huxley")
         .options([("statement_timeout", config.statement_timeout_ms.to_string())]))
 }
 
+/// The configuration for connections straight to PostgreSQL (`direct_url`,
+/// or `url` when there's no pooler in between).
+fn direct(config: &DatabaseConfig) -> DatabaseConfig {
+    match &config.direct_url {
+        Some(url) => DatabaseConfig {
+            url: url.clone(),
+            direct_url: None,
+            pooled: false,
+            ..config.clone()
+        },
+        None => DatabaseConfig {
+            pooled: false,
+            ..config.clone()
+        },
+    }
+}
+
+/// A small pool straight to PostgreSQL for LISTEN connections, which a
+/// transaction pooler can't carry.
+pub fn connect_listen(config: &DatabaseConfig) -> Result<PgPool, DbError> {
+    connect(&DatabaseConfig {
+        max_connections: 4,
+        ..direct(config)
+    })
+}
+
+/// When `pooled`, checks that connections through the pooler run as the
+/// application role: if the pooler didn't switch role, they'd run as the
+/// login and skip row security.
+pub async fn check_pooled(pool: &PgPool, config: &DatabaseConfig) -> Result<(), String> {
+    if !config.pooled {
+        return Ok(());
+    }
+    let (user, timeout): (String, String) = sqlx::query_as(
+        "SELECT session_user::text || '/' || current_user::text, current_setting('statement_timeout')",
+    )
+    .fetch_one(pool)
+    .await
+    .map_err(|e| format!("can't reach the database through the pooler: {e}"))?;
+    if !user.ends_with("/huxley_app") {
+        return Err(format!(
+            "database.pooled is set but connections run as {user} (session/current): the pooler must run \
+             `SET ROLE huxley_app` on each server connection (PgBouncer: connect_query)"
+        ));
+    }
+    if timeout == "0" {
+        tracing::warn!(
+            "connections through the pooler have no statement timeout; set it in the pooler's connect_query"
+        );
+    }
+    Ok(())
+}
+
 /// Creates the runtime pool. Connections are opened lazily and run as
 /// [`APP_ROLE`], so they fail until migrations have created that role.
 pub fn connect(config: &DatabaseConfig) -> Result<PgPool, DbError> {
-    Ok(PgPoolOptions::new()
+    let options = PgPoolOptions::new()
         .max_connections(config.max_connections)
-        .acquire_timeout(Duration::from_secs(config.acquire_timeout_secs))
+        .acquire_timeout(Duration::from_secs(config.acquire_timeout_secs));
+    if config.pooled {
+        // Behind a transaction pooler the role is the pooler's job, on every
+        // server connection. Setting it here would leave it on whichever
+        // server connection this landed on, and hide a pooler that doesn't
+        // (see `check_pooled`).
+        return Ok(options.connect_lazy_with(self::options(config)?));
+    }
+    Ok(options
         .after_connect(|conn, _meta| {
             Box::pin(async move {
                 conn.execute(SET_APP_ROLE).await?;
                 Ok(())
             })
         })
-        .connect_lazy_with(options(config)?))
+        .connect_lazy_with(self::options(config)?))
 }
 
 /// The read replica's pool, when `read_url` is set: like [`connect`], for
@@ -105,18 +181,22 @@ pub fn connect_read(config: &DatabaseConfig) -> Result<Option<PgPool>, DbError> 
     let replica = DatabaseConfig {
         url: url.clone(),
         read_url: None,
+        direct_url: None,
+        pooled: false,
         ..config.clone()
     };
     connect(&replica).map(Some)
 }
 
-/// Creates a pool that connects as the configured user without switching role.
-/// It bypasses RLS: use it only for migrations and admin commands.
+/// Creates a pool that connects as the configured user without switching role,
+/// straight to PostgreSQL (`direct_url`). It bypasses RLS: use it only for
+/// migrations and admin commands.
 pub fn connect_owner(config: &DatabaseConfig) -> Result<PgPool, DbError> {
+    let config = direct(config);
     Ok(PgPoolOptions::new()
         .max_connections(2)
         .acquire_timeout(Duration::from_secs(config.acquire_timeout_secs))
-        .connect_lazy_with(options(config)?))
+        .connect_lazy_with(options(&config)?))
 }
 
 /// Applies all pending migrations. Requires an owner pool.

@@ -18,6 +18,8 @@ fn app() -> axum::Router {
         acquire_timeout_secs: 1,
         statement_timeout_ms: 1_000,
         read_url: None,
+        direct_url: None,
+        pooled: false,
     };
     let db = huxley_db::connect(&config).expect("lazy pool");
     let auth = AuthService::new(

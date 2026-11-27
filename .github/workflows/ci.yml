@@ -84,6 +84,33 @@ jobs:
         with:
           command: check
 
+  helm:
+    name: Helm chart
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      # helm comes with the runner image.
+      - name: Lint and validate the rendered manifests
+        run: |
+          set -euo pipefail
+          helm version --short
+          mkdir -p rendered
+          for values in deploy/helm/huxley/ci/*-values.yaml; do
+            helm lint deploy/helm/huxley -f "$values"
+            helm template ci deploy/helm/huxley -f "$values" > "rendered/$(basename "$values" .yaml).yaml"
+          done
+          # KEDA's CRDs come from the community schema catalogue.
+          docker run --rm -v "$PWD/rendered:/rendered:ro" ghcr.io/yannh/kubeconform:v0.7.0 \
+            -strict -summary -kubernetes-version 1.31.0 \
+            -schema-location default \
+            -schema-location 'https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json' \
+            /rendered
+          # Defaults alone must refuse to render (no database configured).
+          if helm template ci deploy/helm/huxley > /dev/null 2>&1; then
+            echo "::error::the chart rendered without database settings"
+            exit 1
+          fi
+
   js:
     name: Frontend (check, lint, tests, e2e)
     runs-on: ubuntu-24.04

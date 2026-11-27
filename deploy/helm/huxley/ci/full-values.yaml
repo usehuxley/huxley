@@ -1,0 +1,24 @@
+# Everything on, for linting and template checks (CI).
+database:
+  host: postgres.example.internal
+  password: example
+  readReplicaHost: postgres-replica.example.internal
+kek:
+  value: c2l4dGVlbi1ieXRlLWtleS1mb3ItY2ktb25seS0xMjM0NQ==
+storage:
+  url: s3://huxley-objects
+  optionsSecret: huxley-storage
+email:
+  smtpUrlSecret: huxley-smtp
+pgbouncer:
+  enabled: true
+keda:
+  enabled: true
+api:
+  autoscaling:
+    enabled: true
+ingress:
+  className: nginx
+  tls:
+    - secretName: huxley-tls
+      hosts: [huxley.example.com, portal.example.com]

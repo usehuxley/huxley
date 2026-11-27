@@ -134,6 +134,7 @@ async fn spawn_api(
     tasks: &mut Tasks,
     config: &Config,
     db: &huxley_db::sqlx::PgPool,
+    listen_db: &huxley_db::sqlx::PgPool,
     crypto: &huxley_crypto::Crypto,
     mailer: &huxley_email::Mailer,
     shutdown: &CancellationToken,
@@ -166,16 +167,16 @@ async fn spawn_api(
     spawn_runner_gateway(tasks, config, db, crypto, shutdown).await?;
     // Real-time notifications: one LISTEN connection per process.
     let broadcaster = state.notifications.clone();
-    let (listen_db, listen_stop) = (db.clone(), shutdown.clone());
+    let (pool, listen_stop) = (listen_db.clone(), shutdown.clone());
     tasks.spawn(async move {
-        broadcaster.run(listen_db, listen_stop).await;
+        broadcaster.run(pool, listen_stop).await;
         Ok(())
     });
     // Live run views: likewise, one LISTEN connection per process.
     let run_changes = state.run_changes.clone();
-    let (listen_db, listen_stop) = (db.clone(), shutdown.clone());
+    let (pool, listen_stop) = (listen_db.clone(), shutdown.clone());
     tasks.spawn(async move {
-        run_changes.run(listen_db, listen_stop).await;
+        run_changes.run(pool, listen_stop).await;
         Ok(())
     });
     let app =
@@ -187,6 +188,31 @@ async fn spawn_api(
             .await
             .context("api server failed")
     });
+    Ok(())
+}
+
+/// Settings that can only be checked once running: connections through a
+/// transaction pooler run as the application role (ADR-089), and worker
+/// pools name real job kinds.
+async fn check_startup(
+    config: &Config,
+    db: &huxley_db::sqlx::PgPool,
+    db_config: &huxley_db::DatabaseConfig,
+) -> anyhow::Result<()> {
+    huxley_db::check_pooled(db, db_config)
+        .await
+        .map_err(anyhow::Error::msg)?;
+    if let Some(bad) = config
+        .engine
+        .kinds
+        .iter()
+        .find(|k| !huxley_engine::queue::kind::ALL.contains(&k.as_str()))
+    {
+        anyhow::bail!(
+            "engine.kinds: {bad} isn't a job kind (use {})",
+            huxley_engine::queue::kind::ALL.join(", ")
+        );
+    }
     Ok(())
 }
 
@@ -207,6 +233,9 @@ pub async fn serve(config: Config, roles: BTreeSet<Role>) -> anyhow::Result<()> 
         tracing::warn!("email is configured but auth.public_url isn't: emails need it for links");
     }
     let db = huxley_db::connect(db_config)?;
+    check_startup(&config, &db, db_config).await?;
+    // LISTEN needs its own session: straight to PostgreSQL past any pooler.
+    let listen_db = huxley_db::connect_listen(db_config)?;
     let crypto = huxley_crypto::Crypto::new(db.clone(), config.crypto.key_ring()?);
     crypto
         .verify_keys()
@@ -224,7 +253,10 @@ pub async fn serve(config: Config, roles: BTreeSet<Role>) -> anyhow::Result<()> 
     for role in &roles {
         match role {
             Role::Api => {
-                spawn_api(&mut tasks, &config, &db, &crypto, &mailer, &shutdown).await?;
+                spawn_api(
+                    &mut tasks, &config, &db, &listen_db, &crypto, &mailer, &shutdown,
+                )
+                .await?;
             }
             Role::Worker => {
                 // Notification emails. Several workers may run: rows are
@@ -241,7 +273,8 @@ pub async fn serve(config: Config, roles: BTreeSet<Role>) -> anyhow::Result<()> 
                         .with_storage(storage.clone())
                         .with_public_url(config.auth.public_url.clone())
                         .with_portal_url(config.http.api.portal_public_url.clone())
-                        .with_mailer(mailer.clone());
+                        .with_mailer(mailer.clone())
+                        .with_listen_pool(listen_db.clone());
                 let worker_config = huxley_engine::WorkerConfig::from(&config.engine);
                 let stop = shutdown.clone();
                 let events = (engine.clone(), crypto.clone(), shutdown.clone());
