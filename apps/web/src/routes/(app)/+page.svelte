@@ -77,10 +77,13 @@
 				{greeting}, {firstName}
 			</h1>
 			<p class="mt-1 text-sm text-fg-subtle">
-				{today}{#if data.work}
-					· {needing.length === 0
-						? 'nothing urgent'
-						: `${needing.length} ticket${needing.length === 1 ? ' needs' : 's need'} you`}{/if}
+				{data.work
+					? `${today} · ${
+							needing.length === 0
+								? 'nothing urgent'
+								: `${needing.length} ticket${needing.length === 1 ? ' needs' : 's need'} you`
+						}`
+					: today}
 			</p>
 		</div>
 		{#if data.work}

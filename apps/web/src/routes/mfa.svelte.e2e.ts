@@ -62,6 +62,7 @@ test.describe('two-factor authentication', () => {
 
 		// Signing in now asks for a code. The setup code can't be replayed, so
 		// use the next step's.
+		await page.getByRole('button', { name: /^Your account/ }).click();
 		await page.getByRole('button', { name: 'Sign out' }).click();
 		await submitPassword(page, email);
 		await expect(page.getByLabel('Authentication code')).toBeVisible();
@@ -75,6 +76,7 @@ test.describe('two-factor authentication', () => {
 		);
 
 		// A recovery code works too.
+		await page.getByRole('button', { name: /^Your account/ }).click();
 		await page.getByRole('button', { name: 'Sign out' }).click();
 		await submitPassword(page, email);
 		await page.getByRole('button', { name: 'Use a recovery code' }).click();

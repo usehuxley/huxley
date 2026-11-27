@@ -143,10 +143,7 @@ test.describe('AI triage', () => {
 			await expect(page.getByRole('heading', { level: 1 })).toHaveText(
 				/^Good (morning|afternoon|evening), /
 			);
-			await page
-				.context()
-				.addCookies([{ name: 'hx_org', value: clientId, url: new URL(page.url()).origin }]);
-			await page.goto('/settings/triage');
+			await page.goto(`/settings/triage?org=${clientId}`);
 
 			// One more sample from the page.
 			await page.getByLabel('Ticket text').fill('I need a second monitor');

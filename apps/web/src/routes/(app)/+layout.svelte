@@ -14,15 +14,13 @@
 		Workflow
 	} from '@lucide/svelte';
 	import {
-		Button,
 		CommandPalette,
-		ThemeToggle,
+		UserMenu,
 		Workbench,
 		type Command,
 		type Space,
 		type SpaceMenuItem
 	} from '@usehuxley/ui';
-	import OrgSwitcher from '#lib/orgs/OrgSwitcher.svelte';
 	import { visibleSections } from '#lib/permissions.ts';
 	import type { LayoutProps } from './$types';
 
@@ -260,6 +258,43 @@
 	});
 </script>
 
+{#snippet bell(onRail: boolean)}
+	<a
+		href={resolve('/(app)/notifications')}
+		class="relative grid size-10 place-items-center rounded-lg {onRail
+			? 'text-rail-fg hover:bg-rail-raised hover:text-rail-fg-active'
+			: 'text-fg-muted hover:bg-surface-sunken hover:text-fg'} {page.url.pathname.startsWith(
+			'/notifications'
+		) && onRail
+			? 'bg-rail-raised text-rail-fg-active'
+			: ''}"
+		aria-label={unread > 0 ? `Notifications, ${unread} unread` : 'Notifications'}
+	>
+		<Bell size={19} />
+		{#if unread > 0}
+			<span
+				class="absolute top-1 right-1 min-w-4 rounded-full bg-danger px-1 text-center text-[10px] leading-4 font-semibold text-white"
+				data-testid={onRail ? 'unread-count' : 'unread-count-top'}
+			>
+				{unread > 99 ? '99+' : unread}
+			</span>
+		{/if}
+	</a>
+{/snippet}
+{#snippet account(side: 'right' | 'bottom')}
+	<UserMenu name={data.user.displayName} email={data.user.email} {side}>
+		{#snippet items(close)}
+			<a
+				href={resolve('/(app)/profile')}
+				onclick={close}
+				class="flex items-center gap-2 rounded-control px-2.5 py-2 font-medium text-fg hover:bg-surface-sunken"
+			>
+				<CircleUserRound size={15} /> Profile and security
+			</a>
+		{/snippet}
+	</UserMenu>
+{/snippet}
+
 <Workbench
 	brand="Huxley"
 	{spaces}
@@ -268,6 +303,7 @@
 	onSearch={() => (paletteOpen = true)}
 >
 	{#snippet railEnd()}
+		{@render bell(true)}
 		{#if canSeeSettings}
 			<a
 				href={resolve('/(app)/settings')}
@@ -282,42 +318,14 @@
 				<Settings size={19} />
 			</a>
 		{/if}
+		<div class="mt-1">{@render account('right')}</div>
 	{/snippet}
 	{#snippet topbar()}
-		<OrgSwitcher current={data.currentOrg} />
-		<span class="hidden sm:contents"><ThemeToggle /></span>
-		<a
-			href={resolve('/(app)/notifications')}
-			class="relative rounded-control p-2 text-fg-muted hover:bg-surface-sunken hover:text-fg"
-			aria-label={unread > 0 ? `Notifications, ${unread} unread` : 'Notifications'}
-		>
-			<Bell size={18} />
-			{#if unread > 0}
-				<span
-					class="absolute -top-0.5 -right-0.5 min-w-4 rounded-full bg-danger px-1 text-center text-[10px] leading-4 font-semibold text-white"
-					data-testid="unread-count"
-				>
-					{unread > 99 ? '99+' : unread}
-				</span>
-			{/if}
-		</a>
-		<a
-			href={resolve('/(app)/profile')}
-			class="hidden rounded-control px-2 py-1.5 text-sm font-medium text-fg-muted hover:bg-surface-sunken hover:text-fg sm:block"
-		>
-			{data.user.displayName}
-		</a>
-		<!-- On phones: the profile, which has Sign out, instead of the name. -->
-		<a
-			href={resolve('/(app)/profile')}
-			class="shrink-0 rounded-control p-2 text-fg-muted hover:bg-surface-sunken hover:text-fg sm:hidden"
-			aria-label={`Account: ${data.user.displayName}`}
-		>
-			<CircleUserRound size={18} />
-		</a>
-		<form method="POST" action="/logout" class="hidden sm:block">
-			<Button type="submit" variant="ghost" size="sm">Sign out</Button>
-		</form>
+		<!-- On phones the rail is a bottom bar: these live in the top bar instead. -->
+		<div class="flex items-center gap-1 md:hidden">
+			{@render bell(false)}
+			{@render account('bottom')}
+		</div>
 	{/snippet}
 	{@render children()}
 </Workbench>

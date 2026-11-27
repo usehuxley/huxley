@@ -13,10 +13,9 @@ const useOf = (form: FormData): Use =>
 const noun = (use: Use) => (use === 'chat' ? 'AI provider' : 'Embeddings provider');
 
 export const load: PageServerLoad = async (event) => {
-	const { currentOrg } = await event.parent();
 	const client = api(event);
 	const orgs = (await client.GET('/api/v1/orgs')).data ?? [];
-	const orgId = event.url.searchParams.get('org') ?? currentOrg?.id ?? orgs[0]?.id;
+	const orgId = event.url.searchParams.get('org') ?? orgs[0]?.id;
 	if (!orgId) error(404, 'No organization to set up.');
 	const [provider, embeddings, calls] = await Promise.all([
 		client.GET('/api/v1/ai/provider', { params: { query: { orgId } } }),

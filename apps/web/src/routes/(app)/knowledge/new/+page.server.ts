@@ -7,7 +7,7 @@ import { fieldErrors } from '#lib/tickets/server.ts';
 import type { Actions, PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async (event) => {
-	const { user, currentOrg } = await event.parent();
+	const { user } = await event.parent();
 	if (!user.grantedPermissions.includes('kb:write')) error(403, 'You may not write articles.');
 	const client = api(event);
 	const [orgs, categories] = await Promise.all([
@@ -18,10 +18,7 @@ export const load: PageServerLoad = async (event) => {
 	const list = orgs.data ?? [];
 	// The current organization first, then the root (the MSP), then the rest.
 	// ?org= (e.g. from a client's Documentation), else the current organization, else the root.
-	const first =
-		event.url.searchParams.get('org') ??
-		currentOrg?.id ??
-		list.find((o) => o.parentId === null)?.id;
+	const first = event.url.searchParams.get('org') ?? list.find((o) => o.parentId === null)?.id;
 	return {
 		orgs: [...list.filter((o) => o.id === first), ...list.filter((o) => o.id !== first)].map(
 			(o) => ({

@@ -102,9 +102,6 @@ test.describe('assistant context', () => {
 			await expect(page.getByRole('heading', { level: 1 })).toHaveText(
 				/^Good (morning|afternoon|evening), /
 			);
-			await page
-				.context()
-				.addCookies([{ name: 'hx_org', value: client.id, url: new URL(page.url()).origin }]);
 			await page.goto(`/tickets/${ticket.id}`);
 			await page.getByRole('link', { name: 'Ask the assistant' }).click();
 			await expect(page.getByRole('note')).toContainText(`Printer jams ${stamp}`);

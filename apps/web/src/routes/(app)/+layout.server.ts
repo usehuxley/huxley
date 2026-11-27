@@ -31,17 +31,7 @@ export const load: LayoutServerLoad = async (event) => {
 		.GET('/api/v1/notifications/unread-count')
 		.then((r) => r.data?.unreadCount ?? 0)
 		.catch(() => 0);
-	// The organization picked in the switcher, if it's still visible.
-	let currentOrg: { id: string; name: string } | null = null;
-	const orgId = event.cookies.get(ORG_COOKIE);
-	if (orgId) {
-		const org = await api(event)
-			.GET('/api/v1/orgs/{id}', { params: { path: { id: orgId } } })
-			.catch(() => null);
-		if (org?.data) currentOrg = { id: org.data.id, name: org.data.name };
-		else if (org?.response.status === 404 || org?.response.status === 400) {
-			event.cookies.delete(ORG_COOKIE, { path: '/' });
-		}
-	}
-	return { user: result.data, unreadNotifications: unread, currentOrg };
+	// The old organization switcher's cookie: no longer used.
+	if (event.cookies.get(ORG_COOKIE)) event.cookies.delete(ORG_COOKIE, { path: '/' });
+	return { user: result.data, unreadNotifications: unread };
 };

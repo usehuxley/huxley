@@ -5,7 +5,6 @@ import { problemMessage } from '#lib/server/problems.ts';
 import type { Actions, PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async (event) => {
-	const { currentOrg } = await event.parent();
 	const client = api(event);
 	const [list, orgs] = await Promise.all([
 		client.GET('/api/v1/assistant/conversations'),
@@ -16,14 +15,22 @@ export const load: PageServerLoad = async (event) => {
 	const ticketId = event.url.searchParams.get('ticket');
 	const clientId = event.url.searchParams.get('client');
 	let context: { kind: 'ticket' | 'client'; id: string; label: string } | null = null;
+	// Asked about a record: its organization's AI provider answers.
+	let recordOrg: string | null = null;
 	if (ticketId) {
 		const { data } = await client.GET('/api/v1/tickets/{id}', {
 			params: { path: { id: ticketId } }
 		});
-		if (data) context = { kind: 'ticket', id: data.id, label: `${data.reference} · ${data.title}` };
+		if (data) {
+			context = { kind: 'ticket', id: data.id, label: `${data.reference} · ${data.title}` };
+			recordOrg = data.orgId;
+		}
 	} else if (clientId) {
 		const { data } = await client.GET('/api/v1/orgs/{id}', { params: { path: { id: clientId } } });
-		if (data) context = { kind: 'client', id: data.id, label: data.name };
+		if (data) {
+			context = { kind: 'client', id: data.id, label: data.name };
+			recordOrg = data.id;
+		}
 	}
 	const conversation = id
 		? ((await client.GET('/api/v1/assistant/conversations/{id}', { params: { path: { id } } }))
@@ -33,7 +40,7 @@ export const load: PageServerLoad = async (event) => {
 		conversations: list.data ?? [],
 		conversation,
 		context,
-		orgId: currentOrg?.id ?? orgs.data?.[0]?.id ?? ''
+		orgId: recordOrg ?? event.url.searchParams.get('org') ?? orgs.data?.[0]?.id ?? ''
 	};
 };
 

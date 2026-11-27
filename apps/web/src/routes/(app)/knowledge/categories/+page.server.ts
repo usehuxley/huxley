@@ -6,7 +6,7 @@ import { fieldErrors } from '#lib/tickets/server.ts';
 import type { Actions, PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async (event) => {
-	const { user, currentOrg } = await event.parent();
+	const { user } = await event.parent();
 	if (!user.grantedPermissions.includes('kb:publish')) error(403, 'You may not keep categories.');
 	const client = api(event);
 	const [categories, orgs] = await Promise.all([
@@ -17,7 +17,7 @@ export const load: PageServerLoad = async (event) => {
 	if (!categories.data) error(503, 'Could not load the categories.');
 	const list = orgs.data ?? [];
 	const names = Object.fromEntries(list.map((o) => [o.id, o.name]));
-	const first = currentOrg?.id ?? list.find((o) => o.parentId === null)?.id;
+	const first = list.find((o) => o.parentId === null)?.id;
 	return {
 		categories: categories.data.map((c) => ({ ...c, orgName: names[c.orgId] ?? '' })),
 		orgs: [...list.filter((o) => o.id === first), ...list.filter((o) => o.id !== first)].map(

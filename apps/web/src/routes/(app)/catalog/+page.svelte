@@ -101,7 +101,7 @@
 
 	function edit(p: Product | null) {
 		editing = p;
-		orgId = p?.orgId ?? data.currentOrg?.id ?? data.orgs[0]?.id ?? '';
+		orgId = p?.orgId ?? data.orgs[0]?.id ?? '';
 		sku = p?.sku ?? '';
 		name = p?.name ?? '';
 		description = p?.description ?? '';

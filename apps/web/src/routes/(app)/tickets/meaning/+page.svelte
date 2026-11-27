@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { page } from '$app/state';
 	import { resolve } from '$app/paths';
 	import { Button, Card, EmptyState, Input } from '@usehuxley/ui';
 	import { Sparkles } from '@lucide/svelte';
@@ -25,6 +26,9 @@
 	</header>
 
 	<form method="GET" class="flex gap-2" role="search">
+		{#if page.url.searchParams.get('org')}
+			<input type="hidden" name="org" value={page.url.searchParams.get('org')} />
+		{/if}
 		<label for="meaning-q" class="sr-only">Describe what you're looking for</label>
 		<Input
 			id="meaning-q"

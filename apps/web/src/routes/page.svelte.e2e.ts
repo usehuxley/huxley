@@ -62,6 +62,8 @@ test.describe('with the API', () => {
 		await expect(page.getByRole('navigation', { name: 'Spaces' })).toBeVisible();
 		await expect(page.getByText('Operational')).toBeVisible();
 
+		await page.getByRole('button', { name: /^Your account/ }).click();
+
 		await page.getByRole('button', { name: 'Sign out' }).click();
 		await expect(page).toHaveURL(/\/login$/);
 
@@ -87,7 +89,8 @@ test.describe('with the API', () => {
 		expect(overflow).toBe(0);
 		await expect(page.getByRole('button', { name: 'Search or jump to…' })).toBeVisible();
 
-		await page.getByRole('link', { name: /^Account:/ }).click();
+		await page.getByRole('button', { name: /^Your account/ }).click();
+		await page.getByRole('link', { name: 'Profile and security' }).click();
 		await expect(page.getByRole('heading', { level: 1 })).toHaveText('Your profile');
 		await page.getByRole('button', { name: 'Sign out of Huxley' }).click();
 		await expect(page).toHaveURL(/\/login$/);
