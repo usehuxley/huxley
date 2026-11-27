@@ -1,4 +1,6 @@
-import { error } from '@sveltejs/kit';
+import { error, fail, redirect } from '@sveltejs/kit';
+import { formString } from '#lib/forms.ts';
+import { problemMessage } from '#lib/server/problems.ts';
 import { applyReading, deleteExpense, logExpense, uploadReceipt } from '#lib/expenses/server.ts';
 import { api } from '#lib/server/api.ts';
 import type { Actions, PageServerLoad } from './$types';
@@ -46,5 +48,19 @@ export const actions: Actions = {
 	logExpense: (event) => logExpense(event, 'org', null),
 	uploadReceipt: (event) => uploadReceipt(event),
 	applyReading: (event) => applyReading(event),
-	deleteExpense: (event) => deleteExpense(event)
+	deleteExpense: (event) => deleteExpense(event),
+	submitReport: async (event) => {
+		const form = await event.request.formData();
+		const entryIds = form.getAll('entryIds').map(String);
+		const {
+			data,
+			error: problem,
+			response
+		} = await api(event).POST('/api/v1/expense-reports', {
+			body: { title: formString(form, 'title') || null, entryIds }
+		});
+		if (!data)
+			return fail(response.status, { message: problemMessage(problem, 'Could not submit them.') });
+		redirect(303, `/expenses/reports/${data.id}`);
+	}
 };

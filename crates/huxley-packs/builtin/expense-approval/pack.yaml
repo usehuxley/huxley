@@ -1,0 +1,9 @@
+apiVersion: usehuxley.io/v1
+kind: Pack
+key: huxley/expense-approval
+name: Expense approval
+version: 1.0.0
+publisher: Huxley
+description: Sends each expense report to the person's team leads (administrators if they have none), who approve it, ask for changes or reject it; approved expenses are locked.
+contents:
+  workflows: [approve-expenses]

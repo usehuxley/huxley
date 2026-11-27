@@ -12,6 +12,7 @@ publish = false
 bytes.workspace = true
 huxley-core.workspace = true
 huxley-db.workspace = true
+huxley-notify.workspace = true
 huxley-storage.workspace = true
 rust_decimal.workspace = true
 serde.workspace = true

@@ -16,6 +16,7 @@
 pub mod categories;
 pub mod entries;
 pub mod rates;
+pub mod reports;
 
 use std::str::FromStr;
 

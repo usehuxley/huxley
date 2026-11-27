@@ -3125,6 +3125,66 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
+	'/api/v1/expense-reports': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/**
+		 * Expense reports, newest first: everyone's where you approve or read
+		 *     expenses; otherwise yours.
+		 */
+		get: operations['list_expense_reports'];
+		put?: never;
+		/**
+		 * Submits expenses of yours (drafts, or ones sent back) as a report, for
+		 *     approval. Raises `expense_report.submitted` (the Expense approval pack).
+		 */
+		post: operations['submit_expense_report'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/expense-reports/{id}': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get: operations['get_expense_report'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/expense-reports/{id}/comments': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get: operations['expense_report_comments'];
+		put?: never;
+		/**
+		 * Comments on a report or one of its expenses (whoever submitted it, and
+		 *     anyone @mentioned, are told).
+		 */
+		post: operations['add_expense_report_comment'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
 	'/api/v1/expenses': {
 		parameters: {
 			query?: never;
@@ -11996,6 +12056,11 @@ export interface components {
 			readingError?: string | null;
 			receiptName?: string | null;
 			reimbursable: boolean;
+			/**
+			 * Format: uuid
+			 * @description The report it was submitted in.
+			 */
+			reportId?: string | null;
 			/** Format: date */
 			spentOn: string;
 			status: components['schemas']['ExpenseStatus'];
@@ -12078,6 +12143,57 @@ export interface components {
 			 */
 			version?: number | null;
 		};
+		ExpenseReport: {
+			comment?: string | null;
+			/** Format: date-time */
+			decidedAt?: string | null;
+			decidedBy?: string | null;
+			entries: components['schemas']['Expense'][];
+			/** @description Policy flags across its entries, counted: `{ over_limit: 1, … }`. */
+			flags: {
+				[key: string]: number;
+			};
+			/** Format: uuid */
+			id: string;
+			/** Format: int64 */
+			number: number;
+			/** Format: uuid */
+			orgId: string;
+			reviewers: string[];
+			status: components['schemas']['ExpenseReportStatus'];
+			/** Format: date-time */
+			submittedAt: string;
+			title: string;
+			totals: components['schemas']['Total'][];
+			/** Format: uuid */
+			userId: string;
+			userName: string;
+			/** Format: int32 */
+			version: number;
+		};
+		ExpenseReportComment: {
+			authorName?: string | null;
+			body: string;
+			/** Format: date-time */
+			createdAt: string;
+			/** Format: uuid */
+			entryId?: string | null;
+			/** Format: uuid */
+			id: string;
+			mentions: string[];
+		};
+		ExpenseReportCommentInput: {
+			body: string;
+			/**
+			 * Format: uuid
+			 * @description One of its entries, or none for the whole report.
+			 */
+			entryId?: string | null;
+			/** @description People @mentioned: they're told. */
+			mentions?: string[];
+		};
+		/** @enum {string} */
+		ExpenseReportStatus: 'submitted' | 'approved' | 'changes_requested' | 'rejected' | 'reimbursed';
 		/** @enum {string} */
 		ExpenseStatus: 'draft' | 'submitted' | 'approved' | 'rejected' | 'reimbursed';
 		ExpiringCertification: {
@@ -15686,6 +15802,16 @@ export interface components {
 		ReportSharing: {
 			clientVisible: boolean;
 		};
+		/** @description A report, with the open approval for the caller to decide. */
+		ReportView: components['schemas']['ExpenseReport'] & {
+			/**
+			 * Format: uuid
+			 * @description The approval workflow's open approval, if any.
+			 */
+			approvalId?: string | null;
+			/** @description The caller is one of its approvers. */
+			canDecide: boolean;
+		};
 		Requirement: {
 			/**
 			 * Format: uuid
@@ -17091,6 +17217,11 @@ export interface components {
 			roles?: string[];
 			teams?: string[];
 		};
+		SubmitInput: {
+			/** @description The entries: your drafts, or ones sent back. */
+			entryIds: string[];
+			title?: string | null;
+		};
 		SubmitRequest: {
 			answers: {
 				[key: string]: unknown;
@@ -17874,6 +18005,13 @@ export interface components {
 			secrets?: string[];
 			/** @description The answer's field holding the token (matched ignoring case). */
 			tokenField: string;
+		};
+		/** @description A total in one currency. */
+		Total: {
+			amount: string;
+			currency: string;
+			/** @description What's to be paid back. */
+			reimbursable: string;
 		};
 		TotpEnrollmentView: {
 			/** @description `otpauth://` URI to show as a QR code. */
@@ -24833,6 +24971,118 @@ export interface operations {
 				};
 				content: {
 					'application/json': components['schemas']['ExpenseCategory'];
+				};
+			};
+		};
+	};
+	list_expense_reports: {
+		parameters: {
+			query?: {
+				userId?: string;
+				status?: components['schemas']['ExpenseReportStatus'];
+			};
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ExpenseReport'][];
+				};
+			};
+		};
+	};
+	submit_expense_report: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['SubmitInput'];
+			};
+		};
+		responses: {
+			201: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ExpenseReport'];
+				};
+			};
+		};
+	};
+	get_expense_report: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ReportView'];
+				};
+			};
+		};
+	};
+	expense_report_comments: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ExpenseReportComment'][];
+				};
+			};
+		};
+	};
+	add_expense_report_comment: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['ExpenseReportCommentInput'];
+			};
+		};
+		responses: {
+			201: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ExpenseReportComment'];
 				};
 			};
 		};

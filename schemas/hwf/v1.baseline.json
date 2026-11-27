@@ -457,6 +457,21 @@
       ],
       "type": "object"
     },
+    "ExpenseReportDecide": {
+      "additionalProperties": false,
+      "description": "An expense report's decision (`core.expense.report_decide`): `report_id`\n(from `expense_report.submitted`), `decision` (`approved`,\n`changes_requested` or `rejected`, or a boolean), `by` and a `comment`.\nApproved locks its expenses; otherwise they go back to the person to\nchange and submit again. Raises `expense_report.approved`,\n`.changes_requested` or `.rejected` and tells the person. Output: the\nreport.",
+      "properties": {
+        "by": true,
+        "comment": true,
+        "decision": true,
+        "report_id": true
+      },
+      "required": [
+        "report_id",
+        "decision"
+      ],
+      "type": "object"
+    },
     "HealthCompute": {
       "additionalProperties": false,
       "description": "Client health for today (`core.health.compute`): each client company in\nthe run's organization and below gets a score, 0 to 100, from weighted\nfactors (satisfaction, NPS, SLA misses, reopened tickets, ticket volume,\nrenewals, sentiment), with the reasons; those that dropped 10 points or\nmore from a week before emit `client.health_declining`, and those whose\nmessages turned negative emit `client.sentiment_declining` (at most\nweekly). It takes nothing. Output: `{ companies, declining: [{ org_id,\nname, score, previous, reasons }], sentiment_falling: [{ org_id, name,\nrecent, previous, explanations }] }`.",
@@ -4598,6 +4613,69 @@
             },
             "with": {
               "$ref": "#/$defs/ExpenseReadReceipt"
+            }
+          },
+          "required": [
+            "type",
+            "id",
+            "with"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Record an expense report's decision (the `expenses` module).",
+          "properties": {
+            "continue_on_error": {
+              "description": "Record the error as the step's output and carry on.",
+              "type": "boolean"
+            },
+            "description": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "id": {
+              "description": "Unique in the workflow: lowercase letters, digits, underscores.\nOther steps read this step's output as `steps.<id>.output`.",
+              "type": "string"
+            },
+            "if": {
+              "description": "Skip the step unless this expression is true.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "name": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "retry": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/RetryPolicy"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "timeout": {
+              "description": "Fail the attempt after this long, e.g. `30s`.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "type": {
+              "const": "core.expense.report_decide",
+              "type": "string"
+            },
+            "with": {
+              "$ref": "#/$defs/ExpenseReportDecide"
             }
           },
           "required": [

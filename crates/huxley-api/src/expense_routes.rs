@@ -16,6 +16,7 @@ use huxley_db::{OrgScope, begin_scoped};
 use huxley_expenses::categories::{self, Category, CategoryInput};
 use huxley_expenses::entries::{self, Expense, ExpenseInput, Filter};
 use huxley_expenses::rates::{self, MileageRate, MileageRateInput};
+use huxley_expenses::reports::{self, Comment, CommentInput, Report, ReportFilter, SubmitInput};
 use huxley_expenses::{ExpenseError, MODULE};
 use uuid::Uuid;
 
@@ -37,6 +38,12 @@ pub fn routes(upload_limit: usize) -> Router<AppState> {
         .route(
             "/expenses/{id}/apply-reading",
             axum::routing::post(apply_reading),
+        )
+        .route("/expense-reports", get(list_reports).post(submit_report))
+        .route("/expense-reports/{id}", get(get_report))
+        .route(
+            "/expense-reports/{id}/comments",
+            get(report_comments).post(add_report_comment),
         )
         .route(
             "/expenses/{id}/receipt",
@@ -438,4 +445,144 @@ pub async fn apply_reading(
         })
         .await?,
     ))
+}
+
+/// A report the caller may see: theirs, or with `expense:approve` or
+/// `expense:read` at its organization.
+async fn report_visible(state: &AppState, authed: &Authed, id: Uuid) -> ApiResult<()> {
+    let (user, org) = scoped(state, &OrgScope::System, async |tx| {
+        reports::owner_of(tx, id).await
+    })
+    .await?
+    .ok_or_else(ApiError::not_found)?;
+    require_module_at(state, MODULE, org).await?;
+    if user == me(authed) {
+        return Ok(());
+    }
+    if authed
+        .require_at(state, permissions::EXPENSE_APPROVE, org)
+        .await
+        .is_ok()
+    {
+        return Ok(());
+    }
+    authed
+        .require_at(state, permissions::EXPENSE_READ, org)
+        .await
+        .map_err(|_| ApiError::not_found())
+}
+
+/// Expense reports, newest first: everyone's where you approve or read
+/// expenses; otherwise yours.
+#[utoipa::path(get, path = "/api/v1/expense-reports", operation_id = "list_expense_reports", tag = "expenses",
+    params(ReportFilter), responses((status = 200, body = Vec<Report>)))]
+pub async fn list_reports(
+    State(state): State<AppState>,
+    authed: Authed,
+    Query(mut filter): Query<ReportFilter>,
+) -> ApiResult<Json<Vec<Report>>> {
+    require_module(&state, MODULE).await?;
+    let mut scope = authed
+        .module_scope(&state, permissions::EXPENSE_APPROVE, MODULE)
+        .await?;
+    if matches!(&scope, OrgScope::Orgs(o) if o.is_empty()) {
+        scope = authed
+            .module_scope(&state, permissions::EXPENSE_READ, MODULE)
+            .await?;
+    }
+    if matches!(&scope, OrgScope::Orgs(o) if o.is_empty()) {
+        filter.user_id = Some(me(&authed));
+        scope = OrgScope::System;
+    }
+    Ok(Json(
+        scoped(&state, &scope, async |tx| reports::list(tx, &filter).await).await?,
+    ))
+}
+
+/// Submits expenses of yours (drafts, or ones sent back) as a report, for
+/// approval. Raises `expense_report.submitted` (the Expense approval pack).
+#[utoipa::path(post, path = "/api/v1/expense-reports", operation_id = "submit_expense_report", tag = "expenses",
+    request_body = SubmitInput, responses((status = 201, body = Report)))]
+pub async fn submit_report(
+    State(state): State<AppState>,
+    authed: Authed,
+    Json(body): Json<SubmitInput>,
+) -> ApiResult<(StatusCode, Json<Report>)> {
+    require_module(&state, MODULE).await?;
+    let ctx = authed.user.ctx.clone();
+    let user = me(&authed);
+    let r = scoped(&state, &OrgScope::System, async |tx| {
+        reports::submit(tx, &ctx, user, &body).await
+    })
+    .await?;
+    Ok((StatusCode::CREATED, Json(r)))
+}
+
+/// A report, with the open approval for the caller to decide.
+#[derive(Debug, serde::Serialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ReportView {
+    #[serde(flatten)]
+    pub report: Report,
+    /// The approval workflow's open approval, if any.
+    pub approval_id: Option<Uuid>,
+    /// The caller is one of its approvers.
+    pub can_decide: bool,
+}
+
+#[utoipa::path(get, path = "/api/v1/expense-reports/{id}", operation_id = "get_expense_report", tag = "expenses",
+    params(("id" = Uuid, Path)), responses((status = 200, body = ReportView)))]
+pub async fn get_report(
+    State(state): State<AppState>,
+    authed: Authed,
+    Path(id): Path<Uuid>,
+) -> ApiResult<Json<ReportView>> {
+    report_visible(&state, &authed, id).await?;
+    let user = me(&authed);
+    let (report, open) = scoped(&state, &OrgScope::System, async |tx| {
+        let r = reports::get(tx, id).await?;
+        let open = reports::open_approval(tx, id, user).await?;
+        Ok((r, open))
+    })
+    .await?;
+    Ok(Json(ReportView {
+        report,
+        approval_id: open.map(|(a, _)| a),
+        can_decide: open.is_some_and(|(_, me)| me),
+    }))
+}
+
+#[utoipa::path(get, path = "/api/v1/expense-reports/{id}/comments", operation_id = "expense_report_comments", tag = "expenses",
+    params(("id" = Uuid, Path)), responses((status = 200, body = Vec<Comment>)))]
+pub async fn report_comments(
+    State(state): State<AppState>,
+    authed: Authed,
+    Path(id): Path<Uuid>,
+) -> ApiResult<Json<Vec<Comment>>> {
+    report_visible(&state, &authed, id).await?;
+    Ok(Json(
+        scoped(&state, &OrgScope::System, async |tx| {
+            reports::comments(tx, id).await
+        })
+        .await?,
+    ))
+}
+
+/// Comments on a report or one of its expenses (whoever submitted it, and
+/// anyone @mentioned, are told).
+#[utoipa::path(post, path = "/api/v1/expense-reports/{id}/comments", operation_id = "add_expense_report_comment",
+    tag = "expenses", params(("id" = Uuid, Path)), request_body = CommentInput, responses((status = 201, body = Comment)))]
+pub async fn add_report_comment(
+    State(state): State<AppState>,
+    authed: Authed,
+    Path(id): Path<Uuid>,
+    Json(body): Json<CommentInput>,
+) -> ApiResult<(StatusCode, Json<Comment>)> {
+    report_visible(&state, &authed, id).await?;
+    let ctx = authed.user.ctx.clone();
+    let c = scoped(&state, &OrgScope::System, async |tx| {
+        reports::comment(tx, &ctx, id, &body).await
+    })
+    .await?;
+    Ok((StatusCode::CREATED, Json(c)))
 }

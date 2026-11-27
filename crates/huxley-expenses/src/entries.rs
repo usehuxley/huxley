@@ -84,6 +84,8 @@ pub struct Expense {
     pub reading: Option<Reading>,
     pub reading_error: Option<String>,
     pub status: Status,
+    /// The report it was submitted in.
+    pub report_id: Option<Uuid>,
     /// Policy flags: `over_limit`, `no_receipt`.
     #[sqlx(skip)]
     pub flags: Vec<String>,
@@ -116,7 +118,7 @@ const SELECT: &str = "SELECT e.id, e.org_id, o.name AS org_name, e.user_id, u.di
         CASE WHEN e.billable THEN round(e.amount * (1 + e.markup_pct / 100), 2) ELSE 0 END AS bill_amount, \
         e.reimbursable, e.ticket_id, (t.number_prefix || '-' || t.number) AS ticket_ref, \
         e.project_id, p.name AS project_name, e.phase_id, ph.name AS phase_name, \
-        (e.receipt_key IS NOT NULL) AS has_receipt, e.receipt_name, e.reading, e.reading_error, e.status, e.version, e.created_at, \
+        (e.receipt_key IS NOT NULL) AS has_receipt, e.receipt_name, e.reading, e.reading_error, e.status, e.report_id, e.version, e.created_at, \
         c.limit_amount, c.receipt_required \
    FROM exp_entries e JOIN organizations o ON o.id = e.org_id JOIN users u ON u.id = e.user_id \
    JOIN exp_categories c ON c.id = e.category_id LEFT JOIN sd_tickets t ON t.id = e.ticket_id \
@@ -170,6 +172,17 @@ pub async fn list(conn: &mut PgConnection, f: &Filter) -> ExpenseResult<Vec<Expe
     .bind(f.status)
     .bind(f.from)
     .bind(f.to)
+    .fetch_all(conn)
+    .await?;
+    Ok(rows.into_iter().map(Expense::flagged).collect())
+}
+
+/// A report's entries, by day.
+pub async fn in_report(conn: &mut PgConnection, report: Uuid) -> ExpenseResult<Vec<Expense>> {
+    let rows: Vec<Expense> = sqlx::query_as(sqlx::AssertSqlSafe(format!(
+        "{SELECT} WHERE e.report_id = $1 ORDER BY e.spent_on, e.created_at"
+    )))
+    .bind(report)
     .fetch_all(conn)
     .await?;
     Ok(rows.into_iter().map(Expense::flagged).collect())
