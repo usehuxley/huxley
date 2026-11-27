@@ -28,6 +28,7 @@ pub mod dashboard_routes;
 mod dataset_routes;
 pub mod desk_routes;
 pub mod entity_routes;
+pub mod expense_routes;
 mod folder_routes;
 mod form_routes;
 pub mod health;

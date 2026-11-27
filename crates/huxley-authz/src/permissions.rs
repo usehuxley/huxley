@@ -118,6 +118,10 @@ permissions! {
     BILLING_APPROVE = "billing:approve", Org, "Approve invoices for sending and syncing";
     BILLING_CONFIGURE = "billing:configure", Org, "Keep billing settings (the default hourly rate, currency and payment terms) and, at the top, the invoice review rules";
     BILLING_OVERRIDE = "billing:review:override", Org, "Approve an invoice that needs review without an approved review (it's recorded)";
+    EXPENSE_WRITE = "expense:write", Org, "Log your own expenses and mileage, with receipts, against tickets, projects and clients";
+    EXPENSE_READ = "expense:read", Org, "View everyone's expenses";
+    EXPENSE_APPROVE = "expense:approve", Org, "Approve and reject expense reports";
+    EXPENSE_CONFIGURE = "expense:configure", Instance, "Keep expense categories, limits and mileage rates";
 }
 
 /// Wildcard granting every permission.

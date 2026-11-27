@@ -86,6 +86,12 @@ export const SETTINGS_SECTIONS = [
 		module: 'inventory'
 	},
 	{
+		key: 'expenses',
+		label: 'Expenses',
+		permission: 'expense:configure',
+		module: 'expenses'
+	},
+	{
 		key: 'billing',
 		label: 'Billing',
 		permission: 'billing:configure',

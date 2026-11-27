@@ -151,6 +151,9 @@ jobs:
       HUXLEY_AUTH__PUBLIC_URL: http://localhost:4173
       # The assistant streaming test runs a mock AI provider on 127.0.0.1.
       HUXLEY_ENGINE__EGRESS__PRIVATE_HOSTS: "[127.0.0.1]"
+      # The suite queues many workflow runs at once (approvals, reviews,
+      # syncs): more workers keep their steps from waiting behind each other.
+      HUXLEY_ENGINE__CONCURRENCY: "32"
       # Real SMTP to Mailpit; the email e2e tests read it through its API.
       HUXLEY_EMAIL__SMTP_URL: smtp://127.0.0.1:1025
       HUXLEY_EMAIL__FROM: Huxley <huxley@example.com>

@@ -3093,6 +3093,96 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
+	'/api/v1/expense-categories': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get: operations['list_expense_categories'];
+		put?: never;
+		post: operations['create_expense_category'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/expense-categories/{id}': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put: operations['update_expense_category'];
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/expenses': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/**
+		 * Expenses, newest first: everyone's where you have `expense:read`;
+		 *     otherwise just yours.
+		 */
+		get: operations['list_expenses'];
+		put?: never;
+		/**
+		 * Logs an expense (or mileage) of yours: against a ticket, a project (and
+		 *     phase), a client, or your MSP.
+		 */
+		post: operations['create_expense'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/expenses/{id}': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get: operations['get_expense'];
+		/** Changes a draft of yours (send the version you read). */
+		put: operations['update_expense'];
+		post?: never;
+		delete: operations['delete_expense'];
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/expenses/{id}/receipt': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get: operations['get_expense_receipt'];
+		/** Keeps the receipt (multipart field `file`: a photo or a PDF) on a draft of yours. */
+		put: operations['put_expense_receipt'];
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
 	'/api/v1/forms': {
 		parameters: {
 			query?: never;
@@ -4326,6 +4416,39 @@ export interface paths {
 		 */
 		post: operations['post_message'];
 		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/mileage-rates': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get: operations['list_mileage_rates'];
+		/** Sets the mileage rate from a day (replacing one set for that day). */
+		put: operations['set_mileage_rate'];
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/mileage-rates/{id}': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		post?: never;
+		delete: operations['delete_mileage_rate'];
 		options?: never;
 		head?: never;
 		patch?: never;
@@ -11818,6 +11941,123 @@ export interface components {
 			key: string;
 			label: string;
 		};
+		Expense: {
+			/** @description What was paid, tax included. */
+			amount: string;
+			/** @description What the client is charged: the amount marked up (when billable). */
+			billAmount: string;
+			billable: boolean;
+			/** Format: uuid */
+			categoryId: string;
+			categoryName: string;
+			/** Format: date-time */
+			createdAt: string;
+			currency: string;
+			description: string;
+			distance?: string | null;
+			/** @description Policy flags: `over_limit`, `no_receipt`. */
+			flags: string[];
+			hasReceipt: boolean;
+			/** Format: uuid */
+			id: string;
+			kind: components['schemas']['ExpenseCategoryKind'];
+			markupPct: string;
+			/** Format: uuid */
+			orgId: string;
+			orgName: string;
+			/** Format: uuid */
+			phaseId?: string | null;
+			phaseName?: string | null;
+			/** Format: uuid */
+			projectId?: string | null;
+			projectName?: string | null;
+			rate?: string | null;
+			receiptName?: string | null;
+			reimbursable: boolean;
+			/** Format: date */
+			spentOn: string;
+			status: components['schemas']['ExpenseStatus'];
+			tax: string;
+			/** Format: uuid */
+			ticketId?: string | null;
+			ticketRef?: string | null;
+			unit?: string | null;
+			/** Format: uuid */
+			userId: string;
+			userName: string;
+			vendor?: string | null;
+			/** Format: int32 */
+			version: number;
+		};
+		ExpenseCategory: {
+			active: boolean;
+			billable: boolean;
+			/** Format: uuid */
+			id: string;
+			kind: components['schemas']['ExpenseCategoryKind'];
+			/** @description Entries over this are flagged. */
+			limitAmount?: string | null;
+			markupPct: string;
+			name: string;
+			receiptRequired: boolean;
+			reimbursable: boolean;
+		};
+		ExpenseCategoryInput: {
+			active?: boolean;
+			billable?: boolean;
+			kind?: components['schemas']['ExpenseCategoryKind'];
+			limitAmount?: string | null;
+			markupPct?: string | null;
+			name: string;
+			receiptRequired?: boolean;
+			reimbursable?: boolean;
+		};
+		/** @enum {string} */
+		ExpenseCategoryKind: 'expense' | 'mileage';
+		ExpenseInput: {
+			/** @description What was paid, tax included (not for mileage). */
+			amount?: string | null;
+			/** @description Default: the category's. */
+			billable?: boolean | null;
+			/** Format: uuid */
+			categoryId: string;
+			currency?: string | null;
+			description: string;
+			/** @description Mileage: the distance. */
+			distance?: string | null;
+			markupPct?: string | null;
+			/**
+			 * Format: uuid
+			 * @description …or a client, or the provider (internal).
+			 */
+			orgId?: string | null;
+			/** Format: uuid */
+			phaseId?: string | null;
+			/**
+			 * Format: uuid
+			 * @description …or a project (and optionally one of its phases)…
+			 */
+			projectId?: string | null;
+			reimbursable?: boolean | null;
+			/** Format: date */
+			spentOn: string;
+			tax?: string | null;
+			/**
+			 * Format: uuid
+			 * @description Against a ticket (its client)…
+			 */
+			ticketId?: string | null;
+			/** @description Mileage: `mi` (the default) or `km`. */
+			unit?: string | null;
+			vendor?: string | null;
+			/**
+			 * Format: int32
+			 * @description Updates: the version read.
+			 */
+			version?: number | null;
+		};
+		/** @enum {string} */
+		ExpenseStatus: 'draft' | 'submitted' | 'approved' | 'rejected' | 'reimbursed';
 		ExpiringCertification: {
 			certification: string;
 			expiresOn: string;
@@ -13265,6 +13505,23 @@ export interface components {
 		 * @enum {string}
 		 */
 		MfaTrust: 'never' | 'amr' | 'always';
+		MileageRate: {
+			currency: string;
+			/** Format: date */
+			effectiveFrom: string;
+			/** Format: uuid */
+			id: string;
+			rate: string;
+			/** @description `mi` or `km`. */
+			unit: string;
+		};
+		MileageRateInput: {
+			currency?: string | null;
+			/** Format: date */
+			effectiveFrom: string;
+			rate: string;
+			unit?: string | null;
+		};
 		Milestone: {
 			/**
 			 * Format: double
@@ -24479,6 +24736,235 @@ export interface operations {
 			};
 		};
 	};
+	list_expense_categories: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ExpenseCategory'][];
+				};
+			};
+		};
+	};
+	create_expense_category: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['ExpenseCategoryInput'];
+			};
+		};
+		responses: {
+			201: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ExpenseCategory'];
+				};
+			};
+		};
+	};
+	update_expense_category: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['ExpenseCategoryInput'];
+			};
+		};
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ExpenseCategory'];
+				};
+			};
+		};
+	};
+	list_expenses: {
+		parameters: {
+			query?: {
+				/** @description Whose (the API sets it to you unless you may see everyone's). */
+				userId?: string;
+				ticketId?: string;
+				projectId?: string;
+				orgId?: string;
+				status?: components['schemas']['ExpenseStatus'];
+				from?: string;
+				to?: string;
+			};
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['Expense'][];
+				};
+			};
+		};
+	};
+	create_expense: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['ExpenseInput'];
+			};
+		};
+		responses: {
+			201: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['Expense'];
+				};
+			};
+		};
+	};
+	get_expense: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['Expense'];
+				};
+			};
+		};
+	};
+	update_expense: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['ExpenseInput'];
+			};
+		};
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['Expense'];
+				};
+			};
+		};
+	};
+	delete_expense: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			204: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content?: never;
+			};
+		};
+	};
+	get_expense_receipt: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			/** @description The receipt's bytes */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content?: never;
+			};
+		};
+	};
+	put_expense_receipt: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		/** @description A `file` part */
+		requestBody?: {
+			content: {
+				'multipart/form-data': unknown;
+			};
+		};
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['Expense'];
+				};
+			};
+		};
+	};
 	list_forms: {
 		parameters: {
 			query?: never;
@@ -27105,6 +27591,67 @@ export interface operations {
 				content: {
 					'application/problem+json': components['schemas']['ApiError'];
 				};
+			};
+		};
+	};
+	list_mileage_rates: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['MileageRate'][];
+				};
+			};
+		};
+	};
+	set_mileage_rate: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['MileageRateInput'];
+			};
+		};
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['MileageRate'];
+				};
+			};
+		};
+	};
+	delete_mileage_rate: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			204: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content?: never;
 			};
 		};
 	};

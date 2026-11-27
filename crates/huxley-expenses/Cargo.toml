@@ -1,0 +1,26 @@
+[package]
+name = "huxley-expenses"
+description = "Expenses for Huxley: entries, mileage, receipts, reports"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[dependencies]
+bytes.workspace = true
+huxley-core.workspace = true
+huxley-db.workspace = true
+huxley-storage.workspace = true
+rust_decimal.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sqlx.workspace = true
+thiserror.workspace = true
+time = { workspace = true, features = ["macros"] }
+utoipa.workspace = true
+uuid.workspace = true
+
+[lints]
+workspace = true

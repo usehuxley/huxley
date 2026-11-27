@@ -155,7 +155,7 @@ pub const REGISTRY: &[Module] = &[
         description: "Expenses with receipts, mileage, reimbursement and billing.",
         requires: &["crm"],
         phase: 12,
-        released: false,
+        released: true,
     },
 ];
 

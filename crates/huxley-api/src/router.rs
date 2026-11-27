@@ -32,6 +32,14 @@ const MAX_BODY_BYTES: usize = 2 * 1024 * 1024;
 
 /// Builds the full API router with the standard middleware stack.
 /// The contracts, sales, inventory (and purchasing) and billing modules.
+/// Routes that take files, with the upload limit (plus room for the form).
+fn upload_routes(state: &AppState) -> Router<AppState> {
+    let limit = usize::try_from(state.storage.max_upload_bytes())
+        .unwrap_or(usize::MAX)
+        .saturating_add(64 * 1024);
+    entity_routes::attachment_routes(limit).merge(crate::expense_routes::routes(limit))
+}
+
 fn business_routes() -> Router<AppState> {
     crate::agreement_routes::routes()
         .merge(crate::sales_routes::routes())
@@ -107,11 +115,7 @@ pub fn router(state: AppState) -> Router {
         .merge(entity_routes::routes())
         .merge(module_routes::org_routes())
         .merge(variable_routes::routes())
-        .merge(entity_routes::attachment_routes(
-            usize::try_from(state.storage.max_upload_bytes())
-                .unwrap_or(usize::MAX)
-                .saturating_add(64 * 1024),
-        ))
+        .merge(upload_routes(&state))
         .layer(middleware::from_fn(csrf::require_header));
 
     let stack = ServiceBuilder::new()

@@ -40,21 +40,14 @@ async fn toggles_respect_dependencies_and_are_audited() {
 
     assert!(is_active(&mut tx, "billing").await.unwrap());
 
-    // Unreleased modules are enabled but not active.
-    assert_eq!(
-        set_enabled(&mut tx, &ctx, "expenses", true, false)
-            .await
-            .unwrap(),
-        vec!["expenses"]
-    );
-    assert!(!is_active(&mut tx, "expenses").await.unwrap());
+    // Enabled shows as active (every module is released in this version).
     let change = states(&mut tx)
         .await
         .unwrap()
         .into_iter()
-        .find(|m| m.module.key == "expenses")
+        .find(|m| m.module.key == "billing")
         .unwrap();
-    assert!(change.enabled && !change.active);
+    assert!(change.enabled && change.active);
 
     // A module others depend on can't be turned off.
     let blocked = set_enabled(&mut tx, &ctx, "contracts", false, false).await;
