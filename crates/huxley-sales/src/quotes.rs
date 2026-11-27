@@ -178,6 +178,8 @@ pub struct Quote {
     pub decline_reason: Option<String>,
     /// Whether it needs (or had) an internal review.
     pub review_status: crate::review::ReviewStatus,
+    /// The sales order it became, once accepted.
+    pub sales_order_id: Option<Uuid>,
     pub version: i32,
     #[serde(with = "time::serde::rfc3339")]
     pub created_at: OffsetDateTime,
@@ -306,7 +308,8 @@ const SELECT: &str = "SELECT q.id, q.org_id, g.name AS org_name, q.number, q.opp
         o.name AS opportunity_name, q.title, q.status, q.revision, q.currency, q.valid_until, \
         q.contact_id, nullif(btrim(coalesce(c.first_name, '') || ' ' || coalesce(c.last_name, '')), '') AS contact_name, \
         c.email AS contact_email, q.owner_id, u.display_name AS owner_name, q.intro, q.terms, \
-        q.sent_at, q.decided_at, q.decided_by, q.decline_reason, q.review_status, q.version, \
+        q.sent_at, q.decided_at, q.decided_by, q.decline_reason, q.review_status, \
+        (SELECT so.id FROM sales_orders so WHERE so.quote_id = q.id) AS sales_order_id, q.version, \
         q.created_at, q.updated_at \
    FROM sales_quotes q \
    JOIN organizations g ON g.id = q.org_id \
@@ -903,6 +906,7 @@ pub async fn decide(
     .await?;
     if input.accept {
         win_opportunity(&mut *conn, ctx, current.opportunity_id).await?;
+        crate::orders::from_quote(&mut *conn, ctx, id).await?;
     }
     let q = get(&mut *conn, id).await?;
     audit::record(

@@ -755,13 +755,15 @@ pub async fn movements(
 pub enum RefType {
     Ticket,
     Project,
+    SalesOrder,
 }
 
 impl RefType {
-    const fn as_str(self) -> &'static str {
+    pub const fn as_str(self) -> &'static str {
         match self {
             Self::Ticket => "ticket",
             Self::Project => "project",
+            Self::SalesOrder => "sales_order",
         }
     }
 }
@@ -868,6 +870,7 @@ pub async fn ref_org(
     let sql = match kind {
         RefType::Ticket => "SELECT org_id FROM sd_tickets WHERE id = $1",
         RefType::Project => "SELECT org_id FROM prj_projects WHERE id = $1",
+        RefType::SalesOrder => "SELECT org_id FROM sales_orders WHERE id = $1",
     };
     Ok(sqlx::query_scalar(sql)
         .bind(id)

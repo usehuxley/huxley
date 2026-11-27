@@ -5630,6 +5630,166 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
+	'/api/v1/sales-orders': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** Sales orders you can see, newest first. */
+		get: operations['list_sales_orders'];
+		put?: never;
+		/**
+		 * The sales order for an accepted quote (made if it hasn't one; accepting
+		 *     a quote makes it anyway).
+		 */
+		post: operations['create_sales_order'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/sales-orders/{id}': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** An order with its lines: delivered, set aside and on order. */
+		get: operations['get_sales_order'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/sales-orders/{id}/agreement': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/** Hands the order's recurring lines to a new agreement for the client. */
+		post: operations['sales_order_agreement'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/sales-orders/{id}/allocate': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/** Sets aside what's in stock for the order's one-time product lines. */
+		post: operations['allocate_sales_order'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/sales-orders/{id}/cancel': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/** Cancels an open order nothing was delivered from, releasing what it set aside. */
+		post: operations['cancel_sales_order'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/sales-orders/{id}/close': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/** Closes a fulfilled order. */
+		post: operations['close_sales_order'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/sales-orders/{id}/fulfil': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/**
+		 * Delivers what's ready: stocked lines use what's set aside for them,
+		 *     services and unstocked lines are delivered in full.
+		 */
+		post: operations['fulfil_sales_order'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/sales-orders/{id}/project': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/** Starts the order's project for the client, laid out from a template if given. */
+		post: operations['sales_order_project'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/sales-orders/{id}/purchase': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/** Drafts purchase orders, per vendor, for what the order is still short. */
+		post: operations['purchase_for_sales_order'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
 	'/api/v1/sales/reasons': {
 		parameters: {
 			query?: never;
@@ -10295,6 +10455,13 @@ export interface components {
 			orgId: string;
 			quote: components['schemas']['QuoteInput'];
 		};
+		CreateSalesOrderRequest: {
+			/**
+			 * Format: uuid
+			 * @description An accepted quote.
+			 */
+			quoteId: string;
+		};
 		CreateScriptRequest: {
 			/** Format: uuid */
 			orgId: string;
@@ -11231,7 +11398,7 @@ export interface components {
 		InventoryMovementKind:
 			'receive' | 'transfer' | 'adjust' | 'allocate' | 'release' | 'consume' | 'return' | 'rma';
 		/** @enum {string} */
-		InventoryRefType: 'ticket' | 'project';
+		InventoryRefType: 'ticket' | 'project' | 'sales_order';
 		InventoryReorderInput: {
 			/** @description Raise `stock.low` when what's available falls to this. */
 			reorderPoint: string;
@@ -13632,6 +13799,11 @@ export interface components {
 			reviewStatus: components['schemas']['ReviewStatus'];
 			/** Format: int32 */
 			revision: number;
+			/**
+			 * Format: uuid
+			 * @description The sales order it became, once accepted.
+			 */
+			salesOrderId?: string | null;
 			/** Format: date-time */
 			sentAt?: string | null;
 			status: components['schemas']['QuoteStatus'];
@@ -14161,6 +14333,117 @@ export interface components {
 			revokedAt?: string | null;
 			source: components['schemas']['RunnerSource'];
 			version?: string | null;
+		};
+		SalesOrder: {
+			/** Format: uuid */
+			agreementId?: string | null;
+			agreementName?: string | null;
+			/** Format: date-time */
+			closedAt?: string | null;
+			/** Format: date-time */
+			createdAt: string;
+			createdByName?: string | null;
+			currency: string;
+			/** Format: uuid */
+			id: string;
+			lines: components['schemas']['SalesOrderLine'][];
+			monthly: string;
+			notes?: string | null;
+			/** Format: int64 */
+			number: number;
+			oneTime: string;
+			/** Format: uuid */
+			opportunityId?: string | null;
+			/** Format: uuid */
+			orgId: string;
+			orgName: string;
+			/** Format: uuid */
+			projectId?: string | null;
+			projectName?: string | null;
+			/** Format: uuid */
+			quoteId?: string | null;
+			/** Format: int64 */
+			quoteNumber?: number | null;
+			status: components['schemas']['SalesOrderStatus'];
+			title: string;
+			/** Format: date-time */
+			updatedAt: string;
+			/** Format: int32 */
+			version: number;
+		};
+		SalesOrderAgreementRequest: {
+			/** @description Active straight away (default: a draft to finish on the agreement). */
+			activate?: boolean;
+			autoRenew?: boolean;
+			kind?: components['schemas']['AgreementKind'];
+			/** @description Default: the order's title. */
+			name?: string | null;
+			/** @description `YYYY-MM-DD`; default today. */
+			startsOn?: string | null;
+		};
+		/** @description What an allocation pass did. */
+		SalesOrderAllocated: {
+			/** @description Allocations made. */
+			made: number;
+			/** @description Lines still short afterwards: `name: how many`. */
+			short: string[];
+		};
+		SalesOrderLine: {
+			/** @description Set aside for this order (per item). */
+			allocated: string;
+			billing: components['schemas']['QuoteBilling'];
+			description: string;
+			discountPct: string;
+			fulfilled: string;
+			/** Format: uuid */
+			id: string;
+			/**
+			 * Format: uuid
+			 * @description The stocked item it's drawn from (the nearest organization above the
+			 *     client that stocks the product), if any.
+			 */
+			itemId?: string | null;
+			name: string;
+			/** @description On purchase orders bought for this order, still to arrive (per item). */
+			onOrder: string;
+			/** Format: uuid */
+			productId?: string | null;
+			quantity: string;
+			sku?: string | null;
+			total: string;
+			tracking?: components['schemas']['Tracking'] | null;
+			unit: string;
+			/** @description What was quoted as its cost (what it's bought at, by default). */
+			unitCost: string;
+			unitPrice: string;
+		};
+		SalesOrderProjectRequest: {
+			/** Format: uuid */
+			managerUserId?: string | null;
+			/** @description Default: the order's title. */
+			name?: string | null;
+			/** @description `YYYY-MM-DD`; default today. */
+			startOn?: string | null;
+			/** Format: uuid */
+			templateId?: string | null;
+		};
+		/** @description What a purchasing pass did. */
+		SalesOrderPurchased: {
+			/** @description Purchase orders drafted. */
+			orders: string[];
+			/**
+			 * @description Lines short with no vendor to buy from (the catalog product's vendor
+			 *     matches none): `name: how many`.
+			 */
+			unmatched: string[];
+		};
+		/** @enum {string} */
+		SalesOrderStatus: 'open' | 'fulfilled' | 'closed' | 'cancelled';
+		SalesOrderVersion: {
+			/** @description Why (cancelling), or a closing note. */
+			note?: string | null;
+			/** Format: int32 */
+			version: number;
 		};
 		SalesReason: {
 			/** Format: uuid */
@@ -27730,6 +28013,265 @@ export interface operations {
 				};
 				content: {
 					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	list_sales_orders: {
+		parameters: {
+			query?: {
+				status?: components['schemas']['SalesOrderStatus'];
+				orgId?: string;
+				/** @description Title, client, or `SO-` number. */
+				q?: string;
+			};
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['SalesOrder'][];
+				};
+			};
+		};
+	};
+	create_sales_order: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['CreateSalesOrderRequest'];
+			};
+		};
+		responses: {
+			201: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['SalesOrder'];
+				};
+			};
+			409: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	get_sales_order: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['SalesOrder'];
+				};
+			};
+		};
+	};
+	sales_order_agreement: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['SalesOrderAgreementRequest'];
+			};
+		};
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['SalesOrder'];
+				};
+			};
+			409: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	allocate_sales_order: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['SalesOrderAllocated'];
+				};
+			};
+		};
+	};
+	cancel_sales_order: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['SalesOrderVersion'];
+			};
+		};
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['SalesOrder'];
+				};
+			};
+		};
+	};
+	close_sales_order: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['SalesOrderVersion'];
+			};
+		};
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['SalesOrder'];
+				};
+			};
+		};
+	};
+	fulfil_sales_order: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['SalesOrderVersion'];
+			};
+		};
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['SalesOrder'];
+				};
+			};
+		};
+	};
+	sales_order_project: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['SalesOrderProjectRequest'];
+			};
+		};
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['SalesOrder'];
+				};
+			};
+			409: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	purchase_for_sales_order: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['SalesOrderPurchased'];
 				};
 			};
 		};

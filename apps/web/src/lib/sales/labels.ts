@@ -93,6 +93,17 @@ export const RULE_KINDS = [
 	{ value: 'expression', label: 'An expression is true' }
 ] as const;
 
+export const ORDER_STATUSES = [
+	{ value: 'open', label: 'Open' },
+	{ value: 'fulfilled', label: 'Fulfilled' },
+	{ value: 'closed', label: 'Closed' },
+	{ value: 'cancelled', label: 'Cancelled' }
+] as const;
+
+export function orderTone(status: string): BadgeTone {
+	return status === 'fulfilled' ? 'success' : status === 'open' ? 'info' : 'neutral';
+}
+
 /** `Q-42`. */
 export const quoteRef = (n: number) => `Q-${n}`;
 

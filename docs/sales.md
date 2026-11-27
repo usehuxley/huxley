@@ -43,10 +43,24 @@ Review rules (below) decide which quotes need a second look before they go out: 
 - **Send without approval** (administrators, `sales:review:override`) sends it anyway; the quote and the audit log record that.
 - **Comments** go on the whole quote or a line. **Mention someone** to tell them; reply in the thread, and **Resolve** it when settled. Lines with open comments say so in the builder.
 
+## Orders
+
+Accepting a quote, whether in Huxley or by the client signing in the portal, makes a **sales order** (SO-*n*) at the client, with the lines agreed to: the options taken, not the rest. **Business → Orders** lists them; the quote links to its order (ADR-069).
+
+The order page shows each line's state: short, on order, ready, delivered, or waiting for the agreement. From there:
+
+- **Set aside stock** allocates what's in stock for the one-time product lines. It draws from the nearest organization above the client that stocks the product, and from the locations with the most first. This takes `inventory:write`.
+- **Order what's short** drafts purchase orders, one per vendor, for what's still missing. The lines are bought for the order and set aside for it when they arrive. Products whose catalog vendor matches no vendor are listed so you can order them by hand. This takes `procurement:write`; see [Purchasing](purchasing.md).
+- **Deliver what's ready** uses what's set aside: it leaves stock and counts as delivered. Services and unstocked lines are delivered with the order.
+- **Make the agreement** hands the recurring lines to a new agreement for the client, as its billing lines. The agreement starts as a draft, unless you make it active. This takes `agreement:manage`.
+- **Start a project** creates the client's project, laid out from a project template if you pick one. This takes `project:manage`.
+
+When every line is delivered, the order is **fulfilled**, and `sales_order.fulfilled` is raised for billing. **Close** it then. **Cancel order** works on an open order nothing has been delivered from. It gives back the stock set aside for it; purchase orders made for it stay as they are.
+
 ## Settings
 
 **Settings → Sales pipeline** (`sales:configure`) keeps the stages (order, kind and chance of winning), the reasons deals are won and lost, and the **quote review** rules with who reviews each (`role:<key>`, `team:<id>` or `user:<id>`). A stage with open opportunities can't be removed until they move.
 
 ## Events
 
-`sales.lead.created`, `sales.lead.converted`, `sales.opportunity.created`, `sales.opportunity.updated`, `sales.opportunity.stage_changed`, `sales.opportunity.won`, `sales.opportunity.lost`, `sales.quote.created`, `sales.quote.sent`, `sales.quote.accepted`, `sales.quote.declined`, `quote.submitted_for_review`, `quote.approved`, `quote.changes_requested` and `quote.rejected`, for workflows: tell the account manager when a deal is won, start onboarding, post to a channel.
+`sales.lead.created`, `sales.lead.converted`, `sales.opportunity.created`, `sales.opportunity.updated`, `sales.opportunity.stage_changed`, `sales.opportunity.won`, `sales.opportunity.lost`, `sales.quote.created`, `sales.quote.sent`, `sales.quote.accepted`, `sales.quote.declined`, `quote.submitted_for_review`, `quote.approved`, `quote.changes_requested`, `quote.rejected`, `sales_order.created`, `sales_order.fulfilled`, `sales_order.closed` and `sales_order.cancelled`, for workflows: tell the account manager when a deal is won, start onboarding, post to a channel.
