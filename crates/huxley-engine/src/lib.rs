@@ -29,6 +29,7 @@ mod http;
 mod journal;
 mod kb;
 mod lookup;
+pub mod metrics;
 mod notify;
 pub mod oauth;
 mod pages;

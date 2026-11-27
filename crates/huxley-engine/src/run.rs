@@ -34,6 +34,16 @@ impl RunStatus {
     pub const fn is_finished(self) -> bool {
         matches!(self, Self::Succeeded | Self::Failed | Self::Cancelled)
     }
+
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Queued => "queued",
+            Self::Running => "running",
+            Self::Succeeded => "succeeded",
+            Self::Failed => "failed",
+            Self::Cancelled => "cancelled",
+        }
+    }
 }
 
 /// What to run.
@@ -580,6 +590,7 @@ async fn finish(
     outputs: Option<Json>,
     error: Option<Json>,
 ) -> EngineResult<()> {
+    crate::metrics::run_finished(status.as_str());
     sqlx::query(
         "UPDATE step_runs SET status = 'cancelled', finished_at = now() \
           WHERE run_id = $1 AND status IN ('running', 'waiting')",

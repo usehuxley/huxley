@@ -73,6 +73,11 @@ fn spawn_scheduler(
         run_audit_sealer(seal_db, seal_stop).await;
         Ok(())
     });
+    let (gauge_engine, gauge_stop) = (engine.clone(), shutdown.clone());
+    tasks.spawn(async move {
+        huxley_engine::metrics::run_gauges(gauge_engine, gauge_stop).await;
+        Ok(())
+    });
     let (ship_engine, ship_stop) = (engine.clone(), shutdown.clone());
     tasks.spawn(async move {
         huxley_engine::audit_stream::run_shipper(ship_engine, ship_stop).await;
@@ -191,6 +196,50 @@ async fn spawn_api(
     Ok(())
 }
 
+/// Connection pool gauges (`db.client.connection.count`, by pool and
+/// state): how close each process is to `database.max_connections`.
+fn pool_gauges(pools: Vec<(&'static str, huxley_db::sqlx::PgPool)>) {
+    use opentelemetry::KeyValue;
+    let meter = opentelemetry::global::meter("huxley");
+    let limits = pools.clone();
+    let _ = meter
+        .i64_observable_gauge("db.client.connection.max")
+        .with_description("The most connections each pool may open")
+        .with_callback(move |o| {
+            for (name, pool) in &limits {
+                o.observe(
+                    i64::from(pool.options().get_max_connections()),
+                    &[KeyValue::new("db.client.connection.pool.name", *name)],
+                );
+            }
+        })
+        .build();
+    let _ = meter
+        .i64_observable_gauge("db.client.connection.count")
+        .with_description("Database connections by pool and state (used, idle)")
+        .with_callback(move |o| {
+            for (name, pool) in &pools {
+                let size = i64::from(pool.size());
+                let idle = i64::try_from(pool.num_idle()).unwrap_or(0);
+                o.observe(
+                    size - idle,
+                    &[
+                        KeyValue::new("db.client.connection.pool.name", *name),
+                        KeyValue::new("db.client.connection.state", "used"),
+                    ],
+                );
+                o.observe(
+                    idle,
+                    &[
+                        KeyValue::new("db.client.connection.pool.name", *name),
+                        KeyValue::new("db.client.connection.state", "idle"),
+                    ],
+                );
+            }
+        })
+        .build();
+}
+
 /// Settings that can only be checked once running: connections through a
 /// transaction pooler run as the application role (ADR-089), and worker
 /// pools name real job kinds.
@@ -236,6 +285,7 @@ pub async fn serve(config: Config, roles: BTreeSet<Role>) -> anyhow::Result<()> 
     check_startup(&config, &db, db_config).await?;
     // LISTEN needs its own session: straight to PostgreSQL past any pooler.
     let listen_db = huxley_db::connect_listen(db_config)?;
+    pool_gauges(vec![("main", db.clone()), ("listen", listen_db.clone())]);
     let crypto = huxley_crypto::Crypto::new(db.clone(), config.crypto.key_ring()?);
     crypto
         .verify_keys()
