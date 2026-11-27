@@ -64,6 +64,42 @@ pub struct Request {
     pub prompt: String,
     pub schema: Option<Json>,
     pub max_tokens: u32,
+    /// A file shown with the prompt (a photo or a PDF).
+    pub attachment: Option<Attachment>,
+}
+
+/// A file sent with a request: its media type and base64 content.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Attachment {
+    /// e.g. `image/jpeg` or `application/pdf`.
+    pub media_type: String,
+    pub base64: String,
+}
+
+impl Attachment {
+    fn is_pdf(&self) -> bool {
+        self.media_type == "application/pdf"
+    }
+
+    /// Anthropic content: the file, then the prompt.
+    fn anthropic(&self, prompt: &str) -> Json {
+        let kind = if self.is_pdf() { "document" } else { "image" };
+        json!([
+            { "type": kind, "source": { "type": "base64", "media_type": self.media_type, "data": self.base64 } },
+            { "type": "text", "text": prompt }
+        ])
+    }
+
+    /// OpenAI-style content: the file, then the prompt.
+    fn openai(&self, prompt: &str) -> Json {
+        let url = format!("data:{};base64,{}", self.media_type, self.base64);
+        let file = if self.is_pdf() {
+            json!({ "type": "file", "file": { "filename": "file.pdf", "file_data": url } })
+        } else {
+            json!({ "type": "image_url", "image_url": { "url": url } })
+        };
+        json!([file, { "type": "text", "text": prompt }])
+    }
 }
 
 /// A provider's answer.
@@ -149,7 +185,8 @@ pub(crate) fn build(endpoint: &Endpoint, key: &str, request: &Request) -> Result
             let mut body = json!({
                 "model": endpoint.model,
                 "max_tokens": max_tokens,
-                "messages": [{ "role": "user", "content": request.prompt }],
+                "messages": [{ "role": "user", "content": request.attachment.as_ref()
+                    .map_or_else(|| json!(request.prompt), |a| a.anthropic(&request.prompt)) }],
                 // Declined requests are retried on a fallback model.
                 "fallbacks": "default",
             });
@@ -177,7 +214,11 @@ pub(crate) fn build(endpoint: &Endpoint, key: &str, request: &Request) -> Result
             if let Some(system) = &request.system {
                 messages.push(json!({ "role": "system", "content": system }));
             }
-            messages.push(json!({ "role": "user", "content": request.prompt }));
+            let content = request
+                .attachment
+                .as_ref()
+                .map_or_else(|| json!(request.prompt), |a| a.openai(&request.prompt));
+            messages.push(json!({ "role": "user", "content": content }));
             let mut body = json!({ "model": endpoint.model, "messages": messages, "max_completion_tokens": max_tokens });
             if let Some(schema) = &request.schema {
                 body["response_format"] = json!({ "type": "json_schema", "json_schema": { "name": "answer", "schema": schema, "strict": true } });
@@ -332,12 +373,44 @@ mod tests {
     }
 
     #[test]
+    fn attachments_go_before_the_prompt() {
+        let request = Request {
+            prompt: "Read it".into(),
+            attachment: Some(Attachment {
+                media_type: "application/pdf".into(),
+                base64: "JVBERg==".into(),
+            }),
+            ..Request::default()
+        };
+        let anthropic = build(&endpoint(ProviderKind::Anthropic), "k", &request)
+            .unwrap()
+            .body;
+        let content = &anthropic["messages"][0]["content"];
+        assert_eq!(content[0]["type"], "document");
+        assert_eq!(content[0]["source"]["data"], "JVBERg==");
+        assert_eq!(content[1]["text"], "Read it");
+        let photo = Request {
+            attachment: Some(Attachment {
+                media_type: "image/png".into(),
+                base64: "iVBO".into(),
+            }),
+            ..request
+        };
+        let openai = build(&endpoint(ProviderKind::Openai), "k", &photo)
+            .unwrap()
+            .body;
+        let content = &openai["messages"][0]["content"];
+        assert_eq!(content[0]["image_url"]["url"], "data:image/png;base64,iVBO");
+    }
+
+    #[test]
     fn requests_take_each_providers_shape() {
         let request = Request {
             system: Some("Be brief.".into()),
             prompt: "Hi".into(),
             schema: Some(json!({ "type": "object" })),
             max_tokens: 0,
+            attachment: None,
         };
         let Http { url, headers, body } =
             build(&endpoint(ProviderKind::Anthropic), "k", &request).unwrap();

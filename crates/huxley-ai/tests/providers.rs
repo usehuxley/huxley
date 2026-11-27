@@ -119,6 +119,7 @@ fn request(prompt: &str) -> Request {
         prompt: prompt.into(),
         schema: None,
         max_tokens: 1000,
+        attachment: None,
     }
 }
 

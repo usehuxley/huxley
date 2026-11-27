@@ -94,6 +94,16 @@ export async function uploadReceipt(event: RequestEvent) {
 	return { message: 'Receipt kept.' };
 }
 
+/** Form action: takes what AI read from the receipt into the draft. */
+export async function applyReading(event: RequestEvent) {
+	const form = await event.request.formData();
+	const { data, error, response } = await api(event).POST('/api/v1/expenses/{id}/apply-reading', {
+		params: { path: { id: formString(form, 'id') } }
+	});
+	if (!data) return failed(response.status, error, 'Could not take it.');
+	return { message: 'Updated from the receipt.' };
+}
+
 /** Form action: deletes a draft expense. */
 export async function deleteExpense(event: RequestEvent) {
 	const form = await event.request.formData();

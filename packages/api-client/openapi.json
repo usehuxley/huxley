@@ -8477,6 +8477,35 @@
 				}
 			}
 		},
+		"/api/v1/expenses/{id}/apply-reading": {
+			"post": {
+				"tags": ["expenses"],
+				"summary": "Takes what AI read from the receipt into a draft of yours: the amount,\ntax, currency, day and vendor it found.",
+				"operationId": "apply_expense_reading",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Expense"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
 		"/api/v1/expenses/{id}/receipt": {
 			"get": {
 				"tags": ["expenses"],
@@ -32609,6 +32638,20 @@
 					"rate": {
 						"type": ["string", "null"]
 					},
+					"reading": {
+						"oneOf": [
+							{
+								"$ref": "#/components/schemas/Reading",
+								"description": "What AI read from the receipt, for the person to confirm (ADR-080)."
+							},
+							{
+								"type": "null"
+							}
+						]
+					},
+					"readingError": {
+						"type": ["string", "null"]
+					},
 					"receiptName": {
 						"type": ["string", "null"]
 					},
@@ -41332,6 +41375,33 @@
 					}
 				},
 				"additionalProperties": false
+			},
+			"Reading": {
+				"type": "object",
+				"description": "What was read from a receipt. Anything it couldn't read is null.",
+				"properties": {
+					"amount": {
+						"type": ["string", "null"],
+						"description": "The total paid, tax included, as a decimal string."
+					},
+					"currency": {
+						"type": ["string", "null"]
+					},
+					"description": {
+						"type": ["string", "null"],
+						"description": "What was bought, briefly."
+					},
+					"spentOn": {
+						"type": ["string", "null"],
+						"description": "`YYYY-MM-DD`."
+					},
+					"tax": {
+						"type": ["string", "null"]
+					},
+					"vendor": {
+						"type": ["string", "null"]
+					}
+				}
 			},
 			"Reason": {
 				"type": "object",

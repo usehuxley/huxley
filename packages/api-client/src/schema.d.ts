@@ -3166,6 +3166,26 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
+	'/api/v1/expenses/{id}/apply-reading': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/**
+		 * Takes what AI read from the receipt into a draft of yours: the amount,
+		 *     tax, currency, day and vendor it found.
+		 */
+		post: operations['apply_expense_reading'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
 	'/api/v1/expenses/{id}/receipt': {
 		parameters: {
 			query?: never;
@@ -11972,6 +11992,8 @@ export interface components {
 			projectId?: string | null;
 			projectName?: string | null;
 			rate?: string | null;
+			reading?: components['schemas']['Reading'] | null;
+			readingError?: string | null;
 			receiptName?: string | null;
 			reimbursable: boolean;
 			/** Format: date */
@@ -15551,6 +15573,18 @@ export interface components {
 			 * @description Calls allowed per window (1–100000).
 			 */
 			requests: number;
+		};
+		/** @description What was read from a receipt. Anything it couldn't read is null. */
+		Reading: {
+			/** @description The total paid, tax included, as a decimal string. */
+			amount?: string | null;
+			currency?: string | null;
+			/** @description What was bought, briefly. */
+			description?: string | null;
+			/** @description `YYYY-MM-DD`. */
+			spentOn?: string | null;
+			tax?: string | null;
+			vendor?: string | null;
 		};
 		/** @description A rule a quote matches, and why. */
 		Reason: {
@@ -24916,6 +24950,27 @@ export interface operations {
 					[name: string]: unknown;
 				};
 				content?: never;
+			};
+		};
+	};
+	apply_expense_reading: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['Expense'];
+				};
 			};
 		};
 	};

@@ -150,6 +150,13 @@ const SOURCES: &[Source] = &[
         )],
     },
     Source {
+        manifest: include_str!("../builtin/receipt-reading/pack.yaml"),
+        files: &[(
+            "workflows/read-receipt.yaml",
+            include_str!("../builtin/receipt-reading/workflows/read-receipt.yaml"),
+        )],
+    },
+    Source {
         manifest: include_str!("../builtin/invoice-review/pack.yaml"),
         files: &[(
             "workflows/review-invoice.yaml",

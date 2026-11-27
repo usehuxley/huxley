@@ -23,6 +23,7 @@ mod desk;
 mod dispatch;
 mod egress;
 mod email;
+mod expenses;
 mod http;
 mod journal;
 mod kb;

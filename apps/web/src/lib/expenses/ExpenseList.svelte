@@ -51,6 +51,33 @@
 						? ` · ${e.ticketRef ?? e.projectName ?? e.orgName}`
 						: ''}
 				</p>
+				{#if e.reading && draft(e)}
+					{@const r = e.reading}
+					<form
+						method="POST"
+						action="?/applyReading"
+						use:enhance={said}
+						class="mt-1 flex flex-wrap items-center gap-2 rounded-control bg-surface-sunken px-2 py-1 text-xs"
+					>
+						<input type="hidden" name="id" value={e.id} />
+						<span class="text-fg-muted">
+							From the receipt: {[
+								r.amount ? money(r.amount, r.currency?.toUpperCase() ?? e.currency) : null,
+								r.spentOn,
+								r.vendor
+							]
+								.filter(Boolean)
+								.join(' · ') || 'nothing legible'}
+						</span>
+						{#if r.amount || r.spentOn || r.vendor}
+							<button type="submit" class="font-semibold text-accent hover:underline">
+								Use these
+							</button>
+						{/if}
+					</form>
+				{:else if e.readingError && draft(e)}
+					<p class="mt-1 text-xs text-fg-subtle">The receipt couldn't be read.</p>
+				{/if}
 				<p class="mt-1 flex flex-wrap gap-1">
 					<Badge tone={expenseTone(e.status)}>{statusLabel(e.status)}</Badge>
 					{#if e.billable}<Badge tone="info">Billable {money(e.billAmount, e.currency)}</Badge>{/if}

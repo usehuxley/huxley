@@ -36,6 +36,7 @@ huxley-orgs.workspace = true
 huxley-scripts.workspace = true
 huxley-sales.workspace = true
 huxley-billing.workspace = true
+huxley-expenses.workspace = true
 huxley-servicedesk.workspace = true
 huxley-storage.workspace = true
 huxley-variables.workspace = true

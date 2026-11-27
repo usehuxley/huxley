@@ -123,6 +123,7 @@ fn build(
         prompt: "-".into(),
         schema: None,
         max_tokens,
+        attachment: None,
     };
     let http = crate::provider::build(endpoint, key, &probe)?;
     let mut body = http.body;

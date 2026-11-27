@@ -627,6 +627,19 @@ export const STEPS: StepSpec[] = [
 		]
 	},
 	{
+		type: 'core.expense.read_receipt',
+		label: "Read an expense's receipt",
+		description:
+			'Have AI read the receipt on an expense (amount, tax, date, vendor) for the person to confirm; it never changes the expense by itself.',
+		group: 'Actions',
+		module: 'expenses',
+		template: { with: { expense_id: '{{ inputs.expenseId }}' } },
+		fields: [
+			{ path: 'with.expense_id', label: 'Expense', kind: 'expression' },
+			{ path: 'with.model', label: 'Model', kind: 'expression' }
+		]
+	},
+	{
 		type: 'core.sales.log_email',
 		label: 'Log a sales email',
 		description:

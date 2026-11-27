@@ -445,6 +445,18 @@
       ],
       "type": "object"
     },
+    "ExpenseReadReceipt": {
+      "additionalProperties": false,
+      "description": "An expense whose receipt to read (`core.expense.read_receipt`):\n`expense_id` (from `expense.receipt_added`), and optionally a `model`.\nThe organization's AI provider reads the receipt (a photo or PDF) for\nthe amount, tax, currency, date, vendor and what was bought; what it\nread is kept beside the entry for the person to confirm, never applied\nby itself. Output: the reading (anything unread is null).",
+      "properties": {
+        "expense_id": true,
+        "model": true
+      },
+      "required": [
+        "expense_id"
+      ],
+      "type": "object"
+    },
     "HealthCompute": {
       "additionalProperties": false,
       "description": "Client health for today (`core.health.compute`): each client company in\nthe run's organization and below gets a score, 0 to 100, from weighted\nfactors (satisfaction, NPS, SLA misses, reopened tickets, ticket volume,\nrenewals, sentiment), with the reasons; those that dropped 10 points or\nmore from a week before emit `client.health_declining`, and those whose\nmessages turned negative emit `client.sentiment_declining` (at most\nweekly). It takes nothing. Output: `{ companies, declining: [{ org_id,\nname, score, previous, reasons }], sentiment_falling: [{ org_id, name,\nrecent, previous, explanations }] }`.",
@@ -4523,6 +4535,69 @@
             },
             "with": {
               "$ref": "#/$defs/InvoiceStatus"
+            }
+          },
+          "required": [
+            "type",
+            "id",
+            "with"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Read an expense's receipt with AI (the `expenses` module).",
+          "properties": {
+            "continue_on_error": {
+              "description": "Record the error as the step's output and carry on.",
+              "type": "boolean"
+            },
+            "description": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "id": {
+              "description": "Unique in the workflow: lowercase letters, digits, underscores.\nOther steps read this step's output as `steps.<id>.output`.",
+              "type": "string"
+            },
+            "if": {
+              "description": "Skip the step unless this expression is true.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "name": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "retry": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/RetryPolicy"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "timeout": {
+              "description": "Fail the attempt after this long, e.g. `30s`.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "type": {
+              "const": "core.expense.read_receipt",
+              "type": "string"
+            },
+            "with": {
+              "$ref": "#/$defs/ExpenseReadReceipt"
             }
           },
           "required": [

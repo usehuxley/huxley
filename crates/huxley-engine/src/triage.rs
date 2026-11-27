@@ -13,7 +13,7 @@ use uuid::Uuid;
 use crate::Engine;
 use crate::walk::error;
 
-fn internal(e: impl std::fmt::Display) -> Json {
+pub(crate) fn internal(e: impl std::fmt::Display) -> Json {
     error("internal", e.to_string())
 }
 
@@ -28,7 +28,7 @@ fn desk_error(e: DeskError) -> Json {
 }
 
 /// An optional id input (empty: none).
-fn id(input: &Json, key: &str) -> Result<Option<Uuid>, Json> {
+pub(crate) fn id(input: &Json, key: &str) -> Result<Option<Uuid>, Json> {
     match input[key].as_str().map(str::trim).filter(|s| !s.is_empty()) {
         None => Ok(None),
         Some(s) => s

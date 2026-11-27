@@ -35,6 +35,10 @@ pub fn routes(upload_limit: usize) -> Router<AppState> {
         .route("/expenses", get(list).post(create))
         .route("/expenses/{id}", get(get_one).put(update).delete(delete))
         .route(
+            "/expenses/{id}/apply-reading",
+            axum::routing::post(apply_reading),
+        )
+        .route(
             "/expenses/{id}/receipt",
             get(receipt)
                 .put(put_receipt)
@@ -414,5 +418,24 @@ pub async fn receipt(
             (header::X_CONTENT_TYPE_OPTIONS, "nosniff".to_owned()),
         ],
         data,
+    ))
+}
+
+/// Takes what AI read from the receipt into a draft of yours: the amount,
+/// tax, currency, day and vendor it found.
+#[utoipa::path(post, path = "/api/v1/expenses/{id}/apply-reading", operation_id = "apply_expense_reading", tag = "expenses",
+    params(("id" = Uuid, Path)), responses((status = 200, body = Expense)))]
+pub async fn apply_reading(
+    State(state): State<AppState>,
+    authed: Authed,
+    Path(id): Path<Uuid>,
+) -> ApiResult<Json<Expense>> {
+    own(&state, &authed, id).await?;
+    let ctx = authed.user.ctx.clone();
+    Ok(Json(
+        scoped(&state, &OrgScope::System, async |tx| {
+            entries::apply_reading(tx, &ctx, id).await
+        })
+        .await?,
     ))
 }

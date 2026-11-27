@@ -83,3 +83,4 @@ Decisions that shape Huxley. Add a new ADR by copying `0000-template.md` with th
 | [077](0077-accounting-sync.md) | Accounting sync: Huxley prepares and tracks, a pack's system workflow creates | Accepted |
 | [078](0078-payment-status.md) | Payment status comes back through the sync pack; Huxley keeps client balances and credit holds | Accepted |
 | [079](0079-expenses.md) | Expenses are entries placed like time, with receipts kept beside them | Accepted |
+| [080](0080-receipt-reading.md) | AI reads receipts into a suggestion the person confirms | Accepted |
