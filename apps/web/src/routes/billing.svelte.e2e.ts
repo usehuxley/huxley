@@ -174,7 +174,11 @@ test.describe('billing', () => {
 				`Review ${stamp}`
 			);
 			// A price changed by hand: the out-of-the-box rule matches too.
-			await page.getByRole('region', { name: 'Lines' }).getByLabel('Price').fill('99');
+			// Typed before the page is live, the change is lost: type until it shows.
+			await expect(async () => {
+				await page.getByRole('region', { name: 'Lines' }).getByLabel('Price').fill('99');
+				await expect(page.getByText('Unsaved changes')).toBeVisible({ timeout: 1000 });
+			}).toPass({ timeout: 20_000 });
 			await page.getByRole('button', { name: 'Save' }).click();
 			await expect(page.getByRole('list', { name: 'Why it needs review' })).toContainText(
 				'1 line changed by hand'
