@@ -7,8 +7,10 @@
 //! configured KEK. The frame works with any provider, whether or not its API
 //! takes associated data.
 //!
-//! Providers: HashiCorp Vault and OpenBao (Transit), and Azure Key Vault.
+//! Providers: HashiCorp Vault and OpenBao (Transit), Azure Key Vault, and
+//! AWS KMS.
 
+mod aws;
 mod azure;
 mod vault;
 
@@ -20,6 +22,8 @@ use zeroize::Zeroizing;
 
 use crate::CryptoError;
 
+pub use aws::AwsKmsConfig;
+pub(crate) use aws::AwsKmsKek;
 pub(crate) use azure::AzureKek;
 pub use azure::{AzureAuthConfig, AzureKeyVaultConfig};
 pub(crate) use vault::VaultKek;

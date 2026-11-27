@@ -12,7 +12,7 @@ use zeroize::Zeroizing;
 use uuid::Uuid;
 
 use crate::CryptoError;
-use crate::kms::{self, AzureKek, VaultKek};
+use crate::kms::{self, AwsKmsKek, AzureKek, VaultKek};
 
 /// AES-256 key length in bytes.
 pub const KEY_LEN: usize = 32;
@@ -131,6 +131,7 @@ pub(crate) enum Kek {
     Local(Box<LocalKek>),
     Vault(Box<VaultKek>),
     Azure(Box<AzureKek>),
+    Aws(Box<AwsKmsKek>),
 }
 
 impl Kek {
@@ -139,6 +140,7 @@ impl Kek {
             Self::Local(k) => &k.id,
             Self::Vault(k) => k.id(),
             Self::Azure(k) => k.id(),
+            Self::Aws(k) => k.id(),
         }
     }
 
@@ -147,6 +149,7 @@ impl Kek {
             Self::Local(k) => Ok(k.key.seal(&wrap_aad(dek_id, org_id), dek)),
             Self::Vault(k) => k.wrap(&kms::frame(dek_id, org_id, dek)).await,
             Self::Azure(k) => k.wrap(&kms::frame(dek_id, org_id, dek)).await,
+            Self::Aws(k) => k.wrap(&kms::frame(dek_id, org_id, dek)).await,
         }
     }
 
@@ -160,6 +163,7 @@ impl Kek {
             Self::Local(k) => k.key.open(&wrap_aad(dek_id, org_id), wrapped),
             Self::Vault(k) => kms::unframe(dek_id, org_id, &k.unwrap(wrapped).await?),
             Self::Azure(k) => kms::unframe(dek_id, org_id, &k.unwrap(wrapped).await?),
+            Self::Aws(k) => kms::unframe(dek_id, org_id, &k.unwrap(wrapped).await?),
         }
     }
 }
