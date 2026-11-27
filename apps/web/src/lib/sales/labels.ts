@@ -62,6 +62,37 @@ export function quoteTone(status: string): BadgeTone {
 				: 'neutral';
 }
 
+export const REVIEW_STATUSES = [
+	{ value: 'not_needed', label: 'No review needed' },
+	{ value: 'needed', label: 'Needs review' },
+	{ value: 'in_review', label: 'In review' },
+	{ value: 'approved', label: 'Approved' },
+	{ value: 'changes_requested', label: 'Changes requested' },
+	{ value: 'rejected', label: 'Rejected' }
+] as const;
+
+export function reviewTone(status: string): BadgeTone {
+	return status === 'approved'
+		? 'success'
+		: status === 'rejected'
+			? 'danger'
+			: status === 'needed' || status === 'changes_requested'
+				? 'warning'
+				: status === 'in_review'
+					? 'info'
+					: 'neutral';
+}
+
+export const RULE_KINDS = [
+	{ value: 'always', label: 'Every quote' },
+	{ value: 'margin_below', label: 'Margin below (%)' },
+	{ value: 'first_year_above', label: 'First year above (amount)' },
+	{ value: 'discount_above', label: 'A line discounted more than (%)' },
+	{ value: 'new_client', label: "The client's first quote" },
+	{ value: 'category', label: 'Includes a product category' },
+	{ value: 'expression', label: 'An expression is true' }
+] as const;
+
 /** `Q-42`. */
 export const quoteRef = (n: number) => `Q-${n}`;
 

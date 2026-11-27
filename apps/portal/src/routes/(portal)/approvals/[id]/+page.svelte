@@ -40,6 +40,9 @@
 				</Field>
 				<div class="flex gap-2">
 					<Button type="submit" name="decision" value="approve" variant="primary">Approve</Button>
+					{#if a.allowChanges}
+						<Button type="submit" name="decision" value="request_changes">Ask for changes</Button>
+					{/if}
 					<Button type="submit" name="decision" value="reject" variant="danger">Reject</Button>
 				</div>
 			</form>

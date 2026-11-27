@@ -444,6 +444,9 @@ pub enum Step {
     /// Record a project scope change's decision (the `projects` module).
     #[serde(rename = "core.project.scope.decide")]
     ScopeDecide(ScopeDecideStep),
+    /// Record a quote review's decision (the `sales` module).
+    #[serde(rename = "core.quote.review")]
+    QuoteReview(QuoteReviewStep),
     /// Sync people's busy time from their calendars (the `workforce` module).
     #[serde(rename = "core.calendar.sync")]
     CalendarSync(CalendarSyncStep),
@@ -658,6 +661,10 @@ step!(ApprovalStep {
     /// step fails with `kind: timeout`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub expires: Option<String>,
+    /// Approvers may also ask for changes: the step's `decision` is then
+    /// `approved`, `rejected` or `changes_requested`.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub changes: bool,
 });
 
 step!(SubworkflowStep {
@@ -852,6 +859,11 @@ step!(ScopeDecideStep {
     pub decide: ScopeDecide,
 });
 
+step!(QuoteReviewStep {
+    #[serde(rename = "with")]
+    pub review: QuoteReview,
+});
+
 step!(CalendarSyncStep {
     #[serde(rename = "with", default, skip_serializing_if = "Option::is_none")]
     pub sync: Option<CalendarSync>,
@@ -899,6 +911,11 @@ step!(AiExtractStep {
 
 const fn yes() -> bool {
     true
+}
+
+#[allow(clippy::trivially_copy_pass_by_ref)] // serde's skip_serializing_if signature
+const fn is_false(value: &bool) -> bool {
+    !*value
 }
 
 #[allow(clippy::trivially_copy_pass_by_ref)] // serde's skip_serializing_if signature
@@ -966,6 +983,7 @@ impl Step {
             ReportSend,
             ChangeDecide,
             ScopeDecide,
+            QuoteReview,
             CalendarSync,
             CalendarWrite,
             ProjectStatus,
@@ -1035,6 +1053,7 @@ impl Step {
             Self::ReportSend(_) => "core.report.send",
             Self::ChangeDecide(_) => "core.change.decide",
             Self::ScopeDecide(_) => "core.project.scope.decide",
+            Self::QuoteReview(_) => "core.quote.review",
             Self::CalendarSync(_) => "core.calendar.sync",
             Self::CalendarWrite(_) => "core.calendar.write",
             Self::ProjectStatus(_) => "core.project.status",
@@ -1697,6 +1716,24 @@ pub struct ChangeDecide {
 #[serde(deny_unknown_fields)]
 pub struct ScopeDecide {
     pub scope_change_id: Value,
+    pub decision: Value,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub by: Option<Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub comment: Option<Value>,
+}
+
+/// A quote review's decision to record (`core.quote.review`): `review_id`
+/// (from `quote.submitted_for_review`), `decision` (`approved`,
+/// `changes_requested` or `rejected`, or a boolean), `by` and a `comment`.
+/// Only the quote's open review counts: if the quote changed since, it
+/// needs a new review and the step fails with `kind: conflict`. Raises
+/// `quote.approved`, `quote.changes_requested` or `quote.rejected`, and
+/// tells the quote's owner. Output: the quote's review state.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct QuoteReview {
+    pub review_id: Value,
     pub decision: Value,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub by: Option<Value>,

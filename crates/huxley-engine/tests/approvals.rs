@@ -6,7 +6,7 @@ use std::time::{Duration, Instant};
 use huxley_core::{RequestContext, Via};
 use huxley_db::testing::{IsolatedDb, TestPools, ensure_root, isolated};
 use huxley_db::{OrgScope, begin_scoped};
-use huxley_engine::approval::{self, ApprovalStatus, DecisionError};
+use huxley_engine::approval::{self, ApprovalStatus, DecisionError, Verdict};
 use huxley_engine::{Engine, RunStatus, StartRun};
 use serde_json::{Value as Json, json};
 use uuid::Uuid;
@@ -350,12 +350,18 @@ async fn client_contacts_decide_in_the_portal() {
     ));
     assert!(matches!(
         h.engine
-            .decide_portal_approval(&ctx, approval_id, user, true, None)
+            .decide_portal_approval(&ctx, approval_id, user, Verdict::Approve, None)
             .await,
         Err(DecisionError::NotAnApprover)
     ));
     h.engine
-        .decide_portal_approval(&ctx, approval_id, approver, true, Some("OK by us"))
+        .decide_portal_approval(
+            &ctx,
+            approval_id,
+            approver,
+            Verdict::Approve,
+            Some("OK by us"),
+        )
         .await
         .unwrap();
     h.until("the run to finish", async || {
@@ -373,7 +379,7 @@ async fn client_contacts_decide_in_the_portal() {
     assert_eq!(decided.decided_by_name.as_deref(), Some("Cara Client"));
     assert!(matches!(
         h.engine
-            .decide_portal_approval(&ctx, approval_id, admin, false, None)
+            .decide_portal_approval(&ctx, approval_id, admin, Verdict::Reject, None)
             .await,
         Err(DecisionError::Closed)
     ));

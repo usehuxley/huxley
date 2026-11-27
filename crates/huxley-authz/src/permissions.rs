@@ -105,7 +105,8 @@ permissions! {
     TIMESHEET_APPROVE = "timesheet:approve", Instance, "Approve, reject and reopen the timesheets of people in teams you lead";
     SALES_READ = "sales:read", Org, "View leads, opportunities and the pipeline";
     SALES_WRITE = "sales:write", Org, "Capture and work leads, convert them, and create, change and move opportunities";
-    SALES_CONFIGURE = "sales:configure", Instance, "Keep the pipeline's stages and the win and loss reasons";
+    SALES_CONFIGURE = "sales:configure", Instance, "Keep the pipeline's stages, the win and loss reasons, and the quote review rules";
+    SALES_OVERRIDE = "sales:review:override", Org, "Send a quote that needs review without an approved review (it's recorded)";
 }
 
 /// Wildcard granting every permission.

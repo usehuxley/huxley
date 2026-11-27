@@ -124,6 +124,7 @@ fn approval_input(s: &huxley_hwf::ApprovalStep, now: OffsetDateTime) -> Json {
         "message": s.message,
         "approvers": s.approvers,
         "expires_at": (now + expires).format(&Rfc3339).unwrap_or_default(),
+        "changes": s.changes,
     })
 }
 
@@ -408,6 +409,7 @@ impl<'a> Walker<'a> {
             | Step::ReportSend(_)
             | Step::ChangeDecide(_)
             | Step::ScopeDecide(_)
+            | Step::QuoteReview(_)
             | Step::CalendarSync(_)
             | Step::CalendarWrite(_)
             | Step::ProjectStatus(_)
@@ -880,6 +882,7 @@ fn with_block(step: &Step) -> Json {
         Step::ReportSend(s) => serde_json::to_value(&s.report),
         Step::ChangeDecide(s) => serde_json::to_value(&s.decide),
         Step::ScopeDecide(s) => serde_json::to_value(&s.decide),
+        Step::QuoteReview(s) => serde_json::to_value(&s.review),
         Step::CalendarSync(s) => serde_json::to_value(&s.sync),
         Step::CalendarWrite(s) => serde_json::to_value(&s.write),
         Step::ProjectStatus(s) => serde_json::to_value(&s.status),

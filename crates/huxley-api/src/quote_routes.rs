@@ -13,6 +13,7 @@ use huxley_authz::permissions;
 use huxley_db::OrgScope;
 use huxley_sales::MODULE;
 use huxley_sales::quotes::{self, DecisionInput, Quote, QuoteInput, Revision};
+use huxley_sales::review::{self, Comment, CommentInput, ReviewState};
 use huxley_sales::signing::{self, Signature};
 use serde::Deserialize;
 use utoipa::ToSchema;
@@ -36,6 +37,9 @@ pub(crate) fn routes() -> Router<AppState> {
         .route("/{id}/pdf", get(quote_pdf))
         .route("/{id}/signature", get(quote_signature))
         .route("/{id}/signature.png", get(quote_signature_image))
+        .route("/{id}/review", get(quote_review).post(submit_review))
+        .route("/{id}/comments", get(quote_comments).post(add_comment))
+        .route("/{id}/comments/{comment}/resolve", post(resolve_comment))
 }
 
 async fn quote_access(
@@ -146,9 +150,15 @@ pub async fn delete_quote(
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct SendQuoteRequest {
     pub version: i32,
+    /// Send it though it needs an approved review (`sales:review:override`;
+    /// recorded).
+    #[serde(default)]
+    pub override_review: bool,
 }
 
-/// Marks a draft sent, keeping what was sent as its revision.
+/// Marks a draft sent, keeping what was sent as its revision. A quote that
+/// needs review takes an approved review of this revision first (409
+/// otherwise), unless sent with `overrideReview`.
 #[utoipa::path(post, path = "/api/v1/quotes/{id}/send", operation_id = "send_quote", tag = "sales",
     params(("id" = Uuid, Path)), request_body = SendQuoteRequest,
     responses((status = 200, body = Quote), (status = 409, body = ApiError, content_type = "application/problem+json")))]
@@ -159,10 +169,16 @@ pub async fn send_quote(
     Json(body): Json<SendQuoteRequest>,
 ) -> ApiResult<Json<Quote>> {
     let scope = quote_access(&state, &authed, id, permissions::SALES_WRITE).await?;
+    if body.override_review {
+        let org = org_of(&state, async |tx| quotes::org_of(tx, id).await).await?;
+        authed
+            .require_at(&state, permissions::SALES_OVERRIDE, org)
+            .await?;
+    }
     let ctx = authed.user.ctx.clone();
     Ok(Json(
         scoped(&state, &scope, async |tx| {
-            quotes::send(tx, &ctx, id, body.version).await
+            quotes::send(tx, &ctx, id, body.version, body.override_review).await
         })
         .await?,
     ))
@@ -365,4 +381,134 @@ pub async fn quote_signature_image(
         .header(axum::http::header::CACHE_CONTROL, "private, max-age=3600")
         .body(axum::body::Body::from(png))
         .map_err(|e| ApiError::internal(&e))
+}
+
+/// Its review state, with the open approval for the caller to decide.
+#[derive(Debug, serde::Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct QuoteReviewView {
+    #[serde(flatten)]
+    pub state: ReviewState,
+    /// The review workflow's open approval, if any.
+    pub approval_id: Option<Uuid>,
+    /// The caller is one of its approvers.
+    pub can_decide: bool,
+    /// The caller may send it without an approved review.
+    pub can_override: bool,
+}
+
+async fn review_view(
+    state: &AppState,
+    authed: &Authed,
+    scope: &OrgScope,
+    id: Uuid,
+) -> ApiResult<QuoteReviewView> {
+    let user = authed.user.auth.user.id;
+    let (review, open) = scoped(state, scope, async |tx| {
+        let review = review::state(tx, id).await?;
+        let open = review::open_approval(tx, id, user).await?;
+        Ok((review, open))
+    })
+    .await?;
+    let org = org_of(state, async |tx| quotes::org_of(tx, id).await).await?;
+    let can_override = authed
+        .require_at(state, permissions::SALES_OVERRIDE, org)
+        .await
+        .is_ok();
+    Ok(QuoteReviewView {
+        state: review,
+        approval_id: open.map(|(a, _)| a),
+        can_decide: open.is_some_and(|(_, me)| me),
+        can_override,
+    })
+}
+
+#[utoipa::path(get, path = "/api/v1/quotes/{id}/review", operation_id = "quote_review", tag = "sales",
+    params(("id" = Uuid, Path)), responses((status = 200, body = QuoteReviewView)))]
+pub async fn quote_review(
+    State(state): State<AppState>,
+    authed: Authed,
+    Path(id): Path<Uuid>,
+) -> ApiResult<Json<QuoteReviewView>> {
+    let scope = quote_access(&state, &authed, id, permissions::SALES_READ).await?;
+    Ok(Json(review_view(&state, &authed, &scope, id).await?))
+}
+
+/// Submits a draft for review (send the version you read). Raises
+/// `quote.submitted_for_review` for the review workflow (the Quote review
+/// pack).
+#[utoipa::path(post, path = "/api/v1/quotes/{id}/review", operation_id = "submit_quote_review", tag = "sales",
+    params(("id" = Uuid, Path)), request_body = SendQuoteRequest,
+    responses((status = 200, body = QuoteReviewView), (status = 409, body = ApiError, content_type = "application/problem+json")))]
+pub async fn submit_review(
+    State(state): State<AppState>,
+    authed: Authed,
+    Path(id): Path<Uuid>,
+    Json(body): Json<SendQuoteRequest>,
+) -> ApiResult<Json<QuoteReviewView>> {
+    let scope = quote_access(&state, &authed, id, permissions::SALES_WRITE).await?;
+    let ctx = authed.user.ctx.clone();
+    scoped(&state, &scope, async |tx| {
+        review::submit(tx, &ctx, id, body.version).await
+    })
+    .await?;
+    Ok(Json(review_view(&state, &authed, &scope, id).await?))
+}
+
+/// The quote's comments, oldest first (replies point at their thread).
+#[utoipa::path(get, path = "/api/v1/quotes/{id}/comments", operation_id = "quote_comments", tag = "sales",
+    params(("id" = Uuid, Path)), responses((status = 200, body = Vec<Comment>)))]
+pub async fn quote_comments(
+    State(state): State<AppState>,
+    authed: Authed,
+    Path(id): Path<Uuid>,
+) -> ApiResult<Json<Vec<Comment>>> {
+    let scope = quote_access(&state, &authed, id, permissions::SALES_READ).await?;
+    Ok(Json(
+        scoped(&state, &scope, async |tx| review::comments(tx, id).await).await?,
+    ))
+}
+
+/// Comments on the quote or one of its lines, telling anyone @mentioned.
+#[utoipa::path(post, path = "/api/v1/quotes/{id}/comments", operation_id = "add_quote_comment", tag = "sales",
+    params(("id" = Uuid, Path)), request_body = CommentInput,
+    responses((status = 201, body = Comment), (status = 422, body = ApiError, content_type = "application/problem+json")))]
+pub async fn add_comment(
+    State(state): State<AppState>,
+    authed: Authed,
+    Path(id): Path<Uuid>,
+    Json(body): Json<CommentInput>,
+) -> ApiResult<(StatusCode, Json<Comment>)> {
+    let scope = quote_access(&state, &authed, id, permissions::SALES_READ).await?;
+    let ctx = authed.user.ctx.clone();
+    let c = scoped(&state, &scope, async |tx| {
+        review::comment(tx, &ctx, id, &body).await
+    })
+    .await?;
+    Ok((StatusCode::CREATED, Json(c)))
+}
+
+#[derive(Debug, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ResolveRequest {
+    pub resolved: bool,
+}
+
+/// Resolves a comment thread, or opens it again.
+#[utoipa::path(post, path = "/api/v1/quotes/{id}/comments/{comment}/resolve", operation_id = "resolve_quote_comment",
+    tag = "sales", params(("id" = Uuid, Path), ("comment" = Uuid, Path)), request_body = ResolveRequest,
+    responses((status = 204)))]
+pub async fn resolve_comment(
+    State(state): State<AppState>,
+    authed: Authed,
+    Path((id, comment)): Path<(Uuid, Uuid)>,
+    Json(body): Json<ResolveRequest>,
+) -> ApiResult<StatusCode> {
+    let scope = quote_access(&state, &authed, id, permissions::SALES_READ).await?;
+    let ctx = authed.user.ctx.clone();
+    scoped(&state, &scope, async |tx| {
+        review::resolve(tx, &ctx, id, comment, body.resolved).await
+    })
+    .await?;
+    Ok(StatusCode::NO_CONTENT)
 }

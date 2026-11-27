@@ -7,7 +7,7 @@ use axum::routing::{get, post};
 use axum::{Json, Router};
 use huxley_authz::permissions;
 use huxley_db::{OrgScope, begin_scoped};
-use huxley_engine::approval::{self, ApprovalView, DecisionError};
+use huxley_engine::approval::{self, ApprovalView, DecisionError, Verdict};
 use serde::Deserialize;
 use utoipa::ToSchema;
 use uuid::Uuid;
@@ -71,10 +71,12 @@ pub async fn detail(
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, ToSchema)]
-#[serde(rename_all = "lowercase")]
+#[serde(rename_all = "snake_case")]
 pub enum Decision {
     Approve,
     Reject,
+    /// Only where the approval allows it (`allowChanges`).
+    RequestChanges,
 }
 
 #[derive(Debug, Deserialize, ToSchema)]
@@ -85,8 +87,8 @@ pub struct DecisionRequest {
     pub comment: Option<String>,
 }
 
-/// Approves or rejects. The first decision counts; the workflow continues
-/// with it as the step's output.
+/// Approves, rejects or (where allowed) asks for changes. The first
+/// decision counts; the workflow continues with it as the step's output.
 #[utoipa::path(post, path = "/api/v1/approvals/{id}/decision", operation_id = "decide_approval", tag = "workflows",
     params(("id" = Uuid, Path)), request_body = DecisionRequest,
     responses((status = 200, body = ApprovalView),
@@ -107,11 +109,15 @@ pub async fn decide(
     }
     let view = state
         .engine
-        .decide_approval(
+        .decide_approval_as(
             &authed.user.ctx,
             id,
             authed.user.auth.user.id,
-            body.decision == Decision::Approve,
+            match body.decision {
+                Decision::Approve => Verdict::Approve,
+                Decision::Reject => Verdict::Reject,
+                Decision::RequestChanges => Verdict::RequestChanges,
+            },
             body.comment.as_deref(),
         )
         .await
@@ -123,6 +129,10 @@ pub async fn decide(
                 "Only its approvers can decide",
             ),
             DecisionError::Closed => ApiError::conflict(e.to_string()),
+            DecisionError::ChangesNotAllowed => ApiError::validation().with_field_error(
+                "/decision",
+                "this approval can only be approved or rejected",
+            ),
             DecisionError::Engine(e) => ApiError::internal(&e),
         })?;
     Ok(Json(view))

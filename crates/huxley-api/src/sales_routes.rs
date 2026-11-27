@@ -15,6 +15,7 @@ use huxley_authz::permissions;
 use huxley_db::{OrgScope, begin_scoped};
 use huxley_sales::leads::{self, ConvertInput, Converted, Lead, LeadInput};
 use huxley_sales::opportunities::{self, MoveInput, Opportunity, OpportunityInput, StageChange};
+use huxley_sales::review::{self, Rule, RuleInput};
 use huxley_sales::stages::{self, Reason, ReasonInput, Stage, StageInput};
 use huxley_sales::{MODULE, SalesError};
 use serde::Deserialize;
@@ -41,6 +42,14 @@ fn stage_routes() -> Router<AppState> {
         .route("/stages/{id}", put(update_stage).delete(archive_stage))
         .route("/reasons", get(list_reasons).post(create_reason))
         .route("/reasons/{id}", axum::routing::delete(archive_reason))
+        .route(
+            "/review-rules",
+            get(list_review_rules).post(create_review_rule),
+        )
+        .route(
+            "/review-rules/{id}",
+            put(update_review_rule).delete(delete_review_rule),
+        )
 }
 
 fn lead_routes() -> Router<AppState> {
@@ -583,4 +592,70 @@ pub async fn opportunity_history(
         })
         .await?,
     ))
+}
+
+/// When quotes need review, and who reviews them.
+#[utoipa::path(get, path = "/api/v1/sales/review-rules", operation_id = "list_review_rules", tag = "sales",
+    responses((status = 200, body = Vec<Rule>)))]
+pub async fn list_review_rules(
+    State(state): State<AppState>,
+    authed: Authed,
+) -> ApiResult<Json<Vec<Rule>>> {
+    reader(&state, &authed).await?;
+    Ok(Json(
+        scoped(&state, &OrgScope::System, async |tx| {
+            review::rules(tx).await
+        })
+        .await?,
+    ))
+}
+
+#[utoipa::path(post, path = "/api/v1/sales/review-rules", operation_id = "create_review_rule", tag = "sales",
+    request_body = RuleInput, responses((status = 201, body = Rule), (status = 422, body = ApiError, content_type = "application/problem+json")))]
+pub async fn create_review_rule(
+    State(state): State<AppState>,
+    authed: Authed,
+    Json(body): Json<RuleInput>,
+) -> ApiResult<(StatusCode, Json<Rule>)> {
+    configurer(&state, &authed).await?;
+    let ctx = authed.user.ctx.clone();
+    let rule = scoped(&state, &OrgScope::System, async |tx| {
+        review::create_rule(tx, &ctx, &body).await
+    })
+    .await?;
+    Ok((StatusCode::CREATED, Json(rule)))
+}
+
+#[utoipa::path(put, path = "/api/v1/sales/review-rules/{id}", operation_id = "update_review_rule", tag = "sales",
+    params(("id" = Uuid, Path)), request_body = RuleInput, responses((status = 200, body = Rule)))]
+pub async fn update_review_rule(
+    State(state): State<AppState>,
+    authed: Authed,
+    Path(id): Path<Uuid>,
+    Json(body): Json<RuleInput>,
+) -> ApiResult<Json<Rule>> {
+    configurer(&state, &authed).await?;
+    let ctx = authed.user.ctx.clone();
+    Ok(Json(
+        scoped(&state, &OrgScope::System, async |tx| {
+            review::update_rule(tx, &ctx, id, &body).await
+        })
+        .await?,
+    ))
+}
+
+#[utoipa::path(delete, path = "/api/v1/sales/review-rules/{id}", operation_id = "delete_review_rule", tag = "sales",
+    params(("id" = Uuid, Path)), responses((status = 204)))]
+pub async fn delete_review_rule(
+    State(state): State<AppState>,
+    authed: Authed,
+    Path(id): Path<Uuid>,
+) -> ApiResult<StatusCode> {
+    configurer(&state, &authed).await?;
+    let ctx = authed.user.ctx.clone();
+    scoped(&state, &OrgScope::System, async |tx| {
+        review::delete_rule(tx, &ctx, id).await
+    })
+    .await?;
+    Ok(StatusCode::NO_CONTENT)
 }

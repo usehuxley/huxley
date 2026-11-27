@@ -783,7 +783,7 @@ async fn a_quote_is_declined_and_printed() {
         .await;
     assert_eq!(status, StatusCode::NO_CONTENT);
 
-    let (_, sent) = s
+    let (status, sent) = s
         .call(
             &s.owner,
             "POST",
@@ -791,6 +791,7 @@ async fn a_quote_is_declined_and_printed() {
             Some(json!({ "version": q["version"] })),
         )
         .await;
+    assert_eq!(status, StatusCode::OK, "{sent}");
     let (status, declined) = s
         .call(
             &s.owner,
@@ -831,4 +832,242 @@ async fn a_quote_is_declined_and_printed() {
     assert_eq!(res.headers()["content-type"], "application/pdf");
     let bytes = res.into_body().collect().await.unwrap().to_bytes();
     assert!(bytes.starts_with(b"%PDF-"));
+}
+
+impl Setup {
+    /// A rule matching only quotes titled `title` (rules are instance-wide).
+    async fn rule_for(&self, title: &str) -> String {
+        let (status, rule) = self
+            .call(
+                &self.owner,
+                "POST",
+                "/api/v1/sales/review-rules",
+                Some(json!({ "name": "This test's quotes", "kind": "expression",
+                    "expression": format!("quote.title == '{title}'"), "reviewers": "role:admin" })),
+            )
+            .await;
+        assert_eq!(status, StatusCode::CREATED, "{rule}");
+        rule["id"].as_str().unwrap().to_owned()
+    }
+}
+
+#[tokio::test]
+async fn a_quote_that_needs_review_waits_for_it_or_an_override() {
+    let Some(s) = setup().await else { return };
+    let title = unique("Review me");
+    let rule = s.rule_for(&title).await;
+    let (_, rep) = user(&s.pools, Some(("sales", s.provider))).await;
+    let rep = login(&s.app, &rep).await;
+    let q = s
+        .quote(json!({ "orgId": s.acme, "quote": { "title": title,
+            "lines": [{ "name": "Server", "unitCost": "900", "unitPrice": "1000" }] } }))
+        .await;
+    assert_eq!(q["reviewStatus"], "needed");
+    let id = q["id"].as_str().unwrap();
+    let (status, review) = s
+        .call(&rep, "GET", &format!("/api/v1/quotes/{id}/review"), None)
+        .await;
+    assert_eq!(status, StatusCode::OK, "{review}");
+    assert_eq!(review["reasons"][0]["name"], "This test's quotes");
+    assert_eq!(review["canSend"], false);
+    assert_eq!(review["canOverride"], false);
+
+    // Not without review; and only some may send it anyway.
+    let body = |over: bool| json!({ "version": q["version"], "overrideReview": over });
+    let (status, _) = s
+        .call(
+            &rep,
+            "POST",
+            &format!("/api/v1/quotes/{id}/send"),
+            Some(body(false)),
+        )
+        .await;
+    assert_eq!(status, StatusCode::CONFLICT);
+    let (status, _) = s
+        .call(
+            &rep,
+            "POST",
+            &format!("/api/v1/quotes/{id}/send"),
+            Some(body(true)),
+        )
+        .await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+
+    // Submitted: in review, with the event for the workflow.
+    let (status, review) = s
+        .call(
+            &rep,
+            "POST",
+            &format!("/api/v1/quotes/{id}/review"),
+            Some(json!({ "version": q["version"] })),
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK, "{review}");
+    assert_eq!(review["status"], "in_review");
+    let events = s.events(id, "quote.submitted_for_review").await;
+    assert_eq!(events.len(), 1);
+    assert_eq!(events[0]["reviewers"], json!(["role:admin"]));
+    assert_eq!(
+        events[0]["reasons"][0],
+        format!("This test's quotes: matches quote.title == '{title}'")
+    );
+    let (status, _) = s
+        .call(
+            &rep,
+            "POST",
+            &format!("/api/v1/quotes/{id}/review"),
+            Some(json!({ "version": q["version"] })),
+        )
+        .await;
+    assert_eq!(status, StatusCode::CONFLICT);
+
+    // An administrator sends it anyway; that's on record.
+    let (status, sent) = s
+        .call(
+            &s.owner,
+            "POST",
+            &format!("/api/v1/quotes/{id}/send"),
+            Some(body(true)),
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK, "{sent}");
+    let (_, review) = s
+        .call(
+            &s.owner,
+            "GET",
+            &format!("/api/v1/quotes/{id}/review"),
+            None,
+        )
+        .await;
+    assert_eq!(review["sentOverridden"], true);
+    s.call(
+        &s.owner,
+        "DELETE",
+        &format!("/api/v1/sales/review-rules/{rule}"),
+        None,
+    )
+    .await;
+}
+
+#[tokio::test]
+async fn people_comment_on_quote_lines_and_mention_each_other() {
+    let Some(s) = setup().await else { return };
+    let (rep_id, rep) = user(&s.pools, Some(("sales", s.provider))).await;
+    let rep = login(&s.app, &rep).await;
+    let (boss, _) = user(&s.pools, None).await;
+    let q = s
+        .quote(json!({ "orgId": s.acme, "quote": { "title": "Switches",
+            "lines": [{ "name": "Switch", "quantity": 4, "unitPrice": "300" }] } }))
+        .await;
+    let id = q["id"].as_str().unwrap();
+    let line = q["lines"][0]["id"].clone();
+    let path = format!("/api/v1/quotes/{id}/comments");
+    let (status, c) = s
+        .call(
+            &rep,
+            "POST",
+            &path,
+            Some(json!({ "body": "Is 300 right?", "lineId": line, "mentions": [boss] })),
+        )
+        .await;
+    assert_eq!(status, StatusCode::CREATED, "{c}");
+    assert_eq!(c["lineName"], "Switch");
+    let (status, _) = s
+        .call(
+            &s.owner,
+            "POST",
+            &path,
+            Some(json!({ "body": "Yes", "parentId": c["id"] })),
+        )
+        .await;
+    assert_eq!(status, StatusCode::CREATED);
+    // Replies go on a thread's first comment; lines must be the quote's.
+    let (status, _) = s
+        .call(
+            &s.owner,
+            "POST",
+            &path,
+            Some(json!({ "body": "x", "lineId": Uuid::now_v7() })),
+        )
+        .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+
+    // The boss was told; the author wasn't.
+    let mut tx = begin_scoped(&s.pools.app, &OrgScope::System).await.unwrap();
+    let told: Vec<(Uuid, String)> = sqlx::query_as(
+        "SELECT user_id, link FROM notifications WHERE kind = 'quote.mentioned' AND link LIKE $1",
+    )
+    .bind(format!("/sales/quotes/{id}%"))
+    .fetch_all(&mut *tx)
+    .await
+    .unwrap();
+    tx.commit().await.unwrap();
+    assert_eq!(told.len(), 1);
+    assert_eq!(told[0].0, boss);
+    assert_ne!(told[0].0, rep_id);
+
+    // Saving the quote keeps the line (and its comments' anchor).
+    let (status, saved) = s
+        .call(
+            &s.owner,
+            "PUT",
+            &format!("/api/v1/quotes/{id}"),
+            Some(json!({ "title": "Switches",
+            "lines": [{ "id": line, "name": "Switch", "quantity": 5, "unitPrice": "300" }],
+            "version": q["version"] })),
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK, "{saved}");
+    assert_eq!(saved["lines"][0]["id"], line);
+
+    let (status, _) = s
+        .call(
+            &rep,
+            "POST",
+            &format!("{path}/{}/resolve", c["id"].as_str().unwrap()),
+            Some(json!({ "resolved": true })),
+        )
+        .await;
+    assert_eq!(status, StatusCode::NO_CONTENT);
+    let (_, all) = s.call(&rep, "GET", &path, None).await;
+    let all = all.as_array().unwrap();
+    assert_eq!(all.len(), 2);
+    assert!(all[0]["resolvedAt"].is_string());
+    assert_eq!(all[1]["parentId"], c["id"]);
+}
+
+#[tokio::test]
+async fn review_rules_are_kept_by_configurers() {
+    let Some(s) = setup().await else { return };
+    let rule = s.rule_for(&unique("Nobody uses this title")).await;
+    let (_, rep) = user(&s.pools, Some(("sales", s.provider))).await;
+    let rep = login(&s.app, &rep).await;
+    // Rules are kept by configurers only.
+    let (status, _) = s
+        .call(
+            &rep,
+            "DELETE",
+            &format!("/api/v1/sales/review-rules/{rule}"),
+            None,
+        )
+        .await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+    let (status, bad) = s
+        .call(
+            &s.owner,
+            "PUT",
+            &format!("/api/v1/sales/review-rules/{rule}"),
+            Some(json!({ "name": "Bad", "kind": "margin_below", "reviewers": "admins" })),
+        )
+        .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{bad}");
+    let (status, _) = s
+        .call(
+            &s.owner,
+            "DELETE",
+            &format!("/api/v1/sales/review-rules/{rule}"),
+            None,
+        )
+        .await;
+    assert_eq!(status, StatusCode::NO_CONTENT);
 }

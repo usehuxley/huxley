@@ -1,0 +1,37 @@
+apiVersion: usehuxley.io/v1
+kind: Workflow
+metadata:
+  key: review-quote
+  name: Review quotes before they're sent
+  description: >-
+    When a quote is submitted for review, asks the reviewers named by the
+    review rules it matched to approve it, ask for changes, or reject it,
+    and records their decision on the quote. Add steps for levels (a second
+    approval above a total), or change who reviews in Settings → Sales
+    pipeline.
+spec:
+  triggers:
+    - type: event
+      event: quote.submitted_for_review
+  steps:
+    - id: review
+      type: approval
+      title: "Review quote {{ inputs.reference }}: {{ inputs.title }} for {{ inputs.client }}"
+      message: >-
+        {{ inputs.firstYear }} {{ inputs.currency }} in the first year ({{ inputs.oneTime }} one-time,
+        {{ inputs.monthly }} a month), margin {{ inputs.marginPct or 'n/a' }}%.
+        Why it needs review: {{ inputs.reasons | join('; ') if inputs.reasons else 'asked for' }}.{{
+        ' Changed since the last review: ' ~ inputs.changes ~ '.' if inputs.changes else '' }}
+        Submitted by {{ inputs.submittedBy or 'someone' }}.
+      approvers: "{{ inputs.reviewers }}"
+      changes: true
+      expires: 3d
+    - id: decide
+      type: core.quote.review
+      with:
+        review_id: "{{ inputs.reviewId }}"
+        decision: "{{ steps.review.output.decision }}"
+        by: "{{ steps.review.output.by.name }}"
+        comment: "{{ steps.review.output.comment or '' }}"
+  outputs:
+    decision: "{{ steps.review.output.decision }}"

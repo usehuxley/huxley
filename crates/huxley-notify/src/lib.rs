@@ -58,6 +58,8 @@ pub mod kinds {
     pub const TICKET_ASSIGNED: &str = "ticket.assigned";
     pub const TICKET_REPLIED: &str = "ticket.replied";
     pub const TICKET_SLA: &str = "ticket.sla";
+    pub const QUOTE_MENTIONED: &str = "quote.mentioned";
+    pub const QUOTE_REVIEWED: &str = "quote.reviewed";
 
     pub const ALL: &[Kind] = &[
         Kind {
@@ -139,6 +141,22 @@ pub mod kinds {
             email: true,
             mandatory: false,
             module: Some("servicedesk"),
+        },
+        Kind {
+            key: QUOTE_MENTIONED,
+            description: "You were mentioned in a comment on a quote",
+            in_app: true,
+            email: true,
+            mandatory: false,
+            module: Some("sales"),
+        },
+        Kind {
+            key: QUOTE_REVIEWED,
+            description: "A quote of yours was approved, sent back for changes or rejected in review",
+            in_app: true,
+            email: true,
+            mandatory: false,
+            module: Some("sales"),
         },
     ];
 

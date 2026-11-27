@@ -11,6 +11,7 @@
 pub mod leads;
 pub mod opportunities;
 pub mod quotes;
+pub mod review;
 pub mod signing;
 pub mod stages;
 

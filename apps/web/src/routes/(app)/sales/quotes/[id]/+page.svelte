@@ -13,6 +13,8 @@
 		X
 	} from '@lucide/svelte';
 	import { Badge, Button, Card, Dialog, Field, Input, Select, toast, tray } from '@usehuxley/ui';
+	import QuoteComments from '#lib/sales/QuoteComments.svelte';
+	import QuoteReview from '#lib/sales/QuoteReview.svelte';
 	import {
 		BILLINGS,
 		QUOTE_STATUSES,
@@ -30,6 +32,7 @@
 	type Billing = 'one_time' | 'monthly' | 'quarterly' | 'annual';
 	type Row = {
 		key: number;
+		id: string | null;
 		kind: 'item' | 'heading';
 		productId: string | null;
 		sku: string;
@@ -64,6 +67,7 @@
 		terms = saved.terms;
 		rows = saved.lines.map((l) => ({
 			key: ++seq,
+			id: l.id,
 			kind: l.kind,
 			productId: l.productId ?? null,
 			sku: l.sku ?? '',
@@ -133,6 +137,7 @@
 	function add(kind: 'item' | 'heading') {
 		rows.push({
 			key: ++seq,
+			id: null,
 			kind,
 			productId: null,
 			sku: '',
@@ -154,6 +159,7 @@
 		if (!p) return;
 		rows.push({
 			key: ++seq,
+			id: null,
 			kind: 'item',
 			productId: p.id,
 			sku: p.sku,
@@ -189,6 +195,7 @@
 			terms,
 			version: q.version,
 			lines: rows.map((r) => ({
+				id: r.id,
 				kind: r.kind,
 				productId: r.productId,
 				sku: r.sku || null,
@@ -204,6 +211,20 @@
 				selected: !r.optional
 			}))
 		})
+	);
+
+	let review = $derived(data.review);
+	let mustReview = $derived(review != null && !review.canSend);
+	let overrideOpen = $state(false);
+	// Open comment threads per line, for the marker in the table.
+	let openOn = $derived(
+		data.comments.reduce<Record<string, number>>((acc, c) => {
+			if (c.lineId && !c.parentId && !c.resolvedAt) acc[c.lineId] = (acc[c.lineId] ?? 0) + 1;
+			return acc;
+		}, {})
+	);
+	let commentLines = $derived(
+		q.lines.filter((l) => l.kind === 'item').map((l) => ({ value: l.id, label: l.name }))
 	);
 
 	let deciding = $state<'yes' | 'no' | null>(null);
@@ -280,7 +301,7 @@
 						<Button type="submit" variant={dirty ? 'primary' : 'secondary'}>Save</Button>
 					</form>
 				{/if}
-				{#if data.canWrite && q.status === 'draft'}
+				{#if data.canWrite && q.status === 'draft' && !mustReview}
 					<form method="POST" action="?/send" use:enhance={done('Marked sent.')}>
 						<input type="hidden" name="version" value={q.version} />
 						<Button
@@ -292,6 +313,10 @@
 							<Send size={16} /> Mark sent
 						</Button>
 					</form>
+				{:else if data.canWrite && q.status === 'draft' && review?.canOverride}
+					<Button onclick={() => (overrideOpen = true)} disabled={dirty}>
+						<Send size={16} /> Send without approval
+					</Button>
 				{/if}
 				{#if data.canWrite && q.status === 'sent'}
 					<Button variant="primary" onclick={() => ((deciding = 'yes'), (decideOpen = true))}>
@@ -303,6 +328,13 @@
 				{/if}
 			</div>
 		</div>
+		{#if mustReview && q.status === 'draft'}
+			<p class="mt-3 text-sm text-fg-subtle">
+				{review?.status === 'in_review'
+					? 'In review: it can be sent once a reviewer approves it.'
+					: 'This quote needs an approved review before it can be sent.'}
+			</p>
+		{/if}
 		{#if q.status === 'sent' && editable}
 			<p class="mt-3 text-sm text-fg-subtle">
 				Saving changes starts revision {q.revision + 1}; send it again when it's ready.
@@ -419,6 +451,12 @@
 											disabled={!editable}
 											placeholder="What it is"
 										/>
+										{#if r.id && openOn[r.id]}<a
+												href="#comment-body"
+												class="mt-0.5 block px-2 text-[11.5px] text-accent hover:underline"
+											>
+												{openOn[r.id]} open comment{openOn[r.id] === 1 ? '' : 's'}
+											</a>{/if}
 										{#if r.sku}<span
 												class="mt-0.5 block px-2 font-mono text-[11.5px] text-fg-subtle"
 											>
@@ -570,6 +608,14 @@
 					</Field>
 				</div>
 			</Card>
+
+			<QuoteComments
+				comments={data.comments}
+				lines={commentLines}
+				people={data.people}
+				me={data.me}
+				{done}
+			/>
 		</div>
 
 		<aside class="grid gap-5 sm:grid-cols-2 2xl:flex 2xl:flex-col">
@@ -592,6 +638,16 @@
 					<p class="mt-3 text-xs text-fg-subtle">Options count once the client takes them.</p>
 				{/if}
 			</Card>
+			{#if review && (review.status !== 'not_needed' || review.history.length > 0 || data.approval)}
+				<QuoteReview
+					{review}
+					approval={data.approval}
+					canSubmit={data.canWrite && q.status === 'draft'}
+					version={q.version}
+					{dirty}
+					{done}
+				/>
+			{/if}
 			{#if data.signature}
 				<Card title={data.signature.accepted ? 'Signed in the portal' : 'Declined in the portal'}>
 					{#if data.signature.hasImage}
@@ -689,5 +745,26 @@
 	{#snippet footer()}
 		<Button onclick={() => (decideOpen = false)}>Cancel</Button>
 		<Button type="submit" form="decide-form" variant="primary">Save</Button>
+	{/snippet}
+</Dialog>
+
+<Dialog bind:open={overrideOpen} title="Send without an approved review?">
+	<form
+		id="override-form"
+		method="POST"
+		action="?/send"
+		class="flex flex-col gap-3 text-sm"
+		use:enhance={done('Marked sent.', () => (overrideOpen = false))}
+	>
+		<input type="hidden" name="version" value={q.version} />
+		<input type="hidden" name="override" value="yes" />
+		<p class="text-fg">
+			{review?.status === 'in_review' ? "It's still in review." : "It hasn't been approved."}
+			Sending it anyway is recorded on the quote and in the audit log.
+		</p>
+	</form>
+	{#snippet footer()}
+		<Button onclick={() => (overrideOpen = false)}>Cancel</Button>
+		<Button type="submit" form="override-form" variant="danger">Send anyway</Button>
 	{/snippet}
 </Dialog>
