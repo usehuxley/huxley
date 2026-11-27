@@ -1564,6 +1564,258 @@
 				}
 			}
 		},
+		"/api/v1/activities": {
+			"get": {
+				"tags": ["sales"],
+				"summary": "Activities you can see: on a record, someone's, or yours.",
+				"operationId": "list_activities",
+				"parameters": [
+					{
+						"name": "leadId",
+						"in": "query",
+						"required": false,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					},
+					{
+						"name": "opportunityId",
+						"in": "query",
+						"required": false,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					},
+					{
+						"name": "contactId",
+						"in": "query",
+						"required": false,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					},
+					{
+						"name": "ownerId",
+						"in": "query",
+						"description": "Someone's.",
+						"required": false,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					},
+					{
+						"name": "mine",
+						"in": "query",
+						"description": "Only yours (the API fills in the owner).",
+						"required": false,
+						"schema": {
+							"type": "boolean"
+						}
+					},
+					{
+						"name": "open",
+						"in": "query",
+						"description": "Only tasks not yet done (and meetings to come).",
+						"required": false,
+						"schema": {
+							"type": "boolean"
+						}
+					},
+					{
+						"name": "kind",
+						"in": "query",
+						"required": false,
+						"schema": {
+							"$ref": "#/components/schemas/SalesActivityKind"
+						}
+					},
+					{
+						"name": "limit",
+						"in": "query",
+						"description": "At most this many (default 100, at most 500).",
+						"required": false,
+						"schema": {
+							"type": "integer",
+							"format": "int64"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "array",
+									"items": {
+										"$ref": "#/components/schemas/SalesActivity"
+									}
+								}
+							}
+						}
+					}
+				}
+			},
+			"post": {
+				"tags": ["sales"],
+				"summary": "Adds a task, call, meeting or note to a lead, opportunity, quote or\ncontact. A task given to someone else tells them.",
+				"operationId": "create_activity",
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/SalesActivityInput"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"201": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/SalesActivity"
+								}
+							}
+						}
+					},
+					"422": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/activities/{id}": {
+			"get": {
+				"tags": ["sales"],
+				"operationId": "get_activity",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/SalesActivity"
+								}
+							}
+						}
+					}
+				}
+			},
+			"put": {
+				"tags": ["sales"],
+				"operationId": "update_activity",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/SalesActivityInput"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/SalesActivity"
+								}
+							}
+						}
+					}
+				}
+			},
+			"delete": {
+				"tags": ["sales"],
+				"operationId": "delete_activity",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"responses": {
+					"204": {}
+				}
+			}
+		},
+		"/api/v1/activities/{id}/done": {
+			"post": {
+				"tags": ["sales"],
+				"summary": "Marks it done, or not.",
+				"operationId": "complete_activity",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/CompleteActivity"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/SalesActivity"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
 		"/api/v1/agreements": {
 			"get": {
 				"tags": ["agreements"],
@@ -27690,6 +27942,20 @@
 					}
 				}
 			},
+			"CompleteActivity": {
+				"type": "object",
+				"required": ["done"],
+				"properties": {
+					"done": {
+						"type": "boolean"
+					},
+					"outcome": {
+						"type": ["string", "null"],
+						"description": "How it went (a call's outcome, say)."
+					}
+				},
+				"additionalProperties": false
+			},
 			"ConfirmPasswordResetRequest": {
 				"type": "object",
 				"required": ["token", "newPassword"],
@@ -31768,6 +32034,7 @@
 					"unknownSender",
 					"stripReplies",
 					"enabled",
+					"purpose",
 					"hasPassword",
 					"version",
 					"createdAt"
@@ -31830,6 +32097,10 @@
 					"orgId": {
 						"type": "string",
 						"format": "uuid"
+					},
+					"purpose": {
+						"type": "string",
+						"description": "`tickets` (each message opens or updates a ticket) or `sales_log`\n(messages are logged on the contacts and leads they're to or from)."
 					},
 					"queueId": {
 						"type": ["string", "null"],
@@ -31912,6 +32183,10 @@
 						"format": "password",
 						"description": "The IMAP password; left out, the stored one stays.",
 						"writeOnly": true
+					},
+					"purpose": {
+						"type": ["string", "null"],
+						"description": "`tickets` (default) or `sales_log`."
 					},
 					"queueId": {
 						"type": ["string", "null"],
@@ -38074,6 +38349,169 @@
 						"type": ["string", "null"]
 					}
 				}
+			},
+			"SalesActivity": {
+				"type": "object",
+				"required": ["id", "orgId", "kind", "subject", "body", "createdAt"],
+				"properties": {
+					"body": {
+						"type": "string"
+					},
+					"contactId": {
+						"type": ["string", "null"],
+						"format": "uuid"
+					},
+					"contactName": {
+						"type": ["string", "null"]
+					},
+					"createdAt": {
+						"type": "string",
+						"format": "date-time"
+					},
+					"createdByName": {
+						"type": ["string", "null"]
+					},
+					"direction": {
+						"type": ["string", "null"],
+						"description": "Emails: `in` (from them) or `out` (to them)."
+					},
+					"doneAt": {
+						"type": ["string", "null"],
+						"format": "date-time"
+					},
+					"dueAt": {
+						"type": ["string", "null"],
+						"format": "date-time"
+					},
+					"durationMinutes": {
+						"type": ["integer", "null"],
+						"format": "int32"
+					},
+					"emailId": {
+						"type": ["string", "null"],
+						"format": "uuid"
+					},
+					"endsAt": {
+						"type": ["string", "null"],
+						"format": "date-time"
+					},
+					"id": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"kind": {
+						"$ref": "#/components/schemas/SalesActivityKind"
+					},
+					"leadId": {
+						"type": ["string", "null"],
+						"format": "uuid"
+					},
+					"leadName": {
+						"type": ["string", "null"]
+					},
+					"location": {
+						"type": ["string", "null"]
+					},
+					"opportunityId": {
+						"type": ["string", "null"],
+						"format": "uuid"
+					},
+					"opportunityName": {
+						"type": ["string", "null"]
+					},
+					"orgId": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"outcome": {
+						"type": ["string", "null"]
+					},
+					"ownerId": {
+						"type": ["string", "null"],
+						"format": "uuid"
+					},
+					"ownerName": {
+						"type": ["string", "null"]
+					},
+					"quoteId": {
+						"type": ["string", "null"],
+						"format": "uuid"
+					},
+					"startsAt": {
+						"type": ["string", "null"],
+						"format": "date-time"
+					},
+					"subject": {
+						"type": "string"
+					}
+				}
+			},
+			"SalesActivityInput": {
+				"type": "object",
+				"required": ["kind", "subject"],
+				"properties": {
+					"body": {
+						"type": "string"
+					},
+					"contactId": {
+						"type": ["string", "null"],
+						"format": "uuid"
+					},
+					"done": {
+						"type": "boolean",
+						"description": "Done already (calls, meetings and notes that happened)."
+					},
+					"dueAt": {
+						"type": ["string", "null"],
+						"format": "date-time"
+					},
+					"durationMinutes": {
+						"type": ["integer", "null"],
+						"format": "int32"
+					},
+					"endsAt": {
+						"type": ["string", "null"],
+						"format": "date-time"
+					},
+					"kind": {
+						"$ref": "#/components/schemas/SalesActivityKind"
+					},
+					"leadId": {
+						"type": ["string", "null"],
+						"format": "uuid"
+					},
+					"location": {
+						"type": ["string", "null"]
+					},
+					"opportunityId": {
+						"type": ["string", "null"],
+						"format": "uuid"
+					},
+					"outcome": {
+						"type": ["string", "null"]
+					},
+					"ownerId": {
+						"type": ["string", "null"],
+						"format": "uuid",
+						"description": "Who it's for (default: you)."
+					},
+					"quoteId": {
+						"type": ["string", "null"],
+						"format": "uuid"
+					},
+					"startsAt": {
+						"type": ["string", "null"],
+						"format": "date-time"
+					},
+					"subject": {
+						"type": "string"
+					}
+				},
+				"additionalProperties": false
+			},
+			"SalesActivityKind": {
+				"type": "string",
+				"enum": ["task", "call", "meeting", "note", "email"]
 			},
 			"SalesOrder": {
 				"type": "object",

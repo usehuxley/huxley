@@ -1,0 +1,31 @@
+apiVersion: usehuxley.io/v1
+kind: Workflow
+metadata:
+  key: log-sales-email
+  name: Log sales email
+  description: >-
+    When a mailbox set to log sales email receives a message, files it on
+    each contact it's from or to (on their client's latest open
+    opportunity) and on open leads with those addresses. BCC the mailbox's
+    address on mail to clients and prospects.
+spec:
+  inputs:
+    type: object
+    required: [email_id]
+    properties:
+      email_id: { type: string }
+      mailbox_id: { type: string }
+      from: { type: [string, "null"] }
+      subject: { type: string }
+      purpose: { type: string }
+  triggers:
+    - type: event
+      event: email.received
+      filter: "{{ event.payload.purpose == 'sales_log' }}"
+  steps:
+    - id: log
+      type: core.sales.log_email
+      with:
+        email_id: "{{ inputs.email_id }}"
+  outputs:
+    logged: "{{ steps.log.output.logged }}"

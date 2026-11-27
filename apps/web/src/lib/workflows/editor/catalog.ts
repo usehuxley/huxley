@@ -542,6 +542,16 @@ export const STEPS: StepSpec[] = [
 		]
 	},
 	{
+		type: 'core.sales.log_email',
+		label: 'Log a sales email',
+		description:
+			'File an email on the contacts and leads it is to or from, as activities on their deals.',
+		group: 'Actions',
+		module: 'sales',
+		template: { with: { email_id: '{{ inputs.email_id }}' } },
+		fields: [{ path: 'with.email_id', label: 'Email', kind: 'expression' }]
+	},
+	{
 		type: 'core.calendar.sync',
 		label: 'Sync calendars',
 		description: "Read people's busy time from Microsoft 365 or their calendar feeds.",

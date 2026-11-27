@@ -384,4 +384,57 @@ test.describe('quotes', () => {
 		await page.getByRole('button', { name: 'Close', exact: true }).click();
 		await expect(page.getByText('Closed', { exact: true })).toBeVisible();
 	});
+
+	test('activities are planned and logged on a deal', async ({ page }) => {
+		const stamp = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+		const api = await request.newContext({
+			baseURL: apiUrl,
+			extraHTTPHeaders: { 'x-requested-with': 'huxley' }
+		});
+		await api.post('/api/v1/auth/login', { data: { email: ownerEmail, password: ownerPassword } });
+		for (const module of ['contracts', 'sales']) {
+			await api.put(`/api/v1/modules/${module}`, { data: { enabled: true } });
+		}
+		const orgs = (await (await api.get('/api/v1/orgs')).json()) as {
+			id: string;
+			parentId: string | null;
+		}[];
+		const root = orgs.find((o) => o.parentId === null)!.id;
+		const client = (await (
+			await api.post('/api/v1/orgs', {
+				data: { parentId: root, kind: 'client', name: `Pied Piper ${stamp}` }
+			})
+		).json()) as { id: string };
+		const opp = (await (
+			await api.post('/api/v1/opportunities', {
+				data: { orgId: client.id, opportunity: { name: `Compression ${stamp}` } }
+			})
+		).json()) as { id: string };
+		await api.dispose();
+
+		await signIn(page);
+		await page.goto(`/sales/opportunities/${opp.id}`);
+		await page.getByRole('button', { name: 'Log or plan something' }).click();
+		await page.getByLabel('What').fill(`Send pricing ${stamp}`);
+		await page.getByRole('button', { name: 'Add', exact: true }).click();
+		const todo = page.getByRole('list', { name: 'Open tasks' });
+		await expect(todo).toContainText(`Send pricing ${stamp}`);
+
+		await page.getByRole('button', { name: 'Log or plan something' }).click();
+		await page.getByLabel('Kind').selectOption('call');
+		await page.getByLabel('What').fill('Intro call');
+		await page.getByLabel('Minutes').fill('20');
+		await page.getByRole('button', { name: 'Add', exact: true }).click();
+		const history = page.getByRole('list', { name: 'Activity history' });
+		await expect(history).toContainText('Intro call');
+		await expect(history).toContainText('20 min');
+
+		await openFromMenu(page, 'Activities');
+		await expect(page.getByRole('heading', { level: 1 })).toHaveText('My activities');
+		const item = page.getByRole('listitem').filter({ hasText: `Send pricing ${stamp}` });
+		await item.getByRole('button', { name: 'Done' }).click();
+		await expect(page.getByRole('list', { name: 'Done lately' })).toContainText(
+			`Send pricing ${stamp}`
+		);
+	});
 });

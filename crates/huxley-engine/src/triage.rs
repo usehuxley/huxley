@@ -324,6 +324,42 @@ impl Engine {
         Ok(json!(change))
     }
 
+    /// `core.sales.log_email`: logs a sales mailbox's email on the contacts
+    /// and leads it's to or from.
+    pub(crate) async fn sales_log_email(&self, org_id: Uuid, input: &Json) -> Result<Json, Json> {
+        let mut tx = begin_scoped(self.db(), &OrgScope::System)
+            .await
+            .map_err(internal)?;
+        let on = huxley_modules::is_active_at(&mut tx, huxley_sales::MODULE, org_id)
+            .await
+            .map_err(internal)?;
+        if !on {
+            return Err(error("module_disabled", "Sales is turned off"));
+        }
+        let email = id(input, "email_id")?.ok_or_else(|| error("input", "email_id is required"))?;
+        let under: bool = sqlx::query_scalar(
+            "SELECT EXISTS (SELECT 1 FROM sd_inbound_emails e JOIN organizations eo ON eo.id = e.org_id \
+               JOIN organizations o ON o.id = $2 WHERE e.id = $1 AND o.path @> eo.path)",
+        )
+        .bind(email)
+        .bind(org_id)
+        .fetch_one(&mut *tx)
+        .await
+        .map_err(internal)?;
+        if !under {
+            return Err(error("not_found", "no such email here"));
+        }
+        let ctx = RequestContext::system(Via::Workflow);
+        let logged = huxley_sales::activities::log_email(&mut tx, &ctx, email)
+            .await
+            .map_err(|e| match e {
+                huxley_sales::SalesError::NotFound => error("not_found", "no such email here"),
+                other => internal(other),
+            })?;
+        tx.commit().await.map_err(internal)?;
+        Ok(json!(logged))
+    }
+
     /// `core.quote.review`: records a quote review's decision (on a quote
     /// in the run's organization or below). Output: the review state.
     pub(crate) async fn quote_review(&self, org_id: Uuid, input: &Json) -> Result<Json, Json> {

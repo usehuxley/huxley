@@ -1,0 +1,9 @@
+apiVersion: usehuxley.io/v1
+kind: Pack
+key: huxley/sales-email-logging
+name: Sales email logging
+version: 1.0.0
+publisher: Huxley
+description: Logs each email a sales mailbox receives (a BCC address, or a synced mailbox) on the contacts and leads it's to or from, as activities on their deals.
+contents:
+  workflows: [log-sales-email]

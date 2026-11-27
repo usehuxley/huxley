@@ -60,6 +60,7 @@ pub mod kinds {
     pub const TICKET_SLA: &str = "ticket.sla";
     pub const QUOTE_MENTIONED: &str = "quote.mentioned";
     pub const QUOTE_REVIEWED: &str = "quote.reviewed";
+    pub const SALES_TASK: &str = "sales.task";
 
     pub const ALL: &[Kind] = &[
         Kind {
@@ -153,6 +154,14 @@ pub mod kinds {
         Kind {
             key: QUOTE_REVIEWED,
             description: "A quote of yours was approved, sent back for changes or rejected in review",
+            in_app: true,
+            email: true,
+            mandatory: false,
+            module: Some("sales"),
+        },
+        Kind {
+            key: SALES_TASK,
+            description: "Someone gave you a sales task",
             in_app: true,
             email: true,
             mandatory: false,

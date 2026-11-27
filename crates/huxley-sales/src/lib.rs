@@ -8,6 +8,7 @@
 //! `sales:*` permissions and that the module is on. Money is
 //! `numeric(18,4)` with an explicit currency, as decimal strings in JSON.
 
+pub mod activities;
 pub mod leads;
 pub mod opportunities;
 pub mod orders;

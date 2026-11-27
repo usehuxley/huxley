@@ -737,6 +737,17 @@
       ],
       "type": "object"
     },
+    "SalesLogEmail": {
+      "additionalProperties": false,
+      "description": "An email to log (`core.sales.log_email`): `email_id`, from a mailbox's\n`email.received`. It's filed as an activity on each contact it's from or\nto (on their client's latest open opportunity, if any) and on open leads\nwith those addresses. Output: `{ logged, unmatched: [address] }`.",
+      "properties": {
+        "email_id": true
+      },
+      "required": [
+        "email_id"
+      ],
+      "type": "object"
+    },
     "ScopeDecide": {
       "additionalProperties": false,
       "description": "A project scope change's decision to record\n(`core.project.scope.decide`): `scope_change_id` (submitted, on a\nproject in the run's organization or below), `decision` (`approved` or\n`rejected`, or a boolean), `by` and a `comment`. An approved change's\nhours are added to the budget. Raises `project.scope_change_approved`\nor `project.scope_change_rejected`. Output: the scope change.",
@@ -4163,6 +4174,69 @@
             },
             "with": {
               "$ref": "#/$defs/QuoteReview"
+            }
+          },
+          "required": [
+            "type",
+            "id",
+            "with"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Log an email on the contacts and leads it's to or from (the `sales` module).",
+          "properties": {
+            "continue_on_error": {
+              "description": "Record the error as the step's output and carry on.",
+              "type": "boolean"
+            },
+            "description": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "id": {
+              "description": "Unique in the workflow: lowercase letters, digits, underscores.\nOther steps read this step's output as `steps.<id>.output`.",
+              "type": "string"
+            },
+            "if": {
+              "description": "Skip the step unless this expression is true.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "name": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "retry": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/RetryPolicy"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "timeout": {
+              "description": "Fail the attempt after this long, e.g. `30s`.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "type": {
+              "const": "core.sales.log_email",
+              "type": "string"
+            },
+            "with": {
+              "$ref": "#/$defs/SalesLogEmail"
             }
           },
           "required": [
