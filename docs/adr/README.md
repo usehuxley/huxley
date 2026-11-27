@@ -89,3 +89,4 @@ Decisions that shape Huxley. Add a new ADR by copying `0000-template.md` with th
 | [083](0083-reimbursement.md) | Expenses are paid back as a bill to the person through the accounting packs | Accepted |
 | [084](0084-card-transactions.md) | Card charges are imported, deduplicated by bank ID, and matched to the cardholder's expenses | Accepted |
 | [085](0085-retention.md) | A daily sweep enforces retention; the audit log is exported, not pruned | Accepted |
+| [086](0086-audit-sealing.md) | Audit records are sealed into the hash chain after commit | Accepted |

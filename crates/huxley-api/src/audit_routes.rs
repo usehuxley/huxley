@@ -83,6 +83,16 @@ pub async fn list(
             .replace('_', "\\_")
     });
 
+    // What's just been written is sealed into the chain before it's listed.
+    let mut conn = state
+        .db
+        .acquire()
+        .await
+        .map_err(|e| ApiError::internal(&e))?;
+    huxley_db::audit::seal(&mut conn)
+        .await
+        .map_err(|e| ApiError::internal(&e))?;
+    drop(conn);
     let mut tx = begin_scoped(&state.db, &OrgScope::System)
         .await
         .map_err(|e| ApiError::internal(&e))?;
@@ -93,7 +103,7 @@ pub async fn list(
            FROM audit_events e \
            LEFT JOIN users u ON u.id = e.actor_id \
            LEFT JOIN organizations o ON o.id = e.org_id \
-          WHERE ($1::bigint IS NULL OR e.seq < $1) \
+          WHERE e.seq IS NOT NULL AND ($1::bigint IS NULL OR e.seq < $1) \
             AND ($2::text IS NULL OR e.action LIKE $2 || '%') \
             AND ($3::uuid IS NULL OR e.target_id = $3) \
           ORDER BY e.seq DESC LIMIT $4",
@@ -294,6 +304,17 @@ pub async fn export(
     .await
     .map_err(|e| ApiError::internal(&e))?;
     tx.commit().await.map_err(|e| ApiError::internal(&e))?;
+    // Everything committed so far, the export's own record included, is
+    // sealed into the chain before it's exported (ADR-086).
+    let mut conn = state
+        .db
+        .acquire()
+        .await
+        .map_err(|e| ApiError::internal(&e))?;
+    huxley_db::audit::seal(&mut conn)
+        .await
+        .map_err(|e| ApiError::internal(&e))?;
+    drop(conn);
 
     let (db, format, from, to) = (state.db.clone(), params.format, params.from, params.to);
     let header_chunk = matches!(format, ExportFormat::Csv)

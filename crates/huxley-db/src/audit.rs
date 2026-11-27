@@ -62,7 +62,7 @@ pub async fn record(
 ) -> Result<Uuid, DbError> {
     let id = huxley_core::new_id();
     let (target_type, target_id) = record.target.unzip();
-    // seq, occurred_at, prev_hash, and hash are overwritten by the chain trigger.
+    // seq, prev_hash and hash are filled in when the record is sealed (ADR-086).
     sqlx::query(
         "INSERT INTO audit_events \
             (id, seq, actor_type, actor_id, via, ip, user_agent, request_id, \
@@ -100,10 +100,31 @@ const VERIFY_BATCH: i64 = 1000;
 /// (seq, `prev_hash`, hash, recomputed hash)
 type ChainRow = (i64, Vec<u8>, Vec<u8>, Vec<u8>);
 
+/// Seals committed audit records into the hash chain (ADR-086): oldest
+/// first, until none are left or another sealer holds the chain. Returns how
+/// many it sealed.
+pub async fn seal(conn: &mut PgConnection) -> Result<u64, DbError> {
+    let mut total = 0u64;
+    loop {
+        let n: i32 = sqlx::query_scalar("SELECT huxley_audit_seal(1000)")
+            .fetch_one(&mut *conn)
+            .await?;
+        total += u64::try_from(n).unwrap_or(0);
+        if n < 1000 {
+            return Ok(total);
+        }
+    }
+}
+
 /// Recomputes the whole hash chain from one consistent snapshot, so audit
-/// writes happening meanwhile don't look like tampering. Use an owner pool:
-/// RLS would hide records from the application role.
+/// writes happening meanwhile don't look like tampering. Seals what's
+/// waiting first. Use an owner pool: RLS would hide records from the
+/// application role.
 pub async fn verify_chain(pool: &PgPool) -> Result<ChainStatus, DbError> {
+    {
+        let mut conn = pool.acquire().await?;
+        seal(&mut conn).await?;
+    }
     let mut tx = pool.begin().await?;
     sqlx::query("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY")
         .execute(&mut *tx)

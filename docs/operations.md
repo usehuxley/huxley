@@ -16,3 +16,9 @@ Some data grows without end, so a daily sweep removes what's older than its rete
 The sweep runs in the scheduler role a few minutes after start, then daily. **Sweep now** runs it straight away, and the page shows what the last sweep removed. Run partitions the sweep empties are dropped.
 
 The **audit log** isn't swept. It's a hash chain (`huxley admin verify-audit` checks it), so export it to your SIEM or archive instead of deleting it.
+
+## The audit log
+
+Every change is recorded in the audit log, which is a hash chain. Each record carries the hash of the one before it, so an edit or a deletion breaks the chain. `huxley admin verify-audit` checks it.
+
+Records are chained ("sealed") about a second after their change commits, by the scheduler role (ADR-086). The audit list and verification seal anything waiting first.
