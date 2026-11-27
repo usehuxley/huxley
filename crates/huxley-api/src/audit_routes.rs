@@ -304,6 +304,17 @@ pub async fn export(
     .await
     .map_err(|e| ApiError::internal(&e))?;
     tx.commit().await.map_err(|e| ApiError::internal(&e))?;
+    // Everything committed so far, the export's own record included, is
+    // sealed into the chain before it's exported (ADR-086).
+    let mut conn = state
+        .db
+        .acquire()
+        .await
+        .map_err(|e| ApiError::internal(&e))?;
+    huxley_db::audit::seal(&mut conn)
+        .await
+        .map_err(|e| ApiError::internal(&e))?;
+    drop(conn);
 
     let (db, format, from, to) = (state.db.clone(), params.format, params.from, params.to);
     let header_chunk = matches!(format, ExportFormat::Csv)

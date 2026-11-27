@@ -460,12 +460,13 @@ async fn notes_activity_and_events() {
         events,
         ["ticket.created", "ticket.note_added", "ticket.note_added"]
     );
-    let audited: Vec<String> =
-        sqlx::query_scalar("SELECT action FROM audit_events WHERE target_id = $1 ORDER BY seq")
-            .bind(id)
-            .fetch_all(&mut *tx)
-            .await
-            .unwrap();
+    let audited: Vec<String> = sqlx::query_scalar(
+        "SELECT action FROM audit_events WHERE target_id = $1 ORDER BY occurred_at, id",
+    )
+    .bind(id)
+    .fetch_all(&mut *tx)
+    .await
+    .unwrap();
     assert_eq!(audited, events);
     tx.commit().await.unwrap();
 }
