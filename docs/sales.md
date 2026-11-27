@@ -19,10 +19,20 @@ An opportunity's page has its details, the stage strip (click a stage to move it
 - **Weighted value** is (one-time + 12 × monthly) × probability.
 - **Forecast** puts it in pipeline, best case or commit (or leaves it out).
 
+## Quotes
+
+**Business → Quotes**, or **New quote** on an opportunity, starts one. The quote page is the builder:
+
+- **Add from the catalog** fills in the SKU, name, unit, cost and price; or add a **line** of your own, or a **section** heading. Lines can be one-time or recurring (monthly, quarterly, annual), with a quantity, unit price, discount and unit cost. Tick **Option** for something the client may take or leave.
+- **Totals** update as you type: one-time, monthly, the first year (one-time + 12 months) and the **margin** on it. Options count once the client takes them.
+- **Save** keeps the quote. **Mark sent** records that it went out and keeps what was sent as a **revision**. Changing a sent quote starts the next revision; send it again when it's ready.
+- **Accepted** or **Declined** records the client's answer: who, and the options taken or why not. Accepting wins its opportunity.
+- **PDF** downloads the quote with its sections, options and totals.
+
 ## Settings
 
 **Settings → Sales pipeline** (`sales:configure`) keeps the stages (order, kind and chance of winning) and the reasons deals are won and lost. A stage with open opportunities can't be removed until they move.
 
 ## Events
 
-`sales.lead.created`, `sales.lead.converted`, `sales.opportunity.created`, `sales.opportunity.updated`, `sales.opportunity.stage_changed`, `sales.opportunity.won` and `sales.opportunity.lost`, for workflows: tell the account manager when a deal is won, start onboarding, post to a channel.
+`sales.lead.created`, `sales.lead.converted`, `sales.opportunity.created`, `sales.opportunity.updated`, `sales.opportunity.stage_changed`, `sales.opportunity.won`, `sales.opportunity.lost`, `sales.quote.created`, `sales.quote.sent`, `sales.quote.accepted` and `sales.quote.declined`, for workflows: tell the account manager when a deal is won, start onboarding, post to a channel.

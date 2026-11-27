@@ -90,3 +90,92 @@ test.describe('sales pipeline', () => {
 		await expect(row).toContainText('$5,000');
 	});
 });
+
+test.describe('quotes', () => {
+	test.skip(
+		!ownerEmail || !ownerPassword || !apiUrl,
+		'set E2E_EMAIL, E2E_PASSWORD, and HUXLEY_API_URL'
+	);
+	test.skip(preset === 'automation', 'the crm module is off in this run');
+
+	test('a quote is built from the catalog, sent and accepted, which wins the deal', async ({
+		page
+	}) => {
+		const stamp = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+		const api = await request.newContext({
+			baseURL: apiUrl,
+			extraHTTPHeaders: { 'x-requested-with': 'huxley' }
+		});
+		await api.post('/api/v1/auth/login', { data: { email: ownerEmail, password: ownerPassword } });
+		for (const module of ['contracts', 'sales']) {
+			await api.put(`/api/v1/modules/${module}`, { data: { enabled: true } });
+		}
+		const orgs = (await (await api.get('/api/v1/orgs')).json()) as {
+			id: string;
+			parentId: string | null;
+		}[];
+		const root = orgs.find((o) => o.parentId === null)!.id;
+		const product = await api.post('/api/v1/catalog/products', {
+			data: {
+				orgId: root,
+				product: {
+					sku: `FG-${stamp}`,
+					name: `Firewall ${stamp}`,
+					kind: 'product',
+					cost: '800',
+					price: '1000'
+				}
+			}
+		});
+		expect(product.status(), await product.text()).toBe(201);
+		const client = (await (
+			await api.post('/api/v1/orgs', {
+				data: { parentId: root, kind: 'client', name: `Contoso ${stamp}` }
+			})
+		).json()) as { id: string };
+		const opp = (await (
+			await api.post('/api/v1/opportunities', {
+				data: { orgId: client.id, opportunity: { name: `Firewall refresh ${stamp}` } }
+			})
+		).json()) as { id: string };
+		await api.dispose();
+
+		await signIn(page);
+		await page.goto(`/sales/opportunities/${opp.id}`);
+		await page.getByRole('link', { name: 'New quote' }).click();
+		await page.getByRole('button', { name: 'Start the quote' }).click();
+		await expect(page.getByRole('heading', { level: 1 })).toHaveText(`Firewall refresh ${stamp}`);
+
+		// Lines: one from the catalog, one written in, monthly.
+		await page
+			.getByLabel('Add from the catalog')
+			.selectOption({ label: `Firewall ${stamp} · FG-${stamp} · $1,000` });
+		await page.getByLabel('Quantity').first().fill('2');
+		await page.getByRole('button', { name: 'Line', exact: true }).click();
+		await page.getByLabel('Item name').nth(1).fill('Managed firewall');
+		await page.getByLabel('Billing').nth(1).selectOption('monthly');
+		await page.getByLabel('Unit price').nth(1).fill('25');
+		await page.getByLabel('Unit cost').nth(1).fill('15');
+		const totals = page.getByLabel('Totals');
+		await expect(totals).toContainText('$2,000');
+		await expect(totals).toContainText('$25');
+		await page.getByRole('button', { name: 'Save' }).click();
+		await expect(page.getByText('Unsaved changes')).toBeHidden();
+
+		await page.getByRole('button', { name: 'Mark sent' }).click();
+		await expect(page.getByRole('list', { name: 'Revisions' })).toContainText('Revision 1');
+		await page.getByRole('button', { name: 'Accepted', exact: true }).click();
+		const dialog = page.getByRole('dialog', { name: 'Record the acceptance' });
+		await dialog.getByLabel('Accepted by').fill('Rosa Park');
+		await dialog.getByRole('button', { name: 'Save' }).click();
+		await expect(page.getByText('Accepted by Rosa Park')).toBeVisible();
+
+		// The opportunity is won.
+		await page
+			.getByRole('link', { name: `Firewall refresh ${stamp}` })
+			.first()
+			.click();
+		await expect(page.getByText('100% likely')).toBeVisible();
+		await expect(page.getByRole('list', { name: 'Quotes' })).toContainText('Accepted');
+	});
+});

@@ -4,7 +4,16 @@
 	import { Trophy, XCircle } from '@lucide/svelte';
 	import { Badge, Button, Card, Dialog, Field, Input, Select, toast, tray } from '@usehuxley/ui';
 	import OpportunityFields from '#lib/sales/OpportunityFields.svelte';
-	import { FORECASTS, label, money, oppRef, statusTone } from '#lib/sales/labels.ts';
+	import {
+		FORECASTS,
+		QUOTE_STATUSES,
+		label,
+		money,
+		oppRef,
+		quoteRef,
+		quoteTone,
+		statusTone
+	} from '#lib/sales/labels.ts';
 	import type { PageProps } from './$types';
 
 	let { data, form }: PageProps = $props();
@@ -163,6 +172,44 @@
 						{money(o.weighted, o.currency)}
 					</dd>
 				</dl>
+			</Card>
+			<Card title="Quotes">
+				{#snippet actions()}
+					{#if data.canWrite}
+						<!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- resolve() plus a query string -->
+						<a
+							href="{resolve('/(app)/sales/quotes/new')}?opportunity={o.id}"
+							class="text-sm font-semibold text-accent hover:underline"
+						>
+							New quote
+						</a>
+					{/if}
+				{/snippet}
+				{#if data.quotes.length === 0}
+					<p class="text-sm text-fg-muted">No quotes yet.</p>
+				{:else}
+					<ul class="flex flex-col gap-2 text-sm" aria-label="Quotes">
+						{#each data.quotes as qt (qt.id)}
+							<li class="flex items-start justify-between gap-2">
+								<span class="min-w-0">
+									<a
+										href={resolve('/(app)/sales/quotes/[id]', { id: qt.id })}
+										class="font-semibold text-fg hover:text-accent"
+									>
+										{qt.title}
+									</a>
+									<span class="block font-mono text-xs text-fg-subtle">
+										{quoteRef(qt.number)} · rev {qt.revision} · {money(qt.oneTime, qt.currency)} + {money(
+											qt.monthly,
+											qt.currency
+										)}/mo
+									</span>
+								</span>
+								<Badge tone={quoteTone(qt.status)}>{label(QUOTE_STATUSES, qt.status)}</Badge>
+							</li>
+						{/each}
+					</ul>
+				{/if}
 			</Card>
 			<Card title="History">
 				<ol class="flex flex-col gap-2 text-sm" aria-label="Stage history">

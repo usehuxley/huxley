@@ -12940,6 +12940,364 @@
 				}
 			}
 		},
+		"/api/v1/quotes": {
+			"get": {
+				"tags": ["sales"],
+				"summary": "Quotes you can see, newest first.",
+				"operationId": "list_quotes",
+				"parameters": [
+					{
+						"name": "orgId",
+						"in": "query",
+						"required": false,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					},
+					{
+						"name": "opportunityId",
+						"in": "query",
+						"required": false,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					},
+					{
+						"name": "status",
+						"in": "query",
+						"required": false,
+						"schema": {
+							"$ref": "#/components/schemas/QuoteStatus"
+						}
+					},
+					{
+						"name": "q",
+						"in": "query",
+						"description": "In the title, the client's name or the number.",
+						"required": false,
+						"schema": {
+							"type": "string"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "array",
+									"items": {
+										"$ref": "#/components/schemas/Quote"
+									}
+								}
+							}
+						}
+					}
+				}
+			},
+			"post": {
+				"tags": ["sales"],
+				"summary": "Drafts a quote.",
+				"operationId": "create_quote",
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/CreateQuoteRequest"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"201": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Quote"
+								}
+							}
+						}
+					},
+					"422": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/quotes/{id}": {
+			"get": {
+				"tags": ["sales"],
+				"operationId": "get_quote",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Quote"
+								}
+							}
+						}
+					}
+				}
+			},
+			"put": {
+				"tags": ["sales"],
+				"summary": "Saves the quote and all its lines (send the version you read). A sent\nquote goes back to draft as its next revision.",
+				"operationId": "update_quote",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/QuoteInput"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Quote"
+								}
+							}
+						}
+					},
+					"409": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			},
+			"delete": {
+				"tags": ["sales"],
+				"summary": "Deletes a quote that was never sent.",
+				"operationId": "delete_quote",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"responses": {
+					"204": {},
+					"409": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/quotes/{id}/decision": {
+			"post": {
+				"tags": ["sales"],
+				"summary": "Records the client's acceptance (with the options taken) or decline.\nAccepting wins its open opportunity.",
+				"operationId": "decide_quote",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/DecisionInput"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Quote"
+								}
+							}
+						}
+					},
+					"409": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/quotes/{id}/pdf": {
+			"get": {
+				"tags": ["sales"],
+				"summary": "The quote as a PDF: its lines, options and totals.",
+				"operationId": "quote_pdf",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "The PDF",
+						"content": {
+							"application/pdf": {
+								"schema": {
+									"type": "array",
+									"items": {
+										"type": "integer",
+										"format": "int32",
+										"minimum": 0
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/quotes/{id}/revisions": {
+			"get": {
+				"tags": ["sales"],
+				"summary": "What was sent each time, newest first.",
+				"operationId": "quote_revisions",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "array",
+									"items": {
+										"$ref": "#/components/schemas/Revision"
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/quotes/{id}/send": {
+			"post": {
+				"tags": ["sales"],
+				"summary": "Marks a draft sent, keeping what was sent as its revision.",
+				"operationId": "send_quote",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/SendQuoteRequest"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Quote"
+								}
+							}
+						}
+					},
+					"409": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
 		"/api/v1/role-assignments": {
 			"post": {
 				"tags": ["users"],
@@ -25767,6 +26125,21 @@
 					}
 				]
 			},
+			"CreateQuoteRequest": {
+				"type": "object",
+				"required": ["orgId", "quote"],
+				"properties": {
+					"orgId": {
+						"type": "string",
+						"format": "uuid",
+						"description": "The client it's for."
+					},
+					"quote": {
+						"$ref": "#/components/schemas/QuoteInput"
+					}
+				},
+				"additionalProperties": false
+			},
 			"CreateScriptRequest": {
 				"type": "object",
 				"required": ["orgId", "script"],
@@ -26325,6 +26698,37 @@
 			"Decision": {
 				"type": "string",
 				"enum": ["approve", "reject"]
+			},
+			"DecisionInput": {
+				"type": "object",
+				"description": "The client's answer.",
+				"required": ["accept", "name", "version"],
+				"properties": {
+					"accept": {
+						"type": "boolean"
+					},
+					"name": {
+						"type": "string",
+						"description": "Who decided, as they'd have it written."
+					},
+					"options": {
+						"type": "array",
+						"items": {
+							"type": "string",
+							"format": "uuid"
+						},
+						"description": "The options taken (accepting only); others are left out."
+					},
+					"reason": {
+						"type": ["string", "null"],
+						"description": "Why, when declining."
+					},
+					"version": {
+						"type": "integer",
+						"format": "int32"
+					}
+				},
+				"additionalProperties": false
 			},
 			"DecisionRequest": {
 				"type": "object",
@@ -32610,6 +33014,354 @@
 					}
 				}
 			},
+			"Quote": {
+				"type": "object",
+				"required": [
+					"id",
+					"orgId",
+					"orgName",
+					"number",
+					"title",
+					"status",
+					"revision",
+					"currency",
+					"intro",
+					"terms",
+					"version",
+					"createdAt",
+					"updatedAt",
+					"lines",
+					"totals"
+				],
+				"properties": {
+					"contactEmail": {
+						"type": ["string", "null"]
+					},
+					"contactId": {
+						"type": ["string", "null"],
+						"format": "uuid"
+					},
+					"contactName": {
+						"type": ["string", "null"]
+					},
+					"createdAt": {
+						"type": "string",
+						"format": "date-time"
+					},
+					"currency": {
+						"type": "string"
+					},
+					"decidedAt": {
+						"type": ["string", "null"],
+						"format": "date-time"
+					},
+					"decidedBy": {
+						"type": ["string", "null"]
+					},
+					"declineReason": {
+						"type": ["string", "null"]
+					},
+					"id": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"intro": {
+						"type": "string"
+					},
+					"lines": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/QuoteLine"
+						}
+					},
+					"number": {
+						"type": "integer",
+						"format": "int64",
+						"description": "`Q-` and this number."
+					},
+					"opportunityId": {
+						"type": ["string", "null"],
+						"format": "uuid"
+					},
+					"opportunityName": {
+						"type": ["string", "null"]
+					},
+					"orgId": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"orgName": {
+						"type": "string"
+					},
+					"ownerId": {
+						"type": ["string", "null"],
+						"format": "uuid"
+					},
+					"ownerName": {
+						"type": ["string", "null"]
+					},
+					"revision": {
+						"type": "integer",
+						"format": "int32"
+					},
+					"sentAt": {
+						"type": ["string", "null"],
+						"format": "date-time"
+					},
+					"status": {
+						"$ref": "#/components/schemas/QuoteStatus"
+					},
+					"terms": {
+						"type": "string"
+					},
+					"title": {
+						"type": "string"
+					},
+					"totals": {
+						"$ref": "#/components/schemas/QuoteTotals"
+					},
+					"updatedAt": {
+						"type": "string",
+						"format": "date-time"
+					},
+					"validUntil": {
+						"type": ["string", "null"],
+						"format": "date"
+					},
+					"version": {
+						"type": "integer",
+						"format": "int32"
+					}
+				}
+			},
+			"QuoteBilling": {
+				"type": "string",
+				"description": "How often a line is charged.",
+				"enum": ["one_time", "monthly", "quarterly", "annual"]
+			},
+			"QuoteInput": {
+				"type": "object",
+				"required": ["title"],
+				"properties": {
+					"contactId": {
+						"type": ["string", "null"],
+						"format": "uuid"
+					},
+					"currency": {
+						"type": "string"
+					},
+					"intro": {
+						"type": "string"
+					},
+					"lines": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/QuoteLineInput"
+						},
+						"description": "Every line, in order (replaces them all)."
+					},
+					"opportunityId": {
+						"type": ["string", "null"],
+						"format": "uuid"
+					},
+					"ownerId": {
+						"type": ["string", "null"],
+						"format": "uuid"
+					},
+					"terms": {
+						"type": "string"
+					},
+					"title": {
+						"type": "string"
+					},
+					"validUntil": {
+						"type": ["string", "null"],
+						"format": "date"
+					},
+					"version": {
+						"type": ["integer", "null"],
+						"format": "int32",
+						"description": "The version you read (updates only)."
+					}
+				},
+				"additionalProperties": false
+			},
+			"QuoteLine": {
+				"type": "object",
+				"required": [
+					"id",
+					"position",
+					"kind",
+					"name",
+					"description",
+					"billing",
+					"quantity",
+					"unit",
+					"unitCost",
+					"unitPrice",
+					"discountPct",
+					"taxable",
+					"optional",
+					"selected",
+					"total"
+				],
+				"properties": {
+					"billing": {
+						"$ref": "#/components/schemas/QuoteBilling"
+					},
+					"description": {
+						"type": "string"
+					},
+					"discountPct": {
+						"type": "string",
+						"description": "Percent off, 0 to 100."
+					},
+					"id": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"kind": {
+						"$ref": "#/components/schemas/QuoteLineKind"
+					},
+					"name": {
+						"type": "string"
+					},
+					"optional": {
+						"type": "boolean",
+						"description": "An option the client may take or leave."
+					},
+					"position": {
+						"type": "integer",
+						"format": "int32"
+					},
+					"productId": {
+						"type": ["string", "null"],
+						"format": "uuid"
+					},
+					"quantity": {
+						"type": "string"
+					},
+					"selected": {
+						"type": "boolean",
+						"description": "Counted in the totals (always, unless an option left out)."
+					},
+					"sku": {
+						"type": ["string", "null"]
+					},
+					"taxable": {
+						"type": "boolean"
+					},
+					"total": {
+						"type": "string",
+						"description": "Quantity × price, less the discount (per charge)."
+					},
+					"unit": {
+						"type": "string"
+					},
+					"unitCost": {
+						"type": "string"
+					},
+					"unitPrice": {
+						"type": "string"
+					}
+				}
+			},
+			"QuoteLineInput": {
+				"type": "object",
+				"properties": {
+					"billing": {
+						"oneOf": [
+							{
+								"$ref": "#/components/schemas/QuoteBilling"
+							},
+							{
+								"type": "null"
+							}
+						]
+					},
+					"description": {
+						"type": ["string", "null"]
+					},
+					"discountPct": {
+						"type": ["string", "null"]
+					},
+					"kind": {
+						"$ref": "#/components/schemas/QuoteLineKind"
+					},
+					"name": {
+						"type": ["string", "null"]
+					},
+					"optional": {
+						"type": "boolean"
+					},
+					"productId": {
+						"type": ["string", "null"],
+						"format": "uuid",
+						"description": "From the catalog; its SKU, name, unit, cost and price fill what's left out."
+					},
+					"quantity": {
+						"type": ["string", "null"]
+					},
+					"selected": {
+						"type": ["boolean", "null"],
+						"description": "Whether an option is in (default yes)."
+					},
+					"sku": {
+						"type": ["string", "null"]
+					},
+					"taxable": {
+						"type": ["boolean", "null"]
+					},
+					"unit": {
+						"type": ["string", "null"]
+					},
+					"unitCost": {
+						"type": ["string", "null"]
+					},
+					"unitPrice": {
+						"type": ["string", "null"]
+					}
+				},
+				"additionalProperties": false
+			},
+			"QuoteLineKind": {
+				"type": "string",
+				"enum": ["item", "heading"]
+			},
+			"QuoteStatus": {
+				"type": "string",
+				"enum": ["draft", "sent", "accepted", "declined"]
+			},
+			"QuoteTotals": {
+				"type": "object",
+				"required": ["oneTime", "monthly", "firstYear", "firstYearCost", "discounts"],
+				"properties": {
+					"discounts": {
+						"type": "string",
+						"description": "What the discounts take off the first year."
+					},
+					"firstYear": {
+						"type": "string",
+						"description": "One-time + 12 months of recurring."
+					},
+					"firstYearCost": {
+						"type": "string",
+						"description": "The cost of the first year."
+					},
+					"marginPct": {
+						"type": ["string", "null"],
+						"description": "Margin on the first year, as a percent (none without revenue)."
+					},
+					"monthly": {
+						"type": "string",
+						"description": "Recurring lines, per month."
+					},
+					"oneTime": {
+						"type": "string",
+						"description": "One-time lines."
+					}
+				}
+			},
 			"RaisePortalTicket": {
 				"type": "object",
 				"required": ["title"],
@@ -33052,6 +33804,27 @@
 					},
 					"language": {
 						"type": "string"
+					}
+				}
+			},
+			"Revision": {
+				"type": "object",
+				"required": ["revision", "sentAt", "snapshot"],
+				"properties": {
+					"revision": {
+						"type": "integer",
+						"format": "int32"
+					},
+					"sentAt": {
+						"type": "string",
+						"format": "date-time"
+					},
+					"sentByName": {
+						"type": ["string", "null"]
+					},
+					"snapshot": {
+						"type": "object",
+						"description": "The quote as sent, lines and totals included."
 					}
 				}
 			},
@@ -33749,6 +34522,17 @@
 						"type": "string"
 					}
 				}
+			},
+			"SendQuoteRequest": {
+				"type": "object",
+				"required": ["version"],
+				"properties": {
+					"version": {
+						"type": "integer",
+						"format": "int32"
+					}
+				},
+				"additionalProperties": false
 			},
 			"SentimentEntry": {
 				"type": "object",

@@ -10,6 +10,7 @@
 
 pub mod leads;
 pub mod opportunities;
+pub mod quotes;
 pub mod stages;
 
 use std::str::FromStr;
@@ -82,6 +83,34 @@ pub(crate) fn required(field: &str, value: &str, max: usize) -> SalesResult<Stri
 #[allow(clippy::trivially_copy_pass_by_ref)]
 pub(crate) fn plain<S: serde::Serializer>(value: &Decimal, s: S) -> Result<S::Ok, S::Error> {
     s.serialize_str(&value.normalize().to_string())
+}
+
+/// Out as a decimal string without trailing zeros, or null.
+#[allow(clippy::ref_option)]
+pub(crate) fn plain_opt<S: serde::Serializer>(
+    value: &Option<Decimal>,
+    s: S,
+) -> Result<S::Ok, S::Error> {
+    match value {
+        Some(d) => s.serialize_str(&d.normalize().to_string()),
+        None => s.serialize_none(),
+    }
+}
+
+/// Money, or nothing: a decimal string or a JSON number; missing or blank is `None`.
+pub(crate) fn money_opt<'de, D: Deserializer<'de>>(d: D) -> Result<Option<Decimal>, D::Error> {
+    use serde::de::Error;
+    match Option::<Json>::deserialize(d)? {
+        None | Some(Json::Null) => Ok(None),
+        Some(Json::String(s)) if s.trim().is_empty() => Ok(None),
+        Some(Json::String(s)) => Decimal::from_str(s.trim())
+            .map(Some)
+            .map_err(|_| D::Error::custom(format!("{s:?} isn't a number"))),
+        Some(Json::Number(n)) => Decimal::from_str(&n.to_string())
+            .map(Some)
+            .map_err(|_| D::Error::custom(format!("{n} isn't a number we can keep"))),
+        Some(other) => Err(D::Error::custom(format!("{other} isn't a number"))),
+    }
 }
 
 /// Money: a decimal string (`"12.50"`) or a JSON number; missing is zero.

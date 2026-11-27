@@ -9,12 +9,13 @@ import type { Actions, PageServerLoad } from './$types';
 export const load: PageServerLoad = async (event) => {
 	const client = api(event);
 	const id = event.params.id;
-	const [found, history, stages, reasons, people] = await Promise.all([
+	const [found, history, stages, reasons, people, quotes] = await Promise.all([
 		client.GET('/api/v1/opportunities/{id}', { params: { path: { id } } }),
 		client.GET('/api/v1/opportunities/{id}/history', { params: { path: { id } } }),
 		client.GET('/api/v1/sales/stages'),
 		client.GET('/api/v1/sales/reasons'),
-		assignees(event)
+		assignees(event),
+		client.GET('/api/v1/quotes', { params: { query: { opportunityId: id } } })
 	]);
 	if (found.response.status === 404) error(404, 'Opportunity not found.');
 	if (!found.data) error(503, 'Could not load the opportunity.');
@@ -25,6 +26,16 @@ export const load: PageServerLoad = async (event) => {
 	return {
 		opportunity: found.data,
 		history: history.data ?? [],
+		quotes: (quotes.data ?? []).map((q) => ({
+			id: q.id,
+			number: q.number,
+			title: q.title,
+			status: q.status,
+			revision: q.revision,
+			oneTime: q.totals.oneTime,
+			monthly: q.totals.monthly,
+			currency: q.currency
+		})),
 		stages: stages.data ?? [],
 		reasons: reasons.data ?? [],
 		people: people.people,
