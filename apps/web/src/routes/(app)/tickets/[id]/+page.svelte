@@ -15,7 +15,20 @@
 		Square,
 		X
 	} from '@lucide/svelte';
-	import { Badge, Button, Card, Dialog, Field, Input, Select, toast, tray } from '@usehuxley/ui';
+	import {
+		Badge,
+		Button,
+		Card,
+		Dialog,
+		Field,
+		HuxleyMark,
+		Input,
+		Select,
+		clockTone,
+		clockUsed,
+		toast,
+		tray
+	} from '@usehuxley/ui';
 	import { describe } from '#lib/tickets/activity.ts';
 	import { clockLines } from '#lib/tickets/sla.ts';
 	import {
@@ -214,12 +227,12 @@
 	}
 
 	const saved =
-		(done: string, after?: () => void): SubmitFunction =>
+		(done: string | (() => string), after?: () => void): SubmitFunction =>
 		({ formElement }) =>
 		async ({ result, update }) => {
 			await update({ reset: false });
 			if (result.type === 'success') {
-				toast.push({ title: done, tone: 'success' });
+				toast.push({ title: typeof done === 'function' ? done() : done, tone: 'success' });
 				after?.();
 				if (formElement.dataset.reset !== undefined) formElement.reset();
 			} else if (result.type === 'failure') {
@@ -230,6 +243,52 @@
 		};
 
 	const when = (iso: string) => new Date(iso).toLocaleString();
+
+	// Where the ticket is in its life, by status category.
+	const STAGES = [
+		{ key: 'new', label: 'New' },
+		{ key: 'open', label: 'In progress' },
+		{ key: 'pending', label: 'Waiting' },
+		{ key: 'resolved', label: 'Resolved' },
+		{ key: 'closed', label: 'Closed' }
+	];
+	let stage = $derived(STAGES.findIndex((s) => s.key === ticket.statusCategory));
+
+	// The resolution clock, short, for the header.
+	let now = $state(Date.now());
+	$effect(() => {
+		const timer = setInterval(() => (now = Date.now()), 30_000);
+		return () => clearInterval(timer);
+	});
+	let slaChip = $derived.by(() => {
+		if (!ticket.resolutionDueAt || ticket.resolutionMet != null) return null;
+		if (ticket.slaPaused) return { text: 'SLA paused', tone: 'neutral' as const };
+		const left = new Date(ticket.resolutionDueAt).getTime() - now;
+		const mins = Math.round(Math.abs(left) / 60_000);
+		const span =
+			mins >= 1440
+				? `${Math.round(mins / 1440)}d`
+				: `${Math.floor(mins / 60)}:${String(mins % 60).padStart(2, '0')}`;
+		const tone = clockTone(clockUsed({ from: ticket.createdAt, due: ticket.resolutionDueAt }, now));
+		return {
+			text: left < 0 ? `SLA breached ${span} ago` : `SLA ${span} left`,
+			tone:
+				tone === 'danger'
+					? ('danger' as const)
+					: tone === 'warn'
+						? ('warning' as const)
+						: ('success' as const)
+		};
+	});
+
+	function initials(name: string) {
+		return name
+			.split(/\s+/)
+			.filter(Boolean)
+			.slice(0, 2)
+			.map((w) => w.charAt(0).toUpperCase())
+			.join('');
+	}
 	const textarea =
 		'w-full rounded-control border border-border-strong bg-surface px-3 py-2 text-sm text-fg disabled:opacity-50';
 </script>
@@ -243,7 +302,7 @@
 		<a href={resolve('/(app)/tickets')} class="text-sm text-fg-muted hover:text-fg">← Tickets</a>
 		<div class="mt-2 flex flex-wrap items-start justify-between gap-3">
 			<div class="min-w-0">
-				<p class="text-sm text-fg-muted tabular-nums">
+				<p class="font-mono text-[12.5px] text-fg-subtle tabular-nums">
 					{ticket.reference} · {ticket.typeName} ·
 					<a
 						href={resolve('/(app)/clients/[id]', { id: ticket.orgId })}
@@ -252,11 +311,41 @@
 						{ticket.orgName}
 					</a>
 				</p>
-				<h1 class="mt-1 text-2xl font-semibold break-words text-fg">{ticket.title}</h1>
-				<div class="mt-2 flex flex-wrap gap-2">
+				<h1
+					class="mt-1 max-w-3xl text-2xl font-extrabold tracking-tight text-balance break-words text-fg"
+				>
+					{ticket.title}
+				</h1>
+				<div class="mt-2 flex flex-wrap items-center gap-2">
 					<Badge tone={categoryTone(ticket.statusCategory)}>{ticket.statusName}</Badge>
 					<Badge tone={priority.tone}>{priority.label}</Badge>
+					{#if slaChip}
+						<Badge tone={slaChip.tone}>
+							<span class="size-1.5 rounded-full bg-current" aria-hidden="true"></span>
+							<span class="font-mono tabular-nums">{slaChip.text}</span>
+						</Badge>
+					{/if}
 				</div>
+				{#if stage >= 0}
+					<!-- Labels come from CSS, so they don't repeat the status for assistive tech. -->
+					<div
+						class="mt-4 grid max-w-3xl grid-cols-5 gap-[3px]"
+						role="img"
+						aria-label="Stage: {STAGES[stage]?.label}"
+					>
+						{#each STAGES as s, i (s.key)}
+							<span
+								data-label={s.label}
+								class="stage truncate px-2 py-1.5 text-[11px] font-bold tracking-[0.04em] uppercase first:rounded-l-md last:rounded-r-md {i <
+								stage
+									? 'bg-fg-muted text-surface'
+									: i === stage
+										? 'bg-accent text-accent-fg'
+										: 'bg-surface-sunken text-fg-subtle'}"
+							></span>
+						{/each}
+					</div>
+				{/if}
 			</div>
 			{#if canWrite}
 				<div class="flex gap-2">
@@ -326,46 +415,80 @@
 					{#each timeline as entry ('note' in entry ? entry.note.id : entry.change.id)}
 						{#if 'note' in entry}
 							{@const note = entry.note}
-							<li
-								class="rounded-card border p-4 {note.kind === 'internal'
-									? 'border-warning/40 bg-warning-soft/40'
-									: note.kind === 'resolution'
-										? 'border-success/40 bg-success-soft/40'
-										: 'border-border bg-surface'}"
-							>
-								<div class="flex flex-wrap items-center gap-2 text-xs text-fg-muted">
-									<span class="font-medium text-fg">
-										{note.authorName ?? note.authorContactName ?? note.authorEmail ?? 'Someone'}
-									</span>
-									{#if note.emailId}<Badge tone="info"><Mail size={12} /> By email</Badge>{/if}
-									{#if note.kind === 'internal'}
-										<Badge tone="warning"><Lock size={12} /> Internal</Badge>
-									{:else if note.kind === 'resolution'}
-										<Badge tone="success">Resolution</Badge>
+							{@const who =
+								note.authorName ?? note.authorContactName ?? note.authorEmail ?? 'Someone'}
+							<li class="grid grid-cols-[2rem_minmax(0,1fr)] gap-3 border-t border-border pt-4">
+								<span
+									class="grid size-8 place-items-center rounded-full text-xs font-bold text-white {note.authorName
+										? 'bg-[#2f6db3]'
+										: 'bg-[#0f7c8a]'}"
+									aria-hidden="true"
+								>
+									{initials(who)}
+								</span>
+								<div
+									class="min-w-0 {note.kind === 'internal'
+										? 'rounded-card bg-warning-soft px-3 py-2'
+										: note.kind === 'resolution'
+											? 'rounded-card bg-success-soft px-3 py-2'
+											: ''}"
+								>
+									<div class="flex flex-wrap items-center gap-2 text-[13px] text-fg-subtle">
+										<span class="font-bold text-fg">{who}</span>
+										{#if note.emailId}<Badge tone="info"><Mail size={12} /> By email</Badge>{/if}
+										{#if note.kind === 'internal'}
+											<Badge tone="warning"><Lock size={12} /> Internal</Badge>
+										{:else if note.kind === 'resolution'}
+											<Badge tone="success">Resolution</Badge>
+										{/if}
+										<time datetime={note.createdAt} title={when(note.createdAt)}>
+											{ago(note.createdAt)}
+										</time>
+									</div>
+									<p
+										class="mt-1 max-w-[66ch] text-sm/relaxed break-words whitespace-pre-wrap text-fg"
+									>
+										{note.body}
+									</p>
+									{#if note.emailedAt}
+										<p class="mt-2 text-xs text-fg-muted">
+											Emailed to {note.emailedTo} · {ago(note.emailedAt)}
+										</p>
+									{:else if note.emailError}
+										<p class="mt-2 text-xs text-danger">
+											Couldn’t email {note.emailedTo}: {note.emailError}
+										</p>
 									{/if}
-									<time datetime={note.createdAt} title={when(note.createdAt)}>
-										{ago(note.createdAt)}
-									</time>
 								</div>
-								<p class="mt-2 text-sm break-words whitespace-pre-wrap text-fg">{note.body}</p>
-								{#if note.emailedAt}
-									<p class="mt-2 text-xs text-fg-muted">
-										Emailed to {note.emailedTo} · {ago(note.emailedAt)}
-									</p>
-								{:else if note.emailError}
-									<p class="mt-2 text-xs text-danger">
-										Couldn’t email {note.emailedTo}: {note.emailError}
-									</p>
-								{/if}
 							</li>
 						{:else}
 							{@const change = entry.change}
-							<li class="flex flex-wrap gap-x-1 px-1 text-xs text-fg-muted">
-								<span class="font-medium text-fg">{change.actorName ?? 'Huxley'}</span>
-								<span>{describe(change.kind, change.details, statusName)}</span>
-								<span>·</span>
-								<time datetime={change.at} title={when(change.at)}>{ago(change.at)}</time>
-							</li>
+							{#if change.actorName}
+								<li class="flex flex-wrap gap-x-1 pl-11 text-xs text-fg-muted">
+									<span class="font-medium text-fg">{change.actorName}</span>
+									<span>{describe(change.kind, change.details, statusName)}</span>
+									<span>·</span>
+									<time datetime={change.at} title={when(change.at)}>{ago(change.at)}</time>
+								</li>
+							{:else}
+								<!-- Done by the engine: a workflow, a schedule or an integration. -->
+								<li
+									class="flex items-center gap-3 border-t border-border pt-3 text-[13px] text-fg-muted"
+								>
+									<HuxleyMark size={32} />
+									<span class="min-w-0 flex-1">
+										<span class="font-bold text-fg">Huxley</span>
+										{describe(change.kind, change.details, statusName)}
+									</span>
+									<time
+										class="font-mono text-xs text-fg-subtle"
+										datetime={change.at}
+										title={when(change.at)}
+									>
+										{ago(change.at)}
+									</time>
+								</li>
+							{/if}
 						{/if}
 					{/each}
 				</ol>
@@ -376,7 +499,7 @@
 						action="?/note"
 						class="flex flex-col gap-3 rounded-card border border-border bg-surface p-4"
 						data-reset
-						use:enhance={saved(noteKind === 'internal' ? 'Note added.' : 'Reply added.')}
+						use:enhance={saved(() => (noteKind === 'internal' ? 'Note added.' : 'Reply added.'))}
 					>
 						<fieldset class="flex gap-4">
 							<legend class="sr-only">Kind of note</legend>
@@ -965,3 +1088,9 @@
 		</div>
 	</form>
 </Dialog>
+
+<style>
+	.stage::before {
+		content: attr(data-label);
+	}
+</style>
