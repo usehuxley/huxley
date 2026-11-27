@@ -129,7 +129,9 @@ test.describe('calendars', () => {
 		await page.getByLabel('Email').fill(ownerEmail!);
 		await page.getByLabel('Password').fill(ownerPassword!);
 		await page.getByRole('button', { name: 'Sign in', exact: true }).click();
-		await expect(page.getByRole('heading', { level: 1 })).toHaveText('Welcome to Huxley');
+		await expect(page.getByRole('heading', { level: 1 })).toHaveText(
+			/^Good (morning|afternoon|evening), /
+		);
 
 		// The week with tomorrow in it: the meeting shows as busy (its subject
 		// isn't kept by default).

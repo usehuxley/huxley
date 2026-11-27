@@ -47,7 +47,9 @@ test.describe('two-factor authentication', () => {
 
 		// Set up the authenticator from the profile page.
 		await submitPassword(page, email);
-		await expect(page.getByRole('heading', { level: 1 })).toHaveText('Welcome to Huxley');
+		await expect(page.getByRole('heading', { level: 1 })).toHaveText(
+			/^Good (morning|afternoon|evening), /
+		);
 		await page.goto('/profile');
 		await page.locator('#totpPassword').fill(PASSWORD);
 		await page.getByRole('button', { name: 'Set up authenticator app' }).click();
@@ -68,7 +70,9 @@ test.describe('two-factor authentication', () => {
 		await expect(page.getByRole('alert')).toHaveText('That code is not valid.');
 		await page.getByLabel('Authentication code').fill(totp(secret, 1));
 		await page.getByRole('button', { name: 'Verify' }).click();
-		await expect(page.getByRole('heading', { level: 1 })).toHaveText('Welcome to Huxley');
+		await expect(page.getByRole('heading', { level: 1 })).toHaveText(
+			/^Good (morning|afternoon|evening), /
+		);
 
 		// A recovery code works too.
 		await page.getByRole('button', { name: 'Sign out' }).click();
@@ -76,7 +80,9 @@ test.describe('two-factor authentication', () => {
 		await page.getByRole('button', { name: 'Use a recovery code' }).click();
 		await page.getByLabel('Recovery code').fill(recoveryCode);
 		await page.getByRole('button', { name: 'Verify' }).click();
-		await expect(page.getByRole('heading', { level: 1 })).toHaveText('Welcome to Huxley');
+		await expect(page.getByRole('heading', { level: 1 })).toHaveText(
+			/^Good (morning|afternoon|evening), /
+		);
 		await page.goto('/profile');
 		await expect(page.getByText('9 recovery codes left')).toBeVisible();
 	});

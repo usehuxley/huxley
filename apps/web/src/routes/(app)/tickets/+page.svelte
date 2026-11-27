@@ -7,9 +7,17 @@
 	import { Badge, Button, Dialog, EmptyState, Field, Input, Select, toast } from '@usehuxley/ui';
 	import { VIEWS, ago, categoryTone, priorityOf } from '#lib/tickets/labels.ts';
 	import { missed } from '#lib/tickets/sla.ts';
+	import SlaBar from '#lib/tickets/SlaBar.svelte';
 	import type { PageProps } from './$types';
 
 	let { data, form }: PageProps = $props();
+
+	// SLA bars count down while the list is open.
+	let now = $state(Date.now());
+	$effect(() => {
+		const timer = setInterval(() => (now = Date.now()), 30_000);
+		return () => clearInterval(timer);
+	});
 
 	let canWrite = $derived(data.user.grantedPermissions.includes('ticket:write'));
 	let queueOptions = $derived([
@@ -288,9 +296,7 @@
 	{:else}
 		<section class="overflow-x-auto rounded-card border border-border bg-surface">
 			<table class="w-full text-left text-sm" aria-label="Tickets">
-				<thead
-					class="border-b border-border bg-surface-sunken text-xs tracking-wide text-fg-muted uppercase"
-				>
+				<thead class="border-b border-border text-xs font-bold text-fg-subtle">
 					<tr>
 						{#if canWrite}
 							<th scope="col" class="w-10 py-2.5 pl-4">
@@ -308,13 +314,18 @@
 						<th scope="col" class="px-4 py-2.5 font-medium">Status</th>
 						<th scope="col" class="px-4 py-2.5 font-medium">Priority</th>
 						<th scope="col" class="px-4 py-2.5 font-medium">Assignee</th>
+						<th scope="col" class="px-4 py-2.5 font-medium">SLA</th>
 						<th scope="col" class="px-4 py-2.5 text-right font-medium">Updated</th>
 					</tr>
 				</thead>
 				<tbody>
 					{#each data.tickets as ticket (ticket.id)}
 						{@const priority = priorityOf(ticket.priority)}
-						<tr class="border-b border-border last:border-0 hover:bg-surface-sunken">
+						<tr
+							class="border-b border-border last:border-0 {selected.includes(ticket.id)
+								? 'bg-accent-soft'
+								: 'hover:bg-surface-sunken'}"
+						>
 							{#if canWrite}
 								<td class="py-2.5 pl-4">
 									<input
@@ -352,6 +363,14 @@
 							</td>
 							<td class="px-4 py-2.5 text-fg-muted">
 								{ticket.assigneeUserName ?? ticket.assigneeTeamName ?? 'Unassigned'}
+							</td>
+							<td class="px-4 py-2.5">
+								<SlaBar
+									createdAt={ticket.createdAt}
+									dueAt={ticket.resolutionMet == null ? ticket.resolutionDueAt : null}
+									paused={ticket.slaPaused}
+									{now}
+								/>
 							</td>
 							<td class="px-4 py-2.5 text-right whitespace-nowrap text-fg-muted">
 								<time

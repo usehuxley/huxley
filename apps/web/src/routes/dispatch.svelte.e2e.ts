@@ -13,7 +13,9 @@ async function signIn(page: Page) {
 	await page.getByLabel('Email').fill(ownerEmail!);
 	await page.getByLabel('Password').fill(ownerPassword!);
 	await page.getByRole('button', { name: 'Sign in', exact: true }).click();
-	await expect(page.getByRole('heading', { level: 1 })).toHaveText('Welcome to Huxley');
+	await expect(page.getByRole('heading', { level: 1 })).toHaveText(
+		/^Good (morning|afternoon|evening), /
+	);
 }
 
 async function owner(): Promise<APIRequestContext> {
