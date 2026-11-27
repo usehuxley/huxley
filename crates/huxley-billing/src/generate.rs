@@ -694,6 +694,7 @@ async fn draft(
             .details(json!({ "lines": u.lines.len(), "total": u.total.normalize().to_string(), "run": run })),
     )
     .await?;
+    crate::review::refresh(&mut *conn, id).await?;
     Ok(id)
 }
 

@@ -107,6 +107,8 @@ pub struct Invoice {
     #[serde(serialize_with = "crate::plain")]
     #[schema(value_type = String)]
     pub total: Decimal,
+    /// Whether it needs (or had) an internal review (ADR-076).
+    pub review_status: crate::review::ReviewStatus,
     pub version: i32,
     #[serde(with = "time::serde::rfc3339")]
     pub created_at: OffsetDateTime,
@@ -119,7 +121,7 @@ const SELECT: &str = "SELECT i.id, i.org_id, o.name AS org_name, i.number, i.kin
         a.display_name AS approved_by_name, i.approved_at, \
         coalesce((SELECT sum(round(l.quantity * l.unit_price, 2)) FROM billing_invoice_lines l \
                    WHERE l.invoice_id = i.id), 0) AS total, \
-        i.version, i.created_at \
+        i.review_status, i.version, i.created_at \
    FROM billing_invoices i JOIN organizations o ON o.id = i.org_id LEFT JOIN users a ON a.id = i.approved_by";
 
 #[derive(Debug, Default, Deserialize, IntoParams)]
@@ -338,7 +340,7 @@ pub async fn update(
     }
     sqlx::query(
         "UPDATE billing_invoices SET notes = $2, due_on = coalesce($3, due_on), version = version + 1, \
-            updated_at = now() WHERE id = $1",
+            revision = revision + 1, updated_at = now() WHERE id = $1",
     )
     .bind(id)
     .bind(text("notes", input.notes.as_deref(), 4000)?)
@@ -354,6 +356,7 @@ pub async fn update(
             .details(json!({ "number": current.number, "lines": input.lines.len() })),
     )
     .await?;
+    crate::review::refresh(&mut *conn, id).await?;
     get(conn, id).await
 }
 
@@ -406,13 +409,15 @@ async fn emit(conn: &mut PgConnection, event: &'static str, i: &Invoice) -> Bill
     Ok(())
 }
 
-/// Approves a draft that isn't held: it can then be sent or synced. Sets
-/// the issue date (today) and due date (by the payment terms) if unset.
+/// Approves a draft that isn't held: it can then be sent or synced. One
+/// that needs review takes an approved review of this revision, or
+/// `override_review` (the caller checked the permission; it's recorded).
 pub async fn approve(
     conn: &mut PgConnection,
     ctx: &RequestContext,
     id: Uuid,
     version: i32,
+    override_review: bool,
 ) -> BillingResult<Invoice> {
     let i = lock(&mut *conn, id, Some(version), &[Status::Draft], "approved").await?;
     if i.on_hold {
@@ -423,6 +428,26 @@ pub async fn approve(
     if i.lines.is_empty() {
         return Err(BillingError::invalid("lines", "nothing to bill"));
     }
+    crate::review::refresh(&mut *conn, id).await?;
+    if !crate::review::may_approve(&mut *conn, id).await? {
+        if !override_review {
+            return Err(BillingError::Conflict(
+                "it needs review: submit it for review first".into(),
+            ));
+        }
+        crate::review::record_override(&mut *conn, ctx, &i).await?;
+    }
+    finish_approval(conn, ctx, &i).await
+}
+
+/// Approves a draft (its checks done): sets the issue date (today) and due
+/// date (by the payment terms) if unset, and raises `invoice.approved`.
+pub(crate) async fn finish_approval(
+    conn: &mut PgConnection,
+    ctx: &RequestContext,
+    i: &Invoice,
+) -> BillingResult<Invoice> {
+    let id = i.id;
     let terms = crate::settings::for_client(&mut *conn, i.org_id).await?;
     sqlx::query(
         "UPDATE billing_invoices SET status = 'approved', approved_by = $2, approved_at = now(), \
@@ -581,5 +606,6 @@ pub async fn credit(
             .details(json!({ "creditMemo": memo, "lines": chosen.len() })),
     )
     .await?;
+    crate::review::refresh(&mut *conn, memo).await?;
     get(conn, memo).await
 }

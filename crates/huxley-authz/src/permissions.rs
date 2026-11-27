@@ -116,7 +116,8 @@ permissions! {
     BILLING_READ = "billing:read", Org, "View invoices, billing runs and what's still unbilled";
     BILLING_WRITE = "billing:write", Org, "Run billing, edit, hold and void draft invoices, and make credit memos";
     BILLING_APPROVE = "billing:approve", Org, "Approve invoices for sending and syncing";
-    BILLING_CONFIGURE = "billing:configure", Org, "Keep billing settings: the default hourly rate, currency and payment terms";
+    BILLING_CONFIGURE = "billing:configure", Org, "Keep billing settings (the default hourly rate, currency and payment terms) and, at the top, the invoice review rules";
+    BILLING_OVERRIDE = "billing:review:override", Org, "Approve an invoice that needs review without an approved review (it's recorded)";
 }
 
 /// Wildcard granting every permission.

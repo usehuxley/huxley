@@ -1,4 +1,4 @@
-<!-- Comments on a quote or one of its lines: threads with replies,
+<!-- Comments on a quote (or an invoice) or one of its lines: threads with replies,
      @mentions (who are told), resolved when settled. -->
 <script lang="ts">
 	import { enhance, type SubmitFunction } from '$app/forms';
@@ -14,13 +14,16 @@
 		lines,
 		people,
 		me,
-		done
+		done,
+		whole = 'The whole quote'
 	}: {
 		comments: Comment[];
 		lines: Option[];
 		people: Option[];
 		me: string;
 		done: (message: string, after?: () => void) => SubmitFunction;
+		/** The choice for commenting on the whole thing. */
+		whole?: string;
 	} = $props();
 
 	let threads = $derived(
@@ -167,7 +170,7 @@
 					bind:value={lineId}
 					class="h-8 max-w-56 rounded-control border border-border-strong bg-surface px-2 text-sm text-fg"
 				>
-					<option value="">The whole quote</option>
+					<option value="">{whole}</option>
 					{#each lines as l (l.value)}<option value={l.value}>{l.label}</option>{/each}
 				</select>
 				<label class="sr-only" for="comment-mention">Mention someone</label>

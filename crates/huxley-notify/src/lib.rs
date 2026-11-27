@@ -60,6 +60,8 @@ pub mod kinds {
     pub const TICKET_SLA: &str = "ticket.sla";
     pub const QUOTE_MENTIONED: &str = "quote.mentioned";
     pub const QUOTE_REVIEWED: &str = "quote.reviewed";
+    pub const INVOICE_MENTIONED: &str = "invoice.mentioned";
+    pub const INVOICE_REVIEWED: &str = "invoice.reviewed";
     pub const SALES_TASK: &str = "sales.task";
 
     pub const ALL: &[Kind] = &[
@@ -158,6 +160,22 @@ pub mod kinds {
             email: true,
             mandatory: false,
             module: Some("sales"),
+        },
+        Kind {
+            key: INVOICE_MENTIONED,
+            description: "You were mentioned in a comment on an invoice",
+            in_app: true,
+            email: true,
+            mandatory: false,
+            module: Some("billing"),
+        },
+        Kind {
+            key: INVOICE_REVIEWED,
+            description: "An invoice you submitted was approved, sent back for changes or rejected in review",
+            in_app: true,
+            email: true,
+            mandatory: false,
+            module: Some("billing"),
         },
         Kind {
             key: SALES_TASK,

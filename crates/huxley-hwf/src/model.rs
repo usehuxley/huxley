@@ -447,6 +447,9 @@ pub enum Step {
     /// Record a quote review's decision (the `sales` module).
     #[serde(rename = "core.quote.review")]
     QuoteReview(QuoteReviewStep),
+    /// Record an invoice review's decision (the `billing` module).
+    #[serde(rename = "core.invoice.review")]
+    InvoiceReview(InvoiceReviewStep),
     /// Log an email on the contacts and leads it's to or from (the `sales` module).
     #[serde(rename = "core.sales.log_email")]
     SalesLogEmail(SalesLogEmailStep),
@@ -879,6 +882,11 @@ step!(QuoteReviewStep {
     pub review: QuoteReview,
 });
 
+step!(InvoiceReviewStep {
+    #[serde(rename = "with")]
+    pub review: InvoiceReview,
+});
+
 step!(SalesLogEmailStep {
     #[serde(rename = "with")]
     pub log: SalesLogEmail,
@@ -1024,6 +1032,7 @@ impl Step {
             ChangeDecide,
             ScopeDecide,
             QuoteReview,
+            InvoiceReview,
             SalesLogEmail,
             ScopeContext,
             ScopeWrite,
@@ -1099,6 +1108,7 @@ impl Step {
             Self::ChangeDecide(_) => "core.change.decide",
             Self::ScopeDecide(_) => "core.project.scope.decide",
             Self::QuoteReview(_) => "core.quote.review",
+            Self::InvoiceReview(_) => "core.invoice.review",
             Self::SalesLogEmail(_) => "core.sales.log_email",
             Self::ScopeContext(_) => "core.scope.context",
             Self::ScopeWrite(_) => "core.scope.write",
@@ -1783,6 +1793,26 @@ pub struct ScopeDecide {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct QuoteReview {
+    pub review_id: Value,
+    pub decision: Value,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub by: Option<Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub comment: Option<Value>,
+}
+
+/// An invoice review's decision to record (`core.invoice.review`):
+/// `review_id` (from `invoice.submitted_for_review`), `decision`
+/// (`approved`, `changes_requested` or `rejected`, or a boolean), `by` and
+/// a `comment`. Only the invoice's open review counts: if it changed since,
+/// it needs a new review and the step fails with `kind: conflict`. An
+/// approved review approves the invoice (unless it's on hold). Raises
+/// `invoice.review_approved`, `invoice.changes_requested` or
+/// `invoice.rejected`, and tells whoever submitted it. Output: the
+/// invoice's review state.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct InvoiceReview {
     pub review_id: Value,
     pub decision: Value,
     #[serde(default, skip_serializing_if = "Option::is_none")]

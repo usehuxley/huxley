@@ -15,6 +15,9 @@ use axum::{Json, Router};
 use huxley_authz::permissions;
 use huxley_billing::generate::{self, Run, RunInput, Unbilled};
 use huxley_billing::invoices::{self, Filter, Invoice, InvoiceInput};
+use huxley_billing::review::{
+    self, Comment, CommentInput, ReviewState, Rule, RuleInput, RunApproval,
+};
 use huxley_billing::settings::{self, Settings};
 use huxley_billing::{BillingError, MODULE};
 use huxley_db::{OrgScope, begin_scoped};
@@ -41,6 +44,24 @@ pub fn routes() -> Router<AppState> {
         .route("/invoices/{id}/void", post(void_invoice))
         .route("/invoices/{id}/credit", post(credit_invoice))
         .route("/invoices/{id}/pdf", get(invoice_pdf))
+        .route(
+            "/invoices/{id}/review",
+            get(invoice_review).post(submit_review),
+        )
+        .route(
+            "/invoices/{id}/comments",
+            get(invoice_comments).post(add_comment),
+        )
+        .route(
+            "/invoices/{id}/comments/{comment}/resolve",
+            post(resolve_comment),
+        )
+        .route("/billing/runs/{id}/approve", post(approve_run))
+        .route("/billing/review-rules", get(list_rules).post(create_rule))
+        .route(
+            "/billing/review-rules/{id}",
+            axum::routing::put(update_rule).delete(delete_rule),
+        )
 }
 
 fn map(e: BillingError) -> ApiError {
@@ -287,23 +308,287 @@ pub struct VersionRequest {
     pub version: i32,
 }
 
-/// Approves a draft: it can then be sent or synced.
+#[derive(Debug, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ApproveRequest {
+    pub version: i32,
+    /// Approve one that needs review without an approved review
+    /// (`billing:review:override`; it's recorded).
+    #[serde(default)]
+    pub override_review: bool,
+}
+
+/// Approves a draft: it can then be sent or synced. One that needs review
+/// takes an approved review of this revision first (409 otherwise), unless
+/// sent with `overrideReview`.
 #[utoipa::path(post, path = "/api/v1/invoices/{id}/approve", operation_id = "approve_invoice", tag = "billing",
-    params(("id" = Uuid, Path)), request_body = VersionRequest, responses((status = 200, body = Invoice)))]
+    params(("id" = Uuid, Path)), request_body = ApproveRequest,
+    responses((status = 200, body = Invoice), (status = 409, body = ApiError, content_type = "application/problem+json")))]
 pub async fn approve_invoice(
     State(state): State<AppState>,
     authed: Authed,
     Path(id): Path<Uuid>,
-    Json(body): Json<VersionRequest>,
+    Json(body): Json<ApproveRequest>,
 ) -> ApiResult<Json<Invoice>> {
     let scope = at_invoice(&state, &authed, id, permissions::BILLING_APPROVE).await?;
+    if body.override_review {
+        at_invoice(&state, &authed, id, permissions::BILLING_OVERRIDE).await?;
+    }
     let ctx = authed.user.ctx.clone();
     Ok(Json(
         scoped(&state, &scope, async |tx| {
-            invoices::approve(tx, &ctx, id, body.version).await
+            invoices::approve(tx, &ctx, id, body.version, body.override_review).await
         })
         .await?,
     ))
+}
+
+/// Its review state, with the open approval for the caller to decide.
+#[derive(Debug, serde::Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct InvoiceReviewView {
+    #[serde(flatten)]
+    pub state: ReviewState,
+    /// The review workflow's open approval, if any.
+    pub approval_id: Option<Uuid>,
+    /// The caller is one of its approvers.
+    pub can_decide: bool,
+    /// The caller may approve it without an approved review.
+    pub can_override: bool,
+}
+
+async fn review_view(
+    state: &AppState,
+    authed: &Authed,
+    scope: &OrgScope,
+    id: Uuid,
+) -> ApiResult<InvoiceReviewView> {
+    let user = authed.user.auth.user.id;
+    let (review, open) = scoped(state, scope, async |tx| {
+        let review = review::state(tx, id).await?;
+        let open = review::open_approval(tx, id, user).await?;
+        Ok((review, open))
+    })
+    .await?;
+    let can_override = at_invoice(state, authed, id, permissions::BILLING_OVERRIDE)
+        .await
+        .is_ok();
+    Ok(InvoiceReviewView {
+        state: review,
+        approval_id: open.map(|(a, _)| a),
+        can_decide: open.is_some_and(|(_, me)| me),
+        can_override,
+    })
+}
+
+#[utoipa::path(get, path = "/api/v1/invoices/{id}/review", operation_id = "invoice_review", tag = "billing",
+    params(("id" = Uuid, Path)), responses((status = 200, body = InvoiceReviewView)))]
+pub async fn invoice_review(
+    State(state): State<AppState>,
+    authed: Authed,
+    Path(id): Path<Uuid>,
+) -> ApiResult<Json<InvoiceReviewView>> {
+    let scope = at_invoice(&state, &authed, id, permissions::BILLING_READ).await?;
+    Ok(Json(review_view(&state, &authed, &scope, id).await?))
+}
+
+/// Submits a draft for review (send the version you read). Raises
+/// `invoice.submitted_for_review` for the review workflow (the Invoice
+/// review pack).
+#[utoipa::path(post, path = "/api/v1/invoices/{id}/review", operation_id = "submit_invoice_review", tag = "billing",
+    params(("id" = Uuid, Path)), request_body = VersionRequest,
+    responses((status = 200, body = InvoiceReviewView), (status = 409, body = ApiError, content_type = "application/problem+json")))]
+pub async fn submit_review(
+    State(state): State<AppState>,
+    authed: Authed,
+    Path(id): Path<Uuid>,
+    Json(body): Json<VersionRequest>,
+) -> ApiResult<Json<InvoiceReviewView>> {
+    let scope = at_invoice(&state, &authed, id, permissions::BILLING_WRITE).await?;
+    let ctx = authed.user.ctx.clone();
+    scoped(&state, &scope, async |tx| {
+        review::submit(tx, &ctx, id, Some(body.version)).await
+    })
+    .await?;
+    Ok(Json(review_view(&state, &authed, &scope, id).await?))
+}
+
+/// The invoice's comments, oldest first (replies point at their thread).
+#[utoipa::path(get, path = "/api/v1/invoices/{id}/comments", operation_id = "invoice_comments", tag = "billing",
+    params(("id" = Uuid, Path)), responses((status = 200, body = Vec<Comment>)))]
+pub async fn invoice_comments(
+    State(state): State<AppState>,
+    authed: Authed,
+    Path(id): Path<Uuid>,
+) -> ApiResult<Json<Vec<Comment>>> {
+    let scope = at_invoice(&state, &authed, id, permissions::BILLING_READ).await?;
+    Ok(Json(
+        scoped(&state, &scope, async |tx| review::comments(tx, id).await).await?,
+    ))
+}
+
+/// Comments on the invoice or one of its lines, telling anyone @mentioned.
+#[utoipa::path(post, path = "/api/v1/invoices/{id}/comments", operation_id = "add_invoice_comment", tag = "billing",
+    params(("id" = Uuid, Path)), request_body = CommentInput,
+    responses((status = 201, body = Comment), (status = 422, body = ApiError, content_type = "application/problem+json")))]
+pub async fn add_comment(
+    State(state): State<AppState>,
+    authed: Authed,
+    Path(id): Path<Uuid>,
+    Json(body): Json<CommentInput>,
+) -> ApiResult<(StatusCode, Json<Comment>)> {
+    let scope = at_invoice(&state, &authed, id, permissions::BILLING_READ).await?;
+    let ctx = authed.user.ctx.clone();
+    let c = scoped(&state, &scope, async |tx| {
+        review::comment(tx, &ctx, id, &body).await
+    })
+    .await?;
+    Ok((StatusCode::CREATED, Json(c)))
+}
+
+#[derive(Debug, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ResolveCommentRequest {
+    pub resolved: bool,
+}
+
+/// Resolves a comment thread, or opens it again.
+#[utoipa::path(post, path = "/api/v1/invoices/{id}/comments/{comment}/resolve", operation_id = "resolve_invoice_comment",
+    tag = "billing", params(("id" = Uuid, Path), ("comment" = Uuid, Path)), request_body = ResolveCommentRequest,
+    responses((status = 204)))]
+pub async fn resolve_comment(
+    State(state): State<AppState>,
+    authed: Authed,
+    Path((id, comment)): Path<(Uuid, Uuid)>,
+    Json(body): Json<ResolveCommentRequest>,
+) -> ApiResult<StatusCode> {
+    let scope = at_invoice(&state, &authed, id, permissions::BILLING_READ).await?;
+    let ctx = authed.user.ctx.clone();
+    scoped(&state, &scope, async |tx| {
+        review::resolve(tx, &ctx, id, comment, body.resolved).await
+    })
+    .await?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+#[derive(Debug, Default, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ApproveRunRequest {
+    /// Submit those that need a review (and aren't in one) for review.
+    #[serde(default)]
+    pub submit_reviews: bool,
+}
+
+/// Approves a billing run's drafts in one pass; those on hold or needing
+/// review are returned as exceptions.
+#[utoipa::path(post, path = "/api/v1/billing/runs/{id}/approve", operation_id = "approve_billing_run", tag = "billing",
+    params(("id" = Uuid, Path)), request_body = ApproveRunRequest, responses((status = 200, body = RunApproval)))]
+pub async fn approve_run(
+    State(state): State<AppState>,
+    authed: Authed,
+    Path(id): Path<Uuid>,
+    Json(body): Json<ApproveRunRequest>,
+) -> ApiResult<Json<RunApproval>> {
+    let run = scoped(&state, &OrgScope::System, async |tx| {
+        generate::get_run(tx, id).await
+    })
+    .await?;
+    access_at(&state, &authed, run.org_id, permissions::BILLING_APPROVE).await?;
+    let ctx = authed.user.ctx.clone();
+    Ok(Json(
+        scoped(&state, &OrgScope::System, async |tx| {
+            review::approve_run(tx, &ctx, id, body.submit_reviews).await
+        })
+        .await?,
+    ))
+}
+
+async fn rule_reader(state: &AppState, authed: &Authed) -> ApiResult<()> {
+    require_module(state, MODULE).await?;
+    if authed
+        .principal
+        .can_instance(permissions::BILLING_CONFIGURE)
+    {
+        return Ok(());
+    }
+    match authed
+        .module_scope(state, permissions::BILLING_READ, MODULE)
+        .await?
+    {
+        OrgScope::Orgs(orgs) if orgs.is_empty() => Err(ApiError::forbidden()),
+        _ => Ok(()),
+    }
+}
+
+async fn rule_writer(state: &AppState, authed: &Authed) -> ApiResult<()> {
+    require_module(state, MODULE).await?;
+    authed.require_instance(permissions::BILLING_CONFIGURE)
+}
+
+/// When invoices need review, and who reviews them.
+#[utoipa::path(get, path = "/api/v1/billing/review-rules", operation_id = "list_invoice_review_rules", tag = "billing",
+    responses((status = 200, body = Vec<Rule>)))]
+pub async fn list_rules(
+    State(state): State<AppState>,
+    authed: Authed,
+) -> ApiResult<Json<Vec<Rule>>> {
+    rule_reader(&state, &authed).await?;
+    Ok(Json(
+        scoped(&state, &OrgScope::System, async |tx| {
+            review::rules(tx).await
+        })
+        .await?,
+    ))
+}
+
+#[utoipa::path(post, path = "/api/v1/billing/review-rules", operation_id = "create_invoice_review_rule", tag = "billing",
+    request_body = RuleInput, responses((status = 201, body = Rule), (status = 422, body = ApiError, content_type = "application/problem+json")))]
+pub async fn create_rule(
+    State(state): State<AppState>,
+    authed: Authed,
+    Json(body): Json<RuleInput>,
+) -> ApiResult<(StatusCode, Json<Rule>)> {
+    rule_writer(&state, &authed).await?;
+    let ctx = authed.user.ctx.clone();
+    let rule = scoped(&state, &OrgScope::System, async |tx| {
+        review::create_rule(tx, &ctx, &body).await
+    })
+    .await?;
+    Ok((StatusCode::CREATED, Json(rule)))
+}
+
+#[utoipa::path(put, path = "/api/v1/billing/review-rules/{id}", operation_id = "update_invoice_review_rule", tag = "billing",
+    params(("id" = Uuid, Path)), request_body = RuleInput, responses((status = 200, body = Rule)))]
+pub async fn update_rule(
+    State(state): State<AppState>,
+    authed: Authed,
+    Path(id): Path<Uuid>,
+    Json(body): Json<RuleInput>,
+) -> ApiResult<Json<Rule>> {
+    rule_writer(&state, &authed).await?;
+    let ctx = authed.user.ctx.clone();
+    Ok(Json(
+        scoped(&state, &OrgScope::System, async |tx| {
+            review::update_rule(tx, &ctx, id, &body).await
+        })
+        .await?,
+    ))
+}
+
+#[utoipa::path(delete, path = "/api/v1/billing/review-rules/{id}", operation_id = "delete_invoice_review_rule", tag = "billing",
+    params(("id" = Uuid, Path)), responses((status = 204)))]
+pub async fn delete_rule(
+    State(state): State<AppState>,
+    authed: Authed,
+    Path(id): Path<Uuid>,
+) -> ApiResult<StatusCode> {
+    rule_writer(&state, &authed).await?;
+    let ctx = authed.user.ctx.clone();
+    scoped(&state, &OrgScope::System, async |tx| {
+        review::delete_rule(tx, &ctx, id).await
+    })
+    .await?;
+    Ok(StatusCode::NO_CONTENT)
 }
 
 /// Marks an approved invoice sent (it's then locked).

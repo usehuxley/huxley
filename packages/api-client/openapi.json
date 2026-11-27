@@ -4954,6 +4954,117 @@
 				}
 			}
 		},
+		"/api/v1/billing/review-rules": {
+			"get": {
+				"tags": ["billing"],
+				"summary": "When invoices need review, and who reviews them.",
+				"operationId": "list_invoice_review_rules",
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "array",
+									"items": {
+										"$ref": "#/components/schemas/InvoiceReviewRule"
+									}
+								}
+							}
+						}
+					}
+				}
+			},
+			"post": {
+				"tags": ["billing"],
+				"operationId": "create_invoice_review_rule",
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/InvoiceReviewRuleInput"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"201": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/InvoiceReviewRule"
+								}
+							}
+						}
+					},
+					"422": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/billing/review-rules/{id}": {
+			"put": {
+				"tags": ["billing"],
+				"operationId": "update_invoice_review_rule",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/InvoiceReviewRuleInput"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/InvoiceReviewRule"
+								}
+							}
+						}
+					}
+				}
+			},
+			"delete": {
+				"tags": ["billing"],
+				"operationId": "delete_invoice_review_rule",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"responses": {
+					"204": {}
+				}
+			}
+		},
 		"/api/v1/billing/runs": {
 			"get": {
 				"tags": ["billing"],
@@ -4993,6 +5104,45 @@
 							"application/json": {
 								"schema": {
 									"$ref": "#/components/schemas/BillingRun"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/billing/runs/{id}/approve": {
+			"post": {
+				"tags": ["billing"],
+				"summary": "Approves a billing run's drafts in one pass; those on hold or needing\nreview are returned as exceptions.",
+				"operationId": "approve_billing_run",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/ApproveRunRequest"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/RunApproval"
 								}
 							}
 						}
@@ -9536,7 +9686,7 @@
 		"/api/v1/invoices/{id}/approve": {
 			"post": {
 				"tags": ["billing"],
-				"summary": "Approves a draft: it can then be sent or synced.",
+				"summary": "Approves a draft: it can then be sent or synced. One that needs review\ntakes an approved review of this revision first (409 otherwise), unless\nsent with `overrideReview`.",
 				"operationId": "approve_invoice",
 				"parameters": [
 					{
@@ -9553,7 +9703,7 @@
 					"content": {
 						"application/json": {
 							"schema": {
-								"$ref": "#/components/schemas/VersionRequest"
+								"$ref": "#/components/schemas/ApproveRequest"
 							}
 						}
 					},
@@ -9568,7 +9718,134 @@
 								}
 							}
 						}
+					},
+					"409": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
 					}
+				}
+			}
+		},
+		"/api/v1/invoices/{id}/comments": {
+			"get": {
+				"tags": ["billing"],
+				"summary": "The invoice's comments, oldest first (replies point at their thread).",
+				"operationId": "invoice_comments",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "array",
+									"items": {
+										"$ref": "#/components/schemas/InvoiceComment"
+									}
+								}
+							}
+						}
+					}
+				}
+			},
+			"post": {
+				"tags": ["billing"],
+				"summary": "Comments on the invoice or one of its lines, telling anyone @mentioned.",
+				"operationId": "add_invoice_comment",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/InvoiceCommentInput"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"201": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/InvoiceComment"
+								}
+							}
+						}
+					},
+					"422": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/invoices/{id}/comments/{comment}/resolve": {
+			"post": {
+				"tags": ["billing"],
+				"summary": "Resolves a comment thread, or opens it again.",
+				"operationId": "resolve_invoice_comment",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					},
+					{
+						"name": "comment",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/ResolveCommentRequest"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"204": {}
 				}
 			}
 		},
@@ -9676,6 +9953,80 @@
 										"format": "int32",
 										"minimum": 0
 									}
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/invoices/{id}/review": {
+			"get": {
+				"tags": ["billing"],
+				"operationId": "invoice_review",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/InvoiceReviewView"
+								}
+							}
+						}
+					}
+				}
+			},
+			"post": {
+				"tags": ["billing"],
+				"summary": "Submits a draft for review (send the version you read). Raises\n`invoice.submitted_for_review` for the review workflow (the Invoice\nreview pack).",
+				"operationId": "submit_invoice_review",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/VersionRequest"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/InvoiceReviewView"
+								}
+							}
+						}
+					},
+					"409": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
 								}
 							}
 						}
@@ -26616,6 +26967,31 @@
 					}
 				}
 			},
+			"ApproveRequest": {
+				"type": "object",
+				"required": ["version"],
+				"properties": {
+					"overrideReview": {
+						"type": "boolean",
+						"description": "Approve one that needs review without an approved review\n(`billing:review:override`; it's recorded)."
+					},
+					"version": {
+						"type": "integer",
+						"format": "int32"
+					}
+				},
+				"additionalProperties": false
+			},
+			"ApproveRunRequest": {
+				"type": "object",
+				"properties": {
+					"submitReviews": {
+						"type": "boolean",
+						"description": "Submit those that need a review (and aren't in one) for review."
+					}
+				},
+				"additionalProperties": false
+			},
 			"ApproveScope": {
 				"type": "object",
 				"required": ["version"],
@@ -32791,6 +33167,7 @@
 					"onHold",
 					"currency",
 					"total",
+					"reviewStatus",
 					"version",
 					"createdAt",
 					"lines"
@@ -32864,6 +33241,10 @@
 						"type": ["string", "null"],
 						"format": "date"
 					},
+					"reviewStatus": {
+						"$ref": "#/components/schemas/InvoiceReviewStatus",
+						"description": "Whether it needs (or had) an internal review (ADR-076)."
+					},
 					"runId": {
 						"type": ["string", "null"],
 						"format": "uuid"
@@ -32877,6 +33258,140 @@
 					"version": {
 						"type": "integer",
 						"format": "int32"
+					}
+				}
+			},
+			"InvoiceChanges": {
+				"type": "object",
+				"description": "What changed since the last decided review.",
+				"required": ["sinceRevision", "decision", "added", "removed", "changed"],
+				"properties": {
+					"added": {
+						"type": "array",
+						"items": {
+							"type": "string"
+						}
+					},
+					"changed": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/InvoiceLineChange"
+						}
+					},
+					"decision": {
+						"type": "string"
+					},
+					"removed": {
+						"type": "array",
+						"items": {
+							"type": "string"
+						}
+					},
+					"sinceRevision": {
+						"type": "integer",
+						"format": "int32"
+					},
+					"total": {
+						"oneOf": [
+							{
+								"$ref": "#/components/schemas/InvoiceFieldChange"
+							},
+							{
+								"type": "null"
+							}
+						]
+					}
+				}
+			},
+			"InvoiceComment": {
+				"type": "object",
+				"required": ["id", "body", "mentions", "createdAt"],
+				"properties": {
+					"authorId": {
+						"type": ["string", "null"],
+						"format": "uuid"
+					},
+					"authorName": {
+						"type": ["string", "null"]
+					},
+					"body": {
+						"type": "string"
+					},
+					"createdAt": {
+						"type": "string",
+						"format": "date-time"
+					},
+					"id": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"lineId": {
+						"type": ["string", "null"],
+						"format": "uuid"
+					},
+					"lineName": {
+						"type": ["string", "null"]
+					},
+					"mentions": {
+						"type": "array",
+						"items": {
+							"type": "string",
+							"format": "uuid"
+						}
+					},
+					"parentId": {
+						"type": ["string", "null"],
+						"format": "uuid"
+					},
+					"resolvedAt": {
+						"type": ["string", "null"],
+						"format": "date-time"
+					},
+					"resolvedByName": {
+						"type": ["string", "null"]
+					}
+				}
+			},
+			"InvoiceCommentInput": {
+				"type": "object",
+				"required": ["body"],
+				"properties": {
+					"body": {
+						"type": "string"
+					},
+					"lineId": {
+						"type": ["string", "null"],
+						"format": "uuid",
+						"description": "A line of the invoice, or none for the whole invoice."
+					},
+					"mentions": {
+						"type": "array",
+						"items": {
+							"type": "string",
+							"format": "uuid"
+						},
+						"description": "People @mentioned: they're told."
+					},
+					"parentId": {
+						"type": ["string", "null"],
+						"format": "uuid",
+						"description": "Replying to a thread (its first comment)."
+					}
+				},
+				"additionalProperties": false
+			},
+			"InvoiceFieldChange": {
+				"type": "object",
+				"required": ["field", "before", "after"],
+				"properties": {
+					"after": {
+						"type": "string"
+					},
+					"before": {
+						"type": "string"
+					},
+					"field": {
+						"type": "string"
 					}
 				}
 			},
@@ -32957,6 +33472,21 @@
 					}
 				}
 			},
+			"InvoiceLineChange": {
+				"type": "object",
+				"required": ["name", "fields"],
+				"properties": {
+					"fields": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/InvoiceFieldChange"
+						}
+					},
+					"name": {
+						"type": "string"
+					}
+				}
+			},
 			"InvoiceLineInput": {
 				"type": "object",
 				"required": ["description", "quantity", "unitPrice"],
@@ -32991,6 +33521,211 @@
 			"InvoiceLineKind": {
 				"type": "string",
 				"enum": ["time", "product", "recurring", "project", "manual"]
+			},
+			"InvoiceReviewReason": {
+				"type": "object",
+				"description": "A rule an invoice matches, and why.",
+				"required": ["ruleId", "name", "detail", "reviewers"],
+				"properties": {
+					"detail": {
+						"type": "string"
+					},
+					"name": {
+						"type": "string"
+					},
+					"reviewers": {
+						"type": "string"
+					},
+					"ruleId": {
+						"type": "string",
+						"format": "uuid"
+					}
+				}
+			},
+			"InvoiceReviewRecord": {
+				"type": "object",
+				"required": ["id", "revision", "reasons", "reviewers", "submittedAt"],
+				"properties": {
+					"comment": {
+						"type": ["string", "null"]
+					},
+					"decidedAt": {
+						"type": ["string", "null"],
+						"format": "date-time"
+					},
+					"decidedBy": {
+						"type": ["string", "null"]
+					},
+					"decision": {
+						"type": ["string", "null"],
+						"description": "`approved`, `changes_requested` or `rejected`; none while in review."
+					},
+					"id": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"reasons": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/InvoiceReviewReason"
+						}
+					},
+					"reviewers": {
+						"type": "array",
+						"items": {
+							"type": "string"
+						}
+					},
+					"revision": {
+						"type": "integer",
+						"format": "int32"
+					},
+					"submittedAt": {
+						"type": "string",
+						"format": "date-time"
+					},
+					"submittedByName": {
+						"type": ["string", "null"]
+					}
+				}
+			},
+			"InvoiceReviewRule": {
+				"type": "object",
+				"required": ["id", "name", "kind", "reviewers", "active"],
+				"properties": {
+					"active": {
+						"type": "boolean"
+					},
+					"expression": {
+						"type": ["string", "null"]
+					},
+					"id": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"kind": {
+						"$ref": "#/components/schemas/InvoiceReviewRuleKind"
+					},
+					"name": {
+						"type": "string"
+					},
+					"reviewers": {
+						"type": "string",
+						"description": "Who reviews: `role:<key>`, `team:<id>`, `user:<id>`, several separated by commas."
+					},
+					"threshold": {
+						"type": ["string", "null"]
+					}
+				}
+			},
+			"InvoiceReviewRuleInput": {
+				"type": "object",
+				"required": ["name", "kind", "reviewers"],
+				"properties": {
+					"active": {
+						"type": "boolean"
+					},
+					"expression": {
+						"type": ["string", "null"]
+					},
+					"kind": {
+						"$ref": "#/components/schemas/InvoiceReviewRuleKind"
+					},
+					"name": {
+						"type": "string"
+					},
+					"reviewers": {
+						"type": "string"
+					},
+					"threshold": {
+						"type": ["string", "null"]
+					}
+				},
+				"additionalProperties": false
+			},
+			"InvoiceReviewRuleKind": {
+				"type": "string",
+				"enum": [
+					"always",
+					"edited",
+					"total_above",
+					"change_above",
+					"new_client",
+					"credit_memo",
+					"expression"
+				]
+			},
+			"InvoiceReviewState": {
+				"type": "object",
+				"description": "The review state of an invoice, for its page.",
+				"required": ["status", "reasons", "canApprove", "overridden", "history"],
+				"properties": {
+					"canApprove": {
+						"type": "boolean",
+						"description": "It can be approved without an override: no review needed, or one\napproved for this revision."
+					},
+					"changes": {
+						"oneOf": [
+							{
+								"$ref": "#/components/schemas/InvoiceChanges",
+								"description": "What changed since the latest decided review."
+							},
+							{
+								"type": "null"
+							}
+						]
+					},
+					"history": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/InvoiceReviewRecord"
+						},
+						"description": "Each submission, newest first."
+					},
+					"overridden": {
+						"type": "boolean"
+					},
+					"reasons": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/InvoiceReviewReason"
+						}
+					},
+					"status": {
+						"$ref": "#/components/schemas/InvoiceReviewStatus"
+					}
+				}
+			},
+			"InvoiceReviewStatus": {
+				"type": "string",
+				"enum": ["not_needed", "needed", "in_review", "approved", "changes_requested", "rejected"]
+			},
+			"InvoiceReviewView": {
+				"allOf": [
+					{
+						"$ref": "#/components/schemas/InvoiceReviewState"
+					},
+					{
+						"type": "object",
+						"required": ["canDecide", "canOverride"],
+						"properties": {
+							"approvalId": {
+								"type": ["string", "null"],
+								"format": "uuid",
+								"description": "The review workflow's open approval, if any."
+							},
+							"canDecide": {
+								"type": "boolean",
+								"description": "The caller is one of its approvers."
+							},
+							"canOverride": {
+								"type": "boolean",
+								"description": "The caller may approve it without an approved review."
+							}
+						}
+					}
+				],
+				"description": "Its review state, with the open approval for the caller to decide."
 			},
 			"InvoiceStatus": {
 				"type": "string",
@@ -39496,6 +40231,16 @@
 				},
 				"additionalProperties": false
 			},
+			"ResolveCommentRequest": {
+				"type": "object",
+				"required": ["resolved"],
+				"properties": {
+					"resolved": {
+						"type": "boolean"
+					}
+				},
+				"additionalProperties": false
+			},
 			"ResolveRequest": {
 				"type": "object",
 				"required": ["resolved"],
@@ -40073,6 +40818,25 @@
 					}
 				}
 			},
+			"RunApproval": {
+				"type": "object",
+				"required": ["approved", "exceptions"],
+				"properties": {
+					"approved": {
+						"type": "array",
+						"items": {
+							"type": "string",
+							"format": "uuid"
+						}
+					},
+					"exceptions": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/RunException"
+						}
+					}
+				}
+			},
 			"RunAsRequest": {
 				"type": "object",
 				"properties": {
@@ -40127,6 +40891,27 @@
 						}
 					}
 				]
+			},
+			"RunException": {
+				"type": "object",
+				"description": "An invoice a run's approval left out, and why.",
+				"required": ["invoiceId", "number", "orgName", "reason"],
+				"properties": {
+					"invoiceId": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"number": {
+						"type": "integer",
+						"format": "int64"
+					},
+					"orgName": {
+						"type": "string"
+					},
+					"reason": {
+						"type": "string"
+					}
+				}
 			},
 			"RunFrom": {
 				"type": "object",

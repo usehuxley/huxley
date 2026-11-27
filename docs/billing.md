@@ -40,6 +40,28 @@ An approved invoice is **marked sent**, by hand for now (accounting sync comes n
 
 Every invoice has a **PDF**.
 
+## Review
+
+No invoice goes to a client or the accounting system until it's approved. **Review rules** decide which invoices need an internal review first, and who reviews them. Out of the box, an invoice with a line **changed by hand** needs review by administrators. Other rules can match:
+- every invoice;
+- a total above an amount;
+- a total that moved more than a percent from the client's last invoice;
+- a client's first invoice;
+- credit memos;
+- an expression over the invoice, e.g. `invoice.total | float > 10000`.
+
+Keep rules in **Settings → Billing** (`billing:configure` at the top).
+
+A draft that needs review shows why on its page. **Submit for review** sends it to the **Invoice review** workflow; install the pack from **Packs** first. The reviewers approve it, ask for changes or reject it, and an approved review approves the invoice. Whoever submitted it is told.
+
+When an invoice changes after review, it needs a new one, and the reviewer sees what changed since the last decision. Someone with `billing:review:override` can approve an invoice without review. The override is recorded and shown on the invoice.
+
+Comment on the invoice or on a line, and **@mention** people to tell them. Resolve a thread once it's settled.
+
+### Approving a run
+
+On a run's invoices (**Billing runs → Invoices**), **Approve the run** approves every draft that needs no review. Invoices on hold or needing review are listed as exceptions. Optionally, those that need review are submitted for review in the same pass.
+
 ## Settings
 
 **Settings → Billing** (`billing:configure`), per provider, sets:
@@ -50,7 +72,7 @@ Every invoice has a **PDF**.
 
 ## Events
 
-`invoice.approved`, `invoice.sent` and `invoice.voided`, for workflows.
+`invoice.approved`, `invoice.sent` and `invoice.voided`, for workflows. For review: `invoice.submitted_for_review` (with the reasons, the reviewers, what changed and the client's previous total), `invoice.review_approved`, `invoice.changes_requested` and `invoice.rejected`. The `core.invoice.review` step records a decision.
 
 ## Permissions
 
@@ -59,4 +81,5 @@ Every invoice has a **PDF**.
 | `billing:read` | See invoices, runs and what's unbilled. |
 | `billing:write` | Run billing, edit, hold, void and mark invoices sent, and make credit memos. |
 | `billing:approve` | Approve invoices. |
-| `billing:configure` | Keep billing settings. |
+| `billing:review:override` | Approve an invoice that needs review without one (recorded). |
+| `billing:configure` | Keep billing settings, and at the top, the review rules. |

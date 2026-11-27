@@ -79,3 +79,4 @@ Decisions that shape Huxley. Add a new ADR by copying `0000-template.md` with th
 | [073](0073-presales-estimates.md) | Estimates are three-point hours by priced role plus a sized bill of materials, drafted by the scoping pack and assembled into the quote | Accepted |
 | [074](0074-scope-to-project.md) | A won deal's project is laid out from its scoped work breakdown, and the scope tracks estimate against actual | Accepted |
 | [075](0075-invoicing.md) | Invoices are generated per client and currency from marked sources, drafts until approved, corrected by credit memos | Accepted |
+| [076](0076-invoice-review.md) | Invoices are reviewed on the quote review model, and an approved review approves the invoice | Accepted |

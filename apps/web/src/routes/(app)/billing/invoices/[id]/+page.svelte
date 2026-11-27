@@ -3,7 +3,10 @@
 	import { resolve } from '$app/paths';
 	import { Check, Download, Pause, Plus, Send, Trash2 } from '@lucide/svelte';
 	import { Badge, Button, Card, Dialog, Field, Input, toast, tray } from '@usehuxley/ui';
+	import InvoiceReview from '#lib/billing/InvoiceReview.svelte';
 	import { INVOICE_STATUSES, invRef, invoiceTone, money } from '#lib/billing/labels.ts';
+	import QuoteComments from '#lib/sales/QuoteComments.svelte';
+	import { REVIEW_STATUSES, label, reviewTone } from '#lib/sales/labels.ts';
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
@@ -83,6 +86,22 @@
 				toast.push({ title: message ?? 'Something went wrong.', tone: 'danger' });
 			}
 		};
+	/** For the review and comment panels: a fixed message on success. */
+	const said =
+		(message: string, after?: () => void): SubmitFunction =>
+		() =>
+		async ({ result, update }) => {
+			await update({ reset: false });
+			if (result.type === 'success') {
+				toast.push({ title: message, tone: 'success' });
+				after?.();
+			} else if (result.type === 'failure') {
+				const failed = result.data as { message?: string } | undefined;
+				toast.push({ title: failed?.message ?? 'Something went wrong.', tone: 'danger' });
+			}
+		};
+	let needsReview = $derived(data.review !== null && !data.review.canApprove);
+	let commentLines = $derived(i.lines.map((l) => ({ value: l.id, label: l.description })));
 	const cell =
 		'h-8 w-full rounded-control border border-border bg-surface px-2 text-sm text-fg disabled:border-transparent disabled:bg-transparent';
 </script>
@@ -109,6 +128,11 @@
 							On hold{i.holdReason ? `: ${i.holdReason}` : ''}
 						</Badge>{/if}
 					{#if i.dueOn}<Badge>Due {i.dueOn}</Badge>{/if}
+					{#if i.reviewStatus !== 'not_needed'}
+						<Badge tone={reviewTone(i.reviewStatus)}>
+							{label(REVIEW_STATUSES, i.reviewStatus)}
+						</Badge>
+					{/if}
 					{#if dirty}<Badge tone="warning">Unsaved changes</Badge>{/if}
 				</div>
 			</div>
@@ -130,11 +154,24 @@
 						<Button onclick={() => (holdOpen = true)}><Pause size={16} /> Hold</Button>
 					{/if}
 				{/if}
-				{#if i.status === 'draft' && data.canApprove}
+				{#if i.status === 'draft' && data.canApprove && !needsReview}
 					<form method="POST" action="?/approve" use:enhance={done()}>
 						<input type="hidden" name="version" value={i.version} />
 						<Button type="submit" variant="primary" disabled={dirty || i.onHold}>
 							<Check size={16} /> Approve
+						</Button>
+					</form>
+				{:else if i.status === 'draft' && data.canApprove && data.review?.canOverride}
+					<form method="POST" action="?/approve" use:enhance={done()}>
+						<input type="hidden" name="version" value={i.version} />
+						<input type="hidden" name="override" value="yes" />
+						<Button
+							type="submit"
+							variant="ghost"
+							disabled={dirty || i.onHold}
+							title="It needs review; approving it now is recorded"
+						>
+							Approve without review
 						</Button>
 					</form>
 				{/if}
@@ -255,6 +292,26 @@
 			</div>
 		{/if}
 	</section>
+
+	{#if data.review && (i.status === 'draft' || data.review.history.length > 0)}
+		<InvoiceReview
+			review={data.review}
+			approval={data.approval}
+			canSubmit={data.canWrite && i.status === 'draft'}
+			version={i.version}
+			{dirty}
+			done={said}
+		/>
+	{/if}
+
+	<QuoteComments
+		comments={data.comments}
+		lines={commentLines}
+		people={data.people}
+		me={data.me}
+		done={said}
+		whole="The whole invoice"
+	/>
 
 	{#if draft || i.notes}
 		<Card title="Notes">

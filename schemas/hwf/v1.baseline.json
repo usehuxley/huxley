@@ -507,6 +507,21 @@
       ],
       "type": "object"
     },
+    "InvoiceReview": {
+      "additionalProperties": false,
+      "description": "An invoice review's decision to record (`core.invoice.review`):\n`review_id` (from `invoice.submitted_for_review`), `decision`\n(`approved`, `changes_requested` or `rejected`, or a boolean), `by` and\na `comment`. Only the invoice's open review counts: if it changed since,\nit needs a new review and the step fails with `kind: conflict`. An\napproved review approves the invoice (unless it's on hold). Raises\n`invoice.review_approved`, `invoice.changes_requested` or\n`invoice.rejected`, and tells whoever submitted it. Output: the\ninvoice's review state.",
+      "properties": {
+        "by": true,
+        "comment": true,
+        "decision": true,
+        "review_id": true
+      },
+      "required": [
+        "review_id",
+        "decision"
+      ],
+      "type": "object"
+    },
     "Join": {
       "description": "When a `parallel` step finishes.",
       "oneOf": [
@@ -4214,6 +4229,69 @@
             },
             "with": {
               "$ref": "#/$defs/QuoteReview"
+            }
+          },
+          "required": [
+            "type",
+            "id",
+            "with"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Record an invoice review's decision (the `billing` module).",
+          "properties": {
+            "continue_on_error": {
+              "description": "Record the error as the step's output and carry on.",
+              "type": "boolean"
+            },
+            "description": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "id": {
+              "description": "Unique in the workflow: lowercase letters, digits, underscores.\nOther steps read this step's output as `steps.<id>.output`.",
+              "type": "string"
+            },
+            "if": {
+              "description": "Skip the step unless this expression is true.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "name": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "retry": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/RetryPolicy"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "timeout": {
+              "description": "Fail the attempt after this long, e.g. `30s`.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "type": {
+              "const": "core.invoice.review",
+              "type": "string"
+            },
+            "with": {
+              "$ref": "#/$defs/InvoiceReview"
             }
           },
           "required": [

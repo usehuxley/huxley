@@ -25,3 +25,13 @@ export function lastMonth(): { from: string; to: string } {
 	const day = (t: number) => new Date(t).toISOString().slice(0, 10);
 	return { from: day(first), to: day(last) };
 }
+
+export const INVOICE_RULE_KINDS = [
+	{ value: 'edited', label: 'A line was changed by hand' },
+	{ value: 'always', label: 'Every invoice' },
+	{ value: 'total_above', label: 'Total above (amount)' },
+	{ value: 'change_above', label: "Total moved more than (%) from the client's last" },
+	{ value: 'new_client', label: "The client's first invoice" },
+	{ value: 'credit_memo', label: 'Credit memos' },
+	{ value: 'expression', label: 'An expression is true' }
+] as const;
