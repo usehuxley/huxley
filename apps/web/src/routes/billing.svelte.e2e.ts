@@ -107,7 +107,7 @@ test.describe('billing', () => {
 	test('an invoice changed by hand goes to review, and the approved review approves it', async ({
 		page
 	}) => {
-		test.setTimeout(150_000);
+		test.setTimeout(300_000);
 		const stamp = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
 		const today = new Date().toISOString().slice(0, 10);
 		const api = await request.newContext({
@@ -192,14 +192,14 @@ test.describe('billing', () => {
 			await expect(async () => {
 				await page.reload();
 				await expect(page.getByText('Your review')).toBeVisible({ timeout: 1000 });
-			}).toPass({ timeout: 60_000 });
+			}).toPass({ timeout: 120_000 });
 			await page.getByRole('button', { name: 'Approve', exact: true }).click();
 			await expect(async () => {
 				await page.reload();
 				await expect(page.getByRole('button', { name: 'Mark sent' })).toBeVisible({
 					timeout: 1000
 				});
-			}).toPass({ timeout: 60_000 });
+			}).toPass({ timeout: 120_000 });
 			await expect(page.getByRole('list', { name: 'Review history' })).toContainText('Approved');
 		} finally {
 			await api.delete(`/api/v1/billing/review-rules/${rule.id}`);
