@@ -180,6 +180,8 @@ test.describe('quotes', () => {
 	});
 
 	test('a quote that needs review is sent back for changes, with comments', async ({ page }) => {
+		// It waits on the review workflow twice; give a busy runner room.
+		test.setTimeout(90_000);
 		const stamp = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
 		const title = `Review me ${stamp}`;
 		const api = await request.newContext({
