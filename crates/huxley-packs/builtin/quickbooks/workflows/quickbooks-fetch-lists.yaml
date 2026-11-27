@@ -5,7 +5,7 @@ metadata:
   name: Fetch QuickBooks lists
   description: >-
     Every night (or when run by hand), reads QuickBooks' customers, items,
-    tax codes and classes into their datasets, replacing what was there, so
+    tax codes, classes, vendors and expense accounts into their datasets, replacing what was there, so
     they can be matched to clients, products and tax codes under Billing →
     Accounting. Up to 1,000 of each. Uses the connection named quickbooks;
     run it at your MSP.
@@ -73,6 +73,34 @@ spec:
         rows: "{{ (steps.classes.output.QueryResponse.Class if steps.classes.output and steps.classes.output.QueryResponse else none) or [] }}"
         replace: true
         map: { id: Id, name: FullyQualifiedName, active: Active }
+    - id: vendors
+      type: integration.action
+      action: quickbooks/query
+      connection: quickbooks
+      with:
+        query: select Id, DisplayName, Active from Vendor startposition 1 maxresults 1000
+        minorversion: 75
+    - id: save_vendors
+      type: dataset.upsert
+      with:
+        dataset: quickbooks-suppliers
+        rows: "{{ steps.vendors.output.QueryResponse.Vendor or [] }}"
+        replace: true
+        map: { id: Id, name: DisplayName, active: Active }
+    - id: accounts
+      type: integration.action
+      action: quickbooks/query
+      connection: quickbooks
+      with:
+        query: select Id, Name, Active from Account where AccountType = 'Expense' startposition 1 maxresults 1000
+        minorversion: 75
+    - id: save_accounts
+      type: dataset.upsert
+      with:
+        dataset: quickbooks-accounts
+        rows: "{{ steps.accounts.output.QueryResponse.Account or [] }}"
+        replace: true
+        map: { id: Id, name: Name, active: Active }
   outputs:
     customers: "{{ (steps.customers.output.QueryResponse.Customer or []) | length }}"
     items: "{{ (steps.items.output.QueryResponse.Item or []) | length }}"

@@ -4,8 +4,8 @@ metadata:
   key: xero-fetch-lists
   name: Fetch Xero lists
   description: >-
-    Every night (or when run by hand), reads Xero's customer contacts,
-    items, tax rates and tracking options into their datasets, replacing
+    Every night (or when run by hand), reads Xero's contacts, items,
+    tax rates, tracking options and expense accounts into their datasets, replacing
     what was there, so they can be matched to clients, products, tax codes
     and classes under Billing → Accounting. Uses the connection named xero
     and the organization variable xero_tenant_id; run it at your MSP.
@@ -29,6 +29,29 @@ spec:
         rows: "{{ steps.contacts.output.Contacts or [] }}"
         replace: true
         map: { id: ContactID, name: Name, active: IsCustomer }
+    # Anyone paid back is a contact too.
+    - id: save_suppliers
+      type: dataset.upsert
+      with:
+        dataset: xero-suppliers
+        rows: "{{ steps.contacts.output.Contacts or [] }}"
+        replace: true
+        map: { id: ContactID, name: Name, active: IsSupplier }
+    - id: accounts
+      type: integration.action
+      action: xero/listAccounts
+      connection: xero
+      with:
+        xero-tenant-id: "{{ vars.xero_tenant_id }}"
+        where: Class=="EXPENSE"
+    # Bills name accounts by their code.
+    - id: save_accounts
+      type: dataset.upsert
+      with:
+        dataset: xero-accounts
+        rows: "{{ (steps.accounts.output.Accounts or []) | selectattr('Code') | list }}"
+        replace: true
+        map: { id: Code, name: Name }
     - id: items
       type: integration.action
       action: xero/listItems

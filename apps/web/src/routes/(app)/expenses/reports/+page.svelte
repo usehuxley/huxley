@@ -18,6 +18,15 @@
 		<h1 class="mt-1 text-[26px] leading-tight font-extrabold tracking-tight text-fg">
 			Expense reports
 		</h1>
+		<p class="mt-1 text-sm">
+			<a
+				href="{resolve('/(app)/expenses/reports')}/export.csv"
+				class="text-accent hover:underline"
+				data-sveltekit-reload
+			>
+				Export approved expenses (CSV)
+			</a>
+		</p>
 	</div>
 	<Card>
 		{#if data.reports.length === 0}

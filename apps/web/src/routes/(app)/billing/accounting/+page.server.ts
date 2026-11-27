@@ -6,7 +6,7 @@ import type { components } from '@usehuxley/api-client';
 import type { Actions, PageServerLoad } from './$types';
 
 type Kind = components['schemas']['MappingKind'];
-const KINDS: Kind[] = ['customer', 'item', 'tax_code', 'class'];
+const KINDS: Kind[] = ['customer', 'item', 'tax_code', 'class', 'supplier', 'account'];
 
 export const load: PageServerLoad = async (event) => {
 	const client = api(event);
@@ -21,15 +21,17 @@ export const load: PageServerLoad = async (event) => {
 	]);
 	if (settings?.response.status === 404) error(404, 'Invoicing is turned off.');
 	const target = settings?.data?.target ?? null;
-	const [mappings, products, ...options] = target
+	const [mappings, products, people, categories, ...options] = target
 		? await Promise.all([
 				client.GET('/api/v1/billing/mappings', { params: { query: { orgId } } }),
 				client.GET('/api/v1/catalog/products', { params: { query: { active: true } } }),
+				client.GET('/api/v1/users', { params: { query: { limit: 200 } } }),
+				client.GET('/api/v1/expense-categories'),
 				...KINDS.map((kind) =>
 					client.GET('/api/v1/billing/mappings/options', { params: { query: { orgId, kind } } })
 				)
 			])
-		: [null, null];
+		: [null, null, null, null];
 	const { user } = await event.parent();
 	return {
 		orgId,
@@ -42,6 +44,10 @@ export const load: PageServerLoad = async (event) => {
 			.map((o) => ({ id: o.id, name: o.name }))
 			.sort((a, b) => a.name.localeCompare(b.name)),
 		products: (products?.data ?? []).map((p) => ({ id: p.id, name: p.name, sku: p.sku })),
+		people: (people?.data?.items ?? [])
+			.filter((u) => u.status === 'active' && u.kind === 'human')
+			.map((u) => ({ id: u.id, name: u.displayName })),
+		categories: (categories?.data ?? []).map((c) => ({ id: c.id, name: c.name })),
 		options: Object.fromEntries(KINDS.map((k, i) => [k, options[i]?.data ?? []])),
 		queue: queue.data ?? [],
 		receivables: owing.data ?? [],

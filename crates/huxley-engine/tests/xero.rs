@@ -23,7 +23,7 @@ use uuid::Uuid;
 const SPEC: &str = include_str!("../../huxley-packs/builtin/xero/integrations/xero.yaml");
 const SYNC: &str = include_str!("../../huxley-packs/builtin/xero/workflows/xero-sync-invoice.yaml");
 const FETCH: &str = include_str!("../../huxley-packs/builtin/xero/workflows/xero-fetch-lists.yaml");
-const DATASETS: [(&str, &str); 4] = [
+const DATASETS: [(&str, &str); 6] = [
     (
         "xero-customers",
         include_str!("../../huxley-packs/builtin/xero/datasets/xero-customers.json"),
@@ -39,6 +39,14 @@ const DATASETS: [(&str, &str); 4] = [
     (
         "xero-classes",
         include_str!("../../huxley-packs/builtin/xero/datasets/xero-classes.json"),
+    ),
+    (
+        "xero-suppliers",
+        include_str!("../../huxley-packs/builtin/xero/datasets/xero-suppliers.json"),
+    ),
+    (
+        "xero-accounts",
+        include_str!("../../huxley-packs/builtin/xero/datasets/xero-accounts.json"),
     ),
 ];
 
@@ -104,6 +112,10 @@ async fn harness() -> Option<Harness> {
             axum::Json(json!({ "TrackingCategories": [{ "Name": "Region", "Options": [
                 { "Name": "North", "Status": "ACTIVE" }, { "Name": "South", "Status": "ARCHIVED" }] }] }))
         }))
+        .route(
+            "/api.xro/2.0/Accounts",
+            get(|| async { axum::Json(json!({ "Accounts": [{ "Code": "429", "Name": "General Expenses" }] })) }),
+        )
         .route("/api.xro/2.0/Invoices", axum::routing::put(invoices))
         .with_state(seen.clone());
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();

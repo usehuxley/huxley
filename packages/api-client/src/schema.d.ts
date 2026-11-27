@@ -3149,6 +3149,23 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
+	'/api/v1/expense-reports/export.csv': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** Reimbursable expenses in approved (or paid back) reports, as CSV. */
+		get: operations['export_expense_reports'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
 	'/api/v1/expense-reports/{id}': {
 		parameters: {
 			query?: never;
@@ -3179,6 +3196,45 @@ export interface paths {
 		 *     anyone @mentioned, are told).
 		 */
 		post: operations['add_expense_report_comment'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/expense-reports/{id}/reimbursed': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/** Marks an approved report paid back. */
+		post: operations['reimburse_expense_report'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/expense-reports/{id}/sync': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** A report's accounting status: whether it's in the accounting system, and paid back. */
+		get: operations['expense_report_sync'];
+		put?: never;
+		/**
+		 * Sends an approved report to the accounting system as a bill to the
+		 *     person (raises `expense_report.sync_requested` for the sync pack), or
+		 *     fails it saying what to map.
+		 */
+		post: operations['sync_expense_report'];
 		delete?: never;
 		options?: never;
 		head?: never;
@@ -13520,7 +13576,7 @@ export interface components {
 			typeName: string;
 		};
 		/** @enum {string} */
-		MappingKind: 'customer' | 'item' | 'tax_code' | 'class';
+		MappingKind: 'customer' | 'item' | 'tax_code' | 'class' | 'supplier' | 'account';
 		MappingRequest: {
 			mapping: components['schemas']['AccountingMappingInput'];
 			/** Format: uuid */
@@ -15823,6 +15879,21 @@ export interface components {
 		};
 		ReportSharing: {
 			clientVisible: boolean;
+		};
+		/** @description A report's accounting status. */
+		ReportSync: {
+			/** Format: date-time */
+			reimbursedAt?: string | null;
+			remoteId?: string | null;
+			remoteNumber?: string | null;
+			remoteUrl?: string | null;
+			/** Format: uuid */
+			reportId: string;
+			status: string;
+			syncError?: string | null;
+			/** @description `pending`, `synced` or `failed`; none if it was never sent. */
+			syncStatus?: string | null;
+			syncTarget?: string | null;
 		};
 		/** @description A report, with the open approval for the caller to decide. */
 		ReportView: components['schemas']['ExpenseReport'] & {
@@ -25043,6 +25114,28 @@ export interface operations {
 			};
 		};
 	};
+	export_expense_reports: {
+		parameters: {
+			query?: {
+				/** @description `approved` (the default) or `reimbursed`. */
+				status?: string;
+			};
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'text/csv': unknown;
+				};
+			};
+		};
+	};
 	get_expense_report: {
 		parameters: {
 			query?: never;
@@ -25106,6 +25199,69 @@ export interface operations {
 				};
 				content: {
 					'application/json': components['schemas']['ExpenseReportComment'];
+				};
+			};
+		};
+	};
+	reimburse_expense_report: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ReportSync'];
+				};
+			};
+		};
+	};
+	expense_report_sync: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ReportSync'];
+				};
+			};
+		};
+	};
+	sync_expense_report: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ReportSync'];
 				};
 			};
 		};

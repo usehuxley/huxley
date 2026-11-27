@@ -60,6 +60,18 @@ Once their report is approved, **billable** expenses go on the client's next inv
 
 A project's **Billing** card has an **expense budget**. The project shows what's been spent: expenses submitted, approved or paid back, against that budget.
 
+## Paying expenses back
+
+On an approved report's page, someone with `expense:approve` can do either (ADR-083):
+- **Send to accounting.** This creates a **bill** to the person, as a supplier, in QuickBooks Online or Xero. It has one line per expense to be paid back, on its category's **expense account**, and the report shows the bill and a link to it.
+  - First, under **Billing → Accounting**, match people to suppliers (**People (suppliers)**) and categories to expense accounts (**Expense accounts**). A default account covers any category without its own.
+  - Expenses in more than one currency, or an unmatched person or category, stop it with the reason.
+- **Mark paid back.** This marks the report and its expenses as paid back.
+
+**Expense reports → Export approved expenses (CSV)** downloads everything to be paid back from approved reports, for payroll or a bank upload.
+
+The events are `expense_report.sync_requested` (for the sync packs), `expense_report.synced`, `expense_report.sync_failed` and `expense_report.reimbursed`. Sync packs report back with `core.expense.sync_result`.
+
 ## Settings
 
 In **Settings → Expenses** (`expense:configure`):

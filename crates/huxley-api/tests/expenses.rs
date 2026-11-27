@@ -492,3 +492,89 @@ async fn approved_billable_expenses_are_invoiced_and_count_on_the_project() {
         "{again}"
     );
 }
+
+#[tokio::test]
+async fn approved_reports_are_exported_and_paid_back() {
+    let Some(s) = setup().await else { return };
+    let (_, tech_email) = user(&s.pools, Some(("technician", s.provider))).await;
+    let tech = login(&s.app, &tech_email).await;
+    let today = time::OffsetDateTime::now_utc().date().to_string();
+    let parts = s.category("Parts and supplies").await;
+    let what = unique("=Cable");
+    let e = s
+        .ok(&tech, "POST", "/api/v1/expenses",
+            json!({ "categoryId": parts, "spentOn": today, "description": what, "amount": "12.50", "orgId": s.acme }),
+            StatusCode::CREATED)
+        .await;
+    let r = s
+        .ok(
+            &tech,
+            "POST",
+            "/api/v1/expense-reports",
+            json!({ "entryIds": [e["id"]] }),
+            StatusCode::CREATED,
+        )
+        .await;
+    let id = r["id"].as_str().unwrap();
+    // Not until it's approved; not by the technician.
+    let (status, _) = s
+        .call(
+            &s.owner,
+            "POST",
+            &format!("/api/v1/expense-reports/{id}/reimbursed"),
+            None,
+        )
+        .await;
+    assert_eq!(status, StatusCode::CONFLICT);
+    s.approve(id).await;
+    let (status, _) = s
+        .call(
+            &tech,
+            "POST",
+            &format!("/api/v1/expense-reports/{id}/reimbursed"),
+            None,
+        )
+        .await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+    // Without an accounting system, sending it says so.
+    let (status, _) = s
+        .call(
+            &s.owner,
+            "POST",
+            &format!("/api/v1/expense-reports/{id}/sync"),
+            None,
+        )
+        .await;
+    assert_eq!(status, StatusCode::CONFLICT);
+    // The export has it, its formula-looking text defused.
+    let req = Request::get("/api/v1/expense-reports/export.csv")
+        .header("x-requested-with", "huxley")
+        .header("cookie", &s.owner)
+        .body(Body::empty())
+        .unwrap();
+    let res = s.app.clone().oneshot(req).await.unwrap();
+    assert_eq!(res.status(), StatusCode::OK);
+    let csv =
+        String::from_utf8(res.into_body().collect().await.unwrap().to_bytes().to_vec()).unwrap();
+    assert!(csv.contains(&format!("\"'{what}\"")), "{csv}");
+    let paid = s
+        .ok(
+            &s.owner,
+            "POST",
+            &format!("/api/v1/expense-reports/{id}/reimbursed"),
+            json!(null),
+            StatusCode::OK,
+        )
+        .await;
+    assert_eq!(paid["status"], "reimbursed");
+    let entry = s
+        .ok(
+            &tech,
+            "GET",
+            &format!("/api/v1/expenses/{}", e["id"].as_str().unwrap()),
+            json!(null),
+            StatusCode::OK,
+        )
+        .await;
+    assert_eq!(entry["status"], "reimbursed");
+}

@@ -1517,6 +1517,30 @@ export type Step =
 			 * Fail the attempt after this long, e.g. `30s`.
 			 */
 			timeout?: string | null;
+			type: 'core.expense.sync_result';
+			with: ExpenseSyncResult;
+	  }
+	| {
+			/**
+			 * Record the error as the step's output and carry on.
+			 */
+			continue_on_error?: boolean;
+			description?: string | null;
+			/**
+			 * Unique in the workflow: lowercase letters, digits, underscores.
+			 * Other steps read this step's output as `steps.<id>.output`.
+			 */
+			id: string;
+			/**
+			 * Skip the step unless this expression is true.
+			 */
+			if?: string | null;
+			name?: string | null;
+			retry?: RetryPolicy | null;
+			/**
+			 * Fail the attempt after this long, e.g. `30s`.
+			 */
+			timeout?: string | null;
 			type: 'core.sales.log_email';
 			with: SalesLogEmail;
 	  }
@@ -2885,6 +2909,26 @@ export interface ExpenseReportDecide {
 	by?: unknown;
 	comment?: unknown;
 	decision: unknown;
+	report_id: unknown;
+}
+/**
+ * How sending an expense report to the accounting system went
+ * (`core.expense.sync_result`), from a sync pack's workflow on
+ * `expense_report.sync_requested`: `report_id`, `ok`, and when it synced
+ * the bill's `remote_id` (and optionally `remote_number` and an https
+ * `remote_url`); when it didn't, the `error`. Raises
+ * `expense_report.synced` or `expense_report.sync_failed`. Output: the
+ * report's accounting status.
+ *
+ * This interface was referenced by `HuxleyWorkflowFormatV1`'s JSON-Schema
+ * via the `definition` "ExpenseSyncResult".
+ */
+export interface ExpenseSyncResult {
+	error?: unknown;
+	ok: unknown;
+	remote_id?: unknown;
+	remote_number?: unknown;
+	remote_url?: unknown;
 	report_id: unknown;
 }
 /**

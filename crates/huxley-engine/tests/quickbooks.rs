@@ -25,11 +25,13 @@ const SPEC: &str =
     include_str!("../../huxley-packs/builtin/quickbooks/integrations/quickbooks.yaml");
 const SYNC: &str =
     include_str!("../../huxley-packs/builtin/quickbooks/workflows/quickbooks-sync-invoice.yaml");
+const EXPENSES: &str =
+    include_str!("../../huxley-packs/builtin/quickbooks/workflows/quickbooks-sync-expenses.yaml");
 const STATUS: &str =
     include_str!("../../huxley-packs/builtin/quickbooks/workflows/quickbooks-invoice-status.yaml");
 const FETCH: &str =
     include_str!("../../huxley-packs/builtin/quickbooks/workflows/quickbooks-fetch-lists.yaml");
-const DATASETS: [(&str, &str); 4] = [
+const DATASETS: [(&str, &str); 6] = [
     (
         "quickbooks-customers",
         include_str!("../../huxley-packs/builtin/quickbooks/datasets/quickbooks-customers.json"),
@@ -45,6 +47,14 @@ const DATASETS: [(&str, &str); 4] = [
     (
         "quickbooks-classes",
         include_str!("../../huxley-packs/builtin/quickbooks/datasets/quickbooks-classes.json"),
+    ),
+    (
+        "quickbooks-suppliers",
+        include_str!("../../huxley-packs/builtin/quickbooks/datasets/quickbooks-suppliers.json"),
+    ),
+    (
+        "quickbooks-accounts",
+        include_str!("../../huxley-packs/builtin/quickbooks/datasets/quickbooks-accounts.json"),
     ),
 ];
 
@@ -107,6 +117,13 @@ async fn harness() -> Option<Harness> {
     let app = axum::Router::new()
         .route("/v3/company/123/query", get(query))
         .route("/v3/company/123/invoice", post(invoice))
+        .route(
+            "/v3/company/123/bill",
+            post(|State(bodies): State<Bodies>, axum::Json(body): axum::Json<Json>| async move {
+                bodies.lock().unwrap().push(body.clone());
+                axum::Json(json!({ "Bill": { "Id": "77", "DocNumber": body["DocNumber"] } }))
+            }),
+        )
         .route(
             "/v3/company/123/invoice/{id}",
             get(|| async {
@@ -442,4 +459,124 @@ async fn lists_are_fetched_and_approved_invoices_sync() {
     let s = sync::state(&mut tx, unmapped).await.unwrap().unwrap();
     assert_eq!(s.status, SyncStatus::Failed);
     assert!(s.error.unwrap().contains("isn't matched to a customer"));
+}
+
+impl Harness {
+    /// A technician's approved report (a hotel), sent to `QuickBooks`, with
+    /// the person and the default account mapped: `(report, the
+    /// expense_report.sync_requested payload)`.
+    async fn sent_report(&self) -> (Uuid, Json) {
+        let h = self;
+        let system = RequestContext::system(Via::System);
+        let user = Uuid::now_v7();
+        sqlx::query("INSERT INTO users (id, email, display_name) VALUES ($1, $2, 'Field Tech')")
+            .bind(user)
+            .bind(format!("{}@example.com", user.simple()))
+            .execute(&h.pools.owner)
+            .await
+            .unwrap();
+        let ctx = RequestContext {
+            actor: huxley_core::Actor::User(user),
+            ..system.clone()
+        };
+        let mut tx = h.tx().await;
+        huxley_modules::set_enabled(&mut tx, &system, "expenses", true, true)
+            .await
+            .unwrap();
+        let settings = Settings {
+            target: "quickbooks".into(),
+            enabled: true,
+            on_approval: true,
+            credit_hold_days: None,
+            credit_hold_amount: None,
+        };
+        sync::set_settings(&mut tx, &system, h.provider, &settings)
+            .await
+            .unwrap();
+        for (kind, local, remote) in [
+            (MappingKind::Supplier, user.to_string(), "V-9"),
+            (MappingKind::Account, "default".into(), "60"),
+        ] {
+            let m = MappingInput {
+                kind,
+                local_key: local,
+                remote_id: remote.into(),
+                remote_name: None,
+            };
+            sync::set_mapping(&mut tx, &system, h.provider, "quickbooks", &m)
+                .await
+                .unwrap();
+        }
+        let travel: Uuid =
+            sqlx::query_scalar("SELECT id FROM exp_categories WHERE name = 'Travel and lodging'")
+                .fetch_one(&mut *tx)
+                .await
+                .unwrap();
+        let input: huxley_expenses::entries::ExpenseInput = serde_json::from_value(json!({
+            "categoryId": travel, "spentOn": time::OffsetDateTime::now_utc().date().to_string(),
+            "description": "Hotel", "amount": "180", "tax": "15", "orgId": h.provider
+        }))
+        .unwrap();
+        let e = huxley_expenses::entries::create(&mut tx, &ctx, user, &input)
+            .await
+            .unwrap();
+        let submit = huxley_expenses::reports::SubmitInput {
+            title: Some("Trip".into()),
+            entry_ids: vec![e.id],
+        };
+        let r = huxley_expenses::reports::submit(&mut tx, &ctx, user, &submit)
+            .await
+            .unwrap();
+        huxley_expenses::reports::decide(
+            &mut tx,
+            &system,
+            r.id,
+            huxley_expenses::reports::Decision::Approved,
+            "Lead",
+            None,
+        )
+        .await
+        .unwrap();
+        let asked = huxley_billing::expense_sync::request(&mut tx, &system, r.id)
+            .await
+            .unwrap();
+        assert_eq!(asked.sync_status.as_deref(), Some("pending"));
+        let payload: Json = sqlx::query_scalar(
+            "SELECT payload FROM events_outbox WHERE event_type = 'expense_report.sync_requested' AND subject_id = $1",
+        )
+        .bind(r.id)
+        .fetch_one(&mut *tx)
+        .await
+        .unwrap();
+        tx.commit().await.unwrap();
+        (r.id, payload)
+    }
+}
+
+#[tokio::test]
+async fn an_approved_expense_report_becomes_a_bill() {
+    let Some(h) = harness().await else { return };
+    let system = RequestContext::system(Via::System);
+    let (report, payload) = h.sent_report().await;
+    assert_eq!(
+        h.run(h.provider, EXPENSES, payload).await,
+        RunStatus::Succeeded
+    );
+    let bill = h.bodies.lock().unwrap()[0].clone();
+    assert_eq!(bill["VendorRef"]["value"], "V-9");
+    assert_eq!(bill["Line"][0]["Amount"], 180.0);
+    assert_eq!(
+        bill["Line"][0]["AccountBasedExpenseLineDetail"]["AccountRef"]["value"],
+        "60"
+    );
+    let mut tx = h.tx().await;
+    let done = huxley_billing::expense_sync::state(&mut tx, report)
+        .await
+        .unwrap();
+    assert_eq!(done.sync_status.as_deref(), Some("synced"));
+    assert_eq!(done.remote_id.as_deref(), Some("77"));
+    let paid = huxley_billing::expense_sync::mark_reimbursed(&mut tx, &system, report)
+        .await
+        .unwrap();
+    assert_eq!(paid.status, "reimbursed");
 }

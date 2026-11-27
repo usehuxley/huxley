@@ -666,6 +666,23 @@ export const STEPS: StepSpec[] = [
 		]
 	},
 	{
+		type: 'core.expense.sync_result',
+		label: 'Record an expense report sync',
+		description:
+			"Record how sending an expense report to the accounting system went: the bill's ID there, or why it didn't go.",
+		group: 'Actions',
+		module: 'billing',
+		template: { with: { report_id: '{{ inputs.reportId }}', ok: true, remote_id: '' } },
+		fields: [
+			{ path: 'with.report_id', label: 'Report', kind: 'expression' },
+			{ path: 'with.ok', label: 'Synced', kind: 'expression', hint: 'true or false' },
+			{ path: 'with.remote_id', label: 'ID in the accounting system', kind: 'expression' },
+			{ path: 'with.remote_number', label: 'Number there', kind: 'expression' },
+			{ path: 'with.remote_url', label: 'Link (https)', kind: 'expression' },
+			{ path: 'with.error', label: 'Why it failed', kind: 'expression' }
+		]
+	},
+	{
 		type: 'core.sales.log_email',
 		label: 'Log a sales email',
 		description:

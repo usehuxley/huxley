@@ -41,6 +41,15 @@ pub fn routes(upload_limit: usize) -> Router<AppState> {
         )
         .route("/expense-reports", get(list_reports).post(submit_report))
         .route("/expense-reports/{id}", get(get_report))
+        .route("/expense-reports/export.csv", get(export_reports))
+        .route(
+            "/expense-reports/{id}/sync",
+            get(report_sync).post(sync_report),
+        )
+        .route(
+            "/expense-reports/{id}/reimbursed",
+            axum::routing::post(reimburse_report),
+        )
         .route(
             "/expense-reports/{id}/comments",
             get(report_comments).post(add_report_comment),
@@ -585,4 +594,146 @@ pub async fn add_report_comment(
     })
     .await?;
     Ok((StatusCode::CREATED, Json(c)))
+}
+
+fn billing_map(e: huxley_billing::BillingError) -> ApiError {
+    use huxley_billing::BillingError as B;
+    match e {
+        B::NotFound => ApiError::not_found(),
+        B::Invalid { field, message } => {
+            ApiError::validation().with_field_error(format!("/{field}"), message)
+        }
+        B::Conflict(m) => ApiError::conflict(m),
+        B::Db(e) => ApiError::internal(&e),
+        B::Sqlx(e) => ApiError::internal(&e),
+        B::Contracts(e) => ApiError::internal(&e),
+    }
+}
+
+/// Checks `expense:approve` at a report's organization.
+async fn report_approver(state: &AppState, authed: &Authed, id: Uuid) -> ApiResult<()> {
+    let (_, org) = scoped(state, &OrgScope::System, async |tx| {
+        reports::owner_of(tx, id).await
+    })
+    .await?
+    .ok_or_else(ApiError::not_found)?;
+    at(state, authed, org, permissions::EXPENSE_APPROVE).await
+}
+
+async fn billing_tx<T>(
+    state: &AppState,
+    f: impl AsyncFnOnce(&mut sqlx::PgConnection) -> Result<T, huxley_billing::BillingError>,
+) -> ApiResult<T> {
+    let mut tx = begin_scoped(&state.db, &OrgScope::System)
+        .await
+        .map_err(|e| ApiError::internal(&e))?;
+    let v = f(&mut tx).await.map_err(billing_map)?;
+    tx.commit().await.map_err(|e| ApiError::internal(&e))?;
+    Ok(v)
+}
+
+/// A report's accounting status: whether it's in the accounting system, and paid back.
+#[utoipa::path(get, path = "/api/v1/expense-reports/{id}/sync", operation_id = "expense_report_sync", tag = "expenses",
+    params(("id" = Uuid, Path)), responses((status = 200, body = huxley_billing::expense_sync::ReportSync)))]
+pub async fn report_sync(
+    State(state): State<AppState>,
+    authed: Authed,
+    Path(id): Path<Uuid>,
+) -> ApiResult<Json<huxley_billing::expense_sync::ReportSync>> {
+    report_visible(&state, &authed, id).await?;
+    Ok(Json(
+        billing_tx(&state, async |tx| {
+            huxley_billing::expense_sync::state(tx, id).await
+        })
+        .await?,
+    ))
+}
+
+/// Sends an approved report to the accounting system as a bill to the
+/// person (raises `expense_report.sync_requested` for the sync pack), or
+/// fails it saying what to map.
+#[utoipa::path(post, path = "/api/v1/expense-reports/{id}/sync", operation_id = "sync_expense_report", tag = "expenses",
+    params(("id" = Uuid, Path)), responses((status = 200, body = huxley_billing::expense_sync::ReportSync)))]
+pub async fn sync_report(
+    State(state): State<AppState>,
+    authed: Authed,
+    Path(id): Path<Uuid>,
+) -> ApiResult<Json<huxley_billing::expense_sync::ReportSync>> {
+    report_approver(&state, &authed, id).await?;
+    let ctx = authed.user.ctx.clone();
+    Ok(Json(
+        billing_tx(&state, async |tx| {
+            huxley_billing::expense_sync::request(tx, &ctx, id).await
+        })
+        .await?,
+    ))
+}
+
+/// Marks an approved report paid back.
+#[utoipa::path(post, path = "/api/v1/expense-reports/{id}/reimbursed", operation_id = "reimburse_expense_report",
+    tag = "expenses", params(("id" = Uuid, Path)), responses((status = 200, body = huxley_billing::expense_sync::ReportSync)))]
+pub async fn reimburse_report(
+    State(state): State<AppState>,
+    authed: Authed,
+    Path(id): Path<Uuid>,
+) -> ApiResult<Json<huxley_billing::expense_sync::ReportSync>> {
+    report_approver(&state, &authed, id).await?;
+    let ctx = authed.user.ctx.clone();
+    Ok(Json(
+        billing_tx(&state, async |tx| {
+            huxley_billing::expense_sync::mark_reimbursed(tx, &ctx, id).await
+        })
+        .await?,
+    ))
+}
+
+#[derive(Debug, serde::Deserialize, utoipa::IntoParams)]
+#[serde(rename_all = "camelCase")]
+#[into_params(parameter_in = Query)]
+pub struct ExportParams {
+    /// `approved` (the default) or `reimbursed`.
+    pub status: Option<String>,
+}
+
+/// Reimbursable expenses in approved (or paid back) reports, as CSV.
+#[utoipa::path(get, path = "/api/v1/expense-reports/export.csv", operation_id = "export_expense_reports", tag = "expenses",
+    params(ExportParams), responses((status = 200, content_type = "text/csv")))]
+pub async fn export_reports(
+    State(state): State<AppState>,
+    authed: Authed,
+    Query(p): Query<ExportParams>,
+) -> ApiResult<impl IntoResponse> {
+    require_module(&state, MODULE).await?;
+    let scope = authed
+        .module_scope(&state, permissions::EXPENSE_APPROVE, MODULE)
+        .await?;
+    if matches!(&scope, OrgScope::Orgs(o) if o.is_empty()) {
+        return Err(ApiError::forbidden());
+    }
+    let status = match p.status.as_deref() {
+        None | Some("approved") => "approved",
+        Some("reimbursed") => "reimbursed",
+        Some(_) => {
+            return Err(
+                ApiError::validation().with_field_error("/status", "approved or reimbursed")
+            );
+        }
+    };
+    let mut tx = begin_scoped(&state.db, &scope)
+        .await
+        .map_err(|e| ApiError::internal(&e))?;
+    let csv = huxley_billing::expense_sync::export_csv(&mut tx, Some(status))
+        .await
+        .map_err(billing_map)?;
+    tx.commit().await.map_err(|e| ApiError::internal(&e))?;
+    Ok((
+        [
+            (header::CONTENT_TYPE, "text/csv; charset=utf-8".to_owned()),
+            (
+                header::CONTENT_DISPOSITION,
+                format!("attachment; filename=\"expenses-{status}.csv\""),
+            ),
+        ],
+        csv,
+    ))
 }

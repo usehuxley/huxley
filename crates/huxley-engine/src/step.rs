@@ -262,6 +262,7 @@ impl Engine {
             Step::InvoiceStatus(_) => self.invoice_status(org_id, input).await.into(),
             Step::ExpenseReadReceipt(_) => self.read_receipt(org_id, run_id, input).await.into(),
             Step::ExpenseReportDecide(_) => self.expense_report_decide(org_id, input).await.into(),
+            Step::ExpenseSyncResult(_) => self.expense_sync_result(org_id, input).await.into(),
             Step::SalesLogEmail(_) => self.sales_log_email(org_id, input).await.into(),
             Step::ScopeContext(_) => self.scope_context(org_id, input).await.into(),
             Step::ScopeWrite(_) => self.scope_write(org_id, input).await.into(),

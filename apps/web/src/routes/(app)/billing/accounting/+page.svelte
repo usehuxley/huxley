@@ -8,12 +8,14 @@
 
 	let { data }: PageProps = $props();
 
-	type Kind = 'customer' | 'item' | 'tax_code' | 'class';
+	type Kind = 'customer' | 'item' | 'tax_code' | 'class' | 'supplier' | 'account';
 	const TABS: { kind: Kind; label: string }[] = [
 		{ kind: 'customer', label: 'Customers' },
 		{ kind: 'item', label: 'Items' },
 		{ kind: 'tax_code', label: 'Tax codes' },
-		{ kind: 'class', label: 'Classes' }
+		{ kind: 'class', label: 'Classes' },
+		{ kind: 'supplier', label: 'People (suppliers)' },
+		{ kind: 'account', label: 'Expense accounts' }
 	];
 	let tab = $state<Kind>('customer');
 	let taxCode = $state('');
@@ -43,6 +45,11 @@
 		class: [
 			{ key: 'default', name: 'Every client (the default class)' },
 			...data.clients.map((c) => ({ key: c.id, name: c.name }))
+		],
+		supplier: data.people.map((u) => ({ key: u.id, name: u.name })),
+		account: [
+			{ key: 'default', name: 'Any other category (the default account)' },
+			...data.categories.map((c) => ({ key: c.id, name: c.name }))
 		]
 	}));
 	const matchOf = (kind: Kind, key: string) =>

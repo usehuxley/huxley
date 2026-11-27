@@ -158,6 +158,10 @@ pub enum MappingKind {
     TaxCode,
     /// A client (its id) or `default` ↔ a class or tracking category.
     Class,
+    /// A person (their user id) ↔ a supplier, for paying their expenses back.
+    Supplier,
+    /// An expense category (its id) or `default` ↔ an expense account.
+    Account,
 }
 
 impl MappingKind {
@@ -168,6 +172,8 @@ impl MappingKind {
             Self::Item => "items",
             Self::TaxCode => "tax-codes",
             Self::Class => "classes",
+            Self::Supplier => "suppliers",
+            Self::Account => "accounts",
         };
         format!("{target}-{list}")
     }
@@ -198,12 +204,14 @@ pub struct MappingInput {
 }
 
 const MAPPING: &str = "SELECT m.id, m.kind, m.local_key, \
-        coalesce(o.name, p.name, CASE WHEN m.local_key LIKE 'kind:%' THEN initcap(substr(m.local_key, 6)) || ' lines' \
+        coalesce(o.name, p.name, u.display_name, ec.name, CASE WHEN m.local_key LIKE 'kind:%' THEN initcap(substr(m.local_key, 6)) || ' lines' \
                                       WHEN m.local_key = 'default' THEN 'Anything else' ELSE m.local_key END) AS local_name, \
         m.remote_id, m.remote_name \
    FROM billing_mappings m \
    LEFT JOIN organizations o ON m.kind IN ('customer', 'class') AND o.id::text = m.local_key \
-   LEFT JOIN catalog_products p ON m.kind = 'item' AND m.local_key LIKE 'product:%' AND p.id::text = substr(m.local_key, 9)";
+   LEFT JOIN catalog_products p ON m.kind = 'item' AND m.local_key LIKE 'product:%' AND p.id::text = substr(m.local_key, 9) \
+   LEFT JOIN users u ON m.kind = 'supplier' AND u.id::text = m.local_key \
+   LEFT JOIN exp_categories ec ON m.kind = 'account' AND ec.id::text = m.local_key";
 
 pub async fn mappings(
     conn: &mut PgConnection,
@@ -232,8 +240,8 @@ fn check_local(kind: MappingKind, key: &str) -> BillingResult<String> {
     let key = key.trim();
     let uuid = |s: &str| Uuid::parse_str(s).is_ok();
     let ok = match kind {
-        MappingKind::Customer => uuid(key),
-        MappingKind::Class => uuid(key) || key == "default",
+        MappingKind::Customer | MappingKind::Supplier => uuid(key),
+        MappingKind::Class | MappingKind::Account => uuid(key) || key == "default",
         MappingKind::Item => {
             key == "default"
                 || key.strip_prefix("product:").is_some_and(uuid)
@@ -252,9 +260,11 @@ fn check_local(kind: MappingKind, key: &str) -> BillingResult<String> {
                 MappingKind::Customer => "a client's id",
                 MappingKind::Class => "a client's id, or default",
                 MappingKind::Item => {
-                    "product:<id>, kind:<time|product|recurring|project|manual> or default"
+                    "product:<id>, kind:<time|product|recurring|project|expense|manual> or default"
                 }
                 MappingKind::TaxCode => "a tax code (or default), up to 50 characters",
+                MappingKind::Supplier => "a person's user id",
+                MappingKind::Account => "an expense category's id, or default",
             },
         ))
     }
@@ -377,7 +387,7 @@ pub async fn remote_options(
 
 type Found = Option<(String, Option<String>)>;
 
-async fn mapped(
+pub(crate) async fn mapped(
     conn: &mut PgConnection,
     provider: Uuid,
     target: &str,
@@ -408,11 +418,11 @@ async fn client_keys(conn: &mut PgConnection, client: Uuid) -> BillingResult<Vec
     .await?)
 }
 
-fn reference((id, name): (String, Option<String>)) -> Json {
+pub(crate) fn reference((id, name): (String, Option<String>)) -> Json {
     json!({ "id": id, "name": name })
 }
 
-fn money(d: Decimal) -> String {
+pub(crate) fn money(d: Decimal) -> String {
     d.round_dp(4).normalize().to_string()
 }
 

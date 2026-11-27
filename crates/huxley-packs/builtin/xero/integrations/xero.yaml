@@ -144,6 +144,18 @@ paths:
         "200":
           description: The items
           content: { application/json: { schema: { type: object, additionalProperties: true } } }
+  /api.xro/2.0/Accounts:
+    get:
+      operationId: listAccounts
+      summary: List accounts (e.g. where Class=="EXPENSE")
+      tags: [Accounts]
+      parameters:
+        - { $ref: "#/components/parameters/tenant" }
+        - { name: where, in: query, description: A filter, schema: { type: string } }
+      responses:
+        "200":
+          description: The accounts
+          content: { application/json: { schema: { type: object, additionalProperties: true } } }
   /api.xro/2.0/TaxRates:
     get:
       operationId: listTaxRates
