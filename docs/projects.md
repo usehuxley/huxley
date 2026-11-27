@@ -25,6 +25,7 @@ A project's tasks show as:
 - **List:** by phase, with hours used against estimates. **Edit** on a task changes its phase, estimate, dates and client visibility.
 - **Board:** columns for to do, in progress, blocked and done.
 - **Timeline:** each dated task as a bar from its start to its due date, milestones as diamonds, and today's line.
+- **Calendar:** a month at a time: milestones on their due dates, and tasks on the days they start and are due. Page through the months.
 
 ## Budget and health
 

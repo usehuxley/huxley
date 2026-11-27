@@ -86,6 +86,17 @@ test.describe('projects', () => {
 				.getByRole('link', { name: `Install agents ${stamp}` })
 		).toBeVisible();
 
+		// The calendar: the task starts on the 7th and is due on the 9th.
+		await page.getByRole('link', { name: 'Calendar', exact: true }).click();
+		await page.getByRole('link', { name: 'Next month' }).waitFor();
+		await page.goto(`${page.url().split('?')[0]}?view=calendar&month=2030-01`);
+		await expect(page.getByRole('list', { name: 'On 2030-01-07' })).toContainText(
+			`Install agents ${stamp}`
+		);
+		await expect(page.getByRole('list', { name: 'On 2030-01-09' })).toContainText(
+			`Due: Install agents ${stamp}`
+		);
+
 		// A scope change, drafted and submitted.
 		await page.getByLabel('Change', { exact: true }).fill(`Extra site ${stamp}`);
 		await page.getByLabel('Hours (+/−)').fill('4');

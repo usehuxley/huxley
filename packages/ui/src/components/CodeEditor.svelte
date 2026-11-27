@@ -71,7 +71,7 @@
 	onMount(() => {
 		let cancelled = false;
 		let made: Controller | undefined;
-		// The editor arrives on demand; until then the textarea works as-is.
+		// The editor arrives on demand; until then the text shows read-only.
 		void import('./code-editor/setup').then(async ({ create }) => {
 			if (cancelled) return;
 			made = await create(host, {
@@ -96,7 +96,7 @@
 				made.destroy();
 				return;
 			}
-			// Typed or set while it loaded (the textarea took it): catch up.
+			// Set while it loaded (by the page): catch up.
 			made.setValue(untrack(() => value));
 			made.setReadonly(untrack(() => readonly));
 			editor = made;
@@ -136,18 +136,18 @@
 	data-language={language}
 	data-compact={compact ? '' : undefined}
 >
-	{#if editor}
-		{#if name}<input type="hidden" {name} {value} bind:this={field} />{/if}
-	{:else}
-		<textarea
-			{name}
-			aria-label={label}
-			rows={lines}
-			spellcheck="false"
-			{readonly}
-			{placeholder}
-			class="w-full rounded-control border border-border-strong bg-surface p-3 font-mono text-xs text-fg"
-			bind:value></textarea>
+	<!-- The form's field, always: the editor writes it as you type. -->
+	{#if name}<input type="hidden" {name} {value} bind:this={field} />{/if}
+	{#if !editor}
+		<!-- Until the editor loads: the text, read-only. Nothing editable is
+		     swapped out from under someone typing (their keystrokes would be
+		     lost with it). -->
+		<pre
+			aria-hidden="true"
+			class="m-0 w-full overflow-hidden rounded-control border border-border-strong bg-surface p-3 font-mono text-xs whitespace-pre-wrap text-fg-muted"
+			style="min-height: calc(min(var(--lines), 4) * 1.55em + 1.5rem)">{value ||
+				placeholder ||
+				''}</pre>
 	{/if}
 	<!-- Never display:none: CodeMirror measures itself (and decides whether
 	     it's on screen, for its tooltips) as it's created. -->
