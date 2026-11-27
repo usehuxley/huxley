@@ -665,6 +665,21 @@
       },
       "type": "object"
     },
+    "QuoteReview": {
+      "additionalProperties": false,
+      "description": "A quote review's decision to record (`core.quote.review`): `review_id`\n(from `quote.submitted_for_review`), `decision` (`approved`,\n`changes_requested` or `rejected`, or a boolean), `by` and a `comment`.\nOnly the quote's open review counts: if the quote changed since, it\nneeds a new review and the step fails with `kind: conflict`. Raises\n`quote.approved`, `quote.changes_requested` or `quote.rejected`, and\ntells the quote's owner. Output: the quote's review state.",
+      "properties": {
+        "by": true,
+        "comment": true,
+        "decision": true,
+        "review_id": true
+      },
+      "required": [
+        "review_id",
+        "decision"
+      ],
+      "type": "object"
+    },
     "ReportSend": {
       "additionalProperties": false,
       "description": "A report to email (`core.report.send`): a shared dashboard (at the\nrun's organization, above or below it) or a prebuilt one by key, with\nthe numbers of the run's organization and below over `range` (default:\nthe dashboard's), as `format` (`csv`, `xlsx` or `pdf`, the default),\nattached to an email to `to` (`user:<id>`, `team:<id>` or `role:<key>`\nentries) with an optional `subject` and `message`. Output: `{ sent,\nfile_name }`.",
@@ -1721,6 +1736,10 @@
           "properties": {
             "approvers": {
               "description": "Who may decide: `user:<id>`, `team:<id>`, `role:<key>` (holders at the\nrun's organization), and client contacts in the portal:\n`contact:<id>` or `client_approvers` (the run's company's client\napprovers and admins). The first decision counts."
+            },
+            "changes": {
+              "description": "Approvers may also ask for changes: the step's `decision` is then\n`approved`, `rejected` or `changes_requested`.",
+              "type": "boolean"
             },
             "continue_on_error": {
               "description": "Record the error as the step's output and carry on.",
@@ -4081,6 +4100,69 @@
             },
             "with": {
               "$ref": "#/$defs/ScopeDecide"
+            }
+          },
+          "required": [
+            "type",
+            "id",
+            "with"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Record a quote review's decision (the `sales` module).",
+          "properties": {
+            "continue_on_error": {
+              "description": "Record the error as the step's output and carry on.",
+              "type": "boolean"
+            },
+            "description": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "id": {
+              "description": "Unique in the workflow: lowercase letters, digits, underscores.\nOther steps read this step's output as `steps.<id>.output`.",
+              "type": "string"
+            },
+            "if": {
+              "description": "Skip the step unless this expression is true.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "name": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "retry": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/RetryPolicy"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "timeout": {
+              "description": "Fail the attempt after this long, e.g. `30s`.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "type": {
+              "const": "core.quote.review",
+              "type": "string"
+            },
+            "with": {
+              "$ref": "#/$defs/QuoteReview"
             }
           },
           "required": [

@@ -16,9 +16,10 @@ export const actions: Actions = {
 		const raw = form.get('comment');
 		const comment = typeof raw === 'string' && raw.trim() ? raw.trim() : undefined;
 		const approve = form.get('decision') === 'approve';
+		const requestChanges = form.get('decision') === 'request_changes';
 		const { data, response } = await api(event).POST('/api/portal/v1/approvals/{id}/decision', {
 			params: { path: { id: event.params.id } },
-			body: { approve, comment }
+			body: { approve, requestChanges, comment }
 		});
 		if (!data) {
 			return fail(response.status, {

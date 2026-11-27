@@ -6,7 +6,7 @@ use axum::extract::{Path, State};
 use axum::routing::{get, post};
 use axum::{Json, Router};
 use huxley_db::{OrgScope, begin_scoped};
-use huxley_engine::approval::{self, DecisionError, PortalApproval};
+use huxley_engine::approval::{self, DecisionError, PortalApproval, Verdict};
 use serde::Deserialize;
 use utoipa::ToSchema;
 use uuid::Uuid;
@@ -61,14 +61,18 @@ pub async fn get_approval(
 }
 
 #[derive(Debug, Deserialize, ToSchema)]
-#[serde(deny_unknown_fields)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct PortalDecision {
     pub approve: bool,
+    /// Ask for changes instead (where the approval allows it).
+    #[serde(default)]
+    pub request_changes: bool,
     #[serde(default)]
     pub comment: Option<String>,
 }
 
-/// Approves or rejects. The first decision counts.
+/// Approves, rejects or (where allowed) asks for changes. The first
+/// decision counts.
 #[utoipa::path(post, path = "/api/portal/v1/approvals/{id}/decision", operation_id = "portal_decide_approval",
     tag = "portal", params(("id" = Uuid, Path)), request_body = PortalDecision,
     responses(
@@ -93,13 +97,23 @@ pub async fn decide(
             &authed.ctx,
             id,
             account,
-            body.approve,
+            if body.request_changes {
+                Verdict::RequestChanges
+            } else if body.approve {
+                Verdict::Approve
+            } else {
+                Verdict::Reject
+            },
             body.comment.as_deref(),
         )
         .await
         .map_err(|e| match e {
             DecisionError::NotFound | DecisionError::NotAnApprover => ApiError::not_found(),
             DecisionError::Closed => ApiError::conflict("It was already decided, or it expired."),
+            DecisionError::ChangesNotAllowed => ApiError::validation().with_field_error(
+                "/requestChanges",
+                "this approval can only be approved or rejected",
+            ),
             DecisionError::Engine(e) => ApiError::internal(&e),
         })?;
     let mut tx = begin_scoped(&state.db, &OrgScope::System)

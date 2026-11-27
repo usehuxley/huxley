@@ -16,7 +16,7 @@
 			? 'success'
 			: status === 'rejected'
 				? 'danger'
-				: status === 'pending'
+				: status === 'pending' || status === 'changes_requested'
 					? 'warning'
 					: 'neutral';
 	const when = (value: string) => new Date(value).toLocaleString();
@@ -25,7 +25,7 @@
 <Card title={approval.title}>
 	<div class="flex flex-col gap-3 text-sm">
 		<p class="flex items-center gap-2">
-			<Badge tone={tone(approval.status)}>{approval.status}</Badge>
+			<Badge tone={tone(approval.status)}>{approval.status.replace('_', ' ')}</Badge>
 			<span class="text-fg-muted">
 				{approval.workflowName ?? 'Workflow'} ·
 				<a
@@ -53,6 +53,11 @@
 					class="rounded-control border border-border bg-surface p-2 text-sm text-fg"></textarea>
 				<div class="flex gap-2">
 					<Button type="submit" name="decision" value="approve">Approve</Button>
+					{#if approval.allowChanges}
+						<Button type="submit" name="decision" value="request_changes" variant="secondary">
+							Request changes
+						</Button>
+					{/if}
 					<Button type="submit" name="decision" value="reject" variant="danger">Reject</Button>
 				</div>
 			</form>

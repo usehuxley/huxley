@@ -46,7 +46,10 @@ export interface paths {
 		};
 		get?: never;
 		put?: never;
-		/** Approves or rejects. The first decision counts. */
+		/**
+		 * Approves, rejects or (where allowed) asks for changes. The first
+		 *     decision counts.
+		 */
 		post: operations['portal_decide_approval'];
 		delete?: never;
 		options?: never;
@@ -953,8 +956,8 @@ export interface paths {
 		get?: never;
 		put?: never;
 		/**
-		 * Approves or rejects. The first decision counts; the workflow continues
-		 *     with it as the step's output.
+		 * Approves, rejects or (where allowed) asks for changes. The first
+		 *     decision counts; the workflow continues with it as the step's output.
 		 */
 		post: operations['decide_approval'];
 		delete?: never;
@@ -4823,6 +4826,41 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
+	'/api/v1/quotes/{id}/comments': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** The quote's comments, oldest first (replies point at their thread). */
+		get: operations['quote_comments'];
+		put?: never;
+		/** Comments on the quote or one of its lines, telling anyone @mentioned. */
+		post: operations['add_quote_comment'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/quotes/{id}/comments/{comment}/resolve': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/** Resolves a comment thread, or opens it again. */
+		post: operations['resolve_quote_comment'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
 	'/api/v1/quotes/{id}/decision': {
 		parameters: {
 			query?: never;
@@ -4860,6 +4898,27 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
+	'/api/v1/quotes/{id}/review': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get: operations['quote_review'];
+		put?: never;
+		/**
+		 * Submits a draft for review (send the version you read). Raises
+		 *     `quote.submitted_for_review` for the review workflow (the Quote review
+		 *     pack).
+		 */
+		post: operations['submit_quote_review'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
 	'/api/v1/quotes/{id}/revisions': {
 		parameters: {
 			query?: never;
@@ -4886,7 +4945,11 @@ export interface paths {
 		};
 		get?: never;
 		put?: never;
-		/** Marks a draft sent, keeping what was sent as its revision. */
+		/**
+		 * Marks a draft sent, keeping what was sent as its revision. A quote that
+		 *     needs review takes an approved review of this revision first (409
+		 *     otherwise), unless sent with `overrideReview`.
+		 */
 		post: operations['send_quote'];
 		delete?: never;
 		options?: never;
@@ -5254,6 +5317,39 @@ export interface paths {
 		put?: never;
 		post?: never;
 		delete: operations['archive_sales_reason'];
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/sales/review-rules': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** When quotes need review, and who reviews them. */
+		get: operations['list_review_rules'];
+		put?: never;
+		post: operations['create_review_rule'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/sales/review-rules/{id}': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put: operations['update_review_rule'];
+		post?: never;
+		delete: operations['delete_review_rule'];
 		options?: never;
 		head?: never;
 		patch?: never;
@@ -8354,9 +8450,11 @@ export interface components {
 			version?: number | null;
 		};
 		/** @enum {string} */
-		ApprovalStatus: 'pending' | 'approved' | 'rejected' | 'expired';
+		ApprovalStatus: 'pending' | 'approved' | 'rejected' | 'expired' | 'changes_requested';
 		/** @description An approval as approvers see it. */
 		ApprovalView: {
+			/** @description Approvers may also ask for changes. */
+			allowChanges: boolean;
 			comment?: string | null;
 			/** Format: date-time */
 			createdAt: string;
@@ -9331,6 +9429,16 @@ export interface components {
 			/** @description Other changes touching the same assets at the same time. */
 			conflicts: components['schemas']['ChangeConflict'][];
 		};
+		/** @description What changed since the last decided review. */
+		Changes: {
+			added: string[];
+			changed: components['schemas']['LineChange'][];
+			decision: string;
+			removed: string[];
+			/** Format: int32 */
+			sinceRevision: number;
+			totals: components['schemas']['FieldChange'][];
+		};
 		Channels: {
 			email: boolean;
 			inApp: boolean;
@@ -9362,6 +9470,40 @@ export interface components {
 		 * @enum {string}
 		 */
 		ColumnType: 'text' | 'integer' | 'number' | 'boolean' | 'timestamp' | 'date' | 'json' | 'uuid';
+		Comment: {
+			/** Format: uuid */
+			authorId?: string | null;
+			authorName?: string | null;
+			body: string;
+			/** Format: date-time */
+			createdAt: string;
+			/** Format: uuid */
+			id: string;
+			/** Format: uuid */
+			lineId?: string | null;
+			lineName?: string | null;
+			mentions: string[];
+			/** Format: uuid */
+			parentId?: string | null;
+			/** Format: date-time */
+			resolvedAt?: string | null;
+			resolvedByName?: string | null;
+		};
+		CommentInput: {
+			body: string;
+			/**
+			 * Format: uuid
+			 * @description A line of the quote, or none for the whole quote.
+			 */
+			lineId?: string | null;
+			/** @description People @mentioned: they're told. */
+			mentions?: string[];
+			/**
+			 * Format: uuid
+			 * @description Replying to a thread (its first comment).
+			 */
+			parentId?: string | null;
+		};
 		Company: {
 			notes?: string | null;
 			/** Format: uuid */
@@ -9980,7 +10122,7 @@ export interface components {
 			comment?: string | null;
 		};
 		/** @enum {string} */
-		Decision: 'approve' | 'reject';
+		Decision: 'approve' | 'reject' | 'request_changes';
 		/** @description The client's answer. */
 		DecisionInput: {
 			accept: boolean;
@@ -10152,6 +10294,11 @@ export interface components {
 			 * @description A run of this workflow to evaluate against. Default: the latest.
 			 */
 			runId?: string | null;
+		};
+		FieldChange: {
+			after: string;
+			before: string;
+			field: string;
 		};
 		/**
 		 * @description Changes to a field. The key and type never change (stored values depend
@@ -10756,6 +10903,10 @@ export interface components {
 		};
 		/** @enum {string} */
 		LeadStatus: 'new' | 'working' | 'disqualified' | 'converted';
+		LineChange: {
+			fields: components['schemas']['FieldChange'][];
+			name: string;
+		};
 		LinkArticle: {
 			/** Format: uuid */
 			articleId: string;
@@ -11815,6 +11966,8 @@ export interface components {
 		};
 		/** @description An approval as a client contact sees it in the portal. */
 		PortalApproval: {
+			/** @description They may also ask for changes. */
+			allowChanges: boolean;
 			comment?: string | null;
 			/** Format: date-time */
 			createdAt: string;
@@ -11826,7 +11979,7 @@ export interface components {
 			/** Format: uuid */
 			id: string;
 			message?: string | null;
-			/** @description `pending`, `approved`, `rejected` or `expired`. */
+			/** @description `pending`, `approved`, `rejected`, `changes_requested` or `expired`. */
 			status: string;
 			title: string;
 		};
@@ -11888,6 +12041,8 @@ export interface components {
 		PortalDecision: {
 			approve: boolean;
 			comment?: string | null;
+			/** @description Ask for changes instead (where the approval allows it). */
+			requestChanges?: boolean;
 		};
 		PortalDevice: {
 			/** Format: uuid */
@@ -12688,6 +12843,8 @@ export interface components {
 			/** Format: uuid */
 			ownerId?: string | null;
 			ownerName?: string | null;
+			/** @description Whether it needs (or had) an internal review. */
+			reviewStatus: components['schemas']['ReviewStatus'];
 			/** Format: int32 */
 			revision: number;
 			/** Format: date-time */
@@ -12759,6 +12916,11 @@ export interface components {
 			billing?: components['schemas']['QuoteBilling'] | null;
 			description?: string | null;
 			discountPct?: string | null;
+			/**
+			 * Format: uuid
+			 * @description An existing line's id, to keep it (and its comments); new lines leave it out.
+			 */
+			id?: string | null;
 			kind?: components['schemas']['QuoteLineKind'];
 			name?: string | null;
 			optional?: boolean;
@@ -12778,6 +12940,18 @@ export interface components {
 		};
 		/** @enum {string} */
 		QuoteLineKind: 'item' | 'heading';
+		/** @description Its review state, with the open approval for the caller to decide. */
+		QuoteReviewView: components['schemas']['ReviewState'] & {
+			/**
+			 * Format: uuid
+			 * @description The review workflow's open approval, if any.
+			 */
+			approvalId?: string | null;
+			/** @description The caller is one of its approvers. */
+			canDecide: boolean;
+			/** @description The caller may send it without an approved review. */
+			canOverride: boolean;
+		};
 		/** @enum {string} */
 		QuoteStatus: 'draft' | 'sent' | 'accepted' | 'declined';
 		QuoteTotals: {
@@ -12815,6 +12989,14 @@ export interface components {
 			 * @description Calls allowed per window (1–100000).
 			 */
 			requests: number;
+		};
+		/** @description A rule a quote matches, and why. */
+		Reason: {
+			detail: string;
+			name: string;
+			reviewers: string;
+			/** Format: uuid */
+			ruleId: string;
 		};
 		/** @description Only that it was received: nothing about the runs. */
 		Received: {
@@ -12894,6 +13076,9 @@ export interface components {
 			 */
 			skillId?: string | null;
 		};
+		ResolveRequest: {
+			resolved: boolean;
+		};
 		/** @description A setting's effective value at an org, and why. */
 		ResolvedSetting: components['schemas']['SettingDef'] & {
 			local?: components['schemas']['LocalSetting'] | null;
@@ -12963,10 +13148,71 @@ export interface components {
 			key: string;
 			kind: string;
 		};
+		ReviewRecord: {
+			comment?: string | null;
+			/** Format: date-time */
+			decidedAt?: string | null;
+			decidedBy?: string | null;
+			/** @description `approved`, `changes_requested` or `rejected`; none while in review. */
+			decision?: string | null;
+			/** Format: uuid */
+			id: string;
+			reasons: components['schemas']['Reason'][];
+			reviewers: string[];
+			/** Format: int32 */
+			revision: number;
+			/** Format: date-time */
+			submittedAt: string;
+			submittedByName?: string | null;
+		};
+		ReviewRule: {
+			active: boolean;
+			categories: string[];
+			expression?: string | null;
+			/** Format: uuid */
+			id: string;
+			kind: components['schemas']['ReviewRuleKind'];
+			name: string;
+			/** @description Who reviews: `role:<key>`, `team:<id>`, `user:<id>`, several separated by commas. */
+			reviewers: string;
+			threshold?: string | null;
+		};
+		ReviewRuleInput: {
+			active?: boolean;
+			categories?: string[];
+			expression?: string | null;
+			kind: components['schemas']['ReviewRuleKind'];
+			name: string;
+			reviewers: string;
+			threshold?: string | null;
+		};
+		/** @enum {string} */
+		ReviewRuleKind:
+			| 'always'
+			| 'margin_below'
+			| 'first_year_above'
+			| 'discount_above'
+			| 'new_client'
+			| 'category'
+			| 'expression';
 		ReviewScript: {
 			key: string;
 			language: string;
 		};
+		/** @description The review state of a quote, for its page. */
+		ReviewState: {
+			/** @description It can be sent: no review needed, or one approved for this revision. */
+			canSend: boolean;
+			changes?: components['schemas']['Changes'] | null;
+			/** @description Each submission, newest first. */
+			history: components['schemas']['ReviewRecord'][];
+			reasons: components['schemas']['Reason'][];
+			sentOverridden: boolean;
+			status: components['schemas']['ReviewStatus'];
+		};
+		/** @enum {string} */
+		ReviewStatus:
+			'not_needed' | 'needed' | 'in_review' | 'approved' | 'changes_requested' | 'rejected';
 		Revision: {
 			/** Format: int32 */
 			revision: number;
@@ -13266,6 +13512,11 @@ export interface components {
 			value: string;
 		};
 		SendQuoteRequest: {
+			/**
+			 * @description Send it though it needs an approved review (`sales:review:override`;
+			 *     recorded).
+			 */
+			overrideReview?: boolean;
 			/** Format: int32 */
 			version: number;
 		};
@@ -24998,6 +25249,84 @@ export interface operations {
 			};
 		};
 	};
+	quote_comments: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['Comment'][];
+				};
+			};
+		};
+	};
+	add_quote_comment: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['CommentInput'];
+			};
+		};
+		responses: {
+			201: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['Comment'];
+				};
+			};
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	resolve_quote_comment: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+				comment: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['ResolveRequest'];
+			};
+		};
+		responses: {
+			204: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content?: never;
+			};
+		};
+	};
 	decide_quote: {
 		parameters: {
 			query?: never;
@@ -25049,6 +25378,60 @@ export interface operations {
 				};
 				content: {
 					'application/pdf': number[];
+				};
+			};
+		};
+	};
+	quote_review: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['QuoteReviewView'];
+				};
+			};
+		};
+	};
+	submit_quote_review: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['SendQuoteRequest'];
+			};
+		};
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['QuoteReviewView'];
+				};
+			};
+			409: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
 				};
 			};
 		};
@@ -25708,6 +26091,100 @@ export interface operations {
 		};
 	};
 	archive_sales_reason: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			204: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content?: never;
+			};
+		};
+	};
+	list_review_rules: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ReviewRule'][];
+				};
+			};
+		};
+	};
+	create_review_rule: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['ReviewRuleInput'];
+			};
+		};
+		responses: {
+			201: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ReviewRule'];
+				};
+			};
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	update_review_rule: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['ReviewRuleInput'];
+			};
+		};
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ReviewRule'];
+				};
+			};
+		};
+	};
+	delete_review_rule: {
 		parameters: {
 			query?: never;
 			header?: never;

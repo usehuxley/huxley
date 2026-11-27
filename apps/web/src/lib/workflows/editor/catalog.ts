@@ -516,6 +516,32 @@ export const STEPS: StepSpec[] = [
 		]
 	},
 	{
+		type: 'core.quote.review',
+		label: 'Decide a quote review',
+		description:
+			'Record whether a quote submitted for review is approved, sent back for changes, or rejected.',
+		group: 'Actions',
+		module: 'sales',
+		template: {
+			with: {
+				review_id: '{{ inputs.reviewId }}',
+				decision: '{{ steps.review.output.decision }}',
+				by: '{{ steps.review.output.by.name }}'
+			}
+		},
+		fields: [
+			{ path: 'with.review_id', label: 'Review', kind: 'expression' },
+			{
+				path: 'with.decision',
+				label: 'Decision',
+				kind: 'expression',
+				hint: 'approved, changes_requested or rejected'
+			},
+			{ path: 'with.by', label: 'Decided by', kind: 'expression' },
+			{ path: 'with.comment', label: 'Comment', kind: 'expression' }
+		]
+	},
+	{
 		type: 'core.calendar.sync',
 		label: 'Sync calendars',
 		description: "Read people's busy time from Microsoft 365 or their calendar feeds.",
@@ -936,7 +962,7 @@ export const STEPS: StepSpec[] = [
 	{
 		type: 'approval',
 		label: 'Approval',
-		description: 'Pause until someone approves or rejects.',
+		description: 'Pause until someone approves, rejects or (if allowed) asks for changes.',
 		group: 'Control flow',
 		template: { title: '', approvers: ['role:admin'], expires: '7d' },
 		fields: [
@@ -953,7 +979,8 @@ export const STEPS: StepSpec[] = [
 				label: 'Expires after',
 				kind: 'text',
 				hint: 'e.g. 3d; then the step fails'
-			}
+			},
+			{ path: 'changes', label: 'Approvers may ask for changes', kind: 'boolean' }
 		]
 	},
 	{

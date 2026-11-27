@@ -25,6 +25,29 @@ pub enum ApprovalStatus {
     Approved,
     Rejected,
     Expired,
+    /// The approver asked for changes (steps with `changes: true`).
+    #[sqlx(rename = "changes_requested")]
+    #[serde(rename = "changes_requested")]
+    ChangesRequested,
+}
+
+/// What an approver decides.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Verdict {
+    Approve,
+    Reject,
+    /// Only where the step allows it (`changes: true`).
+    RequestChanges,
+}
+
+impl Verdict {
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::Approve => "approved",
+            Self::Reject => "rejected",
+            Self::RequestChanges => "changes_requested",
+        }
+    }
 }
 
 /// An approval as approvers see it.
@@ -43,6 +66,8 @@ pub struct ApprovalView {
     #[serde(with = "time::serde::rfc3339::option")]
     pub decided_at: Option<OffsetDateTime>,
     pub comment: Option<String>,
+    /// Approvers may also ask for changes.
+    pub allow_changes: bool,
     /// The workflow's name, if the run is of a saved workflow.
     pub workflow_name: Option<String>,
     #[serde(with = "time::serde::rfc3339")]
@@ -50,11 +75,25 @@ pub struct ApprovalView {
 }
 
 const VIEW: &str = "a.id, a.run_id, a.org_id, a.title, a.message, a.status, a.expires_at, \
-                    a.decided_by, a.decided_at, a.comment, w.name AS workflow_name, a.created_at";
+                    a.decided_by, a.decided_at, a.comment, a.allow_changes, w.name AS workflow_name, \
+                    a.created_at";
 const FROM: &str = "approvals a JOIN runs r ON r.id = a.run_id \
                     LEFT JOIN workflows w ON w.id = r.workflow_id";
 
 /// Why a decision wasn't recorded.
+/// An approval being decided, with whether the decider may.
+#[derive(sqlx::FromRow)]
+struct Pending {
+    run_id: Uuid,
+    org_id: Uuid,
+    step_key: String,
+    attempt: i32,
+    status: ApprovalStatus,
+    expires_at: OffsetDateTime,
+    allowed: bool,
+    allow_changes: bool,
+}
+
 #[derive(Debug, thiserror::Error)]
 pub enum DecisionError {
     #[error("approval not found")]
@@ -63,6 +102,8 @@ pub enum DecisionError {
     NotAnApprover,
     #[error("it was already decided, or expired")]
     Closed,
+    #[error("this approval can only be approved or rejected")]
+    ChangesNotAllowed,
     #[error(transparent)]
     Engine(#[from] EngineError),
 }
@@ -124,7 +165,8 @@ impl Engine {
             let id = huxley_core::new_id();
             sqlx::query(
                 "INSERT INTO approvals (id, run_id, org_id, step_key, attempt, title, message, \
-                        approvers, expires_at, portal_approvers) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)",
+                        approvers, expires_at, portal_approvers, allow_changes) \
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)",
             )
             .bind(id)
             .bind(run_id)
@@ -136,6 +178,7 @@ impl Engine {
             .bind(&approvers)
             .bind(expires_at)
             .bind(&portal)
+            .bind(input["changes"].as_bool().unwrap_or(false))
             .execute(&mut *tx)
             .await?;
             (id, ApprovalStatus::Pending, None)
@@ -189,7 +232,25 @@ impl Engine {
         approve: bool,
         comment: Option<&str>,
     ) -> Result<ApprovalView, DecisionError> {
-        self.decide(ctx, id, Decider::User(user_id), approve, comment)
+        let verdict = if approve {
+            Verdict::Approve
+        } else {
+            Verdict::Reject
+        };
+        self.decide(ctx, id, Decider::User(user_id), verdict, comment)
+            .await
+    }
+
+    /// As [`Self::decide_approval`], with any verdict the step allows.
+    pub async fn decide_approval_as(
+        &self,
+        ctx: &RequestContext,
+        id: Uuid,
+        user_id: Uuid,
+        verdict: Verdict,
+        comment: Option<&str>,
+    ) -> Result<ApprovalView, DecisionError> {
+        self.decide(ctx, id, Decider::User(user_id), verdict, comment)
             .await
     }
 
@@ -200,10 +261,10 @@ impl Engine {
         ctx: &RequestContext,
         id: Uuid,
         account: Uuid,
-        approve: bool,
+        verdict: Verdict,
         comment: Option<&str>,
     ) -> Result<ApprovalView, DecisionError> {
-        self.decide(ctx, id, Decider::Portal(account), approve, comment)
+        self.decide(ctx, id, Decider::Portal(account), verdict, comment)
             .await
     }
 
@@ -212,23 +273,16 @@ impl Engine {
         ctx: &RequestContext,
         id: Uuid,
         decider: Decider,
-        approve: bool,
+        verdict: Verdict,
         comment: Option<&str>,
     ) -> Result<ApprovalView, DecisionError> {
         let mut tx = begin_scoped(self.db(), &OrgScope::System)
             .await
             .map_err(EngineError::from)?;
-        let row: Option<(
-            Uuid,
-            Uuid,
-            String,
-            i32,
-            ApprovalStatus,
-            OffsetDateTime,
-            bool,
-        )> = sqlx::query_as(
+        let row: Option<Pending> = sqlx::query_as(
             "SELECT run_id, org_id, step_key, attempt, status, expires_at, \
-                    CASE WHEN $3 THEN $2 = ANY(approvers) ELSE $2 = ANY(portal_approvers) END \
+                    CASE WHEN $3 THEN $2 = ANY(approvers) ELSE $2 = ANY(portal_approvers) END AS allowed, \
+                    allow_changes \
                    FROM approvals WHERE id = $1 FOR UPDATE",
         )
         .bind(id)
@@ -236,8 +290,19 @@ impl Engine {
         .bind(matches!(decider, Decider::User(_)))
         .fetch_optional(&mut *tx)
         .await?;
-        let (run_id, org_id, step_key, attempt, status, expires_at, allowed) =
-            row.ok_or(DecisionError::NotFound)?;
+        let Pending {
+            run_id,
+            org_id,
+            step_key,
+            attempt,
+            status,
+            expires_at,
+            allowed,
+            allow_changes,
+        } = row.ok_or(DecisionError::NotFound)?;
+        if verdict == Verdict::RequestChanges && !allow_changes {
+            return Err(DecisionError::ChangesNotAllowed);
+        }
         if !allowed {
             return Err(DecisionError::NotAnApprover);
         }
@@ -245,7 +310,7 @@ impl Engine {
             return Err(DecisionError::Closed);
         }
         let comment = comment.map(str::trim).filter(|c| !c.is_empty());
-        let decision = if approve { "approved" } else { "rejected" };
+        let decision = verdict.as_str();
         let by = decider.describe(&mut tx).await?;
         let now = OffsetDateTime::now_utc();
         let output = json!({
@@ -515,8 +580,10 @@ pub struct PortalApproval {
     pub id: Uuid,
     pub title: String,
     pub message: Option<String>,
-    /// `pending`, `approved`, `rejected` or `expired`.
+    /// `pending`, `approved`, `rejected`, `changes_requested` or `expired`.
     pub status: String,
+    /// They may also ask for changes.
+    pub allow_changes: bool,
     #[serde(with = "time::serde::rfc3339")]
     pub expires_at: OffsetDateTime,
     pub decided_by_name: Option<String>,
@@ -529,7 +596,7 @@ pub struct PortalApproval {
 
 const PORTAL_VIEW: &str = "SELECT ap.id, ap.title, ap.message, \
         CASE WHEN ap.status = 'pending' AND ap.expires_at <= now() THEN 'expired' ELSE ap.status::text END AS status, \
-        ap.expires_at, COALESCE(u.display_name, nullif(btrim(c.first_name || ' ' || c.last_name), '')) AS decided_by_name, \
+        ap.allow_changes, ap.expires_at, COALESCE(u.display_name, nullif(btrim(c.first_name || ' ' || c.last_name), '')) AS decided_by_name, \
         ap.decided_at, ap.comment, ap.created_at \
       FROM approvals ap LEFT JOIN users u ON u.id = ap.decided_by \
       LEFT JOIN portal_accounts pa ON pa.id = ap.decided_by_portal LEFT JOIN crm_contacts c ON c.id = pa.contact_id \

@@ -33,10 +33,20 @@ An opportunity's page has its details, the stage strip (click a stage to move it
 
 A sent quote shows in the client portal under **Quotes** for its contact, and for the company's approvers and admins (ADR-065). They see it as sent, without costs, tick the options they want, type their name, **sign** on the pad and accept, or decline and say why. The quote's page then shows the signature, who signed, when, from where, and a fingerprint (SHA-256) of the revision they agreed to. Accepting wins the opportunity. A quote past its *valid until* date can't be accepted.
 
+### Internal review
+
+Review rules (below) decide which quotes need a second look before they go out: every quote, a margin below a percent, a first year above an amount, a line discounted more than a percent, a client's first quote, a product category, or an expression over the quote. A quote that matches one shows **Needs review** and why, and **Mark sent** gives way to **Submit for review** (ADR-066).
+
+- **Submit for review** sends it to the rule's reviewers through the **Quote review** pack (install it from **Packs**, then publish its workflow). Reviewers approve, **request changes** or reject on the quote page or under **Approvals**, with a comment; the quote's owner is told.
+- **Changed since the last review** lists the lines added, removed and changed, and the totals, so reviewers see only what's new.
+- Once approved, it can be sent. Changing it afterwards needs a new review.
+- **Send without approval** (administrators, `sales:review:override`) sends it anyway; the quote and the audit log record that.
+- **Comments** go on the whole quote or a line. **Mention someone** to tell them; reply in the thread, and **Resolve** it when settled. Lines with open comments say so in the builder.
+
 ## Settings
 
-**Settings → Sales pipeline** (`sales:configure`) keeps the stages (order, kind and chance of winning) and the reasons deals are won and lost. A stage with open opportunities can't be removed until they move.
+**Settings → Sales pipeline** (`sales:configure`) keeps the stages (order, kind and chance of winning), the reasons deals are won and lost, and the **quote review** rules with who reviews each (`role:<key>`, `team:<id>` or `user:<id>`). A stage with open opportunities can't be removed until they move.
 
 ## Events
 
-`sales.lead.created`, `sales.lead.converted`, `sales.opportunity.created`, `sales.opportunity.updated`, `sales.opportunity.stage_changed`, `sales.opportunity.won`, `sales.opportunity.lost`, `sales.quote.created`, `sales.quote.sent`, `sales.quote.accepted` and `sales.quote.declined`, for workflows: tell the account manager when a deal is won, start onboarding, post to a channel.
+`sales.lead.created`, `sales.lead.converted`, `sales.opportunity.created`, `sales.opportunity.updated`, `sales.opportunity.stage_changed`, `sales.opportunity.won`, `sales.opportunity.lost`, `sales.quote.created`, `sales.quote.sent`, `sales.quote.accepted`, `sales.quote.declined`, `quote.submitted_for_review`, `quote.approved`, `quote.changes_requested` and `quote.rejected`, for workflows: tell the account manager when a deal is won, start onboarding, post to a channel.

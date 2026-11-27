@@ -69,3 +69,4 @@ Decisions that shape Huxley. Add a new ADR by copying `0000-template.md` with th
 | [063](0063-sales-pipeline.md) | Leads live at the provider, opportunities at the client; stages are instance-wide | Accepted |
 | [064](0064-quotes.md) | A quote is one editable document; each send keeps a revision | Accepted |
 | [065](0065-quote-signing.md) | Clients answer quotes in the portal with a typed name and a drawn signature | Accepted |
+| [066](0066-quote-review.md) | Quotes are reviewed internally by rules, a workflow and a third approval outcome | Accepted |

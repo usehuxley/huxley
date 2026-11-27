@@ -2,18 +2,21 @@ import { error, fail } from '@sveltejs/kit';
 import { formString } from '#lib/forms.ts';
 import { api } from '#lib/server/api.ts';
 import { problemMessage } from '#lib/server/problems.ts';
+import type { components } from '@usehuxley/api-client';
 import type { Actions, PageServerLoad } from './$types';
 
 type Kind = 'open' | 'won' | 'lost';
+type RuleKind = components['schemas']['ReviewRuleKind'];
 
 export const load: PageServerLoad = async (event) => {
 	const client = api(event);
-	const [stages, reasons] = await Promise.all([
+	const [stages, reasons, rules] = await Promise.all([
 		client.GET('/api/v1/sales/stages'),
-		client.GET('/api/v1/sales/reasons')
+		client.GET('/api/v1/sales/reasons'),
+		client.GET('/api/v1/sales/review-rules')
 	]);
 	if (!stages.data) error(stages.response.status === 404 ? 404 : 503, 'Could not load stages.');
-	return { stages: stages.data, reasons: reasons.data ?? [] };
+	return { stages: stages.data, reasons: reasons.data ?? [], rules: rules.data ?? [] };
 };
 
 const failed = (status: number, problem: unknown, fallback: string) =>
@@ -88,5 +91,42 @@ export const actions: Actions = {
 		});
 		if (!response.ok) return failed(response.status, problem, 'Could not remove the reason.');
 		return { archived: true };
+	},
+	saveRule: async (event) => {
+		const form = await event.request.formData();
+		const id = formString(form, 'id');
+		const threshold = formString(form, 'threshold').trim();
+		const expression = formString(form, 'expression').trim();
+		const body = {
+			name: formString(form, 'name'),
+			kind: (formString(form, 'kind') || 'always') as RuleKind,
+			threshold: threshold || null,
+			categories: formString(form, 'categories')
+				.split(',')
+				.map((c) => c.trim())
+				.filter(Boolean),
+			expression: expression || null,
+			reviewers: formString(form, 'reviewers'),
+			active: form.get('active') === 'on'
+		};
+		const client = api(event);
+		const {
+			data,
+			error: problem,
+			response
+		} = id
+			? await client.PUT('/api/v1/sales/review-rules/{id}', { params: { path: { id } }, body })
+			: await client.POST('/api/v1/sales/review-rules', { body });
+		if (!data) return failed(response.status, problem, 'Could not save the rule.');
+		return { saved: data.name };
+	},
+	deleteRule: async (event) => {
+		const form = await event.request.formData();
+		const { response, error: problem } = await api(event).DELETE(
+			'/api/v1/sales/review-rules/{id}',
+			{ params: { path: { id: formString(form, 'id') } } }
+		);
+		if (!response.ok) return failed(response.status, problem, 'Could not remove the rule.');
+		return { removed: true };
 	}
 };

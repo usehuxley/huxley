@@ -73,6 +73,7 @@ const ICONS: Record<string, typeof Globe> = {
 	'core.report.send': Mail,
 	'core.change.decide': ListChecks,
 	'core.project.scope.decide': ListChecks,
+	'core.quote.review': ListChecks,
 	'core.project.status': ListChecks,
 	'core.calendar.sync': ListChecks,
 	'core.calendar.write': ListChecks,

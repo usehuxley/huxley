@@ -324,6 +324,67 @@ impl Engine {
         Ok(json!(change))
     }
 
+    /// `core.quote.review`: records a quote review's decision (on a quote
+    /// in the run's organization or below). Output: the review state.
+    pub(crate) async fn quote_review(&self, org_id: Uuid, input: &Json) -> Result<Json, Json> {
+        let mut tx = begin_scoped(self.db(), &OrgScope::System)
+            .await
+            .map_err(internal)?;
+        let on = huxley_modules::is_active_at(&mut tx, huxley_sales::MODULE, org_id)
+            .await
+            .map_err(internal)?;
+        tx.commit().await.map_err(internal)?;
+        if !on {
+            return Err(error("module_disabled", "Sales is turned off"));
+        }
+        let review =
+            id(input, "review_id")?.ok_or_else(|| error("input", "review_id is required"))?;
+        let decision = match &input["decision"] {
+            Json::Bool(true) => huxley_sales::review::Decision::Approved,
+            Json::Bool(false) => huxley_sales::review::Decision::Rejected,
+            Json::String(s) => huxley_sales::review::Decision::parse(s).ok_or_else(|| {
+                error(
+                    "input",
+                    "decision is approved, changes_requested or rejected",
+                )
+            })?,
+            _ => {
+                return Err(error(
+                    "input",
+                    "decision is approved, changes_requested or rejected",
+                ));
+            }
+        };
+        let by = input["by"]
+            .as_str()
+            .filter(|s| !s.trim().is_empty())
+            .unwrap_or("Quote review");
+        let subtree = self.subtree(org_id).await?;
+        let mut tx = begin_scoped(self.db(), &OrgScope::Orgs(subtree))
+            .await
+            .map_err(internal)?;
+        let ctx = RequestContext::system(Via::Workflow);
+        let state = huxley_sales::review::decide(
+            &mut tx,
+            &ctx,
+            review,
+            decision,
+            by,
+            input["comment"].as_str(),
+        )
+        .await
+        .map_err(|e| match e {
+            huxley_sales::SalesError::NotFound => error("not_found", "no such quote review here"),
+            huxley_sales::SalesError::Conflict(m) => error("conflict", &m),
+            huxley_sales::SalesError::Invalid { field, message } => {
+                error("input", format!("{field}: {message}"))
+            }
+            other => internal(other),
+        })?;
+        tx.commit().await.map_err(internal)?;
+        Ok(json!(state))
+    }
+
     /// `core.project.scope.decide`: records the decision on a submitted
     /// scope change (on a project in the run's organization or below).
     /// Output: the scope change.

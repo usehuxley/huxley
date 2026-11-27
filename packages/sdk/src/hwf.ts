@@ -396,6 +396,11 @@ export type Step =
 			 */
 			approvers: unknown;
 			/**
+			 * Approvers may also ask for changes: the step's `decision` is then
+			 * `approved`, `rejected` or `changes_requested`.
+			 */
+			changes?: boolean;
+			/**
 			 * Record the error as the step's output and carry on.
 			 */
 			continue_on_error?: boolean;
@@ -1322,6 +1327,30 @@ export type Step =
 			timeout?: string | null;
 			type: 'core.project.scope.decide';
 			with: ScopeDecide;
+	  }
+	| {
+			/**
+			 * Record the error as the step's output and carry on.
+			 */
+			continue_on_error?: boolean;
+			description?: string | null;
+			/**
+			 * Unique in the workflow: lowercase letters, digits, underscores.
+			 * Other steps read this step's output as `steps.<id>.output`.
+			 */
+			id: string;
+			/**
+			 * Skip the step unless this expression is true.
+			 */
+			if?: string | null;
+			name?: string | null;
+			retry?: RetryPolicy | null;
+			/**
+			 * Fail the attempt after this long, e.g. `30s`.
+			 */
+			timeout?: string | null;
+			type: 'core.quote.review';
+			with: QuoteReview;
 	  }
 	| {
 			/**
@@ -2472,6 +2501,24 @@ export interface ScopeDecide {
 	comment?: unknown;
 	decision: unknown;
 	scope_change_id: unknown;
+}
+/**
+ * A quote review's decision to record (`core.quote.review`): `review_id`
+ * (from `quote.submitted_for_review`), `decision` (`approved`,
+ * `changes_requested` or `rejected`, or a boolean), `by` and a `comment`.
+ * Only the quote's open review counts: if the quote changed since, it
+ * needs a new review and the step fails with `kind: conflict`. Raises
+ * `quote.approved`, `quote.changes_requested` or `quote.rejected`, and
+ * tells the quote's owner. Output: the quote's review state.
+ *
+ * This interface was referenced by `HuxleyWorkflowFormatV1`'s JSON-Schema
+ * via the `definition` "QuoteReview".
+ */
+export interface QuoteReview {
+	by?: unknown;
+	comment?: unknown;
+	decision: unknown;
+	review_id: unknown;
 }
 /**
  * Whose calendars to sync (`core.calendar.sync`): everyone set up (from

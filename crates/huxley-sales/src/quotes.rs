@@ -176,6 +176,8 @@ pub struct Quote {
     pub decided_at: Option<OffsetDateTime>,
     pub decided_by: Option<String>,
     pub decline_reason: Option<String>,
+    /// Whether it needs (or had) an internal review.
+    pub review_status: crate::review::ReviewStatus,
     pub version: i32,
     #[serde(with = "time::serde::rfc3339")]
     pub created_at: OffsetDateTime,
@@ -191,6 +193,9 @@ pub struct Quote {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 #[schema(as = QuoteLineInput)]
 pub struct LineInput {
+    /// An existing line's id, to keep it (and its comments); new lines leave it out.
+    #[serde(default)]
+    pub id: Option<Uuid>,
     #[serde(default)]
     pub kind: LineKind,
     /// From the catalog; its SKU, name, unit, cost and price fill what's left out.
@@ -301,7 +306,8 @@ const SELECT: &str = "SELECT q.id, q.org_id, g.name AS org_name, q.number, q.opp
         o.name AS opportunity_name, q.title, q.status, q.revision, q.currency, q.valid_until, \
         q.contact_id, nullif(btrim(coalesce(c.first_name, '') || ' ' || coalesce(c.last_name, '')), '') AS contact_name, \
         c.email AS contact_email, q.owner_id, u.display_name AS owner_name, q.intro, q.terms, \
-        q.sent_at, q.decided_at, q.decided_by, q.decline_reason, q.version, q.created_at, q.updated_at \
+        q.sent_at, q.decided_at, q.decided_by, q.decline_reason, q.review_status, q.version, \
+        q.created_at, q.updated_at \
    FROM sales_quotes q \
    JOIN organizations g ON g.id = q.org_id \
    LEFT JOIN sales_opportunities o ON o.id = q.opportunity_id \
@@ -540,18 +546,48 @@ async fn set_lines(
     for (i, l) in lines.iter().enumerate() {
         ready_lines.push(ready(&mut *conn, i, l).await?);
     }
-    sqlx::query("DELETE FROM sales_quote_lines WHERE quote_id = $1")
+    // Lines named by id keep it; the rest are new, and lines not named go.
+    let existing: Vec<Uuid> =
+        sqlx::query_scalar("SELECT id FROM sales_quote_lines WHERE quote_id = $1")
+            .bind(id)
+            .fetch_all(&mut *conn)
+            .await?;
+    let mut keep = Vec::new();
+    for l in lines {
+        if let Some(line) =
+            l.id.filter(|line| existing.contains(line) && !keep.contains(line))
+        {
+            keep.push(line);
+        }
+    }
+    sqlx::query("DELETE FROM sales_quote_lines WHERE quote_id = $1 AND NOT (id = ANY($2))")
         .bind(id)
+        .bind(&keep)
         .execute(&mut *conn)
         .await?;
-    for (i, l) in ready_lines.into_iter().enumerate() {
+    let mut used = Vec::new();
+    for (i, (input, l)) in lines.iter().zip(ready_lines).enumerate() {
+        let line_id = match input
+            .id
+            .filter(|line| keep.contains(line) && !used.contains(line))
+        {
+            Some(line) => line,
+            None => huxley_core::new_id(),
+        };
+        used.push(line_id);
         sqlx::query(
             "INSERT INTO sales_quote_lines (id, quote_id, org_id, position, kind, product_id, sku, name, \
                 description, billing, quantity, unit, unit_cost, unit_price, discount_pct, taxable, \
                 optional, selected) \
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)",
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18) \
+             ON CONFLICT (id) DO UPDATE SET position = EXCLUDED.position, kind = EXCLUDED.kind, \
+                product_id = EXCLUDED.product_id, sku = EXCLUDED.sku, name = EXCLUDED.name, \
+                description = EXCLUDED.description, billing = EXCLUDED.billing, \
+                quantity = EXCLUDED.quantity, unit = EXCLUDED.unit, unit_cost = EXCLUDED.unit_cost, \
+                unit_price = EXCLUDED.unit_price, discount_pct = EXCLUDED.discount_pct, \
+                taxable = EXCLUDED.taxable, optional = EXCLUDED.optional, selected = EXCLUDED.selected",
         )
-        .bind(huxley_core::new_id())
+        .bind(line_id)
         .bind(id)
         .bind(org_id)
         .bind(i32::try_from(i).unwrap_or(i32::MAX))
@@ -673,6 +709,7 @@ pub async fn create(
     .execute(&mut *conn)
     .await?;
     set_lines(&mut *conn, id, org_id, &input.lines).await?;
+    crate::review::refresh(&mut *conn, id, false).await?;
     let q = get(&mut *conn, id).await?;
     audit::record(
         &mut *conn,
@@ -728,6 +765,7 @@ pub async fn update(
     .execute(&mut *conn)
     .await?;
     set_lines(&mut *conn, id, current.org_id, &input.lines).await?;
+    crate::review::refresh(&mut *conn, id, true).await?;
     let q = get(&mut *conn, id).await?;
     audit::record(
         &mut *conn,
@@ -753,6 +791,7 @@ pub async fn send(
     ctx: &RequestContext,
     id: Uuid,
     version: i32,
+    override_review: bool,
 ) -> SalesResult<Quote> {
     let current = get(&mut *conn, id).await?;
     if current.version != version {
@@ -766,6 +805,15 @@ pub async fn send(
     }
     if !current.lines.iter().any(|l| l.kind == LineKind::Item) {
         return Err(SalesError::invalid("lines", "add something to quote first"));
+    }
+    crate::review::refresh(&mut *conn, id, false).await?;
+    if !crate::review::may_send(&mut *conn, &current).await? {
+        if !override_review {
+            return Err(SalesError::Conflict(
+                "it needs an approved review before it's sent".into(),
+            ));
+        }
+        crate::review::record_override(&mut *conn, ctx, &current).await?;
     }
     sqlx::query(
         "UPDATE sales_quotes SET status = 'sent', sent_at = now(), version = version + 1, \

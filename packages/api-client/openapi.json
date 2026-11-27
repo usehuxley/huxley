@@ -62,7 +62,7 @@
 		"/api/portal/v1/approvals/{id}/decision": {
 			"post": {
 				"tags": ["portal"],
-				"summary": "Approves or rejects. The first decision counts.",
+				"summary": "Approves, rejects or (where allowed) asks for changes. The first\ndecision counts.",
 				"operationId": "portal_decide_approval",
 				"parameters": [
 					{
@@ -2211,7 +2211,7 @@
 		"/api/v1/approvals/{id}/decision": {
 			"post": {
 				"tags": ["workflows"],
-				"summary": "Approves or rejects. The first decision counts; the workflow continues\nwith it as the step's output.",
+				"summary": "Approves, rejects or (where allowed) asks for changes. The first\ndecision counts; the workflow continues with it as the step's output.",
 				"operationId": "decide_approval",
 				"parameters": [
 					{
@@ -13242,6 +13242,124 @@
 				}
 			}
 		},
+		"/api/v1/quotes/{id}/comments": {
+			"get": {
+				"tags": ["sales"],
+				"summary": "The quote's comments, oldest first (replies point at their thread).",
+				"operationId": "quote_comments",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "array",
+									"items": {
+										"$ref": "#/components/schemas/Comment"
+									}
+								}
+							}
+						}
+					}
+				}
+			},
+			"post": {
+				"tags": ["sales"],
+				"summary": "Comments on the quote or one of its lines, telling anyone @mentioned.",
+				"operationId": "add_quote_comment",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/CommentInput"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"201": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Comment"
+								}
+							}
+						}
+					},
+					"422": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/quotes/{id}/comments/{comment}/resolve": {
+			"post": {
+				"tags": ["sales"],
+				"summary": "Resolves a comment thread, or opens it again.",
+				"operationId": "resolve_quote_comment",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					},
+					{
+						"name": "comment",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/ResolveRequest"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"204": {}
+				}
+			}
+		},
 		"/api/v1/quotes/{id}/decision": {
 			"post": {
 				"tags": ["sales"],
@@ -13325,6 +13443,80 @@
 				}
 			}
 		},
+		"/api/v1/quotes/{id}/review": {
+			"get": {
+				"tags": ["sales"],
+				"operationId": "quote_review",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/QuoteReviewView"
+								}
+							}
+						}
+					}
+				}
+			},
+			"post": {
+				"tags": ["sales"],
+				"summary": "Submits a draft for review (send the version you read). Raises\n`quote.submitted_for_review` for the review workflow (the Quote review\npack).",
+				"operationId": "submit_quote_review",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/SendQuoteRequest"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/QuoteReviewView"
+								}
+							}
+						}
+					},
+					"409": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
 		"/api/v1/quotes/{id}/revisions": {
 			"get": {
 				"tags": ["sales"],
@@ -13360,7 +13552,7 @@
 		"/api/v1/quotes/{id}/send": {
 			"post": {
 				"tags": ["sales"],
-				"summary": "Marks a draft sent, keeping what was sent as its revision.",
+				"summary": "Marks a draft sent, keeping what was sent as its revision. A quote that\nneeds review takes an approved review of this revision first (409\notherwise), unless sent with `overrideReview`.",
 				"operationId": "send_quote",
 				"parameters": [
 					{
@@ -14212,6 +14404,117 @@
 			"delete": {
 				"tags": ["sales"],
 				"operationId": "archive_sales_reason",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"responses": {
+					"204": {}
+				}
+			}
+		},
+		"/api/v1/sales/review-rules": {
+			"get": {
+				"tags": ["sales"],
+				"summary": "When quotes need review, and who reviews them.",
+				"operationId": "list_review_rules",
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "array",
+									"items": {
+										"$ref": "#/components/schemas/ReviewRule"
+									}
+								}
+							}
+						}
+					}
+				}
+			},
+			"post": {
+				"tags": ["sales"],
+				"operationId": "create_review_rule",
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/ReviewRuleInput"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"201": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ReviewRule"
+								}
+							}
+						}
+					},
+					"422": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/sales/review-rules/{id}": {
+			"put": {
+				"tags": ["sales"],
+				"operationId": "update_review_rule",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/ReviewRuleInput"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ReviewRule"
+								}
+							}
+						}
+					}
+				}
+			},
+			"delete": {
+				"tags": ["sales"],
+				"operationId": "delete_review_rule",
 				"parameters": [
 					{
 						"name": "id",
@@ -22884,13 +23187,26 @@
 			},
 			"ApprovalStatus": {
 				"type": "string",
-				"enum": ["pending", "approved", "rejected", "expired"]
+				"enum": ["pending", "approved", "rejected", "expired", "changes_requested"]
 			},
 			"ApprovalView": {
 				"type": "object",
 				"description": "An approval as approvers see it.",
-				"required": ["id", "runId", "orgId", "title", "status", "expiresAt", "createdAt"],
+				"required": [
+					"id",
+					"runId",
+					"orgId",
+					"title",
+					"status",
+					"expiresAt",
+					"allowChanges",
+					"createdAt"
+				],
 				"properties": {
+					"allowChanges": {
+						"type": "boolean",
+						"description": "Approvers may also ask for changes."
+					},
 					"comment": {
 						"type": ["string", "null"]
 					},
@@ -25322,6 +25638,44 @@
 					}
 				}
 			},
+			"Changes": {
+				"type": "object",
+				"description": "What changed since the last decided review.",
+				"required": ["sinceRevision", "decision", "added", "removed", "changed", "totals"],
+				"properties": {
+					"added": {
+						"type": "array",
+						"items": {
+							"type": "string"
+						}
+					},
+					"changed": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/LineChange"
+						}
+					},
+					"decision": {
+						"type": "string"
+					},
+					"removed": {
+						"type": "array",
+						"items": {
+							"type": "string"
+						}
+					},
+					"sinceRevision": {
+						"type": "integer",
+						"format": "int32"
+					},
+					"totals": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/FieldChange"
+						}
+					}
+				}
+			},
 			"Channels": {
 				"type": "object",
 				"required": ["inApp", "email"],
@@ -25402,6 +25756,83 @@
 				"type": "string",
 				"description": "A column's type.",
 				"enum": ["text", "integer", "number", "boolean", "timestamp", "date", "json", "uuid"]
+			},
+			"Comment": {
+				"type": "object",
+				"required": ["id", "body", "mentions", "createdAt"],
+				"properties": {
+					"authorId": {
+						"type": ["string", "null"],
+						"format": "uuid"
+					},
+					"authorName": {
+						"type": ["string", "null"]
+					},
+					"body": {
+						"type": "string"
+					},
+					"createdAt": {
+						"type": "string",
+						"format": "date-time"
+					},
+					"id": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"lineId": {
+						"type": ["string", "null"],
+						"format": "uuid"
+					},
+					"lineName": {
+						"type": ["string", "null"]
+					},
+					"mentions": {
+						"type": "array",
+						"items": {
+							"type": "string",
+							"format": "uuid"
+						}
+					},
+					"parentId": {
+						"type": ["string", "null"],
+						"format": "uuid"
+					},
+					"resolvedAt": {
+						"type": ["string", "null"],
+						"format": "date-time"
+					},
+					"resolvedByName": {
+						"type": ["string", "null"]
+					}
+				}
+			},
+			"CommentInput": {
+				"type": "object",
+				"required": ["body"],
+				"properties": {
+					"body": {
+						"type": "string"
+					},
+					"lineId": {
+						"type": ["string", "null"],
+						"format": "uuid",
+						"description": "A line of the quote, or none for the whole quote."
+					},
+					"mentions": {
+						"type": "array",
+						"items": {
+							"type": "string",
+							"format": "uuid"
+						},
+						"description": "People @mentioned: they're told."
+					},
+					"parentId": {
+						"type": ["string", "null"],
+						"format": "uuid",
+						"description": "Replying to a thread (its first comment)."
+					}
+				},
+				"additionalProperties": false
 			},
 			"Company": {
 				"type": "object",
@@ -26877,7 +27308,7 @@
 			},
 			"Decision": {
 				"type": "string",
-				"enum": ["approve", "reject"]
+				"enum": ["approve", "reject", "request_changes"]
 			},
 			"DecisionInput": {
 				"type": "object",
@@ -27348,6 +27779,21 @@
 					}
 				},
 				"additionalProperties": false
+			},
+			"FieldChange": {
+				"type": "object",
+				"required": ["field", "before", "after"],
+				"properties": {
+					"after": {
+						"type": "string"
+					},
+					"before": {
+						"type": "string"
+					},
+					"field": {
+						"type": "string"
+					}
+				}
 			},
 			"FieldChanges": {
 				"type": "object",
@@ -28701,6 +29147,21 @@
 			"LeadStatus": {
 				"type": "string",
 				"enum": ["new", "working", "disqualified", "converted"]
+			},
+			"LineChange": {
+				"type": "object",
+				"required": ["name", "fields"],
+				"properties": {
+					"fields": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/FieldChange"
+						}
+					},
+					"name": {
+						"type": "string"
+					}
+				}
 			},
 			"LinkArticle": {
 				"type": "object",
@@ -31113,8 +31574,12 @@
 			"PortalApproval": {
 				"type": "object",
 				"description": "An approval as a client contact sees it in the portal.",
-				"required": ["id", "title", "status", "expiresAt", "createdAt"],
+				"required": ["id", "title", "status", "allowChanges", "expiresAt", "createdAt"],
 				"properties": {
+					"allowChanges": {
+						"type": "boolean",
+						"description": "They may also ask for changes."
+					},
 					"comment": {
 						"type": ["string", "null"]
 					},
@@ -31142,7 +31607,7 @@
 					},
 					"status": {
 						"type": "string",
-						"description": "`pending`, `approved`, `rejected` or `expired`."
+						"description": "`pending`, `approved`, `rejected`, `changes_requested` or `expired`."
 					},
 					"title": {
 						"type": "string"
@@ -31302,6 +31767,10 @@
 					},
 					"comment": {
 						"type": ["string", "null"]
+					},
+					"requestChanges": {
+						"type": "boolean",
+						"description": "Ask for changes instead (where the approval allows it)."
 					}
 				},
 				"additionalProperties": false
@@ -33402,6 +33871,7 @@
 					"currency",
 					"intro",
 					"terms",
+					"reviewStatus",
 					"version",
 					"createdAt",
 					"updatedAt",
@@ -33474,6 +33944,10 @@
 					},
 					"ownerName": {
 						"type": ["string", "null"]
+					},
+					"reviewStatus": {
+						"$ref": "#/components/schemas/ReviewStatus",
+						"description": "Whether it needs (or had) an internal review."
 					},
 					"revision": {
 						"type": "integer",
@@ -33660,6 +34134,11 @@
 					"discountPct": {
 						"type": ["string", "null"]
 					},
+					"id": {
+						"type": ["string", "null"],
+						"format": "uuid",
+						"description": "An existing line's id, to keep it (and its comments); new lines leave it out."
+					},
 					"kind": {
 						"$ref": "#/components/schemas/QuoteLineKind"
 					},
@@ -33702,6 +34181,33 @@
 			"QuoteLineKind": {
 				"type": "string",
 				"enum": ["item", "heading"]
+			},
+			"QuoteReviewView": {
+				"allOf": [
+					{
+						"$ref": "#/components/schemas/ReviewState"
+					},
+					{
+						"type": "object",
+						"required": ["canDecide", "canOverride"],
+						"properties": {
+							"approvalId": {
+								"type": ["string", "null"],
+								"format": "uuid",
+								"description": "The review workflow's open approval, if any."
+							},
+							"canDecide": {
+								"type": "boolean",
+								"description": "The caller is one of its approvers."
+							},
+							"canOverride": {
+								"type": "boolean",
+								"description": "The caller may send it without an approved review."
+							}
+						}
+					}
+				],
+				"description": "Its review state, with the open approval for the caller to decide."
 			},
 			"QuoteStatus": {
 				"type": "string",
@@ -33774,6 +34280,26 @@
 					}
 				},
 				"additionalProperties": false
+			},
+			"Reason": {
+				"type": "object",
+				"description": "A rule a quote matches, and why.",
+				"required": ["ruleId", "name", "detail", "reviewers"],
+				"properties": {
+					"detail": {
+						"type": "string"
+					},
+					"name": {
+						"type": "string"
+					},
+					"reviewers": {
+						"type": "string"
+					},
+					"ruleId": {
+						"type": "string",
+						"format": "uuid"
+					}
+				}
 			},
 			"Received": {
 				"type": "object",
@@ -33945,6 +34471,16 @@
 						"type": ["string", "null"],
 						"format": "uuid",
 						"description": "A skill, at `minLevel` or above (1 learning … 4 expert)."
+					}
+				},
+				"additionalProperties": false
+			},
+			"ResolveRequest": {
+				"type": "object",
+				"required": ["resolved"],
+				"properties": {
+					"resolved": {
+						"type": "boolean"
 					}
 				},
 				"additionalProperties": false
@@ -34170,6 +34706,131 @@
 					}
 				}
 			},
+			"ReviewRecord": {
+				"type": "object",
+				"required": ["id", "revision", "reasons", "reviewers", "submittedAt"],
+				"properties": {
+					"comment": {
+						"type": ["string", "null"]
+					},
+					"decidedAt": {
+						"type": ["string", "null"],
+						"format": "date-time"
+					},
+					"decidedBy": {
+						"type": ["string", "null"]
+					},
+					"decision": {
+						"type": ["string", "null"],
+						"description": "`approved`, `changes_requested` or `rejected`; none while in review."
+					},
+					"id": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"reasons": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/Reason"
+						}
+					},
+					"reviewers": {
+						"type": "array",
+						"items": {
+							"type": "string"
+						}
+					},
+					"revision": {
+						"type": "integer",
+						"format": "int32"
+					},
+					"submittedAt": {
+						"type": "string",
+						"format": "date-time"
+					},
+					"submittedByName": {
+						"type": ["string", "null"]
+					}
+				}
+			},
+			"ReviewRule": {
+				"type": "object",
+				"required": ["id", "name", "kind", "categories", "reviewers", "active"],
+				"properties": {
+					"active": {
+						"type": "boolean"
+					},
+					"categories": {
+						"type": "array",
+						"items": {
+							"type": "string"
+						}
+					},
+					"expression": {
+						"type": ["string", "null"]
+					},
+					"id": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"kind": {
+						"$ref": "#/components/schemas/ReviewRuleKind"
+					},
+					"name": {
+						"type": "string"
+					},
+					"reviewers": {
+						"type": "string",
+						"description": "Who reviews: `role:<key>`, `team:<id>`, `user:<id>`, several separated by commas."
+					},
+					"threshold": {
+						"type": ["string", "null"]
+					}
+				}
+			},
+			"ReviewRuleInput": {
+				"type": "object",
+				"required": ["name", "kind", "reviewers"],
+				"properties": {
+					"active": {
+						"type": "boolean"
+					},
+					"categories": {
+						"type": "array",
+						"items": {
+							"type": "string"
+						}
+					},
+					"expression": {
+						"type": ["string", "null"]
+					},
+					"kind": {
+						"$ref": "#/components/schemas/ReviewRuleKind"
+					},
+					"name": {
+						"type": "string"
+					},
+					"reviewers": {
+						"type": "string"
+					},
+					"threshold": {
+						"type": ["string", "null"]
+					}
+				},
+				"additionalProperties": false
+			},
+			"ReviewRuleKind": {
+				"type": "string",
+				"enum": [
+					"always",
+					"margin_below",
+					"first_year_above",
+					"discount_above",
+					"new_client",
+					"category",
+					"expression"
+				]
+			},
 			"ReviewScript": {
 				"type": "object",
 				"required": ["key", "language"],
@@ -34181,6 +34842,51 @@
 						"type": "string"
 					}
 				}
+			},
+			"ReviewState": {
+				"type": "object",
+				"description": "The review state of a quote, for its page.",
+				"required": ["status", "reasons", "canSend", "sentOverridden", "history"],
+				"properties": {
+					"canSend": {
+						"type": "boolean",
+						"description": "It can be sent: no review needed, or one approved for this revision."
+					},
+					"changes": {
+						"oneOf": [
+							{
+								"$ref": "#/components/schemas/Changes",
+								"description": "What changed since the latest decided review."
+							},
+							{
+								"type": "null"
+							}
+						]
+					},
+					"history": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/ReviewRecord"
+						},
+						"description": "Each submission, newest first."
+					},
+					"reasons": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/Reason"
+						}
+					},
+					"sentOverridden": {
+						"type": "boolean"
+					},
+					"status": {
+						"$ref": "#/components/schemas/ReviewStatus"
+					}
+				}
+			},
+			"ReviewStatus": {
+				"type": "string",
+				"enum": ["not_needed", "needed", "in_review", "approved", "changes_requested", "rejected"]
 			},
 			"Revision": {
 				"type": "object",
@@ -34902,6 +35608,10 @@
 				"type": "object",
 				"required": ["version"],
 				"properties": {
+					"overrideReview": {
+						"type": "boolean",
+						"description": "Send it though it needs an approved review (`sales:review:override`;\nrecorded)."
+					},
 					"version": {
 						"type": "integer",
 						"format": "int32"

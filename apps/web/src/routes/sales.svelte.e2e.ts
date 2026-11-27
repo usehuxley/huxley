@@ -178,4 +178,112 @@ test.describe('quotes', () => {
 		await expect(page.getByText('100% likely')).toBeVisible();
 		await expect(page.getByRole('list', { name: 'Quotes' })).toContainText('Accepted');
 	});
+
+	test('a quote that needs review is sent back for changes, with comments', async ({ page }) => {
+		const stamp = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+		const title = `Review me ${stamp}`;
+		const api = await request.newContext({
+			baseURL: apiUrl,
+			extraHTTPHeaders: { 'x-requested-with': 'huxley' }
+		});
+		const json = async <T>(res: Promise<import('@playwright/test').APIResponse>, status = 0) => {
+			const r = await res;
+			if (status) expect(r.status(), await r.text()).toBe(status);
+			else expect(r.ok(), await r.text()).toBeTruthy();
+			return (await r.json()) as T;
+		};
+		await api.post('/api/v1/auth/login', { data: { email: ownerEmail, password: ownerPassword } });
+		for (const module of ['contracts', 'sales']) {
+			await api.put(`/api/v1/modules/${module}`, { data: { enabled: true } });
+		}
+		const me = (await json<{ id: string }>(api.get('/api/v1/auth/me'))).id;
+		const orgs = await json<{ id: string; parentId: string | null }[]>(api.get('/api/v1/orgs'));
+		const root = orgs.find((o) => o.parentId === null)!.id;
+		const client = await json<{ id: string }>(
+			api.post('/api/v1/orgs', {
+				data: { parentId: root, kind: 'client', name: `Fabrikam ${stamp}` }
+			})
+		);
+		// Rules are instance-wide: this one matches only this test's quote.
+		const rule = await json<{ id: string }>(
+			api.post('/api/v1/sales/review-rules', {
+				data: {
+					name: `Review ${stamp}`,
+					kind: 'expression',
+					expression: `quote.title == '${title}'`,
+					reviewers: `user:${me}`
+				}
+			}),
+			201
+		);
+		// The Quote review pack, at the client.
+		const pack = await json<{ uploadId: string; version: string }>(
+			api.post(`/api/v1/packs/builtin/huxley/quote-review?orgId=${client.id}`)
+		);
+		const installed = await json<{ items: { workflows: Record<string, string> } }>(
+			api.post(`/api/v1/packs/uploads/${pack.uploadId}/install`, {
+				data: { orgId: client.id, version: pack.version }
+			})
+		);
+		for (const id of Object.values(installed.items.workflows)) {
+			await json(api.post(`/api/v1/workflows/${id}/publish`, { data: {} }), 200);
+		}
+		const quote = await json<{ id: string }>(
+			api.post('/api/v1/quotes', {
+				data: {
+					orgId: client.id,
+					quote: {
+						title,
+						lines: [{ name: 'Rack server', unitCost: '900', unitPrice: '1000' }]
+					}
+				}
+			}),
+			201
+		);
+
+		try {
+			await signIn(page);
+			await page.goto(`/sales/quotes/${quote.id}`);
+			await expect(page.getByText('Needs review', { exact: true })).toBeVisible();
+			await expect(page.getByRole('list', { name: 'Why it needs review' })).toContainText(
+				`Review ${stamp}`
+			);
+			await expect(page.getByRole('button', { name: 'Mark sent' })).toBeHidden();
+
+			// A comment on the line, mentioning nobody but noting it.
+			await page.getByLabel('On', { exact: true }).selectOption({ label: 'Rack server' });
+			await page.getByLabel('Add a comment').fill('Is the margin right?');
+			await page.getByRole('button', { name: 'Comment', exact: true }).click();
+			const open = page.getByRole('list', { name: 'Open comments' });
+			await expect(open).toContainText('On Rack server');
+			await expect(open).toContainText('Is the margin right?');
+			await expect(page.getByText('1 open comment')).toBeVisible();
+
+			await page.getByRole('button', { name: 'Submit for review' }).click();
+			await expect(page.getByText('In review', { exact: true })).toBeVisible();
+			// The workflow asks the reviewer (the owner, here).
+			await expect(async () => {
+				await page.reload();
+				await expect(page.getByText('Your review')).toBeVisible({ timeout: 1000 });
+			}).toPass({ timeout: 30_000 });
+			await page.getByLabel('Review comment').fill('Price it at 1100');
+			await page.getByRole('button', { name: 'Request changes' }).click();
+			await expect(async () => {
+				await page.reload();
+				await expect(page.getByText('Changes requested', { exact: true }).first()).toBeVisible({
+					timeout: 1000
+				});
+			}).toPass({ timeout: 30_000 });
+			await expect(page.getByRole('list', { name: 'Review history' })).toContainText(
+				'Price it at 1100'
+			);
+
+			// Resolving the thread tidies it away.
+			await open.getByRole('button', { name: 'Resolve' }).click();
+			await expect(page.getByText('No open comments.')).toBeVisible();
+		} finally {
+			await api.delete(`/api/v1/sales/review-rules/${rule.id}`);
+			await api.dispose();
+		}
+	});
 });
