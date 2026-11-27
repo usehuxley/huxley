@@ -139,7 +139,7 @@ pub const REGISTRY: &[Module] = &[
         description: "Pipeline, CPQ, and sales orders.",
         requires: &["crm", "contracts"],
         phase: 10,
-        released: false,
+        released: true,
     },
     Module {
         key: "billing",

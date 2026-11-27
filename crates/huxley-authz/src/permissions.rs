@@ -103,6 +103,9 @@ permissions! {
     DASHBOARD_MANAGE = "dashboard:manage", Org, "Add, change and delete shared dashboards";
     TIMESHEET_SUBMIT = "timesheet:submit", Instance, "Submit your own timesheets";
     TIMESHEET_APPROVE = "timesheet:approve", Instance, "Approve, reject and reopen the timesheets of people in teams you lead";
+    SALES_READ = "sales:read", Org, "View leads, opportunities and the pipeline";
+    SALES_WRITE = "sales:write", Org, "Capture and work leads, convert them, and create, change and move opportunities";
+    SALES_CONFIGURE = "sales:configure", Instance, "Keep the pipeline's stages and the win and loss reasons";
 }
 
 /// Wildcard granting every permission.

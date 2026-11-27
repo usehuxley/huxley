@@ -38,6 +38,7 @@ huxley-knowledge.workspace = true
 huxley-vault.workspace = true
 huxley-cmdb.workspace = true
 huxley-contracts.workspace = true
+huxley-sales.workspace = true
 huxley-portal.workspace = true
 huxley-email.workspace = true
 huxley-mail.workspace = true

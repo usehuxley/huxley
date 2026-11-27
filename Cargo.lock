@@ -2035,6 +2035,7 @@ dependencies = [
  "huxley-packs",
  "huxley-portal",
  "huxley-runners",
+ "huxley-sales",
  "huxley-scripts",
  "huxley-servicedesk",
  "huxley-sso",
@@ -2606,6 +2607,24 @@ dependencies = [
  "uuid",
  "x509-parser",
  "zeroize",
+]
+
+[[package]]
+name = "huxley-sales"
+version = "0.1.0"
+dependencies = [
+ "huxley-core",
+ "huxley-crm",
+ "huxley-db",
+ "huxley-orgs",
+ "rust_decimal",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "thiserror 2.0.21",
+ "time",
+ "utoipa",
+ "uuid",
 ]
 
 [[package]]

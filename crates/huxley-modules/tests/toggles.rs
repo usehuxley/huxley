@@ -24,7 +24,7 @@ async fn toggles_respect_dependencies_and_are_audited() {
         .unwrap();
 
     // Enabling without dependencies is refused with the missing list.
-    let refused = set_enabled(&mut tx, &ctx, "sales", true, false).await;
+    let refused = set_enabled(&mut tx, &ctx, "billing", true, false).await;
     let Err(SetError::Module(ModuleError::MissingDependencies(mut deps))) = refused else {
         panic!("{refused:?}")
     };
@@ -32,33 +32,33 @@ async fn toggles_respect_dependencies_and_are_audited() {
     assert_eq!(deps, ["contracts", "crm"]);
 
     // Including dependencies turns them on first.
-    let changed = set_enabled(&mut tx, &ctx, "sales", true, true)
+    let changed = set_enabled(&mut tx, &ctx, "billing", true, true)
         .await
         .unwrap();
-    assert_eq!(changed, vec!["crm", "contracts", "sales"]);
+    assert_eq!(changed, vec!["crm", "contracts", "billing"]);
     assert!(enabled_set(&mut tx).await.unwrap().contains("contracts"));
 
     // Unreleased modules are enabled but not active.
-    assert!(!is_active(&mut tx, "sales").await.unwrap());
+    assert!(!is_active(&mut tx, "billing").await.unwrap());
     let change = states(&mut tx)
         .await
         .unwrap()
         .into_iter()
-        .find(|m| m.module.key == "sales")
+        .find(|m| m.module.key == "billing")
         .unwrap();
     assert!(change.enabled && !change.active);
 
     // A module others depend on can't be turned off.
-    let blocked = set_enabled(&mut tx, &ctx, "crm", false, false).await;
+    let blocked = set_enabled(&mut tx, &ctx, "contracts", false, false).await;
     assert!(matches!(
         blocked,
         Err(SetError::Module(ModuleError::HasDependents(_)))
     ));
     assert_eq!(
-        set_enabled(&mut tx, &ctx, "sales", false, false)
+        set_enabled(&mut tx, &ctx, "billing", false, false)
             .await
             .unwrap(),
-        vec!["sales"]
+        vec!["billing"]
     );
 
     // Each change is audited.
