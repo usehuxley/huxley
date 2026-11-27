@@ -8288,6 +8288,725 @@
 				}
 			}
 		},
+		"/api/v1/inventory/allocations": {
+			"get": {
+				"tags": ["inventory"],
+				"summary": "Parts set aside for tickets and projects.",
+				"operationId": "list_inventory_allocations",
+				"parameters": [
+					{
+						"name": "refType",
+						"in": "query",
+						"required": false,
+						"schema": {
+							"$ref": "#/components/schemas/InventoryRefType"
+						}
+					},
+					{
+						"name": "refId",
+						"in": "query",
+						"required": false,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					},
+					{
+						"name": "itemId",
+						"in": "query",
+						"required": false,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					},
+					{
+						"name": "open",
+						"in": "query",
+						"description": "Only open allocations (not yet used or released).",
+						"required": false,
+						"schema": {
+							"type": "boolean"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "array",
+									"items": {
+										"$ref": "#/components/schemas/InventoryAllocation"
+									}
+								}
+							}
+						}
+					}
+				}
+			},
+			"post": {
+				"tags": ["inventory"],
+				"summary": "Sets parts aside for a ticket or project (or, with `consume`, uses them\nstraight away).",
+				"operationId": "create_inventory_allocation",
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/InventoryAllocationInput"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"201": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/InventoryAllocation"
+								}
+							}
+						}
+					},
+					"409": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					},
+					"422": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/inventory/allocations/{id}/consume": {
+			"post": {
+				"tags": ["inventory"],
+				"summary": "The parts were used: they leave stock.",
+				"operationId": "consume_inventory_allocation",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/InventoryAllocation"
+								}
+							}
+						}
+					},
+					"409": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/inventory/allocations/{id}/release": {
+			"post": {
+				"tags": ["inventory"],
+				"summary": "The parts weren't needed: they're available again.",
+				"operationId": "release_inventory_allocation",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/InventoryAllocation"
+								}
+							}
+						}
+					},
+					"409": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/inventory/items": {
+			"get": {
+				"tags": ["inventory"],
+				"summary": "Stocked items you can see, with totals.",
+				"operationId": "list_inventory_items",
+				"parameters": [
+					{
+						"name": "q",
+						"in": "query",
+						"description": "SKU or name contains.",
+						"required": false,
+						"schema": {
+							"type": "string"
+						}
+					},
+					{
+						"name": "low",
+						"in": "query",
+						"description": "Only items at or under a reorder point.",
+						"required": false,
+						"schema": {
+							"type": "boolean"
+						}
+					},
+					{
+						"name": "locationId",
+						"in": "query",
+						"description": "Only items with stock at this location.",
+						"required": false,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "array",
+									"items": {
+										"$ref": "#/components/schemas/InventoryItem"
+									}
+								}
+							}
+						}
+					}
+				}
+			},
+			"post": {
+				"tags": ["inventory"],
+				"summary": "Starts stocking a catalog product.",
+				"operationId": "create_inventory_item",
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/CreateItemRequest"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"201": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/InventoryItem"
+								}
+							}
+						}
+					},
+					"409": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/inventory/items/{id}": {
+			"get": {
+				"tags": ["inventory"],
+				"operationId": "get_inventory_item",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ItemDetail"
+								}
+							}
+						}
+					}
+				}
+			},
+			"put": {
+				"tags": ["inventory"],
+				"summary": "Changes how an item is tracked (while none is on hand), refreshing its\nSKU and name from the catalog.",
+				"operationId": "update_inventory_item",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/UpdateItemRequest"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/InventoryItem"
+								}
+							}
+						}
+					}
+				}
+			},
+			"delete": {
+				"tags": ["inventory"],
+				"summary": "Stops stocking an item that has no history.",
+				"operationId": "delete_inventory_item",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"responses": {
+					"204": {},
+					"409": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/inventory/items/{id}/reorder/{location}": {
+			"put": {
+				"tags": ["inventory"],
+				"summary": "Sets the item's reorder point at a location: `stock.low` is raised when\nwhat's available there falls to it.",
+				"operationId": "set_inventory_reorder",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					},
+					{
+						"name": "location",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/InventoryReorderInput"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"204": {}
+				}
+			},
+			"delete": {
+				"tags": ["inventory"],
+				"operationId": "clear_inventory_reorder",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					},
+					{
+						"name": "location",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"responses": {
+					"204": {}
+				}
+			}
+		},
+		"/api/v1/inventory/locations": {
+			"get": {
+				"tags": ["inventory"],
+				"summary": "Locations you can see.",
+				"operationId": "list_inventory_locations",
+				"parameters": [
+					{
+						"name": "all",
+						"in": "query",
+						"description": "Include locations that are turned off.",
+						"required": false,
+						"schema": {
+							"type": "boolean"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "array",
+									"items": {
+										"$ref": "#/components/schemas/InventoryLocation"
+									}
+								}
+							}
+						}
+					}
+				}
+			},
+			"post": {
+				"tags": ["inventory"],
+				"operationId": "create_inventory_location",
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/CreateLocationRequest"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"201": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/InventoryLocation"
+								}
+							}
+						}
+					},
+					"422": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/inventory/locations/{id}": {
+			"put": {
+				"tags": ["inventory"],
+				"operationId": "update_inventory_location",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/InventoryLocationInput"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/InventoryLocation"
+								}
+							}
+						}
+					}
+				}
+			},
+			"delete": {
+				"tags": ["inventory"],
+				"summary": "Removes a location never used; turn used ones off instead.",
+				"operationId": "delete_inventory_location",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"responses": {
+					"204": {},
+					"409": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/inventory/movements": {
+			"get": {
+				"tags": ["inventory"],
+				"summary": "The ledger, newest first.",
+				"operationId": "list_inventory_movements",
+				"parameters": [
+					{
+						"name": "itemId",
+						"in": "query",
+						"required": false,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					},
+					{
+						"name": "locationId",
+						"in": "query",
+						"required": false,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					},
+					{
+						"name": "refType",
+						"in": "query",
+						"description": "`ticket` or `project`, with `refId`.",
+						"required": false,
+						"schema": {
+							"type": "string"
+						}
+					},
+					{
+						"name": "refId",
+						"in": "query",
+						"required": false,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					},
+					{
+						"name": "limit",
+						"in": "query",
+						"description": "At most this many, newest first (default 100, at most 500).",
+						"required": false,
+						"schema": {
+							"type": "integer",
+							"format": "int64"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "array",
+									"items": {
+										"$ref": "#/components/schemas/InventoryMovement"
+									}
+								}
+							}
+						}
+					}
+				}
+			},
+			"post": {
+				"tags": ["inventory"],
+				"summary": "Receives, transfers, adjusts, returns or sends back (RMA) stock.",
+				"operationId": "create_inventory_movement",
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/InventoryMovementInput"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"201": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/InventoryMovement"
+								}
+							}
+						}
+					},
+					"409": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					},
+					"422": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/inventory/units": {
+			"get": {
+				"tags": ["inventory"],
+				"summary": "Serial-numbered units: look one up, or list an item's.",
+				"operationId": "list_inventory_units",
+				"parameters": [
+					{
+						"name": "itemId",
+						"in": "query",
+						"required": false,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					},
+					{
+						"name": "serial",
+						"in": "query",
+						"description": "Serial number contains.",
+						"required": false,
+						"schema": {
+							"type": "string"
+						}
+					},
+					{
+						"name": "inStock",
+						"in": "query",
+						"description": "Only units in stock (or allocated).",
+						"required": false,
+						"schema": {
+							"type": "boolean"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "array",
+									"items": {
+										"$ref": "#/components/schemas/InventoryUnit"
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		},
 		"/api/v1/jobs/dead": {
 			"get": {
 				"tags": ["workflows"],
@@ -26620,6 +27339,21 @@
 				},
 				"additionalProperties": false
 			},
+			"CreateItemRequest": {
+				"type": "object",
+				"required": ["orgId", "item"],
+				"properties": {
+					"item": {
+						"$ref": "#/components/schemas/InventoryItemInput"
+					},
+					"orgId": {
+						"type": "string",
+						"format": "uuid",
+						"description": "The organization stocking it."
+					}
+				},
+				"additionalProperties": false
+			},
 			"CreateLeadRequest": {
 				"type": "object",
 				"required": ["orgId", "lead"],
@@ -26651,6 +27385,21 @@
 						"type": ["string", "null"],
 						"format": "uuid",
 						"description": "The organization submissions are for: the form's (default) or one\nbelow it."
+					}
+				},
+				"additionalProperties": false
+			},
+			"CreateLocationRequest": {
+				"type": "object",
+				"required": ["orgId", "location"],
+				"properties": {
+					"location": {
+						"$ref": "#/components/schemas/InventoryLocationInput"
+					},
+					"orgId": {
+						"type": "string",
+						"format": "uuid",
+						"description": "The organization holding the stock (usually the provider)."
 					}
 				},
 				"additionalProperties": false
@@ -28551,6 +29300,568 @@
 					}
 				}
 			},
+			"InventoryAllocation": {
+				"type": "object",
+				"required": [
+					"id",
+					"orgId",
+					"itemId",
+					"sku",
+					"name",
+					"unit",
+					"locationId",
+					"locationName",
+					"lot",
+					"quantity",
+					"serials",
+					"refType",
+					"refId",
+					"status",
+					"createdAt"
+				],
+				"properties": {
+					"closedAt": {
+						"type": ["string", "null"],
+						"format": "date-time"
+					},
+					"createdAt": {
+						"type": "string",
+						"format": "date-time"
+					},
+					"createdByName": {
+						"type": ["string", "null"]
+					},
+					"id": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"itemId": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"locationId": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"locationName": {
+						"type": "string"
+					},
+					"lot": {
+						"type": "string"
+					},
+					"name": {
+						"type": "string"
+					},
+					"note": {
+						"type": ["string", "null"]
+					},
+					"orgId": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"quantity": {
+						"type": "string"
+					},
+					"refId": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"refOrgId": {
+						"type": ["string", "null"],
+						"format": "uuid"
+					},
+					"refType": {
+						"$ref": "#/components/schemas/InventoryRefType"
+					},
+					"serials": {
+						"type": "array",
+						"items": {
+							"type": "string"
+						}
+					},
+					"sku": {
+						"type": "string"
+					},
+					"status": {
+						"$ref": "#/components/schemas/InventoryAllocationStatus"
+					},
+					"unit": {
+						"type": "string"
+					}
+				}
+			},
+			"InventoryAllocationInput": {
+				"type": "object",
+				"required": ["itemId", "locationId", "refType", "refId"],
+				"properties": {
+					"consume": {
+						"type": "boolean",
+						"description": "Used straight away (allocated and consumed in one go)."
+					},
+					"itemId": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"locationId": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"lot": {
+						"type": ["string", "null"]
+					},
+					"note": {
+						"type": ["string", "null"]
+					},
+					"quantity": {
+						"type": ["string", "null"]
+					},
+					"refId": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"refType": {
+						"$ref": "#/components/schemas/InventoryRefType"
+					},
+					"serials": {
+						"type": "array",
+						"items": {
+							"type": "string"
+						}
+					}
+				},
+				"additionalProperties": false
+			},
+			"InventoryAllocationStatus": {
+				"type": "string",
+				"enum": ["allocated", "consumed", "released"]
+			},
+			"InventoryItem": {
+				"type": "object",
+				"description": "A stocked item, with its totals across locations.",
+				"required": [
+					"id",
+					"orgId",
+					"productId",
+					"sku",
+					"name",
+					"unit",
+					"tracking",
+					"onHand",
+					"allocated",
+					"available",
+					"low",
+					"createdAt"
+				],
+				"properties": {
+					"allocated": {
+						"type": "string"
+					},
+					"available": {
+						"type": "string"
+					},
+					"createdAt": {
+						"type": "string",
+						"format": "date-time"
+					},
+					"id": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"low": {
+						"type": "boolean",
+						"description": "At or under a reorder point somewhere."
+					},
+					"name": {
+						"type": "string"
+					},
+					"onHand": {
+						"type": "string"
+					},
+					"orgId": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"productId": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"sku": {
+						"type": "string"
+					},
+					"tracking": {
+						"$ref": "#/components/schemas/Tracking"
+					},
+					"unit": {
+						"type": "string"
+					}
+				}
+			},
+			"InventoryItemInput": {
+				"type": "object",
+				"required": ["productId"],
+				"properties": {
+					"productId": {
+						"type": "string",
+						"format": "uuid",
+						"description": "A catalog product (a `product`, not a service or bundle) of this\norganization or one above it."
+					},
+					"tracking": {
+						"$ref": "#/components/schemas/Tracking"
+					}
+				},
+				"additionalProperties": false
+			},
+			"InventoryLocation": {
+				"type": "object",
+				"required": ["id", "orgId", "name", "kind", "active", "createdAt"],
+				"properties": {
+					"active": {
+						"type": "boolean"
+					},
+					"address": {
+						"type": ["string", "null"]
+					},
+					"assignedUserId": {
+						"type": ["string", "null"],
+						"format": "uuid"
+					},
+					"assignedUserName": {
+						"type": ["string", "null"]
+					},
+					"createdAt": {
+						"type": "string",
+						"format": "date-time"
+					},
+					"id": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"kind": {
+						"$ref": "#/components/schemas/InventoryLocationKind"
+					},
+					"name": {
+						"type": "string"
+					},
+					"orgId": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"parentId": {
+						"type": ["string", "null"],
+						"format": "uuid"
+					},
+					"parentName": {
+						"type": ["string", "null"]
+					}
+				}
+			},
+			"InventoryLocationInput": {
+				"type": "object",
+				"required": ["name", "kind"],
+				"properties": {
+					"active": {
+						"type": "boolean"
+					},
+					"address": {
+						"type": ["string", "null"]
+					},
+					"assignedUserId": {
+						"type": ["string", "null"],
+						"format": "uuid",
+						"description": "A vehicle's technician."
+					},
+					"kind": {
+						"$ref": "#/components/schemas/InventoryLocationKind"
+					},
+					"name": {
+						"type": "string"
+					},
+					"parentId": {
+						"type": ["string", "null"],
+						"format": "uuid",
+						"description": "A bin's warehouse."
+					}
+				},
+				"additionalProperties": false
+			},
+			"InventoryLocationKind": {
+				"type": "string",
+				"enum": ["warehouse", "bin", "vehicle", "site"]
+			},
+			"InventoryLot": {
+				"type": "object",
+				"required": ["lot", "onHand", "allocated"],
+				"properties": {
+					"allocated": {
+						"type": "string"
+					},
+					"lot": {
+						"type": "string"
+					},
+					"onHand": {
+						"type": "string"
+					}
+				}
+			},
+			"InventoryMovement": {
+				"type": "object",
+				"required": [
+					"id",
+					"itemId",
+					"sku",
+					"name",
+					"kind",
+					"quantity",
+					"lot",
+					"serials",
+					"createdAt"
+				],
+				"properties": {
+					"allocationId": {
+						"type": ["string", "null"],
+						"format": "uuid"
+					},
+					"createdAt": {
+						"type": "string",
+						"format": "date-time"
+					},
+					"createdByName": {
+						"type": ["string", "null"]
+					},
+					"fromLocationId": {
+						"type": ["string", "null"],
+						"format": "uuid"
+					},
+					"fromLocationName": {
+						"type": ["string", "null"]
+					},
+					"id": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"itemId": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"kind": {
+						"$ref": "#/components/schemas/InventoryMovementKind"
+					},
+					"lot": {
+						"type": "string"
+					},
+					"name": {
+						"type": "string"
+					},
+					"note": {
+						"type": ["string", "null"]
+					},
+					"quantity": {
+						"type": "string"
+					},
+					"refId": {
+						"type": ["string", "null"],
+						"format": "uuid"
+					},
+					"refType": {
+						"type": ["string", "null"]
+					},
+					"reference": {
+						"type": ["string", "null"]
+					},
+					"serials": {
+						"type": "array",
+						"items": {
+							"type": "string"
+						}
+					},
+					"sku": {
+						"type": "string"
+					},
+					"toLocationId": {
+						"type": ["string", "null"],
+						"format": "uuid"
+					},
+					"toLocationName": {
+						"type": ["string", "null"]
+					},
+					"unitCost": {
+						"type": ["string", "null"]
+					}
+				}
+			},
+			"InventoryMovementInput": {
+				"type": "object",
+				"description": "A stock movement to make: receive, transfer, adjust, return or RMA.\n(Allocating, releasing and consuming go through allocations.)",
+				"required": ["kind", "itemId", "locationId"],
+				"properties": {
+					"itemId": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"kind": {
+						"$ref": "#/components/schemas/InventoryMovementKind"
+					},
+					"locationId": {
+						"type": "string",
+						"format": "uuid",
+						"description": "Where: received into, adjusted, returned into, sent back from; a\ntransfer's source."
+					},
+					"lot": {
+						"type": ["string", "null"]
+					},
+					"note": {
+						"type": ["string", "null"],
+						"description": "Why (required for adjustments)."
+					},
+					"quantity": {
+						"type": ["string", "null"],
+						"description": "How many (signed for an adjustment). Serial items: the serial\nnumbers count."
+					},
+					"reference": {
+						"type": ["string", "null"],
+						"description": "A delivery note, PO or RMA number."
+					},
+					"serials": {
+						"type": "array",
+						"items": {
+							"type": "string"
+						}
+					},
+					"toLocationId": {
+						"type": ["string", "null"],
+						"format": "uuid",
+						"description": "A transfer's destination."
+					},
+					"unitCost": {
+						"type": ["string", "null"],
+						"description": "Receiving: what each cost."
+					}
+				},
+				"additionalProperties": false
+			},
+			"InventoryMovementKind": {
+				"type": "string",
+				"enum": ["receive", "transfer", "adjust", "allocate", "release", "consume", "return", "rma"]
+			},
+			"InventoryRefType": {
+				"type": "string",
+				"enum": ["ticket", "project"]
+			},
+			"InventoryReorderInput": {
+				"type": "object",
+				"required": ["reorderPoint"],
+				"properties": {
+					"reorderPoint": {
+						"type": "string",
+						"description": "Raise `stock.low` when what's available falls to this."
+					},
+					"reorderQty": {
+						"type": ["string", "null"],
+						"description": "How many to order then (a suggestion for purchase orders)."
+					}
+				},
+				"additionalProperties": false
+			},
+			"InventoryStockLevel": {
+				"type": "object",
+				"description": "An item at a location: on hand (by lot), allocated, and the reorder point.",
+				"required": [
+					"locationId",
+					"locationName",
+					"onHand",
+					"allocated",
+					"available",
+					"low",
+					"lots"
+				],
+				"properties": {
+					"allocated": {
+						"type": "string"
+					},
+					"available": {
+						"type": "string"
+					},
+					"locationId": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"locationName": {
+						"type": "string"
+					},
+					"lots": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/InventoryLot"
+						},
+						"description": "Lot-tracked items: what's on hand of each lot."
+					},
+					"low": {
+						"type": "boolean"
+					},
+					"onHand": {
+						"type": "string"
+					},
+					"reorderPoint": {
+						"type": ["string", "null"]
+					},
+					"reorderQty": {
+						"type": ["string", "null"]
+					}
+				}
+			},
+			"InventoryUnit": {
+				"type": "object",
+				"required": ["id", "itemId", "sku", "name", "serial", "status", "updatedAt"],
+				"properties": {
+					"allocationId": {
+						"type": ["string", "null"],
+						"format": "uuid"
+					},
+					"id": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"itemId": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"locationId": {
+						"type": ["string", "null"],
+						"format": "uuid"
+					},
+					"locationName": {
+						"type": ["string", "null"]
+					},
+					"name": {
+						"type": "string"
+					},
+					"refId": {
+						"type": ["string", "null"],
+						"format": "uuid"
+					},
+					"refType": {
+						"type": ["string", "null"],
+						"description": "What it's allocated to or was used on."
+					},
+					"serial": {
+						"type": "string"
+					},
+					"sku": {
+						"type": "string"
+					},
+					"status": {
+						"$ref": "#/components/schemas/InventoryUnitStatus"
+					},
+					"updatedAt": {
+						"type": "string",
+						"format": "date-time"
+					}
+				}
+			},
+			"InventoryUnitStatus": {
+				"type": "string",
+				"enum": ["in_stock", "allocated", "consumed", "rma", "returned"]
+			},
 			"InvitePortalContact": {
 				"type": "object",
 				"required": ["role"],
@@ -28560,6 +29871,22 @@
 					}
 				},
 				"additionalProperties": false
+			},
+			"ItemDetail": {
+				"type": "object",
+				"description": "An item, and where it is.",
+				"required": ["item", "levels"],
+				"properties": {
+					"item": {
+						"$ref": "#/components/schemas/InventoryItem"
+					},
+					"levels": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/InventoryStockLevel"
+						}
+					}
+				}
 			},
 			"KbActivity": {
 				"type": "object",
@@ -38603,6 +39930,10 @@
 					}
 				}
 			},
+			"Tracking": {
+				"type": "string",
+				"enum": ["none", "serial", "lot"]
+			},
 			"TriageAgreement": {
 				"type": "object",
 				"description": "How often the AI's suggestions matched where tickets ended up.",
@@ -38939,6 +40270,16 @@
 				"properties": {
 					"dataset": {
 						"$ref": "#/components/schemas/DatasetInput"
+					}
+				},
+				"additionalProperties": false
+			},
+			"UpdateItemRequest": {
+				"type": "object",
+				"required": ["tracking"],
+				"properties": {
+					"tracking": {
+						"$ref": "#/components/schemas/Tracking"
 					}
 				},
 				"additionalProperties": false
@@ -39910,6 +41251,10 @@
 		{
 			"name": "sales",
 			"description": "Leads, opportunities and the pipeline's stages and reasons (the sales module)"
+		},
+		{
+			"name": "inventory",
+			"description": "Locations, stocked items, serial numbers, movements and allocations (the inventory module)"
 		},
 		{
 			"name": "vault",

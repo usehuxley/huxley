@@ -5,6 +5,7 @@ import { problemMessage } from '#lib/server/problems.ts';
 import { actionsFor } from '#lib/forms/actions.server.ts';
 import { parseDuration } from '#lib/tickets/duration.ts';
 import { assignees, fieldErrors } from '#lib/tickets/server.ts';
+import { addPart, closePart, partsFor } from '#lib/inventory/server.ts';
 import type { Actions, PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async (event) => {
@@ -80,6 +81,7 @@ export const load: PageServerLoad = async (event) => {
 			params: { path: { id: event.params.id }, query: { limit: 5 } }
 		})
 	]);
+	const parts = await partsFor(event, 'ticket', event.params.id, user);
 	// A change ticket: its change details, the risk questions, its impact
 	// and the client's assets to pick from.
 	const isChange = ticket.data.typeKey === 'change' && user.activeModules.includes('change');
@@ -126,7 +128,8 @@ export const load: PageServerLoad = async (event) => {
 		changeImpact: impact.data ?? null,
 		changeAssets:
 			(changeAssets.data as { items?: { id: string; name: string }[] } | undefined)?.items ?? [],
-		similar: similar.data ?? null
+		similar: similar.data ?? null,
+		parts
 	};
 };
 
@@ -153,6 +156,8 @@ async function patch(
 }
 
 export const actions: Actions = {
+	addPart: (event) => addPart(event, 'ticket', event.params.id),
+	closePart: (event) => closePart(event),
 	linkAsset: async (event) => {
 		const assetId = formString(await event.request.formData(), 'assetId');
 		const { error: problem, response } = await api(event).POST(

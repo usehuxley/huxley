@@ -3,6 +3,7 @@ import { formString } from '#lib/forms.ts';
 import { api } from '#lib/server/api.ts';
 import { problemMessage } from '#lib/server/problems.ts';
 import { assignees } from '#lib/tickets/server.ts';
+import { addPart, closePart, partsFor } from '#lib/inventory/server.ts';
 import type { Actions, PageServerLoad } from './$types';
 
 const VIEWS = ['list', 'board', 'timeline', 'calendar'] as const;
@@ -40,7 +41,8 @@ export const load: PageServerLoad = async (event) => {
 		month: event.url.searchParams.get('month'),
 		suggestions,
 		canWrite,
-		canManage
+		canManage,
+		parts: await partsFor(event, 'project', event.params.id, user)
 	};
 };
 
@@ -103,6 +105,8 @@ const num = (form: FormData, key: string) => {
 };
 
 export const actions: Actions = {
+	addPart: (event) => addPart(event, 'project', event.params.id),
+	closePart: (event) => closePart(event),
 	milestone: async (event) => {
 		const form = await event.request.formData();
 		const { response } = await api(event).POST('/api/v1/projects/{id}/milestones/{milestone}', {

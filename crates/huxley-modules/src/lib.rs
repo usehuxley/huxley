@@ -131,7 +131,7 @@ pub const REGISTRY: &[Module] = &[
         description: "Stock, warehouses, and purchase orders.",
         requires: &["contracts"],
         phase: 10,
-        released: false,
+        released: true,
     },
     Module {
         key: "sales",

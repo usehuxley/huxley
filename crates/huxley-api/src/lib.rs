@@ -32,6 +32,7 @@ pub mod health;
 mod hook_routes;
 pub mod idempotency;
 mod integration_routes;
+pub mod inventory_routes;
 pub mod kb_routes;
 pub mod mcp;
 pub mod mfa_routes;

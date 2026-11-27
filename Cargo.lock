@@ -2027,6 +2027,7 @@ dependencies = [
  "huxley-forms",
  "huxley-hwf",
  "huxley-integrations",
+ "huxley-inventory",
  "huxley-knowledge",
  "huxley-mail",
  "huxley-modules",
@@ -2440,6 +2441,22 @@ dependencies = [
  "utoipa",
  "uuid",
  "zeroize",
+]
+
+[[package]]
+name = "huxley-inventory"
+version = "0.1.0"
+dependencies = [
+ "huxley-core",
+ "huxley-db",
+ "rust_decimal",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "thiserror 2.0.21",
+ "time",
+ "utoipa",
+ "uuid",
 ]
 
 [[package]]

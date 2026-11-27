@@ -123,7 +123,15 @@
 				label: 'Business',
 				icon: Briefcase,
 				href: '/projects',
-				paths: ['/sales', '/projects', '/catalog', '/dashboards', '/people', '/timesheets'],
+				paths: [
+					'/sales',
+					'/projects',
+					'/catalog',
+					'/inventory',
+					'/dashboards',
+					'/people',
+					'/timesheets'
+				],
 				menu: [
 					{
 						items: [
@@ -132,6 +140,7 @@
 							...item(on('sales') && can('sales:read'), '/sales/quotes', 'Quotes'),
 							...item(on('projects') && can('project:read'), '/projects', 'Projects'),
 							...item(on('contracts') && can('catalog:read'), '/catalog', 'Catalog'),
+							...item(on('inventory') && can('inventory:read'), '/inventory', 'Inventory'),
 							...item(can('dashboard:read'), '/dashboards', 'Dashboards'),
 							...item(on('workforce') && can('workforce:read'), '/people', 'People'),
 							...item(

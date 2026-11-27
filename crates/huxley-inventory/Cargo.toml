@@ -1,0 +1,24 @@
+[package]
+name = "huxley-inventory"
+description = "The inventory module for Huxley: locations, stock, serials, movements and allocations"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[dependencies]
+huxley-core.workspace = true
+huxley-db.workspace = true
+rust_decimal.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sqlx.workspace = true
+thiserror.workspace = true
+time.workspace = true
+utoipa.workspace = true
+uuid.workspace = true
+
+[lints]
+workspace = true
