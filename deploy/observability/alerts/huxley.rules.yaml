@@ -1,0 +1,112 @@
+# Prometheus alert rules for Huxley (ADR-091). Metric names are as the
+# OpenTelemetry Collector's Prometheus exporter (or Prometheus' OTLP
+# receiver) writes them: dots become underscores, units and `_total` are
+# appended. Load into Prometheus (rule_files), wrap in a PrometheusRule for
+# the Prometheus Operator, or import into Grafana alerting / Mimir.
+groups:
+  - name: huxley-api
+    rules:
+      - alert: HuxleyApiErrors
+        expr: |
+          sum(rate(http_server_request_duration_seconds_count{http_response_status_code=~"5.."}[5m]))
+            / sum(rate(http_server_request_duration_seconds_count[5m])) > 0.05
+          and sum(rate(http_server_request_duration_seconds_count[5m])) > 0.1
+        for: 10m
+        labels: { severity: critical }
+        annotations:
+          summary: More than 5% of API requests are failing
+          description: "{{ $value | humanizePercentage }} of requests answered 5xx over the last 5 minutes. Check the API logs and the database."
+      - alert: HuxleyApiSlow
+        expr: |
+          histogram_quantile(0.95, sum by (le) (rate(http_server_request_duration_seconds_bucket[5m]))) > 2
+          and sum(rate(http_server_request_duration_seconds_count[5m])) > 0.1
+        for: 15m
+        labels: { severity: warning }
+        annotations:
+          summary: API requests are slow
+          description: "95th percentile latency is {{ $value | humanizeDuration }}. The Service dashboard shows the slowest routes."
+
+  - name: huxley-engine
+    rules:
+      - alert: HuxleyJobsWaiting
+        expr: max(huxley_jobs_oldest_due_seconds) > 300
+        for: 5m
+        labels: { severity: critical }
+        annotations:
+          summary: Workflow jobs are waiting for workers
+          description: "The oldest due job has waited {{ $value | humanizeDuration }}. Workers are down, stuck, or too few (scale the worker pools)."
+      - alert: HuxleyJobsDelayed
+        expr: max(huxley_jobs_oldest_due_seconds) > 60
+        for: 10m
+        labels: { severity: warning }
+        annotations:
+          summary: Workflow jobs are delayed
+          description: "The oldest due job has waited {{ $value | humanizeDuration }}."
+      - alert: HuxleyJobsDeadLettered
+        expr: sum by (kind) (increase(huxley_jobs_dead_lettered_total[15m])) > 0
+        labels: { severity: warning }
+        annotations:
+          summary: "Workflow {{ $labels.kind }} jobs failed repeatedly and were given up on"
+          description: "{{ $value | humanize }} in the last 15 minutes. See Settings → Workflow jobs to retry them."
+      - alert: HuxleyRunsFailing
+        expr: |
+          sum(rate(huxley_runs_finished_total{status="failed"}[15m]))
+            / sum(rate(huxley_runs_finished_total[15m])) > 0.25
+          and sum(rate(huxley_runs_finished_total[15m])) > 0.01
+        for: 15m
+        labels: { severity: warning }
+        annotations:
+          summary: Many workflow runs are failing
+          description: "{{ $value | humanizePercentage }} of runs failed over the last 15 minutes. A connection or integration may be down."
+      - alert: HuxleySchedulerSilent
+        expr: absent(huxley_jobs_oldest_due_seconds)
+        for: 10m
+        labels: { severity: critical }
+        annotations:
+          summary: The Huxley scheduler isn't reporting
+          description: "No queue metrics for 10 minutes: the scheduler role is down (timers, schedules, retention, audit sealing and streaming stop with it), or telemetry export is broken."
+
+  - name: huxley-audit
+    rules:
+      - alert: HuxleyAuditNotSealing
+        expr: min_over_time(max(huxley_audit_unsealed)[10m:1m]) > 100
+        labels: { severity: critical }
+        annotations:
+          summary: Audit records aren't being sealed into the hash chain
+          description: "{{ $value | humanize }} records have waited for 10 minutes. The scheduler's sealer has stopped; SIEM streams stall with it."
+      - alert: HuxleyAuditStreamFailing
+        expr: max by (stream) (huxley_audit_stream_failures) >= 5
+        for: 10m
+        labels: { severity: warning }
+        annotations:
+          summary: "Audit stream {{ $labels.stream }} can't reach its SIEM"
+          description: "{{ $value | humanize }} failed attempts in a row. Settings → Audit streaming shows the error; records wait and catch up once it's fixed."
+      - alert: HuxleyAuditStreamBehind
+        expr: max by (stream) (huxley_audit_stream_behind) > 10000
+        for: 30m
+        labels: { severity: warning }
+        annotations:
+          summary: "Audit stream {{ $labels.stream }} is far behind"
+          description: "{{ $value | humanize }} records are waiting to be shipped."
+
+  - name: huxley-database
+    rules:
+      - alert: HuxleyDatabasePoolSaturated
+        expr: |
+          sum by (instance, db_client_connection_pool_name) (db_client_connection_count{db_client_connection_state="used"})
+            / sum by (instance, db_client_connection_pool_name) (db_client_connection_max) > 0.9
+        for: 10m
+        labels: { severity: warning }
+        annotations:
+          summary: "{{ $labels.instance }}: the {{ $labels.db_client_connection_pool_name }} connection pool is nearly full"
+          description: "{{ $value | humanizePercentage }} of its connections are in use. Requests and jobs will queue for connections. Raise database.max_connections, add replicas, or put PgBouncer in front."
+
+  - name: huxley-security
+    rules:
+      - alert: HuxleySignInsRateLimited
+        expr: sum(rate(huxley_rate_limit_rejected_total{scope="login"}[5m])) * 60 > 30
+        for: 10m
+        labels: { severity: warning }
+        annotations:
+          summary: Many sign-in attempts are being refused
+          description: "{{ $value | humanize }} refused sign-in attempts a minute: possibly password spraying. The audit log shows the addresses."

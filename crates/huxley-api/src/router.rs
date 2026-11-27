@@ -118,6 +118,7 @@ pub fn router(state: AppState) -> Router {
         .merge(upload_routes(&state))
         .merge(crate::retention_routes::routes())
         .merge(crate::audit_stream_routes::routes())
+        .route_layer(middleware::from_fn(crate::metrics::track))
         .layer(middleware::from_fn(csrf::require_header));
 
     let stack = ServiceBuilder::new()
@@ -143,8 +144,7 @@ pub fn router(state: AppState) -> Router {
         .nest("/api/v1", api_v1)
         // The client portal's own API: portal sessions only (ADR-040).
         .nest("/api/portal/v1", portal_api())
-        // SCIM provisioning for identity providers (ADR-088): its own token.
-        .nest("/scim/v2", crate::scim_routes::routes())
+        .nest("/scim/v2", scim_api())
         .fallback(not_found)
         .layer(stack);
 
@@ -178,7 +178,14 @@ fn portal_api() -> Router<AppState> {
         .merge(crate::portal_quote_routes::routes())
         .merge(crate::portal_invoice_routes::routes())
         .merge(crate::csat_routes::portal_routes())
+        .route_layer(middleware::from_fn(crate::metrics::track))
         .layer(middleware::from_fn(csrf::require_header))
+}
+
+/// SCIM for identity providers (ADR-088): its own token, no anti-forgery
+/// header (no cookies).
+fn scim_api() -> Router<AppState> {
+    crate::scim_routes::routes().route_layer(middleware::from_fn(crate::metrics::track))
 }
 
 /// Webhooks, public forms and callbacks: outside /api/v1 (no sessions or

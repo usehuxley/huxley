@@ -116,6 +116,7 @@ pub(crate) async fn record_failure(
     let dead = queue::fail(&mut tx, job, &failure.to_string()).await?;
     if dead {
         tracing::error!(job = %job.id, kind = %job.kind, "job dead-lettered after repeated failures");
+        crate::metrics::job_dead(&job.kind);
         if let (queue::kind::STEP, Some(org_id), Some(run_id), Some(key)) = (
             job.kind.as_str(),
             job.org_id,
@@ -190,8 +191,14 @@ async fn work(
             worker.clone(),
             config.lease,
         ));
+        let started = std::time::Instant::now();
         let result = engine.process(&job, &worker).await;
         heartbeat.abort();
+        crate::metrics::job_done(
+            &job.kind,
+            if result.is_ok() { "ok" } else { "error" },
+            started.elapsed().as_secs_f64(),
+        );
         if let Err(failure) = result
             && let Err(e) = record_failure(&engine, &job, &failure).await
         {

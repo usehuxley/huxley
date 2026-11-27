@@ -39,6 +39,7 @@ mod integration_routes;
 pub mod inventory_routes;
 pub mod kb_routes;
 pub mod mcp;
+pub mod metrics;
 pub mod mfa_routes;
 pub mod module_routes;
 pub mod notification_routes;

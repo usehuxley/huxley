@@ -32,7 +32,13 @@ impl RateLimiter {
     /// requests needing the database fail anyway.
     pub async fn check(&self, ip: IpAddr) -> bool {
         match self.hit(ip).await {
-            Ok(hits) => u32::try_from(hits).unwrap_or(u32::MAX) <= self.limit,
+            Ok(hits) => {
+                let allowed = u32::try_from(hits).unwrap_or(u32::MAX) <= self.limit;
+                if !allowed {
+                    crate::metrics::rate_limited(self.scope);
+                }
+                allowed
+            }
             Err(e) => {
                 tracing::warn!(error = %e, scope = self.scope, "rate limit check failed; allowing");
                 true

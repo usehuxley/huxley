@@ -151,6 +151,16 @@ pub fn init(config: &TelemetryConfig, role: &str) -> anyhow::Result<TelemetryGua
             KeyValue::new("service.version", env!("CARGO_PKG_VERSION")),
             KeyValue::new("deployment.environment.name", config.environment.clone()),
             KeyValue::new("huxley.role", role.to_owned()),
+            // Tells processes apart (Prometheus' `instance`): the pod or host
+            // name, with the process id for several on one host.
+            KeyValue::new(
+                "service.instance.id",
+                format!(
+                    "{}-{}",
+                    std::env::var("HOSTNAME").unwrap_or_else(|_| "huxley".into()),
+                    std::process::id()
+                ),
+            ),
         ])
         .build();
 
