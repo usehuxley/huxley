@@ -20,9 +20,11 @@ export const actions: Actions = {
 	saveCategory: async (event) => {
 		const form = await event.request.formData();
 		const id = formString(form, 'id');
+		const kind: 'mileage' | 'expense' =
+			formString(form, 'kind') === 'mileage' ? 'mileage' : 'expense';
 		const body = {
 			name: formString(form, 'name'),
-			kind: formString(form, 'kind') === 'mileage' ? 'mileage' : 'expense',
+			kind,
 			billable: form.get('billable') === 'on',
 			reimbursable: form.get('reimbursable') === 'on',
 			markupPct: formString(form, 'markupPct').trim() || null,
