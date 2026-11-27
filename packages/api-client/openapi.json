@@ -13580,6 +13580,488 @@
 				}
 			}
 		},
+		"/api/v1/purchase-orders": {
+			"get": {
+				"tags": ["purchasing"],
+				"summary": "Purchase orders you can see (without lines), newest first.",
+				"operationId": "list_purchase_orders",
+				"parameters": [
+					{
+						"name": "status",
+						"in": "query",
+						"required": false,
+						"schema": {
+							"$ref": "#/components/schemas/PurchaseOrderStatus"
+						}
+					},
+					{
+						"name": "vendorId",
+						"in": "query",
+						"required": false,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					},
+					{
+						"name": "open",
+						"in": "query",
+						"description": "Only orders still to arrive (approved, ordered or partly received).",
+						"required": false,
+						"schema": {
+							"type": "boolean"
+						}
+					},
+					{
+						"name": "q",
+						"in": "query",
+						"description": "`PO-12`, a number, or the vendor's name.",
+						"required": false,
+						"schema": {
+							"type": "string"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "array",
+									"items": {
+										"$ref": "#/components/schemas/PurchaseOrder"
+									}
+								}
+							}
+						}
+					}
+				}
+			},
+			"post": {
+				"tags": ["purchasing"],
+				"summary": "Drafts a purchase order.",
+				"operationId": "create_purchase_order",
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/CreateOrderRequest"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"201": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/PurchaseOrder"
+								}
+							}
+						}
+					},
+					"422": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/purchase-orders/reorder": {
+			"post": {
+				"tags": ["purchasing"],
+				"summary": "Drafts an order per vendor for what's running low (items whose catalog\nvendor matches a vendor's name).",
+				"operationId": "draft_reorders",
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/OrgBody"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "array",
+									"items": {
+										"$ref": "#/components/schemas/PurchaseOrder"
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/purchase-orders/settings": {
+			"get": {
+				"tags": ["purchasing"],
+				"operationId": "get_purchasing_settings",
+				"parameters": [
+					{
+						"name": "orgId",
+						"in": "query",
+						"description": "The buying organization.",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/PurchasingSettings"
+								}
+							}
+						}
+					}
+				}
+			},
+			"put": {
+				"tags": ["purchasing"],
+				"operationId": "put_purchasing_settings",
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/PurchasingSettings"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/PurchasingSettings"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/purchase-orders/suggestions": {
+			"get": {
+				"tags": ["purchasing"],
+				"summary": "What's running low at the organization's locations, and what to order.",
+				"operationId": "reorder_suggestions",
+				"parameters": [
+					{
+						"name": "orgId",
+						"in": "query",
+						"description": "The buying organization.",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "array",
+									"items": {
+										"$ref": "#/components/schemas/ReorderSuggestion"
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/purchase-orders/{id}": {
+			"get": {
+				"tags": ["purchasing"],
+				"operationId": "get_purchase_order",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/PurchaseOrder"
+								}
+							}
+						}
+					}
+				}
+			},
+			"put": {
+				"tags": ["purchasing"],
+				"summary": "Changes a draft (send the version you read).",
+				"operationId": "update_purchase_order",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/PurchaseOrderInput"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/PurchaseOrder"
+								}
+							}
+						}
+					},
+					"409": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			},
+			"delete": {
+				"tags": ["purchasing"],
+				"operationId": "delete_purchase_order",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"responses": {
+					"204": {},
+					"409": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/purchase-orders/{id}/pdf": {
+			"get": {
+				"tags": ["purchasing"],
+				"summary": "The order as a PDF, to send to the vendor.",
+				"operationId": "purchase_order_pdf",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/pdf": {
+								"schema": {
+									"type": "array",
+									"items": {
+										"type": "integer",
+										"format": "int32",
+										"minimum": 0
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/purchase-orders/{id}/receipts": {
+			"get": {
+				"tags": ["purchasing"],
+				"operationId": "purchase_order_receipts",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "array",
+									"items": {
+										"$ref": "#/components/schemas/PurchaseOrderReceipt"
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/purchase-orders/{id}/receive": {
+			"post": {
+				"tags": ["purchasing"],
+				"summary": "Takes in a delivery, in part or in full.",
+				"operationId": "receive_purchase_order",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/PurchaseOrderReceiptInput"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/PurchaseOrder"
+								}
+							}
+						}
+					},
+					"409": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					},
+					"422": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/purchase-orders/{id}/step": {
+			"post": {
+				"tags": ["purchasing"],
+				"summary": "Takes an order a step along: submit, approve, reject, order, cancel or\nclose. Approving and rejecting take `procurement:approve`.",
+				"operationId": "step_purchase_order",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/PurchaseOrderStepInput"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/PurchaseOrder"
+								}
+							}
+						}
+					},
+					"409": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
 		"/api/v1/queues": {
 			"get": {
 				"tags": ["servicedesk"],
@@ -20451,6 +20933,172 @@
 									"items": {
 										"$ref": "#/components/schemas/VaultReveal"
 									}
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/vendors": {
+			"get": {
+				"tags": ["purchasing"],
+				"operationId": "list_vendors",
+				"parameters": [
+					{
+						"name": "q",
+						"in": "query",
+						"description": "Name contains.",
+						"required": false,
+						"schema": {
+							"type": "string"
+						}
+					},
+					{
+						"name": "all",
+						"in": "query",
+						"description": "Include vendors no longer used.",
+						"required": false,
+						"schema": {
+							"type": "boolean"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "array",
+									"items": {
+										"$ref": "#/components/schemas/Vendor"
+									}
+								}
+							}
+						}
+					}
+				}
+			},
+			"post": {
+				"tags": ["purchasing"],
+				"operationId": "create_vendor",
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/CreateVendorRequest"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"201": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Vendor"
+								}
+							}
+						}
+					},
+					"422": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/vendors/{id}": {
+			"get": {
+				"tags": ["purchasing"],
+				"operationId": "get_vendor",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Vendor"
+								}
+							}
+						}
+					}
+				}
+			},
+			"put": {
+				"tags": ["purchasing"],
+				"operationId": "update_vendor",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/VendorInput"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Vendor"
+								}
+							}
+						}
+					}
+				}
+			},
+			"delete": {
+				"tags": ["purchasing"],
+				"summary": "Removes a vendor with no orders; turn others off instead.",
+				"operationId": "delete_vendor",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"responses": {
+					"204": {},
+					"409": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
 								}
 							}
 						}
@@ -27437,6 +28085,21 @@
 				},
 				"additionalProperties": false
 			},
+			"CreateOrderRequest": {
+				"type": "object",
+				"required": ["orgId", "order"],
+				"properties": {
+					"order": {
+						"$ref": "#/components/schemas/PurchaseOrderInput"
+					},
+					"orgId": {
+						"type": "string",
+						"format": "uuid",
+						"description": "The organization buying (usually the provider)."
+					}
+				},
+				"additionalProperties": false
+			},
 			"CreateOrgRequest": {
 				"type": "object",
 				"required": ["parentId", "kind", "name"],
@@ -27585,6 +28248,20 @@
 						"$ref": "#/components/schemas/UserView"
 					}
 				}
+			},
+			"CreateVendorRequest": {
+				"type": "object",
+				"required": ["orgId", "vendor"],
+				"properties": {
+					"orgId": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"vendor": {
+						"$ref": "#/components/schemas/VendorInput"
+					}
+				},
+				"additionalProperties": false
 			},
 			"CreateWorkflowRequest": {
 				"type": "object",
@@ -32068,6 +32745,17 @@
 				"type": "string",
 				"enum": ["open", "won", "lost"]
 			},
+			"OrgBody": {
+				"type": "object",
+				"required": ["orgId"],
+				"properties": {
+					"orgId": {
+						"type": "string",
+						"format": "uuid"
+					}
+				},
+				"additionalProperties": false
+			},
 			"OrgKind": {
 				"type": "string",
 				"description": "`provider`: the owning company, an MSP brand, or a division. `client`: a\ncustomer of a provider, or a site/sub-org of one.",
@@ -34957,6 +35645,386 @@
 					}
 				}
 			},
+			"PurchaseOrder": {
+				"type": "object",
+				"required": [
+					"id",
+					"orgId",
+					"number",
+					"vendorId",
+					"vendorName",
+					"status",
+					"currency",
+					"total",
+					"version",
+					"createdAt",
+					"updatedAt",
+					"lines"
+				],
+				"properties": {
+					"approvedAt": {
+						"type": ["string", "null"],
+						"format": "date-time"
+					},
+					"approvedByName": {
+						"type": ["string", "null"]
+					},
+					"closedAt": {
+						"type": ["string", "null"],
+						"format": "date-time"
+					},
+					"createdAt": {
+						"type": "string",
+						"format": "date-time"
+					},
+					"createdByName": {
+						"type": ["string", "null"]
+					},
+					"currency": {
+						"type": "string"
+					},
+					"expectedOn": {
+						"type": ["string", "null"],
+						"format": "date"
+					},
+					"id": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"lines": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/PurchaseOrderLine"
+						}
+					},
+					"notes": {
+						"type": ["string", "null"]
+					},
+					"number": {
+						"type": "integer",
+						"format": "int64"
+					},
+					"orderedAt": {
+						"type": ["string", "null"],
+						"format": "date-time"
+					},
+					"orgId": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"rejection": {
+						"type": ["string", "null"]
+					},
+					"shipTo": {
+						"type": ["string", "null"],
+						"format": "uuid"
+					},
+					"shipToName": {
+						"type": ["string", "null"]
+					},
+					"status": {
+						"$ref": "#/components/schemas/PurchaseOrderStatus"
+					},
+					"submittedAt": {
+						"type": ["string", "null"],
+						"format": "date-time"
+					},
+					"total": {
+						"type": "string"
+					},
+					"updatedAt": {
+						"type": "string",
+						"format": "date-time"
+					},
+					"vendorEmail": {
+						"type": ["string", "null"]
+					},
+					"vendorId": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"vendorName": {
+						"type": "string"
+					},
+					"vendorReference": {
+						"type": ["string", "null"]
+					},
+					"version": {
+						"type": "integer",
+						"format": "int32"
+					}
+				}
+			},
+			"PurchaseOrderInput": {
+				"type": "object",
+				"required": ["vendorId"],
+				"properties": {
+					"currency": {
+						"type": ["string", "null"],
+						"description": "Defaults to the vendor's."
+					},
+					"expectedOn": {
+						"type": ["string", "null"],
+						"format": "date"
+					},
+					"lines": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/PurchaseOrderLineInput"
+						},
+						"description": "Every line, in order (replaces them all)."
+					},
+					"notes": {
+						"type": ["string", "null"]
+					},
+					"shipTo": {
+						"type": ["string", "null"],
+						"format": "uuid"
+					},
+					"vendorId": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"vendorReference": {
+						"type": ["string", "null"]
+					},
+					"version": {
+						"type": ["integer", "null"],
+						"format": "int32",
+						"description": "The version you read (updates only)."
+					}
+				},
+				"additionalProperties": false
+			},
+			"PurchaseOrderLine": {
+				"type": "object",
+				"required": ["id", "name", "quantity", "unitCost", "total", "received"],
+				"properties": {
+					"forRefId": {
+						"type": ["string", "null"],
+						"format": "uuid"
+					},
+					"forRefType": {
+						"oneOf": [
+							{
+								"$ref": "#/components/schemas/InventoryRefType"
+							},
+							{
+								"type": "null"
+							}
+						]
+					},
+					"id": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"itemId": {
+						"type": ["string", "null"],
+						"format": "uuid"
+					},
+					"name": {
+						"type": "string"
+					},
+					"quantity": {
+						"type": "string"
+					},
+					"received": {
+						"type": "string"
+					},
+					"sku": {
+						"type": ["string", "null"]
+					},
+					"total": {
+						"type": "string"
+					},
+					"tracking": {
+						"oneOf": [
+							{
+								"$ref": "#/components/schemas/Tracking",
+								"description": "How the stocked item is tracked (none for a line of its own)."
+							},
+							{
+								"type": "null"
+							}
+						]
+					},
+					"unitCost": {
+						"type": "string"
+					}
+				}
+			},
+			"PurchaseOrderLineInput": {
+				"type": "object",
+				"required": ["quantity"],
+				"properties": {
+					"forRefId": {
+						"type": ["string", "null"],
+						"format": "uuid"
+					},
+					"forRefType": {
+						"oneOf": [
+							{
+								"$ref": "#/components/schemas/InventoryRefType",
+								"description": "Bought for a ticket or project: allocated to it on arrival."
+							},
+							{
+								"type": "null"
+							}
+						]
+					},
+					"itemId": {
+						"type": ["string", "null"],
+						"format": "uuid",
+						"description": "A stocked item: its SKU and name fill what's left out."
+					},
+					"name": {
+						"type": ["string", "null"]
+					},
+					"quantity": {
+						"type": "string"
+					},
+					"sku": {
+						"type": ["string", "null"]
+					},
+					"unitCost": {
+						"type": ["string", "null"]
+					}
+				},
+				"additionalProperties": false
+			},
+			"PurchaseOrderReceipt": {
+				"type": "object",
+				"required": ["id", "lineId", "name", "quantity", "lot", "serials", "receivedAt"],
+				"properties": {
+					"id": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"lineId": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"locationName": {
+						"type": ["string", "null"]
+					},
+					"lot": {
+						"type": "string"
+					},
+					"name": {
+						"type": "string"
+					},
+					"quantity": {
+						"type": "string"
+					},
+					"receivedAt": {
+						"type": "string",
+						"format": "date-time"
+					},
+					"receivedByName": {
+						"type": ["string", "null"]
+					},
+					"serials": {
+						"type": "array",
+						"items": {
+							"type": "string"
+						}
+					}
+				}
+			},
+			"PurchaseOrderReceiptInput": {
+				"type": "object",
+				"required": ["lines"],
+				"properties": {
+					"lines": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/PurchaseOrderReceiptLine"
+						}
+					},
+					"locationId": {
+						"type": ["string", "null"],
+						"format": "uuid",
+						"description": "Where it was put (defaults to the order's ship-to location)."
+					},
+					"reference": {
+						"type": ["string", "null"],
+						"description": "A delivery note or packing slip."
+					}
+				},
+				"additionalProperties": false
+			},
+			"PurchaseOrderReceiptLine": {
+				"type": "object",
+				"required": ["lineId"],
+				"properties": {
+					"lineId": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"lot": {
+						"type": ["string", "null"]
+					},
+					"quantity": {
+						"type": ["string", "null"]
+					},
+					"serials": {
+						"type": "array",
+						"items": {
+							"type": "string"
+						}
+					}
+				},
+				"additionalProperties": false
+			},
+			"PurchaseOrderStatus": {
+				"type": "string",
+				"enum": [
+					"draft",
+					"submitted",
+					"approved",
+					"ordered",
+					"partially_received",
+					"received",
+					"cancelled"
+				]
+			},
+			"PurchaseOrderStep": {
+				"type": "string",
+				"description": "What can happen to an order next.",
+				"enum": ["submit", "approve", "reject", "order", "cancel", "close"]
+			},
+			"PurchaseOrderStepInput": {
+				"type": "object",
+				"required": ["step", "version"],
+				"properties": {
+					"comment": {
+						"type": ["string", "null"],
+						"description": "Why (rejecting), or the vendor's order reference (ordering)."
+					},
+					"step": {
+						"$ref": "#/components/schemas/PurchaseOrderStep"
+					},
+					"version": {
+						"type": "integer",
+						"format": "int32"
+					}
+				},
+				"additionalProperties": false
+			},
+			"PurchasingSettings": {
+				"type": "object",
+				"required": ["orgId"],
+				"properties": {
+					"approvalAbove": {
+						"type": ["string", "null"],
+						"description": "Orders over this total need approval; none: never."
+					},
+					"orgId": {
+						"type": "string",
+						"format": "uuid"
+					}
+				}
+			},
 			"Query": {
 				"type": "object",
 				"description": "Which rows: equality filters on columns, and optionally one\norganization's rows only.",
@@ -35767,6 +36835,62 @@
 					}
 				},
 				"additionalProperties": false
+			},
+			"ReorderSuggestion": {
+				"type": "object",
+				"description": "Something running low, and what to order.",
+				"required": [
+					"itemId",
+					"sku",
+					"name",
+					"locationId",
+					"locationName",
+					"available",
+					"reorderPoint",
+					"onOrder",
+					"quantity"
+				],
+				"properties": {
+					"available": {
+						"type": "string"
+					},
+					"itemId": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"locationId": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"locationName": {
+						"type": "string"
+					},
+					"name": {
+						"type": "string"
+					},
+					"onOrder": {
+						"type": "string",
+						"description": "Already on open orders."
+					},
+					"quantity": {
+						"type": "string",
+						"description": "What to order: the reorder quantity (or back above the point), less\nwhat's on order."
+					},
+					"reorderPoint": {
+						"type": "string"
+					},
+					"sku": {
+						"type": "string"
+					},
+					"vendorId": {
+						"type": ["string", "null"],
+						"format": "uuid",
+						"description": "The vendor whose name matches the catalog product's."
+					},
+					"vendorName": {
+						"type": ["string", "null"]
+					}
+				}
 			},
 			"ReportSharing": {
 				"type": "object",
@@ -40747,6 +41871,96 @@
 					}
 				}
 			},
+			"Vendor": {
+				"type": "object",
+				"required": ["id", "orgId", "name", "currency", "active", "openOrders", "createdAt"],
+				"properties": {
+					"accountNumber": {
+						"type": ["string", "null"]
+					},
+					"active": {
+						"type": "boolean"
+					},
+					"address": {
+						"type": ["string", "null"]
+					},
+					"createdAt": {
+						"type": "string",
+						"format": "date-time"
+					},
+					"currency": {
+						"type": "string"
+					},
+					"email": {
+						"type": ["string", "null"]
+					},
+					"id": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"name": {
+						"type": "string"
+					},
+					"notes": {
+						"type": ["string", "null"]
+					},
+					"openOrders": {
+						"type": "integer",
+						"format": "int64",
+						"description": "Purchase orders not yet received or cancelled."
+					},
+					"orgId": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"paymentTerms": {
+						"type": ["string", "null"]
+					},
+					"phone": {
+						"type": ["string", "null"]
+					},
+					"website": {
+						"type": ["string", "null"]
+					}
+				}
+			},
+			"VendorInput": {
+				"type": "object",
+				"required": ["name"],
+				"properties": {
+					"accountNumber": {
+						"type": ["string", "null"]
+					},
+					"active": {
+						"type": "boolean"
+					},
+					"address": {
+						"type": ["string", "null"]
+					},
+					"currency": {
+						"type": "string"
+					},
+					"email": {
+						"type": ["string", "null"]
+					},
+					"name": {
+						"type": "string"
+					},
+					"notes": {
+						"type": ["string", "null"]
+					},
+					"paymentTerms": {
+						"type": ["string", "null"]
+					},
+					"phone": {
+						"type": ["string", "null"]
+					},
+					"website": {
+						"type": ["string", "null"]
+					}
+				},
+				"additionalProperties": false
+			},
 			"VerifyEmailRequest": {
 				"type": "object",
 				"required": ["token"],
@@ -41255,6 +42469,10 @@
 		{
 			"name": "inventory",
 			"description": "Locations, stocked items, serial numbers, movements and allocations (the inventory module)"
+		},
+		{
+			"name": "purchasing",
+			"description": "Vendors and purchase orders: approval, ordering and receiving into inventory (the inventory module)"
 		},
 		{
 			"name": "vault",

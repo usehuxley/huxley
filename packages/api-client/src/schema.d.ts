@@ -4934,6 +4934,164 @@ export interface paths {
 		patch: operations['update_project_task'];
 		trace?: never;
 	};
+	'/api/v1/purchase-orders': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** Purchase orders you can see (without lines), newest first. */
+		get: operations['list_purchase_orders'];
+		put?: never;
+		/** Drafts a purchase order. */
+		post: operations['create_purchase_order'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/purchase-orders/reorder': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/**
+		 * Drafts an order per vendor for what's running low (items whose catalog
+		 *     vendor matches a vendor's name).
+		 */
+		post: operations['draft_reorders'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/purchase-orders/settings': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get: operations['get_purchasing_settings'];
+		put: operations['put_purchasing_settings'];
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/purchase-orders/suggestions': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** What's running low at the organization's locations, and what to order. */
+		get: operations['reorder_suggestions'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/purchase-orders/{id}': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get: operations['get_purchase_order'];
+		/** Changes a draft (send the version you read). */
+		put: operations['update_purchase_order'];
+		post?: never;
+		delete: operations['delete_purchase_order'];
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/purchase-orders/{id}/pdf': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** The order as a PDF, to send to the vendor. */
+		get: operations['purchase_order_pdf'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/purchase-orders/{id}/receipts': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get: operations['purchase_order_receipts'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/purchase-orders/{id}/receive': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/** Takes in a delivery, in part or in full. */
+		post: operations['receive_purchase_order'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/purchase-orders/{id}/step': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/**
+		 * Takes an order a step along: submit, approve, reject, order, cancel or
+		 *     close. Approving and rejecting take `procurement:approve`.
+		 */
+		post: operations['step_purchase_order'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
 	'/api/v1/queues': {
 		parameters: {
 			query?: never;
@@ -7360,6 +7518,39 @@ export interface paths {
 		put?: never;
 		post?: never;
 		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/vendors': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get: operations['list_vendors'];
+		put?: never;
+		post: operations['create_vendor'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/vendors/{id}': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get: operations['get_vendor'];
+		put: operations['update_vendor'];
+		post?: never;
+		/** Removes a vendor with no orders; turn others off instead. */
+		delete: operations['delete_vendor'];
 		options?: never;
 		head?: never;
 		patch?: never;
@@ -10070,6 +10261,14 @@ export interface components {
 			 */
 			orgId: string;
 		};
+		CreateOrderRequest: {
+			order: components['schemas']['PurchaseOrderInput'];
+			/**
+			 * Format: uuid
+			 * @description The organization buying (usually the provider).
+			 */
+			orgId: string;
+		};
 		CreateOrgRequest: {
 			kind: components['schemas']['OrgKindInput'];
 			name: string;
@@ -10139,6 +10338,11 @@ export interface components {
 			/** @description An invitation email was sent. */
 			invited: boolean;
 			user: components['schemas']['UserView'];
+		};
+		CreateVendorRequest: {
+			/** Format: uuid */
+			orgId: string;
+			vendor: components['schemas']['VendorInput'];
 		};
 		CreateWorkflowRequest: {
 			/**
@@ -12042,6 +12246,10 @@ export interface components {
 		};
 		/** @enum {string} */
 		OpportunityStatus: 'open' | 'won' | 'lost';
+		OrgBody: {
+			/** Format: uuid */
+			orgId: string;
+		};
 		/**
 		 * @description `provider`: the owning company, an MSP brand, or a division. `client`: a
 		 *     customer of a provider, or a site/sub-org of one.
@@ -13141,6 +13349,153 @@ export interface components {
 		PublishRequest: {
 			notes?: string | null;
 		};
+		PurchaseOrder: {
+			/** Format: date-time */
+			approvedAt?: string | null;
+			approvedByName?: string | null;
+			/** Format: date-time */
+			closedAt?: string | null;
+			/** Format: date-time */
+			createdAt: string;
+			createdByName?: string | null;
+			currency: string;
+			/** Format: date */
+			expectedOn?: string | null;
+			/** Format: uuid */
+			id: string;
+			lines: components['schemas']['PurchaseOrderLine'][];
+			notes?: string | null;
+			/** Format: int64 */
+			number: number;
+			/** Format: date-time */
+			orderedAt?: string | null;
+			/** Format: uuid */
+			orgId: string;
+			rejection?: string | null;
+			/** Format: uuid */
+			shipTo?: string | null;
+			shipToName?: string | null;
+			status: components['schemas']['PurchaseOrderStatus'];
+			/** Format: date-time */
+			submittedAt?: string | null;
+			total: string;
+			/** Format: date-time */
+			updatedAt: string;
+			vendorEmail?: string | null;
+			/** Format: uuid */
+			vendorId: string;
+			vendorName: string;
+			vendorReference?: string | null;
+			/** Format: int32 */
+			version: number;
+		};
+		PurchaseOrderInput: {
+			/** @description Defaults to the vendor's. */
+			currency?: string | null;
+			/** Format: date */
+			expectedOn?: string | null;
+			/** @description Every line, in order (replaces them all). */
+			lines?: components['schemas']['PurchaseOrderLineInput'][];
+			notes?: string | null;
+			/** Format: uuid */
+			shipTo?: string | null;
+			/** Format: uuid */
+			vendorId: string;
+			vendorReference?: string | null;
+			/**
+			 * Format: int32
+			 * @description The version you read (updates only).
+			 */
+			version?: number | null;
+		};
+		PurchaseOrderLine: {
+			/** Format: uuid */
+			forRefId?: string | null;
+			forRefType?: components['schemas']['InventoryRefType'] | null;
+			/** Format: uuid */
+			id: string;
+			/** Format: uuid */
+			itemId?: string | null;
+			name: string;
+			quantity: string;
+			received: string;
+			sku?: string | null;
+			total: string;
+			tracking?: components['schemas']['Tracking'] | null;
+			unitCost: string;
+		};
+		PurchaseOrderLineInput: {
+			/** Format: uuid */
+			forRefId?: string | null;
+			forRefType?: components['schemas']['InventoryRefType'] | null;
+			/**
+			 * Format: uuid
+			 * @description A stocked item: its SKU and name fill what's left out.
+			 */
+			itemId?: string | null;
+			name?: string | null;
+			quantity: string;
+			sku?: string | null;
+			unitCost?: string | null;
+		};
+		PurchaseOrderReceipt: {
+			/** Format: uuid */
+			id: string;
+			/** Format: uuid */
+			lineId: string;
+			locationName?: string | null;
+			lot: string;
+			name: string;
+			quantity: string;
+			/** Format: date-time */
+			receivedAt: string;
+			receivedByName?: string | null;
+			serials: string[];
+		};
+		PurchaseOrderReceiptInput: {
+			lines: components['schemas']['PurchaseOrderReceiptLine'][];
+			/**
+			 * Format: uuid
+			 * @description Where it was put (defaults to the order's ship-to location).
+			 */
+			locationId?: string | null;
+			/** @description A delivery note or packing slip. */
+			reference?: string | null;
+		};
+		PurchaseOrderReceiptLine: {
+			/** Format: uuid */
+			lineId: string;
+			lot?: string | null;
+			quantity?: string | null;
+			serials?: string[];
+		};
+		/** @enum {string} */
+		PurchaseOrderStatus:
+			| 'draft'
+			| 'submitted'
+			| 'approved'
+			| 'ordered'
+			| 'partially_received'
+			| 'received'
+			| 'cancelled';
+		/**
+		 * @description What can happen to an order next.
+		 * @enum {string}
+		 */
+		PurchaseOrderStep: 'submit' | 'approve' | 'reject' | 'order' | 'cancel' | 'close';
+		PurchaseOrderStepInput: {
+			/** @description Why (rejecting), or the vendor's order reference (ordering). */
+			comment?: string | null;
+			step: components['schemas']['PurchaseOrderStep'];
+			/** Format: int32 */
+			version: number;
+		};
+		PurchasingSettings: {
+			/** @description Orders over this total need approval; none: never. */
+			approvalAbove?: string | null;
+			/** Format: uuid */
+			orgId: string;
+		};
 		/**
 		 * @description Which rows: equality filters on columns, and optionally one
 		 *     organization's rows only.
@@ -13486,6 +13841,31 @@ export interface components {
 		ReopenTimesheet: {
 			/** @description Needed when a reviewer reopens one: why. */
 			note?: string | null;
+		};
+		/** @description Something running low, and what to order. */
+		ReorderSuggestion: {
+			available: string;
+			/** Format: uuid */
+			itemId: string;
+			/** Format: uuid */
+			locationId: string;
+			locationName: string;
+			name: string;
+			/** @description Already on open orders. */
+			onOrder: string;
+			/**
+			 * @description What to order: the reorder quantity (or back above the point), less
+			 *     what's on order.
+			 */
+			quantity: string;
+			reorderPoint: string;
+			sku: string;
+			/**
+			 * Format: uuid
+			 * @description The vendor whose name matches the catalog product's.
+			 */
+			vendorId?: string | null;
+			vendorName?: string | null;
 		};
 		ReportSharing: {
 			clientVisible: boolean;
@@ -15569,6 +15949,41 @@ export interface components {
 			/** Format: date-time */
 			revealedAt: string;
 			userName?: string | null;
+		};
+		Vendor: {
+			accountNumber?: string | null;
+			active: boolean;
+			address?: string | null;
+			/** Format: date-time */
+			createdAt: string;
+			currency: string;
+			email?: string | null;
+			/** Format: uuid */
+			id: string;
+			name: string;
+			notes?: string | null;
+			/**
+			 * Format: int64
+			 * @description Purchase orders not yet received or cancelled.
+			 */
+			openOrders: number;
+			/** Format: uuid */
+			orgId: string;
+			paymentTerms?: string | null;
+			phone?: string | null;
+			website?: string | null;
+		};
+		VendorInput: {
+			accountNumber?: string | null;
+			active?: boolean;
+			address?: string | null;
+			currency?: string;
+			email?: string | null;
+			name: string;
+			notes?: string | null;
+			paymentTerms?: string | null;
+			phone?: string | null;
+			website?: string | null;
 		};
 		VerifyEmailRequest: {
 			/** @description From the emailed link. */
@@ -25897,6 +26312,350 @@ export interface operations {
 			};
 		};
 	};
+	list_purchase_orders: {
+		parameters: {
+			query?: {
+				status?: components['schemas']['PurchaseOrderStatus'];
+				vendorId?: string;
+				/** @description Only orders still to arrive (approved, ordered or partly received). */
+				open?: boolean;
+				/** @description `PO-12`, a number, or the vendor's name. */
+				q?: string;
+			};
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['PurchaseOrder'][];
+				};
+			};
+		};
+	};
+	create_purchase_order: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['CreateOrderRequest'];
+			};
+		};
+		responses: {
+			201: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['PurchaseOrder'];
+				};
+			};
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	draft_reorders: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['OrgBody'];
+			};
+		};
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['PurchaseOrder'][];
+				};
+			};
+		};
+	};
+	get_purchasing_settings: {
+		parameters: {
+			query: {
+				/** @description The buying organization. */
+				orgId: string;
+			};
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['PurchasingSettings'];
+				};
+			};
+		};
+	};
+	put_purchasing_settings: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['PurchasingSettings'];
+			};
+		};
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['PurchasingSettings'];
+				};
+			};
+		};
+	};
+	reorder_suggestions: {
+		parameters: {
+			query: {
+				/** @description The buying organization. */
+				orgId: string;
+			};
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ReorderSuggestion'][];
+				};
+			};
+		};
+	};
+	get_purchase_order: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['PurchaseOrder'];
+				};
+			};
+		};
+	};
+	update_purchase_order: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['PurchaseOrderInput'];
+			};
+		};
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['PurchaseOrder'];
+				};
+			};
+			409: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	delete_purchase_order: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			204: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content?: never;
+			};
+			409: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	purchase_order_pdf: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/pdf': number[];
+				};
+			};
+		};
+	};
+	purchase_order_receipts: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['PurchaseOrderReceipt'][];
+				};
+			};
+		};
+	};
+	receive_purchase_order: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['PurchaseOrderReceiptInput'];
+			};
+		};
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['PurchaseOrder'];
+				};
+			};
+			409: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	step_purchase_order: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['PurchaseOrderStepInput'];
+			};
+		};
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['PurchaseOrder'];
+				};
+			};
+			409: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
 	list_queues: {
 		parameters: {
 			query?: {
@@ -31041,6 +31800,134 @@ export interface operations {
 				};
 				content: {
 					'application/json': components['schemas']['VaultReveal'][];
+				};
+			};
+		};
+	};
+	list_vendors: {
+		parameters: {
+			query?: {
+				/** @description Name contains. */
+				q?: string;
+				/** @description Include vendors no longer used. */
+				all?: boolean;
+			};
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['Vendor'][];
+				};
+			};
+		};
+	};
+	create_vendor: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['CreateVendorRequest'];
+			};
+		};
+		responses: {
+			201: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['Vendor'];
+				};
+			};
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	get_vendor: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['Vendor'];
+				};
+			};
+		};
+	};
+	update_vendor: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['VendorInput'];
+			};
+		};
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['Vendor'];
+				};
+			};
+		};
+	};
+	delete_vendor: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			204: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content?: never;
+			};
+			409: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
 				};
 			};
 		};

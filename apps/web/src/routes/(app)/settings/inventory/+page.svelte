@@ -46,45 +46,82 @@
 	<title>Inventory · Settings · Huxley</title>
 </svelte:head>
 
-<Card
-	title="Locations"
-	description="Where stock is kept: warehouses and the bins in them, technicians' vehicles, and stock held at client sites."
->
-	{#snippet actions()}
-		<Button onclick={() => edit(null)}><Plus size={16} /> New location</Button>
-	{/snippet}
-	{#if data.locations.length === 0}
-		<p class="text-sm text-fg-muted">No locations yet. Add a warehouse to receive stock into.</p>
-	{:else}
-		<ul class="flex flex-col divide-y divide-border" aria-label="Locations">
-			{#each data.locations as l (l.id)}
-				<li class="flex items-center justify-between gap-3 py-2 first:pt-0">
-					<div class="min-w-0">
-						<p class="flex items-center gap-2 text-sm font-semibold text-fg">
-							{l.parentName ? `${l.parentName} › ` : ''}{l.name}
-							<Badge>{label(LOCATION_KINDS, l.kind).replace(' (in a warehouse)', '')}</Badge>
-							{#if !l.active}<Badge>Off</Badge>{/if}
-						</p>
-						{#if l.assignedUserName || l.address}
-							<p class="truncate text-xs text-fg-muted">
-								{[l.assignedUserName, l.address].filter(Boolean).join(' · ')}
+<div class="flex flex-col gap-6">
+	<Card
+		title="Locations"
+		description="Where stock is kept: warehouses and the bins in them, technicians' vehicles, and stock held at client sites."
+	>
+		{#snippet actions()}
+			<Button onclick={() => edit(null)}><Plus size={16} /> New location</Button>
+		{/snippet}
+		{#if data.locations.length === 0}
+			<p class="text-sm text-fg-muted">No locations yet. Add a warehouse to receive stock into.</p>
+		{:else}
+			<ul class="flex flex-col divide-y divide-border" aria-label="Locations">
+				{#each data.locations as l (l.id)}
+					<li class="flex items-center justify-between gap-3 py-2 first:pt-0">
+						<div class="min-w-0">
+							<p class="flex items-center gap-2 text-sm font-semibold text-fg">
+								{l.parentName ? `${l.parentName} › ` : ''}{l.name}
+								<Badge>{label(LOCATION_KINDS, l.kind).replace(' (in a warehouse)', '')}</Badge>
+								{#if !l.active}<Badge>Off</Badge>{/if}
 							</p>
-						{/if}
-					</div>
-					<div class="flex shrink-0 gap-1">
-						<Button size="sm" onclick={() => edit(l)}>Edit</Button>
-						<form method="POST" action="?/delete" use:enhance={done('Removed.')}>
-							<input type="hidden" name="id" value={l.id} />
-							<Button type="submit" size="sm" variant="ghost" aria-label="Remove {l.name}">
-								Remove
-							</Button>
-						</form>
-					</div>
-				</li>
-			{/each}
-		</ul>
+							{#if l.assignedUserName || l.address}
+								<p class="truncate text-xs text-fg-muted">
+									{[l.assignedUserName, l.address].filter(Boolean).join(' · ')}
+								</p>
+							{/if}
+						</div>
+						<div class="flex shrink-0 gap-1">
+							<Button size="sm" onclick={() => edit(l)}>Edit</Button>
+							<form method="POST" action="?/delete" use:enhance={done('Removed.')}>
+								<input type="hidden" name="id" value={l.id} />
+								<Button type="submit" size="sm" variant="ghost" aria-label="Remove {l.name}">
+									Remove
+								</Button>
+							</form>
+						</div>
+					</li>
+				{/each}
+			</ul>
+		{/if}
+	</Card>
+
+	{#if data.thresholds.length > 0}
+		<Card
+			title="Purchase order approval"
+			description="Orders over this total wait for someone with purchase approval before they can be sent. Leave it empty to approve every order on submit."
+		>
+			<div class="flex flex-col gap-3">
+				{#each data.thresholds as t (t.orgId)}
+					<form
+						method="POST"
+						action="?/threshold"
+						class="flex flex-wrap items-end gap-2"
+						use:enhance={done('Saved.')}
+					>
+						<input type="hidden" name="orgId" value={t.orgId} />
+						<Field
+							label={data.thresholds.length > 1
+								? `Approve over (${t.name})`
+								: 'Approve orders over'}
+							for="threshold-{t.orgId}"
+						>
+							<Input
+								id="threshold-{t.orgId}"
+								name="approvalAbove"
+								inputmode="decimal"
+								value={t.approvalAbove}
+								class="w-40"
+							/>
+						</Field>
+						<Button type="submit">Save</Button>
+					</form>
+				{/each}
+			</div>
+		</Card>
 	{/if}
-</Card>
+</div>
 
 <Dialog bind:open title={editing ? `Edit ${editing.name}` : 'New location'}>
 	<form

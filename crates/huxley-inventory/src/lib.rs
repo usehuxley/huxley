@@ -13,18 +13,30 @@
 //! - **Reorder points** per item and location raise `stock.low` once each
 //!   time what's available falls to the point.
 //!
+//! - **Vendors** and **purchase orders**: drafted, approved above a
+//!   threshold, sent, and received into stock in part or in full; lines
+//!   bought for a ticket or project are allocated to it on arrival.
+//!
 //! Everything is organization-scoped (RLS) to the organization that holds
 //! the stock. Quantities are `numeric(18,4)`, as decimal strings in JSON.
 
 pub mod items;
 pub mod locations;
+pub mod orders;
 pub mod stock;
+pub mod vendors;
 
 use std::str::FromStr;
 
 use rust_decimal::Decimal;
 use serde::{Deserialize, Deserializer};
 use serde_json::Value as Json;
+
+/// Dates as `YYYY-MM-DD` in JSON.
+pub(crate) mod date {
+    time::serde::format_description!(ymd, Date, "[year]-[month]-[day]");
+    pub(crate) use ymd::option;
+}
 
 /// The module's key in the registry.
 pub const MODULE: &str = "inventory";
