@@ -5463,6 +5463,39 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
+	'/api/v1/platform/retention': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get: operations['get_retention'];
+		put: operations['put_retention'];
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/platform/retention/sweep': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/** Sweeps now, as the daily sweep does. */
+		post: operations['sweep_retention'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
 	'/api/v1/portal-accounts/{id}': {
 		parameters: {
 			query?: never;
@@ -16124,6 +16157,35 @@ export interface components {
 			/** @description False unless the run had failed. */
 			resumed: boolean;
 		};
+		/** @description How long things are kept. */
+		Retention: {
+			/**
+			 * Format: int32
+			 * @description AI call records (usage and cost), in days.
+			 */
+			aiCallDays: number;
+			/**
+			 * Format: int32
+			 * @description Published domain events, in days.
+			 */
+			eventDays: number;
+			/**
+			 * Format: int32
+			 * @description Read notifications, in days.
+			 */
+			notificationDays: number;
+			/**
+			 * Format: int32
+			 * @description Finished workflow runs, in months (1 to 120).
+			 */
+			runMonths: number;
+		};
+		/** @description The settings, with when the last sweep ran and what it removed. */
+		RetentionState: components['schemas']['Retention'] & {
+			lastSweep?: components['schemas']['Swept'] | null;
+			/** Format: date-time */
+			lastSweptAt?: string | null;
+		};
 		RetryJobResponse: {
 			/** @description False if the job wasn't dead (or doesn't exist). */
 			retried: boolean;
@@ -17512,6 +17574,21 @@ export interface components {
 			skipped: string[];
 			/** Format: uuid */
 			submissionId: string;
+		};
+		/** @description What a sweep removed. */
+		Swept: {
+			/** Format: int64 */
+			aiCalls: number;
+			/** Format: int64 */
+			events: number;
+			/** Format: int64 */
+			notifications: number;
+			/** Format: int32 */
+			partitions: number;
+			/** Format: int64 */
+			payloadObjects: number;
+			/** Format: int64 */
+			runs: number;
 		};
 		/** @description A dataset's sync settings. */
 		SyncConfig: {
@@ -30022,6 +30099,67 @@ export interface operations {
 				};
 				content: {
 					'application/json': components['schemas']['Permission'][];
+				};
+			};
+		};
+	};
+	get_retention: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['RetentionState'];
+				};
+			};
+		};
+	};
+	put_retention: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['Retention'];
+			};
+		};
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['RetentionState'];
+				};
+			};
+		};
+	};
+	sweep_retention: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['Swept'];
 				};
 			};
 		};

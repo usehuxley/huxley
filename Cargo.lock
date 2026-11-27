@@ -2817,6 +2817,7 @@ name = "huxley-storage"
 version = "0.1.0"
 dependencies = [
  "bytes",
+ "futures-util",
  "object_store",
  "secrecy",
  "serde",

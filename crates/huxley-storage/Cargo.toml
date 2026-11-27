@@ -9,6 +9,7 @@ repository.workspace = true
 publish = false
 
 [dependencies]
+futures-util.workspace = true
 bytes.workspace = true
 object_store.workspace = true
 secrecy.workspace = true
