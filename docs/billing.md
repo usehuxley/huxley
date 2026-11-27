@@ -82,6 +82,27 @@ Failed syncs are listed under **Accounting → Sync errors**. Fix the cause and 
 
 Events: `invoice.sync_requested` (the prepared invoice, for sync packs), `invoice.synced` and `invoice.sync_failed`. A sync pack's workflow reports back with `core.invoice.sync_result`.
 
+### Payment status and credit hold
+
+Each pack's **Update invoice status** workflow runs hourly. It reads what's due and paid on synced invoices that aren't paid yet (ADR-078):
+- Paid invoices raise `invoice.paid`.
+- The invoice page shows what's still owed.
+- The first check also fetches the client's view-and-pay link, for the portal.
+
+Each client's balance, overdue amount and oldest overdue invoice are kept up to date and listed under **Accounting → Receivables**.
+
+To put clients on **credit hold**, set either threshold under **Settings → Billing → Accounting sync**:
+- days an invoice can be overdue;
+- an overdue total.
+
+Passing either raises `company.credit_hold` for your workflows: flag the client's tickets, tell the account manager, or hold new orders. Getting back under raises `company.credit_hold_released`.
+
+Workflows read status with `core.invoice.unpaid` and record it with `core.invoice.status`.
+
+### In the client portal
+
+Client approvers and admins see **Invoices** in the portal. They see what's gone out and its state (due, overdue, paid, or credit), and can download each as a PDF. When the accounting system has a pay link, there's a **Pay** button.
+
 ## Settings
 
 **Settings → Billing** (`billing:configure`), per provider, sets:
@@ -98,7 +119,7 @@ Events: `invoice.sync_requested` (the prepared invoice, for sync packs), `invoic
 
 | Permission | What it allows |
 | --- | --- |
-| `billing:read` | See invoices, runs and what's unbilled. |
+| `billing:read` | See invoices, runs, what's unbilled and receivables. |
 | `billing:write` | Run billing, edit, hold, void and mark invoices sent, and make credit memos. |
 | `billing:approve` | Approve invoices. |
 | `billing:review:override` | Approve an invoice that needs review without one (recorded). |

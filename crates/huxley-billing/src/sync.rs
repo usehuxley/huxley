@@ -41,6 +41,17 @@ pub struct Settings {
     /// Sync each invoice as soon as it's approved (otherwise by hand).
     #[serde(default = "yes")]
     pub on_approval: bool,
+    /// A client goes on credit hold when an invoice is this many days overdue…
+    #[serde(default)]
+    pub credit_hold_days: Option<i32>,
+    /// …or this much is overdue in all (ADR-078).
+    #[serde(
+        default,
+        serialize_with = "crate::plain_opt",
+        deserialize_with = "crate::number_opt"
+    )]
+    #[schema(value_type = Option<String>)]
+    pub credit_hold_amount: Option<Decimal>,
 }
 
 const fn yes() -> bool {
@@ -49,7 +60,8 @@ const fn yes() -> bool {
 
 pub async fn settings(conn: &mut PgConnection, provider: Uuid) -> BillingResult<Option<Settings>> {
     Ok(sqlx::query_as(
-        "SELECT target, enabled, on_approval FROM billing_sync_settings WHERE org_id = $1",
+        "SELECT target, enabled, on_approval, credit_hold_days, credit_hold_amount FROM billing_sync_settings \
+          WHERE org_id = $1",
     )
     .bind(provider)
     .fetch_optional(conn)
@@ -61,24 +73,18 @@ pub async fn for_client(
     conn: &mut PgConnection,
     client: Uuid,
 ) -> BillingResult<Option<(Uuid, Settings)>> {
-    let row: Option<(Uuid, String, bool, bool)> = sqlx::query_as(
-        "SELECT s.org_id, s.target, s.enabled, s.on_approval FROM billing_sync_settings s \
+    let provider: Option<Uuid> = sqlx::query_scalar(
+        "SELECT s.org_id FROM billing_sync_settings s \
            JOIN organizations so ON so.id = s.org_id JOIN organizations c ON c.id = $1 \
           WHERE so.path @> c.path ORDER BY nlevel(so.path) DESC LIMIT 1",
     )
     .bind(client)
-    .fetch_optional(conn)
+    .fetch_optional(&mut *conn)
     .await?;
-    Ok(row.map(|(org, target, enabled, on_approval)| {
-        (
-            org,
-            Settings {
-                target,
-                enabled,
-                on_approval,
-            },
-        )
-    }))
+    let Some(provider) = provider else {
+        return Ok(None);
+    };
+    Ok(settings(conn, provider).await?.map(|s| (provider, s)))
 }
 
 fn check_target(target: &str) -> BillingResult<String> {
@@ -104,14 +110,24 @@ pub async fn set_settings(
     s: &Settings,
 ) -> BillingResult<Settings> {
     let target = check_target(&s.target)?;
+    if s.credit_hold_days.is_some_and(|d| !(1..=365).contains(&d)) {
+        return Err(BillingError::invalid("creditHoldDays", "1 to 365"));
+    }
+    if s.credit_hold_amount.is_some_and(|a| a < Decimal::ZERO) {
+        return Err(BillingError::invalid("creditHoldAmount", "zero or more"));
+    }
     sqlx::query(
-        "INSERT INTO billing_sync_settings (org_id, target, enabled, on_approval) VALUES ($1, $2, $3, $4) \
-         ON CONFLICT (org_id) DO UPDATE SET target = $2, enabled = $3, on_approval = $4, updated_at = now()",
+        "INSERT INTO billing_sync_settings (org_id, target, enabled, on_approval, credit_hold_days, credit_hold_amount) \
+         VALUES ($1, $2, $3, $4, $5, $6) \
+         ON CONFLICT (org_id) DO UPDATE SET target = $2, enabled = $3, on_approval = $4, credit_hold_days = $5, \
+            credit_hold_amount = $6, updated_at = now()",
     )
     .bind(provider)
     .bind(&target)
     .bind(s.enabled)
     .bind(s.on_approval)
+    .bind(s.credit_hold_days)
+    .bind(s.credit_hold_amount)
     .execute(&mut *conn)
     .await?;
     audit::record(
@@ -526,6 +542,19 @@ pub struct Sync {
     pub remote_url: Option<String>,
     pub attempts: i32,
     pub error: Option<String>,
+    /// What's still owed, from the accounting system (ADR-078).
+    #[serde(serialize_with = "crate::plain_opt")]
+    #[schema(value_type = Option<String>)]
+    pub amount_due: Option<Decimal>,
+    #[serde(serialize_with = "crate::plain_opt")]
+    #[schema(value_type = Option<String>)]
+    pub amount_paid: Option<Decimal>,
+    pub remote_status: Option<String>,
+    /// Where the client views and pays it.
+    pub pay_url: Option<String>,
+    #[serde(with = "crate::date::option")]
+    #[schema(value_type = Option<String>, format = Date)]
+    pub paid_on: Option<time::Date>,
     #[serde(with = "time::serde::rfc3339")]
     pub requested_at: OffsetDateTime,
     #[serde(with = "time::serde::rfc3339::option")]
@@ -533,7 +562,8 @@ pub struct Sync {
 }
 
 const SYNC: &str = "SELECT s.invoice_id, i.number, i.kind, s.org_id, o.name AS org_name, s.target, s.status, s.remote_id, \
-        s.remote_number, s.remote_url, s.attempts, s.error, s.requested_at, s.synced_at \
+        s.remote_number, s.remote_url, s.attempts, s.error, s.amount_due, s.amount_paid, s.remote_status, s.pay_url, \
+        s.paid_on, s.requested_at, s.synced_at \
    FROM billing_invoice_syncs s JOIN billing_invoices i ON i.id = s.invoice_id JOIN organizations o ON o.id = s.org_id";
 
 pub async fn state(conn: &mut PgConnection, invoice: Uuid) -> BillingResult<Option<Sync>> {

@@ -663,6 +663,52 @@
 				}
 			}
 		},
+		"/api/portal/v1/invoices": {
+			"get": {
+				"tags": ["portal"],
+				"summary": "The company's invoices, newest first. Empty when invoicing is off.",
+				"operationId": "portal_invoices",
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "array",
+									"items": {
+										"$ref": "#/components/schemas/PortalInvoice"
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/portal/v1/invoices/{id}/pdf": {
+			"get": {
+				"tags": ["portal"],
+				"summary": "One of the company's invoices, as a PDF.",
+				"operationId": "portal_invoice_pdf",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/pdf": {}
+						}
+					}
+				}
+			}
+		},
 		"/api/portal/v1/me": {
 			"get": {
 				"tags": ["portal"],
@@ -5078,6 +5124,27 @@
 				],
 				"responses": {
 					"204": {}
+				}
+			}
+		},
+		"/api/v1/billing/receivables": {
+			"get": {
+				"tags": ["billing"],
+				"summary": "Clients with something owing (from their synced invoices' status in the\naccounting system), most overdue first; with any credit hold.",
+				"operationId": "billing_receivables",
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "array",
+									"items": {
+										"$ref": "#/components/schemas/ClientStatus"
+									}
+								}
+							}
+						}
+					}
 				}
 			}
 		},
@@ -26071,6 +26138,15 @@
 				"type": "object",
 				"required": ["target"],
 				"properties": {
+					"creditHoldAmount": {
+						"type": ["string", "null"],
+						"description": "…or this much is overdue in all (ADR-078)."
+					},
+					"creditHoldDays": {
+						"type": ["integer", "null"],
+						"format": "int32",
+						"description": "A client goes on credit hold when an invoice is this many days overdue…"
+					},
 					"enabled": {
 						"type": "boolean"
 					},
@@ -29950,6 +30026,40 @@
 					"score": {
 						"type": ["integer", "null"],
 						"format": "int32"
+					}
+				}
+			},
+			"ClientStatus": {
+				"type": "object",
+				"description": "A client's position from its synced invoices.",
+				"required": ["orgId", "orgName", "currency", "balance", "overdue", "creditHold"],
+				"properties": {
+					"balance": {
+						"type": "string"
+					},
+					"creditHold": {
+						"type": "boolean"
+					},
+					"currency": {
+						"type": "string"
+					},
+					"holdSince": {
+						"type": ["string", "null"],
+						"format": "date-time"
+					},
+					"oldestDue": {
+						"type": ["string", "null"],
+						"format": "date"
+					},
+					"orgId": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"orgName": {
+						"type": "string"
+					},
+					"overdue": {
+						"type": "string"
 					}
 				}
 			},
@@ -34100,6 +34210,13 @@
 					"requestedAt"
 				],
 				"properties": {
+					"amountDue": {
+						"type": ["string", "null"],
+						"description": "What's still owed, from the accounting system (ADR-078)."
+					},
+					"amountPaid": {
+						"type": ["string", "null"]
+					},
 					"attempts": {
 						"type": "integer",
 						"format": "int32"
@@ -34125,10 +34242,21 @@
 					"orgName": {
 						"type": "string"
 					},
+					"paidOn": {
+						"type": ["string", "null"],
+						"format": "date"
+					},
+					"payUrl": {
+						"type": ["string", "null"],
+						"description": "Where the client views and pays it."
+					},
 					"remoteId": {
 						"type": ["string", "null"]
 					},
 					"remoteNumber": {
+						"type": ["string", "null"]
+					},
+					"remoteStatus": {
 						"type": ["string", "null"]
 					},
 					"remoteUrl": {
@@ -37686,6 +37814,50 @@
 					}
 				},
 				"additionalProperties": false
+			},
+			"PortalInvoice": {
+				"type": "object",
+				"description": "An invoice in the client portal.",
+				"required": ["id", "number", "kind", "currency", "total", "state"],
+				"properties": {
+					"amountDue": {
+						"type": ["string", "null"],
+						"description": "What's still owed, when the accounting system has said."
+					},
+					"currency": {
+						"type": "string"
+					},
+					"dueOn": {
+						"type": ["string", "null"],
+						"format": "date"
+					},
+					"id": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"issuedOn": {
+						"type": ["string", "null"],
+						"format": "date"
+					},
+					"kind": {
+						"type": "string"
+					},
+					"number": {
+						"type": "integer",
+						"format": "int64"
+					},
+					"payUrl": {
+						"type": ["string", "null"],
+						"description": "Where to view and pay it."
+					},
+					"state": {
+						"type": "string",
+						"description": "`paid`, `overdue`, `due` or `credit`."
+					},
+					"total": {
+						"type": "string"
+					}
+				}
 			},
 			"PortalLinkRequest": {
 				"type": "object",
@@ -44390,6 +44562,13 @@
 				"type": "object",
 				"required": ["orgId", "target"],
 				"properties": {
+					"creditHoldAmount": {
+						"type": ["string", "null"]
+					},
+					"creditHoldDays": {
+						"type": ["integer", "null"],
+						"format": "int32"
+					},
 					"enabled": {
 						"type": "boolean"
 					},

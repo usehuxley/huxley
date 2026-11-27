@@ -7,5 +7,5 @@ publisher: Huxley
 description: "Xero accounting sync: approved invoices and credit memos are created in Xero, authorised, with their mapped contacts, items, tax rates and tracking options, and Xero's contacts, items, tax rates and tracking options are fetched for mapping."
 contents:
   integrations: [xero]
-  workflows: [xero-sync-invoice, xero-fetch-lists]
+  workflows: [xero-sync-invoice, xero-fetch-lists, xero-invoice-status]
   datasets: [xero-customers, xero-items, xero-tax-codes, xero-classes]

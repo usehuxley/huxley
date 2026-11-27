@@ -453,6 +453,12 @@ pub enum Step {
     /// Record how an invoice's accounting sync went (the `billing` module).
     #[serde(rename = "core.invoice.sync_result")]
     InvoiceSyncResult(InvoiceSyncResultStep),
+    /// List synced invoices still open in the accounting system (the `billing` module).
+    #[serde(rename = "core.invoice.unpaid")]
+    InvoiceUnpaid(InvoiceUnpaidStep),
+    /// Record what the accounting system says is paid and due (the `billing` module).
+    #[serde(rename = "core.invoice.status")]
+    InvoiceStatus(InvoiceStatusStep),
     /// Log an email on the contacts and leads it's to or from (the `sales` module).
     #[serde(rename = "core.sales.log_email")]
     SalesLogEmail(SalesLogEmailStep),
@@ -895,6 +901,16 @@ step!(InvoiceSyncResultStep {
     pub result: InvoiceSyncResult,
 });
 
+step!(InvoiceUnpaidStep {
+    #[serde(rename = "with")]
+    pub unpaid: InvoiceUnpaid,
+});
+
+step!(InvoiceStatusStep {
+    #[serde(rename = "with")]
+    pub status: InvoiceStatus,
+});
+
 step!(SalesLogEmailStep {
     #[serde(rename = "with")]
     pub log: SalesLogEmail,
@@ -1042,6 +1058,8 @@ impl Step {
             QuoteReview,
             InvoiceReview,
             InvoiceSyncResult,
+            InvoiceUnpaid,
+            InvoiceStatus,
             SalesLogEmail,
             ScopeContext,
             ScopeWrite,
@@ -1119,6 +1137,8 @@ impl Step {
             Self::QuoteReview(_) => "core.quote.review",
             Self::InvoiceReview(_) => "core.invoice.review",
             Self::InvoiceSyncResult(_) => "core.invoice.sync_result",
+            Self::InvoiceUnpaid(_) => "core.invoice.unpaid",
+            Self::InvoiceStatus(_) => "core.invoice.status",
             Self::SalesLogEmail(_) => "core.sales.log_email",
             Self::ScopeContext(_) => "core.scope.context",
             Self::ScopeWrite(_) => "core.scope.write",
@@ -1851,6 +1871,33 @@ pub struct InvoiceSyncResult {
     pub remote_url: Option<Value>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub error: Option<Value>,
+}
+
+/// Synced invoices still open (`core.invoice.unpaid`): those synced to
+/// `target` (e.g. `quickbooks`) that aren't known to be paid, least
+/// recently checked first (`needsLink` on the first check, when there's no
+/// pay link yet), up to `limit` (default 200, at most 500).
+/// Output: `{ invoices: [{ invoiceId, remoteId, reference, needsLink }] }`.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct InvoiceUnpaid {
+    pub target: Value,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub limit: Option<Value>,
+}
+
+/// What the accounting system says of invoices synced to `target`
+/// (`core.invoice.status`): `statuses`, a list of `{ remote_id, amount_due,
+/// amount_paid, status, pay_url }` (anything left out stays as it was).
+/// An invoice whose amount due reaches zero raises `invoice.paid`; its
+/// client's balance and overdue amount are worked out again, and past the
+/// credit hold limits `company.credit_hold` is raised. Output: `{ updated,
+/// unknown, paid }`.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct InvoiceStatus {
+    pub target: Value,
+    pub statuses: Value,
 }
 
 /// An email to log (`core.sales.log_email`): `email_id`, from a mailbox's

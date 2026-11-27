@@ -94,6 +94,18 @@ paths:
         "200":
           description: The invoices, with their InvoiceID and InvoiceNumber
           content: { application/json: { schema: { type: object, additionalProperties: true } } }
+  /api.xro/2.0/Invoices/{id}/OnlineInvoice:
+    get:
+      operationId: getOnlineInvoice
+      summary: The client's online invoice (view-and-pay) link
+      tags: [Invoices]
+      parameters:
+        - { $ref: "#/components/parameters/tenant" }
+        - { name: id, in: path, required: true, description: The InvoiceID, schema: { type: string } }
+      responses:
+        "200":
+          description: OnlineInvoices[0].OnlineInvoiceUrl
+          content: { application/json: { schema: { type: object, additionalProperties: true } } }
   /api.xro/2.0/CreditNotes:
     put:
       operationId: createCreditNotes

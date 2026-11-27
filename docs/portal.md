@@ -52,8 +52,8 @@ Client admins manage their own organization's portal access under **People**: no
 | Role | What they can do |
 |---|---|
 | **Client user** | Their own tickets: see, raise, reply. The service catalog and help articles. |
-| **Client approver** | As a client user, and approve what's sent to them. |
-| **Client admin** | Every ticket of their company, its devices, and their colleagues' portal access. |
+| **Client approver** | As a client user, and approve what's sent to them. They also see the company's projects, quotes and invoices. |
+| **Client admin** | As a client approver, and also every ticket of their company, its devices, and their colleagues' portal access. |
 
 ## Tickets
 

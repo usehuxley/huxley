@@ -73,6 +73,7 @@ components:
         TotalAmt: { type: number }
         Balance: { type: number }
         DueDate: { type: string }
+        InvoiceLink: { type: string, description: The client's view-and-pay link (with include=invoiceLink) }
 security: [{ intuit: [] }]
 paths:
   /invoice:
@@ -95,6 +96,7 @@ paths:
       tags: [Invoices]
       parameters:
         - { name: id, in: path, required: true, schema: { type: string } }
+        - { name: include, in: query, description: "invoiceLink: also the client's view-and-pay link (QuickBooks Payments)", schema: { type: string } }
         - { $ref: "#/components/parameters/minorversion" }
       responses:
         "200":

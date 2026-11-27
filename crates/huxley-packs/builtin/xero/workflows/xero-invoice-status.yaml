@@ -1,0 +1,77 @@
+apiVersion: usehuxley.io/v1
+kind: Workflow
+metadata:
+  key: xero-invoice-status
+  name: Update invoice status from Xero
+  description: >-
+    Every hour, reads the amount due of each synced invoice that isn't paid
+    yet from Xero and records it: paid invoices raise invoice.paid, and each
+    client's balance and overdue amount (and credit hold) are worked out
+    again. The first time, it also fetches each invoice's online invoice
+    link for the client portal. Uses the connection named xero and the
+    organization variable xero_tenant_id; run it at your MSP.
+spec:
+  triggers:
+    - type: schedule
+      interval: 1h
+    - type: manual
+  steps:
+    - id: open
+      type: core.invoice.unpaid
+      with: { target: xero, limit: 100 }
+    - id: any
+      type: if
+      condition: "{{ steps.open.output.invoices | length > 0 }}"
+      then:
+        - id: read
+          type: integration.action
+          action: xero/listInvoices
+          connection: xero
+          with:
+            xero-tenant-id: "{{ vars.xero_tenant_id }}"
+            IDs: "{{ steps.open.output.invoices | map(attribute='remoteId') | join(',') }}"
+        - id: begin
+          type: set_var
+          vars: { statuses: [] }
+        - id: each
+          type: foreach
+          items: "{{ steps.read.output.Invoices or [] }}"
+          as: inv
+          steps:
+            - id: add
+              type: set_var
+              vars:
+                statuses: >-
+                  {{ run.vars.statuses + [{'remote_id': inv.InvoiceID, 'amount_due': inv.AmountDue,
+                     'amount_paid': inv.AmountPaid, 'status': inv.Status}] }}
+        - id: record
+          type: core.invoice.status
+          with:
+            target: xero
+            statuses: "{{ run.vars.statuses }}"
+        - id: links
+          type: foreach
+          items: "{{ steps.open.output.invoices | selectattr('needsLink') | list }}"
+          as: inv
+          steps:
+            - id: link
+              type: integration.action
+              action: xero/getOnlineInvoice
+              connection: xero
+              continue_on_error: true
+              with:
+                xero-tenant-id: "{{ vars.xero_tenant_id }}"
+                id: "{{ inv.remoteId }}"
+            - id: has_link
+              type: if
+              condition: "{{ steps.link.output and steps.link.output.OnlineInvoices and steps.link.output.OnlineInvoices[0].OnlineInvoiceUrl }}"
+              then:
+                - id: save_link
+                  type: core.invoice.status
+                  with:
+                    target: xero
+                    statuses:
+                      - remote_id: "{{ inv.remoteId }}"
+                        pay_url: "{{ steps.link.output.OnlineInvoices[0].OnlineInvoiceUrl }}"
+  outputs:
+    checked: "{{ steps.open.output.invoices | length }}"

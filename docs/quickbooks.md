@@ -27,3 +27,7 @@ When an invoice is to be synced, the workflow creates an **Invoice** in QuickBoo
 QuickBooks' ID and number are recorded on the invoice, with a link to open it in QuickBooks, and the invoice is marked sent. If QuickBooks refuses it, its reason goes to the sync error queue, for example "Duplicate Document Number Error".
 
 QuickBooks calculates tax from the tax codes. Huxley doesn't.
+
+## Payment status
+
+Publish **Update invoice status from QuickBooks Online**. Every hour it reads what's still due on synced invoices that aren't paid, and records it. The first time, it also fetches each invoice's view-and-pay link (QuickBooks Payments must be on) for the client portal. See [payment status and credit hold](./billing.md#payment-status-and-credit-hold).

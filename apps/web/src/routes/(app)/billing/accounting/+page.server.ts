@@ -14,9 +14,10 @@ export const load: PageServerLoad = async (event) => {
 	const all = orgs.data ?? [];
 	const providers = all.filter((o) => o.kind === 'provider');
 	const orgId = event.url.searchParams.get('org') || providers[0]?.id || '';
-	const [settings, queue] = await Promise.all([
+	const [settings, queue, owing] = await Promise.all([
 		orgId ? client.GET('/api/v1/billing/sync-settings', { params: { query: { orgId } } }) : null,
-		client.GET('/api/v1/billing/sync-queue', { params: { query: { status: 'failed' } } })
+		client.GET('/api/v1/billing/sync-queue', { params: { query: { status: 'failed' } } }),
+		client.GET('/api/v1/billing/receivables')
 	]);
 	if (settings?.response.status === 404) error(404, 'Invoicing is turned off.');
 	const target = settings?.data?.target ?? null;
@@ -43,6 +44,7 @@ export const load: PageServerLoad = async (event) => {
 		products: (products?.data ?? []).map((p) => ({ id: p.id, name: p.name, sku: p.sku })),
 		options: Object.fromEntries(KINDS.map((k, i) => [k, options[i]?.data ?? []])),
 		queue: queue.data ?? [],
+		receivables: owing.data ?? [],
 		canConfigure: user.grantedPermissions.includes('billing:configure'),
 		canWrite: user.grantedPermissions.includes('billing:write')
 	};

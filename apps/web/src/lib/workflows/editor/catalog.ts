@@ -591,6 +591,42 @@ export const STEPS: StepSpec[] = [
 		]
 	},
 	{
+		type: 'core.invoice.unpaid',
+		label: 'List unpaid synced invoices',
+		description:
+			'The invoices synced to an accounting system that are not known to be paid, least recently checked first, for reading their status.',
+		group: 'Actions',
+		module: 'billing',
+		template: { with: { target: 'quickbooks', limit: 200 } },
+		fields: [
+			{
+				path: 'with.target',
+				label: 'Accounting system',
+				kind: 'expression',
+				hint: 'e.g. quickbooks or xero'
+			},
+			{ path: 'with.limit', label: 'At most', kind: 'expression' }
+		]
+	},
+	{
+		type: 'core.invoice.status',
+		label: 'Record invoice payment status',
+		description:
+			"Record what the accounting system says is due and paid on invoices (by its IDs); paid invoices raise invoice.paid and clients' balances and credit holds are worked out again.",
+		group: 'Actions',
+		module: 'billing',
+		template: { with: { target: 'quickbooks', statuses: '{{ run.vars.statuses }}' } },
+		fields: [
+			{ path: 'with.target', label: 'Accounting system', kind: 'expression' },
+			{
+				path: 'with.statuses',
+				label: 'Statuses',
+				kind: 'expression',
+				hint: 'a list of { remote_id, amount_due, amount_paid, status, pay_url }'
+			}
+		]
+	},
+	{
 		type: 'core.sales.log_email',
 		label: 'Log a sales email',
 		description:

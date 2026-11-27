@@ -281,6 +281,10 @@ const SOURCES: &[Source] = &[
                 include_str!("../builtin/quickbooks/workflows/quickbooks-fetch-lists.yaml"),
             ),
             (
+                "workflows/quickbooks-invoice-status.yaml",
+                include_str!("../builtin/quickbooks/workflows/quickbooks-invoice-status.yaml"),
+            ),
+            (
                 "datasets/quickbooks-customers.json",
                 include_str!("../builtin/quickbooks/datasets/quickbooks-customers.json"),
             ),
@@ -312,6 +316,10 @@ const SOURCES: &[Source] = &[
             (
                 "workflows/xero-fetch-lists.yaml",
                 include_str!("../builtin/xero/workflows/xero-fetch-lists.yaml"),
+            ),
+            (
+                "workflows/xero-invoice-status.yaml",
+                include_str!("../builtin/xero/workflows/xero-invoice-status.yaml"),
             ),
             (
                 "datasets/xero-customers.json",

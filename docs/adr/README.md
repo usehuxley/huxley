@@ -81,3 +81,4 @@ Decisions that shape Huxley. Add a new ADR by copying `0000-template.md` with th
 | [075](0075-invoicing.md) | Invoices are generated per client and currency from marked sources, drafts until approved, corrected by credit memos | Accepted |
 | [076](0076-invoice-review.md) | Invoices are reviewed on the quote review model, and an approved review approves the invoice | Accepted |
 | [077](0077-accounting-sync.md) | Accounting sync: Huxley prepares and tracks, a pack's system workflow creates | Accepted |
+| [078](0078-payment-status.md) | Payment status comes back through the sync pack; Huxley keeps client balances and credit holds | Accepted |

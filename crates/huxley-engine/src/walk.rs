@@ -412,6 +412,8 @@ impl<'a> Walker<'a> {
             | Step::QuoteReview(_)
             | Step::InvoiceReview(_)
             | Step::InvoiceSyncResult(_)
+            | Step::InvoiceUnpaid(_)
+            | Step::InvoiceStatus(_)
             | Step::SalesLogEmail(_)
             | Step::ScopeContext(_)
             | Step::ScopeWrite(_)
@@ -892,6 +894,8 @@ fn with_block(step: &Step) -> Json {
         Step::QuoteReview(s) => serde_json::to_value(&s.review),
         Step::InvoiceReview(s) => serde_json::to_value(&s.review),
         Step::InvoiceSyncResult(s) => serde_json::to_value(&s.result),
+        Step::InvoiceUnpaid(s) => serde_json::to_value(&s.unpaid),
+        Step::InvoiceStatus(s) => serde_json::to_value(&s.status),
         Step::SalesLogEmail(s) => serde_json::to_value(&s.log),
         Step::ScopeContext(s) => serde_json::to_value(&s.scope),
         Step::ScopeWrite(s) => serde_json::to_value(&s.write),

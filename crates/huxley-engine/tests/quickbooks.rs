@@ -25,6 +25,8 @@ const SPEC: &str =
     include_str!("../../huxley-packs/builtin/quickbooks/integrations/quickbooks.yaml");
 const SYNC: &str =
     include_str!("../../huxley-packs/builtin/quickbooks/workflows/quickbooks-sync-invoice.yaml");
+const STATUS: &str =
+    include_str!("../../huxley-packs/builtin/quickbooks/workflows/quickbooks-invoice-status.yaml");
 const FETCH: &str =
     include_str!("../../huxley-packs/builtin/quickbooks/workflows/quickbooks-fetch-lists.yaml");
 const DATASETS: [(&str, &str); 4] = [
@@ -56,6 +58,9 @@ async fn query(Query(q): Query<std::collections::HashMap<String, String>>) -> ax
                              { "Id": "99", "DisplayName": "Globex", "Active": true }] })
     } else if text.contains("from Item") {
         json!({ "Item": [{ "Id": "1", "Name": "Services", "Active": true }] })
+    } else if text.contains("from Invoice") {
+        assert!(text.contains("where Id in ('130')"), "{text}");
+        json!({ "Invoice": [{ "Id": "130", "Balance": 0, "TotalAmt": 200 }] })
     } else if text.contains("from TaxCode") {
         json!({ "TaxCode": [{ "Id": "TAX", "Name": "TAX", "Active": true }] })
     } else {
@@ -102,11 +107,18 @@ async fn harness() -> Option<Harness> {
     let app = axum::Router::new()
         .route("/v3/company/123/query", get(query))
         .route("/v3/company/123/invoice", post(invoice))
+        .route(
+            "/v3/company/123/invoice/{id}",
+            get(|| async {
+                axum::Json(json!({ "Invoice": { "Id": "130",
+                    "InvoiceLink": "https://connect.intuit.com/portal/app/CommerceNetwork/view/scs-v1-130" } }))
+            }),
+        )
         .with_state(bodies.clone());
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let base = format!("http://localhost:{}", listener.local_addr().unwrap().port());
     tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
-    // The mock stands in for `QuickBooks`; a bearer token stands in for signing in.
+    // The mock stands in for QuickBooks; a bearer token stands in for signing in.
     let start = SPEC.find("  securitySchemes:").unwrap();
     let end = SPEC.find("  parameters:").unwrap();
     let spec = format!(
@@ -294,6 +306,38 @@ impl Harness {
     }
 }
 
+impl Harness {
+    /// Runs the status workflow and checks the invoice came back paid, with
+    /// its pay link, raising `invoice.paid` once.
+    async fn paid_with_link(&self, id: Uuid) {
+        assert_eq!(
+            self.run(self.provider, STATUS, json!({})).await,
+            RunStatus::Succeeded
+        );
+        let paid: (bool, Option<String>, bool) = sqlx::query_as(
+            "SELECT amount_due = 0, pay_url, paid_on IS NOT NULL FROM billing_invoice_syncs WHERE invoice_id = $1",
+        )
+        .bind(id)
+        .fetch_one(&self.pools.owner)
+        .await
+        .unwrap();
+        assert!(paid.0, "nothing due");
+        assert_eq!(
+            paid.1.as_deref(),
+            Some("https://connect.intuit.com/portal/app/CommerceNetwork/view/scs-v1-130")
+        );
+        assert!(paid.2);
+        let events: i64 = sqlx::query_scalar(
+            "SELECT count(*) FROM events_outbox WHERE event_type = 'invoice.paid' AND subject_id = $1",
+        )
+        .bind(id)
+        .fetch_one(&self.pools.owner)
+        .await
+        .unwrap();
+        assert_eq!(events, 1);
+    }
+}
+
 #[tokio::test]
 async fn lists_are_fetched_and_approved_invoices_sync() {
     let Some(h) = harness().await else { return };
@@ -309,6 +353,8 @@ async fn lists_are_fetched_and_approved_invoices_sync() {
         target: "quickbooks".into(),
         enabled: true,
         on_approval: true,
+        credit_hold_days: None,
+        credit_hold_amount: None,
     };
     sync::set_settings(&mut tx, &ctx, h.provider, &settings)
         .await
@@ -334,7 +380,7 @@ async fn lists_are_fetched_and_approved_invoices_sync() {
     }
     tx.commit().await.unwrap();
 
-    // Approved, it's asked for; the workflow creates it in `QuickBooks`.
+    // Approved, it's asked for; the workflow creates it in QuickBooks.
     let (acme, id) = h.approved("Acme", Some("58")).await;
     let payload = h.requested(id).await.expect("a sync was asked for");
     assert_eq!(payload["customer"]["id"], "58");
@@ -362,7 +408,10 @@ async fn lists_are_fetched_and_approved_invoices_sync() {
     );
     tx.commit().await.unwrap();
 
-    // `QuickBooks` refuses one: it's in the error queue, with `QuickBooks`' reason.
+    // Paid in QuickBooks: the status workflow records it, with the pay link.
+    h.paid_with_link(id).await;
+
+    // QuickBooks refuses one: it's in the error queue, with QuickBooks' reason.
     let (globex, refused) = h.approved("Globex", Some("99")).await;
     h.run(globex, SYNC, h.requested(refused).await.unwrap())
         .await;
@@ -386,7 +435,7 @@ async fn lists_are_fetched_and_approved_invoices_sync() {
     assert!(queue.iter().any(|q| q.invoice_id == refused));
     tx.commit().await.unwrap();
 
-    // An unmapped client fails before `QuickBooks` is asked.
+    // An unmapped client fails before QuickBooks is asked.
     let (_, unmapped) = h.approved("Initech", None).await;
     assert!(h.requested(unmapped).await.is_none());
     let mut tx = h.tx().await;

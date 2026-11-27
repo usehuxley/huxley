@@ -24,6 +24,7 @@ pub mod generate;
 pub mod invoices;
 pub mod review;
 pub mod settings;
+pub mod status;
 pub mod sync;
 
 use std::str::FromStr;

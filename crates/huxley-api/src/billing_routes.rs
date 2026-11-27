@@ -72,6 +72,7 @@ pub fn routes() -> Router<AppState> {
             axum::routing::delete(delete_mapping),
         )
         .route("/billing/sync-queue", get(sync_queue))
+        .route("/billing/receivables", get(receivables))
         .route("/invoices/{id}/sync", get(invoice_sync).post(request_sync))
         .route("/billing/review-rules", get(list_rules).post(create_rule))
         .route(
@@ -694,7 +695,7 @@ pub async fn invoice_pdf(
     ))
 }
 
-fn render_pdf(i: &Invoice) -> Vec<u8> {
+pub(crate) fn render_pdf(i: &Invoice) -> Vec<u8> {
     use huxley_analytics::export::{Cell, Table, pdf};
     let money = |d: Decimal| format!("{} {}", i.currency, d.round_dp(2));
     let rows = i
@@ -775,6 +776,11 @@ pub struct SyncSettingsRequest {
     pub enabled: bool,
     #[serde(default = "yes")]
     pub on_approval: bool,
+    #[serde(default)]
+    pub credit_hold_days: Option<i32>,
+    #[serde(default)]
+    #[schema(value_type = Option<String>)]
+    pub credit_hold_amount: Option<Decimal>,
 }
 
 const fn yes() -> bool {
@@ -794,6 +800,8 @@ pub async fn put_sync_settings(
         target: body.target,
         enabled: body.enabled,
         on_approval: body.on_approval,
+        credit_hold_days: body.credit_hold_days,
+        credit_hold_amount: body.credit_hold_amount,
     };
     Ok(Json(
         scoped(&state, &scope, async |tx| {
@@ -949,6 +957,26 @@ pub async fn request_sync(
     Ok(Json(
         scoped(&state, &OrgScope::System, async |tx| {
             sync::request(tx, &ctx, id).await
+        })
+        .await?,
+    ))
+}
+
+/// Clients with something owing (from their synced invoices' status in the
+/// accounting system), most overdue first; with any credit hold.
+#[utoipa::path(get, path = "/api/v1/billing/receivables", operation_id = "billing_receivables", tag = "billing",
+    responses((status = 200, body = Vec<huxley_billing::status::ClientStatus>)))]
+pub async fn receivables(
+    State(state): State<AppState>,
+    authed: Authed,
+) -> ApiResult<Json<Vec<huxley_billing::status::ClientStatus>>> {
+    require_module(&state, MODULE).await?;
+    let scope = authed
+        .module_scope(&state, permissions::BILLING_READ, MODULE)
+        .await?;
+    Ok(Json(
+        scoped(&state, &scope, async |tx| {
+            huxley_billing::status::receivables(tx).await
         })
         .await?,
     ))

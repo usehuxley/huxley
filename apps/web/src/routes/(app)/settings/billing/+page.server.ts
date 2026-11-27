@@ -64,7 +64,11 @@ export const actions: Actions = {
 				orgId: formString(form, 'orgId'),
 				target: formString(form, 'target'),
 				enabled: form.get('enabled') === 'on',
-				onApproval: form.get('onApproval') === 'on'
+				onApproval: form.get('onApproval') === 'on',
+				creditHoldDays: formString(form, 'creditHoldDays')
+					? Number(formString(form, 'creditHoldDays'))
+					: null,
+				creditHoldAmount: formString(form, 'creditHoldAmount').trim() || null
 			}
 		});
 		if (!data)

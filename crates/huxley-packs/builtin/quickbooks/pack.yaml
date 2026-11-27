@@ -7,5 +7,5 @@ publisher: Huxley
 description: "QuickBooks Online accounting sync: approved invoices and credit memos are created in QuickBooks with their mapped customers, items, tax codes and classes, and QuickBooks' customers, items, tax codes and classes are fetched for mapping."
 contents:
   integrations: [quickbooks]
-  workflows: [quickbooks-sync-invoice, quickbooks-fetch-lists]
+  workflows: [quickbooks-sync-invoice, quickbooks-fetch-lists, quickbooks-invoice-status]
   datasets: [quickbooks-customers, quickbooks-items, quickbooks-tax-codes, quickbooks-classes]
