@@ -18250,8 +18250,13 @@ export interface components {
 		};
 		TicketPage: {
 			items: components['schemas']['Ticket'][];
-			/** Format: int64 */
+			/**
+			 * Format: int64
+			 * @description How many match, counted up to 10,000 (see `total_capped`).
+			 */
 			total: number;
+			/** @description More than 10,000 match: `total` stops there. */
+			totalCapped: boolean;
 		};
 		TicketTemplate: {
 			description: string;

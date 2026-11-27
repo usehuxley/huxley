@@ -51,10 +51,29 @@ impl Database {
     }
 }
 
+/// A `huxley` command, pinned with `taskset` to the CPUs in
+/// `BENCH_HUXLEY_CPUS` (e.g. `0-1`) when set: benchmarks give Huxley a
+/// reference size's cores (docs/performance.md).
+pub fn huxley_command(args: &[&str]) -> Command {
+    match std::env::var("BENCH_HUXLEY_CPUS") {
+        Ok(cpus) if !cpus.trim().is_empty() => {
+            let mut command = Command::new("taskset");
+            command
+                .args(["-c", cpus.trim(), env!("CARGO_BIN_EXE_huxley")])
+                .args(args);
+            command
+        }
+        _ => {
+            let mut command = Command::new(env!("CARGO_BIN_EXE_huxley"));
+            command.args(args);
+            command
+        }
+    }
+}
+
 /// Starts `huxley serve --roles worker` against `url`.
 pub fn worker(url: &str, concurrency: usize) -> Child {
-    Command::new(env!("CARGO_BIN_EXE_huxley"))
-        .args(["serve", "--roles", "worker"])
+    huxley_command(&["serve", "--roles", "worker"])
         .env("HUXLEY_DATABASE__URL", url)
         .env("HUXLEY_CRYPTO__KEK", TEST_KEK)
         .env("HUXLEY_ENGINE__LEASE_SECS", "2")

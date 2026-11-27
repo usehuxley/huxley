@@ -197,7 +197,7 @@ async fn find(tx: &mut PgConnection, input: &Json, org: Option<Uuid>) -> Result<
         offset: None,
     };
     let page = tickets::list(tx, &filter).await.map_err(desk_error)?;
-    Ok(json!({ "tickets": page.items, "total": page.total }))
+    Ok(json!({ "tickets": page.items, "total": page.total, "totalCapped": page.total_capped }))
 }
 
 async fn get(tx: &mut PgConnection, ticket: Uuid, input: &Json) -> Result<Json, Json> {

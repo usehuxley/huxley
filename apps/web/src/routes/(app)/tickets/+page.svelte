@@ -388,7 +388,9 @@
 		</section>
 		{#if data.pages > 1}
 			<nav aria-label="Pages" class="flex items-center justify-between text-sm text-fg-muted">
-				<span>{data.total} tickets · page {data.page} of {data.pages}</span>
+				<span>
+					{data.total.toLocaleString()}{data.totalCapped ? '+' : ''} tickets · page {data.page} of {data.pages}
+				</span>
 				<span class="flex gap-2">
 					{#if data.page > 1}
 						<Button href={withParams({ page: data.page - 1 })} size="sm">Previous</Button>
