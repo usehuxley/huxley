@@ -94,18 +94,24 @@ test.describe('actions', () => {
 		const [name, ticket, reference] = await setUp(stamp);
 		await signIn(page);
 		await page.goto(`/tickets/${ticket}`);
-		await page.getByRole('list', { name: 'Actions' }).getByRole('link', { name }).click();
-		await expect(page.getByTestId('action-on')).toContainText(reference);
-		await expect(page.getByTestId('action-on')).toContainText('Ada');
-		await page.getByLabel('Reason').fill('New phone');
-		await page.getByRole('button', { name: 'Submit' }).click();
-		await expect(page.getByText('Started 1 workflow run(s):')).toBeVisible();
+		await page.getByRole('list', { name: 'Actions' }).getByRole('button', { name }).click();
 
-		const run = await page.getByRole('link', { name: 'View run' }).getAttribute('href');
+		// It opens beside the ticket, on the ticket and its requester.
+		const drawer = page.getByRole('dialog', { name });
+		await expect(drawer).toContainText(reference);
+		await expect(drawer).toContainText('Ada');
+		await drawer.getByLabel('Reason').fill('New phone');
+		await drawer.getByRole('button', { name: 'Run' }).click();
+		const runLink = drawer.getByRole('link', { name: /^Run [0-9a-f]{8}$/ });
+		await expect(runLink).toBeVisible();
+		const run = await runLink.getAttribute('href');
 
-		// Back on the ticket, its history says so.
-		await page.getByRole('link', { name: `Back to ${reference}` }).click();
-		await expect(page.getByText(`ran ${name}`)).toBeVisible();
+		// The ticket's history says so, without leaving the page.
+		await drawer
+			.getByRole('button', { name: /Done|Close/ })
+			.last()
+			.click();
+		await expect(page.getByText(`ran ${name}`)).toBeVisible({ timeout: 20_000 });
 
 		// The run had the requester: its output is Ada's email.
 		await page.goto(run!);
