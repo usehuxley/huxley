@@ -85,7 +85,9 @@ test.describe('email', () => {
 		await page.getByLabel('Email').fill(email);
 		await page.getByLabel('Password').fill('my replacement passphrase');
 		await page.getByRole('button', { name: 'Sign in', exact: true }).click();
-		await expect(page.getByRole('heading', { level: 1 })).toHaveText('Welcome to Huxley');
+		await expect(page.getByRole('heading', { level: 1 })).toHaveText(
+			/^Good (morning|afternoon|evening), /
+		);
 		await page.goto('/profile');
 		await expect(page.getByText('Verified', { exact: true })).toBeVisible();
 
@@ -104,6 +106,8 @@ test.describe('email', () => {
 		await page.getByLabel('Email').fill(email);
 		await page.getByLabel('Password').fill('a passphrase I chose');
 		await page.getByRole('button', { name: 'Sign in', exact: true }).click();
-		await expect(page.getByRole('heading', { level: 1 })).toHaveText('Welcome to Huxley');
+		await expect(page.getByRole('heading', { level: 1 })).toHaveText(
+			/^Good (morning|afternoon|evening), /
+		);
 	});
 });

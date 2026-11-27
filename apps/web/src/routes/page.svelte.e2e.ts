@@ -56,7 +56,9 @@ test.describe('with the API', () => {
 		await page.getByLabel('Password').fill(password!);
 		await page.getByRole('button', { name: 'Sign in', exact: true }).click();
 
-		await expect(page.getByRole('heading', { level: 1 })).toHaveText('Welcome to Huxley');
+		await expect(page.getByRole('heading', { level: 1 })).toHaveText(
+			/^Good (morning|afternoon|evening), /
+		);
 		await expect(page.getByRole('navigation', { name: 'Spaces' })).toBeVisible();
 		await expect(page.getByText('Operational')).toBeVisible();
 
@@ -74,7 +76,9 @@ test.describe('with the API', () => {
 		await page.getByLabel('Email').fill(email!);
 		await page.getByLabel('Password').fill(password!);
 		await page.getByRole('button', { name: 'Sign in', exact: true }).click();
-		await expect(page.getByRole('heading', { level: 1 })).toHaveText('Welcome to Huxley');
+		await expect(page.getByRole('heading', { level: 1 })).toHaveText(
+			/^Good (morning|afternoon|evening), /
+		);
 
 		// Nothing wider than the screen.
 		const overflow = await page.evaluate(

@@ -55,7 +55,9 @@ test.describe('MFA policy', () => {
 		await ownerPage.getByLabel('Email').fill(ownerEmail!);
 		await ownerPage.getByLabel('Password').fill(ownerPassword!);
 		await ownerPage.getByRole('button', { name: 'Sign in', exact: true }).click();
-		await expect(ownerPage.getByRole('heading', { level: 1 })).toHaveText('Welcome to Huxley');
+		await expect(ownerPage.getByRole('heading', { level: 1 })).toHaveText(
+			/^Good (morning|afternoon|evening), /
+		);
 		await ownerPage.goto('/settings/security');
 		await ownerPage.getByRole('button', { name: 'Require for Read-only' }).click();
 		await expect(
@@ -83,7 +85,9 @@ test.describe('MFA policy', () => {
 			await expect(page.getByText('Save your recovery codes')).toBeVisible();
 			await expect(page.getByTestId('mfa-required')).toHaveCount(0);
 			await page.goto('/');
-			await expect(page.getByRole('heading', { level: 1 })).toHaveText('Welcome to Huxley');
+			await expect(page.getByRole('heading', { level: 1 })).toHaveText(
+				/^Good (morning|afternoon|evening), /
+			);
 		} finally {
 			await api.put(`/api/v1/security/mfa-policy/roles/${readOnly.id}`, {
 				data: { required: false }

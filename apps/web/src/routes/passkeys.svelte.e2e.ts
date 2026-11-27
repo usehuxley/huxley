@@ -64,7 +64,9 @@ test.describe('passkeys', () => {
 		await page.getByLabel('Email').fill(email);
 		await page.getByLabel('Password').fill(PASSWORD);
 		await page.getByRole('button', { name: 'Sign in', exact: true }).click();
-		await expect(page.getByRole('heading', { level: 1 })).toHaveText('Welcome to Huxley');
+		await expect(page.getByRole('heading', { level: 1 })).toHaveText(
+			/^Good (morning|afternoon|evening), /
+		);
 
 		// Add a passkey from the profile. It's the first second factor, so
 		// recovery codes come with it.
@@ -82,7 +84,9 @@ test.describe('passkeys', () => {
 		await page.getByLabel('Password').fill(PASSWORD);
 		await page.getByRole('button', { name: 'Sign in', exact: true }).click();
 		await page.getByRole('button', { name: 'Use a passkey' }).click();
-		await expect(page.getByRole('heading', { level: 1 })).toHaveText('Welcome to Huxley');
+		await expect(page.getByRole('heading', { level: 1 })).toHaveText(
+			/^Good (morning|afternoon|evening), /
+		);
 
 		// And the passkey alone signs in, returning to the requested page.
 		await signOut(page);

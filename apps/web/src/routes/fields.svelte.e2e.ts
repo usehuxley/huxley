@@ -18,7 +18,9 @@ test.describe('custom fields and tags', () => {
 		await page.getByLabel('Email').fill(email!);
 		await page.getByLabel('Password').fill(password!);
 		await page.getByRole('button', { name: 'Sign in', exact: true }).click();
-		await expect(page.getByRole('heading', { level: 1 })).toHaveText('Welcome to Huxley');
+		await expect(page.getByRole('heading', { level: 1 })).toHaveText(
+			/^Good (morning|afternoon|evening), /
+		);
 
 		// Define a choice field and a tag.
 		await page.goto('/settings/fields');

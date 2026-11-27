@@ -99,7 +99,9 @@ test.describe('assistant context', () => {
 			await page.getByLabel('Email').fill(ownerEmail!);
 			await page.getByLabel('Password').fill(ownerPassword!);
 			await page.getByRole('button', { name: 'Sign in', exact: true }).click();
-			await expect(page.getByRole('heading', { level: 1 })).toHaveText('Welcome to Huxley');
+			await expect(page.getByRole('heading', { level: 1 })).toHaveText(
+				/^Good (morning|afternoon|evening), /
+			);
 			await page
 				.context()
 				.addCookies([{ name: 'hx_org', value: client.id, url: new URL(page.url()).origin }]);
