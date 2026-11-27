@@ -7,6 +7,7 @@ import { expect, request, test, type APIResponse, type Page } from '@playwright/
 const ownerEmail = process.env.E2E_EMAIL;
 const ownerPassword = process.env.E2E_PASSWORD;
 const apiUrl = process.env.HUXLEY_API_URL;
+const preset = process.env.E2E_PRESET ?? 'automation';
 
 async function signIn(page: Page) {
 	await page.goto('/login');
@@ -65,6 +66,8 @@ test.describe('presales scoping', () => {
 		!ownerEmail || !ownerPassword || !apiUrl,
 		'set E2E_EMAIL, E2E_PASSWORD, and HUXLEY_API_URL'
 	);
+	// It turns the sales modules on, which the modules-off run must not.
+	test.skip(preset === 'automation', 'the sales modules stay off in this run');
 
 	test('discovery becomes an AI-drafted scope, approved and carried by the quote', async ({
 		page
