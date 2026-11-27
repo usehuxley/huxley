@@ -18,7 +18,7 @@ The audit log is an append-only hash chain. Each record holds a sequence number,
   - each record gets the next `seq`, the head's hash as `prev_hash`, and its hash over the same canonical content as before;
   - the head moves on.
   - It takes the head with `FOR UPDATE SKIP LOCKED`, so one sealer works at a time and others return straight away.
-- **Who seals:**
+- **Who seals** (on demand, a sealer waits for one already running, so what committed before is sealed when it returns; the background sealer skips instead):
   - every second, the scheduler role;
   - before listing, the audit list (only sealed records are listed);
   - before verifying, verification (`huxley admin verify-audit`).

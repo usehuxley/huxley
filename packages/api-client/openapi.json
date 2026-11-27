@@ -15023,6 +15023,136 @@
 				}
 			}
 		},
+		"/api/v1/platform/audit-streams": {
+			"get": {
+				"tags": ["audit"],
+				"operationId": "list_audit_streams",
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "array",
+									"items": {
+										"$ref": "#/components/schemas/AuditStream"
+									}
+								}
+							}
+						}
+					}
+				}
+			},
+			"post": {
+				"tags": ["audit"],
+				"operationId": "create_audit_stream",
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/StreamInput"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"201": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/AuditStream"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/platform/audit-streams/{id}": {
+			"put": {
+				"tags": ["audit"],
+				"operationId": "update_audit_stream",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/StreamInput"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/AuditStream"
+								}
+							}
+						}
+					}
+				}
+			},
+			"delete": {
+				"tags": ["audit"],
+				"operationId": "delete_audit_stream",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"responses": {
+					"204": {}
+				}
+			}
+		},
+		"/api/v1/platform/audit-streams/{id}/test": {
+			"post": {
+				"tags": ["audit"],
+				"summary": "Sends a test event (not part of the audit log) to the stream's\ndestination.",
+				"operationId": "test_audit_stream",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/StreamTest"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
 		"/api/v1/platform/retention": {
 			"get": {
 				"tags": ["system"],
@@ -29366,6 +29496,68 @@
 					},
 					"nextCursor": {
 						"type": ["string", "null"]
+					}
+				}
+			},
+			"AuditStream": {
+				"type": "object",
+				"description": "A stream as it's shown: never its secret.",
+				"required": [
+					"id",
+					"name",
+					"kind",
+					"url",
+					"hasSecret",
+					"enabled",
+					"lastSeq",
+					"failures",
+					"behind"
+				],
+				"properties": {
+					"behind": {
+						"type": "integer",
+						"format": "int64",
+						"description": "Sealed records not shipped yet."
+					},
+					"enabled": {
+						"type": "boolean"
+					},
+					"failures": {
+						"type": "integer",
+						"format": "int32",
+						"description": "Failed attempts in a row."
+					},
+					"hasSecret": {
+						"type": "boolean",
+						"description": "Whether a token or header value is set."
+					},
+					"headerName": {
+						"type": ["string", "null"]
+					},
+					"id": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"kind": {
+						"$ref": "#/components/schemas/StreamKind"
+					},
+					"lastError": {
+						"type": ["string", "null"]
+					},
+					"lastSeq": {
+						"type": "integer",
+						"format": "int64",
+						"description": "The last record shipped."
+					},
+					"lastShippedAt": {
+						"type": ["string", "null"],
+						"format": "date-time"
+					},
+					"name": {
+						"type": "string"
+					},
+					"url": {
+						"type": "string"
 					}
 				}
 			},
@@ -46132,6 +46324,55 @@
 			"StepStatus": {
 				"type": "string",
 				"enum": ["running", "waiting", "succeeded", "failed", "skipped", "cancelled"]
+			},
+			"StreamInput": {
+				"type": "object",
+				"description": "A new stream, or changes to one.",
+				"required": ["name", "kind", "url"],
+				"properties": {
+					"enabled": {
+						"type": "boolean"
+					},
+					"fromStart": {
+						"type": "boolean",
+						"description": "New streams only: ship the whole audit log, not just what's recorded\nfrom now on."
+					},
+					"headerName": {
+						"type": ["string", "null"],
+						"description": "Webhook only: the header the secret goes in (default Authorization)."
+					},
+					"kind": {
+						"$ref": "#/components/schemas/StreamKind"
+					},
+					"name": {
+						"type": "string"
+					},
+					"secret": {
+						"type": ["string", "null"],
+						"description": "The token (Splunk) or header value (webhook). Left out when\nchanging a stream, the current one stays."
+					},
+					"url": {
+						"type": "string"
+					}
+				},
+				"additionalProperties": false
+			},
+			"StreamKind": {
+				"type": "string",
+				"enum": ["webhook", "splunk_hec"]
+			},
+			"StreamTest": {
+				"type": "object",
+				"description": "How a test event went.",
+				"required": ["ok"],
+				"properties": {
+					"error": {
+						"type": ["string", "null"]
+					},
+					"ok": {
+						"type": "boolean"
+					}
+				}
 			},
 			"Structure": {
 				"type": "object",

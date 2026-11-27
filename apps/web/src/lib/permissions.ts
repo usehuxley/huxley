@@ -91,6 +91,11 @@ export const SETTINGS_SECTIONS = [
 		permission: 'platform:retention:manage'
 	},
 	{
+		key: 'audit-streams',
+		label: 'Audit streaming',
+		permission: 'platform:audit_streams:manage'
+	},
+	{
 		key: 'expenses',
 		label: 'Expenses',
 		permission: 'expense:configure',

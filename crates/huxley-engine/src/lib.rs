@@ -12,6 +12,7 @@
 mod action;
 mod ai;
 pub mod approval;
+pub mod audit_stream;
 mod autodoc;
 mod calendar;
 mod callback;

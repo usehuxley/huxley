@@ -14,6 +14,7 @@
 		roles: resolve('/(app)/settings/roles'),
 		'service-accounts': resolve('/(app)/settings/service-accounts'),
 		audit: resolve('/(app)/settings/audit'),
+		'audit-streams': resolve('/(app)/settings/audit-streams'),
 		fields: resolve('/(app)/settings/fields'),
 		queues: resolve('/(app)/settings/queues'),
 		sla: resolve('/(app)/settings/sla'),

@@ -90,3 +90,4 @@ Decisions that shape Huxley. Add a new ADR by copying `0000-template.md` with th
 | [084](0084-card-transactions.md) | Card charges are imported, deduplicated by bank ID, and matched to the cardholder's expenses | Accepted |
 | [085](0085-retention.md) | A daily sweep enforces retention; the audit log is exported, not pruned | Accepted |
 | [086](0086-audit-sealing.md) | Audit records are sealed into the hash chain after commit | Accepted |
+| [087](0087-audit-streaming.md) | The audit log is streamed to SIEMs over HTTPS, in chain order | Accepted |
