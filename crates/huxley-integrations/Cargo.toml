@@ -29,6 +29,7 @@ utoipa.workspace = true
 uuid.workspace = true
 
 [dev-dependencies]
+proptest.workspace = true
 huxley-crypto = { workspace = true, features = ["testing"] }
 huxley-db = { workspace = true, features = ["testing"] }
 tokio.workspace = true
