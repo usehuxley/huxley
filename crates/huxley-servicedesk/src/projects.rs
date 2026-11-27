@@ -113,6 +113,12 @@ pub struct ProjectChanges {
     /// Remove the fee.
     #[serde(default)]
     pub clear_fee: bool,
+    /// The expense budget (cost).
+    #[serde(default)]
+    pub cost_budget: Option<f64>,
+    /// Remove the expense budget.
+    #[serde(default)]
+    pub clear_cost_budget: bool,
     pub version: i32,
 }
 
@@ -192,6 +198,8 @@ struct Row {
     used_hours: f64,
     billing_method: String,
     fee_amount: Option<f64>,
+    cost_budget: Option<f64>,
+    expense_cost: f64,
     thresholds: Vec<i16>,
     thresholds_fired: Vec<i16>,
     portal_visible: bool,
@@ -222,6 +230,12 @@ pub struct Project {
     pub billing_method: String,
     /// What it bills: the fixed fee, or a not-to-exceed cap.
     pub fee_amount: Option<f64>,
+    /// Its expense budget (cost).
+    pub cost_budget: Option<f64>,
+    /// Expenses on it (submitted, approved or paid back).
+    pub expense_cost: f64,
+    /// Expenses against the cost budget, in percent.
+    pub cost_burn_percent: Option<f64>,
     pub thresholds: Vec<i16>,
     pub thresholds_fired: Vec<i16>,
     pub portal_visible: bool,
@@ -244,7 +258,9 @@ const SELECT: &str = "SELECT p.id, p.org_id, o.name AS org_name, p.name, p.descr
      to_char(p.end_on, 'YYYY-MM-DD') AS end_on, p.budget_hours::float8 AS budget_hours, \
      coalesce((SELECT sum(e.minutes) FROM sd_time_entries e JOIN prj_tasks k ON k.ticket_id = e.ticket_id \
                WHERE k.project_id = p.id), 0)::float8 / 60 AS used_hours, \
-     p.billing_method, p.fee_amount::float8 AS fee_amount, p.thresholds, p.thresholds_fired, p.portal_visible, p.template_id, \
+     p.billing_method, p.fee_amount::float8 AS fee_amount, p.cost_budget::float8 AS cost_budget, \
+     coalesce((SELECT sum(x.amount) FROM exp_entries x WHERE x.project_id = p.id \
+               AND x.status IN ('submitted', 'approved', 'reimbursed')), 0)::float8 AS expense_cost, p.thresholds, p.thresholds_fired, p.portal_visible, p.template_id, \
      p.agreement_id, a.name AS agreement_name, p.version \
      FROM prj_projects p JOIN organizations o ON o.id = p.org_id LEFT JOIN users u ON u.id = p.manager_user_id \
      LEFT JOIN contract_agreements a ON a.id = p.agreement_id";
@@ -387,6 +403,9 @@ fn assemble(
         used_hours: (row.used_hours * 100.0).round() / 100.0,
         billing_method: row.billing_method,
         fee_amount: row.fee_amount,
+        cost_budget: row.cost_budget,
+        expense_cost: (row.expense_cost * 100.0).round() / 100.0,
+        cost_burn_percent: burn(row.cost_budget, row.expense_cost),
         thresholds: row.thresholds,
         thresholds_fired: row.thresholds_fired,
         portal_visible: row.portal_visible,
@@ -805,6 +824,9 @@ pub async fn update(
     if c.fee_amount.is_some_and(|f| !f.is_finite() || f < 0.0) {
         return Err(DeskError::invalid("feeAmount", "zero or more"));
     }
+    if c.cost_budget.is_some_and(|f| !f.is_finite() || f < 0.0) {
+        return Err(DeskError::invalid("costBudget", "zero or more"));
+    }
     let agreement = if c.clear_agreement {
         None
     } else if let Some(a) = c.agreement_id {
@@ -816,7 +838,7 @@ pub async fn update(
     sqlx::query(
         "UPDATE prj_projects SET name = $2, description = $3, manager_user_id = $4, status = $5, end_on = $6, \
                 budget_hours = $7, billing_method = $8, thresholds = $9, portal_visible = $10, agreement_id = $11, \
-                fee_amount = $12::float8::numeric, \
+                fee_amount = $12::float8::numeric, cost_budget = $13::float8::numeric, \
                 thresholds_fired = (SELECT coalesce(array_agg(f), '{}') FROM unnest(thresholds_fired) f WHERE f = ANY($9)), \
                 version = version + 1, updated_at = now() WHERE id = $1",
     )
@@ -832,6 +854,7 @@ pub async fn update(
     .bind(c.portal_visible.unwrap_or(current.portal_visible))
     .bind(agreement)
     .bind(if c.clear_fee { None } else { c.fee_amount.or(current.fee_amount) })
+    .bind(if c.clear_cost_budget { None } else { c.cost_budget.or(current.cost_budget) })
     .execute(&mut *conn)
     .await?;
     if status != current.status {

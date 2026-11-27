@@ -12973,7 +12973,7 @@ export interface components {
 			unitPrice: string;
 		};
 		/** @enum {string} */
-		InvoiceLineKind: 'time' | 'product' | 'recurring' | 'project' | 'manual';
+		InvoiceLineKind: 'time' | 'product' | 'recurring' | 'project' | 'expense' | 'manual';
 		/** @description A rule an invoice matches, and why. */
 		InvoiceReviewReason: {
 			detail: string;
@@ -15016,8 +15016,23 @@ export interface components {
 			 * @description Used against budget, in percent.
 			 */
 			burnPercent?: number | null;
+			/**
+			 * Format: double
+			 * @description Its expense budget (cost).
+			 */
+			costBudget?: number | null;
+			/**
+			 * Format: double
+			 * @description Expenses against the cost budget, in percent.
+			 */
+			costBurnPercent?: number | null;
 			description: string;
 			endOn?: string | null;
+			/**
+			 * Format: double
+			 * @description Expenses on it (submitted, approved or paid back).
+			 */
+			expenseCost: number;
 			/**
 			 * Format: double
 			 * @description What it bills: the fixed fee, or a not-to-exceed cap.
@@ -15063,8 +15078,15 @@ export interface components {
 			budgetHours?: number | null;
 			/** @description Unlink the agreement. */
 			clearAgreement?: boolean;
+			/** @description Remove the expense budget. */
+			clearCostBudget?: boolean;
 			/** @description Remove the fee. */
 			clearFee?: boolean;
+			/**
+			 * Format: double
+			 * @description The expense budget (cost).
+			 */
+			costBudget?: number | null;
 			description?: string | null;
 			endOn?: string | null;
 			/**
@@ -18152,6 +18174,7 @@ export interface components {
 			  };
 		UnbilledClient: {
 			currency: string;
+			expenses: string;
 			lines: components['schemas']['BillableLine'][];
 			/** Format: uuid */
 			orgId: string;

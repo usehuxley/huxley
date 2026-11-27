@@ -123,13 +123,16 @@ export const actions: Actions = {
 		const form = await event.request.formData();
 		const fee = formString(form, 'feeAmount').trim();
 		const method = formString(form, 'billingMethod');
+		const cost = formString(form, 'costBudget').trim();
 		const { data, response } = await api(event).PATCH('/api/v1/projects/{id}', {
 			params: { path: { id: event.params.id } },
 			body: {
 				version: Number(formString(form, 'version')),
 				billingMethod: method || null,
 				feeAmount: fee ? Number(fee) : null,
-				clearFee: !fee
+				clearFee: !fee,
+				costBudget: cost ? Number(cost) : null,
+				clearCostBudget: !cost
 			}
 		});
 		if (!data) return fail(response.status, { message: 'Could not save billing.' });

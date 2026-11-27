@@ -25,7 +25,7 @@
 		customer: data.clients.map((c) => ({ key: c.id, name: c.name })),
 		item: [
 			{ key: 'default', name: 'Anything else (the default item)' },
-			...['time', 'recurring', 'project', 'product', 'manual'].map((k) => ({
+			...['time', 'recurring', 'project', 'product', 'expense', 'manual'].map((k) => ({
 				key: `kind:${k}`,
 				name: `${k.charAt(0).toUpperCase()}${k.slice(1)} lines`
 			})),

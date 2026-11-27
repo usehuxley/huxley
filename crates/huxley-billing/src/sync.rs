@@ -219,7 +219,14 @@ pub async fn mappings(
     .await?)
 }
 
-const LINE_KINDS: [&str; 5] = ["time", "product", "recurring", "project", "manual"];
+const LINE_KINDS: [&str; 6] = [
+    "time",
+    "product",
+    "recurring",
+    "project",
+    "expense",
+    "manual",
+];
 
 fn check_local(kind: MappingKind, key: &str) -> BillingResult<String> {
     let key = key.trim();

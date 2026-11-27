@@ -85,3 +85,4 @@ Decisions that shape Huxley. Add a new ADR by copying `0000-template.md` with th
 | [079](0079-expenses.md) | Expenses are entries placed like time, with receipts kept beside them | Accepted |
 | [080](0080-receipt-reading.md) | AI reads receipts into a suggestion the person confirms | Accepted |
 | [081](0081-expense-reports.md) | Expense reports go to the person's team leads through an approval workflow | Accepted |
+| [082](0082-expense-billing.md) | Approved billable expenses are billing sources; projects keep an expense budget | Accepted |
