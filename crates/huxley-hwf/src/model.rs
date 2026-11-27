@@ -456,6 +456,12 @@ pub enum Step {
     /// Keep a drafted Scope of Work (the `sales` module).
     #[serde(rename = "core.scope.write")]
     ScopeWrite(ScopeWriteStep),
+    /// Gather what estimating a scope reads (the `sales` module).
+    #[serde(rename = "core.scope.estimate_context")]
+    ScopeEstimateContext(ScopeEstimateContextStep),
+    /// Keep a drafted estimate: WBS and BOM (the `sales` module).
+    #[serde(rename = "core.scope.write_estimate")]
+    ScopeWriteEstimate(ScopeWriteEstimateStep),
     /// Sync people's busy time from their calendars (the `workforce` module).
     #[serde(rename = "core.calendar.sync")]
     CalendarSync(CalendarSyncStep),
@@ -888,6 +894,16 @@ step!(ScopeWriteStep {
     pub write: ScopeWrite,
 });
 
+step!(ScopeEstimateContextStep {
+    #[serde(rename = "with")]
+    pub scope: ScopeContext,
+});
+
+step!(ScopeWriteEstimateStep {
+    #[serde(rename = "with")]
+    pub write: ScopeWriteEstimate,
+});
+
 step!(CalendarSyncStep {
     #[serde(rename = "with", default, skip_serializing_if = "Option::is_none")]
     pub sync: Option<CalendarSync>,
@@ -1011,6 +1027,8 @@ impl Step {
             SalesLogEmail,
             ScopeContext,
             ScopeWrite,
+            ScopeEstimateContext,
+            ScopeWriteEstimate,
             CalendarSync,
             CalendarWrite,
             ProjectStatus,
@@ -1084,6 +1102,8 @@ impl Step {
             Self::SalesLogEmail(_) => "core.sales.log_email",
             Self::ScopeContext(_) => "core.scope.context",
             Self::ScopeWrite(_) => "core.scope.write",
+            Self::ScopeEstimateContext(_) => "core.scope.estimate_context",
+            Self::ScopeWriteEstimate(_) => "core.scope.write_estimate",
             Self::CalendarSync(_) => "core.calendar.sync",
             Self::CalendarWrite(_) => "core.calendar.write",
             Self::ProjectStatus(_) => "core.project.status",
@@ -1804,6 +1824,26 @@ pub struct ScopeWrite {
     pub sections: Option<Value>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub questions: Option<Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub error: Option<Value>,
+}
+
+/// A drafted estimate to keep (`core.scope.write_estimate`): `scope_id`;
+/// `tasks` (`[{ phase, name, role: n, low, likely, high, milestone,
+/// deliverable }]`), `items` (`[{ product: n, name, quantity, basis,
+/// alternate }]`) and `risk` as the AI wrote them, numbers picking from
+/// `core.scope.estimate_context`'s lists; or `error`. Rows people edited
+/// are kept. Output: the estimate.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct ScopeWriteEstimate {
+    pub scope_id: Value,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tasks: Option<Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub items: Option<Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub risk: Option<Value>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub error: Option<Value>,
 }

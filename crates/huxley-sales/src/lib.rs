@@ -9,6 +9,7 @@
 //! `numeric(18,4)` with an explicit currency, as decimal strings in JSON.
 
 pub mod activities;
+pub mod estimate;
 pub mod forecast;
 pub mod leads;
 pub mod opportunities;

@@ -16870,6 +16870,211 @@
 				}
 			}
 		},
+		"/api/v1/scopes/{id}/estimate": {
+			"get": {
+				"tags": ["sales"],
+				"summary": "The scope's WBS and BOM, with totals, contingency and checks.",
+				"operationId": "get_scope_estimate",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ScopeEstimate"
+								}
+							}
+						}
+					}
+				}
+			},
+			"post": {
+				"tags": ["sales"],
+				"summary": "Asks for an AI estimate (the Presales scoping pack drafts it).",
+				"operationId": "request_scope_estimate",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ScopeEstimate"
+								}
+							}
+						}
+					}
+				}
+			},
+			"delete": {
+				"tags": ["sales"],
+				"operationId": "cancel_scope_estimate",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ScopeEstimate"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/scopes/{id}/estimate/items": {
+			"put": {
+				"tags": ["sales"],
+				"summary": "Replaces the Bill of Materials.",
+				"operationId": "set_scope_items",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"type": "array",
+								"items": {
+									"$ref": "#/components/schemas/ScopeItemInput"
+								}
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ScopeEstimate"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/scopes/{id}/estimate/risk": {
+			"put": {
+				"tags": ["sales"],
+				"summary": "Sets how risky the work is: the contingency follows (10, 20 or 35%).",
+				"operationId": "set_scope_risk",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/RiskBody"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ScopeEstimate"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/scopes/{id}/estimate/tasks": {
+			"put": {
+				"tags": ["sales"],
+				"summary": "Replaces the Work Breakdown Structure.",
+				"operationId": "set_scope_tasks",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"type": "array",
+								"items": {
+									"$ref": "#/components/schemas/ScopeTaskInput"
+								}
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ScopeEstimate"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
 		"/api/v1/scopes/{id}/questions": {
 			"post": {
 				"tags": ["sales"],
@@ -16949,6 +17154,35 @@
 							"application/json": {
 								"schema": {
 									"$ref": "#/components/schemas/Scope"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/scopes/{id}/quote": {
+			"post": {
+				"tags": ["sales"],
+				"summary": "Builds a draft quote on the opportunity from the estimate, carrying the\nlatest approved Scope of Work; says what to check.",
+				"operationId": "assemble_scope_quote",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ScopeAssembled"
 								}
 							}
 						}
@@ -38723,6 +38957,16 @@
 					}
 				}
 			},
+			"RiskBody": {
+				"type": "object",
+				"required": ["risk"],
+				"properties": {
+					"risk": {
+						"$ref": "#/components/schemas/ScopeRisk"
+					}
+				},
+				"additionalProperties": false
+			},
 			"RiskOption": {
 				"type": "object",
 				"required": ["key", "label", "points"],
@@ -39792,6 +40036,23 @@
 					}
 				}
 			},
+			"ScopeAssembled": {
+				"type": "object",
+				"description": "The quote made, and what to look at.",
+				"required": ["quoteId", "warnings"],
+				"properties": {
+					"quoteId": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"warnings": {
+						"type": "array",
+						"items": {
+							"type": "string"
+						}
+					}
+				}
+			},
 			"ScopeChange": {
 				"type": "object",
 				"required": [
@@ -39901,6 +40162,131 @@
 				"type": "string",
 				"enum": ["idle", "requested", "failed"]
 			},
+			"ScopeEstimate": {
+				"type": "object",
+				"required": [
+					"risk",
+					"contingencyPct",
+					"state",
+					"tasks",
+					"items",
+					"roles",
+					"hours",
+					"labour",
+					"materials",
+					"warnings"
+				],
+				"properties": {
+					"contingencyPct": {
+						"type": "string"
+					},
+					"error": {
+						"type": ["string", "null"]
+					},
+					"hours": {
+						"type": "string",
+						"description": "Expected hours with contingency."
+					},
+					"items": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/ScopeItem"
+						}
+					},
+					"labour": {
+						"type": "string"
+					},
+					"materials": {
+						"type": "string"
+					},
+					"risk": {
+						"$ref": "#/components/schemas/ScopeRisk"
+					},
+					"roles": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/ScopeRoleTotal"
+						}
+					},
+					"state": {
+						"$ref": "#/components/schemas/ScopeDraftState"
+					},
+					"tasks": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/ScopeTask"
+						}
+					},
+					"warnings": {
+						"type": "array",
+						"items": {
+							"type": "string"
+						},
+						"description": "Things to settle before quoting."
+					}
+				}
+			},
+			"ScopeItem": {
+				"type": "object",
+				"required": ["id", "name", "quantity", "alternate", "drafted"],
+				"properties": {
+					"alternate": {
+						"type": "boolean"
+					},
+					"basis": {
+						"type": ["string", "null"]
+					},
+					"drafted": {
+						"type": "boolean"
+					},
+					"id": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"name": {
+						"type": "string"
+					},
+					"productId": {
+						"type": ["string", "null"],
+						"format": "uuid"
+					},
+					"quantity": {
+						"type": "string"
+					},
+					"sku": {
+						"type": ["string", "null"]
+					},
+					"unitPrice": {
+						"type": ["string", "null"]
+					}
+				}
+			},
+			"ScopeItemInput": {
+				"type": "object",
+				"required": ["name", "quantity"],
+				"properties": {
+					"alternate": {
+						"type": "boolean"
+					},
+					"basis": {
+						"type": ["string", "null"]
+					},
+					"drafted": {
+						"type": "boolean"
+					},
+					"name": {
+						"type": "string"
+					},
+					"productId": {
+						"type": ["string", "null"],
+						"format": "uuid"
+					},
+					"quantity": {
+						"type": "string"
+					}
+				},
+				"additionalProperties": false
+			},
 			"ScopeOfWork": {
 				"type": "object",
 				"description": "An approved version's sections (for a quote).",
@@ -39957,6 +40343,33 @@
 					},
 					"sectionKey": {
 						"type": ["string", "null"]
+					}
+				}
+			},
+			"ScopeRisk": {
+				"type": "string",
+				"enum": ["low", "medium", "high"]
+			},
+			"ScopeRoleTotal": {
+				"type": "object",
+				"description": "Hours and cost per role, with contingency.",
+				"required": ["role", "hours"],
+				"properties": {
+					"cost": {
+						"type": ["string", "null"]
+					},
+					"hours": {
+						"type": "string"
+					},
+					"rate": {
+						"type": ["string", "null"]
+					},
+					"role": {
+						"type": "string"
+					},
+					"roleProductId": {
+						"type": ["string", "null"],
+						"format": "uuid"
 					}
 				}
 			},
@@ -40030,6 +40443,100 @@
 					},
 					"title": {
 						"type": "string"
+					}
+				},
+				"additionalProperties": false
+			},
+			"ScopeTask": {
+				"type": "object",
+				"required": [
+					"id",
+					"phase",
+					"name",
+					"hoursLow",
+					"hoursLikely",
+					"hoursHigh",
+					"expected",
+					"milestone",
+					"drafted"
+				],
+				"properties": {
+					"deliverable": {
+						"type": ["string", "null"]
+					},
+					"drafted": {
+						"type": "boolean"
+					},
+					"expected": {
+						"type": "string",
+						"description": "(low + 4 × likely + high) ÷ 6."
+					},
+					"hoursHigh": {
+						"type": "string"
+					},
+					"hoursLikely": {
+						"type": "string"
+					},
+					"hoursLow": {
+						"type": "string"
+					},
+					"id": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"milestone": {
+						"type": "boolean"
+					},
+					"name": {
+						"type": "string"
+					},
+					"phase": {
+						"type": "string"
+					},
+					"role": {
+						"type": ["string", "null"]
+					},
+					"roleProductId": {
+						"type": ["string", "null"],
+						"format": "uuid"
+					}
+				}
+			},
+			"ScopeTaskInput": {
+				"type": "object",
+				"required": ["phase", "name"],
+				"properties": {
+					"deliverable": {
+						"type": ["string", "null"]
+					},
+					"drafted": {
+						"type": "boolean",
+						"description": "Kept as the AI's (when saving rows you didn't change)."
+					},
+					"hoursHigh": {
+						"type": "string"
+					},
+					"hoursLikely": {
+						"type": "string"
+					},
+					"hoursLow": {
+						"type": "string"
+					},
+					"milestone": {
+						"type": "boolean"
+					},
+					"name": {
+						"type": "string"
+					},
+					"phase": {
+						"type": "string"
+					},
+					"role": {
+						"type": ["string", "null"]
+					},
+					"roleProductId": {
+						"type": ["string", "null"],
+						"format": "uuid"
 					}
 				},
 				"additionalProperties": false

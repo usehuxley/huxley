@@ -1445,6 +1445,54 @@ export type Step =
 			 * Fail the attempt after this long, e.g. `30s`.
 			 */
 			timeout?: string | null;
+			type: 'core.scope.estimate_context';
+			with: ScopeContext;
+	  }
+	| {
+			/**
+			 * Record the error as the step's output and carry on.
+			 */
+			continue_on_error?: boolean;
+			description?: string | null;
+			/**
+			 * Unique in the workflow: lowercase letters, digits, underscores.
+			 * Other steps read this step's output as `steps.<id>.output`.
+			 */
+			id: string;
+			/**
+			 * Skip the step unless this expression is true.
+			 */
+			if?: string | null;
+			name?: string | null;
+			retry?: RetryPolicy | null;
+			/**
+			 * Fail the attempt after this long, e.g. `30s`.
+			 */
+			timeout?: string | null;
+			type: 'core.scope.write_estimate';
+			with: ScopeWriteEstimate;
+	  }
+	| {
+			/**
+			 * Record the error as the step's output and carry on.
+			 */
+			continue_on_error?: boolean;
+			description?: string | null;
+			/**
+			 * Unique in the workflow: lowercase letters, digits, underscores.
+			 * Other steps read this step's output as `steps.<id>.output`.
+			 */
+			id: string;
+			/**
+			 * Skip the step unless this expression is true.
+			 */
+			if?: string | null;
+			name?: string | null;
+			retry?: RetryPolicy | null;
+			/**
+			 * Fail the attempt after this long, e.g. `30s`.
+			 */
+			timeout?: string | null;
 			type: 'core.calendar.sync';
 			with?: CalendarSync | null;
 	  }
@@ -2631,6 +2679,24 @@ export interface ScopeWrite {
 	questions?: unknown;
 	scope_id: unknown;
 	sections?: unknown;
+}
+/**
+ * A drafted estimate to keep (`core.scope.write_estimate`): `scope_id`;
+ * `tasks` (`[{ phase, name, role: n, low, likely, high, milestone,
+ * deliverable }]`), `items` (`[{ product: n, name, quantity, basis,
+ * alternate }]`) and `risk` as the AI wrote them, numbers picking from
+ * `core.scope.estimate_context`'s lists; or `error`. Rows people edited
+ * are kept. Output: the estimate.
+ *
+ * This interface was referenced by `HuxleyWorkflowFormatV1`'s JSON-Schema
+ * via the `definition` "ScopeWriteEstimate".
+ */
+export interface ScopeWriteEstimate {
+	error?: unknown;
+	items?: unknown;
+	risk?: unknown;
+	scope_id: unknown;
+	tasks?: unknown;
 }
 /**
  * Whose calendars to sync (`core.calendar.sync`): everyone set up (from

@@ -6102,6 +6102,75 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
+	'/api/v1/scopes/{id}/estimate': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** The scope's WBS and BOM, with totals, contingency and checks. */
+		get: operations['get_scope_estimate'];
+		put?: never;
+		/** Asks for an AI estimate (the Presales scoping pack drafts it). */
+		post: operations['request_scope_estimate'];
+		delete: operations['cancel_scope_estimate'];
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/scopes/{id}/estimate/items': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		/** Replaces the Bill of Materials. */
+		put: operations['set_scope_items'];
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/scopes/{id}/estimate/risk': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		/** Sets how risky the work is: the contingency follows (10, 20 or 35%). */
+		put: operations['set_scope_risk'];
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/scopes/{id}/estimate/tasks': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		/** Replaces the Work Breakdown Structure. */
+		put: operations['set_scope_tasks'];
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
 	'/api/v1/scopes/{id}/questions': {
 		parameters: {
 			query?: never;
@@ -6129,6 +6198,26 @@ export interface paths {
 		put?: never;
 		/** Answers an open question, and resolves it (or opens it again). */
 		post: operations['answer_scope_question'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/scopes/{id}/quote': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/**
+		 * Builds a draft quote on the opportunity from the estimate, carrying the
+		 *     latest approved Scope of Work; says what to check.
+		 */
+		post: operations['assemble_scope_quote'];
 		delete?: never;
 		options?: never;
 		head?: never;
@@ -14547,6 +14636,9 @@ export interface components {
 			/** @description The quote as sent, lines and totals included. */
 			snapshot: Record<string, never>;
 		};
+		RiskBody: {
+			risk: components['schemas']['ScopeRisk'];
+		};
 		RiskOption: {
 			key: string;
 			label: string;
@@ -14981,6 +15073,12 @@ export interface components {
 			version: number;
 			versions: components['schemas']['ScopeVersion'][];
 		};
+		/** @description The quote made, and what to look at. */
+		ScopeAssembled: {
+			/** Format: uuid */
+			quoteId: string;
+			warnings: string[];
+		};
 		ScopeChange: {
 			/**
 			 * Format: double
@@ -15034,6 +15132,43 @@ export interface components {
 		};
 		/** @enum {string} */
 		ScopeDraftState: 'idle' | 'requested' | 'failed';
+		ScopeEstimate: {
+			contingencyPct: string;
+			error?: string | null;
+			/** @description Expected hours with contingency. */
+			hours: string;
+			items: components['schemas']['ScopeItem'][];
+			labour: string;
+			materials: string;
+			risk: components['schemas']['ScopeRisk'];
+			roles: components['schemas']['ScopeRoleTotal'][];
+			state: components['schemas']['ScopeDraftState'];
+			tasks: components['schemas']['ScopeTask'][];
+			/** @description Things to settle before quoting. */
+			warnings: string[];
+		};
+		ScopeItem: {
+			alternate: boolean;
+			basis?: string | null;
+			drafted: boolean;
+			/** Format: uuid */
+			id: string;
+			name: string;
+			/** Format: uuid */
+			productId?: string | null;
+			quantity: string;
+			sku?: string | null;
+			unitPrice?: string | null;
+		};
+		ScopeItemInput: {
+			alternate?: boolean;
+			basis?: string | null;
+			drafted?: boolean;
+			name: string;
+			/** Format: uuid */
+			productId?: string | null;
+			quantity: string;
+		};
 		/** @description An approved version's sections (for a quote). */
 		ScopeOfWork: {
 			/** Format: int32 */
@@ -15055,6 +15190,17 @@ export interface components {
 			/** Format: date-time */
 			resolvedAt?: string | null;
 			sectionKey?: string | null;
+		};
+		/** @enum {string} */
+		ScopeRisk: 'low' | 'medium' | 'high';
+		/** @description Hours and cost per role, with contingency. */
+		ScopeRoleTotal: {
+			cost?: string | null;
+			hours: string;
+			rate?: string | null;
+			role: string;
+			/** Format: uuid */
+			roleProductId?: string | null;
 		};
 		ScopeSection: {
 			body: string;
@@ -15083,6 +15229,37 @@ export interface components {
 			/** @description `note`, `transcript` or `document`. */
 			kind: string;
 			title: string;
+		};
+		ScopeTask: {
+			deliverable?: string | null;
+			drafted: boolean;
+			/** @description (low + 4 × likely + high) ÷ 6. */
+			expected: string;
+			hoursHigh: string;
+			hoursLikely: string;
+			hoursLow: string;
+			/** Format: uuid */
+			id: string;
+			milestone: boolean;
+			name: string;
+			phase: string;
+			role?: string | null;
+			/** Format: uuid */
+			roleProductId?: string | null;
+		};
+		ScopeTaskInput: {
+			deliverable?: string | null;
+			/** @description Kept as the AI's (when saving rows you didn't change). */
+			drafted?: boolean;
+			hoursHigh?: string;
+			hoursLikely?: string;
+			hoursLow?: string;
+			milestone?: boolean;
+			name: string;
+			phase: string;
+			role?: string | null;
+			/** Format: uuid */
+			roleProductId?: string | null;
 		};
 		/** @description A kind of engagement, and the sections its Scope of Work has. */
 		ScopeTemplate: {
@@ -29524,6 +29701,144 @@ export interface operations {
 			};
 		};
 	};
+	get_scope_estimate: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ScopeEstimate'];
+				};
+			};
+		};
+	};
+	request_scope_estimate: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ScopeEstimate'];
+				};
+			};
+		};
+	};
+	cancel_scope_estimate: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ScopeEstimate'];
+				};
+			};
+		};
+	};
+	set_scope_items: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['ScopeItemInput'][];
+			};
+		};
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ScopeEstimate'];
+				};
+			};
+		};
+	};
+	set_scope_risk: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['RiskBody'];
+			};
+		};
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ScopeEstimate'];
+				};
+			};
+		};
+	};
+	set_scope_tasks: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['ScopeTaskInput'][];
+			};
+		};
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ScopeEstimate'];
+				};
+			};
+		};
+	};
 	add_scope_question: {
 		parameters: {
 			query?: never;
@@ -29571,6 +29886,27 @@ export interface operations {
 				};
 				content: {
 					'application/json': components['schemas']['Scope'];
+				};
+			};
+		};
+	};
+	assemble_scope_quote: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ScopeAssembled'];
 				};
 			};
 		};

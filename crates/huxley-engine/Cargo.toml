@@ -58,6 +58,7 @@ uuid.workspace = true
 zeroize.workspace = true
 
 [dev-dependencies]
+huxley-contracts.workspace = true
 secrecy.workspace = true
 sqlx.workspace = true
 tokio.workspace = true

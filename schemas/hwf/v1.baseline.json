@@ -788,6 +788,21 @@
       ],
       "type": "object"
     },
+    "ScopeWriteEstimate": {
+      "additionalProperties": false,
+      "description": "A drafted estimate to keep (`core.scope.write_estimate`): `scope_id`;\n`tasks` (`[{ phase, name, role: n, low, likely, high, milestone,\ndeliverable }]`), `items` (`[{ product: n, name, quantity, basis,\nalternate }]`) and `risk` as the AI wrote them, numbers picking from\n`core.scope.estimate_context`'s lists; or `error`. Rows people edited\nare kept. Output: the estimate.",
+      "properties": {
+        "error": true,
+        "items": true,
+        "risk": true,
+        "scope_id": true,
+        "tasks": true
+      },
+      "required": [
+        "scope_id"
+      ],
+      "type": "object"
+    },
     "SentimentRecord": {
       "additionalProperties": false,
       "description": "A client message's sentiment to record (`core.sentiment.record`): the\nticket (in the run's organization or below), the note judged (none: the\nticket's description), `score` from -2 (very negative) to 2 (very\npositive), and a one-line `reason`. Again for the same message replaces\nit. Output: `{ id, org_id, ticket_id, score }`.",
@@ -4388,6 +4403,132 @@
             },
             "with": {
               "$ref": "#/$defs/ScopeWrite"
+            }
+          },
+          "required": [
+            "type",
+            "id",
+            "with"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Gather what estimating a scope reads (the `sales` module).",
+          "properties": {
+            "continue_on_error": {
+              "description": "Record the error as the step's output and carry on.",
+              "type": "boolean"
+            },
+            "description": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "id": {
+              "description": "Unique in the workflow: lowercase letters, digits, underscores.\nOther steps read this step's output as `steps.<id>.output`.",
+              "type": "string"
+            },
+            "if": {
+              "description": "Skip the step unless this expression is true.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "name": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "retry": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/RetryPolicy"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "timeout": {
+              "description": "Fail the attempt after this long, e.g. `30s`.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "type": {
+              "const": "core.scope.estimate_context",
+              "type": "string"
+            },
+            "with": {
+              "$ref": "#/$defs/ScopeContext"
+            }
+          },
+          "required": [
+            "type",
+            "id",
+            "with"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Keep a drafted estimate: WBS and BOM (the `sales` module).",
+          "properties": {
+            "continue_on_error": {
+              "description": "Record the error as the step's output and carry on.",
+              "type": "boolean"
+            },
+            "description": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "id": {
+              "description": "Unique in the workflow: lowercase letters, digits, underscores.\nOther steps read this step's output as `steps.<id>.output`.",
+              "type": "string"
+            },
+            "if": {
+              "description": "Skip the step unless this expression is true.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "name": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "retry": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/RetryPolicy"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "timeout": {
+              "description": "Fail the attempt after this long, e.g. `30s`.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "type": {
+              "const": "core.scope.write_estimate",
+              "type": "string"
+            },
+            "with": {
+              "$ref": "#/$defs/ScopeWriteEstimate"
             }
           },
           "required": [

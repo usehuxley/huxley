@@ -16,6 +16,8 @@ use uuid::Uuid;
 
 const DRAFT: &str =
     include_str!("../../huxley-packs/builtin/presales-scoping/workflows/draft-scope.yaml");
+const ESTIMATE: &str =
+    include_str!("../../huxley-packs/builtin/presales-scoping/workflows/draft-estimate.yaml");
 
 /// Answers like Anthropic's Messages API with a drafted scope; checks the
 /// discovery reached it.
@@ -24,15 +26,32 @@ async fn mock_anthropic() -> u16 {
         "/v1/messages",
         post(|AxumJson(body): AxumJson<Json>| async move {
             let asked = body.to_string();
-            assert!(asked.contains("40 mailboxes"), "the transcript reached the model");
-            let answer = json!({
+            let estimating = body["output_config"]["format"]["schema"]["properties"]["tasks"].is_object();
+            let answer = if estimating {
+                // Role 1 and product 1 are the first in the lists it was given.
+                assert!(asked.contains("[1] Engineer"), "the roles reached the model");
+                json!({
+                    "tasks": [
+                        { "phase": "Prepare", "name": "Set up the tenant", "role": 1, "low": 2, "likely": 3, "high": 6,
+                          "milestone": false, "deliverable": "Microsoft 365 tenant" },
+                        { "phase": "Migrate", "name": "Move the mailboxes", "role": 1, "low": 8, "likely": 12, "high": 22,
+                          "milestone": true, "deliverable": "Migrated mailboxes" }
+                    ],
+                    "items": [{ "product": 1, "name": "Licences", "quantity": 40, "basis": "one per mailbox (40)",
+                                "alternate": false }],
+                    "risk": "high"
+                })
+            } else {
+                assert!(asked.contains("40 mailboxes"), "the discovery reached the model");
+                json!({
                 "sections": [
                     { "key": "in_scope", "body": "- Migrate 40 mailboxes to Microsoft 365", "sources": [1] },
                     { "key": "objectives", "body": "Not the people's words", "sources": [] },
                     { "key": "nonsense", "body": "Ignored", "sources": [9] }
                 ],
                 "questions": [{ "section": "timeline", "question": "When must the migration be finished?" }]
-            });
+                })
+            };
             AxumJson(json!({ "model": body["model"], "stop_reason": "end_turn",
                              "content": [{ "type": "text", "text": answer.to_string() }],
                              "usage": { "input_tokens": 400, "output_tokens": 100 } }))
@@ -144,10 +163,10 @@ async fn engine_with_ai(pools: &huxley_db::testing::TestPools, provider: Uuid) -
 async fn run(
     engine: &Engine,
     pools: &huxley_db::testing::TestPools,
-    client: Uuid,
-    scope: Uuid,
+    (client, scope): (Uuid, Uuid),
+    yaml: &str,
 ) -> (RunStatus, Option<Json>) {
-    let document = serde_json::to_value(huxley_hwf::parse_yaml(DRAFT).unwrap()).unwrap();
+    let document = serde_json::to_value(huxley_hwf::parse_yaml(yaml).unwrap()).unwrap();
     let mut tx = begin_scoped(&pools.app, &OrgScope::System).await.unwrap();
     let run = engine
         .start_run(
@@ -191,7 +210,7 @@ async fn the_pack_drafts_untouched_sections_with_citations_and_questions() {
     let pools = db.pools.clone();
     let (provider, client, scope_id) = world(&pools).await;
     let engine = engine_with_ai(&pools, provider).await;
-    let (status, error) = run(&engine, &pools, client, scope_id).await;
+    let (status, error) = run(&engine, &pools, (client, scope_id), DRAFT).await;
     assert_eq!(status, RunStatus::Succeeded, "{error:?}");
 
     let mut tx = begin_scoped(&pools.app, &OrgScope::System).await.unwrap();
@@ -210,4 +229,74 @@ async fn the_pack_drafts_untouched_sections_with_citations_and_questions() {
     assert_eq!(s.questions.len(), 1);
     assert_eq!(s.questions[0].section_key.as_deref(), Some("timeline"));
     assert!(s.questions[0].from_ai);
+}
+
+#[tokio::test]
+async fn the_pack_estimates_the_work_from_the_scope_and_catalog() {
+    let Some(db) = isolated("scoping_estimate").await else {
+        return;
+    };
+    let pools = db.pools.clone();
+    let (provider, client, scope_id) = world(&pools).await;
+    let ctx = RequestContext::system(Via::System);
+    let mut tx = begin_scoped(&pools.app, &OrgScope::System).await.unwrap();
+    for (sku, name, kind, unit, price) in [
+        ("ENG", "Engineer", "service", "hour", "140"),
+        (
+            "M365-BS",
+            "Microsoft 365 Business Standard",
+            "product",
+            "user",
+            "12.5",
+        ),
+    ] {
+        huxley_contracts::catalog::create(
+            &mut tx,
+            &ctx,
+            provider,
+            &serde_json::from_value(
+                json!({ "sku": sku, "name": name, "kind": kind, "unit": unit, "price": price }),
+            )
+            .unwrap(),
+        )
+        .await
+        .unwrap();
+    }
+    huxley_sales::scoping::edit_section(
+        &mut tx,
+        &ctx,
+        scope_id,
+        "deliverables",
+        "- Microsoft 365 tenant\n- Migrated mailboxes",
+    )
+    .await
+    .unwrap();
+    huxley_sales::estimate::request(&mut tx, &ctx, scope_id)
+        .await
+        .unwrap();
+    tx.commit().await.unwrap();
+    let engine = engine_with_ai(&pools, provider).await;
+    let (status, error) = run(&engine, &pools, (client, scope_id), ESTIMATE).await;
+    assert_eq!(status, RunStatus::Succeeded, "{error:?}");
+
+    let mut tx = begin_scoped(&pools.app, &OrgScope::System).await.unwrap();
+    let e = huxley_sales::estimate::get(&mut tx, scope_id)
+        .await
+        .unwrap();
+    tx.commit().await.unwrap();
+    assert_eq!(e.state, DraftState::Idle);
+    assert_eq!(e.risk, huxley_sales::estimate::Risk::High);
+    assert_eq!(e.tasks.len(), 2);
+    assert_eq!(e.tasks[0].role.as_deref(), Some("Engineer"));
+    assert!(e.tasks.iter().all(|t| t.drafted));
+    assert_eq!(e.items[0].name, "Microsoft 365 Business Standard");
+    assert_eq!(e.items[0].basis.as_deref(), Some("one per mailbox (40)"));
+    // (2 + 12 + 6)/6 + (8 + 48 + 22)/6 = 3.33 + 13 = 16.33 hours, plus 35%.
+    assert_eq!(e.hours.round_dp(1).to_string(), "22.0");
+    // Every deliverable has its task.
+    assert!(
+        !e.warnings.iter().any(|w| w.starts_with("No task delivers")),
+        "{:?}",
+        e.warnings
+    );
 }

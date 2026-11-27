@@ -762,6 +762,10 @@ async fn known(
 }
 
 /// The client's people, sites and devices, as lines of text.
+pub(crate) async fn environment_text(conn: &mut PgConnection, org: Uuid) -> SalesResult<String> {
+    environment(conn, org).await
+}
+
 async fn environment(conn: &mut PgConnection, org: Uuid) -> SalesResult<String> {
     let (contacts, sites): (i64, i64) = sqlx::query_as(
         "SELECT (SELECT count(*) FROM crm_contacts WHERE org_id = $1 AND archived_at IS NULL), \

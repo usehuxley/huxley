@@ -1353,3 +1353,131 @@ async fn a_scope_draft_needs_discovery_and_can_be_called_off() {
     let (_, scope) = s.call(&s.owner, "DELETE", &path("/draft"), None).await;
     assert_eq!(scope["draftState"], "idle");
 }
+
+#[tokio::test]
+async fn an_estimate_assembles_the_quote_with_checks() {
+    let Some(s) = setup().await else { return };
+    let engineer = s.product_hourly("ENG-HR", "150").await;
+    let switch = s.product("SW-48", "300", "450", "one_time").await;
+    let (_, o) = s
+        .call(
+            &s.owner,
+            "POST",
+            "/api/v1/opportunities",
+            Some(json!({ "orgId": s.acme, "opportunity": { "name": unique("Network refresh") } })),
+        )
+        .await;
+    let opp = o["id"].as_str().unwrap().to_owned();
+    let (_, scope) = s
+        .call(
+            &s.owner,
+            "POST",
+            &format!("/api/v1/opportunities/{opp}/scope"),
+            Some(json!({ "template": "project" })),
+        )
+        .await;
+    let id = scope["id"].as_str().unwrap().to_owned();
+    let path = |p: &str| format!("/api/v1/scopes/{id}{p}");
+    s.call(
+        &s.owner,
+        "PUT",
+        &path("/sections/deliverables"),
+        Some(json!({ "body": "- New core switches\n- Network diagram" })),
+    )
+    .await;
+
+    // The WBS: three-point hours; a task with no role.
+    let (status, est) = s
+        .call(
+            &s.owner,
+            "PUT",
+            &path("/estimate/tasks"),
+            Some(json!([
+                { "phase": "Build", "name": "Install switches", "roleProductId": engineer,
+                  "hoursLow": "4", "hoursLikely": "6", "hoursHigh": "14", "deliverable": "New core switches" },
+                { "phase": "Close", "name": "Hand over", "hoursLow": "1", "hoursLikely": "1", "hoursHigh": "1" }
+            ])),
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK, "{est}");
+    // (4 + 24 + 14) / 6 = 7, plus 20% (medium risk) = 8.4 hours at 150.
+    assert_eq!(est["tasks"][0]["expected"], "7");
+    let role = est["roles"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|r| r["roleProductId"] == json!(engineer))
+        .unwrap();
+    assert_eq!(role["hours"], "8.4");
+    assert_eq!(role["cost"], "1260");
+    let (_, est) = s
+        .call(
+            &s.owner,
+            "PUT",
+            &path("/estimate/items"),
+            Some(json!([
+                { "productId": switch, "name": "48-port switch", "quantity": 2, "basis": "one per floor (2 floors)" },
+                { "name": "Rack shelf", "quantity": 1 }
+            ])),
+        )
+        .await;
+    assert_eq!(est["materials"], "900");
+    let warnings = est["warnings"].to_string();
+    assert!(warnings.contains("isn't approved"), "{warnings}");
+    assert!(warnings.contains("no priced role"), "{warnings}");
+    assert!(
+        warnings.contains("aren't matched to the catalog"),
+        "{warnings}"
+    );
+    assert!(warnings.contains("Network diagram"), "{warnings}");
+    let (_, est) = s
+        .call(
+            &s.owner,
+            "PUT",
+            &path("/estimate/risk"),
+            Some(json!({ "risk": "high" })),
+        )
+        .await;
+    assert_eq!(est["contingencyPct"], "35");
+
+    // Assembled: labour by role (rounded up to the half hour), then materials.
+    let (status, made) = s.call(&s.owner, "POST", &path("/quote"), None).await;
+    assert_eq!(status, StatusCode::OK, "{made}");
+    let (_, q) = s
+        .call(
+            &s.owner,
+            "GET",
+            &format!("/api/v1/quotes/{}", made["quoteId"].as_str().unwrap()),
+            None,
+        )
+        .await;
+    let names: Vec<&str> = q["lines"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|l| l["name"].as_str().unwrap())
+        .collect();
+    assert_eq!(names[0], "Labour");
+    assert_eq!(names[2], "Hardware and software");
+    // 7 × 1.35 = 9.45 → 9.5 hours.
+    assert_eq!(q["lines"][1]["quantity"], "9.5");
+    assert_eq!(q["lines"][1]["unitPrice"], "150");
+}
+
+impl Setup {
+    /// A labour service priced per hour.
+    async fn product_hourly(&self, sku: &str, price: &str) -> String {
+        let (status, p) = self
+            .call(
+                &self.owner,
+                "POST",
+                "/api/v1/catalog/products",
+                Some(json!({ "orgId": self.provider, "product": {
+                    "sku": unique(sku).replace(' ', "-"), "name": "Engineer", "kind": "service",
+                    "cost": "60", "price": price, "billing": "one_time", "unit": "hour" } })),
+            )
+            .await;
+        assert_eq!(status, StatusCode::CREATED, "{p}");
+        p["id"].as_str().unwrap().to_owned()
+    }
+}

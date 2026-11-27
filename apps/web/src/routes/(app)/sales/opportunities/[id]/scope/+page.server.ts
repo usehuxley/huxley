@@ -3,6 +3,7 @@ import { formString } from '#lib/forms.ts';
 import { api } from '#lib/server/api.ts';
 import { problemMessage } from '#lib/server/problems.ts';
 import type { RequestEvent } from '@sveltejs/kit';
+import type { components } from '@usehuxley/api-client';
 import type { Actions, PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async (event) => {
@@ -15,9 +16,23 @@ export const load: PageServerLoad = async (event) => {
 	]);
 	if (!opp.data) error(opp.response.status === 404 ? 404 : 503, 'Opportunity not found.');
 	const { user } = await event.parent();
+	const [estimate, catalog] = scope.data
+		? await Promise.all([
+				client.GET('/api/v1/scopes/{id}/estimate', { params: { path: { id: scope.data.id } } }),
+				client.GET('/api/v1/catalog/products', { params: { query: { active: true } } })
+			])
+		: [null, null];
+	const all = catalog?.data ?? [];
 	return {
 		opportunity: { id: opp.data.id, name: opp.data.name, orgName: opp.data.orgName },
 		scope: scope.data ?? null,
+		estimate: estimate?.data ?? null,
+		roles: all
+			.filter((p) => p.kind === 'service' && p.unit.toLowerCase().startsWith('hour'))
+			.map((p) => ({ value: p.id, label: p.name })),
+		products: all
+			.filter((p) => p.kind === 'product')
+			.map((p) => ({ value: p.id, label: `${p.name} · ${p.sku}` })),
 		templates: templates.data ?? [],
 		canWrite: user.grantedPermissions.includes('sales:write')
 	};
@@ -157,5 +172,90 @@ export const actions: Actions = {
 		});
 		if (!data) return failed(response.status, problem, 'Could not approve it.');
 		return { message: `Approved as version ${data.versions[0]?.number ?? ''}.` } satisfies Said;
+	},
+	tasks: async (event) => {
+		const form = await event.request.formData();
+		const id = await scopeId(event);
+		let doc: components['schemas']['ScopeTaskInput'][];
+		try {
+			doc = JSON.parse(formString(form, 'doc')) as components['schemas']['ScopeTaskInput'][];
+		} catch {
+			return fail(400, { message: 'Could not read the tasks.' });
+		}
+		const {
+			data,
+			error: problem,
+			response
+		} = await api(event).PUT('/api/v1/scopes/{id}/estimate/tasks', {
+			params: { path: { id } },
+			body: doc
+		});
+		if (!data) return failed(response.status, problem, 'Could not save the work breakdown.');
+		return { message: 'Work breakdown saved.' } satisfies Said;
+	},
+	items: async (event) => {
+		const form = await event.request.formData();
+		const id = await scopeId(event);
+		let doc: components['schemas']['ScopeItemInput'][];
+		try {
+			doc = JSON.parse(formString(form, 'doc')) as components['schemas']['ScopeItemInput'][];
+		} catch {
+			return fail(400, { message: 'Could not read the materials.' });
+		}
+		const {
+			data,
+			error: problem,
+			response
+		} = await api(event).PUT('/api/v1/scopes/{id}/estimate/items', {
+			params: { path: { id } },
+			body: doc
+		});
+		if (!data) return failed(response.status, problem, 'Could not save the materials.');
+		return { message: 'Materials saved.' } satisfies Said;
+	},
+	risk: async (event) => {
+		const form = await event.request.formData();
+		const id = await scopeId(event);
+		const risk =
+			(['low', 'medium', 'high'] as const).find((r) => r === formString(form, 'risk')) ?? 'medium';
+		const {
+			data,
+			error: problem,
+			response
+		} = await api(event).PUT('/api/v1/scopes/{id}/estimate/risk', {
+			params: { path: { id } },
+			body: { risk }
+		});
+		if (!data) return failed(response.status, problem, 'Could not set the risk.');
+		return { message: `Contingency ${data.contingencyPct}%.` } satisfies Said;
+	},
+	estimate: async (event) => {
+		const form = await event.request.formData();
+		const id = await scopeId(event);
+		const cancel = formString(form, 'cancel') === 'yes';
+		const client = api(event);
+		const {
+			data,
+			error: problem,
+			response
+		} = cancel
+			? await client.DELETE('/api/v1/scopes/{id}/estimate', { params: { path: { id } } })
+			: await client.POST('/api/v1/scopes/{id}/estimate', { params: { path: { id } } });
+		if (!data) return failed(response.status, problem, 'Could not ask for an estimate.');
+		return {
+			message: cancel ? 'Stopped waiting.' : 'Estimating: this takes a minute.'
+		} satisfies Said;
+	},
+	assemble: async (event) => {
+		const id = await scopeId(event);
+		const {
+			data,
+			error: problem,
+			response
+		} = await api(event).POST('/api/v1/scopes/{id}/quote', {
+			params: { path: { id } }
+		});
+		if (!data) return failed(response.status, problem, 'Could not build the quote.');
+		redirect(303, `/sales/quotes/${data.quoteId}`);
 	}
 };

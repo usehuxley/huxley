@@ -1,0 +1,93 @@
+apiVersion: usehuxley.io/v1
+kind: Workflow
+metadata:
+  key: draft-estimate
+  name: Draft the estimate (WBS and BOM) with AI
+  description: >-
+    When someone asks for an estimate on an opportunity's scoping page,
+    drafts the Work Breakdown Structure (phases, tasks, hours by role, low /
+    likely / high) from the Scope of Work, grounded in your project
+    templates and the hours logged on past projects' tasks, and the Bill of
+    Materials sized from the client's environment, matched to your catalog.
+    Rows people edited are kept.
+spec:
+  triggers:
+    - type: event
+      event: scope.estimate_requested
+  steps:
+    - id: context
+      type: core.scope.estimate_context
+      with:
+        scope_id: "{{ trigger.subject_id }}"
+    - id: draft
+      type: ai.extract
+      with:
+        text: "{{ steps.context.output.text }}"
+        instructions: >-
+          You are a presales engineer at an IT managed service provider,
+          estimating the work in the Scope of Work above. Draft:
+          1. A Work Breakdown Structure: phases in order, each with tasks.
+          Every task gets the number of the role that does it from this list
+          (0 if none fits): {{ steps.context.output.roles | join('; ') or 'none' }}.
+          Give low, likely and high hours, grounded in the project templates
+          and past actual hours above where they apply (past work often took
+          longer than estimated: allow for it). Mark milestones. Name the
+          Scope of Work deliverable each task serves, in the deliverable's
+          own words, so every deliverable has tasks.
+          2. A Bill of Materials: what has to be bought, each matched to a
+          product by its number from this list (0 if none fits; then name
+          it): {{ steps.context.output.products | join('; ') or 'none' }}.
+          Size quantities from the client's environment and the scope, and
+          say how in basis (e.g. "one per user, 30 users"). Offer an
+          alternate only where there's a real choice.
+          3. The risk (low, medium or high): how uncertain the work is.
+          Never invent client facts; where sizing needs something unknown,
+          use the most likely figure and say so in basis.
+        schema:
+          type: object
+          additionalProperties: false
+          properties:
+            tasks:
+              type: array
+              items:
+                type: object
+                additionalProperties: false
+                properties:
+                  phase: { type: string }
+                  name: { type: string }
+                  role: { type: integer }
+                  low: { type: number }
+                  likely: { type: number }
+                  high: { type: number }
+                  milestone: { type: boolean }
+                  deliverable: { type: string }
+                required: [phase, name, role, low, likely, high, milestone, deliverable]
+            items:
+              type: array
+              items:
+                type: object
+                additionalProperties: false
+                properties:
+                  product: { type: integer }
+                  name: { type: string }
+                  quantity: { type: number }
+                  basis: { type: string }
+                  alternate: { type: boolean }
+                required: [product, name, quantity, basis, alternate]
+            risk: { type: string, enum: [low, medium, high] }
+          required: [tasks, items, risk]
+    - id: write
+      type: core.scope.write_estimate
+      with:
+        scope_id: "{{ trigger.subject_id }}"
+        tasks: "{{ steps.draft.output.tasks }}"
+        items: "{{ steps.draft.output.items }}"
+        risk: "{{ steps.draft.output.risk }}"
+  on_error:
+    - id: failed
+      type: core.scope.write_estimate
+      with:
+        scope_id: "{{ trigger.subject_id }}"
+        error: "{{ error.message or 'Estimating failed' }}"
+  outputs:
+    hours: "{{ steps.write.output.hours }}"
