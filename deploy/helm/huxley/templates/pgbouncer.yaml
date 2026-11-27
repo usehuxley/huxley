@@ -1,0 +1,103 @@
+{{- if .Values.pgbouncer.enabled }}
+{{- $name := printf "%s-pgbouncer" (include "huxley.fullname" .) }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ $name }}
+  labels: {{- include "huxley.labels" . | nindent 4 }}
+data:
+  pgbouncer.ini: |
+    [databases]
+    ; Every server connection runs as the application role, with the
+    ; statement timeout: Huxley checks it does (ADR-089).
+    {{ .Values.database.name }} = host={{ .Values.database.host }} port={{ .Values.database.port }} dbname={{ .Values.database.name }} connect_query='SET ROLE huxley_app; SET statement_timeout = {{ .Values.database.statementTimeoutMs }}'
+
+    [pgbouncer]
+    listen_addr = 0.0.0.0
+    listen_port = 6432
+    unix_socket_dir =
+    auth_type = scram-sha-256
+    auth_file = /etc/pgbouncer/auth/userlist.txt
+    pool_mode = transaction
+    max_client_conn = {{ .Values.pgbouncer.maxClientConnections }}
+    default_pool_size = {{ .Values.pgbouncer.poolSize }}
+    ; sqlx uses named prepared statements.
+    max_prepared_statements = 200
+    ; sqlx sends extra_float_digits at startup.
+    ignore_startup_parameters = extra_float_digits
+    server_tls_sslmode = {{ .Values.pgbouncer.serverTlsSslmode }}
+    admin_users =
+    log_connections = 0
+    log_disconnections = 0
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "huxley.labels" . | nindent 4 }}
+    app.kubernetes.io/component: pgbouncer
+spec:
+  replicas: {{ .Values.pgbouncer.replicas }}
+  selector:
+    matchLabels:
+      {{- include "huxley.selector" (dict "ctx" . "component" "pgbouncer") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "huxley.selector" (dict "ctx" . "component" "pgbouncer") | nindent 8 }}
+      annotations:
+        checksum/config: {{ printf "%s%s" .Values.database.host .Values.pgbouncer.poolSize | sha256sum | trunc 16 }}
+    spec:
+      securityContext: {{ toYaml .Values.podSecurityContext | nindent 8 }}
+      # The user list holds the password; it's written at start, never
+      # stored in a ConfigMap.
+      initContainers:
+        - name: userlist
+          image: {{ .Values.pgbouncer.image }}
+          command: ["/bin/sh", "-c", "printf '\"%s\" \"%s\"\\n' \"$DB_USER\" \"$DB_PASSWORD\" > /etc/pgbouncer/auth/userlist.txt"]
+          securityContext: {{ toYaml .Values.securityContext | nindent 12 }}
+          env:
+            - { name: DB_USER, value: {{ .Values.database.user | quote }} }
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef: { name: {{ include "huxley.dbSecret" . }}, key: {{ .Values.database.passwordKey }} }
+          volumeMounts:
+            - { name: auth, mountPath: /etc/pgbouncer/auth }
+      containers:
+        - name: pgbouncer
+          image: {{ .Values.pgbouncer.image }}
+          command: ["pgbouncer", "/etc/pgbouncer/config/pgbouncer.ini"]
+          securityContext: {{ toYaml .Values.securityContext | nindent 12 }}
+          ports:
+            - { name: pgbouncer, containerPort: 6432 }
+          readinessProbe:
+            tcpSocket: { port: pgbouncer }
+            periodSeconds: 5
+          livenessProbe:
+            tcpSocket: { port: pgbouncer }
+            periodSeconds: 15
+          resources: {{ toYaml .Values.pgbouncer.resources | nindent 12 }}
+          volumeMounts:
+            - { name: config, mountPath: /etc/pgbouncer/config }
+            - { name: auth, mountPath: /etc/pgbouncer/auth }
+      volumes:
+        - name: config
+          configMap: { name: {{ $name }} }
+        - name: auth
+          emptyDir: { medium: Memory }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "huxley.labels" . | nindent 4 }}
+    app.kubernetes.io/component: pgbouncer
+spec:
+  selector:
+    {{- include "huxley.selector" (dict "ctx" . "component" "pgbouncer") | nindent 4 }}
+  ports:
+    - { name: pgbouncer, port: 6432, targetPort: pgbouncer }
+{{ include "huxley.pdb" (dict "ctx" . "component" "pgbouncer") }}
+{{- end }}

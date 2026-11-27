@@ -1,0 +1,1 @@
+{{ include "huxley.serverDeployment" (dict "ctx" . "component" "scheduler" "roles" "scheduler" "replicas" .Values.scheduler.replicas "autoscaled" false "resources" .Values.scheduler.resources "probes" false) }}

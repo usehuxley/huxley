@@ -1,0 +1,193 @@
+# Huxley on Kubernetes (ADR-089). Every process is the same image with a
+# different role: the API, worker pools (by job class), and the scheduler.
+# The web app and client portal are their own images.
+
+image:
+  # Defaults to the chart's appVersion. No images are published yet: build
+  # them (docker/*.Dockerfile) and push to your registry.
+  registry: ghcr.io/usehuxley
+  tag: ""
+  pullPolicy: IfNotPresent
+imagePullSecrets: []
+
+# Public addresses. `host` is the staff app (and API); `portalHost` the
+# client portal.
+host: huxley.example.com
+portalHost: portal.example.com
+# https unless you terminate TLS somewhere that rewrites it.
+scheme: https
+
+database:
+  # PostgreSQL 16+ (managed or your own). Migrations create the
+  # application role; the user below owns the schema.
+  host: ""
+  port: 5432
+  name: huxley
+  user: huxley
+  sslmode: require
+  # A Secret with the user's password (URL-safe characters, or
+  # percent-encoded), under `passwordKey`.
+  existingSecret: ""
+  passwordKey: password
+  # Or the password itself (the chart creates the Secret). Prefer existingSecret.
+  password: ""
+  # Connections per process.
+  maxConnections: 20
+  statementTimeoutMs: 30000
+  # A read replica for reporting queries (same user and password).
+  readReplicaHost: ""
+
+# The key-encryption key for secrets at rest. Back it up with the
+# database: without it, encrypted data can't be recovered.
+kek:
+  # A Secret holding it under `key` (generate with `openssl rand -base64 32`).
+  existingSecret: ""
+  key: kek
+  value: ""
+
+# PgBouncer in transaction mode between Huxley and PostgreSQL (ADR-089):
+# many processes share few server connections. LISTEN, migrations and admin
+# commands still go straight to PostgreSQL. Huxley checks at start that the
+# pooler switches to the application role.
+pgbouncer:
+  enabled: false
+  image: edoburu/pgbouncer:v1.24.1-p1
+  replicas: 2
+  maxClientConnections: 2000
+  # Server connections per pool (per PgBouncer replica).
+  poolSize: 40
+  serverTlsSslmode: prefer
+  resources:
+    requests: { cpu: 50m, memory: 32Mi }
+    limits: { memory: 128Mi }
+
+# Attachments and large workflow payloads. With more than one pod they must
+# be shared: an s3:// or az:// URL (credentials in storage.options), or a
+# ReadWriteMany volume.
+storage:
+  url: ""
+  # Provider options as environment variables, from a Secret
+  # (HUXLEY_STORAGE__OPTIONS__<NAME> keys), e.g. access keys.
+  optionsSecret: ""
+  maxUploadMb: 25
+  persistence:
+    enabled: false
+    existingClaim: ""
+    storageClass: ""
+    size: 20Gi
+
+email:
+  smtpUrlSecret: ""
+  smtpUrlKey: smtp-url
+  from: "Huxley <huxley@example.com>"
+
+telemetry:
+  environment: production
+  otlpEndpoint: ""
+
+# Extra environment for every Huxley process (any HUXLEY_* setting).
+extraEnv: []
+extraEnvFrom: []
+
+podSecurityContext:
+  runAsNonRoot: true
+  seccompProfile: { type: RuntimeDefault }
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities: { drop: [ALL] }
+
+serviceAccount:
+  create: true
+  name: ""
+  annotations: {}
+
+# Applies migrations before each install and upgrade (a Helm hook Job).
+migrations:
+  enabled: true
+  resources:
+    requests: { cpu: 100m, memory: 64Mi }
+    limits: { memory: 256Mi }
+
+api:
+  replicas: 2
+  resources:
+    requests: { cpu: 200m, memory: 128Mi }
+    limits: { memory: 512Mi }
+  autoscaling:
+    enabled: false
+    minReplicas: 2
+    maxReplicas: 10
+    targetCPU: 70
+  # The script runner gateway (mutual TLS, port 8443) runs with the API.
+  runnerGateway: true
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+# Worker pools by job class. Each pool is a Deployment whose processes take
+# only its job kinds (advance, step, deadline; none listed takes all), so
+# slow calls to the outside world don't hold up run bookkeeping. With KEDA,
+# each pool scales on its own backlog.
+workers:
+  pools:
+    - name: steps
+      kinds: [step]
+      concurrency: 16
+      replicas: 2
+      minReplicas: 1
+      maxReplicas: 20
+      resources:
+        requests: { cpu: 200m, memory: 192Mi }
+        limits: { memory: 768Mi }
+    - name: runs
+      kinds: [advance, deadline]
+      concurrency: 16
+      replicas: 1
+      minReplicas: 1
+      maxReplicas: 6
+      resources:
+        requests: { cpu: 100m, memory: 128Mi }
+        limits: { memory: 512Mi }
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+# Scale worker pools with KEDA (install KEDA first: https://keda.sh). The
+# trigger counts a pool's due and running jobs, straight from PostgreSQL;
+# each process handles `concurrency` of them.
+keda:
+  enabled: false
+  pollingInterval: 15
+  cooldownPeriod: 300
+
+scheduler:
+  # Timers, schedules, retention, audit sealing and streaming. Safe to run
+  # two for availability: their work is claimed with SKIP LOCKED.
+  replicas: 1
+  resources:
+    requests: { cpu: 50m, memory: 96Mi }
+    limits: { memory: 384Mi }
+
+web:
+  replicas: 2
+  # Uploads pass through the web app.
+  bodySizeLimit: 30M
+  resources:
+    requests: { cpu: 100m, memory: 128Mi }
+    limits: { memory: 384Mi }
+
+portal:
+  replicas: 2
+  resources:
+    requests: { cpu: 50m, memory: 96Mi }
+    limits: { memory: 256Mi }
+
+ingress:
+  enabled: true
+  className: ""
+  annotations: {}
+  # [{ secretName: huxley-tls, hosts: [huxley.example.com, portal.example.com] }]
+  tls: []
+
+podDisruptionBudgets: true

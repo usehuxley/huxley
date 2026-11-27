@@ -29,7 +29,7 @@ async fn claim_takes_exactly_the_limit() {
     }
     for round in 1..=5 {
         let mut tx = begin_scoped(&pools.app, &OrgScope::System).await.unwrap();
-        let claimed = queue::claim(&mut tx, &worker, 1, Duration::from_secs(60))
+        let claimed = queue::claim(&mut tx, &worker, 1, Duration::from_secs(60), &[])
             .await
             .unwrap();
         tx.commit().await.unwrap();
@@ -105,4 +105,49 @@ async fn leases_heartbeats_and_dead_letters() {
         .execute(&pools.owner)
         .await
         .unwrap();
+}
+
+/// Worker pools by job class (ADR-089): a worker taking only some kinds
+/// leaves the others for the pools that take them.
+#[tokio::test]
+async fn workers_take_only_their_kinds() {
+    let Some(db) = huxley_db::testing::isolated("queue_kinds").await else {
+        return;
+    };
+    let pools = db.pools.clone();
+    let run = Uuid::now_v7();
+    for (kind, key) in [
+        ("advance", None),
+        ("step", Some("a")),
+        ("step", Some("b")),
+        ("deadline", None),
+    ] {
+        sqlx::query("INSERT INTO jobs (id, kind, run_id, step_key) VALUES ($1, $2, $3, $4)")
+            .bind(Uuid::now_v7())
+            .bind(kind)
+            .bind(run)
+            .bind(key)
+            .execute(&pools.owner)
+            .await
+            .unwrap();
+    }
+    let claim = |kinds: Vec<String>| {
+        let app = pools.app.clone();
+        async move {
+            let mut tx = begin_scoped(&app, &OrgScope::System).await.unwrap();
+            let jobs = queue::claim(&mut tx, "pool-test", 10, Duration::from_secs(60), &kinds)
+                .await
+                .unwrap();
+            tx.commit().await.unwrap();
+            let mut kinds: Vec<String> = jobs.into_iter().map(|j| j.kind).collect();
+            kinds.sort();
+            kinds
+        }
+    };
+    assert_eq!(claim(vec!["step".into()]).await, ["step", "step"]);
+    assert_eq!(claim(vec!["step".into()]).await, Vec::<String>::new());
+    assert_eq!(
+        claim(vec!["advance".into(), "deadline".into()]).await,
+        ["advance", "deadline"]
+    );
 }

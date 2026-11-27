@@ -1,0 +1,13 @@
+apiVersion: v2
+name: huxley
+description: Huxley — open-source automation and service platform for MSPs (API, workers, scheduler, web and portal)
+type: application
+# The chart's own version. Bumped with chart changes; no releases are
+# published yet (ADR-089).
+version: 0.1.0
+# The Huxley version the images default to.
+appVersion: "0.1.0"
+home: https://usehuxley.io
+sources:
+  - https://github.com/usehuxley/huxley
+kubeVersion: ">=1.27.0-0"

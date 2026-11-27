@@ -39,11 +39,15 @@ test.describe('my time', () => {
 			});
 		}).toPass({ timeout: 15_000 });
 		await page.getByRole('button', { name: 'Stop the timer' }).click();
-		await expect(page.getByLabel('Time spent')).toHaveValue('1m');
+		// The log form only: suggested time (from other activity) has fields too.
+		const form = page
+			.locator('form')
+			.filter({ has: page.getByRole('button', { name: 'Log time' }) });
+		await expect(form.getByLabel('Time spent')).toHaveValue('1m');
 
-		await page.getByLabel('Time spent').fill('2h');
-		await page.getByLabel('Work type').selectOption({ label: 'Training' });
-		await page.getByLabel('Notes').fill(note);
+		await form.getByLabel('Time spent').fill('2h');
+		await form.getByLabel('Work type').selectOption({ label: 'Training' });
+		await form.getByLabel('Notes').fill(note);
 		await page.getByRole('button', { name: 'Log time' }).click();
 		await expect(page.getByText('Time logged.')).toBeVisible();
 		const week = page.getByRole('region', { name: 'This week' });

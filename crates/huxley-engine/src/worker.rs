@@ -28,6 +28,11 @@ pub struct EngineConfig {
     pub lease_secs: u64,
     /// When step inputs and outputs go to object storage.
     pub payload: crate::PayloadConfig,
+    /// The job kinds this process's workers take (`advance`, `step`,
+    /// `deadline`); empty takes all. Worker pools by job class (ADR-089):
+    /// e.g. one pool for `step` (calls to the outside world) and one for
+    /// `advance,deadline` (quick bookkeeping), scaled on their own.
+    pub kinds: Vec<String>,
 }
 
 impl Default for EngineConfig {
@@ -37,6 +42,7 @@ impl Default for EngineConfig {
             egress: crate::EgressConfig::default(),
             lease_secs: 60,
             payload: crate::PayloadConfig::default(),
+            kinds: Vec::new(),
         }
     }
 }
@@ -46,6 +52,7 @@ impl From<&EngineConfig> for WorkerConfig {
         Self {
             concurrency: config.concurrency.clamp(1, 256),
             lease: Duration::from_secs(config.lease_secs.clamp(2, 3600)),
+            kinds: config.kinds.clone(),
             ..Self::default()
         }
     }
@@ -62,6 +69,8 @@ pub struct WorkerConfig {
     pub poll: Duration,
     /// Identifies this process in `jobs.locked_by`.
     pub id: String,
+    /// The job kinds taken; empty takes all.
+    pub kinds: Vec<String>,
 }
 
 impl Default for WorkerConfig {
@@ -72,6 +81,7 @@ impl Default for WorkerConfig {
             concurrency: 8,
             lease: Duration::from_secs(60),
             poll: Duration::from_secs(2),
+            kinds: Vec::new(),
             id: format!(
                 "{}-{}-{:08x}",
                 std::env::var("HOSTNAME").unwrap_or_else(|_| "huxley".into()),
@@ -86,9 +96,10 @@ pub(crate) async fn claim_one(
     engine: &Engine,
     worker: &str,
     lease: Duration,
+    kinds: &[String],
 ) -> EngineResult<Option<Job>> {
     let mut tx = begin_scoped(&engine.db, &OrgScope::System).await?;
-    let job = queue::claim(&mut tx, worker, 1, lease).await?.pop();
+    let job = queue::claim(&mut tx, worker, 1, lease, kinds).await?.pop();
     tx.commit().await?;
     Ok(job)
 }
@@ -143,7 +154,7 @@ pub async fn run_workers(engine: Engine, config: WorkerConfig, shutdown: Cancell
             shutdown.clone(),
         ));
     }
-    tracing::info!(concurrency = config.concurrency, id = %config.id, "workflow workers started");
+    tracing::info!(concurrency = config.concurrency, id = %config.id, kinds = ?config.kinds, "workflow workers started");
     while tasks.join_next().await.is_some() {}
     tracing::info!("workflow workers stopped");
 }
@@ -156,7 +167,7 @@ async fn work(
     shutdown: CancellationToken,
 ) {
     while !shutdown.is_cancelled() {
-        let job = match claim_one(&engine, &worker, config.lease).await {
+        let job = match claim_one(&engine, &worker, config.lease, &config.kinds).await {
             Ok(job) => job,
             Err(e) => {
                 tracing::error!(error = %e, "claiming jobs failed");
@@ -214,16 +225,17 @@ async fn heartbeat(engine: Engine, job: uuid::Uuid, worker: String, lease: Durat
 /// Wakes idle workers on `NOTIFY huxley_jobs`, reconnecting as needed.
 async fn listen(engine: Engine, wake: Arc<Notify>, shutdown: CancellationToken) {
     while !shutdown.is_cancelled() {
-        let mut listener = match PgListener::connect_with(&engine.db).await {
-            Ok(listener) => listener,
-            Err(e) => {
-                tracing::warn!(error = %e, "job listener can't connect; polling only");
-                tokio::select! {
-                    () = shutdown.cancelled() => return,
-                    () = tokio::time::sleep(Duration::from_secs(5)) => continue,
+        let mut listener =
+            match PgListener::connect_with(engine.listen_db.as_ref().unwrap_or(&engine.db)).await {
+                Ok(listener) => listener,
+                Err(e) => {
+                    tracing::warn!(error = %e, "job listener can't connect; polling only");
+                    tokio::select! {
+                        () = shutdown.cancelled() => return,
+                        () = tokio::time::sleep(Duration::from_secs(5)) => continue,
+                    }
                 }
-            }
-        };
+            };
         if let Err(e) = listener.listen(queue::CHANNEL).await {
             tracing::warn!(error = %e, "LISTEN failed");
             continue;

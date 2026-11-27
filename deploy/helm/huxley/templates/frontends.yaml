@@ -1,0 +1,74 @@
+{{- range $app := list "web" "portal" }}
+{{- $values := index $.Values $app }}
+{{- $host := ternary $.Values.host $.Values.portalHost (eq $app "web") }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "huxley.fullname" $ }}-{{ $app }}
+  labels:
+    {{- include "huxley.labels" $ | nindent 4 }}
+    app.kubernetes.io/component: {{ $app }}
+spec:
+  replicas: {{ $values.replicas }}
+  revisionHistoryLimit: 5
+  selector:
+    matchLabels:
+      {{- include "huxley.selector" (dict "ctx" $ "component" $app) | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "huxley.selector" (dict "ctx" $ "component" $app) | nindent 8 }}
+    spec:
+      serviceAccountName: {{ include "huxley.serviceAccount" $ }}
+      {{- with $.Values.imagePullSecrets }}
+      imagePullSecrets: {{ toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext: {{ toYaml $.Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: {{ $app }}
+          image: {{ include "huxley.image" (dict "ctx" $ "name" $app) }}
+          imagePullPolicy: {{ $.Values.image.pullPolicy }}
+          securityContext: {{ toYaml $.Values.securityContext | nindent 12 }}
+          env:
+            - name: HUXLEY_API_URL
+              value: {{ printf "http://%s-api:8080" (include "huxley.fullname" $) | quote }}
+            - name: ORIGIN
+              value: {{ printf "%s://%s" $.Values.scheme $host | quote }}
+            # Behind the ingress: the client address is the last hop it adds.
+            - name: ADDRESS_HEADER
+              value: X-Forwarded-For
+            - name: XFF_DEPTH
+              value: "1"
+            {{- with $values.bodySizeLimit }}
+            - name: BODY_SIZE_LIMIT
+              value: {{ . | quote }}
+            {{- end }}
+          ports:
+            - { name: http, containerPort: 3000 }
+          livenessProbe:
+            httpGet: { path: /healthz, port: http }
+            periodSeconds: 15
+          readinessProbe:
+            httpGet: { path: /healthz, port: http }
+            periodSeconds: 5
+          resources: {{ toYaml $values.resources | nindent 12 }}
+          volumeMounts:
+            - { name: tmp, mountPath: /tmp }
+      volumes:
+        - { name: tmp, emptyDir: {} }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "huxley.fullname" $ }}-{{ $app }}
+  labels:
+    {{- include "huxley.labels" $ | nindent 4 }}
+    app.kubernetes.io/component: {{ $app }}
+spec:
+  selector:
+    {{- include "huxley.selector" (dict "ctx" $ "component" $app) | nindent 4 }}
+  ports:
+    - { name: http, port: 3000, targetPort: http }
+{{ include "huxley.pdb" (dict "ctx" $ "component" $app) }}
+{{- end }}

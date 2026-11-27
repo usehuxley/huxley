@@ -60,6 +60,7 @@ export default defineConfig({
 					{ text: 'Your first workflow', link: '/getting-started' },
 					{ text: 'Search', link: '/search' },
 					{ text: 'Running Huxley', link: '/operations' },
+					{ text: 'Kubernetes', link: '/kubernetes' },
 					{ text: 'Provisioning (SCIM)', link: '/scim' }
 				]
 			},

@@ -23,6 +23,8 @@ pub mod kind {
     pub const STEP: &str = "step";
     /// A run's timeout: advance it so it fails.
     pub const DEADLINE: &str = "deadline";
+    /// Every kind, for worker pools that take only some (ADR-089).
+    pub const ALL: [&str; 3] = [ADVANCE, STEP, DEADLINE];
 }
 
 /// Infrastructure failures before a job is given up on (dead-lettered).
@@ -140,6 +142,7 @@ pub async fn claim(
     worker: &str,
     limit: i64,
     lease: Duration,
+    kinds: &[String],
 ) -> sqlx::Result<Vec<Job>> {
     // A CTE, not `WHERE id IN (SELECT … LIMIT n)`: the planner may run such
     // a subquery more than once and claim more than `limit` rows.
@@ -148,6 +151,7 @@ pub async fn claim(
                 SELECT id FROM jobs \
                  WHERE NOT dead AND run_at <= now() \
                    AND (locked_until IS NULL OR locked_until < now()) \
+                   AND (cardinality($4::text[]) = 0 OR kind = ANY($4)) \
                  ORDER BY priority DESC, run_at \
                  LIMIT $2 FOR UPDATE SKIP LOCKED) \
          UPDATE jobs SET locked_by = $1, \
@@ -160,6 +164,7 @@ pub async fn claim(
     .bind(worker)
     .bind(limit)
     .bind(lease.as_secs_f64())
+    .bind(kinds)
     .fetch_all(conn)
     .await
 }

@@ -1,0 +1,55 @@
+{{- range $pool := .Values.workers.pools }}
+{{- $component := printf "worker-%s" $pool.name }}
+{{- $env := list (dict "name" "HUXLEY_ENGINE__CONCURRENCY" "value" (toString $pool.concurrency)) }}
+{{- if $pool.kinds }}
+{{- $env = append $env (dict "name" "HUXLEY_ENGINE__KINDS" "value" (printf "[%s]" (join "," $pool.kinds))) }}
+{{- end }}
+---
+{{ include "huxley.serverDeployment" (dict "ctx" $ "component" $component "roles" "worker" "replicas" $pool.replicas "autoscaled" $.Values.keda.enabled "resources" $pool.resources "env" $env "probes" false "scheduling" $.Values.workers) }}
+{{ include "huxley.pdb" (dict "ctx" $ "component" $component) }}
+{{- if $.Values.keda.enabled }}
+---
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: {{ include "huxley.fullname" $ }}-{{ $component }}
+  labels: {{- include "huxley.labels" $ | nindent 4 }}
+spec:
+  scaleTargetRef:
+    name: {{ include "huxley.fullname" $ }}-{{ $component }}
+  minReplicaCount: {{ $pool.minReplicas }}
+  maxReplicaCount: {{ $pool.maxReplicas }}
+  pollingInterval: {{ $.Values.keda.pollingInterval }}
+  cooldownPeriod: {{ $.Values.keda.cooldownPeriod }}
+  triggers:
+    - type: postgresql
+      authenticationRef:
+        name: {{ include "huxley.fullname" $ }}-keda
+      metadata:
+        host: {{ $.Values.database.host | quote }}
+        port: {{ $.Values.database.port | quote }}
+        userName: {{ $.Values.database.user | quote }}
+        dbName: {{ $.Values.database.name | quote }}
+        sslmode: {{ $.Values.database.sslmode | quote }}
+        # Due and running jobs of the pool's kinds; each process runs
+        # `concurrency` at once.
+        query: >-
+          SELECT count(*) FROM jobs WHERE NOT dead AND run_at <= now()
+          {{- if $pool.kinds }} AND kind IN ({{ range $i, $k := $pool.kinds }}{{ if $i }}, {{ end }}'{{ $k }}'{{ end }}){{ end }}
+        targetQueryValue: {{ $pool.concurrency | quote }}
+        activationTargetQueryValue: "0"
+{{- end }}
+{{- end }}
+{{- if .Values.keda.enabled }}
+---
+apiVersion: keda.sh/v1alpha1
+kind: TriggerAuthentication
+metadata:
+  name: {{ include "huxley.fullname" . }}-keda
+  labels: {{- include "huxley.labels" . | nindent 4 }}
+spec:
+  secretTargetRef:
+    - parameter: password
+      name: {{ include "huxley.dbSecret" . }}
+      key: {{ .Values.database.passwordKey }}
+{{- end }}

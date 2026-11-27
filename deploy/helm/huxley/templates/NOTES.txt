@@ -1,0 +1,26 @@
+Huxley is starting.
+
+  Staff app:  {{ .Values.scheme }}://{{ .Values.host }}
+  Portal:     {{ .Values.scheme }}://{{ .Values.portalHost }}
+
+Set up the instance (once). A password is generated and printed:
+
+  kubectl -n {{ .Release.Namespace }} exec deploy/{{ include "huxley.fullname" . }}-api -- \
+    huxley admin bootstrap --org-name "Your Company" --email you@example.com \
+      --name "Your Name" --preset service-desk
+
+{{- if .Values.pgbouncer.enabled }}
+
+PgBouncer is in transaction mode; Huxley refuses to start if its
+connections don't run as huxley_app (check the API logs if pods don't
+become ready).
+{{- end }}
+{{- if .Values.keda.enabled }}
+
+Worker pools scale with KEDA on their job backlog:
+{{- range .Values.workers.pools }}
+  {{ .name }}: {{ .minReplicas }}–{{ .maxReplicas }} pods ({{ join ", " (default (list "all kinds") .kinds) }})
+{{- end }}
+{{- end }}
+
+Back up the database and the key-encryption key ({{ include "huxley.kekSecret" . }}) together.

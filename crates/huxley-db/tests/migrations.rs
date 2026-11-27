@@ -21,6 +21,8 @@ fn test_pools() -> Option<(sqlx::PgPool, sqlx::PgPool)> {
         acquire_timeout_secs: 10,
         statement_timeout_ms: 10_000,
         read_url: None,
+        direct_url: None,
+        pooled: false,
     };
     // Migrations need the owner; the app role deliberately cannot change schema.
     let owner = connect_owner(&config).expect("valid test database URL");
