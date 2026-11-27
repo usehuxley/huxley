@@ -103,40 +103,54 @@ pub async fn list(conn: &mut PgConnection, filter: &Filter) -> CmdbResult<(Vec<A
     {
         return Err(CmdbError::invalid("status", STATUSES.join(", ")));
     }
-    let wh = "WHERE ($1::text IS NULL OR (a.name || ' ' || a.serial_number || ' ' || a.hostname || ' ' || a.model || ' ' \
-                  || a.manufacturer) ILIKE '%' || $1 || '%' OR a.name % $1) \
-             AND ($2::uuid IS NULL OR a.org_id = $2) \
-             AND ($3::uuid IS NULL OR a.type_id = $3) \
-             AND ($4::text IS NULL OR a.status = $4) \
-             AND (NOT $5 OR a.status NOT IN ('retired', 'disposed')) \
-             AND ($8::int IS NULL OR (a.warranty_ends_on IS NOT NULL AND a.warranty_ends_on <= current_date + $8::int))";
-    let rows: Vec<Asset> = sqlx::query_as(sqlx::AssertSqlSafe(format!(
-        "{SELECT} {wh} ORDER BY lower(a.name), a.id LIMIT $6 OFFSET $7"
-    )))
-    .bind(q)
-    .bind(filter.org_id)
-    .bind(filter.type_id)
-    .bind(status)
-    .bind(filter.in_use)
-    .bind(filter.limit.clamp(1, 500))
-    .bind(filter.offset.max(0))
-    .bind(filter.warranty_within_days)
-    .fetch_all(&mut *conn)
-    .await?;
-    let total: i64 = sqlx::query_scalar(sqlx::AssertSqlSafe(format!(
-        "SELECT count(*) FROM assets a {wh}"
-    )))
-    .bind(q)
-    .bind(filter.org_id)
-    .bind(filter.type_id)
-    .bind(status)
-    .bind(filter.in_use)
-    // $6 and $7 aren't used by the count; bound so $8 keeps its place.
-    .bind(0_i64)
-    .bind(0_i64)
-    .bind(filter.warranty_within_days)
-    .fetch_one(conn)
-    .await?;
+    // Only the filters given, and the page picked from `assets` alone before
+    // the joins (docs/performance.md).
+    let conditions = |builder: &mut sqlx::QueryBuilder<sqlx::Postgres>| {
+        builder.push(" WHERE true");
+        if let Some(q) = q {
+            builder
+                .push(" AND ((a.name || ' ' || a.serial_number || ' ' || a.hostname || ' ' || a.model || ' ' || a.manufacturer) ILIKE '%' || ")
+                .push_bind(q.to_owned())
+                .push(" || '%' OR a.name % ")
+                .push_bind(q.to_owned())
+                .push(")");
+        }
+        if let Some(org) = filter.org_id {
+            builder.push(" AND a.org_id = ").push_bind(org);
+        }
+        if let Some(kind) = filter.type_id {
+            builder.push(" AND a.type_id = ").push_bind(kind);
+        }
+        if let Some(status) = status {
+            builder
+                .push(" AND a.status = ")
+                .push_bind(status.to_owned());
+        }
+        if filter.in_use {
+            builder.push(" AND a.status NOT IN ('retired', 'disposed')");
+        }
+        if let Some(days) = filter.warranty_within_days {
+            builder
+                .push(
+                    " AND a.warranty_ends_on IS NOT NULL AND a.warranty_ends_on <= current_date + ",
+                )
+                .push_bind(days);
+        }
+    };
+    let mut page =
+        sqlx::QueryBuilder::<sqlx::Postgres>::new("WITH page AS (SELECT a.id FROM assets a");
+    conditions(&mut page);
+    page.push(" ORDER BY lower(a.name), a.id LIMIT ")
+        .push_bind(filter.limit.clamp(1, 500))
+        .push(" OFFSET ")
+        .push_bind(filter.offset.max(0))
+        .push(") ")
+        .push(SELECT)
+        .push(" WHERE a.id = ANY(ARRAY(SELECT id FROM page)) ORDER BY lower(a.name), a.id");
+    let rows: Vec<Asset> = page.build_query_as().fetch_all(&mut *conn).await?;
+    let mut count = sqlx::QueryBuilder::<sqlx::Postgres>::new("SELECT count(*) FROM assets a");
+    conditions(&mut count);
+    let total: i64 = count.build_query_scalar().fetch_one(conn).await?;
     Ok((rows, total))
 }
 

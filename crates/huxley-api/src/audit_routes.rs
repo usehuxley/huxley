@@ -96,25 +96,34 @@ pub async fn list(
     let mut tx = begin_scoped(&state.db, &OrgScope::System)
         .await
         .map_err(|e| ApiError::internal(&e))?;
-    let rows: Vec<AuditEventView> = sqlx::query_as(
+    // Only the filters given: `($n IS NULL OR …)` filters leave prepared
+    // statements' generic plans unable to use the indexes (docs/performance.md).
+    let mut q = sqlx::QueryBuilder::<sqlx::Postgres>::new(
         "SELECT e.id, e.seq, e.occurred_at, e.actor_type, e.actor_id, u.display_name AS actor_name, \
                 e.via, host(e.ip) AS ip, e.action, e.org_id, o.name AS org_name, \
                 e.target_type, e.target_id, e.details \
            FROM audit_events e \
            LEFT JOIN users u ON u.id = e.actor_id \
            LEFT JOIN organizations o ON o.id = e.org_id \
-          WHERE e.seq IS NOT NULL AND ($1::bigint IS NULL OR e.seq < $1) \
-            AND ($2::text IS NULL OR e.action LIKE $2 || '%') \
-            AND ($3::uuid IS NULL OR e.target_id = $3) \
-          ORDER BY e.seq DESC LIMIT $4",
-    )
-    .bind(before)
-    .bind(prefix)
-    .bind(params.target_id)
-    .bind(i64::from(limit) + 1)
-    .fetch_all(&mut *tx)
-    .await
-    .map_err(|e| ApiError::internal(&e))?;
+          WHERE e.seq IS NOT NULL",
+    );
+    if let Some(before) = before {
+        q.push(" AND e.seq < ").push_bind(before);
+    }
+    if let Some(prefix) = prefix {
+        q.push(" AND e.action LIKE ")
+            .push_bind(format!("{prefix}%"));
+    }
+    if let Some(target) = params.target_id {
+        q.push(" AND e.target_id = ").push_bind(target);
+    }
+    q.push(" ORDER BY e.seq DESC LIMIT ")
+        .push_bind(i64::from(limit) + 1);
+    let rows: Vec<AuditEventView> = q
+        .build_query_as()
+        .fetch_all(&mut *tx)
+        .await
+        .map_err(|e| ApiError::internal(&e))?;
     tx.commit().await.map_err(|e| ApiError::internal(&e))?;
 
     let page = huxley_core::Page::from_overfetch(rows, limit, |e| e.seq);

@@ -351,18 +351,20 @@ pub async fn list(
     limit: u32,
     unread_only: bool,
 ) -> NotifyResult<Vec<Notification>> {
-    Ok(sqlx::query_as(
-        "SELECT id, kind, title, body, link, read_at, created_at FROM notifications \
-          WHERE user_id = $1 AND in_app AND ($2::uuid IS NULL OR id < $2) \
-            AND (NOT $4 OR read_at IS NULL) \
-          ORDER BY id DESC LIMIT $3",
-    )
-    .bind(user_id)
-    .bind(before)
-    .bind(i64::from(limit) + 1)
-    .bind(unread_only)
-    .fetch_all(conn)
-    .await?)
+    // Only the filters given (docs/performance.md).
+    let mut q = sqlx::QueryBuilder::<sqlx::Postgres>::new(
+        "SELECT id, kind, title, body, link, read_at, created_at FROM notifications WHERE in_app AND user_id = ",
+    );
+    q.push_bind(user_id);
+    if let Some(before) = before {
+        q.push(" AND id < ").push_bind(before);
+    }
+    if unread_only {
+        q.push(" AND read_at IS NULL");
+    }
+    q.push(" ORDER BY id DESC LIMIT ")
+        .push_bind(i64::from(limit) + 1);
+    Ok(q.build_query_as().fetch_all(conn).await?)
 }
 
 pub async fn unread_count(conn: &mut PgConnection, user_id: Uuid) -> NotifyResult<i64> {

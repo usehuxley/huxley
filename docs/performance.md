@@ -55,6 +55,29 @@ The first runs found ticket lists that slowed as tickets grew. The open-ticket l
 | Before | 58 | 103 | 25 (34 errors) |
 | After | 924 | 1,605 | 1,390 |
 
+### Other large lists
+
+The same patterns appeared in other lists over tables that grow large, and got the same fixes. Each was measured on its query in PostgreSQL, under row security, with synthetic data:
+
+| List | Data | Before | After |
+|---|---|---|---|
+| Audit log: one record's history | 3 million records | 276 ms | 0.1 ms |
+| Audit log: a page far back | 3 million records | 233 ms | 0.05 ms |
+| Workflow runs: a page six months back | 1.2 million runs in 16 monthly partitions | 73 ms | 0.07 ms |
+| Assets, by name | 100,000 assets | 136 ms | 0.4 ms |
+
+The changes behind those numbers:
+
+- **Audit log:** its history view filtered on a record's id, which no index led with. A new index covers it.
+- **Workflow runs:** with optional filters, a generic plan can't skip months older than the page, so every newer month's partition was read. It now can.
+- **Assets:** the list now picks its page by name from the assets table, with a new index, before joining types, sites and contacts.
+
+When writing a list query, avoid three patterns:
+
+- `($1 IS NULL OR column = $1)` filters: build the WHERE clause from the filters given, with `sqlx::QueryBuilder`;
+- joining before limiting: pick the page from the main table, then fetch its rows by id;
+- counting everything for a total.
+
 ### Workflow engine at the reference sizes
 
 The engine test below, with more runs and more worker processes for the larger sizes:
