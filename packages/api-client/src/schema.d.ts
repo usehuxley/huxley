@@ -5844,6 +5844,44 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
+	'/api/v1/sales/forecast': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/**
+		 * Won and open deals per salesperson for a period, by forecast category,
+		 *     against their quota (first-year values).
+		 */
+		get: operations['sales_forecast'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/sales/quotas': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** Quotas starting in a year. */
+		get: operations['list_sales_quotas'];
+		/** Sets someone's quota for a month or quarter (no amount removes it). */
+		put: operations['set_sales_quota'];
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
 	'/api/v1/sales/reasons': {
 		parameters: {
 			query?: never;
@@ -11027,6 +11065,28 @@ export interface components {
 		 * @enum {string}
 		 */
 		ForecastCategory: 'pipeline' | 'best_case' | 'commit' | 'omitted';
+		/** @description One salesperson's forecast (in one currency). */
+		ForecastRow: {
+			/** @description Won as a percentage of quota. */
+			attainment?: string | null;
+			bestCase: string;
+			commit: string;
+			currency: string;
+			/** Format: int64 */
+			openCount: number;
+			/**
+			 * Format: uuid
+			 * @description None: deals without an owner.
+			 */
+			ownerId?: string | null;
+			ownerName?: string | null;
+			pipeline: string;
+			quota?: string | null;
+			weighted: string;
+			won: string;
+			/** Format: int64 */
+			wonCount: number;
+		};
 		Form: {
 			/**
 			 * @description Offered as an Action on a `client`, `contact` or `ticket`: run from
@@ -14584,6 +14644,43 @@ export interface components {
 			note?: string | null;
 			/** Format: int32 */
 			version: number;
+		};
+		SalesQuota: {
+			amount: string;
+			currency: string;
+			/** Format: uuid */
+			id: string;
+			/** Format: int32 */
+			months: number;
+			/** Format: uuid */
+			orgId: string;
+			/** Format: date */
+			periodStart: string;
+			/** Format: uuid */
+			userId: string;
+			userName?: string | null;
+		};
+		SalesQuotaInput: {
+			/** @description First-year value; zero or empty removes it. */
+			amount?: string | null;
+			currency?: string;
+			/**
+			 * Format: int32
+			 * @description 1 (a month) or 3 (a quarter).
+			 */
+			months: number;
+			/**
+			 * Format: uuid
+			 * @description The organization they sell for.
+			 */
+			orgId: string;
+			/**
+			 * Format: date
+			 * @description The first day of a month (or of a quarter, for 3 months).
+			 */
+			periodStart: string;
+			/** Format: uuid */
+			userId: string;
 		};
 		SalesReason: {
 			/** Format: uuid */
@@ -28565,6 +28662,80 @@ export interface operations {
 				};
 				content: {
 					'application/json': components['schemas']['SalesOrderPurchased'];
+				};
+			};
+		};
+	};
+	sales_forecast: {
+		parameters: {
+			query: {
+				/** @description The first day (`YYYY-MM-DD`). */
+				from: string;
+				/** @description The last day, included. */
+				to: string;
+			};
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ForecastRow'][];
+				};
+			};
+		};
+	};
+	list_sales_quotas: {
+		parameters: {
+			query: {
+				year: number;
+			};
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['SalesQuota'][];
+				};
+			};
+		};
+	};
+	set_sales_quota: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['SalesQuotaInput'];
+			};
+		};
+		responses: {
+			204: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content?: never;
+			};
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
 				};
 			};
 		};

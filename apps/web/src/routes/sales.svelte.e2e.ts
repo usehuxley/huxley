@@ -439,4 +439,59 @@ test.describe('quotes', () => {
 			`Send pricing ${stamp}`
 		);
 	});
+
+	test('the forecast shows the quarter against quota, and the sales dashboard is there', async ({
+		page
+	}) => {
+		const stamp = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+		const api = await request.newContext({
+			baseURL: apiUrl,
+			extraHTTPHeaders: { 'x-requested-with': 'huxley' }
+		});
+		await api.post('/api/v1/auth/login', { data: { email: ownerEmail, password: ownerPassword } });
+		for (const module of ['contracts', 'sales']) {
+			await api.put(`/api/v1/modules/${module}`, { data: { enabled: true } });
+		}
+		const me = ((await (await api.get('/api/v1/auth/me')).json()) as { id: string }).id;
+		const orgs = (await (await api.get('/api/v1/orgs')).json()) as {
+			id: string;
+			parentId: string | null;
+		}[];
+		const root = orgs.find((o) => o.parentId === null)!.id;
+		const client = (await (
+			await api.post('/api/v1/orgs', {
+				data: { parentId: root, kind: 'client', name: `Raviga ${stamp}` }
+			})
+		).json()) as { id: string };
+		const today = new Date().toISOString().slice(0, 10);
+		const made = await api.post('/api/v1/opportunities', {
+			data: {
+				orgId: client.id,
+				opportunity: {
+					name: `Forecasted ${stamp}`,
+					amount: '1234',
+					forecast: 'commit',
+					ownerId: me,
+					closeDate: today
+				}
+			}
+		});
+		expect(made.status(), await made.text()).toBe(201);
+		await api.dispose();
+
+		await signIn(page);
+		await openFromMenu(page, 'Forecast');
+		await expect(page.getByRole('heading', { level: 1 })).toHaveText('Forecast');
+		const table = page.getByRole('table', { name: 'Forecast by owner' });
+		await expect(table).toBeVisible();
+		await page.getByRole('button', { name: 'Set a quota' }).click();
+		const quota = page.getByRole('dialog', { name: /^Quota for Q\d/ });
+		await quota.getByLabel('First-year value to win').fill('987654');
+		await quota.getByRole('button', { name: 'Save' }).click();
+		await expect(table).toContainText('$987,654');
+
+		await page.goto('/dashboards/sales');
+		await expect(page.getByRole('heading', { level: 1 })).toHaveText('Sales');
+		await expect(page.getByText('Open pipeline', { exact: true })).toBeVisible();
+	});
 });

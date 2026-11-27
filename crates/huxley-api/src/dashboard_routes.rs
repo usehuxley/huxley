@@ -97,7 +97,19 @@ pub async fn list_dashboards(
     let mut tx = begin_scoped(&state.db, &scope).await.map_err(db_err)?;
     let stored = dashboards::list(&mut tx, &viewer).await.map_err(map)?;
     tx.commit().await.map_err(db_err)?;
-    let mut all = dashboards::builtin();
+    let mut all = Vec::new();
+    // A prebuilt dashboard for a module is listed only while it's on.
+    for d in dashboards::builtin() {
+        let on = match d.module {
+            Some(m) => crate::module_routes::require_module(&state, m)
+                .await
+                .is_ok(),
+            None => true,
+        };
+        if on {
+            all.push(d);
+        }
+    }
     all.extend(stored);
     Ok(Json(all))
 }

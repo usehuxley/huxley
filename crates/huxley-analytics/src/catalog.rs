@@ -368,6 +368,115 @@ pub const SENTIMENT: Source = Source {
 };
 
 /// Dataset sources' keys: `dataset:<dataset key>`.
+/// First-year value: one-time plus twelve months of recurring.
+const FIRST_YEAR: &str = "(op.amount + 12 * op.recurring)";
+
+pub const OPPORTUNITIES: Source = Source {
+    key: Cow::Borrowed("opportunities"),
+    label: Cow::Borrowed("Opportunities"),
+    description: Cow::Borrowed(
+        "Deals in the pipeline: stage, owner, value, forecast category, and whether they were won or lost.",
+    ),
+    module: Some("sales"),
+    permission: "sales:read",
+    time_field: Cow::Borrowed("closed_at"),
+    from: Cow::Borrowed(
+        "sales_opportunities op JOIN organizations o ON o.id = op.org_id \
+        LEFT JOIN sales_stages st ON st.id = op.stage_id LEFT JOIN users u ON u.id = op.owner_id \
+        LEFT JOIN sales_reasons rs ON rs.id = op.reason_id",
+    ),
+    fields: Cow::Borrowed(&[
+        CLIENT,
+        f("name", "Name", Kind::Text, "op.name"),
+        f("owner", "Owner", Kind::Text, "u.display_name"),
+        f("stage", "Stage", Kind::Text, "st.name"),
+        f("status", "Status", Kind::Text, "op.status"),
+        f("forecast", "Forecast category", Kind::Text, "op.forecast"),
+        f("source", "Source", Kind::Text, "op.source"),
+        f("reason", "Won or lost because", Kind::Text, "rs.name"),
+        f("won", "Won", Kind::Bool, "(op.status = 'won')"),
+        f("open", "Open", Kind::Bool, "(op.status = 'open')"),
+        f("amount", "One-time value", Kind::Number, "op.amount"),
+        f("recurring", "Monthly value", Kind::Number, "op.recurring"),
+        f("first_year", "First-year value", Kind::Number, FIRST_YEAR),
+        f(
+            "weighted",
+            "Weighted value",
+            Kind::Number,
+            "((op.amount + 12 * op.recurring) * op.probability / 100.0)",
+        ),
+        f(
+            "probability",
+            "Probability %",
+            Kind::Number,
+            "op.probability",
+        ),
+        f("close_date", "Expected close", Kind::Date, "op.close_date"),
+        f("closed_at", "Closed", Kind::Time, "op.closed_at"),
+        f("created_at", "Created", Kind::Time, "op.created_at"),
+    ]),
+};
+
+pub const QUOTES: Source = Source {
+    key: Cow::Borrowed("quotes"),
+    label: Cow::Borrowed("Quotes"),
+    description: Cow::Borrowed(
+        "Quotes: who they're for, their status and when they were sent and answered.",
+    ),
+    module: Some("sales"),
+    permission: "sales:read",
+    time_field: Cow::Borrowed("created_at"),
+    from: Cow::Borrowed(
+        "sales_quotes q JOIN organizations o ON o.id = q.org_id LEFT JOIN users u ON u.id = q.owner_id",
+    ),
+    fields: Cow::Borrowed(&[
+        CLIENT,
+        f("title", "Title", Kind::Text, "q.title"),
+        f("owner", "Owner", Kind::Text, "u.display_name"),
+        f("status", "Status", Kind::Text, "q.status"),
+        f(
+            "accepted",
+            "Accepted",
+            Kind::Bool,
+            "(q.status = 'accepted')",
+        ),
+        f("revision", "Revision", Kind::Number, "q.revision"),
+        f("sent_at", "Sent", Kind::Time, "q.sent_at"),
+        f("decided_at", "Answered", Kind::Time, "q.decided_at"),
+        f(
+            "days_to_answer",
+            "Days to answer",
+            Kind::Number,
+            "(extract(epoch FROM q.decided_at - q.sent_at) / 86400.0)",
+        ),
+        f("created_at", "Created", Kind::Time, "q.created_at"),
+    ]),
+};
+
+pub const SALES_ACTIVITIES: Source = Source {
+    key: Cow::Borrowed("sales_activities"),
+    label: Cow::Borrowed("Sales activities"),
+    description: Cow::Borrowed(
+        "Tasks, calls, meetings, notes and logged emails on deals and leads.",
+    ),
+    module: Some("sales"),
+    permission: "sales:read",
+    time_field: Cow::Borrowed("created_at"),
+    from: Cow::Borrowed(
+        "sales_activities a JOIN organizations o ON o.id = a.org_id LEFT JOIN users u ON u.id = a.owner_id",
+    ),
+    fields: Cow::Borrowed(&[
+        CLIENT,
+        f("kind", "Kind", Kind::Text, "a.kind"),
+        f("owner", "Owner", Kind::Text, "u.display_name"),
+        f("done", "Done", Kind::Bool, "(a.done_at IS NOT NULL)"),
+        f("direction", "Email direction", Kind::Text, "a.direction"),
+        f("minutes", "Minutes", Kind::Number, "a.duration_minutes"),
+        f("due_at", "Due", Kind::Time, "a.due_at"),
+        f("created_at", "Logged", Kind::Time, "a.created_at"),
+    ]),
+};
+
 pub const DATASET_PREFIX: &str = "dataset:";
 
 /// Every source, in display order.
@@ -380,6 +489,9 @@ pub const SOURCES: &[Source] = &[
     NPS,
     HEALTH,
     SENTIMENT,
+    OPPORTUNITIES,
+    QUOTES,
+    SALES_ACTIVITIES,
 ];
 
 pub fn source(key: &str) -> Option<&'static Source> {

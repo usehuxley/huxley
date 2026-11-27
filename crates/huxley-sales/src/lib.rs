@@ -9,6 +9,7 @@
 //! `numeric(18,4)` with an explicit currency, as decimal strings in JSON.
 
 pub mod activities;
+pub mod forecast;
 pub mod leads;
 pub mod opportunities;
 pub mod orders;
@@ -30,6 +31,11 @@ pub const MODULE: &str = "sales";
 pub(crate) mod date {
     time::serde::format_description!(ymd, Date, "[year]-[month]-[day]");
     pub(crate) use ymd::option;
+
+    /// A required date.
+    pub(crate) mod required {
+        pub(crate) use super::ymd::{deserialize, serialize};
+    }
 }
 
 #[derive(Debug, thiserror::Error)]

@@ -13,6 +13,7 @@ use axum::routing::{get, post, put};
 use axum::{Json, Router};
 use huxley_authz::permissions;
 use huxley_db::{OrgScope, begin_scoped};
+use huxley_sales::forecast::{self, Period, Quota, QuotaInput};
 use huxley_sales::leads::{self, ConvertInput, Converted, Lead, LeadInput};
 use huxley_sales::opportunities::{self, MoveInput, Opportunity, OpportunityInput, StageChange};
 use huxley_sales::review::{self, Rule, RuleInput};
@@ -42,6 +43,8 @@ fn stage_routes() -> Router<AppState> {
         .route("/stages/{id}", put(update_stage).delete(archive_stage))
         .route("/reasons", get(list_reasons).post(create_reason))
         .route("/reasons/{id}", axum::routing::delete(archive_reason))
+        .route("/forecast", get(sales_forecast))
+        .route("/quotas", get(list_quotas).put(set_quota))
         .route(
             "/review-rules",
             get(list_review_rules).post(create_review_rule),
@@ -655,6 +658,73 @@ pub async fn delete_review_rule(
     let ctx = authed.user.ctx.clone();
     scoped(&state, &OrgScope::System, async |tx| {
         review::delete_rule(tx, &ctx, id).await
+    })
+    .await?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+// ---- forecast and quotas ----
+
+/// Won and open deals per salesperson for a period, by forecast category,
+/// against their quota (first-year values).
+#[utoipa::path(get, path = "/api/v1/sales/forecast", operation_id = "sales_forecast", tag = "sales",
+    params(Period), responses((status = 200, body = Vec<forecast::Row>)))]
+pub async fn sales_forecast(
+    State(state): State<AppState>,
+    authed: Authed,
+    Query(period): Query<Period>,
+) -> ApiResult<Json<Vec<forecast::Row>>> {
+    require_module(&state, MODULE).await?;
+    let scope = authed
+        .module_scope(&state, permissions::SALES_READ, MODULE)
+        .await?;
+    Ok(Json(
+        scoped(&state, &scope, async |tx| {
+            forecast::forecast(tx, &period).await
+        })
+        .await?,
+    ))
+}
+
+#[derive(Debug, Deserialize, utoipa::IntoParams)]
+#[serde(rename_all = "camelCase")]
+#[into_params(parameter_in = Query)]
+pub struct QuotaParams {
+    pub year: i32,
+}
+
+/// Quotas starting in a year.
+#[utoipa::path(get, path = "/api/v1/sales/quotas", operation_id = "list_sales_quotas", tag = "sales",
+    params(QuotaParams), responses((status = 200, body = Vec<Quota>)))]
+pub async fn list_quotas(
+    State(state): State<AppState>,
+    authed: Authed,
+    Query(params): Query<QuotaParams>,
+) -> ApiResult<Json<Vec<Quota>>> {
+    reader(&state, &authed).await?;
+    let scope = authed
+        .module_scope(&state, permissions::SALES_READ, MODULE)
+        .await?;
+    Ok(Json(
+        scoped(&state, &scope, async |tx| {
+            forecast::quotas(tx, params.year).await
+        })
+        .await?,
+    ))
+}
+
+/// Sets someone's quota for a month or quarter (no amount removes it).
+#[utoipa::path(put, path = "/api/v1/sales/quotas", operation_id = "set_sales_quota", tag = "sales",
+    request_body = QuotaInput, responses((status = 204), (status = 422, body = ApiError, content_type = "application/problem+json")))]
+pub async fn set_quota(
+    State(state): State<AppState>,
+    authed: Authed,
+    Json(body): Json<QuotaInput>,
+) -> ApiResult<StatusCode> {
+    configurer(&state, &authed).await?;
+    let ctx = authed.user.ctx.clone();
+    scoped(&state, &OrgScope::System, async |tx| {
+        forecast::set_quota(tx, &ctx, &body).await
     })
     .await?;
     Ok(StatusCode::NO_CONTENT)
