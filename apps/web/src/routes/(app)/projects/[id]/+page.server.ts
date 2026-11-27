@@ -3,6 +3,7 @@ import { formString } from '#lib/forms.ts';
 import { api } from '#lib/server/api.ts';
 import { problemMessage } from '#lib/server/problems.ts';
 import { assignees } from '#lib/tickets/server.ts';
+import { deleteExpense, expensesFor, logExpense, uploadReceipt } from '#lib/expenses/server.ts';
 import { addPart, closePart, partsFor } from '#lib/inventory/server.ts';
 import type { Actions, PageServerLoad } from './$types';
 
@@ -42,7 +43,8 @@ export const load: PageServerLoad = async (event) => {
 		suggestions,
 		canWrite,
 		canManage,
-		parts: await partsFor(event, 'project', event.params.id, user)
+		parts: await partsFor(event, 'project', event.params.id, user),
+		expenses: await expensesFor(event, 'project', event.params.id, user)
 	};
 };
 
@@ -106,6 +108,9 @@ const num = (form: FormData, key: string) => {
 
 export const actions: Actions = {
 	addPart: (event) => addPart(event, 'project', event.params.id),
+	logExpense: (event) => logExpense(event, 'project', event.params.id),
+	uploadReceipt: (event) => uploadReceipt(event),
+	deleteExpense: (event) => deleteExpense(event),
 	closePart: (event) => closePart(event),
 	billing: async (event) => {
 		const form = await event.request.formData();

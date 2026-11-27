@@ -5,6 +5,7 @@ import { problemMessage } from '#lib/server/problems.ts';
 import { actionsFor } from '#lib/forms/actions.server.ts';
 import { parseDuration } from '#lib/tickets/duration.ts';
 import { assignees, fieldErrors } from '#lib/tickets/server.ts';
+import { deleteExpense, expensesFor, logExpense, uploadReceipt } from '#lib/expenses/server.ts';
 import { addPart, closePart, partsFor } from '#lib/inventory/server.ts';
 import type { Actions, PageServerLoad } from './$types';
 
@@ -81,7 +82,10 @@ export const load: PageServerLoad = async (event) => {
 			params: { path: { id: event.params.id }, query: { limit: 5 } }
 		})
 	]);
-	const parts = await partsFor(event, 'ticket', event.params.id, user);
+	const [parts, expenses] = await Promise.all([
+		partsFor(event, 'ticket', event.params.id, user),
+		expensesFor(event, 'ticket', event.params.id, user)
+	]);
 	// A change ticket: its change details, the risk questions, its impact
 	// and the client's assets to pick from.
 	const isChange = ticket.data.typeKey === 'change' && user.activeModules.includes('change');
@@ -129,7 +133,8 @@ export const load: PageServerLoad = async (event) => {
 		changeAssets:
 			(changeAssets.data as { items?: { id: string; name: string }[] } | undefined)?.items ?? [],
 		similar: similar.data ?? null,
-		parts
+		parts,
+		expenses
 	};
 };
 
@@ -157,6 +162,9 @@ async function patch(
 
 export const actions: Actions = {
 	addPart: (event) => addPart(event, 'ticket', event.params.id),
+	logExpense: (event) => logExpense(event, 'ticket', event.params.id),
+	uploadReceipt: (event) => uploadReceipt(event),
+	deleteExpense: (event) => deleteExpense(event),
 	closePart: (event) => closePart(event),
 	linkAsset: async (event) => {
 		const assetId = formString(await event.request.formData(), 'assetId');

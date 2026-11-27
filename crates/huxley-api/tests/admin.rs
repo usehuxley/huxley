@@ -337,7 +337,7 @@ async fn module_toggles_need_permission_and_gate_disabled_modules() {
     .await;
     assert_eq!(status, StatusCode::NOT_FOUND);
 
-    // Unreleased modules are never active, so the gate rejects them.
+    // A module that isn't there (or isn't on) is gated.
     let state = AppState::new(
         pools.app.clone(),
         AuthService::new(
@@ -348,8 +348,8 @@ async fn module_toggles_need_permission_and_gate_disabled_modules() {
         Crypto::new(pools.app.clone(), huxley_crypto::testing::key_ring()),
         ApiConfig::default(),
     );
-    let gate = huxley_api::module_routes::require_module(&state, "expenses").await;
-    let err = gate.expect_err("unreleased module must be gated");
+    let gate = huxley_api::module_routes::require_module(&state, "no-such-module").await;
+    let err = gate.expect_err("an unknown module must be gated");
     assert_eq!(err.kind, "https://usehuxley.io/problems/module-disabled");
 }
 

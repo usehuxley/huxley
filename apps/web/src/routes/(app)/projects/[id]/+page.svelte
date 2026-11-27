@@ -2,6 +2,7 @@
 	import { enhance } from '$app/forms';
 	import { resolve } from '$app/paths';
 	import { Badge, Button, Card, Field, Input, Select } from '@usehuxley/ui';
+	import ExpensesCard from '#lib/expenses/ExpensesCard.svelte';
 	import PartsCard from '#lib/inventory/PartsCard.svelte';
 	import { BILLING, HEALTH, STATUSES, label } from '#lib/projects/labels.ts';
 	import Board from '#lib/projects/Board.svelte';
@@ -184,6 +185,12 @@
 	</div>
 	{#if data.parts}
 		<PartsCard parts={data.parts} />
+	{/if}
+	{#if data.expenses}
+		<ExpensesCard
+			expenses={data.expenses}
+			phases={data.project.phases.map((ph) => ({ value: ph.id, label: ph.name }))}
+		/>
 	{/if}
 
 	<nav class="flex gap-1 border-b border-border" aria-label="Views">

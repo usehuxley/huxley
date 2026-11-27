@@ -128,6 +128,9 @@
 					'/projects',
 					'/catalog',
 					'/inventory',
+					'/purchasing',
+					'/billing',
+					'/expenses',
 					'/dashboards',
 					'/people',
 					'/timesheets'
@@ -146,6 +149,11 @@
 							...item(on('inventory') && can('inventory:read'), '/inventory', 'Inventory'),
 							...item(on('inventory') && can('procurement:read'), '/purchasing', 'Purchasing'),
 							...item(on('billing') && can('billing:read'), '/billing', 'Billing'),
+							...item(
+								on('expenses') && (can('expense:write') || can('expense:read')),
+								'/expenses',
+								'Expenses'
+							),
 							...item(can('dashboard:read'), '/dashboards', 'Dashboards'),
 							...item(on('workforce') && can('workforce:read'), '/people', 'People'),
 							...item(

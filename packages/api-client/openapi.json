@@ -8199,6 +8199,339 @@
 				}
 			}
 		},
+		"/api/v1/expense-categories": {
+			"get": {
+				"tags": ["expenses"],
+				"operationId": "list_expense_categories",
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "array",
+									"items": {
+										"$ref": "#/components/schemas/ExpenseCategory"
+									}
+								}
+							}
+						}
+					}
+				}
+			},
+			"post": {
+				"tags": ["expenses"],
+				"operationId": "create_expense_category",
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/ExpenseCategoryInput"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"201": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ExpenseCategory"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/expense-categories/{id}": {
+			"put": {
+				"tags": ["expenses"],
+				"operationId": "update_expense_category",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/ExpenseCategoryInput"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ExpenseCategory"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/expenses": {
+			"get": {
+				"tags": ["expenses"],
+				"summary": "Expenses, newest first: everyone's where you have `expense:read`;\notherwise just yours.",
+				"operationId": "list_expenses",
+				"parameters": [
+					{
+						"name": "userId",
+						"in": "query",
+						"description": "Whose (the API sets it to you unless you may see everyone's).",
+						"required": false,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					},
+					{
+						"name": "ticketId",
+						"in": "query",
+						"required": false,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					},
+					{
+						"name": "projectId",
+						"in": "query",
+						"required": false,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					},
+					{
+						"name": "orgId",
+						"in": "query",
+						"required": false,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					},
+					{
+						"name": "status",
+						"in": "query",
+						"required": false,
+						"schema": {
+							"$ref": "#/components/schemas/ExpenseStatus"
+						}
+					},
+					{
+						"name": "from",
+						"in": "query",
+						"required": false,
+						"schema": {
+							"type": "string",
+							"format": "date"
+						}
+					},
+					{
+						"name": "to",
+						"in": "query",
+						"required": false,
+						"schema": {
+							"type": "string",
+							"format": "date"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "array",
+									"items": {
+										"$ref": "#/components/schemas/Expense"
+									}
+								}
+							}
+						}
+					}
+				}
+			},
+			"post": {
+				"tags": ["expenses"],
+				"summary": "Logs an expense (or mileage) of yours: against a ticket, a project (and\nphase), a client, or your MSP.",
+				"operationId": "create_expense",
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/ExpenseInput"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"201": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Expense"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/expenses/{id}": {
+			"get": {
+				"tags": ["expenses"],
+				"operationId": "get_expense",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Expense"
+								}
+							}
+						}
+					}
+				}
+			},
+			"put": {
+				"tags": ["expenses"],
+				"summary": "Changes a draft of yours (send the version you read).",
+				"operationId": "update_expense",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/ExpenseInput"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Expense"
+								}
+							}
+						}
+					}
+				}
+			},
+			"delete": {
+				"tags": ["expenses"],
+				"operationId": "delete_expense",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"responses": {
+					"204": {}
+				}
+			}
+		},
+		"/api/v1/expenses/{id}/receipt": {
+			"get": {
+				"tags": ["expenses"],
+				"operationId": "get_expense_receipt",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "The receipt's bytes"
+					}
+				}
+			},
+			"put": {
+				"tags": ["expenses"],
+				"summary": "Keeps the receipt (multipart field `file`: a photo or a PDF) on a draft of yours.",
+				"operationId": "put_expense_receipt",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"requestBody": {
+					"description": "A `file` part",
+					"content": {
+						"multipart/form-data": {}
+					}
+				},
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Expense"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
 		"/api/v1/forms": {
 			"get": {
 				"tags": ["forms"],
@@ -11907,6 +12240,72 @@
 							}
 						}
 					}
+				}
+			}
+		},
+		"/api/v1/mileage-rates": {
+			"get": {
+				"tags": ["expenses"],
+				"operationId": "list_mileage_rates",
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "array",
+									"items": {
+										"$ref": "#/components/schemas/MileageRate"
+									}
+								}
+							}
+						}
+					}
+				}
+			},
+			"put": {
+				"tags": ["expenses"],
+				"summary": "Sets the mileage rate from a day (replacing one set for that day).",
+				"operationId": "set_mileage_rate",
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/MileageRateInput"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/MileageRate"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/mileage-rates/{id}": {
+			"delete": {
+				"tags": ["expenses"],
+				"operationId": "delete_mileage_rate",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"responses": {
+					"204": {}
 				}
 			}
 		},
@@ -32108,6 +32507,306 @@
 					}
 				}
 			},
+			"Expense": {
+				"type": "object",
+				"required": [
+					"id",
+					"orgId",
+					"orgName",
+					"userId",
+					"userName",
+					"categoryId",
+					"categoryName",
+					"kind",
+					"spentOn",
+					"description",
+					"amount",
+					"tax",
+					"currency",
+					"billable",
+					"markupPct",
+					"billAmount",
+					"reimbursable",
+					"hasReceipt",
+					"status",
+					"flags",
+					"version",
+					"createdAt"
+				],
+				"properties": {
+					"amount": {
+						"type": "string",
+						"description": "What was paid, tax included."
+					},
+					"billAmount": {
+						"type": "string",
+						"description": "What the client is charged: the amount marked up (when billable)."
+					},
+					"billable": {
+						"type": "boolean"
+					},
+					"categoryId": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"categoryName": {
+						"type": "string"
+					},
+					"createdAt": {
+						"type": "string",
+						"format": "date-time"
+					},
+					"currency": {
+						"type": "string"
+					},
+					"description": {
+						"type": "string"
+					},
+					"distance": {
+						"type": ["string", "null"]
+					},
+					"flags": {
+						"type": "array",
+						"items": {
+							"type": "string"
+						},
+						"description": "Policy flags: `over_limit`, `no_receipt`."
+					},
+					"hasReceipt": {
+						"type": "boolean"
+					},
+					"id": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"kind": {
+						"$ref": "#/components/schemas/ExpenseCategoryKind"
+					},
+					"markupPct": {
+						"type": "string"
+					},
+					"orgId": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"orgName": {
+						"type": "string"
+					},
+					"phaseId": {
+						"type": ["string", "null"],
+						"format": "uuid"
+					},
+					"phaseName": {
+						"type": ["string", "null"]
+					},
+					"projectId": {
+						"type": ["string", "null"],
+						"format": "uuid"
+					},
+					"projectName": {
+						"type": ["string", "null"]
+					},
+					"rate": {
+						"type": ["string", "null"]
+					},
+					"receiptName": {
+						"type": ["string", "null"]
+					},
+					"reimbursable": {
+						"type": "boolean"
+					},
+					"spentOn": {
+						"type": "string",
+						"format": "date"
+					},
+					"status": {
+						"$ref": "#/components/schemas/ExpenseStatus"
+					},
+					"tax": {
+						"type": "string"
+					},
+					"ticketId": {
+						"type": ["string", "null"],
+						"format": "uuid"
+					},
+					"ticketRef": {
+						"type": ["string", "null"]
+					},
+					"unit": {
+						"type": ["string", "null"]
+					},
+					"userId": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"userName": {
+						"type": "string"
+					},
+					"vendor": {
+						"type": ["string", "null"]
+					},
+					"version": {
+						"type": "integer",
+						"format": "int32"
+					}
+				}
+			},
+			"ExpenseCategory": {
+				"type": "object",
+				"required": [
+					"id",
+					"name",
+					"kind",
+					"billable",
+					"reimbursable",
+					"markupPct",
+					"receiptRequired",
+					"active"
+				],
+				"properties": {
+					"active": {
+						"type": "boolean"
+					},
+					"billable": {
+						"type": "boolean"
+					},
+					"id": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"kind": {
+						"$ref": "#/components/schemas/ExpenseCategoryKind"
+					},
+					"limitAmount": {
+						"type": ["string", "null"],
+						"description": "Entries over this are flagged."
+					},
+					"markupPct": {
+						"type": "string"
+					},
+					"name": {
+						"type": "string"
+					},
+					"receiptRequired": {
+						"type": "boolean"
+					},
+					"reimbursable": {
+						"type": "boolean"
+					}
+				}
+			},
+			"ExpenseCategoryInput": {
+				"type": "object",
+				"required": ["name"],
+				"properties": {
+					"active": {
+						"type": "boolean"
+					},
+					"billable": {
+						"type": "boolean"
+					},
+					"kind": {
+						"$ref": "#/components/schemas/ExpenseCategoryKind"
+					},
+					"limitAmount": {
+						"type": ["string", "null"]
+					},
+					"markupPct": {
+						"type": ["string", "null"]
+					},
+					"name": {
+						"type": "string"
+					},
+					"receiptRequired": {
+						"type": "boolean"
+					},
+					"reimbursable": {
+						"type": "boolean"
+					}
+				},
+				"additionalProperties": false
+			},
+			"ExpenseCategoryKind": {
+				"type": "string",
+				"enum": ["expense", "mileage"]
+			},
+			"ExpenseInput": {
+				"type": "object",
+				"required": ["categoryId", "spentOn", "description"],
+				"properties": {
+					"amount": {
+						"type": ["string", "null"],
+						"description": "What was paid, tax included (not for mileage)."
+					},
+					"billable": {
+						"type": ["boolean", "null"],
+						"description": "Default: the category's."
+					},
+					"categoryId": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"currency": {
+						"type": ["string", "null"]
+					},
+					"description": {
+						"type": "string"
+					},
+					"distance": {
+						"type": ["string", "null"],
+						"description": "Mileage: the distance."
+					},
+					"markupPct": {
+						"type": ["string", "null"]
+					},
+					"orgId": {
+						"type": ["string", "null"],
+						"format": "uuid",
+						"description": "…or a client, or the provider (internal)."
+					},
+					"phaseId": {
+						"type": ["string", "null"],
+						"format": "uuid"
+					},
+					"projectId": {
+						"type": ["string", "null"],
+						"format": "uuid",
+						"description": "…or a project (and optionally one of its phases)…"
+					},
+					"reimbursable": {
+						"type": ["boolean", "null"]
+					},
+					"spentOn": {
+						"type": "string",
+						"format": "date"
+					},
+					"tax": {
+						"type": ["string", "null"]
+					},
+					"ticketId": {
+						"type": ["string", "null"],
+						"format": "uuid",
+						"description": "Against a ticket (its client)…"
+					},
+					"unit": {
+						"type": ["string", "null"],
+						"description": "Mileage: `mi` (the default) or `km`."
+					},
+					"vendor": {
+						"type": ["string", "null"]
+					},
+					"version": {
+						"type": ["integer", "null"],
+						"format": "int32",
+						"description": "Updates: the version read."
+					}
+				},
+				"additionalProperties": false
+			},
+			"ExpenseStatus": {
+				"type": "string",
+				"enum": ["draft", "submitted", "approved", "rejected", "reimbursed"]
+			},
 			"ExpiringCertification": {
 				"type": "object",
 				"required": ["userId", "person", "certification", "expiresOn", "uncovers"],
@@ -35581,6 +36280,50 @@
 				"type": "string",
 				"description": "When an SSO sign-in counts as multi-factor for the MFA policy.",
 				"enum": ["never", "amr", "always"]
+			},
+			"MileageRate": {
+				"type": "object",
+				"required": ["id", "unit", "rate", "currency", "effectiveFrom"],
+				"properties": {
+					"currency": {
+						"type": "string"
+					},
+					"effectiveFrom": {
+						"type": "string",
+						"format": "date"
+					},
+					"id": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"rate": {
+						"type": "string"
+					},
+					"unit": {
+						"type": "string",
+						"description": "`mi` or `km`."
+					}
+				}
+			},
+			"MileageRateInput": {
+				"type": "object",
+				"required": ["rate", "effectiveFrom"],
+				"properties": {
+					"currency": {
+						"type": ["string", "null"]
+					},
+					"effectiveFrom": {
+						"type": "string",
+						"format": "date"
+					},
+					"rate": {
+						"type": "string"
+					},
+					"unit": {
+						"type": ["string", "null"]
+					}
+				},
+				"additionalProperties": false
 			},
 			"Milestone": {
 				"type": "object",
@@ -47701,6 +48444,10 @@
 		{
 			"name": "billing",
 			"description": "Invoicing: billing settings, unbilled work, billing runs, invoices and credit memos (the billing module)"
+		},
+		{
+			"name": "expenses",
+			"description": "Expenses: categories, mileage rates, and entries with receipts (the expenses module)"
 		},
 		{
 			"name": "vault",
