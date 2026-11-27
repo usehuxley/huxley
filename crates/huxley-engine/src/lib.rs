@@ -35,6 +35,7 @@ mod payload;
 pub mod queue;
 mod rate;
 pub mod replay;
+pub mod retention;
 mod run;
 pub mod runs;
 pub mod script;
@@ -77,6 +78,9 @@ pub enum EngineError {
     /// Object storage (spilled payloads) failed.
     #[error("object storage: {0}")]
     Storage(String),
+    /// Settings that don't fit: `field: what fits`.
+    #[error("{0}")]
+    Invalid(String),
 }
 
 impl From<sqlx::Error> for EngineError {

@@ -116,6 +116,7 @@ pub fn router(state: AppState) -> Router {
         .merge(module_routes::org_routes())
         .merge(variable_routes::routes())
         .merge(upload_routes(&state))
+        .merge(crate::retention_routes::routes())
         .layer(middleware::from_fn(csrf::require_header));
 
     let stack = ServiceBuilder::new()

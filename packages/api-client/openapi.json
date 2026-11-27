@@ -15023,6 +15023,66 @@
 				}
 			}
 		},
+		"/api/v1/platform/retention": {
+			"get": {
+				"tags": ["system"],
+				"operationId": "get_retention",
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/RetentionState"
+								}
+							}
+						}
+					}
+				}
+			},
+			"put": {
+				"tags": ["system"],
+				"operationId": "put_retention",
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/Retention"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/RetentionState"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/platform/retention/sweep": {
+			"post": {
+				"tags": ["system"],
+				"summary": "Sweeps now, as the daily sweep does.",
+				"operationId": "sweep_retention",
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Swept"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
 		"/api/v1/portal-accounts/{id}": {
 			"patch": {
 				"tags": ["portal"],
@@ -42678,6 +42738,61 @@
 					}
 				}
 			},
+			"Retention": {
+				"type": "object",
+				"description": "How long things are kept.",
+				"required": ["runMonths", "eventDays", "notificationDays", "aiCallDays"],
+				"properties": {
+					"aiCallDays": {
+						"type": "integer",
+						"format": "int32",
+						"description": "AI call records (usage and cost), in days."
+					},
+					"eventDays": {
+						"type": "integer",
+						"format": "int32",
+						"description": "Published domain events, in days."
+					},
+					"notificationDays": {
+						"type": "integer",
+						"format": "int32",
+						"description": "Read notifications, in days."
+					},
+					"runMonths": {
+						"type": "integer",
+						"format": "int32",
+						"description": "Finished workflow runs, in months (1 to 120)."
+					}
+				},
+				"additionalProperties": false
+			},
+			"RetentionState": {
+				"allOf": [
+					{
+						"$ref": "#/components/schemas/Retention"
+					},
+					{
+						"type": "object",
+						"properties": {
+							"lastSweep": {
+								"oneOf": [
+									{
+										"$ref": "#/components/schemas/Swept"
+									},
+									{
+										"type": "null"
+									}
+								]
+							},
+							"lastSweptAt": {
+								"type": ["string", "null"],
+								"format": "date-time"
+							}
+						}
+					}
+				],
+				"description": "The settings, with when the last sweep ran and what it removed."
+			},
 			"RetryJobResponse": {
 				"type": "object",
 				"required": ["retried"],
@@ -46190,6 +46305,42 @@
 					"submissionId": {
 						"type": "string",
 						"format": "uuid"
+					}
+				}
+			},
+			"Swept": {
+				"type": "object",
+				"description": "What a sweep removed.",
+				"required": ["runs", "payloadObjects", "partitions", "events", "notifications", "aiCalls"],
+				"properties": {
+					"aiCalls": {
+						"type": "integer",
+						"format": "int64",
+						"minimum": 0
+					},
+					"events": {
+						"type": "integer",
+						"format": "int64",
+						"minimum": 0
+					},
+					"notifications": {
+						"type": "integer",
+						"format": "int64",
+						"minimum": 0
+					},
+					"partitions": {
+						"type": "integer",
+						"format": "int32"
+					},
+					"payloadObjects": {
+						"type": "integer",
+						"format": "int64",
+						"minimum": 0
+					},
+					"runs": {
+						"type": "integer",
+						"format": "int64",
+						"minimum": 0
 					}
 				}
 			},

@@ -68,6 +68,11 @@ fn spawn_scheduler(
         .with_storage(storage.clone())
         .with_public_url(config.auth.public_url.clone())
         .with_portal_url(config.http.api.portal_public_url.clone());
+    let (retention_engine, retention_stop) = (engine.clone(), shutdown.clone());
+    tasks.spawn(async move {
+        huxley_engine::retention::run_sweeper(retention_engine, retention_stop).await;
+        Ok(())
+    });
     let stop = shutdown.clone();
     tasks.spawn(async move {
         huxley_triggers::run_scheduler(engine, stop).await;

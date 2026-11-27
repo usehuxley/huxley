@@ -68,6 +68,7 @@ pub mod purchasing_routes;
 pub mod quote_routes;
 pub mod rate_limit;
 pub mod recommend_routes;
+pub mod retention_routes;
 mod router;
 mod runner_routes;
 pub mod sales_order_routes;

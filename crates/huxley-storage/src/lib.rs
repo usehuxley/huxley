@@ -175,6 +175,24 @@ impl Storage {
         }
     }
 
+    /// Deletes every object under `prefix` (a `/`-separated key prefix,
+    /// e.g. a run's payload folder). Returns how many it deleted.
+    pub async fn delete_prefix(&self, prefix: &str) -> StorageResult<usize> {
+        use futures_util::TryStreamExt as _;
+        let objects: Vec<object_store::ObjectMeta> = self
+            .store
+            .list(Some(&self.path(prefix.trim_end_matches('/'))))
+            .try_collect()
+            .await?;
+        for o in &objects {
+            match self.store.delete(&o.location).await {
+                Ok(()) | Err(object_store::Error::NotFound { .. }) => {}
+                Err(e) => return Err(e.into()),
+            }
+        }
+        Ok(objects.len())
+    }
+
     /// Writes and deletes a probe object: checks the store is reachable and
     /// writable. Run at startup.
     pub async fn check(&self) -> StorageResult<()> {
@@ -191,6 +209,17 @@ impl Storage {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tokio::test]
+    async fn prefixes_are_deleted_whole() {
+        let s = Storage::memory();
+        for k in ["runs/a/1.json", "runs/a/2.json", "runs/b/1.json"] {
+            s.put(k, Bytes::from_static(b"x")).await.unwrap();
+        }
+        assert_eq!(s.delete_prefix("runs/a/").await.unwrap(), 2);
+        assert!(s.get("runs/a/1.json").await.is_err());
+        assert!(s.get("runs/b/1.json").await.is_ok());
+    }
 
     #[tokio::test]
     async fn memory_round_trip() {

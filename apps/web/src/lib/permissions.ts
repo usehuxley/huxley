@@ -86,6 +86,11 @@ export const SETTINGS_SECTIONS = [
 		module: 'inventory'
 	},
 	{
+		key: 'retention',
+		label: 'Data retention',
+		permission: 'platform:retention:manage'
+	},
+	{
 		key: 'expenses',
 		label: 'Expenses',
 		permission: 'expense:configure',
