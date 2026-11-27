@@ -84,7 +84,7 @@ test.describe('tickets by meaning', () => {
 	);
 	test.skip(preset === 'automation', 'the servicedesk module is off in this run');
 
-	test('tickets about the same thing are found in other words', async ({ page, context }) => {
+	test('tickets about the same thing are found in other words', async ({ page }) => {
 		const stamp = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
 		const model = createServer((req, res) => {
 			let body = '';
@@ -169,10 +169,7 @@ test.describe('tickets by meaning', () => {
 
 			// Searching as the client (its embeddings provider reads the words).
 			await signIn(page);
-			await context.addCookies([
-				{ name: 'hx_org', value: client.id, url: new URL(page.url()).origin }
-			]);
-			await page.goto('/tickets');
+			await page.goto(`/tickets?view=open&org=${client.id}`);
 			await page.getByRole('link', { name: 'By meaning' }).click();
 			await page.getByLabel("Describe what you're looking for").fill('the printer is out of paper');
 			await page.getByRole('button', { name: 'Search', exact: true }).click();
@@ -186,8 +183,7 @@ test.describe('tickets by meaning', () => {
 			await expect(found.first()).toContainText(`Working from home ${stamp}`);
 
 			// Articles by meaning.
-			await page.goto('/knowledge');
-			await page.getByRole('link', { name: 'By meaning' }).click();
+			await page.goto(`/knowledge/meaning?org=${client.id}`);
 			await page.getByLabel("Describe what you're looking for").fill('my inbox is empty');
 			await page.getByRole('button', { name: 'Search', exact: true }).click();
 			const articles = page

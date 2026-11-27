@@ -10,7 +10,7 @@
 	let canManage = $derived(granted.includes('form:manage'));
 	let orgId = $state('');
 	$effect(() => {
-		if (!orgId) orgId = data.currentOrg?.id ?? data.orgs[0]?.id ?? '';
+		if (!orgId) orgId = data.orgs[0]?.id ?? '';
 	});
 	let orgOptions = $derived(data.orgs.map((o) => ({ value: o.id, label: o.name })));
 </script>

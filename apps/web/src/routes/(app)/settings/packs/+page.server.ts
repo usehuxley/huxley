@@ -11,10 +11,9 @@ type Review = components['schemas']['Review'];
 const MAX_PACK_BYTES = 20 * 1024 * 1024;
 
 export const load: PageServerLoad = async (event) => {
-	const { currentOrg } = await event.parent();
 	const client = api(event);
 	const orgs = (await client.GET('/api/v1/orgs')).data ?? [];
-	const orgId = event.url.searchParams.get('org') ?? currentOrg?.id ?? orgs[0]?.id;
+	const orgId = event.url.searchParams.get('org') ?? orgs[0]?.id;
 	if (!orgId) error(404, 'No organization to install packs in.');
 	const { data, response } = await client.GET('/api/v1/packs', { params: { query: { orgId } } });
 	if (response.status === 403 || response.status === 404) {

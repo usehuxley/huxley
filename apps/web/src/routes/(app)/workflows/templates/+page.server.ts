@@ -6,10 +6,10 @@ import type { Actions, PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async (event) => {
 	const { parent } = event;
-	const { currentOrg, user } = await parent();
+	const { user } = await parent();
 	const client = api(event);
-	// Your organization's templates: the one you're in, else your first.
-	const orgId = currentOrg?.id ?? (await client.GET('/api/v1/orgs')).data?.[0]?.id;
+	// Your organization's templates: your first organization's.
+	const orgId = (await client.GET('/api/v1/orgs')).data?.[0]?.id;
 	const { data } = await client.GET('/api/v1/templates', {
 		params: { query: orgId ? { orgId } : {} }
 	});

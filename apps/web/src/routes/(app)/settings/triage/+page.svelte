@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { page } from '$app/state';
 	import { enhance } from '$app/forms';
 	import { invalidateAll } from '$app/navigation';
 	import { resolve } from '$app/paths';
@@ -8,6 +9,11 @@
 	import type { PageProps } from './$types';
 
 	let { data, form }: PageProps = $props();
+	// Keep the organization (`?org=`) when a form posts back.
+	const act = (name: string) =>
+		page.url.searchParams.get('org')
+			? `?org=${encodeURIComponent(page.url.searchParams.get('org') ?? '')}&/${name}`
+			: `?/${name}`;
 	let latest = $derived(data.evaluations[0]);
 	const pct = (s: { correct: number; of: number }) =>
 		s.of === 0 ? '–' : `${Math.round((s.correct * 1000) / s.of) / 10}%`;
@@ -59,7 +65,7 @@
 		description="Runs the “Triage new tickets with AI” workflow on every sample and compares its answers with the labels."
 	>
 		<div class="flex flex-wrap items-center gap-2">
-			<form method="POST" action="?/evaluate" use:enhance>
+			<form method="POST" action={act('evaluate')} use:enhance>
 				<Button type="submit" variant="primary" disabled={data.samples.length === 0}>
 					Run evaluation
 				</Button>
@@ -139,12 +145,12 @@
 
 	<Card title="Labeled samples" description="Examples with the queue and priority they should get.">
 		<div class="flex flex-col gap-4">
-			<form method="POST" action="?/fromTickets" use:enhance>
+			<form method="POST" action={act('fromTickets')} use:enhance>
 				<Button type="submit">Add recently resolved tickets</Button>
 			</form>
 			<form
 				method="POST"
-				action="?/add"
+				action={act('add')}
 				class="grid gap-3 sm:grid-cols-[1fr_12rem_9rem_auto] sm:items-end"
 				use:enhance
 			>
@@ -202,7 +208,7 @@
 									{/if}
 								</p>
 							</div>
-							<form method="POST" action="?/remove" use:enhance>
+							<form method="POST" action={act('remove')} use:enhance>
 								<input type="hidden" name="id" value={s.id} />
 								<Button type="submit" variant="ghost" aria-label="Remove sample">
 									<Trash2 size={16} />

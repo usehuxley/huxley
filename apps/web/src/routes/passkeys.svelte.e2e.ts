@@ -46,6 +46,7 @@ async function addVirtualAuthenticator(page: Page) {
 }
 
 async function signOut(page: Page) {
+	await page.getByRole('button', { name: /^Your account/ }).click();
 	await page.getByRole('button', { name: 'Sign out' }).click();
 	await expect(page).toHaveURL(/\/login$/);
 }

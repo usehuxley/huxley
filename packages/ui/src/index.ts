@@ -17,6 +17,7 @@ export { default as ThemeToggle, type ThemePreference } from './components/Theme
 export { default as Toaster } from './components/Toaster.svelte';
 export { default as Workbench } from './components/Workbench.svelte';
 export { default as HuxleyMark } from './components/HuxleyMark.svelte';
+export { default as UserMenu } from './components/UserMenu.svelte';
 export type { Space, SpaceMenuGroup, SpaceMenuItem } from './workbench';
 export { tray, clockTone, clockUsed, type TrayItem, type TrayKind } from './tray.svelte';
 export { toast, type Toast, type ToastTone } from './toast.svelte';

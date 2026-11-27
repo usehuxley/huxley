@@ -185,9 +185,10 @@
 			<Input id="q" name="q" value={data.search} placeholder="Title or number" class="w-64" />
 			<Button type="submit"><Search size={16} /> Search</Button>
 			<Button
-				href={data.search
-					? `${resolve('/(app)/tickets/meaning')}?q=${encodeURIComponent(data.search)}`
-					: resolve('/(app)/tickets/meaning')}
+				href={`${resolve('/(app)/tickets/meaning')}?${new URLSearchParams({
+					...(data.search ? { q: data.search } : {}),
+					...(data.orgId ? { org: data.orgId } : {})
+				})}`}
 				variant="ghost"
 				title="Find tickets about the same thing, in other words"
 			>

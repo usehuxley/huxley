@@ -1,16 +1,15 @@
 import type { RequestEvent } from '@sveltejs/kit';
 import type { components } from '@usehuxley/api-client';
 import type { Answer } from '@usehuxley/widgets';
-import { ORG_COOKIE } from '#lib/orgContext.ts';
 import { api } from '#lib/server/api.ts';
 import { effectiveSpec, type Source } from './spec.ts';
 
 type Dashboard = components['schemas']['Dashboard'];
 
-/** Where new dashboards live: the current organization, else the top one you can see. */
+/** The organization a page works in: `?org=` when given, else the top one you can see. */
 export async function homeOrg(event: RequestEvent): Promise<string | null> {
-	const current = event.cookies.get(ORG_COOKIE);
-	if (current) return current;
+	const asked = event.url.searchParams.get('org');
+	if (asked) return asked;
 	const { data } = await api(event).GET('/api/v1/orgs');
 	const orgs = data ?? [];
 	return orgs.find((o) => !orgs.some((p) => p.id === o.parentId))?.id ?? null;
