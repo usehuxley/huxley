@@ -111,6 +111,25 @@ jobs:
             exit 1
           fi
 
+  observability:
+    name: Dashboards and alert rules
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Alert rules are valid and their tests pass
+        working-directory: deploy/observability/alerts
+        run: |
+          docker run --rm -v "$PWD:/rules:ro" -w /rules --entrypoint promtool prom/prometheus:v3.2.1 check rules huxley.rules.yaml
+          docker run --rm -v "$PWD:/rules:ro" -w /rules --entrypoint promtool prom/prometheus:v3.2.1 test rules huxley.rules.test.yaml
+      - name: Dashboards match their generator
+        working-directory: deploy/observability/dashboards
+        run: |
+          python3 generate.py
+          if ! git diff --exit-code -- .; then
+            echo "::error::Edit generate.py and run it; don't edit the dashboard JSON by hand."
+            exit 1
+          fi
+
   js:
     name: Frontend (check, lint, tests, e2e)
     runs-on: ubuntu-24.04

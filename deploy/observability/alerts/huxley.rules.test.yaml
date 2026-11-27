@@ -1,0 +1,101 @@
+# promtool test rules huxley.rules.test.yaml
+rule_files: [huxley.rules.yaml]
+evaluation_interval: 1m
+tests:
+  - name: jobs waiting fire, then clear
+    interval: 1m
+    input_series:
+      - series: huxley_jobs_oldest_due_seconds{instance="s1"}
+        values: "0 0 400x10 0x10"
+    alert_rule_test:
+      - eval_time: 9m
+        alertname: HuxleyJobsWaiting
+        exp_alerts:
+          - exp_labels: { severity: critical }
+            exp_annotations:
+              summary: Workflow jobs are waiting for workers
+              description: "The oldest due job has waited 6m 40s. Workers are down, stuck, or too few (scale the worker pools)."
+      - eval_time: 20m
+        alertname: HuxleyJobsWaiting
+        exp_alerts: []
+
+  - name: API errors need volume and a high share
+    interval: 1m
+    input_series:
+      - series: http_server_request_duration_seconds_count{http_response_status_code="200"}
+        values: "0+60x20"
+      - series: http_server_request_duration_seconds_count{http_response_status_code="500"}
+        values: "0+12x20"
+    alert_rule_test:
+      - eval_time: 16m
+        alertname: HuxleyApiErrors
+        exp_alerts:
+          - exp_labels: { severity: critical }
+            exp_annotations:
+              summary: More than 5% of API requests are failing
+              description: "16.67% of requests answered 5xx over the last 5 minutes. Check the API logs and the database."
+
+  - name: dead-lettered jobs
+    interval: 1m
+    input_series:
+      - series: huxley_jobs_dead_lettered_total{kind="step"}
+        values: "0 0 0 1 1 1"
+    alert_rule_test:
+      - eval_time: 5m
+        alertname: HuxleyJobsDeadLettered
+        exp_alerts:
+          - exp_labels: { severity: warning, kind: step }
+            exp_annotations:
+              summary: Workflow step jobs failed repeatedly and were given up on
+              description: "1 in the last 15 minutes. See Settings → Workflow jobs to retry them."
+
+  - name: scheduler silent
+    interval: 1m
+    input_series:
+      - series: huxley_audit_unsealed
+        values: "0x20"
+    alert_rule_test:
+      - eval_time: 15m
+        alertname: HuxleySchedulerSilent
+        exp_alerts:
+          - exp_labels: { severity: critical }
+            exp_annotations:
+              summary: The Huxley scheduler isn't reporting
+              description: "No queue metrics for 10 minutes: the scheduler role is down (timers, schedules, retention, audit sealing and streaming stop with it), or telemetry export is broken."
+
+  - name: sealing stalled, not merely busy
+    interval: 1m
+    input_series:
+      - series: huxley_audit_unsealed{instance="s1"}
+        values: "5 300 0 300 300 300 300 300 300 300 300 300 300 300 300"
+    alert_rule_test:
+      - eval_time: 8m
+        alertname: HuxleyAuditNotSealing
+        exp_alerts: []
+      - eval_time: 13m
+        alertname: HuxleyAuditNotSealing
+        exp_alerts:
+          - exp_labels: { severity: critical }
+            exp_annotations:
+              summary: Audit records aren't being sealed into the hash chain
+              description: "300 records have waited for 10 minutes. The scheduler's sealer has stopped; SIEM streams stall with it."
+
+  - name: pool saturation is against the maximum
+    interval: 1m
+    input_series:
+      - series: db_client_connection_count{instance="a",db_client_connection_pool_name="main",db_client_connection_state="used"}
+        values: "4x15"
+      - series: db_client_connection_max{instance="a",db_client_connection_pool_name="main"}
+        values: "20x15"
+      - series: db_client_connection_count{instance="b",db_client_connection_pool_name="main",db_client_connection_state="used"}
+        values: "19x15"
+      - series: db_client_connection_max{instance="b",db_client_connection_pool_name="main"}
+        values: "20x15"
+    alert_rule_test:
+      - eval_time: 12m
+        alertname: HuxleyDatabasePoolSaturated
+        exp_alerts:
+          - exp_labels: { severity: warning, instance: b, db_client_connection_pool_name: main }
+            exp_annotations:
+              summary: "b: the main connection pool is nearly full"
+              description: "95% of its connections are in use. Requests and jobs will queue for connections. Raise database.max_connections, add replicas, or put PgBouncer in front."

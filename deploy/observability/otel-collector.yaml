@@ -2,8 +2,10 @@
 #
 # Receives OTLP from all Huxley services, applies tail sampling (keep every
 # error and slow request, sample the rest), and exports to a backend.
-# Replace the `debug` exporter with your backend: Grafana Cloud, Tempo/Loki/
-# Prometheus, Jaeger, Azure Monitor, Datadog, Honeycomb, etc.
+# Metrics are served for Prometheus to scrape on :8889 — the dashboards and
+# alert rules beside this file use those names (ADR-091). Replace the
+# `debug` exporter with your trace and log backend: Grafana Cloud, Tempo/
+# Loki, Jaeger, Azure Monitor, Datadog, Honeycomb, etc.
 
 receivers:
   otlp:
@@ -33,6 +35,10 @@ processors:
 exporters:
   debug:
     verbosity: basic
+  # Scrape this with Prometheus (or push with `prometheusremotewrite` to
+  # Mimir, Thanos, Grafana Cloud). Each process is one `instance`.
+  prometheus:
+    endpoint: 0.0.0.0:8889
   # otlp:
   #   endpoint: tempo:4317
   #   tls: { insecure: true }
@@ -46,7 +52,7 @@ service:
     metrics:
       receivers: [otlp]
       processors: [memory_limiter, batch]
-      exporters: [debug]
+      exporters: [prometheus]
     logs:
       receivers: [otlp]
       processors: [memory_limiter, batch]

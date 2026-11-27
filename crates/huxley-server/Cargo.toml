@@ -13,6 +13,7 @@ name = "huxley"
 path = "src/main.rs"
 
 [dependencies]
+opentelemetry.workspace = true
 anyhow.workspace = true
 axum.workspace = true
 clap.workspace = true

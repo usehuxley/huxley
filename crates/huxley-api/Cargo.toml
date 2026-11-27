@@ -9,6 +9,7 @@ repository.workspace = true
 publish = false
 
 [dependencies]
+opentelemetry.workspace = true
 huxley-cx.workspace = true
 huxley-analytics.workspace = true
 rust_decimal.workspace = true
