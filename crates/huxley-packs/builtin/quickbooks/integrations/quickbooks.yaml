@@ -102,6 +102,39 @@ paths:
         "200":
           description: The invoice
           content: { application/json: { schema: { type: object, properties: { Invoice: { $ref: "#/components/schemas/Created" } } } } }
+  /bill:
+    post:
+      operationId: createBill
+      summary: Create a bill (to a vendor, e.g. an employee to pay back)
+      tags: [Bills]
+      parameters: [{ $ref: "#/components/parameters/minorversion" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                VendorRef: { $ref: "#/components/schemas/Ref" }
+                TxnDate: { type: string, format: date }
+                DocNumber: { type: string }
+                PrivateNote: { type: string }
+                CurrencyRef: { $ref: "#/components/schemas/Ref" }
+                Line:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      DetailType: { type: string, enum: [AccountBasedExpenseLineDetail] }
+                      Amount: { type: number }
+                      Description: { type: string }
+                      AccountBasedExpenseLineDetail:
+                        type: object
+                        properties: { AccountRef: { $ref: "#/components/schemas/Ref" } }
+      responses:
+        "200":
+          description: The bill
+          content: { application/json: { schema: { type: object, properties: { Bill: { $ref: "#/components/schemas/Created" } } } } }
   /creditmemo:
     post:
       operationId: createCreditMemo

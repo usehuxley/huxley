@@ -80,6 +80,7 @@ const ICONS: Record<string, typeof Globe> = {
 	'core.invoice.status': ListChecks,
 	'core.expense.read_receipt': ListChecks,
 	'core.expense.report_decide': ListChecks,
+	'core.expense.sync_result': ListChecks,
 	'core.sales.log_email': ListChecks,
 	'core.scope.context': ListChecks,
 	'core.scope.write': ListChecks,

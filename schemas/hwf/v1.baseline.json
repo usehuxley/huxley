@@ -472,6 +472,23 @@
       ],
       "type": "object"
     },
+    "ExpenseSyncResult": {
+      "additionalProperties": false,
+      "description": "How sending an expense report to the accounting system went\n(`core.expense.sync_result`), from a sync pack's workflow on\n`expense_report.sync_requested`: `report_id`, `ok`, and when it synced\nthe bill's `remote_id` (and optionally `remote_number` and an https\n`remote_url`); when it didn't, the `error`. Raises\n`expense_report.synced` or `expense_report.sync_failed`. Output: the\nreport's accounting status.",
+      "properties": {
+        "error": true,
+        "ok": true,
+        "remote_id": true,
+        "remote_number": true,
+        "remote_url": true,
+        "report_id": true
+      },
+      "required": [
+        "report_id",
+        "ok"
+      ],
+      "type": "object"
+    },
     "HealthCompute": {
       "additionalProperties": false,
       "description": "Client health for today (`core.health.compute`): each client company in\nthe run's organization and below gets a score, 0 to 100, from weighted\nfactors (satisfaction, NPS, SLA misses, reopened tickets, ticket volume,\nrenewals, sentiment), with the reasons; those that dropped 10 points or\nmore from a week before emit `client.health_declining`, and those whose\nmessages turned negative emit `client.sentiment_declining` (at most\nweekly). It takes nothing. Output: `{ companies, declining: [{ org_id,\nname, score, previous, reasons }], sentiment_falling: [{ org_id, name,\nrecent, previous, explanations }] }`.",
@@ -4676,6 +4693,69 @@
             },
             "with": {
               "$ref": "#/$defs/ExpenseReportDecide"
+            }
+          },
+          "required": [
+            "type",
+            "id",
+            "with"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Record how sending an expense report to accounting went (the `billing` module).",
+          "properties": {
+            "continue_on_error": {
+              "description": "Record the error as the step's output and carry on.",
+              "type": "boolean"
+            },
+            "description": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "id": {
+              "description": "Unique in the workflow: lowercase letters, digits, underscores.\nOther steps read this step's output as `steps.<id>.output`.",
+              "type": "string"
+            },
+            "if": {
+              "description": "Skip the step unless this expression is true.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "name": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "retry": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/RetryPolicy"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "timeout": {
+              "description": "Fail the attempt after this long, e.g. `30s`.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "type": {
+              "const": "core.expense.sync_result",
+              "type": "string"
+            },
+            "with": {
+              "$ref": "#/$defs/ExpenseSyncResult"
             }
           },
           "required": [

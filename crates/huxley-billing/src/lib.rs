@@ -20,6 +20,7 @@
 //!
 //! Money is `numeric(18,4)` with an explicit currency, as decimal strings.
 
+pub mod expense_sync;
 pub mod generate;
 pub mod invoices;
 pub mod review;

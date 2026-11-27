@@ -681,6 +681,54 @@ impl Engine {
         }
     }
 
+    /// `core.expense.sync_result`: records how sending an expense report to
+    /// accounting went (a report in the run's organization or below).
+    pub(crate) async fn expense_sync_result(
+        &self,
+        org_id: Uuid,
+        input: &Json,
+    ) -> Result<Json, Json> {
+        self.require_billing(org_id).await?;
+        let report =
+            id(input, "report_id")?.ok_or_else(|| error("input", "report_id is required"))?;
+        let text = |k: &str| match &input[k] {
+            Json::String(s) if !s.trim().is_empty() => Some(s.clone()),
+            Json::Number(n) => Some(n.to_string()),
+            _ => None,
+        };
+        let ok = match &input["ok"] {
+            Json::Bool(b) => *b,
+            Json::String(s) => s == "true",
+            _ => return Err(error("input", "ok is true or false")),
+        };
+        let outcome = huxley_billing::sync::Outcome {
+            ok,
+            remote_id: text("remote_id"),
+            remote_number: text("remote_number"),
+            remote_url: text("remote_url"),
+            error: text("error"),
+        };
+        let subtree = self.subtree(org_id).await?;
+        let mut tx = begin_scoped(self.db(), &OrgScope::Orgs(subtree))
+            .await
+            .map_err(internal)?;
+        let ctx = RequestContext::system(Via::Workflow);
+        let state = huxley_billing::expense_sync::record(&mut tx, &ctx, report, &outcome)
+            .await
+            .map_err(|e| match e {
+                huxley_billing::BillingError::NotFound => {
+                    error("not_found", "no such expense report here")
+                }
+                huxley_billing::BillingError::Conflict(m) => error("conflict", &m),
+                huxley_billing::BillingError::Invalid { field, message } => {
+                    error("input", format!("{field}: {message}"))
+                }
+                other => internal(other),
+            })?;
+        tx.commit().await.map_err(internal)?;
+        Ok(json!(state))
+    }
+
     /// `core.invoice.unpaid`: synced invoices (in the run's organization or
     /// below) still open in the accounting system.
     pub(crate) async fn invoice_unpaid(&self, org_id: Uuid, input: &Json) -> Result<Json, Json> {

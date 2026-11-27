@@ -1,0 +1,71 @@
+apiVersion: usehuxley.io/v1
+kind: Workflow
+metadata:
+  key: xero-sync-expenses
+  name: Send expense reports to Xero
+  description: >-
+    When an approved expense report is sent to accounting (target xero),
+    creates an authorised bill in Xero to the person's contact, one line per
+    expense to be paid back on its category's expense account (amounts tax
+    included), and records the bill on the report. If Xero refuses it, the
+    report says why. Uses the connection named xero and the organization
+    variable xero_tenant_id.
+spec:
+  triggers:
+    - type: event
+      event: expense_report.sync_requested
+      filter: "{{ event.payload.target == 'xero' }}"
+  steps:
+    - id: begin
+      type: set_var
+      vars: { lines: [] }
+    - id: each
+      type: foreach
+      items: "{{ inputs.lines }}"
+      as: line
+      steps:
+        - id: add
+          type: set_var
+          vars:
+            lines: >-
+              {{ run.vars.lines + [{'Description': line.description, 'Quantity': 1,
+                 'UnitAmount': line.amount | float, 'AccountCode': line.account.id}] }}
+    - id: bill
+      type: integration.action
+      action: xero/createInvoices
+      connection: xero
+      with:
+        xero-tenant-id: "{{ vars.xero_tenant_id }}"
+        body:
+          Invoices:
+            - Type: ACCPAY
+              Contact: { ContactID: "{{ inputs.supplier.id }}" }
+              LineItems: "{{ run.vars.lines }}"
+              Date: "{{ inputs.date }}"
+              DueDate: "{{ inputs.date }}"
+              InvoiceNumber: "{{ inputs.reference }}"
+              Reference: "{{ 'Expenses: ' ~ inputs.title }}"
+              CurrencyCode: "{{ inputs.currency }}"
+              Status: AUTHORISED
+              LineAmountTypes: Inclusive
+    - id: synced
+      type: core.expense.sync_result
+      with:
+        report_id: "{{ inputs.reportId }}"
+        ok: true
+        remote_id: "{{ steps.bill.output.Invoices[0].InvoiceID }}"
+        remote_number: "{{ steps.bill.output.Invoices[0].InvoiceNumber }}"
+        remote_url: "https://go.xero.com/AccountsPayable/View.aspx?InvoiceID={{ steps.bill.output.Invoices[0].InvoiceID }}"
+  on_error:
+    - id: failed
+      type: core.expense.sync_result
+      with:
+        report_id: "{{ inputs.reportId }}"
+        ok: false
+        error: >-
+          {{ ('Xero: ' ~ (error.body.Elements[0].ValidationErrors | map(attribute='Message') | join('; ')))
+             if (error.body and error.body.Elements and error.body.Elements[0].ValidationErrors)
+             else (('Xero: ' ~ error.body.Message) if (error.body and error.body.Message)
+                   else (error.message or 'Xero refused it')) }}
+  outputs:
+    synced: "{{ inputs.reference }}"

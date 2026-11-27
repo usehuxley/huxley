@@ -31,3 +31,7 @@ QuickBooks calculates tax from the tax codes. Huxley doesn't.
 ## Payment status
 
 Publish **Update invoice status from QuickBooks Online**. Every hour it reads what's still due on synced invoices that aren't paid, and records it. The first time, it also fetches each invoice's view-and-pay link (QuickBooks Payments must be on) for the client portal. See [payment status and credit hold](./billing.md#payment-status-and-credit-hold).
+
+## Expense reports
+
+Publish **Send expense reports to QuickBooks Online**. An approved report sent to accounting becomes a **bill** to the person's vendor, one line per expense to be paid back, on the expense account matched to its category. **Fetch lists** also reads vendors and expense accounts for matching. See [paying expenses back](./expenses.md#paying-expenses-back).

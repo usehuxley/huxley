@@ -8348,6 +8348,31 @@
 				}
 			}
 		},
+		"/api/v1/expense-reports/export.csv": {
+			"get": {
+				"tags": ["expenses"],
+				"summary": "Reimbursable expenses in approved (or paid back) reports, as CSV.",
+				"operationId": "export_expense_reports",
+				"parameters": [
+					{
+						"name": "status",
+						"in": "query",
+						"description": "`approved` (the default) or `reimbursed`.",
+						"required": false,
+						"schema": {
+							"type": "string"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"text/csv": {}
+						}
+					}
+				}
+			}
+		},
 		"/api/v1/expense-reports/{id}": {
 			"get": {
 				"tags": ["expenses"],
@@ -8437,6 +8462,91 @@
 							"application/json": {
 								"schema": {
 									"$ref": "#/components/schemas/ExpenseReportComment"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/expense-reports/{id}/reimbursed": {
+			"post": {
+				"tags": ["expenses"],
+				"summary": "Marks an approved report paid back.",
+				"operationId": "reimburse_expense_report",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ReportSync"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/expense-reports/{id}/sync": {
+			"get": {
+				"tags": ["expenses"],
+				"summary": "A report's accounting status: whether it's in the accounting system, and paid back.",
+				"operationId": "expense_report_sync",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ReportSync"
+								}
+							}
+						}
+					}
+				}
+			},
+			"post": {
+				"tags": ["expenses"],
+				"summary": "Sends an approved report to the accounting system as a bill to the\nperson (raises `expense_report.sync_requested` for the sync pack), or\nfails it saying what to map.",
+				"operationId": "sync_expense_report",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ReportSync"
 								}
 							}
 						}
@@ -36402,7 +36512,7 @@
 			},
 			"MappingKind": {
 				"type": "string",
-				"enum": ["customer", "item", "tax_code", "class"]
+				"enum": ["customer", "item", "tax_code", "class", "supplier", "account"]
 			},
 			"MappingRequest": {
 				"type": "object",
@@ -41983,6 +42093,43 @@
 					}
 				},
 				"additionalProperties": false
+			},
+			"ReportSync": {
+				"type": "object",
+				"description": "A report's accounting status.",
+				"required": ["reportId", "status"],
+				"properties": {
+					"reimbursedAt": {
+						"type": ["string", "null"],
+						"format": "date-time"
+					},
+					"remoteId": {
+						"type": ["string", "null"]
+					},
+					"remoteNumber": {
+						"type": ["string", "null"]
+					},
+					"remoteUrl": {
+						"type": ["string", "null"]
+					},
+					"reportId": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"status": {
+						"type": "string"
+					},
+					"syncError": {
+						"type": ["string", "null"]
+					},
+					"syncStatus": {
+						"type": ["string", "null"],
+						"description": "`pending`, `synced` or `failed`; none if it was never sent."
+					},
+					"syncTarget": {
+						"type": ["string", "null"]
+					}
+				}
 			},
 			"ReportView": {
 				"allOf": [

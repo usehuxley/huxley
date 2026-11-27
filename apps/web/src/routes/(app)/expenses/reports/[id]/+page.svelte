@@ -82,6 +82,55 @@
 		</Card>
 	{/if}
 
+	{#if data.sync && data.canPay && (r.status === 'approved' || r.status === 'reimbursed')}
+		<Card title="Paying it back">
+			<div class="flex flex-wrap items-center justify-between gap-3 text-sm">
+				<div class="min-w-0">
+					{#if r.status === 'reimbursed'}
+						<p class="text-fg">Paid back.</p>
+					{/if}
+					{#if data.sync.syncStatus === 'synced'}
+						<p class="text-fg-muted">
+							In {data.sync.syncTarget} as a bill{data.sync.remoteNumber
+								? ` (${data.sync.remoteNumber})`
+								: ''}.
+							{#if data.sync.remoteUrl}
+								<!-- eslint-disable svelte/no-navigation-without-resolve -- the accounting system's page -->
+								<a
+									href={data.sync.remoteUrl}
+									target="_blank"
+									rel="noopener noreferrer"
+									class="text-accent hover:underline"
+								>
+									Open it
+								</a>
+								<!-- eslint-enable svelte/no-navigation-without-resolve -->
+							{/if}
+						</p>
+					{:else if data.sync.syncStatus === 'pending'}
+						<p class="text-fg-muted">Being sent to {data.sync.syncTarget}…</p>
+					{:else if data.sync.syncStatus === 'failed'}
+						<p class="text-xs text-danger">{data.sync.syncError}</p>
+					{/if}
+				</div>
+				{#if r.status === 'approved'}
+					<div class="flex gap-2">
+						{#if data.sync.syncStatus !== 'synced'}
+							<form method="POST" action="?/sendToAccounting" use:enhance={said()}>
+								<Button type="submit" size="sm">
+									{data.sync.syncStatus === 'failed' ? 'Try again' : 'Send to accounting'}
+								</Button>
+							</form>
+						{/if}
+						<form method="POST" action="?/reimbursed" use:enhance={said()}>
+							<Button type="submit" size="sm" variant="primary">Mark paid back</Button>
+						</form>
+					</div>
+				{/if}
+			</div>
+		</Card>
+	{/if}
+
 	<Card title="Expenses">
 		<ExpenseList entries={r.entries} me={data.me} showWhere />
 	</Card>

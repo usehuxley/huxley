@@ -2,10 +2,10 @@ apiVersion: usehuxley.io/v1
 kind: Pack
 key: huxley/quickbooks
 name: QuickBooks Online
-version: 1.0.0
+version: 1.1.0
 publisher: Huxley
 description: "QuickBooks Online accounting sync: approved invoices and credit memos are created in QuickBooks with their mapped customers, items, tax codes and classes, and QuickBooks' customers, items, tax codes and classes are fetched for mapping."
 contents:
   integrations: [quickbooks]
-  workflows: [quickbooks-sync-invoice, quickbooks-fetch-lists, quickbooks-invoice-status]
-  datasets: [quickbooks-customers, quickbooks-items, quickbooks-tax-codes, quickbooks-classes]
+  workflows: [quickbooks-sync-invoice, quickbooks-fetch-lists, quickbooks-invoice-status, quickbooks-sync-expenses]
+  datasets: [quickbooks-customers, quickbooks-items, quickbooks-tax-codes, quickbooks-classes, quickbooks-suppliers, quickbooks-accounts]

@@ -1,0 +1,66 @@
+apiVersion: usehuxley.io/v1
+kind: Workflow
+metadata:
+  key: quickbooks-sync-expenses
+  name: Send expense reports to QuickBooks Online
+  description: >-
+    When an approved expense report is sent to accounting (target
+    quickbooks), creates a bill in QuickBooks to the person's vendor, one
+    line per expense to be paid back on its category's expense account, and
+    records the bill on the report. If QuickBooks refuses it, the report
+    says why. Uses the connection named quickbooks.
+spec:
+  triggers:
+    - type: event
+      event: expense_report.sync_requested
+      filter: "{{ event.payload.target == 'quickbooks' }}"
+  steps:
+    - id: begin
+      type: set_var
+      vars: { lines: [] }
+    # (Spaced braces: a literal pair would end the expression.)
+    - id: each
+      type: foreach
+      items: "{{ inputs.lines }}"
+      as: line
+      steps:
+        - id: add
+          type: set_var
+          vars:
+            lines: >-
+              {{ run.vars.lines + [{'DetailType': 'AccountBasedExpenseLineDetail', 'Amount': line.amount | float,
+                 'Description': line.description,
+                 'AccountBasedExpenseLineDetail': {'AccountRef': {'value': line.account.id} } }] }}
+    - id: bill
+      type: integration.action
+      action: quickbooks/createBill
+      connection: quickbooks
+      with:
+        minorversion: 75
+        body:
+          VendorRef: { value: "{{ inputs.supplier.id }}" }
+          TxnDate: "{{ inputs.date }}"
+          DocNumber: "{{ inputs.reference }}"
+          CurrencyRef: { value: "{{ inputs.currency }}" }
+          PrivateNote: "{{ 'Expenses from Huxley ' ~ inputs.reference ~ ': ' ~ inputs.title }}"
+          Line: "{{ run.vars.lines }}"
+    - id: synced
+      type: core.expense.sync_result
+      with:
+        report_id: "{{ inputs.reportId }}"
+        ok: true
+        remote_id: "{{ steps.bill.output.Bill.Id }}"
+        remote_number: "{{ steps.bill.output.Bill.DocNumber }}"
+        remote_url: "https://{{ vars.quickbooks_app_host | default('app.qbo.intuit.com') }}/app/bill?txnId={{ steps.bill.output.Bill.Id }}"
+  on_error:
+    - id: failed
+      type: core.expense.sync_result
+      with:
+        report_id: "{{ inputs.reportId }}"
+        ok: false
+        error: >-
+          {{ ('QuickBooks: ' ~ (error.body.Fault.Error | map(attribute='Message') | join('; ')))
+             if (error.body and error.body.Fault and error.body.Fault.Error)
+             else (error.message or 'QuickBooks refused it') }}
+  outputs:
+    synced: "{{ inputs.reference }}"

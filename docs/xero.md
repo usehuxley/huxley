@@ -29,3 +29,7 @@ Items need a sales account in Xero, since lines carry the item code and not an a
 ## Payment status
 
 Publish **Update invoice status from Xero**. Every hour it reads what's still due on synced invoices that aren't paid, and records it. The first time, it also fetches each invoice's online invoice link for the client portal. See [payment status and credit hold](./billing.md#payment-status-and-credit-hold).
+
+## Expense reports
+
+Publish **Send expense reports to Xero**. An approved report sent to accounting becomes an authorised **bill** (amounts tax included) to the person's contact, one line per expense to be paid back, on the expense account matched to its category. **Fetch lists** also reads contacts and expense accounts for matching. See [paying expenses back](./expenses.md#paying-expenses-back).

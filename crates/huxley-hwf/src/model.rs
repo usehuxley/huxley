@@ -465,6 +465,9 @@ pub enum Step {
     /// Record an expense report's decision (the `expenses` module).
     #[serde(rename = "core.expense.report_decide")]
     ExpenseReportDecide(ExpenseReportDecideStep),
+    /// Record how sending an expense report to accounting went (the `billing` module).
+    #[serde(rename = "core.expense.sync_result")]
+    ExpenseSyncResult(ExpenseSyncResultStep),
     /// Log an email on the contacts and leads it's to or from (the `sales` module).
     #[serde(rename = "core.sales.log_email")]
     SalesLogEmail(SalesLogEmailStep),
@@ -927,6 +930,11 @@ step!(ExpenseReportDecideStep {
     pub decide: ExpenseReportDecide,
 });
 
+step!(ExpenseSyncResultStep {
+    #[serde(rename = "with")]
+    pub result: ExpenseSyncResult,
+});
+
 step!(SalesLogEmailStep {
     #[serde(rename = "with")]
     pub log: SalesLogEmail,
@@ -1078,6 +1086,7 @@ impl Step {
             InvoiceStatus,
             ExpenseReadReceipt,
             ExpenseReportDecide,
+            ExpenseSyncResult,
             SalesLogEmail,
             ScopeContext,
             ScopeWrite,
@@ -1159,6 +1168,7 @@ impl Step {
             Self::InvoiceStatus(_) => "core.invoice.status",
             Self::ExpenseReadReceipt(_) => "core.expense.read_receipt",
             Self::ExpenseReportDecide(_) => "core.expense.report_decide",
+            Self::ExpenseSyncResult(_) => "core.expense.sync_result",
             Self::SalesLogEmail(_) => "core.sales.log_email",
             Self::ScopeContext(_) => "core.scope.context",
             Self::ScopeWrite(_) => "core.scope.write",
@@ -1950,6 +1960,28 @@ pub struct ExpenseReportDecide {
     pub by: Option<Value>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub comment: Option<Value>,
+}
+
+/// How sending an expense report to the accounting system went
+/// (`core.expense.sync_result`), from a sync pack's workflow on
+/// `expense_report.sync_requested`: `report_id`, `ok`, and when it synced
+/// the bill's `remote_id` (and optionally `remote_number` and an https
+/// `remote_url`); when it didn't, the `error`. Raises
+/// `expense_report.synced` or `expense_report.sync_failed`. Output: the
+/// report's accounting status.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct ExpenseSyncResult {
+    pub report_id: Value,
+    pub ok: Value,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub remote_id: Option<Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub remote_number: Option<Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub remote_url: Option<Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub error: Option<Value>,
 }
 
 /// An email to log (`core.sales.log_email`): `email_id`, from a mailbox's

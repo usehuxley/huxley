@@ -299,6 +299,18 @@ const SOURCES: &[Source] = &[
                 include_str!("../builtin/quickbooks/workflows/quickbooks-invoice-status.yaml"),
             ),
             (
+                "workflows/quickbooks-sync-expenses.yaml",
+                include_str!("../builtin/quickbooks/workflows/quickbooks-sync-expenses.yaml"),
+            ),
+            (
+                "datasets/quickbooks-suppliers.json",
+                include_str!("../builtin/quickbooks/datasets/quickbooks-suppliers.json"),
+            ),
+            (
+                "datasets/quickbooks-accounts.json",
+                include_str!("../builtin/quickbooks/datasets/quickbooks-accounts.json"),
+            ),
+            (
                 "datasets/quickbooks-customers.json",
                 include_str!("../builtin/quickbooks/datasets/quickbooks-customers.json"),
             ),
@@ -334,6 +346,18 @@ const SOURCES: &[Source] = &[
             (
                 "workflows/xero-invoice-status.yaml",
                 include_str!("../builtin/xero/workflows/xero-invoice-status.yaml"),
+            ),
+            (
+                "workflows/xero-sync-expenses.yaml",
+                include_str!("../builtin/xero/workflows/xero-sync-expenses.yaml"),
+            ),
+            (
+                "datasets/xero-suppliers.json",
+                include_str!("../builtin/xero/datasets/xero-suppliers.json"),
+            ),
+            (
+                "datasets/xero-accounts.json",
+                include_str!("../builtin/xero/datasets/xero-accounts.json"),
             ),
             (
                 "datasets/xero-customers.json",

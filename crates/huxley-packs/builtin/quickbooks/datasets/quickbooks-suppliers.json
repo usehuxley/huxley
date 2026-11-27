@@ -1,0 +1,10 @@
+{
+  "name": "QuickBooks vendors",
+  "description": "QuickBooks vendors, fetched by Fetch QuickBooks lists, for paying expenses back (matched under Billing → Accounting).",
+  "columns": [
+    { "name": "id", "type": "text" },
+    { "name": "name", "type": "text" },
+    { "name": "active", "type": "boolean" }
+  ],
+  "primaryKey": ["id"]
+}

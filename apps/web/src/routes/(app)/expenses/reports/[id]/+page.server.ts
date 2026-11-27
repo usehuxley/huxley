@@ -8,9 +8,10 @@ import type { Actions, PageServerLoad } from './$types';
 export const load: PageServerLoad = async (event) => {
 	const client = api(event);
 	const id = event.params.id;
-	const [report, comments] = await Promise.all([
+	const [report, comments, sync] = await Promise.all([
 		client.GET('/api/v1/expense-reports/{id}', { params: { path: { id } } }),
-		client.GET('/api/v1/expense-reports/{id}/comments', { params: { path: { id } } })
+		client.GET('/api/v1/expense-reports/{id}/comments', { params: { path: { id } } }),
+		client.GET('/api/v1/expense-reports/{id}/sync', { params: { path: { id } } })
 	]);
 	if (report.response.status === 404) error(404, 'Report not found.');
 	if (!report.data) error(503, 'Could not load the report.');
@@ -27,12 +28,43 @@ export const load: PageServerLoad = async (event) => {
 		report: report.data,
 		comments: comments.data ?? [],
 		approval: approval ?? null,
+		sync: sync.data ?? null,
+		canPay: user.grantedPermissions.includes('expense:approve'),
 		me: user.id
 	};
 };
 
 export const actions: Actions = {
 	decideReview: decide,
+	sendToAccounting: async (event) => {
+		const {
+			data,
+			error: problem,
+			response
+		} = await api(event).POST('/api/v1/expense-reports/{id}/sync', {
+			params: { path: { id: event.params.id } }
+		});
+		if (!data)
+			return fail(response.status, { message: problemMessage(problem, 'Could not send it.') });
+		return {
+			message:
+				data.syncStatus === 'failed'
+					? `It can't go yet: ${data.syncError ?? ''}`
+					: 'Sent to accounting.'
+		};
+	},
+	reimbursed: async (event) => {
+		const {
+			data,
+			error: problem,
+			response
+		} = await api(event).POST('/api/v1/expense-reports/{id}/reimbursed', {
+			params: { path: { id: event.params.id } }
+		});
+		if (!data)
+			return fail(response.status, { message: problemMessage(problem, 'Could not mark it.') });
+		return { message: 'Marked paid back.' };
+	},
 	comment: async (event) => {
 		const form = await event.request.formData();
 		const {
