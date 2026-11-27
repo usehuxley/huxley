@@ -67,3 +67,4 @@ Decisions that shape Huxley. Add a new ADR by copying `0000-template.md` with th
 | [061](0061-calendar-sync.md) | Calendar sync reads free/busy, through connections and a pack | Accepted |
 | [062](0062-calendar-write-back.md) | Appointments are written to calendars by an event-driven workflow | Accepted |
 | [063](0063-sales-pipeline.md) | Leads live at the provider, opportunities at the client; stages are instance-wide | Accepted |
+| [064](0064-quotes.md) | A quote is one editable document; each send keeps a revision | Accepted |

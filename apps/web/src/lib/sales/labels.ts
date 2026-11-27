@@ -44,3 +44,30 @@ export const label = (list: readonly { value: string; label: string }[], value: 
 
 /** `OPP-42`. */
 export const oppRef = (n: number) => `OPP-${n}`;
+
+export const QUOTE_STATUSES = [
+	{ value: 'draft', label: 'Draft' },
+	{ value: 'sent', label: 'Sent' },
+	{ value: 'accepted', label: 'Accepted' },
+	{ value: 'declined', label: 'Declined' }
+] as const;
+
+export function quoteTone(status: string): BadgeTone {
+	return status === 'accepted'
+		? 'success'
+		: status === 'declined'
+			? 'danger'
+			: status === 'sent'
+				? 'info'
+				: 'neutral';
+}
+
+/** `Q-42`. */
+export const quoteRef = (n: number) => `Q-${n}`;
+
+export const BILLINGS = [
+	{ value: 'one_time', label: 'One-time' },
+	{ value: 'monthly', label: 'Monthly' },
+	{ value: 'quarterly', label: 'Quarterly' },
+	{ value: 'annual', label: 'Annual' }
+] as const;

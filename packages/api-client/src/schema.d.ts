@@ -4734,6 +4734,116 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
+	'/api/v1/quotes': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** Quotes you can see, newest first. */
+		get: operations['list_quotes'];
+		put?: never;
+		/** Drafts a quote. */
+		post: operations['create_quote'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/quotes/{id}': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get: operations['get_quote'];
+		/**
+		 * Saves the quote and all its lines (send the version you read). A sent
+		 *     quote goes back to draft as its next revision.
+		 */
+		put: operations['update_quote'];
+		post?: never;
+		/** Deletes a quote that was never sent. */
+		delete: operations['delete_quote'];
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/quotes/{id}/decision': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/**
+		 * Records the client's acceptance (with the options taken) or decline.
+		 *     Accepting wins its open opportunity.
+		 */
+		post: operations['decide_quote'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/quotes/{id}/pdf': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** The quote as a PDF: its lines, options and totals. */
+		get: operations['quote_pdf'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/quotes/{id}/revisions': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** What was sent each time, newest first. */
+		get: operations['quote_revisions'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/quotes/{id}/send': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/** Marks a draft sent, keeping what was sent as its revision. */
+		post: operations['send_quote'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
 	'/api/v1/role-assignments': {
 		parameters: {
 			query?: never;
@@ -9550,6 +9660,14 @@ export interface components {
 			 */
 			orgId: string;
 		};
+		CreateQuoteRequest: {
+			/**
+			 * Format: uuid
+			 * @description The client it's for.
+			 */
+			orgId: string;
+			quote: components['schemas']['QuoteInput'];
+		};
 		CreateScriptRequest: {
 			/** Format: uuid */
 			orgId: string;
@@ -9776,6 +9894,18 @@ export interface components {
 		};
 		/** @enum {string} */
 		Decision: 'approve' | 'reject';
+		/** @description The client's answer. */
+		DecisionInput: {
+			accept: boolean;
+			/** @description Who decided, as they'd have it written. */
+			name: string;
+			/** @description The options taken (accepting only); others are left out. */
+			options?: string[];
+			/** @description Why, when declining. */
+			reason?: string | null;
+			/** Format: int32 */
+			version: number;
+		};
 		DecisionRequest: {
 			/** @description Shown on the run, at most 2000 characters. */
 			comment?: string | null;
@@ -12372,6 +12502,142 @@ export interface components {
 			 */
 			unassigned: number;
 		};
+		Quote: {
+			contactEmail?: string | null;
+			/** Format: uuid */
+			contactId?: string | null;
+			contactName?: string | null;
+			/** Format: date-time */
+			createdAt: string;
+			currency: string;
+			/** Format: date-time */
+			decidedAt?: string | null;
+			decidedBy?: string | null;
+			declineReason?: string | null;
+			/** Format: uuid */
+			id: string;
+			intro: string;
+			lines: components['schemas']['QuoteLine'][];
+			/**
+			 * Format: int64
+			 * @description `Q-` and this number.
+			 */
+			number: number;
+			/** Format: uuid */
+			opportunityId?: string | null;
+			opportunityName?: string | null;
+			/** Format: uuid */
+			orgId: string;
+			orgName: string;
+			/** Format: uuid */
+			ownerId?: string | null;
+			ownerName?: string | null;
+			/** Format: int32 */
+			revision: number;
+			/** Format: date-time */
+			sentAt?: string | null;
+			status: components['schemas']['QuoteStatus'];
+			terms: string;
+			title: string;
+			totals: components['schemas']['QuoteTotals'];
+			/** Format: date-time */
+			updatedAt: string;
+			/** Format: date */
+			validUntil?: string | null;
+			/** Format: int32 */
+			version: number;
+		};
+		/**
+		 * @description How often a line is charged.
+		 * @enum {string}
+		 */
+		QuoteBilling: 'one_time' | 'monthly' | 'quarterly' | 'annual';
+		QuoteInput: {
+			/** Format: uuid */
+			contactId?: string | null;
+			currency?: string;
+			intro?: string;
+			/** @description Every line, in order (replaces them all). */
+			lines?: components['schemas']['QuoteLineInput'][];
+			/** Format: uuid */
+			opportunityId?: string | null;
+			/** Format: uuid */
+			ownerId?: string | null;
+			terms?: string;
+			title: string;
+			/** Format: date */
+			validUntil?: string | null;
+			/**
+			 * Format: int32
+			 * @description The version you read (updates only).
+			 */
+			version?: number | null;
+		};
+		QuoteLine: {
+			billing: components['schemas']['QuoteBilling'];
+			description: string;
+			/** @description Percent off, 0 to 100. */
+			discountPct: string;
+			/** Format: uuid */
+			id: string;
+			kind: components['schemas']['QuoteLineKind'];
+			name: string;
+			/** @description An option the client may take or leave. */
+			optional: boolean;
+			/** Format: int32 */
+			position: number;
+			/** Format: uuid */
+			productId?: string | null;
+			quantity: string;
+			/** @description Counted in the totals (always, unless an option left out). */
+			selected: boolean;
+			sku?: string | null;
+			taxable: boolean;
+			/** @description Quantity × price, less the discount (per charge). */
+			total: string;
+			unit: string;
+			unitCost: string;
+			unitPrice: string;
+		};
+		QuoteLineInput: {
+			billing?: components['schemas']['QuoteBilling'] | null;
+			description?: string | null;
+			discountPct?: string | null;
+			kind?: components['schemas']['QuoteLineKind'];
+			name?: string | null;
+			optional?: boolean;
+			/**
+			 * Format: uuid
+			 * @description From the catalog; its SKU, name, unit, cost and price fill what's left out.
+			 */
+			productId?: string | null;
+			quantity?: string | null;
+			/** @description Whether an option is in (default yes). */
+			selected?: boolean | null;
+			sku?: string | null;
+			taxable?: boolean | null;
+			unit?: string | null;
+			unitCost?: string | null;
+			unitPrice?: string | null;
+		};
+		/** @enum {string} */
+		QuoteLineKind: 'item' | 'heading';
+		/** @enum {string} */
+		QuoteStatus: 'draft' | 'sent' | 'accepted' | 'declined';
+		QuoteTotals: {
+			/** @description What the discounts take off the first year. */
+			discounts: string;
+			/** @description One-time + 12 months of recurring. */
+			firstYear: string;
+			/** @description The cost of the first year. */
+			firstYearCost: string;
+			/** @description Margin on the first year, as a percent (none without revenue). */
+			marginPct?: string | null;
+			/** @description Recurring lines, per month. */
+			monthly: string;
+			/** @description One-time lines. */
+			oneTime: string;
+		};
 		RaisePortalTicket: {
 			/**
 			 * Format: uuid
@@ -12544,6 +12810,15 @@ export interface components {
 		ReviewScript: {
 			key: string;
 			language: string;
+		};
+		Revision: {
+			/** Format: int32 */
+			revision: number;
+			/** Format: date-time */
+			sentAt: string;
+			sentByName?: string | null;
+			/** @description The quote as sent, lines and totals included. */
+			snapshot: Record<string, never>;
 		};
 		RiskOption: {
 			key: string;
@@ -12833,6 +13108,10 @@ export interface components {
 		SelectOption: {
 			label: string;
 			value: string;
+		};
+		SendQuoteRequest: {
+			/** Format: int32 */
+			version: number;
 		};
 		SentimentEntry: {
 			/** Format: date-time */
@@ -24320,6 +24599,252 @@ export interface operations {
 				content?: never;
 			};
 			404: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	list_quotes: {
+		parameters: {
+			query?: {
+				orgId?: string;
+				opportunityId?: string;
+				status?: components['schemas']['QuoteStatus'];
+				/** @description In the title, the client's name or the number. */
+				q?: string;
+			};
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['Quote'][];
+				};
+			};
+		};
+	};
+	create_quote: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['CreateQuoteRequest'];
+			};
+		};
+		responses: {
+			201: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['Quote'];
+				};
+			};
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	get_quote: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['Quote'];
+				};
+			};
+		};
+	};
+	update_quote: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['QuoteInput'];
+			};
+		};
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['Quote'];
+				};
+			};
+			409: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	delete_quote: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			204: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content?: never;
+			};
+			409: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	decide_quote: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['DecisionInput'];
+			};
+		};
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['Quote'];
+				};
+			};
+			409: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	quote_pdf: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			/** @description The PDF */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/pdf': number[];
+				};
+			};
+		};
+	};
+	quote_revisions: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['Revision'][];
+				};
+			};
+		};
+	};
+	send_quote: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['SendQuoteRequest'];
+			};
+		};
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['Quote'];
+				};
+			};
+			409: {
 				headers: {
 					[name: string]: unknown;
 				};

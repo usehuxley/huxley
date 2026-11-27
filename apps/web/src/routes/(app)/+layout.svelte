@@ -129,6 +129,7 @@
 						items: [
 							...item(on('sales') && can('sales:read'), '/sales', 'Pipeline'),
 							...item(on('sales') && can('sales:read'), '/sales/leads', 'Leads'),
+							...item(on('sales') && can('sales:read'), '/sales/quotes', 'Quotes'),
 							...item(on('projects') && can('project:read'), '/projects', 'Projects'),
 							...item(on('contracts') && can('catalog:read'), '/catalog', 'Catalog'),
 							...item(can('dashboard:read'), '/dashboards', 'Dashboards'),

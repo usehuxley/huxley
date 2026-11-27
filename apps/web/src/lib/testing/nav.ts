@@ -16,6 +16,7 @@ const SPACE_OF: Record<string, string> = {
 	Catalog: 'Business',
 	Pipeline: 'Business',
 	Leads: 'Business',
+	Quotes: 'Business',
 	People: 'Business',
 	Timesheets: 'Business'
 };

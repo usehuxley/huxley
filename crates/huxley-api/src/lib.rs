@@ -58,6 +58,7 @@ pub mod problem;
 pub mod problem_routes;
 pub mod project_routes;
 mod public_form_routes;
+pub mod quote_routes;
 pub mod rate_limit;
 pub mod recommend_routes;
 mod router;

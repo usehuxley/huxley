@@ -31,6 +31,7 @@ pub fn routes() -> Router<AppState> {
         .nest("/sales", stage_routes())
         .nest("/leads", lead_routes())
         .nest("/opportunities", opportunity_routes())
+        .nest("/quotes", crate::quote_routes::routes())
 }
 
 fn stage_routes() -> Router<AppState> {
@@ -87,7 +88,7 @@ fn db_err(e: impl std::fmt::Display) -> ApiError {
     ApiError::internal(&e)
 }
 
-async fn scoped<T>(
+pub(crate) async fn scoped<T>(
     state: &AppState,
     scope: &OrgScope,
     f: impl AsyncFnOnce(&mut sqlx::PgConnection) -> Result<T, SalesError>,
@@ -99,7 +100,7 @@ async fn scoped<T>(
 }
 
 /// Where a record is (read in system scope), for checking access there.
-async fn org_of(
+pub(crate) async fn org_of(
     state: &AppState,
     f: impl AsyncFnOnce(&mut sqlx::PgConnection) -> Result<Option<Uuid>, SalesError>,
 ) -> ApiResult<Uuid> {
@@ -108,7 +109,7 @@ async fn org_of(
         .ok_or_else(ApiError::not_found)
 }
 
-async fn access_at(
+pub(crate) async fn access_at(
     state: &AppState,
     authed: &Authed,
     org: Uuid,

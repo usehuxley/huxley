@@ -611,3 +611,224 @@ async fn sales_people_work_deals_and_others_only_look() {
     let (status, _) = s.call(&rep, "GET", "/api/v1/sales/stages", None).await;
     assert_eq!(status, StatusCode::OK);
 }
+
+impl Setup {
+    async fn product(&self, sku: &str, cost: &str, price: &str, billing: &str) -> String {
+        let (status, p) = self
+            .call(
+                &self.owner,
+                "POST",
+                "/api/v1/catalog/products",
+                Some(json!({ "orgId": self.provider, "product": {
+                    "sku": unique(sku).replace(' ', "-"), "name": sku, "kind": "product",
+                    "cost": cost, "price": price, "billing": billing, "unit": "each" } })),
+            )
+            .await;
+        assert_eq!(status, StatusCode::CREATED, "{p}");
+        p["id"].as_str().unwrap().to_owned()
+    }
+
+    async fn quote(&self, body: Value) -> Value {
+        let (status, q) = self
+            .call(&self.owner, "POST", "/api/v1/quotes", Some(body))
+            .await;
+        assert_eq!(status, StatusCode::CREATED, "{q}");
+        q
+    }
+}
+
+#[tokio::test]
+async fn a_quote_is_priced_from_the_catalog_sent_revised_and_accepted() {
+    let Some(s) = setup().await else { return };
+    let firewall = s.product("FG-60F", "800", "1000", "one_time").await;
+    let (_, o) = s
+        .call(
+            &s.owner,
+            "POST",
+            "/api/v1/opportunities",
+            Some(json!({ "orgId": s.acme, "opportunity": { "name": "Firewall refresh" } })),
+        )
+        .await;
+    let q = s
+        .quote(json!({ "orgId": s.acme, "quote": {
+            "title": "Firewall refresh", "opportunityId": o["id"], "validUntil": "2027-01-31",
+            "lines": [
+                { "kind": "heading", "name": "Hardware" },
+                { "productId": firewall, "quantity": 2, "discountPct": 10 },
+                { "name": "Managed firewall", "billing": "monthly", "quantity": 2,
+                  "unitCost": "15", "unitPrice": "25" },
+                { "name": "Spare unit", "optional": true, "selected": false, "unitCost": "800", "unitPrice": "1000" }
+            ] } }))
+        .await;
+    // The catalog filled the firewall line in.
+    assert_eq!(q["lines"][1]["name"], "FG-60F");
+    assert_eq!(q["lines"][1]["unitPrice"], "1000");
+    assert_eq!(q["lines"][1]["total"], "1800");
+    assert_eq!(q["totals"]["oneTime"], "1800");
+    assert_eq!(q["totals"]["monthly"], "50");
+    assert_eq!(q["totals"]["firstYear"], "2400");
+    // (2400 - (1600 + 360)) / 2400 = 18.3%.
+    assert_eq!(q["totals"]["marginPct"], "18.3");
+    let id = q["id"].as_str().unwrap();
+
+    // Sending keeps revision 1; changing it after starts revision 2.
+    let (status, sent) = s
+        .call(
+            &s.owner,
+            "POST",
+            &format!("/api/v1/quotes/{id}/send"),
+            Some(json!({ "version": q["version"] })),
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK, "{sent}");
+    assert_eq!(sent["status"], "sent");
+    let mut body = json!({ "title": "Firewall refresh", "opportunityId": o["id"],
+        "lines": q["lines"].as_array().unwrap().iter().map(|l| json!({
+            "kind": l["kind"], "name": l["name"], "productId": l["productId"], "billing": l["billing"],
+            "quantity": l["quantity"], "unitCost": l["unitCost"], "unitPrice": l["unitPrice"],
+            "discountPct": l["discountPct"], "optional": l["optional"] })).collect::<Vec<_>>(),
+        "version": sent["version"] });
+    body["lines"][1]["discountPct"] = json!("5");
+    let (status, revised) = s
+        .call(&s.owner, "PUT", &format!("/api/v1/quotes/{id}"), Some(body))
+        .await;
+    assert_eq!(status, StatusCode::OK, "{revised}");
+    assert_eq!(revised["status"], "draft");
+    assert_eq!(revised["revision"], 2);
+    let (_, sent) = s
+        .call(
+            &s.owner,
+            "POST",
+            &format!("/api/v1/quotes/{id}/send"),
+            Some(json!({ "version": revised["version"] })),
+        )
+        .await;
+    let (_, revisions) = s
+        .call(
+            &s.owner,
+            "GET",
+            &format!("/api/v1/quotes/{id}/revisions"),
+            None,
+        )
+        .await;
+    let revs = revisions.as_array().unwrap();
+    assert_eq!(revs.len(), 2);
+    assert_eq!(revs[1]["snapshot"]["lines"][1]["discountPct"], "10");
+    assert_eq!(revs[0]["snapshot"]["lines"][1]["discountPct"], "5");
+
+    // Accepted with the option: it counts, and the opportunity is won.
+    let option = sent["lines"][3]["id"].clone();
+    let (status, accepted) = s
+        .call(
+            &s.owner,
+            "POST",
+            &format!("/api/v1/quotes/{id}/decision"),
+            Some(json!({ "accept": true, "name": "Rosa Park", "options": [option], "version": sent["version"] })),
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK, "{accepted}");
+    assert_eq!(accepted["status"], "accepted");
+    assert_eq!(accepted["decidedBy"], "Rosa Park");
+    assert_eq!(accepted["totals"]["oneTime"], "2900");
+    let (_, won) = s
+        .call(
+            &s.owner,
+            "GET",
+            &format!("/api/v1/opportunities/{}", o["id"].as_str().unwrap()),
+            None,
+        )
+        .await;
+    assert_eq!(won["status"], "won");
+    assert_eq!(s.events(id, "sales.quote.accepted").await.len(), 1);
+    assert_eq!(s.events(id, "sales.quote.sent").await.len(), 2);
+}
+
+#[tokio::test]
+async fn a_quote_is_declined_and_printed() {
+    let Some(s) = setup().await else { return };
+    let q = s
+        .quote(json!({ "orgId": s.acme, "quote": { "title": "Printers",
+            "lines": [{ "name": "Printer", "quantity": 3, "unitPrice": "450" }] } }))
+        .await;
+    let id = q["id"].as_str().unwrap();
+    // Not answerable until sent; empty quotes can't be sent.
+    let (status, _) = s
+        .call(
+            &s.owner,
+            "POST",
+            &format!("/api/v1/quotes/{id}/decision"),
+            Some(json!({ "accept": true, "name": "X", "version": q["version"] })),
+        )
+        .await;
+    assert_eq!(status, StatusCode::CONFLICT);
+    let empty = s
+        .quote(json!({ "orgId": s.acme, "quote": { "title": "Nothing yet" } }))
+        .await;
+    let (status, _) = s
+        .call(
+            &s.owner,
+            "POST",
+            &format!("/api/v1/quotes/{}/send", empty["id"].as_str().unwrap()),
+            Some(json!({ "version": empty["version"] })),
+        )
+        .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+    let (status, _) = s
+        .call(
+            &s.owner,
+            "DELETE",
+            &format!("/api/v1/quotes/{}", empty["id"].as_str().unwrap()),
+            None,
+        )
+        .await;
+    assert_eq!(status, StatusCode::NO_CONTENT);
+
+    let (_, sent) = s
+        .call(
+            &s.owner,
+            "POST",
+            &format!("/api/v1/quotes/{id}/send"),
+            Some(json!({ "version": q["version"] })),
+        )
+        .await;
+    let (status, declined) = s
+        .call(
+            &s.owner,
+            "POST",
+            &format!("/api/v1/quotes/{id}/decision"),
+            Some(
+                json!({ "accept": false, "name": "Tom Hale", "reason": "Too expensive",
+                           "version": sent["version"] }),
+            ),
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK, "{declined}");
+    assert_eq!(declined["status"], "declined");
+    assert_eq!(declined["declineReason"], "Too expensive");
+
+    // Decided quotes don't change, and sent ones stay on record.
+    let (status, _) = s
+        .call(
+            &s.owner,
+            "PUT",
+            &format!("/api/v1/quotes/{id}"),
+            Some(json!({ "title": "X", "version": declined["version"] })),
+        )
+        .await;
+    assert_eq!(status, StatusCode::CONFLICT);
+    let (status, _) = s
+        .call(&s.owner, "DELETE", &format!("/api/v1/quotes/{id}"), None)
+        .await;
+    assert_eq!(status, StatusCode::CONFLICT);
+
+    let req = Request::get(format!("/api/v1/quotes/{id}/pdf"))
+        .header("x-requested-with", "huxley")
+        .header("cookie", &s.owner)
+        .body(Body::empty())
+        .unwrap();
+    let res = s.app.clone().oneshot(req).await.unwrap();
+    assert_eq!(res.status(), StatusCode::OK);
+    assert_eq!(res.headers()["content-type"], "application/pdf");
+    let bytes = res.into_body().collect().await.unwrap().to_bytes();
+    assert!(bytes.starts_with(b"%PDF-"));
+}

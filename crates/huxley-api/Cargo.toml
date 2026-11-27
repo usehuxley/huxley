@@ -11,6 +11,7 @@ publish = false
 [dependencies]
 huxley-cx.workspace = true
 huxley-analytics.workspace = true
+rust_decimal.workspace = true
 axum.workspace = true
 base64.workspace = true
 url.workspace = true

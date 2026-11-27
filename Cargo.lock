@@ -2049,6 +2049,7 @@ dependencies = [
  "huxley-workforce",
  "jiff 0.2.46",
  "ring",
+ "rust_decimal",
  "secrecy",
  "serde",
  "serde-saphyr",
