@@ -1,11 +1,13 @@
 <script lang="ts">
+	import { enhance } from '$app/forms';
 	import { resolve } from '$app/paths';
 	import { Search } from '@lucide/svelte';
 	import { Badge, Button, EmptyState, Input, Select } from '@usehuxley/ui';
 	import { INVOICE_STATUSES, invRef, invoiceTone, money } from '#lib/billing/labels.ts';
+	import { REVIEW_STATUSES, label as labelOf, reviewTone } from '#lib/sales/labels.ts';
 	import type { PageProps } from './$types';
 
-	let { data }: PageProps = $props();
+	let { data, form }: PageProps = $props();
 	const label = (s: string) => INVOICE_STATUSES.find((x) => x.value === s)?.label ?? s;
 </script>
 
@@ -19,6 +21,46 @@
 		<h1 class="mt-1 text-[26px] leading-tight font-extrabold tracking-tight text-fg">Invoices</h1>
 		{#if data.runId}<p class="mt-1 text-sm text-fg-subtle">From one billing run.</p>{/if}
 	</div>
+
+	{#if data.runId && data.canApprove && data.invoices.some((i) => i.status === 'draft')}
+		<form method="POST" action="?/approveRun" use:enhance class="flex flex-wrap items-center gap-3">
+			<input type="hidden" name="runId" value={data.runId} />
+			<Button type="submit" variant="primary">Approve the run</Button>
+			<label class="flex items-center gap-2 text-sm text-fg">
+				<input type="checkbox" name="submitReviews" checked /> Submit those that need review
+			</label>
+		</form>
+	{/if}
+	{#if form && 'approval' in form && form.approval}
+		<section
+			class="rounded-card border border-border bg-surface p-4 text-sm"
+			aria-label="Run approval"
+		>
+			<p class="font-semibold text-fg">
+				{form.approval.approved.length} approved{form.approval.exceptions.length
+					? `, ${form.approval.exceptions.length} left out`
+					: ''}.
+			</p>
+			{#if form.approval.exceptions.length}
+				<ul class="mt-2 flex flex-col gap-1">
+					{#each form.approval.exceptions as x (x.invoiceId)}
+						<li>
+							<a
+								href={resolve('/(app)/billing/invoices/[id]', { id: x.invoiceId })}
+								class="font-semibold text-accent hover:underline"
+							>
+								{invRef(x.number)}
+							</a>
+							{x.orgName}: {x.reason}
+						</li>
+					{/each}
+				</ul>
+			{/if}
+		</section>
+	{/if}
+	{#if form && 'message' in form && form.message}
+		<p class="text-sm text-danger" role="alert">{form.message}</p>
+	{/if}
 
 	<form method="GET" class="flex flex-wrap items-center gap-2" role="search">
 		{#if data.runId}<input type="hidden" name="runId" value={data.runId} />{/if}
@@ -67,6 +109,11 @@
 							<td class="px-4 py-2.5">
 								<Badge tone={invoiceTone(i.status)}>{label(i.status)}</Badge>
 								{#if i.onHold}<Badge tone="warning">On hold</Badge>{/if}
+								{#if i.status === 'draft' && i.reviewStatus !== 'not_needed'}
+									<Badge tone={reviewTone(i.reviewStatus)}>
+										{labelOf(REVIEW_STATUSES, i.reviewStatus)}
+									</Badge>
+								{/if}
 							</td>
 							<td class="px-4 py-2.5 text-fg-muted">
 								{i.periodStart ?? ''}{i.periodEnd ? ` to ${i.periodEnd}` : ''}

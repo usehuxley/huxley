@@ -1373,6 +1373,30 @@ export type Step =
 			 * Fail the attempt after this long, e.g. `30s`.
 			 */
 			timeout?: string | null;
+			type: 'core.invoice.review';
+			with: InvoiceReview;
+	  }
+	| {
+			/**
+			 * Record the error as the step's output and carry on.
+			 */
+			continue_on_error?: boolean;
+			description?: string | null;
+			/**
+			 * Unique in the workflow: lowercase letters, digits, underscores.
+			 * Other steps read this step's output as `steps.<id>.output`.
+			 */
+			id: string;
+			/**
+			 * Skip the step unless this expression is true.
+			 */
+			if?: string | null;
+			name?: string | null;
+			retry?: RetryPolicy | null;
+			/**
+			 * Fail the attempt after this long, e.g. `30s`.
+			 */
+			timeout?: string | null;
 			type: 'core.sales.log_email';
 			with: SalesLogEmail;
 	  }
@@ -2635,6 +2659,26 @@ export interface ScopeDecide {
  * via the `definition` "QuoteReview".
  */
 export interface QuoteReview {
+	by?: unknown;
+	comment?: unknown;
+	decision: unknown;
+	review_id: unknown;
+}
+/**
+ * An invoice review's decision to record (`core.invoice.review`):
+ * `review_id` (from `invoice.submitted_for_review`), `decision`
+ * (`approved`, `changes_requested` or `rejected`, or a boolean), `by` and
+ * a `comment`. Only the invoice's open review counts: if it changed since,
+ * it needs a new review and the step fails with `kind: conflict`. An
+ * approved review approves the invoice (unless it's on hold). Raises
+ * `invoice.review_approved`, `invoice.changes_requested` or
+ * `invoice.rejected`, and tells whoever submitted it. Output: the
+ * invoice's review state.
+ *
+ * This interface was referenced by `HuxleyWorkflowFormatV1`'s JSON-Schema
+ * via the `definition` "InvoiceReview".
+ */
+export interface InvoiceReview {
 	by?: unknown;
 	comment?: unknown;
 	decision: unknown;

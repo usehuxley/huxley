@@ -548,6 +548,66 @@ impl Engine {
         Ok(json!(state))
     }
 
+    /// `core.invoice.review`: records an invoice review's decision (on an
+    /// invoice in the run's organization or below). Output: the review state.
+    pub(crate) async fn invoice_review(&self, org_id: Uuid, input: &Json) -> Result<Json, Json> {
+        use huxley_billing::review::Decision;
+        let mut tx = begin_scoped(self.db(), &OrgScope::System)
+            .await
+            .map_err(internal)?;
+        let on = huxley_modules::is_active_at(&mut tx, huxley_billing::MODULE, org_id)
+            .await
+            .map_err(internal)?;
+        tx.commit().await.map_err(internal)?;
+        if !on {
+            return Err(error("module_disabled", "Invoicing is turned off"));
+        }
+        let review =
+            id(input, "review_id")?.ok_or_else(|| error("input", "review_id is required"))?;
+        let bad = || {
+            error(
+                "input",
+                "decision is approved, changes_requested or rejected",
+            )
+        };
+        let decision = match &input["decision"] {
+            Json::Bool(true) => Decision::Approved,
+            Json::Bool(false) => Decision::Rejected,
+            Json::String(s) => Decision::parse(s).ok_or_else(bad)?,
+            _ => return Err(bad()),
+        };
+        let by = input["by"]
+            .as_str()
+            .filter(|s| !s.trim().is_empty())
+            .unwrap_or("Invoice review");
+        let subtree = self.subtree(org_id).await?;
+        let mut tx = begin_scoped(self.db(), &OrgScope::Orgs(subtree))
+            .await
+            .map_err(internal)?;
+        let ctx = RequestContext::system(Via::Workflow);
+        let state = huxley_billing::review::decide(
+            &mut tx,
+            &ctx,
+            review,
+            decision,
+            by,
+            input["comment"].as_str(),
+        )
+        .await
+        .map_err(|e| match e {
+            huxley_billing::BillingError::NotFound => {
+                error("not_found", "no such invoice review here")
+            }
+            huxley_billing::BillingError::Conflict(m) => error("conflict", &m),
+            huxley_billing::BillingError::Invalid { field, message } => {
+                error("input", format!("{field}: {message}"))
+            }
+            other => internal(other),
+        })?;
+        tx.commit().await.map_err(internal)?;
+        Ok(json!(state))
+    }
+
     /// `core.project.scope.decide`: records the decision on a submitted
     /// scope change (on a project in the run's organization or below).
     /// Output: the scope change.

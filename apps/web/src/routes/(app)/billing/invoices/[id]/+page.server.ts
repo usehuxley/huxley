@@ -1,19 +1,36 @@
 import { error, fail, redirect } from '@sveltejs/kit';
 import { formString } from '#lib/forms.ts';
 import { api } from '#lib/server/api.ts';
+import { decide } from '#lib/server/approvals.ts';
 import { problemMessage } from '#lib/server/problems.ts';
 import type { components } from '@usehuxley/api-client';
 import type { Actions, PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async (event) => {
-	const { data, response } = await api(event).GET('/api/v1/invoices/{id}', {
-		params: { path: { id: event.params.id } }
-	});
+	const client = api(event);
+	const id = event.params.id;
+	const [{ data, response }, review, comments, users] = await Promise.all([
+		client.GET('/api/v1/invoices/{id}', { params: { path: { id } } }),
+		client.GET('/api/v1/invoices/{id}/review', { params: { path: { id } } }),
+		client.GET('/api/v1/invoices/{id}/comments', { params: { path: { id } } }),
+		client.GET('/api/v1/users', { params: { query: { limit: 200 } } })
+	]);
 	if (response.status === 404) error(404, 'Invoice not found.');
 	if (!data) error(503, 'Could not load the invoice.');
+	const approvalId = review.data?.canDecide ? review.data.approvalId : null;
+	const approval = approvalId
+		? (await client.GET('/api/v1/approvals/{id}', { params: { path: { id: approvalId } } })).data
+		: null;
 	const { user } = await event.parent();
 	return {
 		invoice: data,
+		review: review.data ?? null,
+		approval: approval ?? null,
+		comments: comments.data ?? [],
+		people: (users.data?.items ?? [])
+			.filter((u) => u.status === 'active' && u.kind === 'human')
+			.map((u) => ({ value: u.id, label: u.displayName })),
+		me: user.id,
 		canWrite: user.grantedPermissions.includes('billing:write'),
 		canApprove: user.grantedPermissions.includes('billing:approve')
 	};
@@ -65,10 +82,57 @@ export const actions: Actions = {
 			response
 		} = await api(event).POST('/api/v1/invoices/{id}/approve', {
 			...path(event.params.id),
-			body: { version: Number(formString(form, 'version')) }
+			body: {
+				version: Number(formString(form, 'version')),
+				overrideReview: formString(form, 'override') === 'yes'
+			}
 		});
 		if (!data) return failed(response.status, problem, 'Could not approve it.');
 		return { message: 'Approved.' };
+	},
+	submitReview: async (event) => {
+		const form = await event.request.formData();
+		const {
+			data,
+			error: problem,
+			response
+		} = await api(event).POST('/api/v1/invoices/{id}/review', {
+			...path(event.params.id),
+			body: { version: Number(formString(form, 'version')) }
+		});
+		if (!data) return failed(response.status, problem, 'Could not submit it for review.');
+		return { message: 'Submitted for review.' };
+	},
+	decideReview: decide,
+	comment: async (event) => {
+		const form = await event.request.formData();
+		const {
+			data,
+			error: problem,
+			response
+		} = await api(event).POST('/api/v1/invoices/{id}/comments', {
+			...path(event.params.id),
+			body: {
+				body: formString(form, 'body'),
+				lineId: formString(form, 'lineId') || null,
+				parentId: formString(form, 'parentId') || null,
+				mentions: form.getAll('mentions').map(String)
+			}
+		});
+		if (!data) return failed(response.status, problem, 'Could not add the comment.');
+		return { message: 'Comment added.' };
+	},
+	resolve: async (event) => {
+		const form = await event.request.formData();
+		const { response, error: problem } = await api(event).POST(
+			'/api/v1/invoices/{id}/comments/{comment}/resolve',
+			{
+				params: { path: { id: event.params.id, comment: formString(form, 'comment') } },
+				body: { resolved: formString(form, 'resolved') === 'yes' }
+			}
+		);
+		if (!response.ok) return failed(response.status, problem, 'Could not change it.');
+		return { message: 'Done.' };
 	},
 	sent: async (event) => {
 		const {

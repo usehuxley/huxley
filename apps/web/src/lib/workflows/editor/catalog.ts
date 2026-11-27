@@ -542,6 +542,32 @@ export const STEPS: StepSpec[] = [
 		]
 	},
 	{
+		type: 'core.invoice.review',
+		label: 'Decide an invoice review',
+		description:
+			'Record whether an invoice submitted for review is approved (which approves the invoice), sent back for changes, or rejected.',
+		group: 'Actions',
+		module: 'billing',
+		template: {
+			with: {
+				review_id: '{{ inputs.reviewId }}',
+				decision: '{{ steps.review.output.decision }}',
+				by: '{{ steps.review.output.by.name }}'
+			}
+		},
+		fields: [
+			{ path: 'with.review_id', label: 'Review', kind: 'expression' },
+			{
+				path: 'with.decision',
+				label: 'Decision',
+				kind: 'expression',
+				hint: 'approved, changes_requested or rejected'
+			},
+			{ path: 'with.by', label: 'Decided by', kind: 'expression' },
+			{ path: 'with.comment', label: 'Comment', kind: 'expression' }
+		]
+	},
+	{
 		type: 'core.sales.log_email',
 		label: 'Log a sales email',
 		description:

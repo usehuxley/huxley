@@ -1996,6 +1996,39 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
+	'/api/v1/billing/review-rules': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** When invoices need review, and who reviews them. */
+		get: operations['list_invoice_review_rules'];
+		put?: never;
+		post: operations['create_invoice_review_rule'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/billing/review-rules/{id}': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put: operations['update_invoice_review_rule'];
+		post?: never;
+		delete: operations['delete_invoice_review_rule'];
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
 	'/api/v1/billing/runs': {
 		parameters: {
 			query?: never;
@@ -2007,6 +2040,26 @@ export interface paths {
 		put?: never;
 		/** Runs billing: draft invoices for what's billable in the period. */
 		post: operations['start_billing_run'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/billing/runs/{id}/approve': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/**
+		 * Approves a billing run's drafts in one pass; those on hold or needing
+		 *     review are returned as exceptions.
+		 */
+		post: operations['approve_billing_run'];
 		delete?: never;
 		options?: never;
 		head?: never;
@@ -3460,8 +3513,47 @@ export interface paths {
 		};
 		get?: never;
 		put?: never;
-		/** Approves a draft: it can then be sent or synced. */
+		/**
+		 * Approves a draft: it can then be sent or synced. One that needs review
+		 *     takes an approved review of this revision first (409 otherwise), unless
+		 *     sent with `overrideReview`.
+		 */
 		post: operations['approve_invoice'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/invoices/{id}/comments': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** The invoice's comments, oldest first (replies point at their thread). */
+		get: operations['invoice_comments'];
+		put?: never;
+		/** Comments on the invoice or one of its lines, telling anyone @mentioned. */
+		post: operations['add_invoice_comment'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/invoices/{id}/comments/{comment}/resolve': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/** Resolves a comment thread, or opens it again. */
+		post: operations['resolve_invoice_comment'];
 		delete?: never;
 		options?: never;
 		head?: never;
@@ -3512,6 +3604,27 @@ export interface paths {
 		get: operations['invoice_pdf'];
 		put?: never;
 		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/invoices/{id}/review': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get: operations['invoice_review'];
+		put?: never;
+		/**
+		 * Submits a draft for review (send the version you read). Raises
+		 *     `invoice.submitted_for_review` for the review workflow (the Invoice
+		 *     review pack).
+		 */
+		post: operations['submit_invoice_review'];
 		delete?: never;
 		options?: never;
 		head?: never;
@@ -9603,6 +9716,19 @@ export interface components {
 			/** @description The workflow's name, if the run is of a saved workflow. */
 			workflowName?: string | null;
 		};
+		ApproveRequest: {
+			/**
+			 * @description Approve one that needs review without an approved review
+			 *     (`billing:review:override`; it's recorded).
+			 */
+			overrideReview?: boolean;
+			/** Format: int32 */
+			version: number;
+		};
+		ApproveRunRequest: {
+			/** @description Submit those that need a review (and aren't in one) for review. */
+			submitReviews?: boolean;
+		};
 		ApproveScope: {
 			/**
 			 * Format: int32
@@ -12157,12 +12283,63 @@ export interface components {
 			periodEnd?: string | null;
 			/** Format: date */
 			periodStart?: string | null;
+			/** @description Whether it needs (or had) an internal review (ADR-076). */
+			reviewStatus: components['schemas']['InvoiceReviewStatus'];
 			/** Format: uuid */
 			runId?: string | null;
 			status: components['schemas']['InvoiceStatus'];
 			total: string;
 			/** Format: int32 */
 			version: number;
+		};
+		/** @description What changed since the last decided review. */
+		InvoiceChanges: {
+			added: string[];
+			changed: components['schemas']['InvoiceLineChange'][];
+			decision: string;
+			removed: string[];
+			/** Format: int32 */
+			sinceRevision: number;
+			total?: components['schemas']['InvoiceFieldChange'] | null;
+		};
+		InvoiceComment: {
+			/** Format: uuid */
+			authorId?: string | null;
+			authorName?: string | null;
+			body: string;
+			/** Format: date-time */
+			createdAt: string;
+			/** Format: uuid */
+			id: string;
+			/** Format: uuid */
+			lineId?: string | null;
+			lineName?: string | null;
+			mentions: string[];
+			/** Format: uuid */
+			parentId?: string | null;
+			/** Format: date-time */
+			resolvedAt?: string | null;
+			resolvedByName?: string | null;
+		};
+		InvoiceCommentInput: {
+			body: string;
+			/**
+			 * Format: uuid
+			 * @description A line of the invoice, or none for the whole invoice.
+			 */
+			lineId?: string | null;
+			/** @description People @mentioned: they're told. */
+			mentions?: string[];
+			/**
+			 * Format: uuid
+			 * @description Replying to a thread (its first comment).
+			 */
+			parentId?: string | null;
+		};
+		InvoiceFieldChange: {
+			after: string;
+			before: string;
+			field: string;
 		};
 		InvoiceInput: {
 			/** Format: date */
@@ -12191,6 +12368,10 @@ export interface components {
 			unit: string;
 			unitPrice: string;
 		};
+		InvoiceLineChange: {
+			fields: components['schemas']['InvoiceFieldChange'][];
+			name: string;
+		};
 		InvoiceLineInput: {
 			description: string;
 			/**
@@ -12207,6 +12388,88 @@ export interface components {
 		};
 		/** @enum {string} */
 		InvoiceLineKind: 'time' | 'product' | 'recurring' | 'project' | 'manual';
+		/** @description A rule an invoice matches, and why. */
+		InvoiceReviewReason: {
+			detail: string;
+			name: string;
+			reviewers: string;
+			/** Format: uuid */
+			ruleId: string;
+		};
+		InvoiceReviewRecord: {
+			comment?: string | null;
+			/** Format: date-time */
+			decidedAt?: string | null;
+			decidedBy?: string | null;
+			/** @description `approved`, `changes_requested` or `rejected`; none while in review. */
+			decision?: string | null;
+			/** Format: uuid */
+			id: string;
+			reasons: components['schemas']['InvoiceReviewReason'][];
+			reviewers: string[];
+			/** Format: int32 */
+			revision: number;
+			/** Format: date-time */
+			submittedAt: string;
+			submittedByName?: string | null;
+		};
+		InvoiceReviewRule: {
+			active: boolean;
+			expression?: string | null;
+			/** Format: uuid */
+			id: string;
+			kind: components['schemas']['InvoiceReviewRuleKind'];
+			name: string;
+			/** @description Who reviews: `role:<key>`, `team:<id>`, `user:<id>`, several separated by commas. */
+			reviewers: string;
+			threshold?: string | null;
+		};
+		InvoiceReviewRuleInput: {
+			active?: boolean;
+			expression?: string | null;
+			kind: components['schemas']['InvoiceReviewRuleKind'];
+			name: string;
+			reviewers: string;
+			threshold?: string | null;
+		};
+		/** @enum {string} */
+		InvoiceReviewRuleKind:
+			| 'always'
+			| 'edited'
+			| 'total_above'
+			| 'change_above'
+			| 'new_client'
+			| 'credit_memo'
+			| 'expression';
+		/** @description The review state of an invoice, for its page. */
+		InvoiceReviewState: {
+			/**
+			 * @description It can be approved without an override: no review needed, or one
+			 *     approved for this revision.
+			 */
+			canApprove: boolean;
+			changes?: components['schemas']['InvoiceChanges'] | null;
+			/** @description Each submission, newest first. */
+			history: components['schemas']['InvoiceReviewRecord'][];
+			overridden: boolean;
+			reasons: components['schemas']['InvoiceReviewReason'][];
+			status: components['schemas']['InvoiceReviewStatus'];
+		};
+		/** @enum {string} */
+		InvoiceReviewStatus:
+			'not_needed' | 'needed' | 'in_review' | 'approved' | 'changes_requested' | 'rejected';
+		/** @description Its review state, with the open approval for the caller to decide. */
+		InvoiceReviewView: components['schemas']['InvoiceReviewState'] & {
+			/**
+			 * Format: uuid
+			 * @description The review workflow's open approval, if any.
+			 */
+			approvalId?: string | null;
+			/** @description The caller is one of its approvers. */
+			canDecide: boolean;
+			/** @description The caller may approve it without an approved review. */
+			canOverride: boolean;
+		};
 		/** @enum {string} */
 		InvoiceStatus: 'draft' | 'approved' | 'sent' | 'void';
 		/** @description An item, and where it is. */
@@ -14878,6 +15141,9 @@ export interface components {
 			 */
 			skillId?: string | null;
 		};
+		ResolveCommentRequest: {
+			resolved: boolean;
+		};
 		ResolveRequest: {
 			resolved: boolean;
 		};
@@ -15081,6 +15347,10 @@ export interface components {
 			 */
 			total: number;
 		};
+		RunApproval: {
+			approved: string[];
+			exceptions: components['schemas']['RunException'][];
+		};
 		RunAsRequest: {
 			/**
 			 * Format: uuid
@@ -15101,6 +15371,15 @@ export interface components {
 			trigger: {
 				[key: string]: unknown;
 			};
+		};
+		/** @description An invoice a run's approval left out, and why. */
+		RunException: {
+			/** Format: uuid */
+			invoiceId: string;
+			/** Format: int64 */
+			number: number;
+			orgName: string;
+			reason: string;
 		};
 		RunFrom: {
 			/** Format: uuid */
@@ -21521,6 +21800,100 @@ export interface operations {
 			};
 		};
 	};
+	list_invoice_review_rules: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['InvoiceReviewRule'][];
+				};
+			};
+		};
+	};
+	create_invoice_review_rule: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['InvoiceReviewRuleInput'];
+			};
+		};
+		responses: {
+			201: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['InvoiceReviewRule'];
+				};
+			};
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	update_invoice_review_rule: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['InvoiceReviewRuleInput'];
+			};
+		};
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['InvoiceReviewRule'];
+				};
+			};
+		};
+	};
+	delete_invoice_review_rule: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			204: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content?: never;
+			};
+		};
+	};
 	list_billing_runs: {
 		parameters: {
 			query?: never;
@@ -21559,6 +21932,31 @@ export interface operations {
 				};
 				content: {
 					'application/json': components['schemas']['BillingRun'];
+				};
+			};
+		};
+	};
+	approve_billing_run: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['ApproveRunRequest'];
+			};
+		};
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['RunApproval'];
 				};
 			};
 		};
@@ -24837,7 +25235,7 @@ export interface operations {
 		};
 		requestBody: {
 			content: {
-				'application/json': components['schemas']['VersionRequest'];
+				'application/json': components['schemas']['ApproveRequest'];
 			};
 		};
 		responses: {
@@ -24848,6 +25246,92 @@ export interface operations {
 				content: {
 					'application/json': components['schemas']['Invoice'];
 				};
+			};
+			409: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	invoice_comments: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['InvoiceComment'][];
+				};
+			};
+		};
+	};
+	add_invoice_comment: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['InvoiceCommentInput'];
+			};
+		};
+		responses: {
+			201: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['InvoiceComment'];
+				};
+			};
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	resolve_invoice_comment: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+				comment: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['ResolveCommentRequest'];
+			};
+		};
+		responses: {
+			204: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content?: never;
 			};
 		};
 	};
@@ -24918,6 +25402,60 @@ export interface operations {
 				};
 				content: {
 					'application/pdf': number[];
+				};
+			};
+		};
+	};
+	invoice_review: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['InvoiceReviewView'];
+				};
+			};
+		};
+	};
+	submit_invoice_review: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['VersionRequest'];
+			};
+		};
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['InvoiceReviewView'];
+				};
+			};
+			409: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
 				};
 			};
 		};

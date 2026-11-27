@@ -103,4 +103,107 @@ test.describe('billing', () => {
 		await expect(page.getByText('Credit memo', { exact: true }).first()).toBeVisible();
 		await expect(page.getByRole('region', { name: 'Lines' })).toContainText('-$300.00');
 	});
+
+	test('an invoice changed by hand goes to review, and the approved review approves it', async ({
+		page
+	}) => {
+		test.setTimeout(150_000);
+		const stamp = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+		const today = new Date().toISOString().slice(0, 10);
+		const api = await request.newContext({
+			baseURL: apiUrl,
+			extraHTTPHeaders: { 'x-requested-with': 'huxley' }
+		});
+		await api.post('/api/v1/auth/login', { data: { email: ownerEmail, password: ownerPassword } });
+		for (const module of ['contracts', 'billing']) {
+			await ok(api.put(`/api/v1/modules/${module}`, { data: { enabled: true } }));
+		}
+		const me = (await ok<{ id: string }>(api.get('/api/v1/auth/me'))).id;
+		const orgs = await ok<{ id: string; parentId: string | null }[]>(api.get('/api/v1/orgs'));
+		const root = orgs.find((o) => o.parentId === null)!.id;
+		const name = `Reviewed ${stamp}`;
+		const client = await ok<{ id: string }>(
+			api.post('/api/v1/orgs', { data: { parentId: root, kind: 'client', name } })
+		);
+		// Rules are instance-wide: this one names the owner, for this client only.
+		const rule = await ok<{ id: string }>(
+			api.post('/api/v1/billing/review-rules', {
+				data: {
+					name: `Review ${stamp}`,
+					kind: 'expression',
+					expression: `invoice.orgName == '${name}'`,
+					reviewers: `user:${me}`
+				}
+			})
+		);
+		const pack = await ok<{ uploadId: string; version: string }>(
+			api.post(`/api/v1/packs/builtin/huxley/invoice-review?orgId=${client.id}`)
+		);
+		const installed = await ok<{ items: { workflows: Record<string, string> } }>(
+			api.post(`/api/v1/packs/uploads/${pack.uploadId}/install`, {
+				data: { orgId: client.id, version: pack.version }
+			})
+		);
+		for (const id of Object.values(installed.items.workflows)) {
+			await ok(api.post(`/api/v1/workflows/${id}/publish`, { data: {} }));
+		}
+		const ticket = await ok<{ id: string }>(
+			api.post('/api/v1/tickets', { data: { orgId: client.id, title: `Backups ${stamp}` } })
+		);
+		const types = await ok<{ id: string; name: string }[]>(api.get('/api/v1/work-types'));
+		await ok(
+			api.post(`/api/v1/tickets/${ticket.id}/time`, {
+				data: {
+					workTypeId: types.find((t) => t.name === 'Remote support')!.id,
+					workedOn: today,
+					minutes: 60
+				}
+			})
+		);
+		const run = await ok<{ id: string }>(
+			api.post('/api/v1/billing/runs', {
+				data: { orgId: root, from: today, to: today, clients: [client.id] }
+			})
+		);
+		const [invoice] = await ok<{ id: string }[]>(api.get(`/api/v1/invoices?runId=${run.id}`));
+
+		try {
+			await signIn(page);
+			await page.goto(`/billing/invoices/${invoice.id}`);
+			await expect(page.getByRole('list', { name: 'Why it needs review' })).toContainText(
+				`Review ${stamp}`
+			);
+			// A price changed by hand: the out-of-the-box rule matches too.
+			await page.getByRole('region', { name: 'Lines' }).getByLabel('Price').fill('99');
+			await page.getByRole('button', { name: 'Save' }).click();
+			await expect(page.getByRole('list', { name: 'Why it needs review' })).toContainText(
+				'1 line changed by hand'
+			);
+			await expect(page.getByRole('button', { name: 'Approve', exact: true })).toBeHidden();
+
+			await page.getByLabel('Add a comment').fill('Discounted as agreed');
+			await page.getByRole('button', { name: 'Comment', exact: true }).click();
+			await expect(page.getByRole('list', { name: 'Open comments' })).toContainText(
+				'Discounted as agreed'
+			);
+
+			await page.getByRole('button', { name: 'Submit for review' }).click();
+			await expect(page.getByText('In review', { exact: true }).first()).toBeVisible();
+			await expect(async () => {
+				await page.reload();
+				await expect(page.getByText('Your review')).toBeVisible({ timeout: 1000 });
+			}).toPass({ timeout: 60_000 });
+			await page.getByRole('button', { name: 'Approve', exact: true }).click();
+			await expect(async () => {
+				await page.reload();
+				await expect(page.getByRole('button', { name: 'Mark sent' })).toBeVisible({
+					timeout: 1000
+				});
+			}).toPass({ timeout: 60_000 });
+			await expect(page.getByRole('list', { name: 'Review history' })).toContainText('Approved');
+		} finally {
+			await api.delete(`/api/v1/billing/review-rules/${rule.id}`);
+			await api.dispose();
+		}
+	});
 });

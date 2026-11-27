@@ -402,7 +402,8 @@ async fn an_invoice_is_edited_held_approved_sent_and_credited() {
             &s.owner,
             "POST",
             &path("/approve"),
-            json!({ "version": free["version"] }),
+            // Changed by hand, it needs review; the owner may override.
+            json!({ "version": free["version"], "overrideReview": true }),
             StatusCode::OK,
         )
         .await;
@@ -449,6 +450,93 @@ async fn an_invoice_is_edited_held_approved_sent_and_credited() {
     assert_eq!(memo["kind"], "credit_memo");
     assert_eq!(memo["total"], "-40");
     assert_eq!(memo["creditOf"], json!(id));
+}
+
+#[tokio::test]
+async fn a_run_is_approved_in_one_pass_and_hand_edits_go_to_review() {
+    let Some(s) = setup().await else { return };
+    s.rate("100").await;
+    s.time("2034-04-04", 60).await;
+    let inv = s.run("2034-04-01", "2034-04-30").await.remove(0);
+    assert_eq!(inv["reviewStatus"], "not_needed");
+    let id = inv["id"].as_str().unwrap().to_owned();
+    let run = inv["runId"].as_str().unwrap().to_owned();
+    let line = inv["lines"][0].clone();
+    let edited = s
+        .ok(
+            &s.owner,
+            "PUT",
+            &format!("/api/v1/invoices/{id}"),
+            json!({ "version": inv["version"], "lines": [
+                { "id": line["id"], "description": line["description"], "quantity": "1", "unitPrice": "75" }
+            ] }),
+            StatusCode::OK,
+        )
+        .await;
+    assert_eq!(edited["reviewStatus"], "needed");
+    // The run's approval flags it and submits it for review.
+    let pass = s
+        .ok(
+            &s.owner,
+            "POST",
+            &format!("/api/v1/billing/runs/{run}/approve"),
+            json!({ "submitReviews": true }),
+            StatusCode::OK,
+        )
+        .await;
+    assert_eq!(pass["approved"], json!([]));
+    assert_eq!(pass["exceptions"][0]["reason"], "submitted for review");
+    let (_, review) = s
+        .call(
+            &s.owner,
+            "GET",
+            &format!("/api/v1/invoices/{id}/review"),
+            None,
+        )
+        .await;
+    assert_eq!(review["status"], "in_review");
+    assert_eq!(review["canApprove"], false);
+    assert_eq!(review["canOverride"], true);
+    assert!(
+        review["reasons"][0]["detail"]
+            .as_str()
+            .unwrap()
+            .contains("changed by hand")
+    );
+    // A comment on the line.
+    let c = s
+        .ok(
+            &s.owner,
+            "POST",
+            &format!("/api/v1/invoices/{id}/comments"),
+            json!({ "body": "Why 75?", "lineId": line["id"] }),
+            StatusCode::CREATED,
+        )
+        .await;
+    assert_eq!(c["lineName"], line["description"]);
+    let (_, all) = s
+        .call(
+            &s.owner,
+            "GET",
+            &format!("/api/v1/invoices/{id}/comments"),
+            None,
+        )
+        .await;
+    assert_eq!(all.as_array().unwrap().len(), 1);
+    // Without the override, approval waits for the review.
+    let now = s
+        .call(&s.owner, "GET", &format!("/api/v1/invoices/{id}"), None)
+        .await
+        .1;
+    let (status, _) = s
+        .call(
+            &s.owner,
+            "POST",
+            &format!("/api/v1/invoices/{id}/approve"),
+            Some(json!({ "version": now["version"] })),
+        )
+        .await;
+    assert_eq!(status, StatusCode::CONFLICT);
 }
 
 #[tokio::test]

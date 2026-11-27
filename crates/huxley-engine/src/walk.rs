@@ -410,6 +410,7 @@ impl<'a> Walker<'a> {
             | Step::ChangeDecide(_)
             | Step::ScopeDecide(_)
             | Step::QuoteReview(_)
+            | Step::InvoiceReview(_)
             | Step::SalesLogEmail(_)
             | Step::ScopeContext(_)
             | Step::ScopeWrite(_)
@@ -888,6 +889,7 @@ fn with_block(step: &Step) -> Json {
         Step::ChangeDecide(s) => serde_json::to_value(&s.decide),
         Step::ScopeDecide(s) => serde_json::to_value(&s.decide),
         Step::QuoteReview(s) => serde_json::to_value(&s.review),
+        Step::InvoiceReview(s) => serde_json::to_value(&s.review),
         Step::SalesLogEmail(s) => serde_json::to_value(&s.log),
         Step::ScopeContext(s) => serde_json::to_value(&s.scope),
         Step::ScopeWrite(s) => serde_json::to_value(&s.write),

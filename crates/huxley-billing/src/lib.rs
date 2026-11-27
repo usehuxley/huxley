@@ -12,10 +12,14 @@
 //!   changed by hand are flagged), held and voided. Once out, corrections
 //!   are credit memos.
 //!
+//! - **Review** (ADR-076): rules say which drafts need an internal review
+//!   before they can be approved; see [`review`].
+//!
 //! Money is `numeric(18,4)` with an explicit currency, as decimal strings.
 
 pub mod generate;
 pub mod invoices;
+pub mod review;
 pub mod settings;
 
 use std::str::FromStr;
