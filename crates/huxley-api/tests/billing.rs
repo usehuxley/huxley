@@ -755,6 +755,52 @@ async fn paid_status_comes_back_and_overdue_clients_go_on_credit_hold() {
 }
 
 #[tokio::test]
+async fn the_finance_dashboard_answers_every_widget() {
+    let Some(s) = setup().await else { return };
+    s.rate("100").await;
+    s.time("2036-01-10", 90).await;
+    let inv = s.run("2036-01-01", "2036-01-31").await.remove(0);
+    let id = inv["id"].as_str().unwrap().to_owned();
+    s.ok(
+        &s.owner,
+        "POST",
+        &format!("/api/v1/invoices/{id}/approve"),
+        json!({ "version": inv["version"] }),
+        StatusCode::OK,
+    )
+    .await;
+    s.ok(
+        &s.owner,
+        "POST",
+        &format!("/api/v1/invoices/{id}/sent"),
+        json!(null),
+        StatusCode::OK,
+    )
+    .await;
+    let finance = s.get("/api/v1/dashboards/finance").await;
+    let widgets = finance["widgets"].as_array().unwrap();
+    assert_eq!(widgets.len(), 8);
+    for w in widgets {
+        let (status, answer) = s
+            .call(
+                &s.owner,
+                "POST",
+                "/api/v1/analytics/query",
+                Some(w["spec"].clone()),
+            )
+            .await;
+        assert_eq!(status, StatusCode::OK, "{}: {answer}", w["id"]);
+    }
+    // This client's invoice is owed and not yet due.
+    let aging = json!({ "source": "invoices", "measures": [{ "fn": "sum", "field": "owed" }],
+        "dimensions": [{ "field": "aging" }], "filters": [{ "field": "number", "op": "eq", "value": format!("INV-{}", inv["number"]) }] });
+    let (_, answer) = s
+        .call(&s.owner, "POST", "/api/v1/analytics/query", Some(aging))
+        .await;
+    assert_eq!(answer["rows"][0][0], "Not yet due", "{answer}");
+}
+
+#[tokio::test]
 async fn an_invoice_prints() {
     let Some(s) = setup().await else { return };
     s.rate("90").await;

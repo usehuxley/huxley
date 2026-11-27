@@ -103,6 +103,15 @@ Workflows read status with `core.invoice.unpaid` and record it with `core.invoic
 
 Client approvers and admins see **Invoices** in the portal. They see what's gone out and its state (due, overdue, paid, or credit), and can download each as a PDF. When the accounting system has a pay link, there's a **Pay** button.
 
+## Reporting
+
+The prebuilt **Finance** dashboard shows:
+- what was billed in the range, per month, by kind of line and by client;
+- what's owed and overdue, with aging;
+- how much billable time has been billed.
+
+Build your own from the `invoices` and `invoice_lines` sources. `time_entries` has a `billed` field.
+
 ## Settings
 
 **Settings → Billing** (`billing:configure`), per provider, sets:
