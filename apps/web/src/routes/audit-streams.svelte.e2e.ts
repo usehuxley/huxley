@@ -86,7 +86,8 @@ test.describe('audit streaming', () => {
 		expect(delivery.headers['x-api-key']).toBe(`key-${stamp}`);
 		expect(String(delivery.records[0].hash)).toMatch(/^[0-9a-f]{64}$/);
 		await page.reload();
-		await expect(row).toContainText('Up to date');
+		// Other activity keeps adding records, so it's "sent", not necessarily "up to date".
+		await expect(row).toContainText(/sent (just now|\d+ \w+ ago)/);
 
 		// The test button reaches the destination too.
 		const before = received.length;
