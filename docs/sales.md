@@ -43,6 +43,26 @@ Review rules (below) decide which quotes need a second look before they go out: 
 - **Send without approval** (administrators, `sales:review:override`) sends it anyway; the quote and the audit log record that.
 - **Comments** go on the whole quote or a line. **Mention someone** to tell them; reply in the thread, and **Resolve** it when settled. Lines with open comments say so in the builder.
 
+## Activities
+
+Leads and opportunities have an **Activity** card (ADR-070). **Log or plan something** adds:
+
+- a **task**, with when it's due and who it's for (you, by default). Someone given a task is told.
+- a **call**, with how long it took and how it went.
+- a **meeting**, with when it is; tick *It's happened* once it has.
+- a **note**.
+
+Open tasks sit at the top until they're marked **Done**. **Business → Activities** lists your tasks and meetings: overdue, today and coming up, plus what you finished lately.
+
+### Logging email
+
+Set a mailbox's **What it's for** to *Sales email* (**Settings → Mailboxes**), install the **Sales email logging** pack, and publish its workflow. Then:
+
+- **BCC the mailbox's address** on mail to clients and prospects, or point an IMAP or Microsoft 365 mailbox at it to sync.
+- Each message is filed as an email activity on every contact it's from or to, on the contact's client's most recently changed open opportunity, and on open leads with those addresses.
+- Addresses that match no one are left out, and a message is logged once.
+- A sales mailbox never opens tickets.
+
 ## Orders
 
 Accepting a quote, whether in Huxley or by the client signing in the portal, makes a **sales order** (SO-*n*) at the client, with the lines agreed to: the options taken, not the rest. **Business → Orders** lists them; the quote links to its order (ADR-069).
@@ -63,4 +83,4 @@ When every line is delivered, the order is **fulfilled**, and `sales_order.fulfi
 
 ## Events
 
-`sales.lead.created`, `sales.lead.converted`, `sales.opportunity.created`, `sales.opportunity.updated`, `sales.opportunity.stage_changed`, `sales.opportunity.won`, `sales.opportunity.lost`, `sales.quote.created`, `sales.quote.sent`, `sales.quote.accepted`, `sales.quote.declined`, `quote.submitted_for_review`, `quote.approved`, `quote.changes_requested`, `quote.rejected`, `sales_order.created`, `sales_order.fulfilled`, `sales_order.closed` and `sales_order.cancelled`, for workflows: tell the account manager when a deal is won, start onboarding, post to a channel.
+`sales.lead.created`, `sales.lead.converted`, `sales.opportunity.created`, `sales.opportunity.updated`, `sales.opportunity.stage_changed`, `sales.opportunity.won`, `sales.opportunity.lost`, `sales.quote.created`, `sales.quote.sent`, `sales.quote.accepted`, `sales.quote.declined`, `quote.submitted_for_review`, `quote.approved`, `quote.changes_requested`, `quote.rejected`, `sales.activity.created`, `sales_order.created`, `sales_order.fulfilled`, `sales_order.closed` and `sales_order.cancelled`, for workflows: tell the account manager when a deal is won, start onboarding, post to a channel.

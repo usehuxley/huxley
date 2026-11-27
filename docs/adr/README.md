@@ -73,3 +73,4 @@ Decisions that shape Huxley. Add a new ADR by copying `0000-template.md` with th
 | [067](0067-inventory.md) | Inventory is a ledger of movements over stock per item, location and lot | Accepted |
 | [068](0068-purchasing.md) | Purchase orders are approved by a threshold and received through inventory movements | Accepted |
 | [069](0069-sales-orders.md) | Accepted quotes become sales orders, fulfilled through inventory and purchasing and handed off by the API | Accepted |
+| [070](0070-sales-activities.md) | Sales activities live with their records, and sales email is logged from a mailbox by a workflow | Accepted |

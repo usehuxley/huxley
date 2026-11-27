@@ -4,14 +4,16 @@ import { api } from '#lib/server/api.ts';
 import { problemMessage } from '#lib/server/problems.ts';
 import { fieldErrors, opportunityBody } from '#lib/sales/server.ts';
 import { assignees } from '#lib/tickets/server.ts';
+import { addActivity, completeActivity } from '#lib/sales/activities.ts';
 import type { Actions, PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async (event) => {
 	const client = api(event);
-	const [found, orgs, people] = await Promise.all([
+	const [found, orgs, people, activities] = await Promise.all([
 		client.GET('/api/v1/leads/{id}', { params: { path: { id: event.params.id } } }),
 		client.GET('/api/v1/orgs'),
-		assignees(event)
+		assignees(event),
+		client.GET('/api/v1/activities', { params: { query: { leadId: event.params.id } } })
 	]);
 	if (found.response.status === 404) error(404, 'Lead not found.');
 	if (!found.data) error(503, 'Could not load the lead.');
@@ -22,11 +24,14 @@ export const load: PageServerLoad = async (event) => {
 			.filter((o) => o.kind === 'client' && o.status === 'active')
 			.map((o) => ({ value: o.id, label: o.name })),
 		people: people.people,
+		activities: activities.data ?? [],
 		canWrite: user.grantedPermissions.includes('sales:write')
 	};
 };
 
 export const actions: Actions = {
+	addActivity: (event) => addActivity(event, { leadId: event.params.id }),
+	completeActivity: (event) => completeActivity(event),
 	save: async (event) => {
 		const form = await event.request.formData();
 		const {

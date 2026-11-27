@@ -1373,6 +1373,30 @@ export type Step =
 			 * Fail the attempt after this long, e.g. `30s`.
 			 */
 			timeout?: string | null;
+			type: 'core.sales.log_email';
+			with: SalesLogEmail;
+	  }
+	| {
+			/**
+			 * Record the error as the step's output and carry on.
+			 */
+			continue_on_error?: boolean;
+			description?: string | null;
+			/**
+			 * Unique in the workflow: lowercase letters, digits, underscores.
+			 * Other steps read this step's output as `steps.<id>.output`.
+			 */
+			id: string;
+			/**
+			 * Skip the step unless this expression is true.
+			 */
+			if?: string | null;
+			name?: string | null;
+			retry?: RetryPolicy | null;
+			/**
+			 * Fail the attempt after this long, e.g. `30s`.
+			 */
+			timeout?: string | null;
 			type: 'core.calendar.sync';
 			with?: CalendarSync | null;
 	  }
@@ -2519,6 +2543,18 @@ export interface QuoteReview {
 	comment?: unknown;
 	decision: unknown;
 	review_id: unknown;
+}
+/**
+ * An email to log (`core.sales.log_email`): `email_id`, from a mailbox's
+ * `email.received`. It's filed as an activity on each contact it's from or
+ * to (on their client's latest open opportunity, if any) and on open leads
+ * with those addresses. Output: `{ logged, unmatched: [address] }`.
+ *
+ * This interface was referenced by `HuxleyWorkflowFormatV1`'s JSON-Schema
+ * via the `definition` "SalesLogEmail".
+ */
+export interface SalesLogEmail {
+	email_id: unknown;
 }
 /**
  * Whose calendars to sync (`core.calendar.sync`): everyone set up (from

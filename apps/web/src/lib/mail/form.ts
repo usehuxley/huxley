@@ -12,6 +12,11 @@ export const SECURITY = [
 	{ value: 'none', label: 'None (your own network only)' }
 ] as const;
 
+export const PURPOSES = [
+	{ value: 'tickets', label: 'Tickets: each message opens or updates a ticket' },
+	{ value: 'sales_log', label: 'Sales email: log messages on contacts and deals' }
+] as const;
+
 export const UNKNOWN_SENDER = [
 	{ value: 'create_contact', label: 'Add them as a contact' },
 	{ value: 'no_requester', label: 'Open the ticket without a requester' },
@@ -27,7 +32,9 @@ export const OUTCOMES: Record<
 	ticket_reopened: { label: 'Reopened ticket', tone: 'info' },
 	ignored_automatic: { label: 'Automatic mail', tone: 'neutral' },
 	ignored_loop: { label: 'Mail loop', tone: 'warning' },
-	ignored_unknown_sender: { label: 'Unknown sender', tone: 'neutral' }
+	ignored_unknown_sender: { label: 'Unknown sender', tone: 'neutral' },
+	ignored_sales_log: { label: 'Sales email', tone: 'neutral' },
+	logged: { label: 'Logged on deals', tone: 'success' }
 };
 
 /** A mailbox from the mailbox form (`MailboxInput`). */
@@ -44,6 +51,7 @@ export function mailboxBody(form: FormData) {
 		unknownSender: formString(form, 'unknownSender') || undefined,
 		unknownOrgId: formString(form, 'unknownOrgId') || null,
 		stripReplies: form.get('stripReplies') === 'on',
+		purpose: formString(form, 'purpose') || 'tickets',
 		enabled: form.get('enabled') === 'on',
 		imap:
 			kind === 'imap'

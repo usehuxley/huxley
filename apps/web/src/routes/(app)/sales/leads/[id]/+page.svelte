@@ -3,6 +3,7 @@
 	import { resolve } from '$app/paths';
 	import { ArrowRightLeft, Ban } from '@lucide/svelte';
 	import { Badge, Button, Card, Dialog, Field, Input, Select, toast } from '@usehuxley/ui';
+	import ActivityPanel from '#lib/sales/ActivityPanel.svelte';
 	import OpportunityFields from '#lib/sales/OpportunityFields.svelte';
 	import { LEAD_STATUSES, label, leadTone } from '#lib/sales/labels.ts';
 	import type { PageProps } from './$types';
@@ -155,6 +156,8 @@
 			{/if}
 		</form>
 	</Card>
+
+	<ActivityPanel activities={data.activities} people={data.people} canWrite={data.canWrite} />
 </div>
 
 <Dialog

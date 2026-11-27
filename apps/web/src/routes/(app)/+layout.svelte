@@ -139,6 +139,7 @@
 							...item(on('sales') && can('sales:read'), '/sales/leads', 'Leads'),
 							...item(on('sales') && can('sales:read'), '/sales/quotes', 'Quotes'),
 							...item(on('sales') && can('sales:read'), '/sales/orders', 'Orders'),
+							...item(on('sales') && can('sales:read'), '/sales/activities', 'Activities'),
 							...item(on('projects') && can('project:read'), '/projects', 'Projects'),
 							...item(on('contracts') && can('catalog:read'), '/catalog', 'Catalog'),
 							...item(on('inventory') && can('inventory:read'), '/inventory', 'Inventory'),

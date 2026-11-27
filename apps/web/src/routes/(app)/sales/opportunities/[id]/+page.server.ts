@@ -4,18 +4,20 @@ import { api } from '#lib/server/api.ts';
 import { problemMessage } from '#lib/server/problems.ts';
 import { fieldErrors, opportunityBody } from '#lib/sales/server.ts';
 import { assignees } from '#lib/tickets/server.ts';
+import { addActivity, completeActivity } from '#lib/sales/activities.ts';
 import type { Actions, PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async (event) => {
 	const client = api(event);
 	const id = event.params.id;
-	const [found, history, stages, reasons, people, quotes] = await Promise.all([
+	const [found, history, stages, reasons, people, quotes, activities] = await Promise.all([
 		client.GET('/api/v1/opportunities/{id}', { params: { path: { id } } }),
 		client.GET('/api/v1/opportunities/{id}/history', { params: { path: { id } } }),
 		client.GET('/api/v1/sales/stages'),
 		client.GET('/api/v1/sales/reasons'),
 		assignees(event),
-		client.GET('/api/v1/quotes', { params: { query: { opportunityId: id } } })
+		client.GET('/api/v1/quotes', { params: { query: { opportunityId: id } } }),
+		client.GET('/api/v1/activities', { params: { query: { opportunityId: id } } })
 	]);
 	if (found.response.status === 404) error(404, 'Opportunity not found.');
 	if (!found.data) error(503, 'Could not load the opportunity.');
@@ -26,6 +28,7 @@ export const load: PageServerLoad = async (event) => {
 	return {
 		opportunity: found.data,
 		history: history.data ?? [],
+		activities: activities.data ?? [],
 		quotes: (quotes.data ?? []).map((q) => ({
 			id: q.id,
 			number: q.number,
@@ -45,6 +48,8 @@ export const load: PageServerLoad = async (event) => {
 };
 
 export const actions: Actions = {
+	addActivity: (event) => addActivity(event, { opportunityId: event.params.id }),
+	completeActivity: (event) => completeActivity(event),
 	save: async (event) => {
 		const form = await event.request.formData();
 		const {

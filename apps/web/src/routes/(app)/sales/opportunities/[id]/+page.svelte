@@ -3,6 +3,7 @@
 	import { resolve } from '$app/paths';
 	import { Trophy, XCircle } from '@lucide/svelte';
 	import { Badge, Button, Card, Dialog, Field, Input, Select, toast, tray } from '@usehuxley/ui';
+	import ActivityPanel from '#lib/sales/ActivityPanel.svelte';
 	import OpportunityFields from '#lib/sales/OpportunityFields.svelte';
 	import {
 		FORECASTS,
@@ -135,26 +136,34 @@
 	</div>
 
 	<div class="grid gap-6 lg:grid-cols-[minmax(0,1fr)_20rem]">
-		<Card title="Details">
-			<form method="POST" action="?/save" class="flex flex-col gap-4" use:enhance={done('Saved.')}>
-				<input type="hidden" name="version" value={o.version} />
-				<fieldset disabled={!data.canWrite} class="flex flex-col gap-4">
-					<OpportunityFields
-						values={o}
-						people={data.people}
-						contacts={data.contacts}
-						errors={saveErrors}
-						{stageProbability}
-					/>
-				</fieldset>
-				{#if data.canWrite}
-					<div class="flex justify-between gap-2">
-						<Button type="submit" variant="primary">Save</Button>
-						<Button type="submit" formaction="?/delete" variant="ghost">Delete</Button>
-					</div>
-				{/if}
-			</form>
-		</Card>
+		<div class="flex min-w-0 flex-col gap-6">
+			<Card title="Details">
+				<form
+					method="POST"
+					action="?/save"
+					class="flex flex-col gap-4"
+					use:enhance={done('Saved.')}
+				>
+					<input type="hidden" name="version" value={o.version} />
+					<fieldset disabled={!data.canWrite} class="flex flex-col gap-4">
+						<OpportunityFields
+							values={o}
+							people={data.people}
+							contacts={data.contacts}
+							errors={saveErrors}
+							{stageProbability}
+						/>
+					</fieldset>
+					{#if data.canWrite}
+						<div class="flex justify-between gap-2">
+							<Button type="submit" variant="primary">Save</Button>
+							<Button type="submit" formaction="?/delete" variant="ghost">Delete</Button>
+						</div>
+					{/if}
+				</form>
+			</Card>
+			<ActivityPanel activities={data.activities} people={data.people} canWrite={data.canWrite} />
+		</div>
 
 		<div class="flex flex-col gap-6">
 			<Card title="Value">

@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { Field, Input, Select } from '@usehuxley/ui';
 	import type { components } from '@usehuxley/api-client';
-	import { KINDS, SECURITY, UNKNOWN_SENDER } from './form.ts';
+	import { KINDS, PURPOSES, SECURITY, UNKNOWN_SENDER } from './form.ts';
 
 	type Mailbox = components['schemas']['Mailbox'];
 	type Option = { value: string; label: string };
@@ -54,6 +54,20 @@
 			placeholder="support@your-msp.example"
 		/>
 	</Field>
+	<Field
+		label="What it's for"
+		for="mb-purpose"
+		class="sm:col-span-2"
+		hint="A sales mailbox is an address to BCC (or a synced mailbox): with the Sales email logging pack, its messages are filed on the contacts and leads they're to or from."
+	>
+		<Select
+			id="mb-purpose"
+			name="purpose"
+			value={mailbox?.purpose ?? 'tickets'}
+			options={[...PURPOSES]}
+		/>
+	</Field>
+
 	<Field
 		label="How mail arrives"
 		for="mb-kind"

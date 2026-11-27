@@ -211,6 +211,9 @@ pub struct Mailbox {
     pub unknown_org_id: Option<Uuid>,
     pub strip_replies: bool,
     pub enabled: bool,
+    /// `tickets` (each message opens or updates a ticket) or `sales_log`
+    /// (messages are logged on the contacts and leads they're to or from).
+    pub purpose: String,
     /// Where it fetches from (`imap` mailboxes).
     #[sqlx(json(nullable))]
     pub imap: Option<ImapSettings>,
@@ -250,6 +253,9 @@ pub struct MailboxInput {
     pub strip_replies: Option<bool>,
     #[serde(default)]
     pub enabled: Option<bool>,
+    /// `tickets` (default) or `sales_log`.
+    #[serde(default)]
+    pub purpose: Option<String>,
     /// Where to fetch from (`imap` mailboxes).
     #[serde(default)]
     pub imap: Option<ImapSettings>,
@@ -270,7 +276,7 @@ pub struct MailboxInput {
 }
 
 const SELECT: &str = "SELECT id, org_id, name, address, kind, ticket_type, queue_id, unknown_sender, \
-    unknown_org_id, strip_replies, enabled, imap, graph, smtp, secret IS NOT NULL AS has_password, last_checked_at, \
+    unknown_org_id, strip_replies, enabled, purpose, imap, graph, smtp, secret IS NOT NULL AS has_password, last_checked_at, \
     last_error, version, created_at \
     FROM sd_mailboxes";
 
@@ -301,9 +307,14 @@ struct Checked {
     imap: Option<ImapSettings>,
     graph: Option<GraphSettings>,
     smtp: Option<SmtpSettings>,
+    purpose: String,
 }
 
 async fn check(conn: &mut PgConnection, input: &MailboxInput) -> DeskResult<Checked> {
+    let purpose = input.purpose.as_deref().unwrap_or("tickets").to_owned();
+    if purpose != "tickets" && purpose != "sales_log" {
+        return Err(DeskError::invalid("purpose", "tickets or sales_log"));
+    }
     let name = text("name", Some(&input.name), 100)?
         .ok_or_else(|| DeskError::invalid("name", "a mailbox needs a name"))?;
     let address = input.address.trim().to_lowercase();
@@ -389,6 +400,7 @@ async fn check(conn: &mut PgConnection, input: &MailboxInput) -> DeskResult<Chec
         imap,
         graph,
         smtp,
+        purpose,
     })
 }
 
@@ -426,8 +438,8 @@ pub async fn create(
     let c = check(conn, input).await?;
     sqlx::query(
         "INSERT INTO sd_mailboxes (id, org_id, name, address, kind, ticket_type, queue_id, unknown_sender, \
-                                   unknown_org_id, strip_replies, enabled, imap, secret, graph, smtp) \
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)",
+                                   unknown_org_id, strip_replies, enabled, imap, secret, graph, smtp, purpose) \
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)",
     )
     .bind(id)
     .bind(org_id)
@@ -444,6 +456,7 @@ pub async fn create(
     .bind(secret)
     .bind(c.graph.as_ref().map(|g| json!(g)))
     .bind(c.smtp.as_ref().map(|g| json!(g)))
+    .bind(&c.purpose)
     .execute(&mut *conn)
     .await
     .map_err(taken)?;
@@ -472,7 +485,7 @@ pub async fn update(
     let rows = sqlx::query(
         "UPDATE sd_mailboxes SET name = $3, address = $4, kind = $5, ticket_type = $6, queue_id = $7, \
                 unknown_sender = $8, unknown_org_id = $9, strip_replies = $10, enabled = $11, \
-                imap = $12, secret = coalesce($13, secret), graph = $14, smtp = $15, \
+                imap = $12, secret = coalesce($13, secret), graph = $14, smtp = $15, purpose = $16, \
                 cursor = CASE WHEN imap IS DISTINCT FROM $12 THEN '{}'::jsonb ELSE cursor END, \
                 version = version + 1 \
           WHERE id = $1 AND version = $2 AND archived_at IS NULL",
@@ -492,6 +505,7 @@ pub async fn update(
     .bind(secret)
     .bind(c.graph.as_ref().map(|g| json!(g)))
     .bind(c.smtp.as_ref().map(|g| json!(g)))
+    .bind(input.purpose.as_deref().map_or(before.purpose.as_str(), |_| c.purpose.as_str()))
     .execute(&mut *conn)
     .await
     .map_err(taken)?
@@ -723,6 +737,7 @@ pub async fn store(
                 "mailbox_id": mailbox.id,
                 "from": parsed.from.as_ref().map(|f| &f.address),
                 "subject": parsed.subject,
+                "purpose": mailbox.purpose,
             }),
         },
     )
@@ -960,6 +975,12 @@ async fn screen(
     mailbox: &Mailbox,
     email: &Email,
 ) -> DeskResult<Option<Outcome>> {
+    if mailbox.purpose == "sales_log" {
+        return Ok(Some(Outcome::ignored(
+            "ignored_sales_log",
+            "this mailbox logs sales email; it doesn't open tickets",
+        )));
+    }
     if let Some(why) = &email.automatic {
         return Ok(Some(Outcome::ignored("ignored_automatic", why.clone())));
     }

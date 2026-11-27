@@ -266,7 +266,7 @@ Mail sent to a service desk mailbox becomes tickets and replies.
 
 ### Mailboxes
 
-A mailbox belongs to an organization, usually your MSP, and has an address. Its rules say what happens to its mail:
+A mailbox belongs to an organization, usually your MSP, and has an address. **What it's for** is *Tickets* (the default) or *Sales email*. A sales mailbox never opens tickets: its messages are logged on contacts and deals instead (see [Sales](sales.md#logging-email)). A ticket mailbox's rules say what happens to its mail:
 
 - **New tickets:** their type and queue.
 - **Unknown senders:** what happens when the sender isn't a contact:

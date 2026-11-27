@@ -447,6 +447,9 @@ pub enum Step {
     /// Record a quote review's decision (the `sales` module).
     #[serde(rename = "core.quote.review")]
     QuoteReview(QuoteReviewStep),
+    /// Log an email on the contacts and leads it's to or from (the `sales` module).
+    #[serde(rename = "core.sales.log_email")]
+    SalesLogEmail(SalesLogEmailStep),
     /// Sync people's busy time from their calendars (the `workforce` module).
     #[serde(rename = "core.calendar.sync")]
     CalendarSync(CalendarSyncStep),
@@ -864,6 +867,11 @@ step!(QuoteReviewStep {
     pub review: QuoteReview,
 });
 
+step!(SalesLogEmailStep {
+    #[serde(rename = "with")]
+    pub log: SalesLogEmail,
+});
+
 step!(CalendarSyncStep {
     #[serde(rename = "with", default, skip_serializing_if = "Option::is_none")]
     pub sync: Option<CalendarSync>,
@@ -984,6 +992,7 @@ impl Step {
             ChangeDecide,
             ScopeDecide,
             QuoteReview,
+            SalesLogEmail,
             CalendarSync,
             CalendarWrite,
             ProjectStatus,
@@ -1054,6 +1063,7 @@ impl Step {
             Self::ChangeDecide(_) => "core.change.decide",
             Self::ScopeDecide(_) => "core.project.scope.decide",
             Self::QuoteReview(_) => "core.quote.review",
+            Self::SalesLogEmail(_) => "core.sales.log_email",
             Self::CalendarSync(_) => "core.calendar.sync",
             Self::CalendarWrite(_) => "core.calendar.write",
             Self::ProjectStatus(_) => "core.project.status",
@@ -1739,6 +1749,16 @@ pub struct QuoteReview {
     pub by: Option<Value>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub comment: Option<Value>,
+}
+
+/// An email to log (`core.sales.log_email`): `email_id`, from a mailbox's
+/// `email.received`. It's filed as an activity on each contact it's from or
+/// to (on their client's latest open opportunity, if any) and on open leads
+/// with those addresses. Output: `{ logged, unmatched: [address] }`.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct SalesLogEmail {
+    pub email_id: Value,
 }
 
 /// Whose calendars to sync (`core.calendar.sync`): everyone set up (from

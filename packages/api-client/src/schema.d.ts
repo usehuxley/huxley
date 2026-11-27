@@ -734,6 +734,60 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
+	'/api/v1/activities': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** Activities you can see: on a record, someone's, or yours. */
+		get: operations['list_activities'];
+		put?: never;
+		/**
+		 * Adds a task, call, meeting or note to a lead, opportunity, quote or
+		 *     contact. A task given to someone else tells them.
+		 */
+		post: operations['create_activity'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/activities/{id}': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get: operations['get_activity'];
+		put: operations['update_activity'];
+		post?: never;
+		delete: operations['delete_activity'];
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/activities/{id}/done': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/** Marks it done, or not. */
+		post: operations['complete_activity'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
 	'/api/v1/agreements': {
 		parameters: {
 			query?: never;
@@ -10086,6 +10140,11 @@ export interface components {
 			status: string;
 			website?: string | null;
 		};
+		CompleteActivity: {
+			done: boolean;
+			/** @description How it went (a call's outcome, say). */
+			outcome?: string | null;
+		};
 		ConfirmPasswordResetRequest: {
 			/** Format: password */
 			newPassword: string;
@@ -11802,6 +11861,11 @@ export interface components {
 			name: string;
 			/** Format: uuid */
 			orgId: string;
+			/**
+			 * @description `tickets` (each message opens or updates a ticket) or `sales_log`
+			 *     (messages are logged on the contacts and leads they're to or from).
+			 */
+			purpose: string;
 			/** Format: uuid */
 			queueId?: string | null;
 			smtp?: components['schemas']['SmtpSettings'] | null;
@@ -11831,6 +11895,8 @@ export interface components {
 			 * @description The IMAP password; left out, the stored one stays.
 			 */
 			password?: string | null;
+			/** @description `tickets` (default) or `sales_log`. */
+			purpose?: string | null;
 			/** Format: uuid */
 			queueId?: string | null;
 			smtp?: components['schemas']['SmtpSettings'] | null;
@@ -14334,6 +14400,80 @@ export interface components {
 			source: components['schemas']['RunnerSource'];
 			version?: string | null;
 		};
+		SalesActivity: {
+			body: string;
+			/** Format: uuid */
+			contactId?: string | null;
+			contactName?: string | null;
+			/** Format: date-time */
+			createdAt: string;
+			createdByName?: string | null;
+			/** @description Emails: `in` (from them) or `out` (to them). */
+			direction?: string | null;
+			/** Format: date-time */
+			doneAt?: string | null;
+			/** Format: date-time */
+			dueAt?: string | null;
+			/** Format: int32 */
+			durationMinutes?: number | null;
+			/** Format: uuid */
+			emailId?: string | null;
+			/** Format: date-time */
+			endsAt?: string | null;
+			/** Format: uuid */
+			id: string;
+			kind: components['schemas']['SalesActivityKind'];
+			/** Format: uuid */
+			leadId?: string | null;
+			leadName?: string | null;
+			location?: string | null;
+			/** Format: uuid */
+			opportunityId?: string | null;
+			opportunityName?: string | null;
+			/** Format: uuid */
+			orgId: string;
+			outcome?: string | null;
+			/** Format: uuid */
+			ownerId?: string | null;
+			ownerName?: string | null;
+			/** Format: uuid */
+			quoteId?: string | null;
+			/** Format: date-time */
+			startsAt?: string | null;
+			subject: string;
+		};
+		SalesActivityInput: {
+			body?: string;
+			/** Format: uuid */
+			contactId?: string | null;
+			/** @description Done already (calls, meetings and notes that happened). */
+			done?: boolean;
+			/** Format: date-time */
+			dueAt?: string | null;
+			/** Format: int32 */
+			durationMinutes?: number | null;
+			/** Format: date-time */
+			endsAt?: string | null;
+			kind: components['schemas']['SalesActivityKind'];
+			/** Format: uuid */
+			leadId?: string | null;
+			location?: string | null;
+			/** Format: uuid */
+			opportunityId?: string | null;
+			outcome?: string | null;
+			/**
+			 * Format: uuid
+			 * @description Who it's for (default: you).
+			 */
+			ownerId?: string | null;
+			/** Format: uuid */
+			quoteId?: string | null;
+			/** Format: date-time */
+			startsAt?: string | null;
+			subject: string;
+		};
+		/** @enum {string} */
+		SalesActivityKind: 'task' | 'call' | 'meeting' | 'note' | 'email';
 		SalesOrder: {
 			/** Format: uuid */
 			agreementId?: string | null;
@@ -17716,6 +17856,159 @@ export interface operations {
 				};
 				content: {
 					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	list_activities: {
+		parameters: {
+			query?: {
+				leadId?: string;
+				opportunityId?: string;
+				contactId?: string;
+				/** @description Someone's. */
+				ownerId?: string;
+				/** @description Only yours (the API fills in the owner). */
+				mine?: boolean;
+				/** @description Only tasks not yet done (and meetings to come). */
+				open?: boolean;
+				kind?: components['schemas']['SalesActivityKind'];
+				/** @description At most this many (default 100, at most 500). */
+				limit?: number;
+			};
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['SalesActivity'][];
+				};
+			};
+		};
+	};
+	create_activity: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['SalesActivityInput'];
+			};
+		};
+		responses: {
+			201: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['SalesActivity'];
+				};
+			};
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	get_activity: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['SalesActivity'];
+				};
+			};
+		};
+	};
+	update_activity: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['SalesActivityInput'];
+			};
+		};
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['SalesActivity'];
+				};
+			};
+		};
+	};
+	delete_activity: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			204: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content?: never;
+			};
+		};
+	};
+	complete_activity: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['CompleteActivity'];
+			};
+		};
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['SalesActivity'];
 				};
 			};
 		};
