@@ -107,6 +107,9 @@ permissions! {
     SALES_WRITE = "sales:write", Org, "Capture and work leads, convert them, and create, change and move opportunities";
     SALES_CONFIGURE = "sales:configure", Instance, "Keep the pipeline's stages, the win and loss reasons, and the quote review rules";
     SALES_OVERRIDE = "sales:review:override", Org, "Send a quote that needs review without an approved review (it's recorded)";
+    INVENTORY_READ = "inventory:read", Org, "View stock, locations, serial numbers and movements";
+    INVENTORY_WRITE = "inventory:write", Org, "Receive, move, adjust and return stock, and allocate parts to tickets and projects";
+    INVENTORY_CONFIGURE = "inventory:configure", Org, "Keep locations (warehouses, bins, vehicles), which products are stocked, and reorder points";
 }
 
 /// Wildcard granting every permission.

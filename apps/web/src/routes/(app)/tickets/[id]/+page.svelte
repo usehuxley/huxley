@@ -47,6 +47,7 @@
 	import ActionsCard from '#lib/forms/ActionsCard.svelte';
 	import KnowledgeCard from '#lib/kb/KnowledgeCard.svelte';
 	import TicketAssetsCard from '#lib/assets/TicketAssetsCard.svelte';
+	import PartsCard from '#lib/inventory/PartsCard.svelte';
 	import CsatCard from '#lib/tickets/CsatCard.svelte';
 	import SentimentCard from '#lib/tickets/SentimentCard.svelte';
 	import InsightCard from '#lib/tickets/InsightCard.svelte';
@@ -620,6 +621,9 @@
 			{/if}
 			{#if data.assets}
 				<TicketAssetsCard assets={data.assets} />
+			{/if}
+			{#if data.parts}
+				<PartsCard parts={data.parts} />
 			{/if}
 			{#if data.csat}
 				<CsatCard survey={data.csat} />

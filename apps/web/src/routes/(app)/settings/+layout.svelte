@@ -21,6 +21,7 @@
 		'project-templates': resolve('/(app)/settings/project-templates'),
 		mailboxes: resolve('/(app)/settings/mailboxes'),
 		sales: resolve('/(app)/settings/sales'),
+		inventory: resolve('/(app)/settings/inventory'),
 		skills: resolve('/(app)/settings/skills'),
 		calendars: resolve('/(app)/settings/calendars'),
 		responses: resolve('/(app)/settings/responses'),

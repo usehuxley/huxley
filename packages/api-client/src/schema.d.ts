@@ -3129,6 +3129,189 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
+	'/api/v1/inventory/allocations': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** Parts set aside for tickets and projects. */
+		get: operations['list_inventory_allocations'];
+		put?: never;
+		/**
+		 * Sets parts aside for a ticket or project (or, with `consume`, uses them
+		 *     straight away).
+		 */
+		post: operations['create_inventory_allocation'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/inventory/allocations/{id}/consume': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/** The parts were used: they leave stock. */
+		post: operations['consume_inventory_allocation'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/inventory/allocations/{id}/release': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/** The parts weren't needed: they're available again. */
+		post: operations['release_inventory_allocation'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/inventory/items': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** Stocked items you can see, with totals. */
+		get: operations['list_inventory_items'];
+		put?: never;
+		/** Starts stocking a catalog product. */
+		post: operations['create_inventory_item'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/inventory/items/{id}': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get: operations['get_inventory_item'];
+		/**
+		 * Changes how an item is tracked (while none is on hand), refreshing its
+		 *     SKU and name from the catalog.
+		 */
+		put: operations['update_inventory_item'];
+		post?: never;
+		/** Stops stocking an item that has no history. */
+		delete: operations['delete_inventory_item'];
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/inventory/items/{id}/reorder/{location}': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		/**
+		 * Sets the item's reorder point at a location: `stock.low` is raised when
+		 *     what's available there falls to it.
+		 */
+		put: operations['set_inventory_reorder'];
+		post?: never;
+		delete: operations['clear_inventory_reorder'];
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/inventory/locations': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** Locations you can see. */
+		get: operations['list_inventory_locations'];
+		put?: never;
+		post: operations['create_inventory_location'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/inventory/locations/{id}': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put: operations['update_inventory_location'];
+		post?: never;
+		/** Removes a location never used; turn used ones off instead. */
+		delete: operations['delete_inventory_location'];
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/inventory/movements': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** The ledger, newest first. */
+		get: operations['list_inventory_movements'];
+		put?: never;
+		/** Receives, transfers, adjusts, returns or sends back (RMA) stock. */
+		post: operations['create_inventory_movement'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/inventory/units': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** Serial-numbered units: look one up, or list an item's. */
+		get: operations['list_inventory_units'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
 	'/api/v1/jobs/dead': {
 		parameters: {
 			query?: never;
@@ -9836,6 +10019,14 @@ export interface components {
 			/** Format: uuid */
 			orgId: string;
 		};
+		CreateItemRequest: {
+			item: components['schemas']['InventoryItemInput'];
+			/**
+			 * Format: uuid
+			 * @description The organization stocking it.
+			 */
+			orgId: string;
+		};
 		CreateLeadRequest: {
 			lead: components['schemas']['LeadInput'];
 			/**
@@ -9855,6 +10046,14 @@ export interface components {
 			 *     below it.
 			 */
 			orgId?: string | null;
+		};
+		CreateLocationRequest: {
+			location: components['schemas']['InventoryLocationInput'];
+			/**
+			 * Format: uuid
+			 * @description The organization holding the stock (usually the provider).
+			 */
+			orgId: string;
 		};
 		CreateMailbox: components['schemas']['MailboxInput'] & {
 			/**
@@ -10646,8 +10845,239 @@ export interface components {
 			/** Format: int32 */
 			warnings: number;
 		};
+		InventoryAllocation: {
+			/** Format: date-time */
+			closedAt?: string | null;
+			/** Format: date-time */
+			createdAt: string;
+			createdByName?: string | null;
+			/** Format: uuid */
+			id: string;
+			/** Format: uuid */
+			itemId: string;
+			/** Format: uuid */
+			locationId: string;
+			locationName: string;
+			lot: string;
+			name: string;
+			note?: string | null;
+			/** Format: uuid */
+			orgId: string;
+			quantity: string;
+			/** Format: uuid */
+			refId: string;
+			/** Format: uuid */
+			refOrgId?: string | null;
+			refType: components['schemas']['InventoryRefType'];
+			serials: string[];
+			sku: string;
+			status: components['schemas']['InventoryAllocationStatus'];
+			unit: string;
+		};
+		InventoryAllocationInput: {
+			/** @description Used straight away (allocated and consumed in one go). */
+			consume?: boolean;
+			/** Format: uuid */
+			itemId: string;
+			/** Format: uuid */
+			locationId: string;
+			lot?: string | null;
+			note?: string | null;
+			quantity?: string | null;
+			/** Format: uuid */
+			refId: string;
+			refType: components['schemas']['InventoryRefType'];
+			serials?: string[];
+		};
+		/** @enum {string} */
+		InventoryAllocationStatus: 'allocated' | 'consumed' | 'released';
+		/** @description A stocked item, with its totals across locations. */
+		InventoryItem: {
+			allocated: string;
+			available: string;
+			/** Format: date-time */
+			createdAt: string;
+			/** Format: uuid */
+			id: string;
+			/** @description At or under a reorder point somewhere. */
+			low: boolean;
+			name: string;
+			onHand: string;
+			/** Format: uuid */
+			orgId: string;
+			/** Format: uuid */
+			productId: string;
+			sku: string;
+			tracking: components['schemas']['Tracking'];
+			unit: string;
+		};
+		InventoryItemInput: {
+			/**
+			 * Format: uuid
+			 * @description A catalog product (a `product`, not a service or bundle) of this
+			 *     organization or one above it.
+			 */
+			productId: string;
+			tracking?: components['schemas']['Tracking'];
+		};
+		InventoryLocation: {
+			active: boolean;
+			address?: string | null;
+			/** Format: uuid */
+			assignedUserId?: string | null;
+			assignedUserName?: string | null;
+			/** Format: date-time */
+			createdAt: string;
+			/** Format: uuid */
+			id: string;
+			kind: components['schemas']['InventoryLocationKind'];
+			name: string;
+			/** Format: uuid */
+			orgId: string;
+			/** Format: uuid */
+			parentId?: string | null;
+			parentName?: string | null;
+		};
+		InventoryLocationInput: {
+			active?: boolean;
+			address?: string | null;
+			/**
+			 * Format: uuid
+			 * @description A vehicle's technician.
+			 */
+			assignedUserId?: string | null;
+			kind: components['schemas']['InventoryLocationKind'];
+			name: string;
+			/**
+			 * Format: uuid
+			 * @description A bin's warehouse.
+			 */
+			parentId?: string | null;
+		};
+		/** @enum {string} */
+		InventoryLocationKind: 'warehouse' | 'bin' | 'vehicle' | 'site';
+		InventoryLot: {
+			allocated: string;
+			lot: string;
+			onHand: string;
+		};
+		InventoryMovement: {
+			/** Format: uuid */
+			allocationId?: string | null;
+			/** Format: date-time */
+			createdAt: string;
+			createdByName?: string | null;
+			/** Format: uuid */
+			fromLocationId?: string | null;
+			fromLocationName?: string | null;
+			/** Format: uuid */
+			id: string;
+			/** Format: uuid */
+			itemId: string;
+			kind: components['schemas']['InventoryMovementKind'];
+			lot: string;
+			name: string;
+			note?: string | null;
+			quantity: string;
+			/** Format: uuid */
+			refId?: string | null;
+			refType?: string | null;
+			reference?: string | null;
+			serials: string[];
+			sku: string;
+			/** Format: uuid */
+			toLocationId?: string | null;
+			toLocationName?: string | null;
+			unitCost?: string | null;
+		};
+		/**
+		 * @description A stock movement to make: receive, transfer, adjust, return or RMA.
+		 *     (Allocating, releasing and consuming go through allocations.)
+		 */
+		InventoryMovementInput: {
+			/** Format: uuid */
+			itemId: string;
+			kind: components['schemas']['InventoryMovementKind'];
+			/**
+			 * Format: uuid
+			 * @description Where: received into, adjusted, returned into, sent back from; a
+			 *     transfer's source.
+			 */
+			locationId: string;
+			lot?: string | null;
+			/** @description Why (required for adjustments). */
+			note?: string | null;
+			/**
+			 * @description How many (signed for an adjustment). Serial items: the serial
+			 *     numbers count.
+			 */
+			quantity?: string | null;
+			/** @description A delivery note, PO or RMA number. */
+			reference?: string | null;
+			serials?: string[];
+			/**
+			 * Format: uuid
+			 * @description A transfer's destination.
+			 */
+			toLocationId?: string | null;
+			/** @description Receiving: what each cost. */
+			unitCost?: string | null;
+		};
+		/** @enum {string} */
+		InventoryMovementKind:
+			'receive' | 'transfer' | 'adjust' | 'allocate' | 'release' | 'consume' | 'return' | 'rma';
+		/** @enum {string} */
+		InventoryRefType: 'ticket' | 'project';
+		InventoryReorderInput: {
+			/** @description Raise `stock.low` when what's available falls to this. */
+			reorderPoint: string;
+			/** @description How many to order then (a suggestion for purchase orders). */
+			reorderQty?: string | null;
+		};
+		/** @description An item at a location: on hand (by lot), allocated, and the reorder point. */
+		InventoryStockLevel: {
+			allocated: string;
+			available: string;
+			/** Format: uuid */
+			locationId: string;
+			locationName: string;
+			/** @description Lot-tracked items: what's on hand of each lot. */
+			lots: components['schemas']['InventoryLot'][];
+			low: boolean;
+			onHand: string;
+			reorderPoint?: string | null;
+			reorderQty?: string | null;
+		};
+		InventoryUnit: {
+			/** Format: uuid */
+			allocationId?: string | null;
+			/** Format: uuid */
+			id: string;
+			/** Format: uuid */
+			itemId: string;
+			/** Format: uuid */
+			locationId?: string | null;
+			locationName?: string | null;
+			name: string;
+			/** Format: uuid */
+			refId?: string | null;
+			/** @description What it's allocated to or was used on. */
+			refType?: string | null;
+			serial: string;
+			sku: string;
+			status: components['schemas']['InventoryUnitStatus'];
+			/** Format: date-time */
+			updatedAt: string;
+		};
+		/** @enum {string} */
+		InventoryUnitStatus: 'in_stock' | 'allocated' | 'consumed' | 'rma' | 'returned';
 		InvitePortalContact: {
 			role: components['schemas']['PortalRole'];
+		};
+		/** @description An item, and where it is. */
+		ItemDetail: {
+			item: components['schemas']['InventoryItem'];
+			levels: components['schemas']['InventoryStockLevel'][];
 		};
 		/** @description Something that happened to an article. */
 		KbActivity: {
@@ -14793,6 +15223,8 @@ export interface components {
 			/** @description Base32 secret, for entering into the app by hand. */
 			secret: string;
 		};
+		/** @enum {string} */
+		Tracking: 'none' | 'serial' | 'lot';
 		/** @description How often the AI's suggestions matched where tickets ended up. */
 		TriageAgreement: {
 			/**
@@ -14938,6 +15370,9 @@ export interface components {
 		};
 		UpdateDatasetRequest: {
 			dataset: components['schemas']['DatasetInput'];
+		};
+		UpdateItemRequest: {
+			tracking: components['schemas']['Tracking'];
 		};
 		UpdateOrgRequest: {
 			name: string;
@@ -21704,6 +22139,498 @@ export interface operations {
 				};
 				content: {
 					'application/json': components['schemas']['IntegrationVersion'][];
+				};
+			};
+		};
+	};
+	list_inventory_allocations: {
+		parameters: {
+			query?: {
+				refType?: components['schemas']['InventoryRefType'];
+				refId?: string;
+				itemId?: string;
+				/** @description Only open allocations (not yet used or released). */
+				open?: boolean;
+			};
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['InventoryAllocation'][];
+				};
+			};
+		};
+	};
+	create_inventory_allocation: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['InventoryAllocationInput'];
+			};
+		};
+		responses: {
+			201: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['InventoryAllocation'];
+				};
+			};
+			409: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	consume_inventory_allocation: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['InventoryAllocation'];
+				};
+			};
+			409: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	release_inventory_allocation: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['InventoryAllocation'];
+				};
+			};
+			409: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	list_inventory_items: {
+		parameters: {
+			query?: {
+				/** @description SKU or name contains. */
+				q?: string;
+				/** @description Only items at or under a reorder point. */
+				low?: boolean;
+				/** @description Only items with stock at this location. */
+				locationId?: string;
+			};
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['InventoryItem'][];
+				};
+			};
+		};
+	};
+	create_inventory_item: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['CreateItemRequest'];
+			};
+		};
+		responses: {
+			201: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['InventoryItem'];
+				};
+			};
+			409: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	get_inventory_item: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ItemDetail'];
+				};
+			};
+		};
+	};
+	update_inventory_item: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['UpdateItemRequest'];
+			};
+		};
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['InventoryItem'];
+				};
+			};
+		};
+	};
+	delete_inventory_item: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			204: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content?: never;
+			};
+			409: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	set_inventory_reorder: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+				location: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['InventoryReorderInput'];
+			};
+		};
+		responses: {
+			204: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content?: never;
+			};
+		};
+	};
+	clear_inventory_reorder: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+				location: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			204: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content?: never;
+			};
+		};
+	};
+	list_inventory_locations: {
+		parameters: {
+			query?: {
+				/** @description Include locations that are turned off. */
+				all?: boolean;
+			};
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['InventoryLocation'][];
+				};
+			};
+		};
+	};
+	create_inventory_location: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['CreateLocationRequest'];
+			};
+		};
+		responses: {
+			201: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['InventoryLocation'];
+				};
+			};
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	update_inventory_location: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['InventoryLocationInput'];
+			};
+		};
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['InventoryLocation'];
+				};
+			};
+		};
+	};
+	delete_inventory_location: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			204: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content?: never;
+			};
+			409: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	list_inventory_movements: {
+		parameters: {
+			query?: {
+				itemId?: string;
+				locationId?: string;
+				/** @description `ticket` or `project`, with `refId`. */
+				refType?: string;
+				refId?: string;
+				/** @description At most this many, newest first (default 100, at most 500). */
+				limit?: number;
+			};
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['InventoryMovement'][];
+				};
+			};
+		};
+	};
+	create_inventory_movement: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['InventoryMovementInput'];
+			};
+		};
+		responses: {
+			201: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['InventoryMovement'];
+				};
+			};
+			409: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	list_inventory_units: {
+		parameters: {
+			query?: {
+				itemId?: string;
+				/** @description Serial number contains. */
+				serial?: string;
+				/** @description Only units in stock (or allocated). */
+				inStock?: boolean;
+			};
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['InventoryUnit'][];
 				};
 			};
 		};

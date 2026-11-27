@@ -80,6 +80,12 @@ export const SETTINGS_SECTIONS = [
 		module: 'sales'
 	},
 	{
+		key: 'inventory',
+		label: 'Inventory',
+		permission: 'inventory:configure',
+		module: 'inventory'
+	},
+	{
 		key: 'mailboxes',
 		label: 'Mailboxes',
 		permission: 'servicedesk:configure',

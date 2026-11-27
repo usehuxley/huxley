@@ -2,6 +2,7 @@
 	import { enhance } from '$app/forms';
 	import { resolve } from '$app/paths';
 	import { Badge, Button, Card, Field, Input, Select } from '@usehuxley/ui';
+	import PartsCard from '#lib/inventory/PartsCard.svelte';
 	import { BILLING, HEALTH, STATUSES, label } from '#lib/projects/labels.ts';
 	import Board from '#lib/projects/Board.svelte';
 	import MonthCalendar from '#lib/projects/MonthCalendar.svelte';
@@ -138,6 +139,9 @@
 			</ul>
 		</Card>
 	</div>
+	{#if data.parts}
+		<PartsCard parts={data.parts} />
+	{/if}
 
 	<nav class="flex gap-1 border-b border-border" aria-label="Views">
 		{#each [['list', 'List'], ['board', 'Board'], ['timeline', 'Timeline'], ['calendar', 'Calendar']] as [key, name] (key)}

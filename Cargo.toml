@@ -53,6 +53,7 @@ huxley-cmdb = { path = "crates/huxley-cmdb" }
 huxley-analytics = { path = "crates/huxley-analytics" }
 huxley-contracts = { path = "crates/huxley-contracts" }
 huxley-sales = { path = "crates/huxley-sales" }
+huxley-inventory = { path = "crates/huxley-inventory" }
 huxley-cx = { path = "crates/huxley-cx" }
 huxley-portal = { path = "crates/huxley-portal" }
 huxley-orgs = { path = "crates/huxley-orgs" }
