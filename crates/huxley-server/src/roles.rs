@@ -73,6 +73,11 @@ fn spawn_scheduler(
         run_audit_sealer(seal_db, seal_stop).await;
         Ok(())
     });
+    let (ship_engine, ship_stop) = (engine.clone(), shutdown.clone());
+    tasks.spawn(async move {
+        huxley_engine::audit_stream::run_shipper(ship_engine, ship_stop).await;
+        Ok(())
+    });
     let (retention_engine, retention_stop) = (engine.clone(), shutdown.clone());
     tasks.spawn(async move {
         huxley_engine::retention::run_sweeper(retention_engine, retention_stop).await;
@@ -115,7 +120,7 @@ async fn run_audit_sealer(db: huxley_db::sqlx::PgPool, shutdown: CancellationTok
         }
         let sealed = async {
             let mut conn = db.acquire().await?;
-            huxley_db::audit::seal(&mut conn).await
+            huxley_db::audit::seal_if_free(&mut conn).await
         }
         .await;
         if let Err(e) = sealed {

@@ -100,13 +100,24 @@ const VERIFY_BATCH: i64 = 1000;
 /// (seq, `prev_hash`, hash, recomputed hash)
 type ChainRow = (i64, Vec<u8>, Vec<u8>, Vec<u8>);
 
-/// Seals committed audit records into the hash chain (ADR-086): oldest
-/// first, until none are left or another sealer holds the chain. Returns how
-/// many it sealed.
+/// Seals committed audit records into the hash chain (ADR-086), oldest
+/// first, waiting for a sealer that's already running: what committed
+/// before the call is sealed when it returns. Returns how many it sealed.
 pub async fn seal(conn: &mut PgConnection) -> Result<u64, DbError> {
+    seal_with(conn, true).await
+}
+
+/// Like [`seal`], but returns straight away when another sealer is running
+/// (for the background sealer).
+pub async fn seal_if_free(conn: &mut PgConnection) -> Result<u64, DbError> {
+    seal_with(conn, false).await
+}
+
+async fn seal_with(conn: &mut PgConnection, wait: bool) -> Result<u64, DbError> {
     let mut total = 0u64;
     loop {
-        let n: i32 = sqlx::query_scalar("SELECT huxley_audit_seal(1000)")
+        let n: i32 = sqlx::query_scalar("SELECT huxley_audit_seal(1000, $1)")
+            .bind(wait)
             .fetch_one(&mut *conn)
             .await?;
         total += u64::try_from(n).unwrap_or(0);

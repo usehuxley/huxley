@@ -5463,6 +5463,58 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
+	'/api/v1/platform/audit-streams': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get: operations['list_audit_streams'];
+		put?: never;
+		post: operations['create_audit_stream'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/platform/audit-streams/{id}': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put: operations['update_audit_stream'];
+		post?: never;
+		delete: operations['delete_audit_stream'];
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/platform/audit-streams/{id}/test': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/**
+		 * Sends a test event (not part of the audit log) to the stream's
+		 *     destination.
+		 */
+		post: operations['test_audit_stream'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
 	'/api/v1/platform/retention': {
 		parameters: {
 			query?: never;
@@ -10707,6 +10759,36 @@ export interface components {
 		AuditPage: {
 			items: components['schemas']['AuditEventView'][];
 			nextCursor?: string | null;
+		};
+		/** @description A stream as it's shown: never its secret. */
+		AuditStream: {
+			/**
+			 * Format: int64
+			 * @description Sealed records not shipped yet.
+			 */
+			behind: number;
+			enabled: boolean;
+			/**
+			 * Format: int32
+			 * @description Failed attempts in a row.
+			 */
+			failures: number;
+			/** @description Whether a token or header value is set. */
+			hasSecret: boolean;
+			headerName?: string | null;
+			/** Format: uuid */
+			id: string;
+			kind: components['schemas']['StreamKind'];
+			lastError?: string | null;
+			/**
+			 * Format: int64
+			 * @description The last record shipped.
+			 */
+			lastSeq: number;
+			/** Format: date-time */
+			lastShippedAt?: string | null;
+			name: string;
+			url: string;
 		};
 		AuthKind:
 			| {
@@ -17513,6 +17595,32 @@ export interface components {
 		};
 		/** @enum {string} */
 		StepStatus: 'running' | 'waiting' | 'succeeded' | 'failed' | 'skipped' | 'cancelled';
+		/** @description A new stream, or changes to one. */
+		StreamInput: {
+			enabled?: boolean;
+			/**
+			 * @description New streams only: ship the whole audit log, not just what's recorded
+			 *     from now on.
+			 */
+			fromStart?: boolean;
+			/** @description Webhook only: the header the secret goes in (default Authorization). */
+			headerName?: string | null;
+			kind: components['schemas']['StreamKind'];
+			name: string;
+			/**
+			 * @description The token (Splunk) or header value (webhook). Left out when
+			 *     changing a stream, the current one stays.
+			 */
+			secret?: string | null;
+			url: string;
+		};
+		/** @enum {string} */
+		StreamKind: 'webhook' | 'splunk_hec';
+		/** @description How a test event went. */
+		StreamTest: {
+			error?: string | null;
+			ok: boolean;
+		};
 		Structure: {
 			milestones?: components['schemas']['TemplateMilestone'][];
 			phases?: components['schemas']['TemplatePhase'][];
@@ -30099,6 +30207,113 @@ export interface operations {
 				};
 				content: {
 					'application/json': components['schemas']['Permission'][];
+				};
+			};
+		};
+	};
+	list_audit_streams: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['AuditStream'][];
+				};
+			};
+		};
+	};
+	create_audit_stream: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['StreamInput'];
+			};
+		};
+		responses: {
+			201: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['AuditStream'];
+				};
+			};
+		};
+	};
+	update_audit_stream: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['StreamInput'];
+			};
+		};
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['AuditStream'];
+				};
+			};
+		};
+	};
+	delete_audit_stream: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			204: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content?: never;
+			};
+		};
+	};
+	test_audit_stream: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['StreamTest'];
 				};
 			};
 		};

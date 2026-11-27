@@ -223,9 +223,7 @@ impl Crypto {
     /// (the org itself, or its nearest provider ancestor).
     ///
     /// The org's first data key is created (and audited) in a transaction of
-    /// its own. Call this before the caller's transaction writes audit
-    /// records: that transaction holds the audit chain's head until it
-    /// commits, and the key creation would wait for it.
+    /// its own.
     pub async fn encrypt(
         &self,
         org_id: Uuid,
