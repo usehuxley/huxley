@@ -393,6 +393,64 @@ impl Engine {
         Ok(json!({ "written": written }))
     }
 
+    /// `core.scope.estimate_context`: what estimating a scope reads.
+    pub(crate) async fn scope_estimate_context(
+        &self,
+        org_id: Uuid,
+        input: &Json,
+    ) -> Result<Json, Json> {
+        let scope = self.scope_in(org_id, input).await?;
+        let mut tx = begin_scoped(self.db(), &OrgScope::System)
+            .await
+            .map_err(internal)?;
+        let context = huxley_sales::estimate::context(&mut tx, scope)
+            .await
+            .map_err(internal)?;
+        tx.commit().await.map_err(internal)?;
+        Ok(json!(context))
+    }
+
+    /// `core.scope.write_estimate`: keeps a drafted WBS and BOM (or that it failed).
+    pub(crate) async fn scope_write_estimate(
+        &self,
+        org_id: Uuid,
+        input: &Json,
+    ) -> Result<Json, Json> {
+        let scope = self.scope_in(org_id, input).await?;
+        let mut tx = begin_scoped(self.db(), &OrgScope::System)
+            .await
+            .map_err(internal)?;
+        if let Some(why) = input["error"].as_str().filter(|e| !e.trim().is_empty()) {
+            huxley_sales::estimate::failed(&mut tx, scope, why)
+                .await
+                .map_err(internal)?;
+            tx.commit().await.map_err(internal)?;
+            return Ok(json!({ "written": false }));
+        }
+        let list = |k: &str| {
+            input
+                .get(k)
+                .and_then(Json::as_array)
+                .cloned()
+                .unwrap_or_default()
+        };
+        let draft: huxley_sales::estimate::Draft = serde_json::from_value(json!({
+            "tasks": list("tasks"), "items": list("items"), "risk": input["risk"].as_str(),
+        }))
+        .map_err(|e| error("input", format!("the estimate isn't readable: {e}")))?;
+        let ctx = RequestContext::system(Via::Workflow);
+        let estimate = huxley_sales::estimate::write(&mut tx, &ctx, scope, &draft)
+            .await
+            .map_err(|e| match e {
+                huxley_sales::SalesError::Invalid { field, message } => {
+                    error("input", format!("{field}: {message}"))
+                }
+                other => internal(other),
+            })?;
+        tx.commit().await.map_err(internal)?;
+        Ok(json!(estimate))
+    }
+
     /// `core.sales.log_email`: logs a sales mailbox's email on the contacts
     /// and leads it's to or from.
     pub(crate) async fn sales_log_email(&self, org_id: Uuid, input: &Json) -> Result<Json, Json> {

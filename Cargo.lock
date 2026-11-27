@@ -2299,6 +2299,7 @@ dependencies = [
  "huxley-auth",
  "huxley-authz",
  "huxley-cmdb",
+ "huxley-contracts",
  "huxley-core",
  "huxley-crm",
  "huxley-crypto",

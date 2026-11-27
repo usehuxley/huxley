@@ -34,6 +34,23 @@ An opportunity's **Open scoping** opens a workspace where the work is scoped bef
 4. **Edit** any section. It's yours from then on.
 5. **Approve** keeps the scope as a numbered version. A quote on the opportunity can **carry** an approved version (on the quote page). The client then sees it in the portal, signs it with the quote (it's part of what's agreed to), and it appears in the quote's PDF.
 
+### Estimate and quote
+
+Below the Scope of Work, the **Estimate** turns it into effort and things to buy (ADR-073):
+
+- **Work breakdown:** phases and tasks. Each task has a **role**: a catalog service priced per hour, such as *Engineer* at its hourly price. It also has **low, likely and high** hours, and the Scope of Work deliverable it serves. A task's expected hours are (low + 4 × likely + high) ÷ 6.
+- **Bill of materials:** catalog products with quantities, and how each quantity was arrived at (for example "one per user, 30 users"). An **alternate** becomes an option on the quote.
+- **Risk** (low, medium or high) adds 10, 20 or 35% contingency to the hours.
+- **Estimate with AI** drafts both with the Presales scoping pack. The work breakdown comes from the Scope of Work, grounded in your project templates and the hours actually logged on past projects' tasks. The materials are sized from the client's environment and matched to your catalog. Rows you edited are kept.
+- **Build the quote** makes a draft quote on the opportunity. It has labour lines per role (the hours with contingency, rounded up to the half hour, at the role's price), then the materials, and it carries the latest approved Scope of Work.
+
+Before building, the estimate lists what to settle:
+
+- an unapproved scope, or open questions;
+- tasks without a priced role, or roles without an hourly price;
+- materials not matched to the catalog;
+- deliverables no task serves.
+
 ## Quotes
 
 **Business → Quotes**, or **New quote** on an opportunity, starts one. The quote page is the builder:

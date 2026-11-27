@@ -413,6 +413,8 @@ impl<'a> Walker<'a> {
             | Step::SalesLogEmail(_)
             | Step::ScopeContext(_)
             | Step::ScopeWrite(_)
+            | Step::ScopeEstimateContext(_)
+            | Step::ScopeWriteEstimate(_)
             | Step::CalendarSync(_)
             | Step::CalendarWrite(_)
             | Step::ProjectStatus(_)
@@ -889,6 +891,8 @@ fn with_block(step: &Step) -> Json {
         Step::SalesLogEmail(s) => serde_json::to_value(&s.log),
         Step::ScopeContext(s) => serde_json::to_value(&s.scope),
         Step::ScopeWrite(s) => serde_json::to_value(&s.write),
+        Step::ScopeEstimateContext(s) => serde_json::to_value(&s.scope),
+        Step::ScopeWriteEstimate(s) => serde_json::to_value(&s.write),
         Step::CalendarSync(s) => serde_json::to_value(&s.sync),
         Step::CalendarWrite(s) => serde_json::to_value(&s.write),
         Step::ProjectStatus(s) => serde_json::to_value(&s.status),

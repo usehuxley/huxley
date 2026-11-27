@@ -5,6 +5,7 @@
 	import { onDestroy } from 'svelte';
 	import { Check, FileText, Sparkles, Trash2 } from '@lucide/svelte';
 	import { Badge, Button, Card, EmptyState, Field, Input, Select, toast } from '@usehuxley/ui';
+	import EstimatePanel from '#lib/sales/EstimatePanel.svelte';
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
@@ -14,7 +15,7 @@
 		Object.fromEntries((template?.sections ?? []).map((x) => [x.key, x.guidance]))
 	);
 	let open = $derived(s?.questions.filter((q) => !q.resolvedAt) ?? []);
-	let waiting = $derived(s?.draftState === 'requested');
+	let waiting = $derived(s?.draftState === 'requested' || data.estimate?.state === 'requested');
 
 	// While a draft is on its way, look again every few seconds.
 	let timer: ReturnType<typeof setInterval> | undefined;
@@ -323,6 +324,14 @@
 						</form>
 					</Card>
 				{/each}
+				{#if data.estimate}
+					<EstimatePanel
+						estimate={data.estimate}
+						roles={data.roles}
+						products={data.products}
+						canWrite={data.canWrite}
+					/>
+				{/if}
 			</div>
 		</div>
 	{/if}

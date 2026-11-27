@@ -176,4 +176,91 @@ test.describe('presales scoping', () => {
 			await api.dispose();
 		}
 	});
+
+	test('an estimate builds the quote: labour by role, then materials', async ({ page }) => {
+		const stamp = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+		const api = await request.newContext({
+			baseURL: apiUrl,
+			extraHTTPHeaders: { 'x-requested-with': 'huxley' }
+		});
+		try {
+			await api.post('/api/v1/auth/login', {
+				data: { email: ownerEmail, password: ownerPassword }
+			});
+			for (const module of ['crm', 'contracts', 'sales']) {
+				await api.put(`/api/v1/modules/${module}`, { data: { enabled: true } });
+			}
+			const orgs = await ok<{ id: string; parentId: string | null }[]>(api.get('/api/v1/orgs'));
+			const root = orgs.find((o) => o.parentId === null)!.id;
+			const product = (body: object) =>
+				ok<{ id: string }>(
+					api.post('/api/v1/catalog/products', { data: { orgId: root, product: body } }),
+					201
+				);
+			const engineer = await product({
+				sku: `ENG-${stamp}`,
+				name: `Engineer ${stamp}`,
+				kind: 'service',
+				unit: 'hour',
+				price: '160'
+			});
+			const ap = await product({
+				sku: `AP-${stamp}`,
+				name: `Access point ${stamp}`,
+				kind: 'product',
+				price: '240'
+			});
+			const client = await ok<{ id: string }>(
+				api.post('/api/v1/orgs', {
+					data: { parentId: root, kind: 'client', name: `Wifi ${stamp}` }
+				})
+			);
+			const opp = await ok<{ id: string }>(
+				api.post('/api/v1/opportunities', {
+					data: { orgId: client.id, opportunity: { name: `Wi-Fi upgrade ${stamp}` } }
+				})
+			);
+			const scope = await ok<{ id: string }>(
+				api.post(`/api/v1/opportunities/${opp.id}/scope`, { data: { template: 'project' } })
+			);
+			await ok(
+				api.put(`/api/v1/scopes/${scope.id}/estimate/tasks`, {
+					data: [
+						{
+							phase: 'Install',
+							name: 'Mount access points',
+							roleProductId: engineer.id,
+							hoursLow: '4',
+							hoursLikely: '5',
+							hoursHigh: '6'
+						}
+					]
+				})
+			);
+			await ok(
+				api.put(`/api/v1/scopes/${scope.id}/estimate/items`, {
+					data: [
+						{ productId: ap.id, name: 'Access point', quantity: 6, basis: 'one per 500 sq ft' }
+					]
+				})
+			);
+
+			await signIn(page);
+			await page.goto(`/sales/opportunities/${opp.id}/scope`);
+			const totals = page.getByLabel('Estimate totals');
+			// 5 hours, plus 20% (medium risk) = 6 hours at 160.
+			await expect(totals).toContainText('$960');
+			await expect(totals).toContainText('$1,440');
+			await page.getByLabel('Risk').selectOption('high');
+			await expect(totals).toContainText('35%');
+			await page.getByRole('button', { name: 'Build the quote' }).click();
+			await expect(page.getByRole('heading', { level: 1 })).toHaveText(`Wi-Fi upgrade ${stamp}`);
+			const lines = page.getByRole('region', { name: 'Lines' });
+			await expect(lines.getByLabel('Section heading').first()).toHaveValue('Labour');
+			// 5 × 1.35 = 6.75 → 7 hours.
+			await expect(lines.getByLabel('Quantity').first()).toHaveValue('7');
+		} finally {
+			await api.dispose();
+		}
+	});
 });

@@ -7,6 +7,8 @@ use axum::extract::{Path, State};
 use axum::routing::{delete, get, post, put};
 use axum::{Json, Router};
 use huxley_authz::permissions;
+use huxley_db::OrgScope;
+use huxley_sales::estimate::{self, Assembled, Estimate, ItemInput, Risk, TaskInput};
 use huxley_sales::opportunities;
 use huxley_sales::scoping::{self, Scope, ScopeOfWork, SourceInput, Template};
 use serde::Deserialize;
@@ -37,6 +39,16 @@ pub fn routes() -> Router<AppState> {
         )
         .route("/scopes/{id}/approve", post(approve_scope))
         .route("/scope-versions/{id}", get(get_version))
+        .route(
+            "/scopes/{id}/estimate",
+            get(get_estimate)
+                .post(request_estimate)
+                .delete(cancel_estimate),
+        )
+        .route("/scopes/{id}/estimate/tasks", put(set_tasks))
+        .route("/scopes/{id}/estimate/items", put(set_items))
+        .route("/scopes/{id}/estimate/risk", put(set_risk))
+        .route("/scopes/{id}/quote", post(assemble_quote))
 }
 
 async fn at_scope(
@@ -311,6 +323,141 @@ pub async fn get_version(
     Ok(Json(
         scoped(&state, &scope, async |tx| {
             scoping::version_of(tx, id, None).await
+        })
+        .await?,
+    ))
+}
+
+// ---- the estimate ----
+
+/// The scope's WBS and BOM, with totals, contingency and checks.
+#[utoipa::path(get, path = "/api/v1/scopes/{id}/estimate", operation_id = "get_scope_estimate", tag = "sales",
+    params(("id" = Uuid, Path)), responses((status = 200, body = Estimate)))]
+pub async fn get_estimate(
+    State(state): State<AppState>,
+    authed: Authed,
+    Path(id): Path<Uuid>,
+) -> ApiResult<Json<Estimate>> {
+    at_scope(&state, &authed, id, permissions::SALES_READ).await?;
+    // Rates and products are the providers' catalog's.
+    Ok(Json(
+        scoped(&state, &OrgScope::System, async |tx| {
+            estimate::get(tx, id).await
+        })
+        .await?,
+    ))
+}
+
+/// Replaces the Work Breakdown Structure.
+#[utoipa::path(put, path = "/api/v1/scopes/{id}/estimate/tasks", operation_id = "set_scope_tasks", tag = "sales",
+    params(("id" = Uuid, Path)), request_body = Vec<TaskInput>, responses((status = 200, body = Estimate)))]
+pub async fn set_tasks(
+    State(state): State<AppState>,
+    authed: Authed,
+    Path(id): Path<Uuid>,
+    Json(body): Json<Vec<TaskInput>>,
+) -> ApiResult<Json<Estimate>> {
+    at_scope(&state, &authed, id, permissions::SALES_WRITE).await?;
+    let ctx = authed.user.ctx.clone();
+    Ok(Json(
+        scoped(&state, &OrgScope::System, async |tx| {
+            estimate::set_tasks(tx, &ctx, id, &body).await
+        })
+        .await?,
+    ))
+}
+
+/// Replaces the Bill of Materials.
+#[utoipa::path(put, path = "/api/v1/scopes/{id}/estimate/items", operation_id = "set_scope_items", tag = "sales",
+    params(("id" = Uuid, Path)), request_body = Vec<ItemInput>, responses((status = 200, body = Estimate)))]
+pub async fn set_items(
+    State(state): State<AppState>,
+    authed: Authed,
+    Path(id): Path<Uuid>,
+    Json(body): Json<Vec<ItemInput>>,
+) -> ApiResult<Json<Estimate>> {
+    at_scope(&state, &authed, id, permissions::SALES_WRITE).await?;
+    let ctx = authed.user.ctx.clone();
+    Ok(Json(
+        scoped(&state, &OrgScope::System, async |tx| {
+            estimate::set_items(tx, &ctx, id, &body).await
+        })
+        .await?,
+    ))
+}
+
+#[derive(Debug, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct RiskBody {
+    pub risk: Risk,
+}
+
+/// Sets how risky the work is: the contingency follows (10, 20 or 35%).
+#[utoipa::path(put, path = "/api/v1/scopes/{id}/estimate/risk", operation_id = "set_scope_risk", tag = "sales",
+    params(("id" = Uuid, Path)), request_body = RiskBody, responses((status = 200, body = Estimate)))]
+pub async fn set_risk(
+    State(state): State<AppState>,
+    authed: Authed,
+    Path(id): Path<Uuid>,
+    Json(body): Json<RiskBody>,
+) -> ApiResult<Json<Estimate>> {
+    at_scope(&state, &authed, id, permissions::SALES_WRITE).await?;
+    Ok(Json(
+        scoped(&state, &OrgScope::System, async |tx| {
+            estimate::set_risk(tx, id, body.risk).await
+        })
+        .await?,
+    ))
+}
+
+/// Asks for an AI estimate (the Presales scoping pack drafts it).
+#[utoipa::path(post, path = "/api/v1/scopes/{id}/estimate", operation_id = "request_scope_estimate", tag = "sales",
+    params(("id" = Uuid, Path)), responses((status = 200, body = Estimate)))]
+pub async fn request_estimate(
+    State(state): State<AppState>,
+    authed: Authed,
+    Path(id): Path<Uuid>,
+) -> ApiResult<Json<Estimate>> {
+    at_scope(&state, &authed, id, permissions::SALES_WRITE).await?;
+    let ctx = authed.user.ctx.clone();
+    Ok(Json(
+        scoped(&state, &OrgScope::System, async |tx| {
+            estimate::request(tx, &ctx, id).await
+        })
+        .await?,
+    ))
+}
+
+#[utoipa::path(delete, path = "/api/v1/scopes/{id}/estimate", operation_id = "cancel_scope_estimate", tag = "sales",
+    params(("id" = Uuid, Path)), responses((status = 200, body = Estimate)))]
+pub async fn cancel_estimate(
+    State(state): State<AppState>,
+    authed: Authed,
+    Path(id): Path<Uuid>,
+) -> ApiResult<Json<Estimate>> {
+    at_scope(&state, &authed, id, permissions::SALES_WRITE).await?;
+    Ok(Json(
+        scoped(&state, &OrgScope::System, async |tx| {
+            estimate::cancel(tx, id).await
+        })
+        .await?,
+    ))
+}
+
+/// Builds a draft quote on the opportunity from the estimate, carrying the
+/// latest approved Scope of Work; says what to check.
+#[utoipa::path(post, path = "/api/v1/scopes/{id}/quote", operation_id = "assemble_scope_quote", tag = "sales",
+    params(("id" = Uuid, Path)), responses((status = 200, body = Assembled)))]
+pub async fn assemble_quote(
+    State(state): State<AppState>,
+    authed: Authed,
+    Path(id): Path<Uuid>,
+) -> ApiResult<Json<Assembled>> {
+    at_scope(&state, &authed, id, permissions::SALES_WRITE).await?;
+    let ctx = authed.user.ctx.clone();
+    Ok(Json(
+        scoped(&state, &OrgScope::System, async |tx| {
+            estimate::assemble(tx, &ctx, id).await
         })
         .await?,
     ))
