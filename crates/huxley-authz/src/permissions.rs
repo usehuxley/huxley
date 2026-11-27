@@ -110,6 +110,9 @@ permissions! {
     INVENTORY_READ = "inventory:read", Org, "View stock, locations, serial numbers and movements";
     INVENTORY_WRITE = "inventory:write", Org, "Receive, move, adjust and return stock, and allocate parts to tickets and projects";
     INVENTORY_CONFIGURE = "inventory:configure", Org, "Keep locations (warehouses, bins, vehicles), which products are stocked, and reorder points";
+    PROCUREMENT_READ = "procurement:read", Org, "View vendors and purchase orders";
+    PROCUREMENT_WRITE = "procurement:write", Org, "Keep vendors, draft and submit purchase orders, mark them ordered, and receive deliveries";
+    PROCUREMENT_APPROVE = "procurement:approve", Org, "Approve or send back purchase orders over the approval threshold, and set the threshold";
 }
 
 /// Wildcard granting every permission.

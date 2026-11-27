@@ -141,6 +141,7 @@
 							...item(on('projects') && can('project:read'), '/projects', 'Projects'),
 							...item(on('contracts') && can('catalog:read'), '/catalog', 'Catalog'),
 							...item(on('inventory') && can('inventory:read'), '/inventory', 'Inventory'),
+							...item(on('inventory') && can('procurement:read'), '/purchasing', 'Purchasing'),
 							...item(can('dashboard:read'), '/dashboards', 'Dashboards'),
 							...item(on('workforce') && can('workforce:read'), '/people', 'People'),
 							...item(

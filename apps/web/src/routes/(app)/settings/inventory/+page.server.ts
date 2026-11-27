@@ -16,7 +16,21 @@ export const load: PageServerLoad = async (event) => {
 	]);
 	if (locations.response.status === 404) error(404, 'Inventory is turned off.');
 	if (!locations.data) error(503, 'Could not load locations.');
+	const providers = (orgs.data ?? []).filter((o) => o.kind === 'provider');
+	const { user } = await event.parent();
+	const canApprove = user.grantedPermissions.includes('procurement:approve');
+	const thresholds = canApprove
+		? await Promise.all(
+				providers.map(async (o) => {
+					const { data } = await client.GET('/api/v1/purchase-orders/settings', {
+						params: { query: { orgId: o.id } }
+					});
+					return { orgId: o.id, name: o.name, approvalAbove: data?.approvalAbove ?? '' };
+				})
+			)
+		: [];
 	return {
+		thresholds,
 		locations: locations.data,
 		providers: (orgs.data ?? [])
 			.filter((o) => o.kind === 'provider')
@@ -66,5 +80,18 @@ export const actions: Actions = {
 		);
 		if (!response.ok) return failed(response.status, problem, 'Could not remove it.');
 		return { removed: true };
+	},
+	threshold: async (event) => {
+		const form = await event.request.formData();
+		const orgId = formString(form, 'orgId');
+		const {
+			data,
+			error: problem,
+			response
+		} = await api(event).PUT('/api/v1/purchase-orders/settings', {
+			body: { orgId, approvalAbove: formString(form, 'approvalAbove').trim() || null }
+		});
+		if (!data) return failed(response.status, problem, 'Could not save the threshold.');
+		return { saved: 'threshold' };
 	}
 };

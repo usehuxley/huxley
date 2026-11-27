@@ -471,6 +471,16 @@ pub async fn movement(
     ctx: &RequestContext,
     input: &MovementInput,
 ) -> InventoryResult<Movement> {
+    movement_for(conn, ctx, input, None).await
+}
+
+/// [`movement`], recording what it came from (e.g. `("purchase_order", id)`).
+pub async fn movement_for(
+    conn: &mut PgConnection,
+    ctx: &RequestContext,
+    input: &MovementInput,
+    source: Option<(&str, Uuid)>,
+) -> InventoryResult<Movement> {
     use MovementKind::{Adjust, Allocate, Consume, Receive, Release, Return, Rma, Transfer};
     let item = items::get(&mut *conn, input.item_id).await?;
     let at = input.location_id;
@@ -525,7 +535,7 @@ pub async fn movement(
             None
         },
         allocation: None,
-        reference: (None, None),
+        reference: (source.map(|s| s.0), source.map(|s| s.1)),
         label: reference.as_deref(),
         note: note.as_deref(),
     };

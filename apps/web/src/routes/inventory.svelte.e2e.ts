@@ -119,4 +119,90 @@ test.describe('inventory', () => {
 		await expect(page.getByText('Running low')).toBeVisible();
 		await expect(page.getByRole('list', { name: 'Movements' })).toContainText('Used');
 	});
+
+	test('a purchase order is drafted, ordered and received into stock', async ({ page }) => {
+		const stamp = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+		const api = await request.newContext({
+			baseURL: apiUrl,
+			extraHTTPHeaders: { 'x-requested-with': 'huxley' }
+		});
+		const json = async <T>(res: Promise<APIResponse>) => {
+			const r = await res;
+			expect(r.ok(), await r.text()).toBeTruthy();
+			return (await r.json()) as T;
+		};
+		await api.post('/api/v1/auth/login', { data: { email: ownerEmail, password: ownerPassword } });
+		for (const module of ['contracts', 'inventory']) {
+			await json(api.put(`/api/v1/modules/${module}`, { data: { enabled: true } }));
+		}
+		const orgs = await json<{ id: string; parentId: string | null }[]>(api.get('/api/v1/orgs'));
+		const root = orgs.find((o) => o.parentId === null)!.id;
+		const product = await json<{ id: string }>(
+			api.post('/api/v1/catalog/products', {
+				data: {
+					orgId: root,
+					product: { sku: `DOCK-${stamp}`, name: `Dock ${stamp}`, kind: 'product', cost: '90' }
+				}
+			})
+		);
+		const item = await json<{ id: string }>(
+			api.post('/api/v1/inventory/items', {
+				data: { orgId: root, item: { productId: product.id } }
+			})
+		);
+		await json(
+			api.post('/api/v1/inventory/locations', {
+				data: { orgId: root, location: { name: `Stores ${stamp}`, kind: 'warehouse' } }
+			})
+		);
+		await api.dispose();
+
+		await signIn(page);
+		await openFromMenu(page, 'Purchasing');
+		await expect(page.getByRole('heading', { level: 1 })).toHaveText('Purchasing');
+		await page.getByRole('link', { name: 'Vendors' }).click();
+		await page.getByRole('button', { name: 'New vendor' }).click();
+		const vendor = page.getByRole('dialog', { name: 'New vendor' });
+		await vendor.getByLabel('Name').fill(`Ingram ${stamp}`);
+		await vendor.getByRole('button', { name: 'Save' }).click();
+		await expect(page.getByRole('list', { name: 'Vendors' })).toContainText(`Ingram ${stamp}`);
+
+		await page.getByRole('link', { name: '← Purchasing' }).click();
+		await page.getByRole('button', { name: 'New order' }).click();
+		const start = page.getByRole('dialog', { name: 'New purchase order' });
+		await start.getByLabel('Vendor').selectOption({ label: `Ingram ${stamp}` });
+		await start.getByRole('button', { name: 'Start the order' }).click();
+		await expect(page.getByRole('heading', { level: 1 })).toHaveText(`Ingram ${stamp}`);
+
+		await page
+			.getByLabel('Add a stocked item')
+			.selectOption({ label: `Dock ${stamp} · DOCK-${stamp}` });
+		await page.getByLabel('Quantity').first().fill('5');
+		await page.getByLabel('Deliver to').selectOption({ label: `Stores ${stamp}` });
+		await page.getByRole('button', { name: 'Save' }).click();
+		await expect(page.getByText('Unsaved changes')).toBeHidden();
+		// The catalog cost filled in: 5 × $90.
+		await expect(page.getByRole('region', { name: 'Lines' })).toContainText('$450.00');
+
+		await page.getByRole('button', { name: 'Submit' }).click();
+		await expect(page.getByText('Approved', { exact: true })).toBeVisible();
+		await page.getByRole('button', { name: 'Mark ordered' }).click();
+		const order = page.getByRole('dialog', { name: 'Mark ordered' });
+		await order.getByLabel('Their order reference').fill(`SO-${stamp}`);
+		await order.getByRole('button', { name: 'Mark ordered' }).click();
+		await expect(page.getByText('Ordered', { exact: true })).toBeVisible();
+
+		await page.getByRole('button', { name: 'Receive' }).click();
+		const receive = page.getByRole('dialog', { name: 'Receive a delivery' });
+		await receive.getByLabel('Quantity arrived').fill('5');
+		await receive.getByRole('button', { name: 'Receive' }).click();
+		await expect(page.getByText('Received', { exact: true })).toBeVisible();
+		await expect(page.getByRole('list', { name: 'Deliveries' })).toContainText(`5 × Dock ${stamp}`);
+
+		await page.goto(`/inventory/items/${item.id}`);
+		await expect(page.getByRole('table', { name: 'Stock by location' })).toContainText(
+			`Stores ${stamp}`
+		);
+		await expect(page.getByLabel('Totals')).toContainText('5');
+	});
 });

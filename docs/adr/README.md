@@ -71,3 +71,4 @@ Decisions that shape Huxley. Add a new ADR by copying `0000-template.md` with th
 | [065](0065-quote-signing.md) | Clients answer quotes in the portal with a typed name and a drawn signature | Accepted |
 | [066](0066-quote-review.md) | Quotes are reviewed internally by rules, a workflow and a third approval outcome | Accepted |
 | [067](0067-inventory.md) | Inventory is a ledger of movements over stock per item, location and lot | Accepted |
+| [068](0068-purchasing.md) | Purchase orders are approved by a threshold and received through inventory movements | Accepted |

@@ -47,7 +47,7 @@ Used parts record the last cost paid, so job costing and billing can pick them u
 
 ## Reorder points
 
-Set a **reorder point** for an item at a location: when what's available there falls to it, Huxley raises `stock.low`. This happens once per dip; it clears when stock is back above the point. An item that's at or under a reorder point anywhere shows **Low** in the list. The reorder quantity is a suggestion for purchase orders.
+Set a **reorder point** for an item at a location: when what's available there falls to it, Huxley raises `stock.low`. This happens once per dip; it clears when stock is back above the point. An item that's at or under a reorder point anywhere shows **Low** in the list. The reorder quantity is what [Purchasing](purchasing.md#reordering) orders when it drafts reorders.
 
 ## Events
 

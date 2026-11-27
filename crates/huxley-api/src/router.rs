@@ -31,11 +31,12 @@ const HOOK_TIMEOUT: Duration = Duration::from_secs(310);
 const MAX_BODY_BYTES: usize = 2 * 1024 * 1024;
 
 /// Builds the full API router with the standard middleware stack.
-/// The contracts, sales and inventory modules.
+/// The contracts, sales and inventory (and purchasing) modules.
 fn business_routes() -> Router<AppState> {
     crate::agreement_routes::routes()
         .merge(crate::sales_routes::routes())
         .merge(crate::inventory_routes::routes())
+        .merge(crate::purchasing_routes::routes())
 }
 
 pub fn router(state: AppState) -> Router {
