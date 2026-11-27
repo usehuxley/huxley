@@ -59,7 +59,10 @@ test.describe('sales pipeline', () => {
 		await convert.getByLabel('Monthly recurring').fill('2400');
 		await convert.getByLabel('One-time value').fill('5000');
 		await convert.getByRole('button', { name: 'Convert' }).click();
-		await expect(page.getByRole('heading', { level: 1 })).toHaveText(`Managed services ${stamp}`);
+		// Converting goes on to the new opportunity, which can take a moment.
+		await expect(page.getByRole('heading', { level: 1 })).toHaveText(`Managed services ${stamp}`, {
+			timeout: 20_000
+		});
 		await expect(page.getByLabel('Contact')).toHaveText(/Peter Gibbons/);
 
 		// Moving along the stages keeps history.
@@ -383,7 +386,12 @@ test.describe('quotes', () => {
 		await agreement.getByRole('button', { name: 'Make it' }).click();
 		await expect(page.getByText('Fulfilled', { exact: true })).toBeVisible();
 		await expect(page.getByText(`Agreement: Kiosks ${stamp}`)).toBeVisible();
-		await page.getByRole('button', { name: 'Close', exact: true }).click();
+		// The dialog's own close button lingers while it animates away.
+		await expect(agreement).toBeHidden();
+		await page
+			.getByRole('button', { name: 'Close', exact: true })
+			.filter({ hasText: 'Close' })
+			.click();
 		await expect(page.getByText('Closed', { exact: true })).toBeVisible();
 	});
 
