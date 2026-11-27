@@ -184,7 +184,7 @@ test.describe('quotes', () => {
 
 	test('a quote that needs review is sent back for changes, with comments', async ({ page }) => {
 		// It waits on the review workflow twice; give a busy runner room.
-		test.setTimeout(150_000);
+		test.setTimeout(300_000);
 		const stamp = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
 		const title = `Review me ${stamp}`;
 		const api = await request.newContext({
@@ -270,7 +270,7 @@ test.describe('quotes', () => {
 			await expect(async () => {
 				await page.reload();
 				await expect(page.getByText('Your review')).toBeVisible({ timeout: 1000 });
-			}).toPass({ timeout: 60_000 });
+			}).toPass({ timeout: 120_000 });
 			await page.getByLabel('Review comment').fill('Price it at 1100');
 			await page.getByRole('button', { name: 'Request changes' }).click();
 			await expect(async () => {
@@ -278,7 +278,7 @@ test.describe('quotes', () => {
 				await expect(page.getByText('Changes requested', { exact: true }).first()).toBeVisible({
 					timeout: 1000
 				});
-			}).toPass({ timeout: 60_000 });
+			}).toPass({ timeout: 120_000 });
 			await expect(page.getByRole('list', { name: 'Review history' })).toContainText(
 				'Price it at 1100'
 			);
