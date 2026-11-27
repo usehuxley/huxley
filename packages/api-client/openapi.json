@@ -20408,6 +20408,112 @@
 				}
 			}
 		},
+		"/api/v1/security/sso/providers/{id}/scim": {
+			"get": {
+				"tags": ["security"],
+				"operationId": "get_scim",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"description": "Provider id",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ScimSettings"
+								}
+							}
+						}
+					},
+					"404": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			},
+			"delete": {
+				"tags": ["security"],
+				"summary": "Turns SCIM off: the token stops working. Provisioned users and teams stay.",
+				"operationId": "disable_scim",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"description": "Provider id",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"responses": {
+					"204": {},
+					"404": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/security/sso/providers/{id}/scim/token": {
+			"post": {
+				"tags": ["security"],
+				"summary": "Turns SCIM on with a new token, replacing any old one (which stops\nworking). The token is shown once.",
+				"operationId": "new_scim_token",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"description": "Provider id",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ScimToken"
+								}
+							}
+						}
+					},
+					"404": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
 		"/api/v1/service-accounts": {
 			"get": {
 				"tags": ["users"],
@@ -44347,6 +44453,62 @@
 					}
 				},
 				"additionalProperties": false
+			},
+			"ScimSettings": {
+				"allOf": [
+					{
+						"$ref": "#/components/schemas/ScimStatus"
+					},
+					{
+						"type": "object",
+						"properties": {
+							"url": {
+								"type": ["string", "null"],
+								"description": "The SCIM base URL (needs `auth.public_url`)."
+							}
+						}
+					}
+				],
+				"description": "SCIM provisioning for a provider (ADR-088): whether it's on, the base\nURL to give the identity provider, and what it has provisioned."
+			},
+			"ScimStatus": {
+				"type": "object",
+				"description": "SCIM settings for a provider, as shown to admins.",
+				"required": ["enabled", "users", "groups"],
+				"properties": {
+					"enabled": {
+						"type": "boolean"
+					},
+					"groups": {
+						"type": "integer",
+						"format": "int64"
+					},
+					"lastUsedAt": {
+						"type": ["string", "null"],
+						"format": "date-time"
+					},
+					"tokenCreatedAt": {
+						"type": ["string", "null"],
+						"format": "date-time"
+					},
+					"users": {
+						"type": "integer",
+						"format": "int64"
+					}
+				}
+			},
+			"ScimToken": {
+				"type": "object",
+				"description": "A new SCIM token: shown once.",
+				"required": ["token"],
+				"properties": {
+					"token": {
+						"type": "string"
+					},
+					"url": {
+						"type": ["string", "null"]
+					}
+				}
 			},
 			"Scope": {
 				"type": "object",

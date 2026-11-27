@@ -35,6 +35,8 @@ pub fn admin_routes() -> Router<AppState> {
                 .delete(delete_provider),
         )
         .route("/{id}/role-mappings", put(set_role_mappings))
+        .route("/{id}/scim", get(get_scim).delete(disable_scim))
+        .route("/{id}/scim/token", post(new_scim_token))
 }
 
 pub(crate) fn map_sso(error: SsoError) -> ApiError {
@@ -320,6 +322,105 @@ pub async fn set_role_mappings(
     providers::set_role_mappings(&mut tx, &authed.user.ctx, id, &body)
         .await
         .map_err(map_sso)?;
+    tx.commit().await.map_err(db_err)?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+/// SCIM provisioning for a provider (ADR-088): whether it's on, the base
+/// URL to give the identity provider, and what it has provisioned.
+#[derive(Debug, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ScimSettings {
+    #[serde(flatten)]
+    pub status: huxley_sso::scim::ScimStatus,
+    /// The SCIM base URL (needs `auth.public_url`).
+    pub url: Option<String>,
+}
+
+/// A new SCIM token: shown once.
+#[derive(Debug, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ScimToken {
+    pub token: String,
+    pub url: Option<String>,
+}
+
+fn scim_url(state: &AppState) -> Option<String> {
+    state
+        .auth
+        .public_url()
+        .map(|u| format!("{}/scim/v2", u.trim_end_matches('/')))
+}
+
+fn map_scim(e: huxley_sso::scim::ScimError) -> ApiError {
+    match e {
+        huxley_sso::scim::ScimError::NotFound => ApiError::not_found(),
+        other => ApiError::internal(&other),
+    }
+}
+
+#[utoipa::path(get, path = "/api/v1/security/sso/providers/{id}/scim", tag = "security",
+    params(("id" = Uuid, Path, description = "Provider id")),
+    responses((status = 200, body = ScimSettings), (status = 404, body = ApiError, content_type = "application/problem+json")))]
+pub async fn get_scim(
+    State(state): State<AppState>,
+    authed: Authed,
+    Path(id): Path<Uuid>,
+) -> ApiResult<Json<ScimSettings>> {
+    authed.require_instance(permissions::SECURITY_POLICY_MANAGE)?;
+    let mut tx = begin_scoped(&state.db, &OrgScope::System)
+        .await
+        .map_err(db_err)?;
+    let status = huxley_sso::scim::status(&mut tx, id)
+        .await
+        .map_err(map_scim)?;
+    tx.commit().await.map_err(db_err)?;
+    Ok(Json(ScimSettings {
+        status,
+        url: scim_url(&state),
+    }))
+}
+
+/// Turns SCIM on with a new token, replacing any old one (which stops
+/// working). The token is shown once.
+#[utoipa::path(post, path = "/api/v1/security/sso/providers/{id}/scim/token", tag = "security",
+    params(("id" = Uuid, Path, description = "Provider id")),
+    responses((status = 200, body = ScimToken), (status = 404, body = ApiError, content_type = "application/problem+json")))]
+pub async fn new_scim_token(
+    State(state): State<AppState>,
+    authed: Authed,
+    Path(id): Path<Uuid>,
+) -> ApiResult<Json<ScimToken>> {
+    authed.require_instance(permissions::SECURITY_POLICY_MANAGE)?;
+    let mut tx = begin_scoped(&state.db, &OrgScope::System)
+        .await
+        .map_err(db_err)?;
+    let token = huxley_sso::scim::new_token(&mut tx, &authed.user.ctx, id)
+        .await
+        .map_err(map_scim)?;
+    tx.commit().await.map_err(db_err)?;
+    Ok(Json(ScimToken {
+        token,
+        url: scim_url(&state),
+    }))
+}
+
+/// Turns SCIM off: the token stops working. Provisioned users and teams stay.
+#[utoipa::path(delete, path = "/api/v1/security/sso/providers/{id}/scim", tag = "security",
+    params(("id" = Uuid, Path, description = "Provider id")),
+    responses((status = 204), (status = 404, body = ApiError, content_type = "application/problem+json")))]
+pub async fn disable_scim(
+    State(state): State<AppState>,
+    authed: Authed,
+    Path(id): Path<Uuid>,
+) -> ApiResult<StatusCode> {
+    authed.require_instance(permissions::SECURITY_POLICY_MANAGE)?;
+    let mut tx = begin_scoped(&state.db, &OrgScope::System)
+        .await
+        .map_err(db_err)?;
+    huxley_sso::scim::disable(&mut tx, &authed.user.ctx, id)
+        .await
+        .map_err(map_scim)?;
     tx.commit().await.map_err(db_err)?;
     Ok(StatusCode::NO_CONTENT)
 }

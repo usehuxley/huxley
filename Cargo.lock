@@ -2795,6 +2795,7 @@ dependencies = [
  "base64 0.23.1",
  "chrono",
  "huxley-auth",
+ "huxley-authz",
  "huxley-core",
  "huxley-crypto",
  "huxley-db",

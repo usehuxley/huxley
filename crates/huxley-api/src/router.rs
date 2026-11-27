@@ -143,6 +143,8 @@ pub fn router(state: AppState) -> Router {
         .nest("/api/v1", api_v1)
         // The client portal's own API: portal sessions only (ADR-040).
         .nest("/api/portal/v1", portal_api())
+        // SCIM provisioning for identity providers (ADR-088): its own token.
+        .nest("/scim/v2", crate::scim_routes::routes())
         .fallback(not_found)
         .layer(stack);
 

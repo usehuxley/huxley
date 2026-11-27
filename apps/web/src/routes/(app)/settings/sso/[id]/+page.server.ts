@@ -11,10 +11,11 @@ type RoleMapping = components['schemas']['RoleMapping'];
 export const load: PageServerLoad = async (event) => {
 	const client = api(event);
 	const id = event.params.id;
-	const [provider, roles, orgs] = await Promise.all([
+	const [provider, roles, orgs, scim] = await Promise.all([
 		client.GET('/api/v1/security/sso/providers/{id}', { params: { path: { id } } }),
 		client.GET('/api/v1/roles'),
-		client.GET('/api/v1/orgs')
+		client.GET('/api/v1/orgs'),
+		client.GET('/api/v1/security/sso/providers/{id}/scim', { params: { path: { id } } })
 	]);
 	if (provider.response.status === 404) error(404, 'Identity provider not found.');
 	if (!provider.data || !roles.data || !orgs.data) error(503, 'Could not load the provider.');
@@ -22,7 +23,8 @@ export const load: PageServerLoad = async (event) => {
 		provider: provider.data,
 		// Owner is granted by hand only, never from a claim.
 		roles: roles.data.filter((r) => r.key !== 'owner'),
-		orgs: orgs.data.filter((o) => o.status === 'active')
+		orgs: orgs.data.filter((o) => o.status === 'active'),
+		scim: scim.data ?? null
 	};
 };
 
@@ -82,6 +84,29 @@ export const actions: Actions = {
 		const index = Number(formString(form, 'index'));
 		const mappings = (await currentMappings(event)).filter((_, i) => i !== index);
 		return saveMappings(event, mappings, 'Mapping removed.');
+	},
+
+	scimToken: async (event) => {
+		const {
+			data,
+			error: problem,
+			response
+		} = await api(event).POST('/api/v1/security/sso/providers/{id}/scim/token', {
+			params: { path: { id: event.params.id } }
+		});
+		if (!data)
+			return fail(response.status, { message: problemMessage(problem, 'Could not make a token.') });
+		// Shown once, from this response only.
+		return { scimToken: data.token, scimUrl: data.url ?? null };
+	},
+
+	scimDisable: async (event) => {
+		const { response } = await api(event).DELETE('/api/v1/security/sso/providers/{id}/scim', {
+			params: { path: { id: event.params.id } }
+		});
+		if (response.status !== 204)
+			return fail(response.status, { message: 'Could not turn it off.' });
+		return { message: 'Provisioning is off.' };
 	},
 
 	delete: async (event) => {

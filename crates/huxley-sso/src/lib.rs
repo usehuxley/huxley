@@ -17,6 +17,7 @@
 
 mod login;
 pub mod providers;
+pub mod scim;
 
 use huxley_auth::AuthError;
 use huxley_crypto::CryptoError;

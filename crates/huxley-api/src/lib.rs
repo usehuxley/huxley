@@ -74,6 +74,7 @@ mod router;
 mod runner_routes;
 pub mod sales_order_routes;
 pub mod sales_routes;
+pub mod scim_routes;
 pub mod scope_routes;
 mod script_routes;
 pub mod search_routes;

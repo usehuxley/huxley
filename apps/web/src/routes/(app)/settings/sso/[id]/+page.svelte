@@ -114,6 +114,66 @@
 	</Card>
 
 	<Card
+		title="Provisioning (SCIM)"
+		description="Let {data.provider
+			.name} create, update and deactivate people here, and manage the members of teams it syncs as groups. Deactivated or removed people are disabled and signed out; their history stays. Roles are still given to teams here."
+	>
+		{#if data.scim}
+			{@const token = form && 'scimToken' in form ? String(form.scimToken) : null}
+			{@const url = data.scim.url ?? (form && 'scimUrl' in form ? form.scimUrl : null)}
+			<div class="flex flex-col gap-4 text-sm">
+				<dl class="grid gap-x-6 gap-y-2 sm:grid-cols-[max-content_1fr]">
+					<dt class="text-fg-muted">Tenant URL</dt>
+					<dd class="font-mono break-all text-fg" data-testid="scim-url">
+						{url ?? 'Set auth.public_url to show it'}
+					</dd>
+					<dt class="text-fg-muted">Status</dt>
+					<dd class="text-fg" data-testid="scim-status">
+						{#if data.scim.enabled}
+							On · {data.scim.users}
+							{data.scim.users === 1 ? 'person' : 'people'} and {data.scim.groups}
+							{data.scim.groups === 1 ? 'team' : 'teams'} provisioned{data.scim.lastUsedAt
+								? ` · last used ${new Date(data.scim.lastUsedAt).toLocaleString()}`
+								: ' · not used yet'}
+						{:else}
+							Off
+						{/if}
+					</dd>
+				</dl>
+				{#if token}
+					<div class="rounded-md border border-border bg-surface-sunken p-3" role="status">
+						<p class="font-medium text-fg">Copy the secret token now. It isn’t shown again.</p>
+						<p class="mt-2 font-mono break-all text-fg" data-testid="scim-token">{token}</p>
+					</div>
+				{/if}
+				<div class="flex flex-wrap gap-2">
+					<form
+						method="POST"
+						action="?/scimToken"
+						use:enhance={({ cancel }) => {
+							if (
+								data.scim?.enabled &&
+								!confirm('Make a new token? The current one stops working straight away.')
+							)
+								cancel();
+							return async ({ update }) => update({ reset: false });
+						}}
+					>
+						<Button type="submit" variant={data.scim.enabled ? 'secondary' : 'primary'}>
+							{data.scim.enabled ? 'Make a new token' : 'Turn on provisioning'}
+						</Button>
+					</form>
+					{#if data.scim.enabled}
+						<form method="POST" action="?/scimDisable" use:enhance={notify}>
+							<Button type="submit">Turn off</Button>
+						</form>
+					{/if}
+				</div>
+			</div>
+		{/if}
+	</Card>
+
+	<Card
 		title="Delete provider"
 		description="Removes the provider, the identities linked to it, and the roles its mappings granted. Users are kept."
 	>
