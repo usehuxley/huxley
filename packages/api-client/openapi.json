@@ -16191,6 +16191,108 @@
 				}
 			}
 		},
+		"/api/v1/sales/forecast": {
+			"get": {
+				"tags": ["sales"],
+				"summary": "Won and open deals per salesperson for a period, by forecast category,\nagainst their quota (first-year values).",
+				"operationId": "sales_forecast",
+				"parameters": [
+					{
+						"name": "from",
+						"in": "query",
+						"description": "The first day (`YYYY-MM-DD`).",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "date"
+						}
+					},
+					{
+						"name": "to",
+						"in": "query",
+						"description": "The last day, included.",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "date"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "array",
+									"items": {
+										"$ref": "#/components/schemas/ForecastRow"
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/sales/quotas": {
+			"get": {
+				"tags": ["sales"],
+				"summary": "Quotas starting in a year.",
+				"operationId": "list_sales_quotas",
+				"parameters": [
+					{
+						"name": "year",
+						"in": "query",
+						"required": true,
+						"schema": {
+							"type": "integer",
+							"format": "int32"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "array",
+									"items": {
+										"$ref": "#/components/schemas/SalesQuota"
+									}
+								}
+							}
+						}
+					}
+				}
+			},
+			"put": {
+				"tags": ["sales"],
+				"summary": "Sets someone's quota for a month or quarter (no amount removes it).",
+				"operationId": "set_sales_quota",
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/SalesQuotaInput"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"204": {},
+					"422": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
 		"/api/v1/sales/reasons": {
 			"get": {
 				"tags": ["sales"],
@@ -30095,6 +30197,63 @@
 				"description": "Which forecast an open opportunity counts in.",
 				"enum": ["pipeline", "best_case", "commit", "omitted"]
 			},
+			"ForecastRow": {
+				"type": "object",
+				"description": "One salesperson's forecast (in one currency).",
+				"required": [
+					"currency",
+					"won",
+					"wonCount",
+					"commit",
+					"bestCase",
+					"pipeline",
+					"weighted",
+					"openCount"
+				],
+				"properties": {
+					"attainment": {
+						"type": ["string", "null"],
+						"description": "Won as a percentage of quota."
+					},
+					"bestCase": {
+						"type": "string"
+					},
+					"commit": {
+						"type": "string"
+					},
+					"currency": {
+						"type": "string"
+					},
+					"openCount": {
+						"type": "integer",
+						"format": "int64"
+					},
+					"ownerId": {
+						"type": ["string", "null"],
+						"format": "uuid",
+						"description": "None: deals without an owner."
+					},
+					"ownerName": {
+						"type": ["string", "null"]
+					},
+					"pipeline": {
+						"type": "string"
+					},
+					"quota": {
+						"type": ["string", "null"]
+					},
+					"weighted": {
+						"type": "string"
+					},
+					"won": {
+						"type": "string"
+					},
+					"wonCount": {
+						"type": "integer",
+						"format": "int64"
+					}
+				}
+			},
 			"Form": {
 				"type": "object",
 				"required": [
@@ -38804,6 +38963,74 @@
 					"version": {
 						"type": "integer",
 						"format": "int32"
+					}
+				},
+				"additionalProperties": false
+			},
+			"SalesQuota": {
+				"type": "object",
+				"required": ["id", "orgId", "userId", "periodStart", "months", "amount", "currency"],
+				"properties": {
+					"amount": {
+						"type": "string"
+					},
+					"currency": {
+						"type": "string"
+					},
+					"id": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"months": {
+						"type": "integer",
+						"format": "int32"
+					},
+					"orgId": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"periodStart": {
+						"type": "string",
+						"format": "date"
+					},
+					"userId": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"userName": {
+						"type": ["string", "null"]
+					}
+				}
+			},
+			"SalesQuotaInput": {
+				"type": "object",
+				"required": ["orgId", "userId", "periodStart", "months"],
+				"properties": {
+					"amount": {
+						"type": ["string", "null"],
+						"description": "First-year value; zero or empty removes it."
+					},
+					"currency": {
+						"type": "string"
+					},
+					"months": {
+						"type": "integer",
+						"format": "int32",
+						"description": "1 (a month) or 3 (a quarter)."
+					},
+					"orgId": {
+						"type": "string",
+						"format": "uuid",
+						"description": "The organization they sell for."
+					},
+					"periodStart": {
+						"type": "string",
+						"format": "date",
+						"description": "The first day of a month (or of a quarter, for 3 months)."
+					},
+					"userId": {
+						"type": "string",
+						"format": "uuid"
 					}
 				},
 				"additionalProperties": false

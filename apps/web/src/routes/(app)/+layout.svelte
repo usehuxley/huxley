@@ -136,6 +136,7 @@
 					{
 						items: [
 							...item(on('sales') && can('sales:read'), '/sales', 'Pipeline'),
+							...item(on('sales') && can('sales:read'), '/sales/forecast', 'Forecast'),
 							...item(on('sales') && can('sales:read'), '/sales/leads', 'Leads'),
 							...item(on('sales') && can('sales:read'), '/sales/quotes', 'Quotes'),
 							...item(on('sales') && can('sales:read'), '/sales/orders', 'Orders'),

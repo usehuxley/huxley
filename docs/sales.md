@@ -63,6 +63,17 @@ Set a mailbox's **What it's for** to *Sales email* (**Settings → Mailboxes**),
 - Addresses that match no one are left out, and a message is logged once.
 - A sales mailbox never opens tickets.
 
+## Forecast
+
+**Business → Forecast** shows a month, quarter or year. For each salesperson it shows, in first-year values (one-time plus twelve months of recurring):
+
+- **Quota:** what they're expected to win.
+- **Won:** deals won with their close in the period, and the percentage of quota.
+- **Commit**, **best case** and **pipeline:** open deals expected to close in the period, by forecast category. Best case includes commit, and pipeline includes both. Deals left out of the forecast don't count.
+- **Weighted:** the open deals' value times their probability.
+
+Sales configurers (`sales:configure`) **set quotas** for a month or a quarter, from the forecast. Set them one way, monthly or quarterly, not both. A year shows the total of the quotas starting in it. The **Sales** dashboard (**Dashboards**) charts the pipeline and wins, and the `opportunities`, `quotes` and `sales_activities` sources are there for your own dashboards (see [Reporting data](analytics.md)) (ADR-071).
+
 ## Orders
 
 Accepting a quote, whether in Huxley or by the client signing in the portal, makes a **sales order** (SO-*n*) at the client, with the lines agreed to: the options taken, not the rest. **Business → Orders** lists them; the quote links to its order (ADR-069).

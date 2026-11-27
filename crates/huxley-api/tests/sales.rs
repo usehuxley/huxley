@@ -1071,3 +1071,133 @@ async fn review_rules_are_kept_by_configurers() {
         .await;
     assert_eq!(status, StatusCode::NO_CONTENT);
 }
+
+#[tokio::test]
+async fn the_forecast_compares_won_and_pipeline_with_quota() {
+    let Some(s) = setup().await else { return };
+    // A salesperson of their own, so other tests' deals don't count.
+    let (rep, _) = user(&s.pools, Some(("sales", s.provider))).await;
+    let today = time::OffsetDateTime::now_utc().date();
+    let q_month = (u8::from(today.month()) - 1) / 3 * 3 + 1;
+    let start =
+        time::Date::from_calendar_date(today.year(), time::Month::try_from(q_month).unwrap(), 1)
+            .unwrap();
+    let end = start
+        .replace_month(time::Month::try_from(q_month + 2).unwrap())
+        .unwrap()
+        .replace_day(28)
+        .unwrap();
+    let deal = |name: &str, amount: &str, recurring: &str, forecast: &str| {
+        json!({ "orgId": s.acme, "opportunity": { "name": unique(name), "amount": amount, "recurring": recurring,
+            "forecast": forecast, "ownerId": rep, "closeDate": end.to_string(), "probability": 50 } })
+    };
+    for (name, amount, recurring, forecast) in [
+        ("Firewalls", "1000", "100", "commit"),
+        ("Backup", "500", "0", "best_case"),
+        ("Phones", "300", "0", "pipeline"),
+        ("Moonshot", "9999", "0", "omitted"),
+    ] {
+        let (status, o) = s
+            .call(
+                &s.owner,
+                "POST",
+                "/api/v1/opportunities",
+                Some(deal(name, amount, recurring, forecast)),
+            )
+            .await;
+        assert_eq!(status, StatusCode::CREATED, "{o}");
+    }
+    let (_, won) = s
+        .call(
+            &s.owner,
+            "POST",
+            "/api/v1/opportunities",
+            Some(deal("Laptops", "4000", "0", "commit")),
+        )
+        .await;
+    let (status, w) = s
+        .mv(
+            won["id"].as_str().unwrap(),
+            json!({ "stageId": s.stage("won").await, "version": won["version"] }),
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK, "{w}");
+    let (status, _) = s
+        .call(
+            &s.owner,
+            "PUT",
+            "/api/v1/sales/quotas",
+            Some(json!({ "orgId": s.provider, "userId": rep, "periodStart": start.to_string(), "months": 3,
+                "amount": "10000" })),
+        )
+        .await;
+    assert_eq!(status, StatusCode::NO_CONTENT);
+
+    let (status, rows) = s
+        .call(
+            &s.owner,
+            "GET",
+            &format!("/api/v1/sales/forecast?from={start}&to={end}"),
+            None,
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK, "{rows}");
+    let mine = rows
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|r| r["ownerId"] == json!(rep))
+        .unwrap();
+    assert_eq!(mine["quota"], "10000");
+    assert_eq!(mine["won"], "4000");
+    assert_eq!(mine["attainment"], "40");
+    // Firewalls: 1000 + 12 × 100.
+    assert_eq!(mine["commit"], "2200");
+    assert_eq!(mine["bestCase"], "2700");
+    assert_eq!(mine["pipeline"], "3000");
+    assert_eq!(mine["weighted"], "1500");
+    assert_eq!(mine["openCount"], 3);
+}
+
+#[tokio::test]
+async fn quotas_are_set_by_month_or_quarter() {
+    let Some(s) = setup().await else { return };
+    let (rep, _) = user(&s.pools, Some(("sales", s.provider))).await;
+    let today = time::OffsetDateTime::now_utc().date();
+    let (status, _) = s
+        .call(
+            &s.owner,
+            "PUT",
+            "/api/v1/sales/quotas",
+            Some(json!({ "orgId": s.provider, "userId": rep, "periodStart": format!("{}-04-01", today.year()),
+                "months": 3, "amount": "9000" })),
+        )
+        .await;
+    assert_eq!(status, StatusCode::NO_CONTENT);
+    // Quarters start in January, April, July or October.
+    let (status, _) = s
+        .call(
+            &s.owner,
+            "PUT",
+            "/api/v1/sales/quotas",
+            Some(json!({ "orgId": s.provider, "userId": rep, "periodStart": format!("{}-02-01", today.year()),
+                "months": 3, "amount": "1" })),
+        )
+        .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+    let (_, quotas) = s
+        .call(
+            &s.owner,
+            "GET",
+            &format!("/api/v1/sales/quotas?year={}", today.year()),
+            None,
+        )
+        .await;
+    assert!(
+        quotas
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|q| q["userId"] == json!(rep))
+    );
+}

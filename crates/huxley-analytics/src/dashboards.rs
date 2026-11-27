@@ -73,6 +73,9 @@ pub struct Dashboard {
     pub version: i32,
     #[serde(with = "time::serde::rfc3339::option")]
     pub updated_at: Option<OffsetDateTime>,
+    /// A prebuilt dashboard's module: it's listed only while that's on.
+    #[serde(skip)]
+    pub module: Option<&'static str>,
 }
 
 #[derive(Debug, Clone, Deserialize, ToSchema)]
@@ -197,6 +200,7 @@ impl From<Row> for Dashboard {
             created_by: r.created_by,
             version: r.version,
             updated_at: Some(r.updated_at),
+            module: None,
         }
     }
 }
@@ -461,6 +465,7 @@ fn prebuilt(key: &str, name: &str, description: &str, widgets: Vec<Widget>) -> D
         created_by: None,
         version: 1,
         updated_at: None,
+        module: None,
     }
 }
 
@@ -838,7 +843,118 @@ pub fn builtin() -> Vec<Dashboard> {
                 ),
             ],
         ),
+        sales(),
     ]
+}
+
+/// The prebuilt sales dashboard: the open pipeline as it stands, and what
+/// was won (and lost) in the range.
+fn sales() -> Dashboard {
+    Dashboard {
+        module: Some("sales"),
+        ..sales_widgets()
+    }
+}
+
+fn sales_widgets() -> Dashboard {
+    let open = json!([{ "field": "open", "op": "eq", "value": true }]);
+    let won = json!([{ "field": "won", "op": "eq", "value": true }]);
+    let value = json!([{ "fn": "sum", "field": "first_year" }]);
+    let weighted = json!([{ "fn": "sum", "field": "weighted" }]);
+    let count = json!([{ "fn": "count" }]);
+    prebuilt(
+        "sales",
+        "Sales",
+        "The open pipeline, weighted and by stage, and what was won in the range (first-year values).",
+        vec![
+            widget(
+                "pipeline",
+                "Open pipeline",
+                Viz::Number,
+                3,
+                true,
+                json!({ "source": "opportunities", "measures": value, "filters": open }),
+            ),
+            widget(
+                "weighted",
+                "Weighted pipeline",
+                Viz::Number,
+                3,
+                true,
+                json!({ "source": "opportunities", "measures": weighted, "filters": open }),
+            ),
+            widget(
+                "won",
+                "Won",
+                Viz::Number,
+                3,
+                false,
+                json!({ "source": "opportunities", "measures": value, "filters": won }),
+            ),
+            widget(
+                "won-count",
+                "Deals won",
+                Viz::Number,
+                3,
+                false,
+                json!({ "source": "opportunities", "measures": count, "filters": won }),
+            ),
+            widget(
+                "by-stage",
+                "Open pipeline by stage",
+                Viz::Bar,
+                6,
+                true,
+                json!({ "source": "opportunities", "measures": value, "dimensions": [{ "field": "stage" }],
+                    "filters": open, "limit": 12 }),
+            ),
+            widget(
+                "by-close",
+                "Weighted pipeline by expected close",
+                Viz::Bar,
+                6,
+                true,
+                json!({ "source": "opportunities", "measures": weighted,
+                    "dimensions": [{ "field": "close_date", "granularity": "month" }], "filters": open, "limit": 12 }),
+            ),
+            widget(
+                "won-month",
+                "Won per month",
+                Viz::Line,
+                12,
+                false,
+                json!({ "source": "opportunities", "measures": value,
+                    "dimensions": [{ "field": "closed_at", "granularity": "month" }], "filters": won, "limit": 24 }),
+            ),
+            widget(
+                "by-owner",
+                "Open pipeline by owner",
+                Viz::Table,
+                6,
+                true,
+                json!({ "source": "opportunities", "measures": [{ "fn": "sum", "field": "first_year" },
+                    { "fn": "sum", "field": "weighted" }], "dimensions": [{ "field": "owner" }],
+                    "filters": open, "limit": 25 }),
+            ),
+            widget(
+                "why-lost",
+                "Why deals were lost",
+                Viz::Bar,
+                6,
+                false,
+                json!({ "source": "opportunities", "measures": count, "dimensions": [{ "field": "reason" }],
+                    "filters": [{ "field": "status", "op": "eq", "value": "lost" }], "limit": 12 }),
+            ),
+            widget(
+                "activity",
+                "Activity by kind",
+                Viz::Bar,
+                12,
+                false,
+                json!({ "source": "sales_activities", "measures": count, "dimensions": [{ "field": "kind" }] }),
+            ),
+        ],
+    )
 }
 
 /// Sources a dashboard can show in the client portal.

@@ -12,6 +12,9 @@ Each source is a curated view of one kind of record. You can query a source if y
 | `time_entries` | Time logged on tickets: who, for which client, what kind of work, and whether it's billable. | servicedesk | `ticket:read` | `client` (text), `technician` (text), `work_type` (text), `worked_on` (date), `hours` (number), `minutes` (number), `billable` (bool), `ticket` (text) |
 | `assets` | Configuration items: devices and other assets, with their type, status and warranty. | cmdb | `asset:read` | `client` (text), `type` (text), `status` (text), `manufacturer` (text), `model` (text), `site` (text), `purchased_on` (date), `warranty_ends_on` (date), `in_warranty` (bool), `created_at` (time) |
 | `runs` | Workflow runs: which workflow, how it was triggered, how it ended and how long it took. | (none) | `workflow:read` | `organization` (text), `workflow` (text), `status` (text), `trigger` (text), `created_at` (time), `finished_at` (time), `duration_seconds` (number) |
+| `opportunities` | Deals in the pipeline: stage, owner, value, forecast category, and whether they were won or lost. Its range applies to when deals closed. | sales | `sales:read` | `client` (text), `name` (text), `owner` (text), `stage` (text), `status` (text), `forecast` (text), `source` (text), `reason` (text), `won` (bool), `open` (bool), `amount` (number), `recurring` (number), `first_year` (number), `weighted` (number), `probability` (number), `close_date` (date), `closed_at` (time), `created_at` (time) |
+| `quotes` | Quotes: who they're for, their status and when they were sent and answered. | sales | `sales:read` | `client` (text), `title` (text), `owner` (text), `status` (text), `accepted` (bool), `revision` (number), `sent_at` (time), `decided_at` (time), `days_to_answer` (number), `created_at` (time) |
+| `sales_activities` | Tasks, calls, meetings, notes and logged emails on deals and leads. | sales | `sales:read` | `client` (text), `kind` (text), `owner` (text), `done` (bool), `direction` (text), `minutes` (number), `due_at` (time), `created_at` (time) |
 
 ### Datasets
 
@@ -78,6 +81,7 @@ The answer has `columns` (key, label, kind) and `rows` (arrays in column order).
   - **Technician utilization**
   - **Client overview**
   - **Time and utilization**
+  - **Sales** (while the sales module is on): the open and weighted pipeline, by stage and expected close, what was won in the range, why deals were lost, and activity.
 
   They're read-only: **Copy to change it** makes a personal copy.
 - **Shared** dashboards live at an organization. People with `dashboard:read` there see them (or only the teams and roles it's published to), and `dashboard:manage` changes them. **Personal** dashboards are yours alone; `dashboard:read` is enough to keep them.
