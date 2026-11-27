@@ -49,6 +49,18 @@ pub enum LineKind {
     Manual,
 }
 
+impl LineKind {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Time => "time",
+            Self::Product => "product",
+            Self::Recurring => "recurring",
+            Self::Project => "project",
+            Self::Manual => "manual",
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, ToSchema, sqlx::FromRow)]
 #[serde(rename_all = "camelCase")]
 #[schema(as = InvoiceLine)]
@@ -470,7 +482,8 @@ pub(crate) async fn finish_approval(
     )
     .await?;
     emit(&mut *conn, "invoice.approved", &after).await?;
-    Ok(after)
+    crate::sync::on_approved(&mut *conn, ctx, &after).await?;
+    get(conn, id).await
 }
 
 /// Marks an approved invoice sent (by hand, or by the accounting sync).

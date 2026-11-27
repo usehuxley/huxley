@@ -450,6 +450,9 @@ pub enum Step {
     /// Record an invoice review's decision (the `billing` module).
     #[serde(rename = "core.invoice.review")]
     InvoiceReview(InvoiceReviewStep),
+    /// Record how an invoice's accounting sync went (the `billing` module).
+    #[serde(rename = "core.invoice.sync_result")]
+    InvoiceSyncResult(InvoiceSyncResultStep),
     /// Log an email on the contacts and leads it's to or from (the `sales` module).
     #[serde(rename = "core.sales.log_email")]
     SalesLogEmail(SalesLogEmailStep),
@@ -887,6 +890,11 @@ step!(InvoiceReviewStep {
     pub review: InvoiceReview,
 });
 
+step!(InvoiceSyncResultStep {
+    #[serde(rename = "with")]
+    pub result: InvoiceSyncResult,
+});
+
 step!(SalesLogEmailStep {
     #[serde(rename = "with")]
     pub log: SalesLogEmail,
@@ -1033,6 +1041,7 @@ impl Step {
             ScopeDecide,
             QuoteReview,
             InvoiceReview,
+            InvoiceSyncResult,
             SalesLogEmail,
             ScopeContext,
             ScopeWrite,
@@ -1109,6 +1118,7 @@ impl Step {
             Self::ScopeDecide(_) => "core.project.scope.decide",
             Self::QuoteReview(_) => "core.quote.review",
             Self::InvoiceReview(_) => "core.invoice.review",
+            Self::InvoiceSyncResult(_) => "core.invoice.sync_result",
             Self::SalesLogEmail(_) => "core.sales.log_email",
             Self::ScopeContext(_) => "core.scope.context",
             Self::ScopeWrite(_) => "core.scope.write",
@@ -1819,6 +1829,28 @@ pub struct InvoiceReview {
     pub by: Option<Value>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub comment: Option<Value>,
+}
+
+/// How an invoice's accounting sync went (`core.invoice.sync_result`), from
+/// a sync pack's workflow on `invoice.sync_requested`: `invoice_id`, `ok`,
+/// and when it synced the accounting system's `remote_id` (and optionally
+/// `remote_number` and an https `remote_url` to view it); when it didn't,
+/// the `error`. Synced, an approved invoice is marked sent and
+/// `invoice.synced` raised; failed, it joins the sync error queue and
+/// `invoice.sync_failed` is raised. Output: the invoice's sync.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct InvoiceSyncResult {
+    pub invoice_id: Value,
+    pub ok: Value,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub remote_id: Option<Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub remote_number: Option<Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub remote_url: Option<Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub error: Option<Value>,
 }
 
 /// An email to log (`core.sales.log_email`): `email_id`, from a mailbox's

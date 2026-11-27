@@ -62,6 +62,26 @@ Comment on the invoice or on a line, and **@mention** people to tell them. Resol
 
 On a run's invoices (**Billing runs → Invoices**), **Approve the run** approves every draft that needs no review. Invoices on hold or needing review are listed as exceptions. Optionally, those that need review are submitted for review in the same pass.
 
+## Accounting sync
+
+Approved invoices and credit memos go to your accounting system (ADR-077). Huxley prepares each one with your matches. The accounting system's pack (**QuickBooks Online**, or **Xero**) creates it there through a system workflow, so other systems can be added the same way.
+
+1. Install the pack from **Packs** at your MSP, connect it, and run its **Fetch lists** workflow once. After that it runs nightly.
+2. In **Settings → Billing → Accounting sync**, set the accounting system (`quickbooks` or `xero`). Choose whether invoices sync **as soon as they're approved**, or only when you sync them.
+3. In **Business → Billing → Accounting**, match:
+   - **customers:** each client (a client without its own match uses the nearest client above it);
+   - **items:** products, kinds of line (time, recurring, project, product, manual) and a **default item** for the rest;
+   - **tax codes:** each tax code on your lines, and one for lines without a code;
+   - **classes** (tracking categories in Xero): a default, or per client. Optional.
+
+The choices come from the lists the pack fetched. Without them, type the ID.
+
+An invoice with an unmatched client or item fails straight away, saying what to match. The invoice page's **Accounting** card shows each invoice's sync: syncing, synced (with its number there and a link to open it), or failed (with the accounting system's reason).
+
+Failed syncs are listed under **Accounting → Sync errors**. Fix the cause and **Retry**. Once synced, an approved invoice is sent.
+
+Events: `invoice.sync_requested` (the prepared invoice, for sync packs), `invoice.synced` and `invoice.sync_failed`. A sync pack's workflow reports back with `core.invoice.sync_result`.
+
 ## Settings
 
 **Settings → Billing** (`billing:configure`), per provider, sets:
@@ -82,4 +102,4 @@ On a run's invoices (**Billing runs → Invoices**), **Approve the run** approve
 | `billing:write` | Run billing, edit, hold, void and mark invoices sent, and make credit memos. |
 | `billing:approve` | Approve invoices. |
 | `billing:review:override` | Approve an invoice that needs review without one (recorded). |
-| `billing:configure` | Keep billing settings, and at the top, the review rules. |
+| `billing:configure` | Keep billing settings and accounting matches, and at the top, the review rules. |

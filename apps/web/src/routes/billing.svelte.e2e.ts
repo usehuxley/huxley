@@ -206,4 +206,91 @@ test.describe('billing', () => {
 			await api.dispose();
 		}
 	});
+
+	test('an approved invoice waits for its client to be matched, then syncs on retry', async ({
+		page
+	}) => {
+		const stamp = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+		const today = new Date().toISOString().slice(0, 10);
+		const api = await request.newContext({
+			baseURL: apiUrl,
+			extraHTTPHeaders: { 'x-requested-with': 'huxley' }
+		});
+		await api.post('/api/v1/auth/login', { data: { email: ownerEmail, password: ownerPassword } });
+		for (const module of ['contracts', 'billing']) {
+			await ok(api.put(`/api/v1/modules/${module}`, { data: { enabled: true } }));
+		}
+		const orgs = await ok<{ id: string; parentId: string | null }[]>(api.get('/api/v1/orgs'));
+		const root = orgs.find((o) => o.parentId === null)!.id;
+		const name = `Synced ${stamp}`;
+		const client = await ok<{ id: string }>(
+			api.post('/api/v1/orgs', { data: { parentId: root, kind: 'client', name } })
+		);
+		const ticket = await ok<{ id: string }>(
+			api.post('/api/v1/tickets', { data: { orgId: client.id, title: `Laptop ${stamp}` } })
+		);
+		const types = await ok<{ id: string; name: string }[]>(api.get('/api/v1/work-types'));
+		await ok(
+			api.post(`/api/v1/tickets/${ticket.id}/time`, {
+				data: {
+					workTypeId: types.find((t) => t.name === 'Remote support')!.id,
+					workedOn: today,
+					minutes: 30
+				}
+			})
+		);
+		const run = await ok<{ id: string }>(
+			api.post('/api/v1/billing/runs', {
+				data: { orgId: root, from: today, to: today, clients: [client.id] }
+			})
+		);
+		const [invoice] = await ok<{ id: string }[]>(api.get(`/api/v1/invoices?runId=${run.id}`));
+		await ok(
+			api.put('/api/v1/billing/sync-settings', {
+				data: { orgId: root, target: 'quickbooks', enabled: true, onApproval: true }
+			})
+		);
+
+		try {
+			await signIn(page);
+			await page.goto(`/billing/invoices/${invoice.id}`);
+			await page.getByRole('button', { name: 'Approve', exact: true }).click();
+			await expect(page.getByText('Sync failed', { exact: true })).toBeVisible();
+			await expect(page.getByText(/isn't matched to a customer in quickbooks/)).toBeVisible();
+
+			await page.goto(`/billing/accounting?org=${root}`);
+			await expect(page.getByRole('list', { name: 'Sync errors' })).toContainText(name);
+			const matches = page.getByRole('table', { name: 'Matches' });
+			await matches.getByLabel(`${name} in quickbooks`).fill('58');
+			await matches
+				.getByRole('row')
+				.filter({ hasText: name })
+				.getByRole('button', { name: 'Save' })
+				.click();
+			await expect(page.getByText('Matched.')).toBeVisible();
+			await page.getByRole('button', { name: 'Items' }).click();
+			await matches.getByLabel('Anything else (the default item) in quickbooks').fill('1');
+			await matches
+				.getByRole('row')
+				.filter({ hasText: 'Anything else' })
+				.getByRole('button', { name: 'Save' })
+				.click();
+			await expect(page.getByText('Matched.').first()).toBeVisible();
+
+			await page
+				.getByRole('list', { name: 'Sync errors' })
+				.getByRole('listitem')
+				.filter({ hasText: name })
+				.getByRole('button', { name: 'Retry' })
+				.click();
+			await expect(page.getByText('Sent to sync again.')).toBeVisible();
+			await page.goto(`/billing/invoices/${invoice.id}`);
+			await expect(page.getByText('Syncing', { exact: true })).toBeVisible();
+		} finally {
+			await api.put('/api/v1/billing/sync-settings', {
+				data: { orgId: root, target: 'quickbooks', enabled: false, onApproval: true }
+			});
+			await api.dispose();
+		}
+	});
 });

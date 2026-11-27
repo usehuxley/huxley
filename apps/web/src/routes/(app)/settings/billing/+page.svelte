@@ -99,7 +99,47 @@
 				<div class="sm:col-span-2"><Button type="submit" variant="primary">Save</Button></div>
 			</form>
 		</Card>
+		<Card
+			title={data.providers.length > 1 ? `Accounting sync: ${p.name}` : 'Accounting sync'}
+			description="The accounting system approved invoices go to, through its pack (install QuickBooks Online or Xero from Packs). Match clients and items under Billing → Accounting."
+		>
+			<form
+				method="POST"
+				action="?/saveSync"
+				class="grid max-w-2xl gap-4 sm:grid-cols-2"
+				use:enhance={said()}
+			>
+				<input type="hidden" name="orgId" value={p.orgId} />
+				<Field
+					label="Accounting system"
+					for="target-{p.orgId}"
+					hint="quickbooks or xero, or another sync pack's target"
+				>
+					<Input
+						id="target-{p.orgId}"
+						name="target"
+						required
+						list="targets"
+						value={p.sync?.target ?? ''}
+					/>
+				</Field>
+				<div class="flex flex-col justify-end gap-2 pb-1 text-sm text-fg">
+					<label class="flex items-center gap-2">
+						<input type="checkbox" name="enabled" checked={p.sync?.enabled ?? true} /> On
+					</label>
+					<label class="flex items-center gap-2">
+						<input type="checkbox" name="onApproval" checked={p.sync?.onApproval ?? true} />
+						Sync each invoice as soon as it's approved
+					</label>
+				</div>
+				<div class="sm:col-span-2"><Button type="submit" variant="primary">Save</Button></div>
+			</form>
+		</Card>
 	{/each}
+	<datalist id="targets">
+		<option value="quickbooks">QuickBooks Online</option>
+		<option value="xero">Xero</option>
+	</datalist>
 
 	<Card
 		title="Invoice review"

@@ -266,6 +266,39 @@ const SOURCES: &[Source] = &[
         ],
     },
     Source {
+        manifest: include_str!("../builtin/quickbooks/pack.yaml"),
+        files: &[
+            (
+                "integrations/quickbooks.yaml",
+                include_str!("../builtin/quickbooks/integrations/quickbooks.yaml"),
+            ),
+            (
+                "workflows/quickbooks-sync-invoice.yaml",
+                include_str!("../builtin/quickbooks/workflows/quickbooks-sync-invoice.yaml"),
+            ),
+            (
+                "workflows/quickbooks-fetch-lists.yaml",
+                include_str!("../builtin/quickbooks/workflows/quickbooks-fetch-lists.yaml"),
+            ),
+            (
+                "datasets/quickbooks-customers.json",
+                include_str!("../builtin/quickbooks/datasets/quickbooks-customers.json"),
+            ),
+            (
+                "datasets/quickbooks-items.json",
+                include_str!("../builtin/quickbooks/datasets/quickbooks-items.json"),
+            ),
+            (
+                "datasets/quickbooks-tax-codes.json",
+                include_str!("../builtin/quickbooks/datasets/quickbooks-tax-codes.json"),
+            ),
+            (
+                "datasets/quickbooks-classes.json",
+                include_str!("../builtin/quickbooks/datasets/quickbooks-classes.json"),
+            ),
+        ],
+    },
+    Source {
         manifest: include_str!("../builtin/immybot/pack.yaml"),
         files: &[
             (

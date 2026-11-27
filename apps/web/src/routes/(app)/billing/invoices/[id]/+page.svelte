@@ -304,6 +304,56 @@
 		/>
 	{/if}
 
+	{#if data.sync || ((i.status === 'approved' || i.status === 'sent') && data.canWrite)}
+		<Card title="Accounting">
+			<div class="flex flex-wrap items-center justify-between gap-3 text-sm">
+				<div class="min-w-0">
+					{#if data.sync}
+						<p class="flex flex-wrap items-center gap-2">
+							<Badge
+								tone={data.sync.status === 'synced'
+									? 'success'
+									: data.sync.status === 'failed'
+										? 'danger'
+										: 'info'}
+							>
+								{data.sync.status === 'synced'
+									? 'Synced'
+									: data.sync.status === 'failed'
+										? 'Sync failed'
+										: 'Syncing'}
+							</Badge>
+							<span class="text-fg-muted">to {data.sync.target}</span>
+							{#if data.sync.remoteNumber}<span class="font-mono text-fg">
+									{data.sync.remoteNumber}
+								</span>{/if}
+							{#if data.sync.remoteUrl}
+								<!-- eslint-disable svelte/no-navigation-without-resolve -- the accounting system's page -->
+								<a
+									href={data.sync.remoteUrl}
+									target="_blank"
+									rel="noopener noreferrer"
+									class="text-accent hover:underline"
+								>
+									Open in {data.sync.target}
+								</a>
+								<!-- eslint-enable svelte/no-navigation-without-resolve -->
+							{/if}
+						</p>
+						{#if data.sync.error}<p class="mt-1 text-xs text-danger">{data.sync.error}</p>{/if}
+					{:else}
+						<p class="text-fg-muted">Not synced to the accounting system.</p>
+					{/if}
+				</div>
+				{#if data.canWrite && data.sync?.status !== 'synced' && (i.status === 'approved' || i.status === 'sent')}
+					<form method="POST" action="?/sync" use:enhance={done()}>
+						<Button type="submit" size="sm">{data.sync ? 'Retry the sync' : 'Sync now'}</Button>
+					</form>
+				{/if}
+			</div>
+		</Card>
+	{/if}
+
 	<QuoteComments
 		comments={data.comments}
 		lines={commentLines}

@@ -9,11 +9,12 @@ import type { Actions, PageServerLoad } from './$types';
 export const load: PageServerLoad = async (event) => {
 	const client = api(event);
 	const id = event.params.id;
-	const [{ data, response }, review, comments, users] = await Promise.all([
+	const [{ data, response }, review, comments, users, sync] = await Promise.all([
 		client.GET('/api/v1/invoices/{id}', { params: { path: { id } } }),
 		client.GET('/api/v1/invoices/{id}/review', { params: { path: { id } } }),
 		client.GET('/api/v1/invoices/{id}/comments', { params: { path: { id } } }),
-		client.GET('/api/v1/users', { params: { query: { limit: 200 } } })
+		client.GET('/api/v1/users', { params: { query: { limit: 200 } } }),
+		client.GET('/api/v1/invoices/{id}/sync', { params: { path: { id } } })
 	]);
 	if (response.status === 404) error(404, 'Invoice not found.');
 	if (!data) error(503, 'Could not load the invoice.');
@@ -27,6 +28,7 @@ export const load: PageServerLoad = async (event) => {
 		review: review.data ?? null,
 		approval: approval ?? null,
 		comments: comments.data ?? [],
+		sync: sync.data ?? null,
 		people: (users.data?.items ?? [])
 			.filter((u) => u.status === 'active' && u.kind === 'human')
 			.map((u) => ({ value: u.id, label: u.displayName })),
@@ -104,6 +106,20 @@ export const actions: Actions = {
 		return { message: 'Submitted for review.' };
 	},
 	decideReview: decide,
+	sync: async (event) => {
+		const {
+			data,
+			error: problem,
+			response
+		} = await api(event).POST('/api/v1/invoices/{id}/sync', path(event.params.id));
+		if (!data) return failed(response.status, problem, 'Could not sync it.');
+		return {
+			message:
+				data.status === 'failed'
+					? `It can't sync yet: ${data.error ?? ''}`
+					: 'Sent to the accounting system.'
+		};
+	},
 	comment: async (event) => {
 		const form = await event.request.formData();
 		const {

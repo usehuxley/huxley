@@ -522,6 +522,23 @@
       ],
       "type": "object"
     },
+    "InvoiceSyncResult": {
+      "additionalProperties": false,
+      "description": "How an invoice's accounting sync went (`core.invoice.sync_result`), from\na sync pack's workflow on `invoice.sync_requested`: `invoice_id`, `ok`,\nand when it synced the accounting system's `remote_id` (and optionally\n`remote_number` and an https `remote_url` to view it); when it didn't,\nthe `error`. Synced, an approved invoice is marked sent and\n`invoice.synced` raised; failed, it joins the sync error queue and\n`invoice.sync_failed` is raised. Output: the invoice's sync.",
+      "properties": {
+        "error": true,
+        "invoice_id": true,
+        "ok": true,
+        "remote_id": true,
+        "remote_number": true,
+        "remote_url": true
+      },
+      "required": [
+        "invoice_id",
+        "ok"
+      ],
+      "type": "object"
+    },
     "Join": {
       "description": "When a `parallel` step finishes.",
       "oneOf": [
@@ -4292,6 +4309,69 @@
             },
             "with": {
               "$ref": "#/$defs/InvoiceReview"
+            }
+          },
+          "required": [
+            "type",
+            "id",
+            "with"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Record how an invoice's accounting sync went (the `billing` module).",
+          "properties": {
+            "continue_on_error": {
+              "description": "Record the error as the step's output and carry on.",
+              "type": "boolean"
+            },
+            "description": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "id": {
+              "description": "Unique in the workflow: lowercase letters, digits, underscores.\nOther steps read this step's output as `steps.<id>.output`.",
+              "type": "string"
+            },
+            "if": {
+              "description": "Skip the step unless this expression is true.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "name": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "retry": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/RetryPolicy"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "timeout": {
+              "description": "Fail the attempt after this long, e.g. `30s`.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "type": {
+              "const": "core.invoice.sync_result",
+              "type": "string"
+            },
+            "with": {
+              "$ref": "#/$defs/InvoiceSyncResult"
             }
           },
           "required": [

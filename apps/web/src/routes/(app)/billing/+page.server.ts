@@ -16,11 +16,12 @@ export const load: PageServerLoad = async (event) => {
 	const fallback = lastMonth();
 	const from = day.test(params.get('from') ?? '') ? params.get('from')! : fallback.from;
 	const to = day.test(params.get('to') ?? '') ? params.get('to')! : fallback.to;
-	const [unbilled, runs] = await Promise.all([
+	const [unbilled, runs, queue] = await Promise.all([
 		orgId
 			? client.GET('/api/v1/billing/unbilled', { params: { query: { orgId, from, to } } })
 			: null,
-		client.GET('/api/v1/billing/runs')
+		client.GET('/api/v1/billing/runs'),
+		client.GET('/api/v1/billing/sync-queue', { params: { query: { status: 'failed' } } })
 	]);
 	if (unbilled?.response.status === 404) error(404, 'Invoicing is turned off.');
 	if (unbilled && !unbilled.data)
@@ -29,6 +30,7 @@ export const load: PageServerLoad = async (event) => {
 	return {
 		unbilled: unbilled?.data ?? [],
 		runs: runs.data ?? [],
+		syncErrors: queue.data?.length ?? 0,
 		providers: providers.map((o) => ({ value: o.id, label: o.name })),
 		orgId,
 		from,

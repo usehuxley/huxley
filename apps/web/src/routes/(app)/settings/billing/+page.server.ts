@@ -17,7 +17,10 @@ export const load: PageServerLoad = async (event) => {
 				params: { query: { orgId: o.id } }
 			});
 			if (response.status === 404) error(404, 'Invoicing is turned off.');
-			return { orgId: o.id, name: o.name, settings: data };
+			const sync = await client.GET('/api/v1/billing/sync-settings', {
+				params: { query: { orgId: o.id } }
+			});
+			return { orgId: o.id, name: o.name, settings: data, sync: sync.data ?? null };
 		})
 	);
 	const rules = await client.GET('/api/v1/billing/review-rules');
@@ -44,6 +47,24 @@ export const actions: Actions = {
 				currency: formString(form, 'currency') || 'USD',
 				paymentDays: Number(formString(form, 'paymentDays') || '30'),
 				approvedTimeOnly: form.get('approvedTimeOnly') === 'on'
+			}
+		});
+		if (!data)
+			return fail(response.status, { message: problemMessage(problem, 'Could not save.') });
+		return { message: 'Saved.' };
+	},
+	saveSync: async (event) => {
+		const form = await event.request.formData();
+		const {
+			data,
+			error: problem,
+			response
+		} = await api(event).PUT('/api/v1/billing/sync-settings', {
+			body: {
+				orgId: formString(form, 'orgId'),
+				target: formString(form, 'target'),
+				enabled: form.get('enabled') === 'on',
+				onApproval: form.get('onApproval') === 'on'
 			}
 		});
 		if (!data)

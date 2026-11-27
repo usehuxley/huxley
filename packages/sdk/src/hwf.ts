@@ -1397,6 +1397,30 @@ export type Step =
 			 * Fail the attempt after this long, e.g. `30s`.
 			 */
 			timeout?: string | null;
+			type: 'core.invoice.sync_result';
+			with: InvoiceSyncResult;
+	  }
+	| {
+			/**
+			 * Record the error as the step's output and carry on.
+			 */
+			continue_on_error?: boolean;
+			description?: string | null;
+			/**
+			 * Unique in the workflow: lowercase letters, digits, underscores.
+			 * Other steps read this step's output as `steps.<id>.output`.
+			 */
+			id: string;
+			/**
+			 * Skip the step unless this expression is true.
+			 */
+			if?: string | null;
+			name?: string | null;
+			retry?: RetryPolicy | null;
+			/**
+			 * Fail the attempt after this long, e.g. `30s`.
+			 */
+			timeout?: string | null;
 			type: 'core.sales.log_email';
 			with: SalesLogEmail;
 	  }
@@ -2683,6 +2707,26 @@ export interface InvoiceReview {
 	comment?: unknown;
 	decision: unknown;
 	review_id: unknown;
+}
+/**
+ * How an invoice's accounting sync went (`core.invoice.sync_result`), from
+ * a sync pack's workflow on `invoice.sync_requested`: `invoice_id`, `ok`,
+ * and when it synced the accounting system's `remote_id` (and optionally
+ * `remote_number` and an https `remote_url` to view it); when it didn't,
+ * the `error`. Synced, an approved invoice is marked sent and
+ * `invoice.synced` raised; failed, it joins the sync error queue and
+ * `invoice.sync_failed` is raised. Output: the invoice's sync.
+ *
+ * This interface was referenced by `HuxleyWorkflowFormatV1`'s JSON-Schema
+ * via the `definition` "InvoiceSyncResult".
+ */
+export interface InvoiceSyncResult {
+	error?: unknown;
+	invoice_id: unknown;
+	ok: unknown;
+	remote_id?: unknown;
+	remote_number?: unknown;
+	remote_url?: unknown;
 }
 /**
  * An email to log (`core.sales.log_email`): `email_id`, from a mailbox's

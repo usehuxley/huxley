@@ -15,12 +15,16 @@
 //! - **Review** (ADR-076): rules say which drafts need an internal review
 //!   before they can be approved; see [`review`].
 //!
+//! - **Accounting sync** (ADR-077): approved invoices go to the accounting
+//!   system through a pack's workflow; see [`sync`].
+//!
 //! Money is `numeric(18,4)` with an explicit currency, as decimal strings.
 
 pub mod generate;
 pub mod invoices;
 pub mod review;
 pub mod settings;
+pub mod sync;
 
 use std::str::FromStr;
 

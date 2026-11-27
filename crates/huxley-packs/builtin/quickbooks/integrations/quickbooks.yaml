@@ -1,0 +1,130 @@
+openapi: 3.0.3
+info:
+  title: QuickBooks Online
+  version: v3
+  description: >-
+    Invoices, credit memos, customers, items, tax codes and classes in a
+    QuickBooks Online company, through an Intuit developer app (client ID
+    and secret) with the com.intuit.quickbooks.accounting scope. Add
+    Huxley's OAuth redirect URL to the app's redirect URIs, set the company
+    to your company (realm) ID, and sign in. For a sandbox company, set the
+    host to sandbox-quickbooks.api.intuit.com.
+servers:
+  - url: https://{host}/v3/company/{company}
+    variables:
+      host:
+        default: quickbooks.api.intuit.com
+        description: quickbooks.api.intuit.com, or sandbox-quickbooks.api.intuit.com for a sandbox company
+      company:
+        default: ""
+        description: The company (realm) ID, under Settings → Additional info in QuickBooks
+components:
+  securitySchemes:
+    intuit:
+      type: oauth2
+      description: An Intuit developer app; sign in as a QuickBooks admin of the company.
+      flows:
+        authorizationCode:
+          authorizationUrl: https://appcenter.intuit.com/connect/oauth2
+          tokenUrl: https://oauth.platform.intuit.com/oauth2/v1/tokens/bearer
+          scopes:
+            com.intuit.quickbooks.accounting: Accounting data
+  parameters:
+    minorversion: { name: minorversion, in: query, description: The API's minor version (default 75), schema: { type: integer } }
+  schemas:
+    Ref:
+      type: object
+      required: [value]
+      properties:
+        value: { type: string }
+        name: { type: string }
+    Line:
+      type: object
+      description: A SalesItemLineDetail line.
+      properties:
+        DetailType: { type: string, enum: [SalesItemLineDetail] }
+        Amount: { type: number }
+        Description: { type: string }
+        SalesItemLineDetail:
+          type: object
+          properties:
+            ItemRef: { $ref: "#/components/schemas/Ref" }
+            Qty: { type: number }
+            UnitPrice: { type: number }
+            TaxCodeRef: { $ref: "#/components/schemas/Ref" }
+            ClassRef: { $ref: "#/components/schemas/Ref" }
+    Transaction:
+      type: object
+      description: An invoice or credit memo.
+      properties:
+        CustomerRef: { $ref: "#/components/schemas/Ref" }
+        Line: { type: array, items: { $ref: "#/components/schemas/Line" } }
+        DocNumber: { type: string, description: The number shown on it (up to 21 characters) }
+        TxnDate: { type: string, format: date }
+        DueDate: { type: string, format: date }
+        CurrencyRef: { $ref: "#/components/schemas/Ref" }
+        PrivateNote: { type: string }
+        CustomerMemo: { type: object, properties: { value: { type: string } } }
+    Created:
+      type: object
+      properties:
+        Id: { type: string }
+        DocNumber: { type: string }
+        TotalAmt: { type: number }
+        Balance: { type: number }
+        DueDate: { type: string }
+security: [{ intuit: [] }]
+paths:
+  /invoice:
+    post:
+      operationId: createInvoice
+      summary: Create an invoice
+      tags: [Invoices]
+      parameters: [{ $ref: "#/components/parameters/minorversion" }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/Transaction" } } }
+      responses:
+        "200":
+          description: The invoice
+          content: { application/json: { schema: { type: object, properties: { Invoice: { $ref: "#/components/schemas/Created" } } } } }
+  /invoice/{id}:
+    get:
+      operationId: getInvoice
+      summary: Get an invoice (its balance, due date and status)
+      tags: [Invoices]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+        - { $ref: "#/components/parameters/minorversion" }
+      responses:
+        "200":
+          description: The invoice
+          content: { application/json: { schema: { type: object, properties: { Invoice: { $ref: "#/components/schemas/Created" } } } } }
+  /creditmemo:
+    post:
+      operationId: createCreditMemo
+      summary: Create a credit memo
+      tags: [Credit memos]
+      parameters: [{ $ref: "#/components/parameters/minorversion" }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/Transaction" } } }
+      responses:
+        "200":
+          description: The credit memo
+          content: { application/json: { schema: { type: object, properties: { CreditMemo: { $ref: "#/components/schemas/Created" } } } } }
+  /query:
+    get:
+      operationId: query
+      summary: Query with QuickBooks' SQL-like language
+      description: >-
+        e.g. select Id, DisplayName, Active from Customer startposition 1
+        maxresults 1000. Answers { QueryResponse: { Customer: [...] } }.
+      tags: [Query]
+      parameters:
+        - { name: query, in: query, required: true, description: The query, schema: { type: string } }
+        - { $ref: "#/components/parameters/minorversion" }
+      responses:
+        "200":
+          description: The matching entities, under QueryResponse.<Entity>
+          content: { application/json: { schema: { type: object, additionalProperties: true } } }

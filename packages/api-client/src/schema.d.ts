@@ -1996,6 +1996,60 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
+	'/api/v1/billing/mappings': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** The provider's mappings to its accounting system. */
+		get: operations['list_accounting_mappings'];
+		/** Matches something of Huxley's to the accounting system's (replacing any match). */
+		put: operations['put_accounting_mapping'];
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/billing/mappings/options': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/**
+		 * The accounting system's customers, items, tax codes or classes, from the
+		 *     sync pack's datasets.
+		 */
+		get: operations['accounting_mapping_options'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/billing/mappings/{id}': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		post?: never;
+		delete: operations['delete_accounting_mapping'];
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
 	'/api/v1/billing/review-rules': {
 		parameters: {
 			query?: never;
@@ -2076,6 +2130,40 @@ export interface paths {
 		/** The provider's billing settings. */
 		get: operations['get_billing_settings'];
 		put: operations['put_billing_settings'];
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/billing/sync-queue': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** Invoice syncs in a status: the error queue (failed) by default. */
+		get: operations['accounting_sync_queue'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/billing/sync-settings': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** The provider's accounting sync settings (none until it's set up). */
+		get: operations['get_accounting_sync_settings'];
+		put: operations['put_accounting_sync_settings'];
 		post?: never;
 		delete?: never;
 		options?: never;
@@ -3642,6 +3730,28 @@ export interface paths {
 		put?: never;
 		/** Marks an approved invoice sent (it's then locked). */
 		post: operations['mark_invoice_sent'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/invoices/{id}/sync': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** The invoice's accounting sync (none if it was never asked for). */
+		get: operations['invoice_sync'];
+		put?: never;
+		/**
+		 * Syncs an approved invoice to the accounting system, or tries again.
+		 *     Raises `invoice.sync_requested` for the sync pack's workflow; an unmapped
+		 *     client or item fails it straight away, with the reason.
+		 */
+		post: operations['request_invoice_sync'];
 		delete?: never;
 		options?: never;
 		head?: never;
@@ -9249,6 +9359,29 @@ export interface components {
 			/** Format: uuid */
 			workTypeId: string;
 		};
+		AccountingMapping: {
+			/** Format: uuid */
+			id: string;
+			kind: components['schemas']['MappingKind'];
+			localKey: string;
+			/** @description What the local key is: the client's or product's name, or the line kind. */
+			localName?: string | null;
+			remoteId: string;
+			remoteName?: string | null;
+		};
+		AccountingMappingInput: {
+			kind: components['schemas']['MappingKind'];
+			localKey: string;
+			remoteId: string;
+			remoteName?: string | null;
+		};
+		AccountingSyncSettings: {
+			enabled?: boolean;
+			/** @description Sync each invoice as soon as it's approved (otherwise by hand). */
+			onApproval?: boolean;
+			/** @description The accounting system: the sync pack's target, e.g. `quickbooks` or `xero`. */
+			target: string;
+		};
 		/** @description One operation. */
 		Action: {
 			/**
@@ -12472,6 +12605,28 @@ export interface components {
 		};
 		/** @enum {string} */
 		InvoiceStatus: 'draft' | 'approved' | 'sent' | 'void';
+		InvoiceSync: {
+			/** Format: int32 */
+			attempts: number;
+			error?: string | null;
+			/** Format: uuid */
+			invoiceId: string;
+			kind: string;
+			/** Format: int64 */
+			number: number;
+			/** Format: uuid */
+			orgId: string;
+			orgName: string;
+			remoteId?: string | null;
+			remoteNumber?: string | null;
+			remoteUrl?: string | null;
+			/** Format: date-time */
+			requestedAt: string;
+			status: components['schemas']['SyncStatus'];
+			/** Format: date-time */
+			syncedAt?: string | null;
+			target: string;
+		};
 		/** @description An item, and where it is. */
 		ItemDetail: {
 			item: components['schemas']['InventoryItem'];
@@ -12902,6 +13057,13 @@ export interface components {
 			status: string;
 			typeKey: string;
 			typeName: string;
+		};
+		/** @enum {string} */
+		MappingKind: 'customer' | 'item' | 'tax_code' | 'class';
+		MappingRequest: {
+			mapping: components['schemas']['AccountingMappingInput'];
+			/** Format: uuid */
+			orgId: string;
 		};
 		/** @description One cell of the priority matrix. */
 		MatrixCell: {
@@ -15082,6 +15244,11 @@ export interface components {
 			/** @description Present when this was the user's first second factor. Shown once. */
 			recoveryCodes?: string[] | null;
 		};
+		/** @description A customer, item, tax code or class in the accounting system. */
+		RemoteOption: {
+			id: string;
+			name: string;
+		};
 		/**
 		 * @description An action that seems to have been renamed: gone under one key, back
 		 *     under another with the same method and path.
@@ -16603,6 +16770,13 @@ export interface components {
 			/** @description IANA time zone for `cron` (default: the organization's). */
 			timezone?: string | null;
 		};
+		SyncSettingsRequest: {
+			enabled?: boolean;
+			onApproval?: boolean;
+			/** Format: uuid */
+			orgId: string;
+			target: string;
+		};
 		SyncStarted: {
 			/** @description One run per target organization. */
 			runs: string[];
@@ -16614,6 +16788,8 @@ export interface components {
 			nextAt?: string | null;
 			sync?: components['schemas']['SyncConfig'] | null;
 		};
+		/** @enum {string} */
+		SyncStatus: 'pending' | 'synced' | 'failed';
 		Tag: {
 			/** @description One of neutral, accent, success, warning, danger, info. */
 			color: string;
@@ -21800,6 +21976,93 @@ export interface operations {
 			};
 		};
 	};
+	list_accounting_mappings: {
+		parameters: {
+			query: {
+				orgId: string;
+			};
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['AccountingMapping'][];
+				};
+			};
+		};
+	};
+	put_accounting_mapping: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['MappingRequest'];
+			};
+		};
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['AccountingMapping'];
+				};
+			};
+		};
+	};
+	accounting_mapping_options: {
+		parameters: {
+			query: {
+				orgId: string;
+				kind: components['schemas']['MappingKind'];
+			};
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['RemoteOption'][];
+				};
+			};
+		};
+	};
+	delete_accounting_mapping: {
+		parameters: {
+			query: {
+				orgId: string;
+			};
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			204: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content?: never;
+			};
+		};
+	};
 	list_invoice_review_rules: {
 		parameters: {
 			query?: never;
@@ -22001,6 +22264,72 @@ export interface operations {
 				};
 				content: {
 					'application/json': components['schemas']['BillingSettings'];
+				};
+			};
+		};
+	};
+	accounting_sync_queue: {
+		parameters: {
+			query?: {
+				/** @description `failed` (the error queue, the default), `pending` or `synced`. */
+				status?: components['schemas']['SyncStatus'];
+			};
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['InvoiceSync'][];
+				};
+			};
+		};
+	};
+	get_accounting_sync_settings: {
+		parameters: {
+			query: {
+				orgId: string;
+			};
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['AccountingSyncSettings'] | null;
+				};
+			};
+		};
+	};
+	put_accounting_sync_settings: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['SyncSettingsRequest'];
+			};
+		};
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['AccountingSyncSettings'];
 				};
 			};
 		};
@@ -25477,6 +25806,56 @@ export interface operations {
 				};
 				content: {
 					'application/json': components['schemas']['Invoice'];
+				};
+			};
+		};
+	};
+	invoice_sync: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['InvoiceSync'] | null;
+				};
+			};
+		};
+	};
+	request_invoice_sync: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['InvoiceSync'];
+				};
+			};
+			409: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
 				};
 			};
 		};

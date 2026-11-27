@@ -4954,6 +4954,133 @@
 				}
 			}
 		},
+		"/api/v1/billing/mappings": {
+			"get": {
+				"tags": ["billing"],
+				"summary": "The provider's mappings to its accounting system.",
+				"operationId": "list_accounting_mappings",
+				"parameters": [
+					{
+						"name": "orgId",
+						"in": "query",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "array",
+									"items": {
+										"$ref": "#/components/schemas/AccountingMapping"
+									}
+								}
+							}
+						}
+					}
+				}
+			},
+			"put": {
+				"tags": ["billing"],
+				"summary": "Matches something of Huxley's to the accounting system's (replacing any match).",
+				"operationId": "put_accounting_mapping",
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/MappingRequest"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/AccountingMapping"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/billing/mappings/options": {
+			"get": {
+				"tags": ["billing"],
+				"summary": "The accounting system's customers, items, tax codes or classes, from the\nsync pack's datasets.",
+				"operationId": "accounting_mapping_options",
+				"parameters": [
+					{
+						"name": "orgId",
+						"in": "query",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					},
+					{
+						"name": "kind",
+						"in": "query",
+						"required": true,
+						"schema": {
+							"$ref": "#/components/schemas/MappingKind"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "array",
+									"items": {
+										"$ref": "#/components/schemas/RemoteOption"
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/billing/mappings/{id}": {
+			"delete": {
+				"tags": ["billing"],
+				"operationId": "delete_accounting_mapping",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					},
+					{
+						"name": "orgId",
+						"in": "query",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"responses": {
+					"204": {}
+				}
+			}
+		},
 		"/api/v1/billing/review-rules": {
 			"get": {
 				"tags": ["billing"],
@@ -5197,6 +5324,99 @@
 							"application/json": {
 								"schema": {
 									"$ref": "#/components/schemas/BillingSettings"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/billing/sync-queue": {
+			"get": {
+				"tags": ["billing"],
+				"summary": "Invoice syncs in a status: the error queue (failed) by default.",
+				"operationId": "accounting_sync_queue",
+				"parameters": [
+					{
+						"name": "status",
+						"in": "query",
+						"description": "`failed` (the error queue, the default), `pending` or `synced`.",
+						"required": false,
+						"schema": {
+							"$ref": "#/components/schemas/SyncStatus"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "array",
+									"items": {
+										"$ref": "#/components/schemas/InvoiceSync"
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/billing/sync-settings": {
+			"get": {
+				"tags": ["billing"],
+				"summary": "The provider's accounting sync settings (none until it's set up).",
+				"operationId": "get_accounting_sync_settings",
+				"parameters": [
+					{
+						"name": "orgId",
+						"in": "query",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"oneOf": [
+										{
+											"$ref": "#/components/schemas/AccountingSyncSettings"
+										},
+										{
+											"type": "null"
+										}
+									]
+								}
+							}
+						}
+					}
+				}
+			},
+			"put": {
+				"tags": ["billing"],
+				"operationId": "put_accounting_sync_settings",
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/SyncSettingsRequest"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/AccountingSyncSettings"
 								}
 							}
 						}
@@ -10056,6 +10276,78 @@
 							"application/json": {
 								"schema": {
 									"$ref": "#/components/schemas/Invoice"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/invoices/{id}/sync": {
+			"get": {
+				"tags": ["billing"],
+				"summary": "The invoice's accounting sync (none if it was never asked for).",
+				"operationId": "invoice_sync",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"oneOf": [
+										{
+											"$ref": "#/components/schemas/InvoiceSync"
+										},
+										{
+											"type": "null"
+										}
+									]
+								}
+							}
+						}
+					}
+				}
+			},
+			"post": {
+				"tags": ["billing"],
+				"summary": "Syncs an approved invoice to the accounting system, or tries again.\nRaises `invoice.sync_requested` for the sync pack's workflow; an unmapped\nclient or item fails it straight away, with the reason.",
+				"operationId": "request_invoice_sync",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/InvoiceSync"
+								}
+							}
+						}
+					},
+					"409": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
 								}
 							}
 						}
@@ -25730,6 +26022,69 @@
 				},
 				"additionalProperties": false
 			},
+			"AccountingMapping": {
+				"type": "object",
+				"required": ["id", "kind", "localKey", "remoteId"],
+				"properties": {
+					"id": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"kind": {
+						"$ref": "#/components/schemas/MappingKind"
+					},
+					"localKey": {
+						"type": "string"
+					},
+					"localName": {
+						"type": ["string", "null"],
+						"description": "What the local key is: the client's or product's name, or the line kind."
+					},
+					"remoteId": {
+						"type": "string"
+					},
+					"remoteName": {
+						"type": ["string", "null"]
+					}
+				}
+			},
+			"AccountingMappingInput": {
+				"type": "object",
+				"required": ["kind", "localKey", "remoteId"],
+				"properties": {
+					"kind": {
+						"$ref": "#/components/schemas/MappingKind"
+					},
+					"localKey": {
+						"type": "string"
+					},
+					"remoteId": {
+						"type": "string"
+					},
+					"remoteName": {
+						"type": ["string", "null"]
+					}
+				},
+				"additionalProperties": false
+			},
+			"AccountingSyncSettings": {
+				"type": "object",
+				"required": ["target"],
+				"properties": {
+					"enabled": {
+						"type": "boolean"
+					},
+					"onApproval": {
+						"type": "boolean",
+						"description": "Sync each invoice as soon as it's approved (otherwise by hand)."
+					},
+					"target": {
+						"type": "string",
+						"description": "The accounting system: the sync pack's target, e.g. `quickbooks` or `xero`."
+					}
+				},
+				"additionalProperties": false
+			},
 			"Action": {
 				"type": "object",
 				"description": "One operation.",
@@ -33731,6 +34086,70 @@
 				"type": "string",
 				"enum": ["draft", "approved", "sent", "void"]
 			},
+			"InvoiceSync": {
+				"type": "object",
+				"required": [
+					"invoiceId",
+					"number",
+					"kind",
+					"orgId",
+					"orgName",
+					"target",
+					"status",
+					"attempts",
+					"requestedAt"
+				],
+				"properties": {
+					"attempts": {
+						"type": "integer",
+						"format": "int32"
+					},
+					"error": {
+						"type": ["string", "null"]
+					},
+					"invoiceId": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"kind": {
+						"type": "string"
+					},
+					"number": {
+						"type": "integer",
+						"format": "int64"
+					},
+					"orgId": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"orgName": {
+						"type": "string"
+					},
+					"remoteId": {
+						"type": ["string", "null"]
+					},
+					"remoteNumber": {
+						"type": ["string", "null"]
+					},
+					"remoteUrl": {
+						"type": ["string", "null"]
+					},
+					"requestedAt": {
+						"type": "string",
+						"format": "date-time"
+					},
+					"status": {
+						"$ref": "#/components/schemas/SyncStatus"
+					},
+					"syncedAt": {
+						"type": ["string", "null"],
+						"format": "date-time"
+					},
+					"target": {
+						"type": "string"
+					}
+				}
+			},
 			"ItemDetail": {
 				"type": "object",
 				"description": "An item, and where it is.",
@@ -34793,6 +35212,24 @@
 						"type": "string"
 					}
 				}
+			},
+			"MappingKind": {
+				"type": "string",
+				"enum": ["customer", "item", "tax_code", "class"]
+			},
+			"MappingRequest": {
+				"type": "object",
+				"required": ["orgId", "mapping"],
+				"properties": {
+					"mapping": {
+						"$ref": "#/components/schemas/AccountingMappingInput"
+					},
+					"orgId": {
+						"type": "string",
+						"format": "uuid"
+					}
+				},
+				"additionalProperties": false
 			},
 			"MatrixCell": {
 				"type": "object",
@@ -40109,6 +40546,19 @@
 					}
 				}
 			},
+			"RemoteOption": {
+				"type": "object",
+				"description": "A customer, item, tax code or class in the accounting system.",
+				"required": ["id", "name"],
+				"properties": {
+					"id": {
+						"type": "string"
+					},
+					"name": {
+						"type": "string"
+					}
+				}
+			},
 			"Rename": {
 				"type": "object",
 				"description": "An action that seems to have been renamed: gone under one key, back\nunder another with the same method and path.",
@@ -43936,6 +44386,26 @@
 				},
 				"additionalProperties": false
 			},
+			"SyncSettingsRequest": {
+				"type": "object",
+				"required": ["orgId", "target"],
+				"properties": {
+					"enabled": {
+						"type": "boolean"
+					},
+					"onApproval": {
+						"type": "boolean"
+					},
+					"orgId": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"target": {
+						"type": "string"
+					}
+				},
+				"additionalProperties": false
+			},
 			"SyncStarted": {
 				"type": "object",
 				"required": ["runs"],
@@ -43972,6 +44442,10 @@
 						]
 					}
 				}
+			},
+			"SyncStatus": {
+				"type": "string",
+				"enum": ["pending", "synced", "failed"]
 			},
 			"Tag": {
 				"type": "object",

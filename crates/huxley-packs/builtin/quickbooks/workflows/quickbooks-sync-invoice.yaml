@@ -1,0 +1,103 @@
+apiVersion: usehuxley.io/v1
+kind: Workflow
+metadata:
+  key: quickbooks-sync-invoice
+  name: Sync invoices to QuickBooks Online
+  description: >-
+    When an invoice or credit memo is to be synced to QuickBooks (target
+    quickbooks in Settings → Billing), creates it in QuickBooks with its
+    mapped customer, items, tax codes and class, and records QuickBooks' ID
+    and number on it (the invoice is then sent). If QuickBooks refuses it,
+    the reason goes to the sync error queue under Billing → Accounting,
+    where it can be retried. Uses the connection named quickbooks. For a
+    sandbox company, set the organization variable quickbooks_app_host to
+    app.sandbox.qbo.intuit.com so links open the sandbox.
+spec:
+  triggers:
+    - type: event
+      event: invoice.sync_requested
+      filter: "{{ event.payload.target == 'quickbooks' }}"
+  steps:
+    - id: begin
+      type: set_var
+      vars: { lines: [] }
+    # QuickBooks lines: optional tax codes and classes are left out, not null.
+    # ('}' ~ '}' because a literal pair of braces would end the expression.)
+    - id: each
+      type: foreach
+      items: "{{ inputs.lines }}"
+      as: line
+      steps:
+        - id: add
+          type: set_var
+          vars:
+            lines: >-
+              {{ run.vars.lines + [('{"DetailType":"SalesItemLineDetail","Amount":' ~ line.amount
+                ~ ',"Description":' ~ (line.description | to_json)
+                ~ ',"SalesItemLineDetail":{"ItemRef":{"value":' ~ (line.item.id | to_json) ~ '}'
+                ~ ',"Qty":' ~ line.quantity ~ ',"UnitPrice":' ~ line.unitPrice
+                ~ ((',"TaxCodeRef":{"value":' ~ (line.taxCode.id | to_json) ~ '}') if line.taxCode else '')
+                ~ ((',"ClassRef":{"value":' ~ (inputs['class'].id | to_json) ~ '}') if inputs['class'] else '')
+                ~ '}' ~ '}') | from_json] }}
+    - id: kind
+      type: if
+      condition: "{{ inputs.kind == 'credit_memo' }}"
+      then:
+        - id: memo
+          type: integration.action
+          action: quickbooks/createCreditMemo
+          connection: quickbooks
+          with:
+            minorversion: 75
+            body:
+              CustomerRef: { value: "{{ inputs.customer.id }}" }
+              Line: "{{ run.vars.lines }}"
+              DocNumber: "{{ inputs.reference }}"
+              TxnDate: "{{ inputs.issuedOn }}"
+              CurrencyRef: { value: "{{ inputs.currency }}" }
+              PrivateNote: "{{ 'From Huxley ' ~ inputs.reference ~ ((': ' ~ inputs.notes) if inputs.notes else '') }}"
+        - id: memo_synced
+          type: core.invoice.sync_result
+          with:
+            invoice_id: "{{ inputs.invoiceId }}"
+            ok: true
+            remote_id: "{{ steps.memo.output.CreditMemo.Id }}"
+            remote_number: "{{ steps.memo.output.CreditMemo.DocNumber }}"
+            remote_url: "https://{{ vars.quickbooks_app_host | default('app.qbo.intuit.com') }}/app/creditmemo?txnId={{ steps.memo.output.CreditMemo.Id }}"
+      else:
+        - id: invoice
+          type: integration.action
+          action: quickbooks/createInvoice
+          connection: quickbooks
+          with:
+            minorversion: 75
+            body:
+              CustomerRef: { value: "{{ inputs.customer.id }}" }
+              Line: "{{ run.vars.lines }}"
+              DocNumber: "{{ inputs.reference }}"
+              TxnDate: "{{ inputs.issuedOn }}"
+              DueDate: "{{ inputs.dueOn }}"
+              CurrencyRef: { value: "{{ inputs.currency }}" }
+              PrivateNote: "{{ 'From Huxley ' ~ inputs.reference }}"
+              CustomerMemo: { value: "{{ inputs.notes or '' }}" }
+        - id: invoice_synced
+          type: core.invoice.sync_result
+          with:
+            invoice_id: "{{ inputs.invoiceId }}"
+            ok: true
+            remote_id: "{{ steps.invoice.output.Invoice.Id }}"
+            remote_number: "{{ steps.invoice.output.Invoice.DocNumber }}"
+            remote_url: "https://{{ vars.quickbooks_app_host | default('app.qbo.intuit.com') }}/app/invoice?txnId={{ steps.invoice.output.Invoice.Id }}"
+  on_error:
+    - id: failed
+      type: core.invoice.sync_result
+      with:
+        invoice_id: "{{ inputs.invoiceId }}"
+        ok: false
+        # QuickBooks says why in the response's Fault.
+        error: >-
+          {{ ('QuickBooks: ' ~ (error.body.Fault.Error | map(attribute='Message') | join('; ')))
+             if (error.body and error.body.Fault and error.body.Fault.Error)
+             else (error.message or 'QuickBooks refused it') }}
+  outputs:
+    synced: "{{ inputs.reference }}"

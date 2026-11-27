@@ -2,7 +2,7 @@
 	import { enhance } from '$app/forms';
 	import { resolve } from '$app/paths';
 	import { Receipt, Search } from '@lucide/svelte';
-	import { Button, Card, EmptyState, Input, toast } from '@usehuxley/ui';
+	import { Badge, Button, Card, EmptyState, Input, toast } from '@usehuxley/ui';
 	import { money } from '#lib/billing/labels.ts';
 	import type { PageProps } from './$types';
 
@@ -24,7 +24,10 @@
 				What's ready to bill, by client, and the runs that billed it.
 			</p>
 		</div>
-		<div class="ml-auto">
+		<div class="ml-auto flex gap-2">
+			<Button href={resolve('/(app)/billing/accounting')}>
+				Accounting{#if data.syncErrors}<Badge tone="danger">{data.syncErrors}</Badge>{/if}
+			</Button>
 			<Button href={resolve('/(app)/billing/invoices')}><Receipt size={16} /> Invoices</Button>
 		</div>
 	</div>
