@@ -64,6 +64,7 @@ export default defineConfig({
 					{ text: 'Cloud templates', link: '/cloud' },
 					{ text: 'Observability', link: '/observability' },
 					{ text: 'Security', link: '/security' },
+					{ text: 'Malware scanning', link: '/attachment-scanning' },
 					{ text: 'Provisioning (SCIM)', link: '/scim' }
 				]
 			},

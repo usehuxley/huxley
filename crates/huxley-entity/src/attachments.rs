@@ -33,6 +33,9 @@ pub struct Attachment {
     pub created_by_name: Option<String>,
     #[serde(with = "time::serde::rfc3339")]
     pub created_at: OffsetDateTime,
+    /// The malware scan (ADR-094): `unscanned` (uploaded with scanning
+    /// off), `pending`, `clean`, `infected` (quarantined) or `failed`.
+    pub scan_status: String,
     #[serde(skip)]
     pub storage_key: String,
     #[serde(skip)]
@@ -41,8 +44,9 @@ pub struct Attachment {
 
 const SELECT: &str = "SELECT a.id, a.entity_type, a.entity_id, a.filename, a.content_type, a.size_bytes, \
     encode(a.sha256, 'hex') AS sha256, a.created_by, u.display_name AS created_by_name, a.created_at, \
-    a.storage_key, a.org_id \
-    FROM attachments a LEFT JOIN users u ON u.id = a.created_by";
+    coalesce(fs.status, 'unscanned') AS scan_status, a.storage_key, a.org_id \
+    FROM attachments a LEFT JOIN users u ON u.id = a.created_by \
+    LEFT JOIN file_scans fs ON fs.storage_key = a.storage_key";
 
 /// A safe file name: no path, no control characters, at most 255 bytes.
 pub fn clean_filename(name: &str) -> String {
@@ -168,6 +172,21 @@ pub async fn upload(
     if let Err(e) = inserted {
         let _ = storage.delete(&key).await;
         return Err(e.into());
+    }
+    if storage.scans_uploads() {
+        huxley_db::scans::queue(
+            conn,
+            huxley_db::scans::NewScan {
+                storage_key: &key,
+                org_id,
+                source: huxley_db::scans::Source::Attachment,
+                record_id: id,
+                filename: &filename,
+                size_bytes: size,
+            },
+        )
+        .await
+        .map_err(db_err)?;
     }
     audit::record(
         conn,

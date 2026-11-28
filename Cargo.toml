@@ -68,6 +68,7 @@ huxley-datasets = { path = "crates/huxley-datasets" }
 huxley-ai = { path = "crates/huxley-ai" }
 huxley-scripts = { path = "crates/huxley-scripts" }
 huxley-storage = { path = "crates/huxley-storage" }
+huxley-scan = { path = "crates/huxley-scan" }
 huxley-telemetry = { path = "crates/huxley-telemetry" }
 huxley-triggers = { path = "crates/huxley-triggers" }
 huxley-variables = { path = "crates/huxley-variables" }

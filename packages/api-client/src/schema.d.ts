@@ -5555,6 +5555,74 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
+	'/api/v1/platform/file-scans': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get: operations['list_file_scans'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/platform/file-scans/status': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get: operations['file_scan_status'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/platform/file-scans/{id}': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		post?: never;
+		/**
+		 * Deletes the file itself: the attachment, or the expense entry's receipt
+		 *     (the entry stays).
+		 */
+		delete: operations['delete_scanned_file'];
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/platform/file-scans/{id}/rescan': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		post: operations['rescan_file'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
 	'/api/v1/platform/retention': {
 		parameters: {
 			query?: never;
@@ -10793,6 +10861,11 @@ export interface components {
 			filename: string;
 			/** Format: uuid */
 			id: string;
+			/**
+			 * @description The malware scan (ADR-094): `unscanned` (uploaded with scanning
+			 *     off), `pending`, `clean`, `infected` (quarantined) or `failed`.
+			 */
+			scanStatus: string;
 			/** @description Hex SHA-256 of the content. */
 			sha256: string;
 			/** Format: int64 */
@@ -12451,6 +12524,11 @@ export interface components {
 			reading?: components['schemas']['Reading'] | null;
 			readingError?: string | null;
 			receiptName?: string | null;
+			/**
+			 * @description The receipt's malware scan (ADR-094), when there's a receipt:
+			 *     `unscanned`, `pending`, `clean`, `infected` (quarantined) or `failed`.
+			 */
+			receiptScan?: string | null;
 			reimbursable: boolean;
 			/**
 			 * Format: uuid
@@ -12690,6 +12768,32 @@ export interface components {
 		/** @description A field that applies to an entity, with its value (null when unset). */
 		FieldValue: components['schemas']['FieldDef'] & {
 			value: Record<string, never>;
+		};
+		/** @description A scanned upload, for the admin page. */
+		FileScan: {
+			/** Format: int32 */
+			attempts: number;
+			/** Format: date-time */
+			createdAt: string;
+			engine?: string | null;
+			filename: string;
+			finding?: string | null;
+			/** Format: uuid */
+			id: string;
+			lastError?: string | null;
+			/** Format: uuid */
+			orgId: string;
+			orgName: string;
+			/** Format: uuid */
+			recordId: string;
+			/** Format: date-time */
+			scannedAt?: string | null;
+			/** Format: int64 */
+			sizeBytes: number;
+			/** @description `attachment` or `receipt`. */
+			source: string;
+			/** @description `pending`, `clean`, `infected` or `failed`. */
+			status: string;
 		};
 		Filter: {
 			field: string;
@@ -16921,6 +17025,25 @@ export interface components {
 		};
 		SayRequest: {
 			text: string;
+		};
+		/** @description How uploads are scanned. */
+		ScanStatus: {
+			/** Format: int64 */
+			clean: number;
+			/** @description The scanner's version, or why it didn't answer. */
+			detail?: string | null;
+			/** Format: int64 */
+			failed: number;
+			/** @description Files not scanned clean yet are withheld (`uploads.scan.while_pending = "hold"`). */
+			holdsUnscanned: boolean;
+			/** Format: int64 */
+			infected: number;
+			/** Format: int64 */
+			pending: number;
+			/** @description `off`, `clamav` or `metadefender`. */
+			provider: string;
+			/** @description Whether the scanner answered just now (absent with scanning off). */
+			reachable?: boolean | null;
 		};
 		Schedule: {
 			/** @description `{"mon": [["09:00", "17:00"]], …}`; days left out aren't worked. */
@@ -22040,7 +22163,25 @@ export interface operations {
 					'application/octet-stream': unknown;
 				};
 			};
+			/** @description Quarantined by the malware scan */
+			403: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
 			404: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+			/** @description Not scanned clean yet */
+			409: {
 				headers: {
 					[name: string]: unknown;
 				};
@@ -30524,6 +30665,109 @@ export interface operations {
 				};
 				content: {
 					'application/json': components['schemas']['StreamTest'];
+				};
+			};
+		};
+	};
+	list_file_scans: {
+		parameters: {
+			query?: {
+				/** @description `infected` (the default), `failed` or `pending`. */
+				status?: string;
+			};
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['FileScan'][];
+				};
+			};
+		};
+	};
+	file_scan_status: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ScanStatus'];
+				};
+			};
+		};
+	};
+	delete_scanned_file: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			204: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content?: never;
+			};
+			404: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+		};
+	};
+	rescan_file: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			204: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content?: never;
+			};
+			404: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
+				};
+			};
+			409: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/problem+json': components['schemas']['ApiError'];
 				};
 			};
 		};

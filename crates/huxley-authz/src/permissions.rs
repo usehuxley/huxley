@@ -63,6 +63,7 @@ permissions! {
     JOBS_MANAGE = "platform:jobs:manage", Instance, "See workflow jobs that failed repeatedly and retry them";
     RETENTION_MANAGE = "platform:retention:manage", Instance, "Set how long workflow runs, events, notifications and AI call records are kept";
     AUDIT_STREAM_MANAGE = "platform:audit_streams:manage", Instance, "Stream the audit log to a SIEM, and change or remove the streams";
+    FILE_SCAN_MANAGE = "platform:file_scans:manage", Instance, "See uploads the malware scan quarantined or couldn't check, and scan them again or delete them";
     INTEGRATION_READ = "integration:read", Org, "View integrations and their actions";
     INTEGRATION_MANAGE = "integration:manage", Org, "Import integrations from OpenAPI specs and update them";
     CONNECTION_READ = "connection:read", Org, "View connections (never their secrets)";

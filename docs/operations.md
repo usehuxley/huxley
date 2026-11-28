@@ -72,7 +72,7 @@ Bypass the cache for `/api/*`, `/hooks/*`, `/scim/*`, `/mcp*`, `/callbacks/*`, `
 
 Live updates (server-sent events) send a keep-alive every 15 seconds, so they stay open. **Synchronous webhooks** (`response: sync`) can wait up to 5 minutes for a run. Behind a CDN, keep their `timeout` under its limit, or use `async`.
 
-Uploads go up to `storage.max_upload_mb` (25 MB by default), within both CDNs' limits.
+Uploads go up to `storage.max_upload_mb` (25 MB by default), within both CDNs' limits. To check them for malware, see [Malware scanning](attachment-scanning.md).
 
 ### 5. Let the WAF through where it must
 

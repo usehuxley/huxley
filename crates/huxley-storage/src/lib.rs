@@ -102,6 +102,10 @@ pub struct Storage {
     /// Prefix inside the store (from the URL path, for cloud stores).
     prefix: Path,
     max_upload_bytes: u64,
+    /// New uploads are queued for a malware scan (ADR-094).
+    scan_uploads: bool,
+    /// Files not yet scanned clean aren't served.
+    hold_unscanned: bool,
     description: String,
 }
 
@@ -143,6 +147,8 @@ impl Storage {
                 store: Arc::new(store),
                 prefix: Path::default(),
                 max_upload_bytes,
+                scan_uploads: false,
+                hold_unscanned: false,
                 description: format!("local filesystem at {}", dir.display()),
             });
         }
@@ -161,6 +167,8 @@ impl Storage {
             store: Arc::from(store),
             prefix,
             max_upload_bytes,
+            scan_uploads: false,
+            hold_unscanned: false,
             description: format!("{}://{}", url.scheme(), url.host_str().unwrap_or_default()),
         })
     }
@@ -171,6 +179,8 @@ impl Storage {
             store: Arc::new(object_store::memory::InMemory::new()),
             prefix: Path::default(),
             max_upload_bytes: 25 * 1024 * 1024,
+            scan_uploads: false,
+            hold_unscanned: false,
             description: "memory".into(),
         }
     }
@@ -184,6 +194,26 @@ impl Storage {
 
     pub fn max_upload_bytes(&self) -> u64 {
         self.max_upload_bytes
+    }
+
+    /// Queues new uploads for a malware scan (`[uploads.scan]` is set),
+    /// and with `hold`, doesn't serve them until they're scanned clean.
+    #[must_use]
+    pub fn with_scanning(mut self, on: bool, hold: bool) -> Self {
+        self.scan_uploads = on;
+        self.hold_unscanned = on && hold;
+        self
+    }
+
+    /// Whether files waiting for a scan (or that couldn't be scanned) are
+    /// withheld. Never with scanning off: nothing would scan them.
+    pub fn holds_unscanned(&self) -> bool {
+        self.hold_unscanned
+    }
+
+    /// Whether new uploads are queued for a malware scan.
+    pub fn scans_uploads(&self) -> bool {
+        self.scan_uploads
     }
 
     fn path(&self, key: &str) -> Path {

@@ -1,6 +1,7 @@
 <!-- Expense entries: what, how much, flags, the receipt; owners keep
      receipts on and delete their drafts. -->
 <script lang="ts">
+	import ScanBadge from '#lib/files/ScanBadge.svelte';
 	import { enhance, type SubmitFunction } from '$app/forms';
 	import { resolve } from '$app/paths';
 	import { Paperclip, Trash2 } from '@lucide/svelte';
@@ -87,7 +88,7 @@
 			</div>
 			<div class="flex items-center gap-2">
 				<span class="font-mono text-fg tabular-nums">{money(e.amount, e.currency)}</span>
-				{#if e.hasReceipt}
+				{#if e.hasReceipt && e.receiptScan !== 'infected'}
 					<a
 						href={resolve('/(app)/expenses/[id]/receipt', { id: e.id })}
 						target="_blank"
@@ -97,6 +98,7 @@
 						<Paperclip size={14} />
 					</a>
 				{/if}
+				{#if e.hasReceipt}<ScanBadge status={e.receiptScan} />{/if}
 				{#if draft(e)}
 					{#if !e.hasReceipt && e.kind === 'expense'}
 						<form

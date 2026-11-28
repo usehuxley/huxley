@@ -48,6 +48,9 @@ pub enum ExpenseError {
     Conflict(String),
     #[error("the file is larger than the {0} MB limit")]
     TooLarge(u64),
+    /// The receipt isn't served: quarantined, or not scanned yet (ADR-094).
+    #[error("the receipt is withheld by the malware scan ({})", .0.as_str())]
+    Withheld(huxley_db::scans::Status),
     #[error(transparent)]
     Db(#[from] huxley_db::DbError),
     #[error(transparent)]

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import ScanBadge from '#lib/files/ScanBadge.svelte';
 	import HealthModelCard from '#lib/orgs/HealthModelCard.svelte';
 	import { enhance, type SubmitFunction } from '$app/forms';
 	import { resolve } from '$app/paths';
@@ -107,13 +108,20 @@
 					{#each data.attachments as file (file.id)}
 						<li class="flex items-center justify-between gap-4 py-3 first:pt-0 last:pb-0">
 							<div class="min-w-0">
-								<a
-									href={resolve('/(app)/attachments/[id]', { id: file.id })}
-									data-sveltekit-reload
-									class="text-sm font-medium text-fg hover:underline"
-								>
-									{file.filename}
-								</a>
+								<div class="flex flex-wrap items-center gap-2">
+									{#if file.scanStatus === 'infected'}
+										<span class="text-sm font-medium text-fg-muted">{file.filename}</span>
+									{:else}
+										<a
+											href={resolve('/(app)/attachments/[id]', { id: file.id })}
+											data-sveltekit-reload
+											class="text-sm font-medium text-fg hover:underline"
+										>
+											{file.filename}
+										</a>
+									{/if}
+									<ScanBadge status={file.scanStatus} />
+								</div>
 								<p class="mt-0.5 text-sm text-fg-muted">
 									{formatSize(file.sizeBytes)} · {file.createdByName ?? 'Someone'} · {dateFormat.format(
 										new Date(file.createdAt)

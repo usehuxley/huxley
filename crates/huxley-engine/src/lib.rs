@@ -40,6 +40,7 @@ pub mod replay;
 pub mod retention;
 mod run;
 pub mod runs;
+pub mod scan;
 pub mod script;
 mod script_credentials;
 mod step;
@@ -112,6 +113,9 @@ pub struct Engine {
     /// LISTEN connections, straight to PostgreSQL (`database.direct_url`);
     /// the main pool when unset.
     listen_db: Option<PgPool>,
+    /// Scans uploads (ADR-094), reading them from `files`.
+    scanner: Option<Arc<huxley_scan::Scanner>>,
+    files: Option<huxley_storage::Storage>,
 }
 
 impl Engine {
@@ -132,6 +136,8 @@ impl Engine {
             mailer: None,
             portal_url: None,
             listen_db: None,
+            scanner: None,
+            files: None,
         }
     }
 
@@ -189,6 +195,18 @@ impl Engine {
     #[must_use]
     pub fn with_storage(mut self, storage: huxley_storage::Storage) -> Self {
         self.payloads = payload::Payloads::new(Some(storage), &self.payload_config);
+        self
+    }
+
+    /// Scans uploads with `scanner`, reading them from `storage` (ADR-094).
+    #[must_use]
+    pub fn with_scanner(
+        mut self,
+        scanner: huxley_scan::Scanner,
+        storage: huxley_storage::Storage,
+    ) -> Self {
+        self.scanner = Some(Arc::new(scanner));
+        self.files = Some(storage);
         self
     }
 

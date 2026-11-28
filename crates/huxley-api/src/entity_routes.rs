@@ -36,7 +36,7 @@ pub fn routes() -> Router<AppState> {
         )
 }
 
-fn map_entity(e: EntityError) -> ApiError {
+pub(crate) fn map_entity(e: EntityError) -> ApiError {
     match e {
         EntityError::UnknownEntityType(_) | EntityError::NotFound => ApiError::not_found(),
         EntityError::Invalid { field, message } => {
@@ -507,7 +507,9 @@ async fn load_attachment(
 #[utoipa::path(get, path = "/api/v1/attachments/{id}/content", tag = "fields",
     params(("id" = Uuid, Path, description = "Attachment id")),
     responses((status = 200, description = "The file", content_type = "application/octet-stream"),
-        (status = 404, body = ApiError, content_type = "application/problem+json")))]
+        (status = 403, description = "Quarantined by the malware scan", body = ApiError, content_type = "application/problem+json"),
+        (status = 404, body = ApiError, content_type = "application/problem+json"),
+        (status = 409, description = "Not scanned clean yet", body = ApiError, content_type = "application/problem+json")))]
 pub async fn download_attachment(
     State(state): State<AppState>,
     authed: Authed,
@@ -516,6 +518,20 @@ pub async fn download_attachment(
     use axum::http::header;
     use axum::response::IntoResponse as _;
     let attachment = load_attachment(&state, &authed, id, false).await?;
+    let key = attachment.storage_key.clone();
+    let scan = {
+        let mut tx = begin_scoped(&state.db, &OrgScope::System)
+            .await
+            .map_err(|e| ApiError::internal(&e))?;
+        let scan = huxley_db::scans::status(&mut tx, &key)
+            .await
+            .map_err(|e| ApiError::internal(&e))?;
+        tx.commit().await.map_err(|e| ApiError::internal(&e))?;
+        scan
+    };
+    if !scan.servable(state.storage.holds_unscanned()) {
+        return Err(ApiError::withheld(&scan));
+    }
     let bytes = huxley_entity::attachments::content(&state.storage, &attachment)
         .await
         .map_err(|e| match e {

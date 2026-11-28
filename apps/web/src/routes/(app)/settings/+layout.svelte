@@ -15,6 +15,7 @@
 		'service-accounts': resolve('/(app)/settings/service-accounts'),
 		audit: resolve('/(app)/settings/audit'),
 		'audit-streams': resolve('/(app)/settings/audit-streams'),
+		'file-scans': resolve('/(app)/settings/file-scans'),
 		fields: resolve('/(app)/settings/fields'),
 		queues: resolve('/(app)/settings/queues'),
 		sla: resolve('/(app)/settings/sla'),

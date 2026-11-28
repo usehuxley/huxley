@@ -51,6 +51,15 @@ fn business_routes() -> Router<AppState> {
         .merge(crate::billing_routes::routes())
 }
 
+/// Instance administration: data retention, audit streaming and upload
+/// scanning.
+fn platform_routes() -> Router<AppState> {
+    Router::new()
+        .merge(crate::retention_routes::routes())
+        .merge(crate::audit_stream_routes::routes())
+        .merge(crate::scan_routes::routes())
+}
+
 pub fn router(state: AppState) -> Router {
     let body_limit = MAX_BODY_BYTES
         .max(
@@ -116,8 +125,7 @@ pub fn router(state: AppState) -> Router {
         .merge(module_routes::org_routes())
         .merge(variable_routes::routes())
         .merge(upload_routes(&state))
-        .merge(crate::retention_routes::routes())
-        .merge(crate::audit_stream_routes::routes())
+        .merge(platform_routes())
         .route_layer(middleware::from_fn(crate::metrics::track))
         .layer(middleware::from_fn(csrf::require_header));
 

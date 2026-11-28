@@ -34,6 +34,7 @@ huxley-cmdb.workspace = true
 huxley-contracts.workspace = true
 huxley-notify.workspace = true
 huxley-storage.workspace = true
+huxley-scan.workspace = true
 huxley-orgs.workspace = true
 huxley-runners.workspace = true
 huxley-packs.workspace = true

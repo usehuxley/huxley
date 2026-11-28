@@ -96,6 +96,11 @@ export const SETTINGS_SECTIONS = [
 		permission: 'platform:audit_streams:manage'
 	},
 	{
+		key: 'file-scans',
+		label: 'Malware scanning',
+		permission: 'platform:file_scans:manage'
+	},
+	{
 		key: 'expenses',
 		label: 'Expenses',
 		permission: 'expense:configure',

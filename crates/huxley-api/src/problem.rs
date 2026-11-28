@@ -115,6 +115,33 @@ impl ApiError {
         Self::new(StatusCode::CONFLICT, "conflict", "Conflict").with_detail(detail)
     }
 
+    /// A file the malware scan withholds (ADR-094): quarantined (403), or
+    /// not scanned clean yet (409, try again shortly).
+    pub fn withheld(scan: &huxley_db::scans::Status) -> Self {
+        match scan {
+            huxley_db::scans::Status::Infected(_) => Self::new(
+                StatusCode::FORBIDDEN,
+                "file-quarantined",
+                "File quarantined",
+            )
+            .with_detail(
+                "The malware scan found a threat in this file, so it can't be downloaded.",
+            ),
+            huxley_db::scans::Status::Failed(_) => Self::new(
+                StatusCode::CONFLICT,
+                "file-not-scanned",
+                "File not scanned",
+            )
+            .with_detail(
+                "The malware scan couldn't check this file. An administrator can scan it again.",
+            ),
+            _ => Self::new(StatusCode::CONFLICT, "file-scanning", "File being scanned")
+                .with_detail(
+                    "This file is still being checked for malware. Try again in a moment.",
+                ),
+        }
+    }
+
     pub fn unavailable(detail: impl Into<String>) -> Self {
         Self::new(
             StatusCode::SERVICE_UNAVAILABLE,

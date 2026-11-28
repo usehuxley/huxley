@@ -76,6 +76,7 @@ mod router;
 mod runner_routes;
 pub mod sales_order_routes;
 pub mod sales_routes;
+pub mod scan_routes;
 pub mod scim_routes;
 pub mod scope_routes;
 mod script_routes;
@@ -179,6 +180,9 @@ pub struct AppState {
     pub datasets_console: Option<PgPool>,
     /// Reporting queries' read replica, if any (else `db`).
     pub read_db: Option<PgPool>,
+    /// The upload scanner (`uploads.scan`, ADR-094), to report on; the
+    /// scheduler does the scanning.
+    pub scanner: Option<Arc<huxley_scan::Scanner>>,
     /// Recent reporting results (ADR-041).
     pub analytics: Arc<huxley_analytics::Cache>,
     pub config: Arc<ApiConfig>,
@@ -221,6 +225,7 @@ impl AppState {
             pack_registries: Arc::new(pack_registry::PackRegistries::new(Vec::new())),
             datasets_console: None,
             read_db: None,
+            scanner: None,
             analytics: Arc::new(huxley_analytics::Cache::default()),
             auth,
             crypto,
