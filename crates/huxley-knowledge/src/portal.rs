@@ -66,10 +66,11 @@ pub async fn list(
     let q = q.map(str::trim).filter(|q| !q.is_empty());
     let query = "websearch_to_tsquery('english', $2)";
     let document = "to_tsvector('english', r.title || ' ' || r.body)";
-    Ok(sqlx::query_as(sqlx::AssertSqlSafe(format!(
+    let headline = crate::highlight::options(30, 12);
+    let rows: Vec<Summary> = sqlx::query_as(sqlx::AssertSqlSafe(format!(
         "SELECT a.id, r.title, c.name AS category, a.published_at, \
                 CASE WHEN $2::text IS NULL THEN NULL ELSE ts_headline('english', r.body, {query}, \
-                     'StartSel=<b>, StopSel=</b>, MaxWords=30, MinWords=12, MaxFragments=1') END AS snippet \
+                     '{headline}') END AS snippet \
            {FROM} WHERE {VISIBLE} \
             AND ($2::text IS NULL OR {document} @@ {query} OR r.title ILIKE '%' || $2 || '%') \
             AND ($3::uuid IS NULL OR a.category_id = $3) \
@@ -81,7 +82,14 @@ pub async fn list(
     .bind(q)
     .bind(category)
     .fetch_all(conn)
-    .await?)
+    .await?;
+    Ok(rows
+        .into_iter()
+        .map(|mut r| {
+            r.snippet = r.snippet.as_deref().map(crate::highlight::to_html);
+            r
+        })
+        .collect())
 }
 
 /// The categories with articles for a company's contacts.

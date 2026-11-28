@@ -161,3 +161,44 @@ test.describe('knowledge base', () => {
 		);
 	});
 });
+
+test.describe('knowledge search snippets', () => {
+	test.skip(!ownerEmail || !ownerPassword, 'set E2E_EMAIL and E2E_PASSWORD');
+	test.skip(preset === 'automation', 'the knowledge module is off in this run');
+
+	// Regression: snippets are rendered as HTML, and markup in an article's
+	// text used to come through (docs/security.md).
+	test('markup in an article shows as text in search snippets', async ({ page }) => {
+		const stamp = `xs${Date.now().toString(36)}`;
+		const api = await request.newContext({
+			baseURL: apiUrl,
+			extraHTTPHeaders: { 'x-requested-with': 'huxley' }
+		});
+		await api.post('/api/v1/auth/login', { data: { email: ownerEmail, password: ownerPassword } });
+		const orgs = (await (await api.get('/api/v1/orgs')).json()) as {
+			id: string;
+			parentId: string | null;
+		}[];
+		const root = orgs.find((o) => o.parentId === null)!.id;
+		const created = await api.post('/api/v1/kb/articles', {
+			data: {
+				orgId: root,
+				title: `Spooler ${stamp}`,
+				// A handler with a call in it: the text search parser doesn't take this
+				// for a tag, and passes it through.
+				body: `Restart the ${stamp} spooler <img src=x id=injected-${stamp} onerror=void(0)> after updates.`
+			}
+		});
+		expect(created.status(), await created.text()).toBe(201);
+		const { id } = (await created.json()) as { id: string };
+		expect((await api.post(`/api/v1/kb/articles/${id}/publish`, { data: {} })).status()).toBe(200);
+		await api.dispose();
+
+		await signIn(page);
+		await page.goto(`/knowledge?q=${stamp}`);
+		const card = page.getByRole('list', { name: 'Articles' }).getByRole('listitem').first();
+		await expect(card).toContainText(`<img src=x id=injected-${stamp}`);
+		await expect(card.locator('b').first()).toContainText(stamp);
+		await expect(page.locator(`#injected-${stamp}`)).toHaveCount(0);
+	});
+});

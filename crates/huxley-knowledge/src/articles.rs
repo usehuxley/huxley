@@ -233,6 +233,7 @@ pub async fn list(conn: &mut PgConnection, filter: &Filter) -> KbResult<(Vec<Sum
            AND ($3::text IS NULL OR (CASE WHEN {own} THEN a.status ELSE 'published' END) = $3) \
            AND ($8::uuid IS NULL OR a.org_id = $8)"
     );
+    let headline = crate::highlight::options(30, 12);
     let columns = format!(
         "a.id, a.org_id, o.name AS org_name, a.category_id, c.name AS category_name, \
          CASE WHEN {own} THEN a.title ELSE r.title END AS title, a.visibility, \
@@ -241,7 +242,7 @@ pub async fn list(conn: &mut PgConnection, filter: &Filter) -> KbResult<(Vec<Sum
          a.published_revision, a.updated_at, a.published_at, \
          CASE WHEN $1::text IS NULL THEN NULL ELSE ts_headline('english', \
               CASE WHEN {own} THEN a.body ELSE coalesce(r.body, '') END, {query}, \
-              'StartSel=<b>, StopSel=</b>, MaxWords=30, MinWords=12, MaxFragments=1') END AS snippet"
+              '{headline}') END AS snippet"
     );
     let from = format!(
         "{FROM} LEFT JOIN kb_revisions r ON r.article_id = a.id AND r.number = a.published_revision"
@@ -262,6 +263,13 @@ pub async fn list(conn: &mut PgConnection, filter: &Filter) -> KbResult<(Vec<Sum
     .bind(filter.org_id)
     .fetch_all(&mut *conn)
     .await?;
+    let rows: Vec<Summary> = rows
+        .into_iter()
+        .map(|mut r| {
+            r.snippet = r.snippet.as_deref().map(crate::highlight::to_html);
+            r
+        })
+        .collect();
     let total: i64 =
         sqlx::query_scalar(sqlx::AssertSqlSafe(format!("SELECT count(*) {from} {wh}")))
             .bind(q)
