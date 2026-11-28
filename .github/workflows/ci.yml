@@ -296,6 +296,20 @@ jobs:
           E2E_PRESET: ${{ matrix.preset }}
       - name: Audit chain is intact after the run
         run: ./target/debug/huxley admin verify-audit
+      # A backup restores completely and checks out (docs/backup.md): the
+      # database the tests filled, dumped and restored into a new database
+      # with the server's own tools (the runner's client is older than
+      # PostgreSQL 18). --exit-on-error: nothing may be skipped.
+      - name: Backup and restore drill
+        run: |
+          set -euo pipefail
+          pg=${{ job.services.postgres.id }}
+          docker exec "$pg" pg_dump -U huxley -d huxley -Fc -f /tmp/backup.dump
+          docker exec "$pg" createdb -U huxley huxley_restored
+          export HUXLEY_DATABASE__URL=postgres://huxley:huxley@localhost:5432/huxley_restored
+          ./target/debug/huxley admin prepare-restore
+          docker exec "$pg" pg_restore -U huxley -d huxley_restored --no-owner --exit-on-error /tmp/backup.dump
+          ./target/debug/huxley admin verify-restore
       - if: failure()
         run: cat api.log
       - if: failure()

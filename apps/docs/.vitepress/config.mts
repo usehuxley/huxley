@@ -60,6 +60,7 @@ export default defineConfig({
 					{ text: 'Your first workflow', link: '/getting-started' },
 					{ text: 'Search', link: '/search' },
 					{ text: 'Running Huxley', link: '/operations' },
+					{ text: 'Backup and restore', link: '/backup' },
 					{ text: 'Kubernetes', link: '/kubernetes' },
 					{ text: 'Cloud templates', link: '/cloud' },
 					{ text: 'Observability', link: '/observability' },
