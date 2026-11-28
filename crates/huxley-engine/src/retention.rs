@@ -197,6 +197,10 @@ impl Engine {
         sqlx::query("DELETE FROM rate_limit_hits WHERE window_start < now() - interval '1 hour'")
             .execute(&mut *tx)
             .await?;
+        // Signed webhook deliveries past their replay window.
+        sqlx::query("DELETE FROM webhook_deliveries WHERE expires_at < now()")
+            .execute(&mut *tx)
+            .await?;
         sqlx::query(
             "UPDATE retention_settings SET last_swept_at = now(), last_sweep = $1 WHERE id",
         )
