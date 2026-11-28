@@ -42,7 +42,7 @@ This page holds the threat model (STRIDE, by component), the gap review against 
 
 | Component | Threats | Controls | Residual risk |
 |---|---|---|---|
-| **Staff sign-in** (passwords, MFA, passkeys, SSO) | S: guessed or stuffed passwords, stolen sessions. E: reaching admin. | Argon2id (OWASP parameters), passwords at least 12 characters. Lockout after 5 failures, doubling from 60 s to 1 h. Per-address rate limit, shared by every replica (ADR-090). MFA (TOTP, passkeys), which a role or organization can require. Sessions: random 256-bit tokens, stored hashed; cookie `HttpOnly; SameSite=Lax; Secure`; 8 h idle, 7 days absolute. Disabling a user revokes their sessions at once. SSO with PKCE, state and nonce. | No check against breached passwords (see the ASVS gaps). |
+| **Staff sign-in** (passwords, MFA, passkeys, SSO) | S: guessed or stuffed passwords, stolen sessions. E: reaching admin. | Argon2id (OWASP parameters). New passwords need at least 12 characters and 4 different ones, and are refused if they're among the ~30,000 breached passwords of that length in a bundled list (checked offline, ignoring case). Lockout after 5 failures, doubling from 60 s to 1 h. Per-address rate limit, shared by every replica (ADR-090). MFA (TOTP, passkeys), which a role or organization can require. Sessions: random 256-bit tokens, stored hashed; cookie `HttpOnly; SameSite=Lax; Secure`; 8 h idle, 7 days absolute. Disabling a user revokes their sessions at once. SSO with PKCE, state and nonce. | The bundled list covers the most common breached passwords, not every one ever leaked. |
 | **Portal sign-in** | S, E: a client contact reaching staff data or another client. | A separate realm: its own sessions, cookie and API (`/api/portal/v1`). Data scoped to the contact's company. | — |
 | **API tokens and OAuth (MCP)** | S: token theft. E: a token doing more than its owner. | Tokens are random and stored hashed. Scopes narrow a token below its owner's permissions, never above. OAuth requires PKCE (S256). MCP tool calls go through the API as the user, are audited `via = mcp`, and only touch drafts. | Long-lived tokens until revoked. |
 | **SCIM** | S: a forged identity provider. E: provisioning an owner. | A per-provider bearer token, stored hashed and shown once. SCIM can't grant roles: roles stay with teams, set in Huxley. Deprovisioning disables and revokes sessions. | Whoever holds the token controls who exists. Rotate it if exposed. |
@@ -68,7 +68,7 @@ Against OWASP ASVS 4.0.3, chapter by chapter. **Met** means the chapter's Level 
 | Chapter | Status | Notes |
 |---|---|---|
 | V1 Architecture | Met | Documented architecture (design doc, 90+ ADRs), this threat model, centralized authorization, and encryption design. |
-| V2 Authentication | **Partial** | Met: Argon2id, length 12+, lockout and rate limits, MFA (TOTP, WebAuthn) and MFA policy, secure recovery by emailed single-use tokens, and re-entering the current password to change it. **Gap: no check against breached passwords** (V2.1.7). |
+| V2 Authentication | Met | Argon2id, length 12+, a breached-password check against a bundled list (V2.1.7), lockout and rate limits, MFA (TOTP, WebAuthn) and MFA policy, secure recovery by emailed single-use tokens, and re-entering the current password to change it. |
 | V3 Session management | Met | Random hashed tokens; `HttpOnly`, `Secure`, `SameSite`; idle and absolute timeouts; sign-out revokes the session; disabling revokes all of a user's sessions; a device list. |
 | V4 Access control | Met | Deny by default; checks on every endpoint; row-level security in the database; field-level permissions; tests for denial and inheritance. |
 | V5 Validation and encoding | Met | Typed request bodies, rejecting unknown fields; parameterized SQL, with dynamic lists built by `QueryBuilder` and bound values; output encoding; sanitized rich text; the parser limits and tests above. |
@@ -84,7 +84,7 @@ Against OWASP ASVS 4.0.3, chapter by chapter. **Met** means the chapter's Level 
 
 ### Gaps to schedule
 
-1. **Breached-password check (V2.1.7).** Refuse passwords found in breach corpuses. Options are a bundled list of the most common breached passwords (offline) or the k-anonymity range API of Have I Been Pwned. The second sends a 5-character hash prefix to a third party, so it would be opt-in.
+1. ~~**Breached-password check (V2.1.7).**~~ Done offline: new passwords are checked against the 12+ character entries of the million most common breached passwords (`crates/huxley-auth/data`). A full check through Have I Been Pwned's k-anonymity API (sending a 5-character hash prefix) could be added later as an opt-in setting.
 2. ~~**Webhook replay (V13).**~~ Done: signatures are recorded for the replay window.
 3. **Malware scanning (V12).** An optional ClamAV (or ICAP) hook on uploads, quarantining files until scanned.
 4. **Prompt injection.** Mark AI output as untrusted wherever it's shown. Never let a workflow act on AI output without review by default. Keep outside text clearly separated from instructions in prompts.
