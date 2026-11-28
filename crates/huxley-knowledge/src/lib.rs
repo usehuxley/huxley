@@ -8,6 +8,7 @@
 pub mod articles;
 pub mod categories;
 pub mod embeddings;
+pub mod highlight;
 pub mod links;
 mod markdown;
 pub mod portal;

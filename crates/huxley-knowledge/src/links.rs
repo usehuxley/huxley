@@ -101,7 +101,8 @@ pub async fn suggest(
     text: &str,
     limit: i64,
 ) -> KbResult<Vec<TicketArticle>> {
-    Ok(sqlx::query_as(
+    let headline = crate::highlight::options(25, 10);
+    let rows: Vec<TicketArticle> = sqlx::query_as(sqlx::AssertSqlSafe(format!(
         "WITH t AS ( \
             SELECT nullif(( \
                 SELECT string_agg(quote_literal(lexeme) || ':*', ' | ') FROM ( \
@@ -111,7 +112,7 @@ pub async fn suggest(
          SELECT a.id, r.title, 'published' AS status, o.name AS org_name, c.name AS category_name, \
                 NULL::text AS linked_by_name, NULL::timestamptz AS linked_at, \
                 ts_headline('english', r.body, t.q, \
-                    'StartSel=<b>, StopSel=</b>, MaxWords=25, MinWords=10, MaxFragments=1') AS snippet \
+                    '{headline}') AS snippet \
            FROM t \
            JOIN kb_articles a ON a.search @@ t.q \
            JOIN kb_revisions r ON r.article_id = a.id AND r.number = a.published_revision \
@@ -120,13 +121,20 @@ pub async fn suggest(
           WHERE a.status <> 'archived' AND a.published_revision IS NOT NULL \
             AND NOT EXISTS (SELECT 1 FROM kb_article_tickets l WHERE l.article_id = a.id AND l.ticket_id = $1) \
           ORDER BY ts_rank(a.search, t.q) DESC, a.published_at DESC \
-          LIMIT $2",
-    )
+          LIMIT $2"
+    )))
     .bind(ticket)
     .bind(limit.clamp(1, 20))
     .bind(text)
     .fetch_all(conn)
-    .await?)
+    .await?;
+    Ok(rows
+        .into_iter()
+        .map(|mut r| {
+            r.snippet = r.snippet.as_deref().map(crate::highlight::to_html);
+            r
+        })
+        .collect())
 }
 
 /// The tickets an article is linked to that the scope can see, newest link
