@@ -7,6 +7,13 @@ const ownerPassword = process.env.E2E_PASSWORD;
 const apiUrl = process.env.HUXLEY_API_URL;
 const preset = process.env.E2E_PRESET ?? 'automation';
 
+/** Goes to `url` and waits until the app is hydrated: a choice made in a
+ * select before then (server-rendered, no handler yet) does nothing. */
+async function open(page: Page, url: string) {
+	await page.goto(url);
+	await page.locator('html[data-hydrated]').waitFor({ state: 'attached' });
+}
+
 async function signIn(page: Page) {
 	await page.goto('/login');
 	await page.getByLabel('Email').fill(ownerEmail!);
@@ -62,7 +69,7 @@ test.describe('canned responses', () => {
 		const ticket = await ticketFrom('Chidi', stamp);
 		await signIn(page);
 
-		await page.goto('/settings/responses');
+		await open(page, '/settings/responses');
 		await page.getByRole('button', { name: 'New response' }).click();
 		const dialog = page.getByRole('dialog');
 		await dialog.getByLabel('Name').fill(name);
@@ -74,7 +81,7 @@ test.describe('canned responses', () => {
 		await expect(page.getByText('Response saved.')).toBeVisible();
 		await expect(page.getByText(name)).toBeVisible();
 
-		await page.goto(`/tickets/${ticket}`);
+		await open(page, `/tickets/${ticket}`);
 		await page.getByLabel('Insert a response').selectOption({ label: `Accounts · ${name}` });
 		const body = page.locator('#note-body');
 		await expect(body).toHaveValue(/^Hi Chidi, your password is reset \([A-Z]+-\d+\)\.$/);
@@ -89,7 +96,7 @@ test.describe('canned responses', () => {
 		const name = `New starter ${stamp}`;
 		await signIn(page);
 
-		await page.goto('/settings/templates');
+		await open(page, '/settings/templates');
 		await page.getByRole('button', { name: 'New template' }).click();
 		const dialog = page.getByRole('dialog');
 		await dialog.getByLabel('Name').fill(name);
@@ -100,7 +107,7 @@ test.describe('canned responses', () => {
 		await dialog.getByRole('button', { name: 'Save' }).click();
 		await expect(page.getByText('Template saved.')).toBeVisible();
 
-		await page.goto('/tickets/new');
+		await open(page, '/tickets/new');
 		// Each choice reloads the form (a choice before the page is ready is
 		// lost: choose until the URL has it).
 		await expect(async () => {
