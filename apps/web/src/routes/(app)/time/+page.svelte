@@ -1,4 +1,5 @@
 <script lang="ts">
+	import AiLabel from '#lib/ai/AiLabel.svelte';
 	import { enhance, type SubmitFunction } from '$app/forms';
 	import { resolve } from '$app/paths';
 	import { onMount } from 'svelte';
@@ -122,6 +123,7 @@
 								{s.ticketReference} · {s.ticketTitle}
 							</a>
 							{#if s.notes}<p class="text-fg-muted">{s.notes}</p>{/if}
+							<AiLabel text="AI estimate" />
 						</div>
 						<div class="flex flex-wrap items-end gap-2">
 							<form

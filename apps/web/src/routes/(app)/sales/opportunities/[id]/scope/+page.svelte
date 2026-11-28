@@ -1,4 +1,5 @@
 <script lang="ts">
+	import AiLabel from '#lib/ai/AiLabel.svelte';
 	import { enhance, type SubmitFunction } from '$app/forms';
 	import { invalidateAll } from '$app/navigation';
 	import { resolve } from '$app/paths';
@@ -316,7 +317,7 @@
 							>
 							<div class="flex flex-wrap items-center justify-between gap-2">
 								<div class="flex flex-wrap gap-1">
-									{#if x.drafted && x.body}<Badge tone="info">AI draft</Badge>{/if}
+									{#if x.drafted && x.body}<AiLabel text="AI draft" />{/if}
 									{#each x.citations as c, i (i)}<Badge>{c.label}</Badge>{/each}
 								</div>
 								{#if data.canWrite}<Button type="submit" size="sm">Save</Button>{/if}

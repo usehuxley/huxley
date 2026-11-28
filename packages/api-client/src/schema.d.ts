@@ -17825,6 +17825,8 @@ export interface components {
 		};
 		StatusReport: {
 			author: string;
+			/** @description Written by a workflow (usually an AI draft), not a person. */
+			automated: boolean;
 			/** @description Markdown. */
 			body: string;
 			clientVisible: boolean;

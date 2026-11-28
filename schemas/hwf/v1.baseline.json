@@ -65,6 +65,13 @@
       "additionalProperties": false,
       "description": "A prompt (`ai.prompt`). Output: `{ text, model }`.",
       "properties": {
+        "context": {
+          "description": "Text from outside (an email, a ticket) for the prompt to work on.\nIt's fenced off from the instructions and the model is told to\ntreat it only as data: put outside text here rather than in\n`prompt`.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "max_tokens": true,
         "model": {
           "description": "Another model than the provider's (e.g. a faster one).",
@@ -1045,6 +1052,10 @@
                 "null"
               ]
             },
+            "trust_ai": {
+              "description": "Act on AI output without a person's approval. Text the AI\nread (an email, a ticket) can steer what it says, so a step\nthat acts on `ai.prompt` or `ai.extract` output must\notherwise run only once an approval step approves it.",
+              "type": "boolean"
+            },
             "type": {
               "const": "transform",
               "type": "string"
@@ -1104,6 +1115,10 @@
                 "string",
                 "null"
               ]
+            },
+            "trust_ai": {
+              "description": "Act on AI output without a person's approval. Text the AI\nread (an email, a ticket) can steer what it says, so a step\nthat acts on `ai.prompt` or `ai.extract` output must\notherwise run only once an approval step approves it.",
+              "type": "boolean"
             },
             "type": {
               "const": "set_var",
@@ -1168,6 +1183,10 @@
                 "string",
                 "null"
               ]
+            },
+            "trust_ai": {
+              "description": "Act on AI output without a person's approval. Text the AI\nread (an email, a ticket) can steer what it says, so a step\nthat acts on `ai.prompt` or `ai.extract` output must\notherwise run only once an approval step approves it.",
+              "type": "boolean"
             },
             "type": {
               "const": "http.request",
@@ -1256,6 +1275,10 @@
                 "null"
               ]
             },
+            "trust_ai": {
+              "description": "Act on AI output without a person's approval. Text the AI\nread (an email, a ticket) can steer what it says, so a step\nthat acts on `ai.prompt` or `ai.extract` output must\notherwise run only once an approval step approves it.",
+              "type": "boolean"
+            },
             "type": {
               "const": "integration.action",
               "type": "string"
@@ -1335,6 +1358,10 @@
                 "null"
               ]
             },
+            "trust_ai": {
+              "description": "Act on AI output without a person's approval. Text the AI\nread (an email, a ticket) can steer what it says, so a step\nthat acts on `ai.prompt` or `ai.extract` output must\notherwise run only once an approval step approves it.",
+              "type": "boolean"
+            },
             "type": {
               "const": "if",
               "type": "string"
@@ -1406,6 +1433,10 @@
                 "string",
                 "null"
               ]
+            },
+            "trust_ai": {
+              "description": "Act on AI output without a person's approval. Text the AI\nread (an email, a ticket) can steer what it says, so a step\nthat acts on `ai.prompt` or `ai.extract` output must\notherwise run only once an approval step approves it.",
+              "type": "boolean"
             },
             "type": {
               "const": "switch",
@@ -1498,6 +1529,10 @@
                 "null"
               ]
             },
+            "trust_ai": {
+              "description": "Act on AI output without a person's approval. Text the AI\nread (an email, a ticket) can steer what it says, so a step\nthat acts on `ai.prompt` or `ai.extract` output must\notherwise run only once an approval step approves it.",
+              "type": "boolean"
+            },
             "type": {
               "const": "foreach",
               "type": "string"
@@ -1568,6 +1603,10 @@
                 "string",
                 "null"
               ]
+            },
+            "trust_ai": {
+              "description": "Act on AI output without a person's approval. Text the AI\nread (an email, a ticket) can steer what it says, so a step\nthat acts on `ai.prompt` or `ai.extract` output must\notherwise run only once an approval step approves it.",
+              "type": "boolean"
             },
             "type": {
               "const": "parallel",
@@ -1649,6 +1688,10 @@
                 "null"
               ]
             },
+            "trust_ai": {
+              "description": "Act on AI output without a person's approval. Text the AI\nread (an email, a ticket) can steer what it says, so a step\nthat acts on `ai.prompt` or `ai.extract` output must\notherwise run only once an approval step approves it.",
+              "type": "boolean"
+            },
             "type": {
               "const": "try",
               "type": "string"
@@ -1716,6 +1759,10 @@
                 "null"
               ]
             },
+            "trust_ai": {
+              "description": "Act on AI output without a person's approval. Text the AI\nread (an email, a ticket) can steer what it says, so a step\nthat acts on `ai.prompt` or `ai.extract` output must\notherwise run only once an approval step approves it.",
+              "type": "boolean"
+            },
             "type": {
               "const": "wait",
               "type": "string"
@@ -1781,6 +1828,10 @@
                 "string",
                 "null"
               ]
+            },
+            "trust_ai": {
+              "description": "Act on AI output without a person's approval. Text the AI\nread (an email, a ticket) can steer what it says, so a step\nthat acts on `ai.prompt` or `ai.extract` output must\notherwise run only once an approval step approves it.",
+              "type": "boolean"
             },
             "type": {
               "const": "subworkflow",
@@ -1871,6 +1922,10 @@
                 "null"
               ]
             },
+            "trust_ai": {
+              "description": "Act on AI output without a person's approval. Text the AI\nread (an email, a ticket) can steer what it says, so a step\nthat acts on `ai.prompt` or `ai.extract` output must\notherwise run only once an approval step approves it.",
+              "type": "boolean"
+            },
             "type": {
               "const": "wait_for_callback",
               "type": "string"
@@ -1955,6 +2010,10 @@
               "description": "What's being decided; shown to approvers.",
               "type": "string"
             },
+            "trust_ai": {
+              "description": "Act on AI output without a person's approval. Text the AI\nread (an email, a ticket) can steer what it says, so a step\nthat acts on `ai.prompt` or `ai.extract` output must\notherwise run only once an approval step approves it.",
+              "type": "boolean"
+            },
             "type": {
               "const": "approval",
               "type": "string"
@@ -2032,6 +2091,10 @@
                 "null"
               ]
             },
+            "trust_ai": {
+              "description": "Act on AI output without a person's approval. Text the AI\nread (an email, a ticket) can steer what it says, so a step\nthat acts on `ai.prompt` or `ai.extract` output must\notherwise run only once an approval step approves it.",
+              "type": "boolean"
+            },
             "type": {
               "const": "script",
               "type": "string"
@@ -2102,6 +2165,10 @@
                 "null"
               ]
             },
+            "trust_ai": {
+              "description": "Act on AI output without a person's approval. Text the AI\nread (an email, a ticket) can steer what it says, so a step\nthat acts on `ai.prompt` or `ai.extract` output must\notherwise run only once an approval step approves it.",
+              "type": "boolean"
+            },
             "type": {
               "const": "return",
               "type": "string"
@@ -2170,6 +2237,10 @@
                 "null"
               ]
             },
+            "trust_ai": {
+              "description": "Act on AI output without a person's approval. Text the AI\nread (an email, a ticket) can steer what it says, so a step\nthat acts on `ai.prompt` or `ai.extract` output must\notherwise run only once an approval step approves it.",
+              "type": "boolean"
+            },
             "type": {
               "const": "fail",
               "type": "string"
@@ -2229,6 +2300,10 @@
                 "string",
                 "null"
               ]
+            },
+            "trust_ai": {
+              "description": "Act on AI output without a person's approval. Text the AI\nread (an email, a ticket) can steer what it says, so a step\nthat acts on `ai.prompt` or `ai.extract` output must\notherwise run only once an approval step approves it.",
+              "type": "boolean"
             },
             "type": {
               "const": "core.notify",
@@ -2293,6 +2368,10 @@
                 "null"
               ]
             },
+            "trust_ai": {
+              "description": "Act on AI output without a person's approval. Text the AI\nread (an email, a ticket) can steer what it says, so a step\nthat acts on `ai.prompt` or `ai.extract` output must\notherwise run only once an approval step approves it.",
+              "type": "boolean"
+            },
             "type": {
               "const": "core.email",
               "type": "string"
@@ -2355,6 +2434,10 @@
                 "string",
                 "null"
               ]
+            },
+            "trust_ai": {
+              "description": "Act on AI output without a person's approval. Text the AI\nread (an email, a ticket) can steer what it says, so a step\nthat acts on `ai.prompt` or `ai.extract` output must\notherwise run only once an approval step approves it.",
+              "type": "boolean"
             },
             "type": {
               "const": "dataset.query",
@@ -2419,6 +2502,10 @@
                 "null"
               ]
             },
+            "trust_ai": {
+              "description": "Act on AI output without a person's approval. Text the AI\nread (an email, a ticket) can steer what it says, so a step\nthat acts on `ai.prompt` or `ai.extract` output must\notherwise run only once an approval step approves it.",
+              "type": "boolean"
+            },
             "type": {
               "const": "dataset.upsert",
               "type": "string"
@@ -2481,6 +2568,10 @@
                 "string",
                 "null"
               ]
+            },
+            "trust_ai": {
+              "description": "Act on AI output without a person's approval. Text the AI\nread (an email, a ticket) can steer what it says, so a step\nthat acts on `ai.prompt` or `ai.extract` output must\notherwise run only once an approval step approves it.",
+              "type": "boolean"
             },
             "type": {
               "const": "core.contact.find",
@@ -2545,6 +2636,10 @@
                 "null"
               ]
             },
+            "trust_ai": {
+              "description": "Act on AI output without a person's approval. Text the AI\nread (an email, a ticket) can steer what it says, so a step\nthat acts on `ai.prompt` or `ai.extract` output must\notherwise run only once an approval step approves it.",
+              "type": "boolean"
+            },
             "type": {
               "const": "core.contact.upsert",
               "type": "string"
@@ -2607,6 +2702,10 @@
                 "string",
                 "null"
               ]
+            },
+            "trust_ai": {
+              "description": "Act on AI output without a person's approval. Text the AI\nread (an email, a ticket) can steer what it says, so a step\nthat acts on `ai.prompt` or `ai.extract` output must\notherwise run only once an approval step approves it.",
+              "type": "boolean"
             },
             "type": {
               "const": "core.company.get",
@@ -2671,6 +2770,10 @@
                 "null"
               ]
             },
+            "trust_ai": {
+              "description": "Act on AI output without a person's approval. Text the AI\nread (an email, a ticket) can steer what it says, so a step\nthat acts on `ai.prompt` or `ai.extract` output must\notherwise run only once an approval step approves it.",
+              "type": "boolean"
+            },
             "type": {
               "const": "core.company.update",
               "type": "string"
@@ -2733,6 +2836,10 @@
                 "string",
                 "null"
               ]
+            },
+            "trust_ai": {
+              "description": "Act on AI output without a person's approval. Text the AI\nread (an email, a ticket) can steer what it says, so a step\nthat acts on `ai.prompt` or `ai.extract` output must\notherwise run only once an approval step approves it.",
+              "type": "boolean"
             },
             "type": {
               "const": "core.ticket.from_email",
@@ -2797,6 +2904,10 @@
                 "null"
               ]
             },
+            "trust_ai": {
+              "description": "Act on AI output without a person's approval. Text the AI\nread (an email, a ticket) can steer what it says, so a step\nthat acts on `ai.prompt` or `ai.extract` output must\notherwise run only once an approval step approves it.",
+              "type": "boolean"
+            },
             "type": {
               "const": "core.ticket.create",
               "type": "string"
@@ -2859,6 +2970,10 @@
                 "string",
                 "null"
               ]
+            },
+            "trust_ai": {
+              "description": "Act on AI output without a person's approval. Text the AI\nread (an email, a ticket) can steer what it says, so a step\nthat acts on `ai.prompt` or `ai.extract` output must\notherwise run only once an approval step approves it.",
+              "type": "boolean"
             },
             "type": {
               "const": "core.ticket.get",
@@ -2923,6 +3038,10 @@
                 "null"
               ]
             },
+            "trust_ai": {
+              "description": "Act on AI output without a person's approval. Text the AI\nread (an email, a ticket) can steer what it says, so a step\nthat acts on `ai.prompt` or `ai.extract` output must\notherwise run only once an approval step approves it.",
+              "type": "boolean"
+            },
             "type": {
               "const": "core.ticket.find",
               "type": "string"
@@ -2985,6 +3104,10 @@
                 "string",
                 "null"
               ]
+            },
+            "trust_ai": {
+              "description": "Act on AI output without a person's approval. Text the AI\nread (an email, a ticket) can steer what it says, so a step\nthat acts on `ai.prompt` or `ai.extract` output must\notherwise run only once an approval step approves it.",
+              "type": "boolean"
             },
             "type": {
               "const": "core.ticket.update",
@@ -3049,6 +3172,10 @@
                 "null"
               ]
             },
+            "trust_ai": {
+              "description": "Act on AI output without a person's approval. Text the AI\nread (an email, a ticket) can steer what it says, so a step\nthat acts on `ai.prompt` or `ai.extract` output must\notherwise run only once an approval step approves it.",
+              "type": "boolean"
+            },
             "type": {
               "const": "core.ticket.note",
               "type": "string"
@@ -3111,6 +3238,10 @@
                 "string",
                 "null"
               ]
+            },
+            "trust_ai": {
+              "description": "Act on AI output without a person's approval. Text the AI\nread (an email, a ticket) can steer what it says, so a step\nthat acts on `ai.prompt` or `ai.extract` output must\notherwise run only once an approval step approves it.",
+              "type": "boolean"
             },
             "type": {
               "const": "core.ticket.dispatch",
@@ -3175,6 +3306,10 @@
                 "null"
               ]
             },
+            "trust_ai": {
+              "description": "Act on AI output without a person's approval. Text the AI\nread (an email, a ticket) can steer what it says, so a step\nthat acts on `ai.prompt` or `ai.extract` output must\notherwise run only once an approval step approves it.",
+              "type": "boolean"
+            },
             "type": {
               "const": "core.mail.fetch",
               "type": "string"
@@ -3237,6 +3372,10 @@
                 "string",
                 "null"
               ]
+            },
+            "trust_ai": {
+              "description": "Act on AI output without a person's approval. Text the AI\nread (an email, a ticket) can steer what it says, so a step\nthat acts on `ai.prompt` or `ai.extract` output must\notherwise run only once an approval step approves it.",
+              "type": "boolean"
             },
             "type": {
               "const": "core.ticket.embed",
@@ -3301,6 +3440,10 @@
                 "null"
               ]
             },
+            "trust_ai": {
+              "description": "Act on AI output without a person's approval. Text the AI\nread (an email, a ticket) can steer what it says, so a step\nthat acts on `ai.prompt` or `ai.extract` output must\notherwise run only once an approval step approves it.",
+              "type": "boolean"
+            },
             "type": {
               "const": "core.kb.embed",
               "type": "string"
@@ -3363,6 +3506,10 @@
                 "string",
                 "null"
               ]
+            },
+            "trust_ai": {
+              "description": "Act on AI output without a person's approval. Text the AI\nread (an email, a ticket) can steer what it says, so a step\nthat acts on `ai.prompt` or `ai.extract` output must\notherwise run only once an approval step approves it.",
+              "type": "boolean"
             },
             "type": {
               "const": "core.timesheet.check",
@@ -3427,6 +3574,10 @@
                 "null"
               ]
             },
+            "trust_ai": {
+              "description": "Act on AI output without a person's approval. Text the AI\nread (an email, a ticket) can steer what it says, so a step\nthat acts on `ai.prompt` or `ai.extract` output must\notherwise run only once an approval step approves it.",
+              "type": "boolean"
+            },
             "type": {
               "const": "core.csat.survey",
               "type": "string"
@@ -3489,6 +3640,10 @@
                 "string",
                 "null"
               ]
+            },
+            "trust_ai": {
+              "description": "Act on AI output without a person's approval. Text the AI\nread (an email, a ticket) can steer what it says, so a step\nthat acts on `ai.prompt` or `ai.extract` output must\notherwise run only once an approval step approves it.",
+              "type": "boolean"
             },
             "type": {
               "const": "core.nps.send",
@@ -3553,6 +3708,10 @@
                 "null"
               ]
             },
+            "trust_ai": {
+              "description": "Act on AI output without a person's approval. Text the AI\nread (an email, a ticket) can steer what it says, so a step\nthat acts on `ai.prompt` or `ai.extract` output must\notherwise run only once an approval step approves it.",
+              "type": "boolean"
+            },
             "type": {
               "const": "core.health.compute",
               "type": "string"
@@ -3615,6 +3774,10 @@
                 "string",
                 "null"
               ]
+            },
+            "trust_ai": {
+              "description": "Act on AI output without a person's approval. Text the AI\nread (an email, a ticket) can steer what it says, so a step\nthat acts on `ai.prompt` or `ai.extract` output must\notherwise run only once an approval step approves it.",
+              "type": "boolean"
             },
             "type": {
               "const": "core.sentiment.record",
@@ -3679,6 +3842,10 @@
                 "null"
               ]
             },
+            "trust_ai": {
+              "description": "Act on AI output without a person's approval. Text the AI\nread (an email, a ticket) can steer what it says, so a step\nthat acts on `ai.prompt` or `ai.extract` output must\notherwise run only once an approval step approves it.",
+              "type": "boolean"
+            },
             "type": {
               "const": "core.triage.options",
               "type": "string"
@@ -3741,6 +3908,10 @@
                 "string",
                 "null"
               ]
+            },
+            "trust_ai": {
+              "description": "Act on AI output without a person's approval. Text the AI\nread (an email, a ticket) can steer what it says, so a step\nthat acts on `ai.prompt` or `ai.extract` output must\notherwise run only once an approval step approves it.",
+              "type": "boolean"
             },
             "type": {
               "const": "core.triage.apply",
@@ -3805,6 +3976,10 @@
                 "null"
               ]
             },
+            "trust_ai": {
+              "description": "Act on AI output without a person's approval. Text the AI\nread (an email, a ticket) can steer what it says, so a step\nthat acts on `ai.prompt` or `ai.extract` output must\notherwise run only once an approval step approves it.",
+              "type": "boolean"
+            },
             "type": {
               "const": "core.dispatch.recommend",
               "type": "string"
@@ -3867,6 +4042,10 @@
                 "string",
                 "null"
               ]
+            },
+            "trust_ai": {
+              "description": "Act on AI output without a person's approval. Text the AI\nread (an email, a ticket) can steer what it says, so a step\nthat acts on `ai.prompt` or `ai.extract` output must\notherwise run only once an approval step approves it.",
+              "type": "boolean"
             },
             "type": {
               "const": "core.workforce.insights",
@@ -3931,6 +4110,10 @@
                 "null"
               ]
             },
+            "trust_ai": {
+              "description": "Act on AI output without a person's approval. Text the AI\nread (an email, a ticket) can steer what it says, so a step\nthat acts on `ai.prompt` or `ai.extract` output must\notherwise run only once an approval step approves it.",
+              "type": "boolean"
+            },
             "type": {
               "const": "core.ticket.insight",
               "type": "string"
@@ -3993,6 +4176,10 @@
                 "string",
                 "null"
               ]
+            },
+            "trust_ai": {
+              "description": "Act on AI output without a person's approval. Text the AI\nread (an email, a ticket) can steer what it says, so a step\nthat acts on `ai.prompt` or `ai.extract` output must\notherwise run only once an approval step approves it.",
+              "type": "boolean"
             },
             "type": {
               "const": "core.kb.draft",
@@ -4057,6 +4244,10 @@
                 "null"
               ]
             },
+            "trust_ai": {
+              "description": "Act on AI output without a person's approval. Text the AI\nread (an email, a ticket) can steer what it says, so a step\nthat acts on `ai.prompt` or `ai.extract` output must\notherwise run only once an approval step approves it.",
+              "type": "boolean"
+            },
             "type": {
               "const": "core.time.suggest",
               "type": "string"
@@ -4119,6 +4310,10 @@
                 "string",
                 "null"
               ]
+            },
+            "trust_ai": {
+              "description": "Act on AI output without a person's approval. Text the AI\nread (an email, a ticket) can steer what it says, so a step\nthat acts on `ai.prompt` or `ai.extract` output must\notherwise run only once an approval step approves it.",
+              "type": "boolean"
             },
             "type": {
               "const": "core.report.send",
@@ -4183,6 +4378,10 @@
                 "null"
               ]
             },
+            "trust_ai": {
+              "description": "Act on AI output without a person's approval. Text the AI\nread (an email, a ticket) can steer what it says, so a step\nthat acts on `ai.prompt` or `ai.extract` output must\notherwise run only once an approval step approves it.",
+              "type": "boolean"
+            },
             "type": {
               "const": "core.change.decide",
               "type": "string"
@@ -4245,6 +4444,10 @@
                 "string",
                 "null"
               ]
+            },
+            "trust_ai": {
+              "description": "Act on AI output without a person's approval. Text the AI\nread (an email, a ticket) can steer what it says, so a step\nthat acts on `ai.prompt` or `ai.extract` output must\notherwise run only once an approval step approves it.",
+              "type": "boolean"
             },
             "type": {
               "const": "core.project.scope.decide",
@@ -4309,6 +4512,10 @@
                 "null"
               ]
             },
+            "trust_ai": {
+              "description": "Act on AI output without a person's approval. Text the AI\nread (an email, a ticket) can steer what it says, so a step\nthat acts on `ai.prompt` or `ai.extract` output must\notherwise run only once an approval step approves it.",
+              "type": "boolean"
+            },
             "type": {
               "const": "core.quote.review",
               "type": "string"
@@ -4371,6 +4578,10 @@
                 "string",
                 "null"
               ]
+            },
+            "trust_ai": {
+              "description": "Act on AI output without a person's approval. Text the AI\nread (an email, a ticket) can steer what it says, so a step\nthat acts on `ai.prompt` or `ai.extract` output must\notherwise run only once an approval step approves it.",
+              "type": "boolean"
             },
             "type": {
               "const": "core.invoice.review",
@@ -4435,6 +4646,10 @@
                 "null"
               ]
             },
+            "trust_ai": {
+              "description": "Act on AI output without a person's approval. Text the AI\nread (an email, a ticket) can steer what it says, so a step\nthat acts on `ai.prompt` or `ai.extract` output must\notherwise run only once an approval step approves it.",
+              "type": "boolean"
+            },
             "type": {
               "const": "core.invoice.sync_result",
               "type": "string"
@@ -4497,6 +4712,10 @@
                 "string",
                 "null"
               ]
+            },
+            "trust_ai": {
+              "description": "Act on AI output without a person's approval. Text the AI\nread (an email, a ticket) can steer what it says, so a step\nthat acts on `ai.prompt` or `ai.extract` output must\notherwise run only once an approval step approves it.",
+              "type": "boolean"
             },
             "type": {
               "const": "core.invoice.unpaid",
@@ -4561,6 +4780,10 @@
                 "null"
               ]
             },
+            "trust_ai": {
+              "description": "Act on AI output without a person's approval. Text the AI\nread (an email, a ticket) can steer what it says, so a step\nthat acts on `ai.prompt` or `ai.extract` output must\notherwise run only once an approval step approves it.",
+              "type": "boolean"
+            },
             "type": {
               "const": "core.invoice.status",
               "type": "string"
@@ -4623,6 +4846,10 @@
                 "string",
                 "null"
               ]
+            },
+            "trust_ai": {
+              "description": "Act on AI output without a person's approval. Text the AI\nread (an email, a ticket) can steer what it says, so a step\nthat acts on `ai.prompt` or `ai.extract` output must\notherwise run only once an approval step approves it.",
+              "type": "boolean"
             },
             "type": {
               "const": "core.expense.read_receipt",
@@ -4687,6 +4914,10 @@
                 "null"
               ]
             },
+            "trust_ai": {
+              "description": "Act on AI output without a person's approval. Text the AI\nread (an email, a ticket) can steer what it says, so a step\nthat acts on `ai.prompt` or `ai.extract` output must\notherwise run only once an approval step approves it.",
+              "type": "boolean"
+            },
             "type": {
               "const": "core.expense.report_decide",
               "type": "string"
@@ -4749,6 +4980,10 @@
                 "string",
                 "null"
               ]
+            },
+            "trust_ai": {
+              "description": "Act on AI output without a person's approval. Text the AI\nread (an email, a ticket) can steer what it says, so a step\nthat acts on `ai.prompt` or `ai.extract` output must\notherwise run only once an approval step approves it.",
+              "type": "boolean"
             },
             "type": {
               "const": "core.expense.sync_result",
@@ -4813,6 +5048,10 @@
                 "null"
               ]
             },
+            "trust_ai": {
+              "description": "Act on AI output without a person's approval. Text the AI\nread (an email, a ticket) can steer what it says, so a step\nthat acts on `ai.prompt` or `ai.extract` output must\notherwise run only once an approval step approves it.",
+              "type": "boolean"
+            },
             "type": {
               "const": "core.sales.log_email",
               "type": "string"
@@ -4875,6 +5114,10 @@
                 "string",
                 "null"
               ]
+            },
+            "trust_ai": {
+              "description": "Act on AI output without a person's approval. Text the AI\nread (an email, a ticket) can steer what it says, so a step\nthat acts on `ai.prompt` or `ai.extract` output must\notherwise run only once an approval step approves it.",
+              "type": "boolean"
             },
             "type": {
               "const": "core.scope.context",
@@ -4939,6 +5182,10 @@
                 "null"
               ]
             },
+            "trust_ai": {
+              "description": "Act on AI output without a person's approval. Text the AI\nread (an email, a ticket) can steer what it says, so a step\nthat acts on `ai.prompt` or `ai.extract` output must\notherwise run only once an approval step approves it.",
+              "type": "boolean"
+            },
             "type": {
               "const": "core.scope.write",
               "type": "string"
@@ -5001,6 +5248,10 @@
                 "string",
                 "null"
               ]
+            },
+            "trust_ai": {
+              "description": "Act on AI output without a person's approval. Text the AI\nread (an email, a ticket) can steer what it says, so a step\nthat acts on `ai.prompt` or `ai.extract` output must\notherwise run only once an approval step approves it.",
+              "type": "boolean"
             },
             "type": {
               "const": "core.scope.estimate_context",
@@ -5065,6 +5316,10 @@
                 "null"
               ]
             },
+            "trust_ai": {
+              "description": "Act on AI output without a person's approval. Text the AI\nread (an email, a ticket) can steer what it says, so a step\nthat acts on `ai.prompt` or `ai.extract` output must\notherwise run only once an approval step approves it.",
+              "type": "boolean"
+            },
             "type": {
               "const": "core.scope.write_estimate",
               "type": "string"
@@ -5127,6 +5382,10 @@
                 "string",
                 "null"
               ]
+            },
+            "trust_ai": {
+              "description": "Act on AI output without a person's approval. Text the AI\nread (an email, a ticket) can steer what it says, so a step\nthat acts on `ai.prompt` or `ai.extract` output must\notherwise run only once an approval step approves it.",
+              "type": "boolean"
             },
             "type": {
               "const": "core.calendar.sync",
@@ -5197,6 +5456,10 @@
                 "null"
               ]
             },
+            "trust_ai": {
+              "description": "Act on AI output without a person's approval. Text the AI\nread (an email, a ticket) can steer what it says, so a step\nthat acts on `ai.prompt` or `ai.extract` output must\notherwise run only once an approval step approves it.",
+              "type": "boolean"
+            },
             "type": {
               "const": "core.calendar.write",
               "type": "string"
@@ -5259,6 +5522,10 @@
                 "string",
                 "null"
               ]
+            },
+            "trust_ai": {
+              "description": "Act on AI output without a person's approval. Text the AI\nread (an email, a ticket) can steer what it says, so a step\nthat acts on `ai.prompt` or `ai.extract` output must\notherwise run only once an approval step approves it.",
+              "type": "boolean"
             },
             "type": {
               "const": "core.project.status",
@@ -5329,6 +5596,10 @@
                 "null"
               ]
             },
+            "trust_ai": {
+              "description": "Act on AI output without a person's approval. Text the AI\nread (an email, a ticket) can steer what it says, so a step\nthat acts on `ai.prompt` or `ai.extract` output must\notherwise run only once an approval step approves it.",
+              "type": "boolean"
+            },
             "type": {
               "const": "core.project.report",
               "type": "string"
@@ -5391,6 +5662,10 @@
                 "string",
                 "null"
               ]
+            },
+            "trust_ai": {
+              "description": "Act on AI output without a person's approval. Text the AI\nread (an email, a ticket) can steer what it says, so a step\nthat acts on `ai.prompt` or `ai.extract` output must\notherwise run only once an approval step approves it.",
+              "type": "boolean"
             },
             "type": {
               "const": "core.asset.sync",
@@ -5455,6 +5730,10 @@
                 "null"
               ]
             },
+            "trust_ai": {
+              "description": "Act on AI output without a person's approval. Text the AI\nread (an email, a ticket) can steer what it says, so a step\nthat acts on `ai.prompt` or `ai.extract` output must\notherwise run only once an approval step approves it.",
+              "type": "boolean"
+            },
             "type": {
               "const": "core.asset.set_warranty",
               "type": "string"
@@ -5517,6 +5796,10 @@
                 "string",
                 "null"
               ]
+            },
+            "trust_ai": {
+              "description": "Act on AI output without a person's approval. Text the AI\nread (an email, a ticket) can steer what it says, so a step\nthat acts on `ai.prompt` or `ai.extract` output must\notherwise run only once an approval step approves it.",
+              "type": "boolean"
             },
             "type": {
               "const": "core.ticket.email_reply",
@@ -5581,6 +5864,10 @@
                 "null"
               ]
             },
+            "trust_ai": {
+              "description": "Act on AI output without a person's approval. Text the AI\nread (an email, a ticket) can steer what it says, so a step\nthat acts on `ai.prompt` or `ai.extract` output must\notherwise run only once an approval step approves it.",
+              "type": "boolean"
+            },
             "type": {
               "const": "ai.prompt",
               "type": "string"
@@ -5644,6 +5931,10 @@
                 "null"
               ]
             },
+            "trust_ai": {
+              "description": "Act on AI output without a person's approval. Text the AI\nread (an email, a ticket) can steer what it says, so a step\nthat acts on `ai.prompt` or `ai.extract` output must\notherwise run only once an approval step approves it.",
+              "type": "boolean"
+            },
             "type": {
               "const": "ai.classify",
               "type": "string"
@@ -5706,6 +5997,10 @@
                 "string",
                 "null"
               ]
+            },
+            "trust_ai": {
+              "description": "Act on AI output without a person's approval. Text the AI\nread (an email, a ticket) can steer what it says, so a step\nthat acts on `ai.prompt` or `ai.extract` output must\notherwise run only once an approval step approves it.",
+              "type": "boolean"
             },
             "type": {
               "const": "ai.extract",

@@ -105,6 +105,9 @@ pub fn check_workflow(engine: &Engine, workflow: &Workflow) -> Vec<Diagnostic> {
             checker.value(&site, &format!("spec.outputs.{key}"), value);
         }
     }
+    checker
+        .diagnostics
+        .extend(crate::ai_guard::check(engine, workflow));
     checker.diagnostics
 }
 

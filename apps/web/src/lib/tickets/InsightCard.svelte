@@ -1,5 +1,6 @@
 <!-- A ticket's AI summary, the things it mentions, a next step, and tickets like it. -->
 <script lang="ts">
+	import AiLabel from '#lib/ai/AiLabel.svelte';
 	import { enhance } from '$app/forms';
 	import { resolve } from '$app/paths';
 	import { RefreshCw } from '@lucide/svelte';
@@ -39,7 +40,8 @@
 				{/if}
 			{/each}
 		</dl>
-		<p class="mt-2 text-xs text-fg-subtle">
+		<p class="mt-2 flex flex-wrap items-center gap-2 text-xs text-fg-subtle">
+			<AiLabel />
 			Summarized by AI, {new Date(insight.at).toLocaleString()}
 		</p>
 	{:else}
