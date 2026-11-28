@@ -2401,6 +2401,7 @@ dependencies = [
  "huxley-workforce",
  "jiff 0.2.46",
  "opentelemetry",
+ "proptest",
  "reqwest 0.13.5",
  "ring",
  "rust_decimal",
@@ -2770,6 +2771,7 @@ dependencies = [
  "huxley-hwf",
  "minijinja",
  "minijinja-contrib",
+ "proptest",
  "regex",
  "serde",
  "serde_json",
@@ -2809,6 +2811,7 @@ name = "huxley-hwf"
 version = "0.1.0"
 dependencies = [
  "jiff 0.2.46",
+ "proptest",
  "schemars 1.2.3",
  "serde",
  "serde-saphyr",
@@ -2827,6 +2830,7 @@ dependencies = [
  "huxley-db",
  "huxley-hwf",
  "huxley-variables",
+ "proptest",
  "serde",
  "serde-saphyr",
  "serde_json",
@@ -2884,6 +2888,7 @@ dependencies = [
  "async-imap",
  "futures-util",
  "mail-parser",
+ "proptest",
  "rustls",
  "serde",
  "serde_json",
@@ -2952,6 +2957,7 @@ name = "huxley-packs"
 version = "0.1.0"
 dependencies = [
  "base64 0.23.1",
+ "proptest",
  "ring",
  "serde",
  "serde-saphyr",
@@ -5259,6 +5265,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "proptest"
+version = "1.12.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b8530004ccb15eae51c7e40009fbe317f341f804db54dc033eec1c50be28cfa0"
+dependencies = [
+ "bitflags",
+ "chacha20",
+ "core_detect",
+ "num-traits",
+ "rand 0.10.4",
+ "rand_xorshift",
+ "regex-syntax",
+ "unarray",
+]
+
+[[package]]
 name = "prost"
 version = "0.14.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5567,6 +5589,15 @@ name = "rand_pcg"
 version = "0.10.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "eb95882a1e14462c69aea9984bb261293ccfe6022ef8de0eda18bd5afb0052df"
+dependencies = [
+ "rand_core 0.10.1",
+]
+
+[[package]]
+name = "rand_xorshift"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "60aa6af80be32871323012e02e6e65f8a7cc7890931ae421d217ad8fe0df2ccf"
 dependencies = [
  "rand_core 0.10.1",
 ]
@@ -7342,6 +7373,12 @@ name = "ucd-trie"
 version = "0.1.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8f20bdbfc9915686faa18fb5bbe8b4552778505defbf9f12289beefbc44092a6"
+
+[[package]]
+name = "unarray"
+version = "0.1.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "eaea85b334db583fe3274d12b4cd1880032beab409c0d774be044d4480ab9a94"
 
 [[package]]
 name = "uncased"

@@ -63,6 +63,7 @@ export default defineConfig({
 					{ text: 'Kubernetes', link: '/kubernetes' },
 					{ text: 'Cloud templates', link: '/cloud' },
 					{ text: 'Observability', link: '/observability' },
+					{ text: 'Security', link: '/security' },
 					{ text: 'Provisioning (SCIM)', link: '/scim' }
 				]
 			},

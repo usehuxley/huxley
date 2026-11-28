@@ -12,6 +12,8 @@ homepage = "https://usehuxley.io"
 authors = ["Huxley contributors"]
 
 [workspace.dependencies]
+# Property tests: parsers fed random and mutated input (docs/security.md).
+proptest = { version = "1", default-features = false, features = ["std"] }
 pulldown-cmark = { version = "0.13.6", default-features = false, features = ["html"] }
 tonic = { version = "0.14", default-features = false, features = ["transport", "codegen", "tls-ring", "router"] }
 tonic-prost = "0.14"
