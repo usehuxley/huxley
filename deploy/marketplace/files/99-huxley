@@ -1,0 +1,22 @@
+#!/bin/sh
+# The login message, until Huxley is set up.
+if [ ! -f /opt/huxley/deploy/compose/.configured ]; then
+	cat <<'TEXT'
+
+  Huxley isn't set up yet. Point DNS for your domain (and the client
+  portal's) at this server, then run:
+
+      huxley-setup
+
+  It asks for the domains and your first user, and starts Huxley.
+
+TEXT
+else
+	cat <<'TEXT'
+
+  Huxley runs from /opt/huxley/deploy/compose (docker compose).
+  Back up the database, the objects volume and secrets/kek:
+  https://docs.usehuxley.io/backup
+
+TEXT
+fi
