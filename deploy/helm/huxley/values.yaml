@@ -76,6 +76,34 @@ storage:
     storageClass: ""
     size: 20Gi
 
+# Malware scanning of uploads (ADR-094, docs/attachment-scanning.md).
+scan:
+  # "off", "clamav" or "metadefender". Quote it: YAML reads a bare off as false.
+  provider: "off"
+  # hold: files can't be downloaded until scanned clean. allow: they can,
+  # until a scan finds something.
+  whilePending: hold
+  clamav:
+    # Run ClamAV in the cluster (one pod; signatures update themselves).
+    # Otherwise set address to a clamd you run.
+    deploy: false
+    address: ""
+    image: clamav/clamav:1.4
+    # clamd keeps its signatures in memory (about 1.2 GB), and briefly twice
+    # that while it reloads updates.
+    resources:
+      requests: { cpu: 100m, memory: 1536Mi }
+      limits: { memory: 3Gi }
+  metadefender:
+    # MetaDefender Cloud, or your Core server, e.g. http://metadefender:8008.
+    # Cloud sends every upload to OPSWAT.
+    url: https://api.metadefender.com/v4
+    # A Secret holding the API key (Cloud needs one).
+    apiKeySecret: ""
+    apiKeyKey: api-key
+    # Core: the workflow rule to scan with.
+    rule: ""
+
 email:
   smtpUrlSecret: ""
   smtpUrlKey: smtp-url

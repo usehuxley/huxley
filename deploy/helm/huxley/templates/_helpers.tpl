@@ -59,9 +59,25 @@ app.kubernetes.io/component: {{ .component }}
 {{- if and (not .Values.kek.existingSecret) (not .Values.kek.value) -}}
 {{- fail "set kek.existingSecret (or kek.value)" -}}
 {{- end -}}
+{{- $scan := include "huxley.scanProvider" . -}}
+{{- if not (has $scan (list "off" "clamav" "metadefender")) -}}
+{{- fail "scan.provider must be \"off\", \"clamav\" or \"metadefender\"" -}}
+{{- end -}}
+{{- if and (eq $scan "clamav") (not .Values.scan.clamav.deploy) (not .Values.scan.clamav.address) -}}
+{{- fail "scan.provider is clamav: set scan.clamav.deploy: true, or scan.clamav.address to your clamd" -}}
+{{- end -}}
+{{- if and (eq $scan "metadefender") (contains "metadefender.com" .Values.scan.metadefender.url) (not .Values.scan.metadefender.apiKeySecret) -}}
+{{- fail "MetaDefender Cloud needs an API key: set scan.metadefender.apiKeySecret" -}}
+{{- end -}}
 {{- if and (not .Values.storage.url) (not .Values.storage.persistence.enabled) -}}
 {{- fail "set storage.url (s3:// or az://) or storage.persistence.enabled: several pods share attachments" -}}
 {{- end -}}
+{{- end -}}
+
+{{/* scan.provider as text (a bare off in YAML is false). */}}
+{{- define "huxley.scanProvider" -}}
+{{- $p := toString .Values.scan.provider -}}
+{{- if eq $p "false" -}}off{{- else -}}{{ $p }}{{- end -}}
 {{- end -}}
 
 {{/* The environment every Huxley process shares. */}}
@@ -126,6 +142,30 @@ app.kubernetes.io/component: {{ .component }}
 - name: HUXLEY_EMAIL__SMTP_URL
   valueFrom:
     secretKeyRef: { name: {{ . }}, key: {{ $.Values.email.smtpUrlKey }} }
+{{- end }}
+{{- $scan := include "huxley.scanProvider" . }}
+- name: HUXLEY_UPLOADS__SCAN__PROVIDER
+  value: {{ $scan | quote }}
+{{- if ne $scan "off" }}
+- name: HUXLEY_UPLOADS__SCAN__WHILE_PENDING
+  value: {{ .Values.scan.whilePending | quote }}
+{{- end }}
+{{- if eq $scan "clamav" }}
+- name: HUXLEY_UPLOADS__SCAN__CLAMAV__ADDRESS
+  value: {{ .Values.scan.clamav.address | default (printf "tcp://%s-clamav:3310" (include "huxley.fullname" .)) | quote }}
+{{- end }}
+{{- if eq $scan "metadefender" }}
+- name: HUXLEY_UPLOADS__SCAN__METADEFENDER__URL
+  value: {{ .Values.scan.metadefender.url | quote }}
+{{- with .Values.scan.metadefender.rule }}
+- name: HUXLEY_UPLOADS__SCAN__METADEFENDER__RULE
+  value: {{ . | quote }}
+{{- end }}
+{{- with .Values.scan.metadefender.apiKeySecret }}
+- name: HUXLEY_UPLOADS__SCAN__METADEFENDER__API_KEY
+  valueFrom:
+    secretKeyRef: { name: {{ . }}, key: {{ $.Values.scan.metadefender.apiKeyKey }} }
+{{- end }}
 {{- end }}
 {{- if .Values.api.runnerGateway }}
 - name: HUXLEY_RUNNERS__PUBLIC_URL

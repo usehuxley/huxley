@@ -1,0 +1,88 @@
+{{- if .Values.scan.clamav.deploy }}
+{{- $name := printf "%s-clamav" (include "huxley.fullname" .) }}
+# ClamAV for scanning uploads (ADR-094). One pod: it holds no state that
+# matters (signatures come from the image, then freshclam keeps them fresh),
+# and uploads wait for their scan while it restarts.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "huxley.labels" . | nindent 4 }}
+    app.kubernetes.io/component: clamav
+spec:
+  replicas: 1
+  strategy: { type: Recreate }
+  selector:
+    matchLabels:
+      {{- include "huxley.selector" (dict "ctx" . "component" "clamav") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "huxley.selector" (dict "ctx" . "component" "clamav") | nindent 8 }}
+    spec:
+      automountServiceAccountToken: false
+      # The image's clamav user; its entrypoint runs without root given
+      # these writable directories.
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 100
+        runAsGroup: 101
+        fsGroup: 101
+        seccompProfile: { type: RuntimeDefault }
+      initContainers:
+        # The image's signatures, so clamd starts without downloading them,
+        # in a directory the clamav user owns: its entrypoint chowns the
+        # database directory, which it can't do to the volume's root-owned top.
+        - name: signatures
+          image: {{ .Values.scan.clamav.image }}
+          command: ["/bin/sh", "-c", "mkdir -p /data/db && cp -R /var/lib/clamav/. /data/db/"]
+          securityContext: {{ toYaml .Values.securityContext | nindent 12 }}
+          volumeMounts:
+            - { name: db, mountPath: /data }
+      containers:
+        - name: clamav
+          image: {{ .Values.scan.clamav.image }}
+          securityContext: {{ toYaml .Values.securityContext | nindent 12 }}
+          ports:
+            - { name: clamd, containerPort: 3310 }
+          startupProbe:
+            exec: { command: ["clamdcheck.sh"] }
+            periodSeconds: 10
+            failureThreshold: 60
+          readinessProbe:
+            exec: { command: ["clamdcheck.sh"] }
+            periodSeconds: 30
+            timeoutSeconds: 10
+          livenessProbe:
+            exec: { command: ["clamdcheck.sh"] }
+            periodSeconds: 60
+            timeoutSeconds: 10
+            failureThreshold: 5
+          resources: {{ toYaml .Values.scan.clamav.resources | nindent 12 }}
+          volumeMounts:
+            - { name: db, mountPath: /var/lib/clamav, subPath: db }
+            - { name: run, mountPath: /run/clamav }
+            - { name: tmp, mountPath: /tmp }
+            - { name: lock, mountPath: /var/lock }
+            - { name: log, mountPath: /var/log/clamav }
+      volumes:
+        - { name: db, emptyDir: {} }
+        - { name: run, emptyDir: {} }
+        - { name: tmp, emptyDir: {} }
+        - { name: lock, emptyDir: {} }
+        - { name: log, emptyDir: {} }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "huxley.labels" . | nindent 4 }}
+    app.kubernetes.io/component: clamav
+spec:
+  selector:
+    {{- include "huxley.selector" (dict "ctx" . "component" "clamav") | nindent 4 }}
+  ports:
+    - { name: clamd, port: 3310, targetPort: clamd }
+{{- end }}

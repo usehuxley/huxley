@@ -7,6 +7,8 @@
 # Optional profiles:
 #   --profile runner         A script runner (enrol it first; see docs/runners.md)
 #   --profile observability  OpenTelemetry Collector (set HUXLEY_OTLP_ENDPOINT too)
+#   --profile clamav         ClamAV, to scan uploads for malware (set
+#                            HUXLEY_SCAN_PROVIDER=clamav too; docs/attachment-scanning.md)
 
 name: huxley
 
@@ -34,6 +36,13 @@ x-huxley-env: &huxley-env
   HUXLEY_RUNNERS__BIND: 0.0.0.0:8443
   HUXLEY_RUNNERS__HOSTS: "[huxley]"
   HUXLEY_RUNNERS__PUBLIC_URL: https://huxley:8443
+  # Malware scanning of uploads (docs/attachment-scanning.md): off, clamav
+  # (with --profile clamav) or metadefender.
+  HUXLEY_UPLOADS__SCAN__PROVIDER: ${HUXLEY_SCAN_PROVIDER:-off}
+  HUXLEY_UPLOADS__SCAN__WHILE_PENDING: ${HUXLEY_SCAN_WHILE_PENDING:-hold}
+  HUXLEY_UPLOADS__SCAN__CLAMAV__ADDRESS: ${HUXLEY_CLAMAV_ADDRESS:-tcp://clamav:3310}
+  HUXLEY_UPLOADS__SCAN__METADEFENDER__URL: ${HUXLEY_METADEFENDER_URL:-https://api.metadefender.com/v4}
+  HUXLEY_UPLOADS__SCAN__METADEFENDER__API_KEY: ${HUXLEY_METADEFENDER_API_KEY:-}
 
 services:
   postgres:
@@ -146,6 +155,16 @@ services:
     depends_on:
       huxley: { condition: service_healthy }
 
+  # Scans uploads for malware. Its signatures update themselves (freshclam)
+  # and are kept in a volume. Starting can take a minute or two while it
+  # loads them; uploads wait for their scan meanwhile.
+  clamav:
+    image: clamav/clamav:1.4
+    profiles: [clamav]
+    restart: unless-stopped
+    volumes:
+      - clamav-db:/var/lib/clamav
+
   otel-collector:
     image: otel/opentelemetry-collector-contrib:latest
     profiles: [observability]
@@ -171,3 +190,4 @@ volumes:
   caddy-config:
   runner-state:
   runner-images:
+  clamav-db:
