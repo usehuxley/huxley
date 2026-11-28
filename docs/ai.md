@@ -36,7 +36,7 @@ How settings apply:
 ```yaml
 - id: gist
   type: ai.prompt
-  with: { prompt: "{{ trigger.body.text }}", system: "Summarize in one line." }
+  with: { prompt: "Summarize the email in one line.", context: "{{ trigger.body.text }}" }
 - id: kind
   type: ai.classify
   with: { text: "{{ trigger.body.text }}", labels: [billing, onboarding, outage, other] }
@@ -59,6 +59,37 @@ How the steps behave:
 - **Logging:** each call is logged against its run.
 - **Failures:** a refusal, an exhausted budget or a provider error fails the step with `kind: ai`. Provider errors also carry `retryable` and `status`, for retry policies.
 - **No secrets:** AI steps refuse input that contains secrets, or values derived from them, so secrets are never sent to a provider.
+
+### Prompt injection
+
+Text an AI step reads, such as an email, a ticket or a web page, can contain instructions of its own ("ignore the above and…"), and these can steer what the AI writes. Huxley limits what that can do.
+
+- **Outside text is fenced off.** The `text` of `ai.classify` and `ai.extract`, and the `context` of `ai.prompt`, go to the model between markers it can't guess, and the model is told to treat what's inside only as data. Put outside text in `context`, not in `prompt`. Fencing makes injection harder; it doesn't make it impossible.
+- **Acting on AI output needs a person's approval.** A workflow that acts on `ai.prompt` or `ai.extract` output, or on anything computed from it, won't publish unless that step runs only after an `approval` step decides. Acting means sending an email, calling an API or an integration, running a script, changing a ticket or a record, or making a decision. The step's `if`, or a step it's inside, checks the decision:
+
+  ```yaml
+  - id: draft
+    type: ai.prompt
+    with: { prompt: "Draft a reply to this email.", context: "{{ trigger.body.text }}" }
+  - id: review
+    type: approval
+    title: Send this reply?
+    message: "{{ steps.draft.output.text }}"
+    approvers: "role:technician"
+  - id: reply
+    type: core.ticket.note
+    if: "{{ steps.review.output.decision == 'approved' }}"
+    with: { ticket_id: "{{ trigger.subject_id }}", kind: public, body: "{{ steps.draft.output.text }}" }
+  ```
+
+  To act without review, set `trust_ai: true` on the step. Reviewers see it in the workflow, and it's your decision.
+- **What doesn't need approval:**
+  - `ai.classify` labels, which are always one of your `labels`;
+  - conditions (`if`) that read AI output, since they decide whether a step runs, not what it does;
+  - steps that only keep AI output as a suggestion for staff: triage suggestions, summaries, sentiment, knowledge drafts, time suggestions, internal notes and notifications. Triage applies its suggestion only where the organization allows it.
+- **AI text is labeled.** Summaries, sentiment, receipt readings, time estimates, scope drafts and automated status reports show an AI label in the app. It's a reminder that they're suggestions to check.
+
+Workflows published before this check keep running. It applies the next time they're published.
 
 Built-in packs that use these steps:
 

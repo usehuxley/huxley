@@ -541,6 +541,12 @@ macro_rules! step {
             /// Record the error as the step's output and carry on.
             #[serde(default, skip_serializing_if = "std::ops::Not::not")]
             pub continue_on_error: bool,
+            /// Act on AI output without a person's approval. Text the AI
+            /// read (an email, a ticket) can steer what it says, so a step
+            /// that acts on `ai.prompt` or `ai.extract` output must
+            /// otherwise run only once an approval step approves it.
+            #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+            pub trust_ai: bool,
             $($(#[$fmeta])* pub $field: $ty,)*
         }
     };
@@ -1031,6 +1037,7 @@ impl Step {
                         retry: s.retry.as_ref(),
                         timeout: s.timeout.as_deref(),
                         continue_on_error: s.continue_on_error,
+                        trust_ai: s.trust_ai,
                     },)*
                 }
             };
@@ -1244,6 +1251,7 @@ pub struct Common<'a> {
     pub retry: Option<&'a RetryPolicy>,
     pub timeout: Option<&'a str>,
     pub continue_on_error: bool,
+    pub trust_ai: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
@@ -2220,6 +2228,12 @@ pub struct CompanyUpdate {
 #[serde(deny_unknown_fields)]
 pub struct AiPrompt {
     pub prompt: String,
+    /// Text from outside (an email, a ticket) for the prompt to work on.
+    /// It's fenced off from the instructions and the model is told to
+    /// treat it only as data: put outside text here rather than in
+    /// `prompt`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub context: Option<String>,
     /// Instructions for the model.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub system: Option<String>,

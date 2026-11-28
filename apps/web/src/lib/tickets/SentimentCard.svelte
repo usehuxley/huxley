@@ -1,5 +1,6 @@
 <!-- How the client's messages on this ticket sounded (the AI sentiment pack). -->
 <script lang="ts">
+	import AiLabel from '#lib/ai/AiLabel.svelte';
 	import { Badge, Card } from '@usehuxley/ui';
 	import type { components } from '@usehuxley/api-client';
 
@@ -27,5 +28,8 @@
 			{/each}
 		</ul>
 	{/if}
-	<p class="mt-2 text-xs text-fg-subtle">Judged by AI from the client's messages.</p>
+	<p class="mt-2 flex flex-wrap items-center gap-2 text-xs text-fg-subtle">
+		<AiLabel />
+		Judged by AI from the client's messages.
+	</p>
 </Card>

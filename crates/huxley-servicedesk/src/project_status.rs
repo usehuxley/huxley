@@ -27,6 +27,8 @@ pub struct StatusReport {
     pub health: String,
     pub client_visible: bool,
     pub author: String,
+    /// Written by a workflow (usually an AI draft), not a person.
+    pub automated: bool,
     #[serde(with = "time::serde::rfc3339")]
     pub created_at: OffsetDateTime,
 }
@@ -45,7 +47,7 @@ pub struct NewStatusReport {
 }
 
 const COLUMNS: &str = "id, project_id, to_char(period_start, 'YYYY-MM-DD') AS period_start, \
-     to_char(period_end, 'YYYY-MM-DD') AS period_end, body, health, client_visible, author, created_at";
+     to_char(period_end, 'YYYY-MM-DD') AS period_end, body, health, client_visible, author, (created_by IS NULL) AS automated, created_at";
 
 /// A project's reports, newest first.
 pub async fn list(

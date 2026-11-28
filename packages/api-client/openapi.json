@@ -46865,10 +46865,23 @@
 			},
 			"StatusReport": {
 				"type": "object",
-				"required": ["id", "projectId", "body", "health", "clientVisible", "author", "createdAt"],
+				"required": [
+					"id",
+					"projectId",
+					"body",
+					"health",
+					"clientVisible",
+					"author",
+					"automated",
+					"createdAt"
+				],
 				"properties": {
 					"author": {
 						"type": "string"
+					},
+					"automated": {
+						"type": "boolean",
+						"description": "Written by a workflow (usually an AI draft), not a person."
 					},
 					"body": {
 						"type": "string",

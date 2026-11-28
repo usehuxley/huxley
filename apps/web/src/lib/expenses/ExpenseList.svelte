@@ -1,6 +1,7 @@
 <!-- Expense entries: what, how much, flags, the receipt; owners keep
      receipts on and delete their drafts. -->
 <script lang="ts">
+	import AiLabel from '#lib/ai/AiLabel.svelte';
 	import ScanBadge from '#lib/files/ScanBadge.svelte';
 	import { enhance, type SubmitFunction } from '$app/forms';
 	import { resolve } from '$app/paths';
@@ -61,6 +62,7 @@
 						class="mt-1 flex flex-wrap items-center gap-2 rounded-control bg-surface-sunken px-2 py-1 text-xs"
 					>
 						<input type="hidden" name="id" value={e.id} />
+						<AiLabel text="Read by AI" />
 						<span class="text-fg-muted">
 							From the receipt: {[
 								r.amount ? money(r.amount, r.currency?.toUpperCase() ?? e.currency) : null,

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import AiLabel from '#lib/ai/AiLabel.svelte';
 	import { enhance } from '$app/forms';
 	import type { components } from '@usehuxley/api-client';
 	import { Badge, Button, Card, ReportBody } from '@usehuxley/ui';
@@ -23,7 +24,10 @@
 				aria-label="Status report, {when(r)}"
 			>
 				<header class="flex flex-wrap items-center justify-between gap-2 text-sm">
-					<span class="text-fg-muted">{when(r)} · {r.author}</span>
+					<span class="flex flex-wrap items-center gap-2 text-fg-muted">
+						{when(r)} · {r.author}
+						{#if r.automated}<AiLabel text="Drafted automatically" />{/if}
+					</span>
 					<span class="flex items-center gap-2">
 						<Badge tone={HEALTH[r.health]?.[1] ?? 'neutral'}>
 							{HEALTH[r.health]?.[0] ?? r.health}

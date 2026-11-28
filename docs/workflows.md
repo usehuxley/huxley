@@ -161,7 +161,7 @@ You fill in a few **bindings**, such as who to tell or which script, and get a *
 | `try` | Runs `catch` if its steps fail (with `error`), and `finally` either way. |
 | `return`, `fail` | End the run with outputs, or with an error. |
 
-Every step has an `id` (unique in the workflow; others read its result as `steps.<id>.output`) and can have `if` (skip unless true), `timeout`, `retry` (`max_attempts`, `backoff: fixed | exponential | jitter`, `delay`, `max_delay`, `on`: statuses like `429`, `4xx`, `5xx`, `timeout`, `network`), and `continue_on_error`. `spec.on_error` runs when nothing caught a failure. `spec.settings` takes a run `timeout` and a `concurrency` limit (runs beyond it wait their turn).
+Every step has an `id` (unique in the workflow; others read its result as `steps.<id>.output`) and can have `if` (skip unless true), `timeout`, `retry` (`max_attempts`, `backoff: fixed | exponential | jitter`, `delay`, `max_delay`, `on`: statuses like `429`, `4xx`, `5xx`, `timeout`, `network`), `continue_on_error`, and `trust_ai` (act on AI output without an approval; see [Prompt injection](ai.md#prompt-injection)). `spec.on_error` runs when nothing caught a failure. `spec.settings` takes a run `timeout` and a `concurrency` limit (runs beyond it wait their turn).
 
 ## Variables and secrets
 

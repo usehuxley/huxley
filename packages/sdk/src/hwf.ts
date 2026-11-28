@@ -40,6 +40,13 @@ export type Step =
 			 * Fail the attempt after this long, e.g. `30s`.
 			 */
 			timeout?: string | null;
+			/**
+			 * Act on AI output without a person's approval. Text the AI
+			 * read (an email, a ticket) can steer what it says, so a step
+			 * that acts on `ai.prompt` or `ai.extract` output must
+			 * otherwise run only once an approval step approves it.
+			 */
+			trust_ai?: boolean;
 			type: 'transform';
 	  }
 	| {
@@ -63,6 +70,13 @@ export type Step =
 			 * Fail the attempt after this long, e.g. `30s`.
 			 */
 			timeout?: string | null;
+			/**
+			 * Act on AI output without a person's approval. Text the AI
+			 * read (an email, a ticket) can steer what it says, so a step
+			 * that acts on `ai.prompt` or `ai.extract` output must
+			 * otherwise run only once an approval step approves it.
+			 */
+			trust_ai?: boolean;
 			type: 'set_var';
 			vars: {
 				[k: string]: unknown;
@@ -89,6 +103,13 @@ export type Step =
 			 * Fail the attempt after this long, e.g. `30s`.
 			 */
 			timeout?: string | null;
+			/**
+			 * Act on AI output without a person's approval. Text the AI
+			 * read (an email, a ticket) can steer what it says, so a step
+			 * that acts on `ai.prompt` or `ai.extract` output must
+			 * otherwise run only once an approval step approves it.
+			 */
+			trust_ai?: boolean;
 			type: 'http.request';
 			with: HttpRequest;
 	  }
@@ -131,6 +152,13 @@ export type Step =
 			 * Fail the attempt after this long, e.g. `30s`.
 			 */
 			timeout?: string | null;
+			/**
+			 * Act on AI output without a person's approval. Text the AI
+			 * read (an email, a ticket) can steer what it says, so a step
+			 * that acts on `ai.prompt` or `ai.extract` output must
+			 * otherwise run only once an approval step approves it.
+			 */
+			trust_ai?: boolean;
 			type: 'integration.action';
 			/**
 			 * The action's inputs: its parameters by name, and `body`.
@@ -161,6 +189,13 @@ export type Step =
 			 * Fail the attempt after this long, e.g. `30s`.
 			 */
 			timeout?: string | null;
+			/**
+			 * Act on AI output without a person's approval. Text the AI
+			 * read (an email, a ticket) can steer what it says, so a step
+			 * that acts on `ai.prompt` or `ai.extract` output must
+			 * otherwise run only once an approval step approves it.
+			 */
+			trust_ai?: boolean;
 			type: 'if';
 	  }
 	| {
@@ -186,6 +221,13 @@ export type Step =
 			 * Fail the attempt after this long, e.g. `30s`.
 			 */
 			timeout?: string | null;
+			/**
+			 * Act on AI output without a person's approval. Text the AI
+			 * read (an email, a ticket) can steer what it says, so a step
+			 * that acts on `ai.prompt` or `ai.extract` output must
+			 * otherwise run only once an approval step approves it.
+			 */
+			trust_ai?: boolean;
 			type: 'switch';
 			/**
 			 * The expression to match.
@@ -226,6 +268,13 @@ export type Step =
 			 * Fail the attempt after this long, e.g. `30s`.
 			 */
 			timeout?: string | null;
+			/**
+			 * Act on AI output without a person's approval. Text the AI
+			 * read (an email, a ticket) can steer what it says, so a step
+			 * that acts on `ai.prompt` or `ai.extract` output must
+			 * otherwise run only once an approval step approves it.
+			 */
+			trust_ai?: boolean;
 			type: 'foreach';
 	  }
 	| {
@@ -254,6 +303,13 @@ export type Step =
 			 * Fail the attempt after this long, e.g. `30s`.
 			 */
 			timeout?: string | null;
+			/**
+			 * Act on AI output without a person's approval. Text the AI
+			 * read (an email, a ticket) can steer what it says, so a step
+			 * that acts on `ai.prompt` or `ai.extract` output must
+			 * otherwise run only once an approval step approves it.
+			 */
+			trust_ai?: boolean;
 			type: 'parallel';
 	  }
 	| {
@@ -286,6 +342,13 @@ export type Step =
 			 * Fail the attempt after this long, e.g. `30s`.
 			 */
 			timeout?: string | null;
+			/**
+			 * Act on AI output without a person's approval. Text the AI
+			 * read (an email, a ticket) can steer what it says, so a step
+			 * that acts on `ai.prompt` or `ai.extract` output must
+			 * otherwise run only once an approval step approves it.
+			 */
+			trust_ai?: boolean;
 			type: 'try';
 	  }
 	| {
@@ -313,6 +376,13 @@ export type Step =
 			 * Fail the attempt after this long, e.g. `30s`.
 			 */
 			timeout?: string | null;
+			/**
+			 * Act on AI output without a person's approval. Text the AI
+			 * read (an email, a ticket) can steer what it says, so a step
+			 * that acts on `ai.prompt` or `ai.extract` output must
+			 * otherwise run only once an approval step approves it.
+			 */
+			trust_ai?: boolean;
 			type: 'wait';
 			/**
 			 * An RFC 3339 timestamp, usually an expression. Set this or `duration`.
@@ -340,6 +410,13 @@ export type Step =
 			 * Fail the attempt after this long, e.g. `30s`.
 			 */
 			timeout?: string | null;
+			/**
+			 * Act on AI output without a person's approval. Text the AI
+			 * read (an email, a ticket) can steer what it says, so a step
+			 * that acts on `ai.prompt` or `ai.extract` output must
+			 * otherwise run only once an approval step approves it.
+			 */
+			trust_ai?: boolean;
 			type: 'subworkflow';
 			/**
 			 * Wait for it and use its outputs (default), or start it and carry on.
@@ -385,6 +462,13 @@ export type Step =
 			 * Fail the attempt after this long, e.g. `30s`.
 			 */
 			timeout?: string | null;
+			/**
+			 * Act on AI output without a person's approval. Text the AI
+			 * read (an email, a ticket) can steer what it says, so a step
+			 * that acts on `ai.prompt` or `ai.extract` output must
+			 * otherwise run only once an approval step approves it.
+			 */
+			trust_ai?: boolean;
 			type: 'wait_for_callback';
 	  }
 	| {
@@ -433,6 +517,13 @@ export type Step =
 			 * What's being decided; shown to approvers.
 			 */
 			title: string;
+			/**
+			 * Act on AI output without a person's approval. Text the AI
+			 * read (an email, a ticket) can steer what it says, so a step
+			 * that acts on `ai.prompt` or `ai.extract` output must
+			 * otherwise run only once an approval step approves it.
+			 */
+			trust_ai?: boolean;
 			type: 'approval';
 	  }
 	| {
@@ -479,6 +570,13 @@ export type Step =
 			 * Fail the attempt after this long, e.g. `30s`.
 			 */
 			timeout?: string | null;
+			/**
+			 * Act on AI output without a person's approval. Text the AI
+			 * read (an email, a ticket) can steer what it says, so a step
+			 * that acts on `ai.prompt` or `ai.extract` output must
+			 * otherwise run only once an approval step approves it.
+			 */
+			trust_ai?: boolean;
 			type: 'script';
 			/**
 			 * Its parameters.
@@ -509,6 +607,13 @@ export type Step =
 			 * Fail the attempt after this long, e.g. `30s`.
 			 */
 			timeout?: string | null;
+			/**
+			 * Act on AI output without a person's approval. Text the AI
+			 * read (an email, a ticket) can steer what it says, so a step
+			 * that acts on `ai.prompt` or `ai.extract` output must
+			 * otherwise run only once an approval step approves it.
+			 */
+			trust_ai?: boolean;
 			type: 'return';
 	  }
 	| {
@@ -534,6 +639,13 @@ export type Step =
 			 * Fail the attempt after this long, e.g. `30s`.
 			 */
 			timeout?: string | null;
+			/**
+			 * Act on AI output without a person's approval. Text the AI
+			 * read (an email, a ticket) can steer what it says, so a step
+			 * that acts on `ai.prompt` or `ai.extract` output must
+			 * otherwise run only once an approval step approves it.
+			 */
+			trust_ai?: boolean;
 			type: 'fail';
 	  }
 	| {
@@ -557,6 +669,13 @@ export type Step =
 			 * Fail the attempt after this long, e.g. `30s`.
 			 */
 			timeout?: string | null;
+			/**
+			 * Act on AI output without a person's approval. Text the AI
+			 * read (an email, a ticket) can steer what it says, so a step
+			 * that acts on `ai.prompt` or `ai.extract` output must
+			 * otherwise run only once an approval step approves it.
+			 */
+			trust_ai?: boolean;
 			type: 'core.notify';
 			with: Notification;
 	  }
@@ -581,6 +700,13 @@ export type Step =
 			 * Fail the attempt after this long, e.g. `30s`.
 			 */
 			timeout?: string | null;
+			/**
+			 * Act on AI output without a person's approval. Text the AI
+			 * read (an email, a ticket) can steer what it says, so a step
+			 * that acts on `ai.prompt` or `ai.extract` output must
+			 * otherwise run only once an approval step approves it.
+			 */
+			trust_ai?: boolean;
 			type: 'core.email';
 			with: EmailMessage;
 	  }
@@ -605,6 +731,13 @@ export type Step =
 			 * Fail the attempt after this long, e.g. `30s`.
 			 */
 			timeout?: string | null;
+			/**
+			 * Act on AI output without a person's approval. Text the AI
+			 * read (an email, a ticket) can steer what it says, so a step
+			 * that acts on `ai.prompt` or `ai.extract` output must
+			 * otherwise run only once an approval step approves it.
+			 */
+			trust_ai?: boolean;
 			type: 'dataset.query';
 			with: DatasetQuery;
 	  }
@@ -629,6 +762,13 @@ export type Step =
 			 * Fail the attempt after this long, e.g. `30s`.
 			 */
 			timeout?: string | null;
+			/**
+			 * Act on AI output without a person's approval. Text the AI
+			 * read (an email, a ticket) can steer what it says, so a step
+			 * that acts on `ai.prompt` or `ai.extract` output must
+			 * otherwise run only once an approval step approves it.
+			 */
+			trust_ai?: boolean;
 			type: 'dataset.upsert';
 			with: DatasetUpsert;
 	  }
@@ -653,6 +793,13 @@ export type Step =
 			 * Fail the attempt after this long, e.g. `30s`.
 			 */
 			timeout?: string | null;
+			/**
+			 * Act on AI output without a person's approval. Text the AI
+			 * read (an email, a ticket) can steer what it says, so a step
+			 * that acts on `ai.prompt` or `ai.extract` output must
+			 * otherwise run only once an approval step approves it.
+			 */
+			trust_ai?: boolean;
 			type: 'core.contact.find';
 			with: ContactFind;
 	  }
@@ -677,6 +824,13 @@ export type Step =
 			 * Fail the attempt after this long, e.g. `30s`.
 			 */
 			timeout?: string | null;
+			/**
+			 * Act on AI output without a person's approval. Text the AI
+			 * read (an email, a ticket) can steer what it says, so a step
+			 * that acts on `ai.prompt` or `ai.extract` output must
+			 * otherwise run only once an approval step approves it.
+			 */
+			trust_ai?: boolean;
 			type: 'core.contact.upsert';
 			with: ContactUpsert;
 	  }
@@ -701,6 +855,13 @@ export type Step =
 			 * Fail the attempt after this long, e.g. `30s`.
 			 */
 			timeout?: string | null;
+			/**
+			 * Act on AI output without a person's approval. Text the AI
+			 * read (an email, a ticket) can steer what it says, so a step
+			 * that acts on `ai.prompt` or `ai.extract` output must
+			 * otherwise run only once an approval step approves it.
+			 */
+			trust_ai?: boolean;
 			type: 'core.company.get';
 			with?: CompanyRef;
 	  }
@@ -725,6 +886,13 @@ export type Step =
 			 * Fail the attempt after this long, e.g. `30s`.
 			 */
 			timeout?: string | null;
+			/**
+			 * Act on AI output without a person's approval. Text the AI
+			 * read (an email, a ticket) can steer what it says, so a step
+			 * that acts on `ai.prompt` or `ai.extract` output must
+			 * otherwise run only once an approval step approves it.
+			 */
+			trust_ai?: boolean;
 			type: 'core.company.update';
 			with: CompanyUpdate;
 	  }
@@ -749,6 +917,13 @@ export type Step =
 			 * Fail the attempt after this long, e.g. `30s`.
 			 */
 			timeout?: string | null;
+			/**
+			 * Act on AI output without a person's approval. Text the AI
+			 * read (an email, a ticket) can steer what it says, so a step
+			 * that acts on `ai.prompt` or `ai.extract` output must
+			 * otherwise run only once an approval step approves it.
+			 */
+			trust_ai?: boolean;
 			type: 'core.ticket.from_email';
 			with: TicketFromEmail;
 	  }
@@ -773,6 +948,13 @@ export type Step =
 			 * Fail the attempt after this long, e.g. `30s`.
 			 */
 			timeout?: string | null;
+			/**
+			 * Act on AI output without a person's approval. Text the AI
+			 * read (an email, a ticket) can steer what it says, so a step
+			 * that acts on `ai.prompt` or `ai.extract` output must
+			 * otherwise run only once an approval step approves it.
+			 */
+			trust_ai?: boolean;
 			type: 'core.ticket.create';
 			with: TicketCreate;
 	  }
@@ -797,6 +979,13 @@ export type Step =
 			 * Fail the attempt after this long, e.g. `30s`.
 			 */
 			timeout?: string | null;
+			/**
+			 * Act on AI output without a person's approval. Text the AI
+			 * read (an email, a ticket) can steer what it says, so a step
+			 * that acts on `ai.prompt` or `ai.extract` output must
+			 * otherwise run only once an approval step approves it.
+			 */
+			trust_ai?: boolean;
 			type: 'core.ticket.get';
 			with: TicketGet;
 	  }
@@ -821,6 +1010,13 @@ export type Step =
 			 * Fail the attempt after this long, e.g. `30s`.
 			 */
 			timeout?: string | null;
+			/**
+			 * Act on AI output without a person's approval. Text the AI
+			 * read (an email, a ticket) can steer what it says, so a step
+			 * that acts on `ai.prompt` or `ai.extract` output must
+			 * otherwise run only once an approval step approves it.
+			 */
+			trust_ai?: boolean;
 			type: 'core.ticket.find';
 			with: TicketFind;
 	  }
@@ -845,6 +1041,13 @@ export type Step =
 			 * Fail the attempt after this long, e.g. `30s`.
 			 */
 			timeout?: string | null;
+			/**
+			 * Act on AI output without a person's approval. Text the AI
+			 * read (an email, a ticket) can steer what it says, so a step
+			 * that acts on `ai.prompt` or `ai.extract` output must
+			 * otherwise run only once an approval step approves it.
+			 */
+			trust_ai?: boolean;
 			type: 'core.ticket.update';
 			with: TicketUpdate;
 	  }
@@ -869,6 +1072,13 @@ export type Step =
 			 * Fail the attempt after this long, e.g. `30s`.
 			 */
 			timeout?: string | null;
+			/**
+			 * Act on AI output without a person's approval. Text the AI
+			 * read (an email, a ticket) can steer what it says, so a step
+			 * that acts on `ai.prompt` or `ai.extract` output must
+			 * otherwise run only once an approval step approves it.
+			 */
+			trust_ai?: boolean;
 			type: 'core.ticket.note';
 			with: TicketNote;
 	  }
@@ -893,6 +1103,13 @@ export type Step =
 			 * Fail the attempt after this long, e.g. `30s`.
 			 */
 			timeout?: string | null;
+			/**
+			 * Act on AI output without a person's approval. Text the AI
+			 * read (an email, a ticket) can steer what it says, so a step
+			 * that acts on `ai.prompt` or `ai.extract` output must
+			 * otherwise run only once an approval step approves it.
+			 */
+			trust_ai?: boolean;
 			type: 'core.ticket.dispatch';
 			with: TicketDispatch;
 	  }
@@ -917,6 +1134,13 @@ export type Step =
 			 * Fail the attempt after this long, e.g. `30s`.
 			 */
 			timeout?: string | null;
+			/**
+			 * Act on AI output without a person's approval. Text the AI
+			 * read (an email, a ticket) can steer what it says, so a step
+			 * that acts on `ai.prompt` or `ai.extract` output must
+			 * otherwise run only once an approval step approves it.
+			 */
+			trust_ai?: boolean;
 			type: 'core.mail.fetch';
 			with?: MailFetch;
 	  }
@@ -941,6 +1165,13 @@ export type Step =
 			 * Fail the attempt after this long, e.g. `30s`.
 			 */
 			timeout?: string | null;
+			/**
+			 * Act on AI output without a person's approval. Text the AI
+			 * read (an email, a ticket) can steer what it says, so a step
+			 * that acts on `ai.prompt` or `ai.extract` output must
+			 * otherwise run only once an approval step approves it.
+			 */
+			trust_ai?: boolean;
 			type: 'core.ticket.embed';
 			with?: TicketEmbed;
 	  }
@@ -965,6 +1196,13 @@ export type Step =
 			 * Fail the attempt after this long, e.g. `30s`.
 			 */
 			timeout?: string | null;
+			/**
+			 * Act on AI output without a person's approval. Text the AI
+			 * read (an email, a ticket) can steer what it says, so a step
+			 * that acts on `ai.prompt` or `ai.extract` output must
+			 * otherwise run only once an approval step approves it.
+			 */
+			trust_ai?: boolean;
 			type: 'core.kb.embed';
 			with?: KbEmbed;
 	  }
@@ -989,6 +1227,13 @@ export type Step =
 			 * Fail the attempt after this long, e.g. `30s`.
 			 */
 			timeout?: string | null;
+			/**
+			 * Act on AI output without a person's approval. Text the AI
+			 * read (an email, a ticket) can steer what it says, so a step
+			 * that acts on `ai.prompt` or `ai.extract` output must
+			 * otherwise run only once an approval step approves it.
+			 */
+			trust_ai?: boolean;
 			type: 'core.timesheet.check';
 			with: TimesheetCheck;
 	  }
@@ -1013,6 +1258,13 @@ export type Step =
 			 * Fail the attempt after this long, e.g. `30s`.
 			 */
 			timeout?: string | null;
+			/**
+			 * Act on AI output without a person's approval. Text the AI
+			 * read (an email, a ticket) can steer what it says, so a step
+			 * that acts on `ai.prompt` or `ai.extract` output must
+			 * otherwise run only once an approval step approves it.
+			 */
+			trust_ai?: boolean;
 			type: 'core.csat.survey';
 			with: CsatSurvey;
 	  }
@@ -1037,6 +1289,13 @@ export type Step =
 			 * Fail the attempt after this long, e.g. `30s`.
 			 */
 			timeout?: string | null;
+			/**
+			 * Act on AI output without a person's approval. Text the AI
+			 * read (an email, a ticket) can steer what it says, so a step
+			 * that acts on `ai.prompt` or `ai.extract` output must
+			 * otherwise run only once an approval step approves it.
+			 */
+			trust_ai?: boolean;
 			type: 'core.nps.send';
 			with?: NpsSend;
 	  }
@@ -1061,6 +1320,13 @@ export type Step =
 			 * Fail the attempt after this long, e.g. `30s`.
 			 */
 			timeout?: string | null;
+			/**
+			 * Act on AI output without a person's approval. Text the AI
+			 * read (an email, a ticket) can steer what it says, so a step
+			 * that acts on `ai.prompt` or `ai.extract` output must
+			 * otherwise run only once an approval step approves it.
+			 */
+			trust_ai?: boolean;
 			type: 'core.health.compute';
 			with?: HealthCompute;
 	  }
@@ -1085,6 +1351,13 @@ export type Step =
 			 * Fail the attempt after this long, e.g. `30s`.
 			 */
 			timeout?: string | null;
+			/**
+			 * Act on AI output without a person's approval. Text the AI
+			 * read (an email, a ticket) can steer what it says, so a step
+			 * that acts on `ai.prompt` or `ai.extract` output must
+			 * otherwise run only once an approval step approves it.
+			 */
+			trust_ai?: boolean;
 			type: 'core.sentiment.record';
 			with: SentimentRecord;
 	  }
@@ -1109,6 +1382,13 @@ export type Step =
 			 * Fail the attempt after this long, e.g. `30s`.
 			 */
 			timeout?: string | null;
+			/**
+			 * Act on AI output without a person's approval. Text the AI
+			 * read (an email, a ticket) can steer what it says, so a step
+			 * that acts on `ai.prompt` or `ai.extract` output must
+			 * otherwise run only once an approval step approves it.
+			 */
+			trust_ai?: boolean;
 			type: 'core.triage.options';
 			with?: TriageOptions;
 	  }
@@ -1133,6 +1413,13 @@ export type Step =
 			 * Fail the attempt after this long, e.g. `30s`.
 			 */
 			timeout?: string | null;
+			/**
+			 * Act on AI output without a person's approval. Text the AI
+			 * read (an email, a ticket) can steer what it says, so a step
+			 * that acts on `ai.prompt` or `ai.extract` output must
+			 * otherwise run only once an approval step approves it.
+			 */
+			trust_ai?: boolean;
 			type: 'core.triage.apply';
 			with: TriageApply;
 	  }
@@ -1157,6 +1444,13 @@ export type Step =
 			 * Fail the attempt after this long, e.g. `30s`.
 			 */
 			timeout?: string | null;
+			/**
+			 * Act on AI output without a person's approval. Text the AI
+			 * read (an email, a ticket) can steer what it says, so a step
+			 * that acts on `ai.prompt` or `ai.extract` output must
+			 * otherwise run only once an approval step approves it.
+			 */
+			trust_ai?: boolean;
 			type: 'core.dispatch.recommend';
 			with: DispatchRecommend;
 	  }
@@ -1181,6 +1475,13 @@ export type Step =
 			 * Fail the attempt after this long, e.g. `30s`.
 			 */
 			timeout?: string | null;
+			/**
+			 * Act on AI output without a person's approval. Text the AI
+			 * read (an email, a ticket) can steer what it says, so a step
+			 * that acts on `ai.prompt` or `ai.extract` output must
+			 * otherwise run only once an approval step approves it.
+			 */
+			trust_ai?: boolean;
 			type: 'core.workforce.insights';
 			with?: WorkforceInsights;
 	  }
@@ -1205,6 +1506,13 @@ export type Step =
 			 * Fail the attempt after this long, e.g. `30s`.
 			 */
 			timeout?: string | null;
+			/**
+			 * Act on AI output without a person's approval. Text the AI
+			 * read (an email, a ticket) can steer what it says, so a step
+			 * that acts on `ai.prompt` or `ai.extract` output must
+			 * otherwise run only once an approval step approves it.
+			 */
+			trust_ai?: boolean;
 			type: 'core.ticket.insight';
 			with: TicketInsight;
 	  }
@@ -1229,6 +1537,13 @@ export type Step =
 			 * Fail the attempt after this long, e.g. `30s`.
 			 */
 			timeout?: string | null;
+			/**
+			 * Act on AI output without a person's approval. Text the AI
+			 * read (an email, a ticket) can steer what it says, so a step
+			 * that acts on `ai.prompt` or `ai.extract` output must
+			 * otherwise run only once an approval step approves it.
+			 */
+			trust_ai?: boolean;
 			type: 'core.kb.draft';
 			with: KbDraft;
 	  }
@@ -1253,6 +1568,13 @@ export type Step =
 			 * Fail the attempt after this long, e.g. `30s`.
 			 */
 			timeout?: string | null;
+			/**
+			 * Act on AI output without a person's approval. Text the AI
+			 * read (an email, a ticket) can steer what it says, so a step
+			 * that acts on `ai.prompt` or `ai.extract` output must
+			 * otherwise run only once an approval step approves it.
+			 */
+			trust_ai?: boolean;
 			type: 'core.time.suggest';
 			with: TimeSuggest;
 	  }
@@ -1277,6 +1599,13 @@ export type Step =
 			 * Fail the attempt after this long, e.g. `30s`.
 			 */
 			timeout?: string | null;
+			/**
+			 * Act on AI output without a person's approval. Text the AI
+			 * read (an email, a ticket) can steer what it says, so a step
+			 * that acts on `ai.prompt` or `ai.extract` output must
+			 * otherwise run only once an approval step approves it.
+			 */
+			trust_ai?: boolean;
 			type: 'core.report.send';
 			with: ReportSend;
 	  }
@@ -1301,6 +1630,13 @@ export type Step =
 			 * Fail the attempt after this long, e.g. `30s`.
 			 */
 			timeout?: string | null;
+			/**
+			 * Act on AI output without a person's approval. Text the AI
+			 * read (an email, a ticket) can steer what it says, so a step
+			 * that acts on `ai.prompt` or `ai.extract` output must
+			 * otherwise run only once an approval step approves it.
+			 */
+			trust_ai?: boolean;
 			type: 'core.change.decide';
 			with: ChangeDecide;
 	  }
@@ -1325,6 +1661,13 @@ export type Step =
 			 * Fail the attempt after this long, e.g. `30s`.
 			 */
 			timeout?: string | null;
+			/**
+			 * Act on AI output without a person's approval. Text the AI
+			 * read (an email, a ticket) can steer what it says, so a step
+			 * that acts on `ai.prompt` or `ai.extract` output must
+			 * otherwise run only once an approval step approves it.
+			 */
+			trust_ai?: boolean;
 			type: 'core.project.scope.decide';
 			with: ScopeDecide;
 	  }
@@ -1349,6 +1692,13 @@ export type Step =
 			 * Fail the attempt after this long, e.g. `30s`.
 			 */
 			timeout?: string | null;
+			/**
+			 * Act on AI output without a person's approval. Text the AI
+			 * read (an email, a ticket) can steer what it says, so a step
+			 * that acts on `ai.prompt` or `ai.extract` output must
+			 * otherwise run only once an approval step approves it.
+			 */
+			trust_ai?: boolean;
 			type: 'core.quote.review';
 			with: QuoteReview;
 	  }
@@ -1373,6 +1723,13 @@ export type Step =
 			 * Fail the attempt after this long, e.g. `30s`.
 			 */
 			timeout?: string | null;
+			/**
+			 * Act on AI output without a person's approval. Text the AI
+			 * read (an email, a ticket) can steer what it says, so a step
+			 * that acts on `ai.prompt` or `ai.extract` output must
+			 * otherwise run only once an approval step approves it.
+			 */
+			trust_ai?: boolean;
 			type: 'core.invoice.review';
 			with: InvoiceReview;
 	  }
@@ -1397,6 +1754,13 @@ export type Step =
 			 * Fail the attempt after this long, e.g. `30s`.
 			 */
 			timeout?: string | null;
+			/**
+			 * Act on AI output without a person's approval. Text the AI
+			 * read (an email, a ticket) can steer what it says, so a step
+			 * that acts on `ai.prompt` or `ai.extract` output must
+			 * otherwise run only once an approval step approves it.
+			 */
+			trust_ai?: boolean;
 			type: 'core.invoice.sync_result';
 			with: InvoiceSyncResult;
 	  }
@@ -1421,6 +1785,13 @@ export type Step =
 			 * Fail the attempt after this long, e.g. `30s`.
 			 */
 			timeout?: string | null;
+			/**
+			 * Act on AI output without a person's approval. Text the AI
+			 * read (an email, a ticket) can steer what it says, so a step
+			 * that acts on `ai.prompt` or `ai.extract` output must
+			 * otherwise run only once an approval step approves it.
+			 */
+			trust_ai?: boolean;
 			type: 'core.invoice.unpaid';
 			with: InvoiceUnpaid;
 	  }
@@ -1445,6 +1816,13 @@ export type Step =
 			 * Fail the attempt after this long, e.g. `30s`.
 			 */
 			timeout?: string | null;
+			/**
+			 * Act on AI output without a person's approval. Text the AI
+			 * read (an email, a ticket) can steer what it says, so a step
+			 * that acts on `ai.prompt` or `ai.extract` output must
+			 * otherwise run only once an approval step approves it.
+			 */
+			trust_ai?: boolean;
 			type: 'core.invoice.status';
 			with: InvoiceStatus;
 	  }
@@ -1469,6 +1847,13 @@ export type Step =
 			 * Fail the attempt after this long, e.g. `30s`.
 			 */
 			timeout?: string | null;
+			/**
+			 * Act on AI output without a person's approval. Text the AI
+			 * read (an email, a ticket) can steer what it says, so a step
+			 * that acts on `ai.prompt` or `ai.extract` output must
+			 * otherwise run only once an approval step approves it.
+			 */
+			trust_ai?: boolean;
 			type: 'core.expense.read_receipt';
 			with: ExpenseReadReceipt;
 	  }
@@ -1493,6 +1878,13 @@ export type Step =
 			 * Fail the attempt after this long, e.g. `30s`.
 			 */
 			timeout?: string | null;
+			/**
+			 * Act on AI output without a person's approval. Text the AI
+			 * read (an email, a ticket) can steer what it says, so a step
+			 * that acts on `ai.prompt` or `ai.extract` output must
+			 * otherwise run only once an approval step approves it.
+			 */
+			trust_ai?: boolean;
 			type: 'core.expense.report_decide';
 			with: ExpenseReportDecide;
 	  }
@@ -1517,6 +1909,13 @@ export type Step =
 			 * Fail the attempt after this long, e.g. `30s`.
 			 */
 			timeout?: string | null;
+			/**
+			 * Act on AI output without a person's approval. Text the AI
+			 * read (an email, a ticket) can steer what it says, so a step
+			 * that acts on `ai.prompt` or `ai.extract` output must
+			 * otherwise run only once an approval step approves it.
+			 */
+			trust_ai?: boolean;
 			type: 'core.expense.sync_result';
 			with: ExpenseSyncResult;
 	  }
@@ -1541,6 +1940,13 @@ export type Step =
 			 * Fail the attempt after this long, e.g. `30s`.
 			 */
 			timeout?: string | null;
+			/**
+			 * Act on AI output without a person's approval. Text the AI
+			 * read (an email, a ticket) can steer what it says, so a step
+			 * that acts on `ai.prompt` or `ai.extract` output must
+			 * otherwise run only once an approval step approves it.
+			 */
+			trust_ai?: boolean;
 			type: 'core.sales.log_email';
 			with: SalesLogEmail;
 	  }
@@ -1565,6 +1971,13 @@ export type Step =
 			 * Fail the attempt after this long, e.g. `30s`.
 			 */
 			timeout?: string | null;
+			/**
+			 * Act on AI output without a person's approval. Text the AI
+			 * read (an email, a ticket) can steer what it says, so a step
+			 * that acts on `ai.prompt` or `ai.extract` output must
+			 * otherwise run only once an approval step approves it.
+			 */
+			trust_ai?: boolean;
 			type: 'core.scope.context';
 			with: ScopeContext;
 	  }
@@ -1589,6 +2002,13 @@ export type Step =
 			 * Fail the attempt after this long, e.g. `30s`.
 			 */
 			timeout?: string | null;
+			/**
+			 * Act on AI output without a person's approval. Text the AI
+			 * read (an email, a ticket) can steer what it says, so a step
+			 * that acts on `ai.prompt` or `ai.extract` output must
+			 * otherwise run only once an approval step approves it.
+			 */
+			trust_ai?: boolean;
 			type: 'core.scope.write';
 			with: ScopeWrite;
 	  }
@@ -1613,6 +2033,13 @@ export type Step =
 			 * Fail the attempt after this long, e.g. `30s`.
 			 */
 			timeout?: string | null;
+			/**
+			 * Act on AI output without a person's approval. Text the AI
+			 * read (an email, a ticket) can steer what it says, so a step
+			 * that acts on `ai.prompt` or `ai.extract` output must
+			 * otherwise run only once an approval step approves it.
+			 */
+			trust_ai?: boolean;
 			type: 'core.scope.estimate_context';
 			with: ScopeContext;
 	  }
@@ -1637,6 +2064,13 @@ export type Step =
 			 * Fail the attempt after this long, e.g. `30s`.
 			 */
 			timeout?: string | null;
+			/**
+			 * Act on AI output without a person's approval. Text the AI
+			 * read (an email, a ticket) can steer what it says, so a step
+			 * that acts on `ai.prompt` or `ai.extract` output must
+			 * otherwise run only once an approval step approves it.
+			 */
+			trust_ai?: boolean;
 			type: 'core.scope.write_estimate';
 			with: ScopeWriteEstimate;
 	  }
@@ -1661,6 +2095,13 @@ export type Step =
 			 * Fail the attempt after this long, e.g. `30s`.
 			 */
 			timeout?: string | null;
+			/**
+			 * Act on AI output without a person's approval. Text the AI
+			 * read (an email, a ticket) can steer what it says, so a step
+			 * that acts on `ai.prompt` or `ai.extract` output must
+			 * otherwise run only once an approval step approves it.
+			 */
+			trust_ai?: boolean;
 			type: 'core.calendar.sync';
 			with?: CalendarSync | null;
 	  }
@@ -1685,6 +2126,13 @@ export type Step =
 			 * Fail the attempt after this long, e.g. `30s`.
 			 */
 			timeout?: string | null;
+			/**
+			 * Act on AI output without a person's approval. Text the AI
+			 * read (an email, a ticket) can steer what it says, so a step
+			 * that acts on `ai.prompt` or `ai.extract` output must
+			 * otherwise run only once an approval step approves it.
+			 */
+			trust_ai?: boolean;
 			type: 'core.calendar.write';
 			with: CalendarWrite;
 	  }
@@ -1709,6 +2157,13 @@ export type Step =
 			 * Fail the attempt after this long, e.g. `30s`.
 			 */
 			timeout?: string | null;
+			/**
+			 * Act on AI output without a person's approval. Text the AI
+			 * read (an email, a ticket) can steer what it says, so a step
+			 * that acts on `ai.prompt` or `ai.extract` output must
+			 * otherwise run only once an approval step approves it.
+			 */
+			trust_ai?: boolean;
 			type: 'core.project.status';
 			with?: ProjectStatus | null;
 	  }
@@ -1733,6 +2188,13 @@ export type Step =
 			 * Fail the attempt after this long, e.g. `30s`.
 			 */
 			timeout?: string | null;
+			/**
+			 * Act on AI output without a person's approval. Text the AI
+			 * read (an email, a ticket) can steer what it says, so a step
+			 * that acts on `ai.prompt` or `ai.extract` output must
+			 * otherwise run only once an approval step approves it.
+			 */
+			trust_ai?: boolean;
 			type: 'core.project.report';
 			with: ProjectReport;
 	  }
@@ -1757,6 +2219,13 @@ export type Step =
 			 * Fail the attempt after this long, e.g. `30s`.
 			 */
 			timeout?: string | null;
+			/**
+			 * Act on AI output without a person's approval. Text the AI
+			 * read (an email, a ticket) can steer what it says, so a step
+			 * that acts on `ai.prompt` or `ai.extract` output must
+			 * otherwise run only once an approval step approves it.
+			 */
+			trust_ai?: boolean;
 			type: 'core.asset.sync';
 			with: AssetSync;
 	  }
@@ -1781,6 +2250,13 @@ export type Step =
 			 * Fail the attempt after this long, e.g. `30s`.
 			 */
 			timeout?: string | null;
+			/**
+			 * Act on AI output without a person's approval. Text the AI
+			 * read (an email, a ticket) can steer what it says, so a step
+			 * that acts on `ai.prompt` or `ai.extract` output must
+			 * otherwise run only once an approval step approves it.
+			 */
+			trust_ai?: boolean;
 			type: 'core.asset.set_warranty';
 			with: AssetWarranty;
 	  }
@@ -1805,6 +2281,13 @@ export type Step =
 			 * Fail the attempt after this long, e.g. `30s`.
 			 */
 			timeout?: string | null;
+			/**
+			 * Act on AI output without a person's approval. Text the AI
+			 * read (an email, a ticket) can steer what it says, so a step
+			 * that acts on `ai.prompt` or `ai.extract` output must
+			 * otherwise run only once an approval step approves it.
+			 */
+			trust_ai?: boolean;
 			type: 'core.ticket.email_reply';
 			with: TicketEmailReply;
 	  }
@@ -1829,6 +2312,13 @@ export type Step =
 			 * Fail the attempt after this long, e.g. `30s`.
 			 */
 			timeout?: string | null;
+			/**
+			 * Act on AI output without a person's approval. Text the AI
+			 * read (an email, a ticket) can steer what it says, so a step
+			 * that acts on `ai.prompt` or `ai.extract` output must
+			 * otherwise run only once an approval step approves it.
+			 */
+			trust_ai?: boolean;
 			type: 'ai.prompt';
 			with: AiPrompt;
 	  }
@@ -1853,6 +2343,13 @@ export type Step =
 			 * Fail the attempt after this long, e.g. `30s`.
 			 */
 			timeout?: string | null;
+			/**
+			 * Act on AI output without a person's approval. Text the AI
+			 * read (an email, a ticket) can steer what it says, so a step
+			 * that acts on `ai.prompt` or `ai.extract` output must
+			 * otherwise run only once an approval step approves it.
+			 */
+			trust_ai?: boolean;
 			type: 'ai.classify';
 			with: AiClassify;
 	  }
@@ -1877,6 +2374,13 @@ export type Step =
 			 * Fail the attempt after this long, e.g. `30s`.
 			 */
 			timeout?: string | null;
+			/**
+			 * Act on AI output without a person's approval. Text the AI
+			 * read (an email, a ticket) can steer what it says, so a step
+			 * that acts on `ai.prompt` or `ai.extract` output must
+			 * otherwise run only once an approval step approves it.
+			 */
+			trust_ai?: boolean;
 			type: 'ai.extract';
 			with: AiExtract;
 	  };
@@ -3109,6 +3613,13 @@ export interface TicketEmailReply {
  * via the `definition` "AiPrompt".
  */
 export interface AiPrompt {
+	/**
+	 * Text from outside (an email, a ticket) for the prompt to work on.
+	 * It's fenced off from the instructions and the model is told to
+	 * treat it only as data: put outside text here rather than in
+	 * `prompt`.
+	 */
+	context?: string | null;
 	max_tokens?: unknown;
 	/**
 	 * Another model than the provider's (e.g. a faster one).

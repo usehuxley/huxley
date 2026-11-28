@@ -11,6 +11,7 @@
 //! - [`check_workflow`] finds syntax errors, unknown names, and `steps.<id>`
 //!   references that can't have run yet, before a workflow is published.
 
+mod ai_guard;
 mod check;
 mod functions;
 mod lookup;
