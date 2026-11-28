@@ -1,4 +1,12 @@
-import { expect, request, test, type APIResponse, type Page } from '@playwright/test';
+import {
+	expect,
+	request,
+	test,
+	type APIRequestContext,
+	type APIResponse,
+	type Locator,
+	type Page
+} from '@playwright/test';
 import { openFromMenu } from '../lib/testing/nav.ts';
 
 // Full-stack: needs the API and the service-desk preset (tickets and time).
@@ -24,6 +32,35 @@ async function ok<T>(response: Promise<APIResponse>) {
 	return (await r.json()) as T;
 }
 
+/** The root's billing settings: every test bills at this rate, whichever runs first. */
+async function billAt150(api: APIRequestContext, root: string) {
+	await ok(
+		api.put('/api/v1/billing/settings', {
+			data: {
+				orgId: root,
+				hourlyRate: '150',
+				currency: 'USD',
+				paymentDays: 30,
+				approvedTimeOnly: false
+			}
+		})
+	);
+}
+
+/** Clicks a match's Save, then waits for its answer and the page's reload. */
+async function saved(page: Page, button: Locator) {
+	const answered = page.waitForResponse(
+		(r) => r.request().method() === 'POST' && r.url().includes('/billing/accounting')
+	);
+	const reloaded = page.waitForResponse(
+		(r) => r.request().method() === 'GET' && r.url().includes('/billing/accounting/__data.json')
+	);
+	await button.click();
+	expect((await answered).ok()).toBe(true);
+	await expect(page.getByText('Matched.').last()).toBeVisible();
+	await reloaded;
+}
+
 test.describe('billing', () => {
 	test.skip(
 		!ownerEmail || !ownerPassword || !apiUrl,
@@ -45,17 +82,7 @@ test.describe('billing', () => {
 		}
 		const orgs = await ok<{ id: string; parentId: string | null }[]>(api.get('/api/v1/orgs'));
 		const root = orgs.find((o) => o.parentId === null)!.id;
-		await ok(
-			api.put('/api/v1/billing/settings', {
-				data: {
-					orgId: root,
-					hourlyRate: '150',
-					currency: 'USD',
-					paymentDays: 30,
-					approvedTimeOnly: false
-				}
-			})
-		);
+		await billAt150(api, root);
 		const client = await ok<{ id: string }>(
 			api.post('/api/v1/orgs', {
 				data: { parentId: root, kind: 'client', name: `Billed ${stamp}` }
@@ -121,6 +148,7 @@ test.describe('billing', () => {
 		const me = (await ok<{ id: string }>(api.get('/api/v1/auth/me'))).id;
 		const orgs = await ok<{ id: string; parentId: string | null }[]>(api.get('/api/v1/orgs'));
 		const root = orgs.find((o) => o.parentId === null)!.id;
+		await billAt150(api, root);
 		const name = `Reviewed ${stamp}`;
 		const client = await ok<{ id: string }>(
 			api.post('/api/v1/orgs', { data: { parentId: root, kind: 'client', name } })
@@ -226,6 +254,7 @@ test.describe('billing', () => {
 		}
 		const orgs = await ok<{ id: string; parentId: string | null }[]>(api.get('/api/v1/orgs'));
 		const root = orgs.find((o) => o.parentId === null)!.id;
+		await billAt150(api, root);
 		const name = `Synced ${stamp}`;
 		const client = await ok<{ id: string }>(
 			api.post('/api/v1/orgs', { data: { parentId: root, kind: 'client', name } })
@@ -266,20 +295,20 @@ test.describe('billing', () => {
 			await expect(page.getByRole('list', { name: 'Sync errors' })).toContainText(name);
 			const matches = page.getByRole('table', { name: 'Matches' });
 			await matches.getByLabel(`${name} in quickbooks`).fill('58');
-			await matches
-				.getByRole('row')
-				.filter({ hasText: name })
-				.getByRole('button', { name: 'Save' })
-				.click();
-			await expect(page.getByText('Matched.')).toBeVisible();
+			await saved(
+				page,
+				matches.getByRole('row').filter({ hasText: name }).getByRole('button', { name: 'Save' })
+			);
 			await page.getByRole('button', { name: 'Items' }).click();
 			await matches.getByLabel('Anything else (the default item) in quickbooks').fill('1');
-			await matches
-				.getByRole('row')
-				.filter({ hasText: 'Anything else' })
-				.getByRole('button', { name: 'Save' })
-				.click();
-			await expect(page.getByText('Matched.').first()).toBeVisible();
+			// Waits for this save itself: "Matched." from the last one is still showing.
+			await saved(
+				page,
+				matches
+					.getByRole('row')
+					.filter({ hasText: 'Anything else' })
+					.getByRole('button', { name: 'Save' })
+			);
 
 			await page
 				.getByRole('list', { name: 'Sync errors' })

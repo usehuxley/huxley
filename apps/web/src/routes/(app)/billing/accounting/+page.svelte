@@ -60,13 +60,14 @@
 		(): SubmitFunction =>
 		() =>
 		async ({ result, update }) => {
-			await update({ reset: false });
 			const back = result.type === 'success' || result.type === 'failure' ? result.data : undefined;
 			const message = (back as { message?: string } | undefined)?.message;
+			// Said at once: reloading this page's lists can take a few seconds.
 			toast.push({
 				title: message ?? 'Done.',
 				tone: result.type === 'success' ? 'success' : 'danger'
 			});
+			await update({ reset: false });
 		};
 	const select = 'h-8 w-full rounded-control border border-border bg-surface px-2 text-sm text-fg';
 </script>
