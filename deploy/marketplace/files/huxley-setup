@@ -1,0 +1,91 @@
+#!/bin/sh
+# Sets Huxley up on a marketplace server: its domains and email settings,
+# then starts it and creates the first user. Run as root. Safe to run
+# again: it changes the settings and restarts, and creates the first user
+# only once.
+#
+# Without a terminal, give everything in the environment:
+#   HUXLEY_DOMAIN, HUXLEY_PORTAL_DOMAIN, HUXLEY_SMTP_URL, HUXLEY_EMAIL_FROM,
+#   HUXLEY_ORG_NAME, HUXLEY_ADMIN_EMAIL, HUXLEY_ADMIN_NAME, HUXLEY_PRESET
+set -eu
+cd /opt/huxley/deploy/compose
+
+if [ "$(id -u)" != 0 ]; then
+	echo "Run huxley-setup as root (sudo huxley-setup)." >&2
+	exit 1
+fi
+
+ask() { # name, question, default
+	eval "current=\${$1:-}"
+	if [ -n "$current" ]; then return; fi
+	if [ ! -t 0 ]; then
+		if [ -n "$3" ]; then eval "$1=\$3"; return; fi
+		echo "Set $1." >&2
+		exit 1
+	fi
+	printf '%s' "$2${3:+ [$3]}: "
+	# shellcheck disable=SC2034 # read through eval below
+	read -r answer
+	eval "$1=\${answer:-\$3}"
+	eval "current=\${$1}"
+	if [ -z "$current" ]; then
+		echo "This one is needed." >&2
+		ask "$@"
+	fi
+}
+
+# What a .env line holds now (for defaults on a second run).
+now() { sed -n "s/^$1=//p" .env 2>/dev/null | head -n 1; }
+
+echo "Huxley setup. Point DNS for both names at this server first: Caddy gets"
+echo "their certificates when Huxley starts."
+echo
+ask HUXLEY_DOMAIN "Staff app domain (e.g. huxley.example.com)" "$(now HUXLEY_DOMAIN | grep -v '^localhost$' || true)"
+ask HUXLEY_PORTAL_DOMAIN "Client portal domain" "$(now HUXLEY_PORTAL_DOMAIN | grep -v 'localhost$' || echo "portal.${HUXLEY_DOMAIN#*.}")"
+if [ -t 0 ] && [ -z "${HUXLEY_SMTP_URL+set}" ]; then
+	echo "Outgoing email (password resets, invitations), e.g."
+	echo "smtps://user:pass@smtp.example.com. Leave empty to set it later."
+	printf 'SMTP URL: '
+	read -r HUXLEY_SMTP_URL
+fi
+HUXLEY_SMTP_URL="${HUXLEY_SMTP_URL:-$(now HUXLEY_SMTP_URL)}"
+ask HUXLEY_EMAIL_FROM "Send email as" "$(now HUXLEY_EMAIL_FROM || true)"
+
+set_env() { # name, value: replace or add a line in .env
+	tmp=$(mktemp)
+	grep -v "^$1=" .env > "$tmp" || true
+	printf '%s=%s\n' "$1" "$2" >> "$tmp"
+	mv "$tmp" .env
+	chmod 600 .env
+}
+set_env HUXLEY_DOMAIN "$HUXLEY_DOMAIN"
+set_env HUXLEY_PORTAL_DOMAIN "$HUXLEY_PORTAL_DOMAIN"
+set_env HUXLEY_SMTP_URL "$HUXLEY_SMTP_URL"
+set_env HUXLEY_EMAIL_FROM "$HUXLEY_EMAIL_FROM"
+
+echo
+echo "Starting Huxley (the first start can take a few minutes)..."
+docker compose up -d --wait huxley web portal caddy
+
+if [ ! -f .bootstrapped ]; then
+	echo
+	echo "Your company and the first user (the owner):"
+	ask HUXLEY_ORG_NAME "Company name" ""
+	ask HUXLEY_ADMIN_EMAIL "Your email" ""
+	ask HUXLEY_ADMIN_NAME "Your name" ""
+	ask HUXLEY_PRESET "Modules: automation, service-desk or full" "full"
+	docker compose run --rm --no-deps -T huxley admin bootstrap \
+		--org-name "$HUXLEY_ORG_NAME" --email "$HUXLEY_ADMIN_EMAIL" \
+		--name "$HUXLEY_ADMIN_NAME" --preset "$HUXLEY_PRESET"
+	touch .bootstrapped
+fi
+touch .configured
+
+cat <<TEXT
+
+Huxley is running at https://$HUXLEY_DOMAIN (the portal at https://$HUXLEY_PORTAL_DOMAIN).
+Sign in with the password above, and change it.
+
+Back up the key-encryption key now: /opt/huxley/deploy/compose/secrets/kek.
+Without it, encrypted data can't be recovered. See https://docs.usehuxley.io/backup
+TEXT

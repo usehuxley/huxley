@@ -144,6 +144,23 @@ jobs:
             tf "deploy/terraform/$dir" init -backend=false -input=false -lockfile=readonly
             tf "deploy/terraform/$dir" validate
           done
+      # Marketplace image recipes (deploy/marketplace/README.md): the Packer template
+      # for each cloud, the scripts, and setup run in a container.
+      - name: Marketplace images
+        run: |
+          set -euo pipefail
+          pk() { docker run --rm -v "$PWD/deploy:/deploy" -w /deploy/marketplace \
+            -e PACKER_PLUGIN_PATH=/deploy/marketplace/.packer.d hashicorp/packer:1.11.2 "$@"; }
+          pk fmt -check -diff .
+          pk init .
+          for only in digitalocean.huxley azure-arm.huxley amazon-ebs.huxley; do
+            pk validate -only="$only" -var huxley_version=0.0.0-ci -var do_token=ci \
+              -var azure_subscription_id=00000000-0000-0000-0000-000000000000 .
+          done
+          docker run --rm -v "$PWD/deploy/marketplace:/mnt:ro" koalaman/shellcheck:v0.10.0 -s sh \
+            /mnt/scripts/install.sh /mnt/scripts/cleanup.sh /mnt/files/first-boot.sh \
+            /mnt/files/99-huxley /mnt/files/huxley-setup /mnt/files/huxley-setup.sh /mnt/test/setup.sh
+          sh deploy/marketplace/test/setup.sh
 
   js:
     name: Frontend (check, lint, tests, e2e)

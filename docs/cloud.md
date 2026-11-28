@@ -79,3 +79,10 @@ Then point DNS where the `dns` output says. Once the API is healthy, run the com
 - **Behind a CDN:** see [Behind a CDN](./operations.md#behind-a-cdn). The AWS template has CloudFront built in.
 - **Telemetry:** set `otlp_endpoint` to send telemetry to a collector. See [Observability](./observability.md).
 - **Key-encryption key:** the key is in the cloud's key service (or the DigitalOcean secret). Keep it with the database's backups, because encrypted data can't be recovered without it. See [Protecting secrets](./operations.md#protecting-secrets).
+
+## From a marketplace image
+
+Once Huxley is listed on a cloud's marketplace, a server made from its image starts with Docker, the Compose deployment and its images in place, and secrets unique to that server. Point DNS for the staff app and the portal at the server, sign in over SSH as root, and run `huxley-setup`. It asks for the domains, outgoing email and your first user, then starts Huxley. Back up `/opt/huxley/deploy/compose/secrets/kek` straight away ([Backup and restore](backup.md)).
+
+The images are built from [`deploy/marketplace`](https://github.com/usehuxley/huxley/tree/main/deploy/marketplace).
+
