@@ -57,6 +57,19 @@ pub enum AdminCommand {
     /// Print a new random key-encryption key for `crypto.kek`. Needs no
     /// database or configuration.
     GenerateKek,
+    /// Before restoring a backup into a new PostgreSQL server: create the
+    /// roles Huxley's grants refer to (`pg_dump` doesn't carry them). Run it
+    /// against the empty target database, then `pg_restore`.
+    PrepareRestore,
+    /// After restoring: check migrations, the application role, the
+    /// key-encryption keys, the audit chain, and that every file the
+    /// database refers to is in object storage. Exits non-zero on a problem.
+    VerifyRestore {
+        /// Check this many files of each kind, chosen at random, instead of
+        /// all of them (for large instances).
+        #[arg(long)]
+        sample: Option<i64>,
+    },
     /// Re-wrap every data key under the active key-encryption key. Run after
     /// rotating `crypto.kek` (with the old key in `crypto.retired_keks`) or
     /// moving to a key service (`crypto.active`); once it succeeds the retired
@@ -78,6 +91,10 @@ pub async fn run(config: &Config, command: AdminCommand) -> anyhow::Result<()> {
     match command {
         AdminCommand::GenerateKek => unreachable!("handled above"),
         AdminCommand::RewrapKeys { all } => rewrap_keys(config, db_config, all).await,
+        AdminCommand::PrepareRestore => crate::restore::prepare(db_config).await,
+        AdminCommand::VerifyRestore { sample } => {
+            crate::restore::verify(config, db_config, sample).await
+        }
         AdminCommand::Bootstrap {
             org_name,
             email,

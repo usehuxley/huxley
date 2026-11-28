@@ -2,6 +2,8 @@
 
 Notes for whoever runs a Huxley instance.
 
+To back up an instance and restore it, see [Backup and restore](backup.md).
+
 ## Data retention
 
 Some data grows without end, so a daily sweep removes what's older than its retention (ADR-085). Set the retentions in **Settings → Data retention** (`platform:retention:manage`).

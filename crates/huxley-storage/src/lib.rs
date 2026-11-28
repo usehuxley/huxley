@@ -235,6 +235,15 @@ impl Storage {
         Ok(self.store.get(&self.path(key)).await?.bytes().await?)
     }
 
+    /// Whether an object exists (without reading it).
+    pub async fn exists(&self, key: &str) -> StorageResult<bool> {
+        match self.store.head(&self.path(key)).await {
+            Ok(_) => Ok(true),
+            Err(object_store::Error::NotFound { .. }) => Ok(false),
+            Err(e) => Err(e.into()),
+        }
+    }
+
     /// Deletes an object. Missing objects are fine.
     pub async fn delete(&self, key: &str) -> StorageResult<()> {
         match self.store.delete(&self.path(key)).await {

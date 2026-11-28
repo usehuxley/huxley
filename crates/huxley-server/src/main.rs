@@ -8,6 +8,7 @@ mod codegen;
 mod config;
 mod mcp_cli;
 mod pack_cli;
+mod restore;
 mod roles;
 mod runner;
 mod shutdown;

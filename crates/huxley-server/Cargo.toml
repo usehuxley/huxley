@@ -23,6 +23,7 @@ huxley-auth.workspace = true
 huxley-authz.workspace = true
 huxley-core.workspace = true
 huxley-crypto.workspace = true
+futures-util.workspace = true
 huxley-db.workspace = true
 huxley-email.workspace = true
 huxley-engine.workspace = true
