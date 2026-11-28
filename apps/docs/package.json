@@ -6,7 +6,7 @@
 	"scripts": {
 		"sync": "node scripts/sync-pages.mjs",
 		"dev": "node scripts/sync-pages.mjs && vitepress dev",
-		"build": "node scripts/sync-pages.mjs && vitepress build && node scripts/copy-schemas.mjs",
+		"build": "node scripts/sync-pages.mjs && vitepress build && node scripts/copy-schemas.mjs && node scripts/security-txt.mjs",
 		"preview": "vitepress preview"
 	},
 	"devDependencies": {
