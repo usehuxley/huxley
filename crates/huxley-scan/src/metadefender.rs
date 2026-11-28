@@ -57,7 +57,11 @@ impl MetaDefender {
         Ok(Self {
             http,
             url,
-            api_key: config.api_key.clone(),
+            // An empty key (e.g. an unset variable) is no key.
+            api_key: config
+                .api_key
+                .clone()
+                .filter(|k| !k.expose_secret().trim().is_empty()),
             rule: config.rule.clone().filter(|r| !r.trim().is_empty()),
             timeout: secs(config.timeout_seconds),
             poll: Duration::from_millis(config.poll_milliseconds.clamp(100, 60_000)),

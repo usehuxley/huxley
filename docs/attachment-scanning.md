@@ -46,7 +46,11 @@ address = "tcp://clamav:3310"   # or "unix:/run/clamav/clamd.sock"
 timeout_seconds = 120
 ```
 
-Run `clamav/clamav` alongside Huxley. It downloads signature updates itself. ClamAV refuses streams over its `StreamMaxLength` (100 MB by default in recent versions). Keep it above `storage.max_upload_mb`, or larger files will fail to scan.
+Run `clamav/clamav` alongside Huxley. It downloads signature updates itself.
+- **Docker Compose:** set `HUXLEY_SCAN_PROVIDER=clamav` in `.env`, then start the profile: `docker compose --profile clamav up -d`.
+- **Kubernetes:** set `scan.provider: clamav` and `scan.clamav.deploy: true` in the chart's values ([Kubernetes](kubernetes.md#malware-scanning)).
+
+ ClamAV refuses streams over its `StreamMaxLength` (100 MB by default in recent versions). Keep it above `storage.max_upload_mb`, or larger files will fail to scan.
 
 ### MetaDefender
 

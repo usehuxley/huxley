@@ -77,6 +77,23 @@ Two things don't go through it:
 
 To use your own pooler (RDS Proxy, Azure's built-in PgBouncer, or PgBouncer you run yourself), set `HUXLEY_DATABASE__URL` to the pooler, `HUXLEY_DATABASE__DIRECT_URL` to PostgreSQL, and `HUXLEY_DATABASE__POOLED=true`. Then make the pooler run `SET ROLE huxley_app` and set the statement timeout on its server connections. The pooler needs PgBouncer 1.21 or later, or another pooler that supports prepared statements in transaction mode.
 
+## Malware scanning
+
+To scan uploads with ClamAV running in the cluster:
+
+```yaml
+scan:
+  provider: clamav
+  clamav:
+    deploy: true
+```
+
+That runs one ClamAV pod (`clamav/clamav`), non-root with a read-only root filesystem, plus a Service the Huxley pods reach it on. It starts from the image's signatures, and `freshclam` then keeps them updated, so it needs outbound access to ClamAV's mirrors. It holds about 1.2 GB of signatures in memory, and briefly twice that while it reloads updates. The default request and limit allow for this (`scan.clamav.resources`). While it restarts, uploads wait for their scan.
+
+To use a clamd you already run, set `scan.clamav.address` (for example `tcp://clamav.security:3310`) and leave `deploy` off.
+
+For MetaDefender, set `provider: metadefender` and `scan.metadefender.url`. For Cloud, also set `scan.metadefender.apiKeySecret`: a Secret holding the key, under `api-key` by default. See [Malware scanning](attachment-scanning.md) for what happens to files while they wait, and when one is quarantined.
+
 ## Behind a CDN
 
 Set `clientIp.header` (for example `CF-Connecting-IP`), or `clientIp.proxyHops: 2` if your ingress appends to `X-Forwarded-For`. Then follow [Behind a CDN](./operations.md#behind-a-cdn): lock the origin to the CDN, bypass the cache for dynamic paths, and mind the timeouts.

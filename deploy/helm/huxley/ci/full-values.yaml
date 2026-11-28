@@ -24,3 +24,8 @@ ingress:
       hosts: [huxley.example.com, portal.example.com]
 clientIp:
   header: CF-Connecting-IP
+scan:
+  provider: clamav
+  whilePending: hold
+  clamav:
+    deploy: true
