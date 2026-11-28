@@ -17,7 +17,7 @@ use base64::Engine as _;
 use huxley_db::{OrgScope, begin_scoped};
 use huxley_engine::RunStatus;
 use huxley_hwf::WebhookResponse;
-use huxley_triggers::webhook::{Incoming, verify};
+use huxley_triggers::webhook::{Incoming, delivery, verify};
 use serde_json::{Value as JsonValue, json};
 use uuid::Uuid;
 
@@ -59,19 +59,29 @@ async fn handle(
     let auth = huxley_triggers::resolve_auth(&state.engine, &state.crypto, &webhook)
         .await
         .map_err(|e| ApiError::internal(&e))?;
+    let mut recorded: Option<Vec<u8>> = None;
     if let Some(auth) = auth {
-        let lookup = |name: &str| {
-            headers
-                .get(name)
-                .and_then(|v| v.to_str().ok())
-                .map(str::to_owned)
+        // Checked without awaiting: the header lookup isn't `Send`.
+        let (verified, signed) = {
+            let lookup = |name: &str| {
+                headers
+                    .get(name)
+                    .and_then(|v| v.to_str().ok())
+                    .map(str::to_owned)
+            };
+            let incoming = Incoming {
+                header: &lookup,
+                body,
+                now: time::OffsetDateTime::now_utc().unix_timestamp(),
+            };
+            let verified = verify(&auth, &incoming);
+            let signed = verified
+                .is_ok()
+                .then(|| delivery(&auth, &incoming))
+                .flatten();
+            (verified, signed)
         };
-        let incoming = Incoming {
-            header: &lookup,
-            body,
-            now: time::OffsetDateTime::now_utc().unix_timestamp(),
-        };
-        if let Err(refused) = verify(&auth, &incoming) {
+        if let Err(refused) = verified {
             tracing::info!(webhook = %public_id, reason = %refused, "webhook request refused");
             return Err(ApiError::new(
                 StatusCode::UNAUTHORIZED,
@@ -79,8 +89,40 @@ async fn handle(
                 "The request isn't signed or authenticated as this webhook requires",
             ));
         }
+        if let Some((signed_at, digest)) = signed {
+            let fresh =
+                huxley_triggers::record_delivery(&state.engine, public_id, signed_at, &digest)
+                    .await
+                    .map_err(|e| ApiError::internal(&e))?;
+            if !fresh {
+                // Already received: a replay, or the sender retrying. Either
+                // way it doesn't start another run.
+                tracing::info!(webhook = %public_id, "repeated signed webhook delivery ignored");
+                return Ok((StatusCode::OK, Json(json!({ "duplicate": true }))).into_response());
+            }
+            recorded = Some(digest);
+        }
     }
+    let response = accept(state, &webhook, query, headers, body).await;
+    if response.is_err()
+        && let Some(digest) = recorded
+    {
+        // Not accepted, so the sender's retry should be.
+        if let Err(e) = huxley_triggers::forget_delivery(&state.engine, public_id, &digest).await {
+            tracing::warn!(webhook = %public_id, error = %e, "couldn't forget a webhook delivery");
+        }
+    }
+    response
+}
 
+/// Parses an authenticated request and starts the run.
+async fn accept(
+    state: &AppState,
+    webhook: &huxley_triggers::Webhook,
+    query: BTreeMap<String, String>,
+    headers: &HeaderMap,
+    body: &[u8],
+) -> Result<Response, ApiError> {
     let is_json = headers
         .get(http::header::CONTENT_TYPE)
         .and_then(|v| v.to_str().ok())
@@ -128,7 +170,7 @@ async fn handle(
         "query": query,
         "body": payload,
     });
-    let run = huxley_triggers::start(&state.engine, &webhook, trigger, inputs)
+    let run = huxley_triggers::start(&state.engine, webhook, trigger, inputs)
         .await
         .map_err(|e| match e {
             huxley_triggers::TriggerError::RunAsUnavailable(reason) => ApiError::new(

@@ -184,6 +184,37 @@ pub fn verify(auth: &Resolved, request: &Incoming<'_>) -> Result<(), Refused> {
     }
 }
 
+/// What identifies a signed delivery, for refusing replays: the signed
+/// timestamp and a digest of the signature. Only timestamped HMAC requests
+/// have one: without a timestamp nothing bounds how long a signature stays
+/// valid, and identical bodies may legitimately arrive more than once.
+/// Call after [`verify`] has accepted the request.
+pub fn delivery(auth: &Resolved, request: &Incoming<'_>) -> Option<(i64, Vec<u8>)> {
+    let Resolved::Hmac {
+        header,
+        prefix,
+        timestamp_header: Some(stamp_header),
+        ..
+    } = auth
+    else {
+        return None;
+    };
+    let at: i64 = (request.header)(stamp_header)?.trim().parse().ok()?;
+    let signature = (request.header)(header)?;
+    let signature = match prefix {
+        Some(p) => signature.strip_prefix(p.as_str())?.to_owned(),
+        None => signature,
+    };
+    // Decoded, so the same tag in hex or base64 counts once.
+    let tag = decode_signature(&signature)?;
+    Some((
+        at,
+        ring::digest::digest(&ring::digest::SHA256, &tag)
+            .as_ref()
+            .to_vec(),
+    ))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -298,6 +329,42 @@ mod tests {
                 }
             ),
             Err(Refused("the timestamp is too old"))
+        );
+    }
+
+    #[test]
+    fn deliveries_identify_timestamped_signatures() {
+        let at = 1_000;
+        let tag = sign("s3cret", format!("{at}.hello").as_bytes());
+        let hex = headers(&[
+            ("X-Timestamp", at.to_string()),
+            ("X-Signature", format!("sha256={tag}")),
+        ]);
+        let request = |h| Incoming {
+            header: h,
+            body: b"hello",
+            now: at,
+        };
+        let (stamp, digest) = delivery(&hmac_auth(true), &request(&hex)).unwrap();
+        assert_eq!(stamp, at);
+        // The same tag in base64 is the same delivery.
+        let bytes: Vec<u8> = (0..tag.len())
+            .step_by(2)
+            .map(|i| u8::from_str_radix(&tag[i..i + 2], 16).unwrap())
+            .collect();
+        let b64 = headers(&[
+            ("X-Timestamp", at.to_string()),
+            ("X-Signature", format!("sha256={}", STANDARD.encode(bytes))),
+        ]);
+        assert_eq!(
+            delivery(&hmac_auth(true), &request(&b64)).map(|d| d.1),
+            Some(digest)
+        );
+        // Without a timestamp header there's nothing to bound it.
+        assert_eq!(delivery(&hmac_auth(false), &request(&hex)), None);
+        assert_eq!(
+            delivery(&Resolved::Bearer("t".into()), &request(&hex)),
+            None
         );
     }
 

@@ -310,3 +310,72 @@ async fn unknown_callbacks_are_not_found() {
     .await;
     assert_eq!(status, StatusCode::NOT_FOUND);
 }
+
+#[tokio::test]
+async fn signed_deliveries_are_accepted_once() {
+    let Some(pools) = pools().await else { return };
+    let app = app(&pools);
+    let (_, public_id) = webhook(
+        &pools,
+        json!({
+            "type": "webhook",
+            "response": "async",
+            "auth": {
+                "type": "hmac",
+                "secret": "{{ secrets.hook_secret }}",
+                "prefix": "sha256=",
+                "timestamp_header": "x-timestamp"
+            }
+        }),
+    )
+    .await;
+    let uri = format!("/hooks/{public_id}");
+    let body = r#"{"event":"ping","n":21}"#;
+    let at = time::OffsetDateTime::now_utc().unix_timestamp();
+    let signed = [
+        ("x-timestamp", at.to_string()),
+        ("x-signature", sign("hook-secret", &format!("{at}.{body}"))),
+    ];
+    let (status, first) = post(&app, &uri, &signed, body).await;
+    assert_eq!(status, StatusCode::ACCEPTED, "{first}");
+
+    // The same signed request again starts nothing.
+    let (status, again) = post(&app, &uri, &signed, body).await;
+    assert_eq!(status, StatusCode::OK, "{again}");
+    assert_eq!(again, json!({ "duplicate": true }));
+    let runs: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM runs WHERE trigger->'headers'->>'x-timestamp' = $1",
+    )
+    .bind(at.to_string())
+    .fetch_one(&pools.owner)
+    .await
+    .unwrap();
+    assert_eq!(runs, 1);
+
+    // A new delivery (another timestamp) is accepted.
+    let next = at + 1;
+    let fresh = [
+        ("x-timestamp", next.to_string()),
+        (
+            "x-signature",
+            sign("hook-secret", &format!("{next}.{body}")),
+        ),
+    ];
+    assert_eq!(post(&app, &uri, &fresh, body).await.0, StatusCode::ACCEPTED);
+
+    // A delivery that isn't accepted (invalid JSON) is forgotten: sent
+    // again, it fails the same way rather than being called a duplicate.
+    let bad = "{";
+    let failing = [
+        ("x-timestamp", at.to_string()),
+        ("x-signature", sign("hook-secret", &format!("{at}.{bad}"))),
+    ];
+    assert_eq!(
+        post(&app, &uri, &failing, bad).await.0,
+        StatusCode::BAD_REQUEST
+    );
+    assert_eq!(
+        post(&app, &uri, &failing, bad).await.0,
+        StatusCode::BAD_REQUEST
+    );
+}
