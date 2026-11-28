@@ -97,3 +97,4 @@ Decisions that shape Huxley. Add a new ADR by copying `0000-template.md` with th
 | [091](0091-metrics-dashboards-alerts.md) | Application metrics over OpenTelemetry, with Grafana dashboards and tested alert rules | Accepted |
 | [092](0092-cloud-templates.md) | Terraform templates for AWS, Azure and DigitalOcean; AWS KMS for the key-encryption key | Accepted |
 | [093](0093-pack-registries.md) | Pack registries are static, hash-pinned indexes, optionally signed | Accepted |
+| [094](0094-upload-scanning.md) | Uploads are scanned for malware by an operator-configured scanner (off, ClamAV or MetaDefender) | Accepted |

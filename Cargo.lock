@@ -1051,6 +1051,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "clamav-client"
+version = "2.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e65db2ab3296d6ccf440230ee401ad828ffcf70b907f4dc642168f39454a8120"
+dependencies = [
+ "tokio",
+]
+
+[[package]]
 name = "clap"
 version = "4.6.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2388,6 +2397,7 @@ dependencies = [
  "huxley-portal",
  "huxley-runners",
  "huxley-sales",
+ "huxley-scan",
  "huxley-scripts",
  "huxley-servicedesk",
  "huxley-sso",
@@ -2645,8 +2655,10 @@ dependencies = [
  "serde_json",
  "sqlx",
  "thiserror 2.0.21",
+ "time",
  "tokio",
  "tracing",
+ "utoipa",
  "uuid",
 ]
 
@@ -2695,6 +2707,7 @@ dependencies = [
  "huxley-notify",
  "huxley-orgs",
  "huxley-sales",
+ "huxley-scan",
  "huxley-scripts",
  "huxley-servicedesk",
  "huxley-storage",
@@ -3056,6 +3069,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "huxley-scan"
+version = "0.1.0"
+dependencies = [
+ "axum",
+ "clamav-client",
+ "reqwest 0.13.5",
+ "secrecy",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.21",
+ "tokio",
+]
+
+[[package]]
 name = "huxley-scripts"
 version = "0.1.0"
 dependencies = [
@@ -3100,6 +3127,7 @@ dependencies = [
  "huxley-orgs",
  "huxley-packs",
  "huxley-runners",
+ "huxley-scan",
  "huxley-servicedesk",
  "huxley-storage",
  "huxley-telemetry",

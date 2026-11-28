@@ -1,0 +1,24 @@
+[package]
+name = "huxley-scan"
+description = "Malware scanning of uploaded files for Huxley: ClamAV and OPSWAT MetaDefender (ADR-094)"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[dependencies]
+clamav-client = { version = "2.3", default-features = false, features = ["tokio"] }
+reqwest.workspace = true
+secrecy.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+
+[dev-dependencies]
+axum.workspace = true
+
+[lints]
+workspace = true

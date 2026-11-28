@@ -12,6 +12,7 @@
 
 pub mod audit;
 pub mod outbox;
+pub mod scans;
 #[cfg(feature = "testing")]
 pub mod testing;
 

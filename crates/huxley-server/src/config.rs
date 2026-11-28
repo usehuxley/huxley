@@ -53,10 +53,21 @@ pub struct Config {
     /// Datasets (ADR-029).
     #[serde(default)]
     pub datasets: DatasetsConfig,
+    /// Uploaded files: malware scanning (ADR-094).
+    #[serde(default)]
+    pub uploads: UploadsConfig,
     /// Apply migrations at startup. Convenient for single-node installs; larger
     /// deployments run `huxley migrate` as a separate step before rollout.
     #[serde(default)]
     pub migrate_on_start: bool,
+}
+
+/// Uploaded files (ADR-094).
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(default)]
+pub struct UploadsConfig {
+    /// Malware scanning: off, ClamAV or MetaDefender.
+    pub scan: huxley_scan::ScanConfig,
 }
 
 /// Datasets (ADR-029).
@@ -244,6 +255,31 @@ mod tests {
                 config.runners.public_url.as_deref(),
                 Some("https://huxley:8443")
             );
+            Ok(())
+        });
+    }
+
+    #[test]
+    fn upload_scanning_comes_from_env_and_files() {
+        figment::Jail::expect_with(|jail| {
+            jail.create_file("md-key", "md-secret\n")?;
+            let path = jail.directory().join("md-key");
+            jail.set_env("HUXLEY_UPLOADS__SCAN__PROVIDER", "metadefender");
+            jail.set_env("HUXLEY_UPLOADS__SCAN__WHILE_PENDING", "allow");
+            let env = [(
+                "HUXLEY_UPLOADS__SCAN__METADEFENDER__API_KEY_FILE".to_owned(),
+                path.display().to_string(),
+            )];
+            let config = Config::from_figment(&figment(None, env.into_iter()).unwrap()).unwrap();
+            let scan = &config.uploads.scan;
+            assert_eq!(scan.provider, huxley_scan::Provider::Metadefender);
+            assert_eq!(scan.while_pending, huxley_scan::WhilePending::Allow);
+            assert_eq!(scan.metadefender.url, "https://api.metadefender.com/v4");
+            assert_eq!(
+                scan.metadefender.api_key.as_ref().unwrap().expose_secret(),
+                "md-secret"
+            );
+            assert!(!format!("{scan:?}").contains("md-secret"));
             Ok(())
         });
     }

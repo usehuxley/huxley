@@ -89,6 +89,7 @@ fn map(e: ExpenseError) -> ApiError {
             ApiError::new(StatusCode::PAYLOAD_TOO_LARGE, "too-large", "File too large")
                 .with_detail(format!("Receipts can be up to {mb} MB."))
         }
+        ExpenseError::Withheld(scan) => ApiError::withheld(&scan),
         ExpenseError::Storage(e) => ApiError::internal(&e),
         ExpenseError::Db(e) => ApiError::internal(&e),
         ExpenseError::Sqlx(e) => ApiError::internal(&e),

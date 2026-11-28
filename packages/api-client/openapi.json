@@ -3724,7 +3724,27 @@
 							"application/octet-stream": {}
 						}
 					},
+					"403": {
+						"description": "Quarantined by the malware scan",
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					},
 					"404": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					},
+					"409": {
+						"description": "Not scanned clean yet",
 						"content": {
 							"application/problem+json": {
 								"schema": {
@@ -15235,6 +15255,122 @@
 							"application/json": {
 								"schema": {
 									"$ref": "#/components/schemas/StreamTest"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/platform/file-scans": {
+			"get": {
+				"tags": ["security"],
+				"operationId": "list_file_scans",
+				"parameters": [
+					{
+						"name": "status",
+						"in": "query",
+						"description": "`infected` (the default), `failed` or `pending`.",
+						"required": false,
+						"schema": {
+							"type": "string"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "array",
+									"items": {
+										"$ref": "#/components/schemas/FileScan"
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/platform/file-scans/status": {
+			"get": {
+				"tags": ["security"],
+				"operationId": "file_scan_status",
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ScanStatus"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/platform/file-scans/{id}": {
+			"delete": {
+				"tags": ["security"],
+				"summary": "Deletes the file itself: the attachment, or the expense entry's receipt\n(the entry stays).",
+				"operationId": "delete_scanned_file",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"responses": {
+					"204": {},
+					"404": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/platform/file-scans/{id}/rescan": {
+			"post": {
+				"tags": ["security"],
+				"operationId": "rescan_file",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"responses": {
+					"204": {},
+					"404": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					},
+					"409": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
 								}
 							}
 						}
@@ -29549,7 +29685,8 @@
 					"contentType",
 					"sizeBytes",
 					"sha256",
-					"createdAt"
+					"createdAt",
+					"scanStatus"
 				],
 				"properties": {
 					"contentType": {
@@ -29579,6 +29716,10 @@
 					"id": {
 						"type": "string",
 						"format": "uuid"
+					},
+					"scanStatus": {
+						"type": "string",
+						"description": "The malware scan (ADR-094): `unscanned` (uploaded with scanning\noff), `pending`, `clean`, `infected` (quarantined) or `failed`."
 					},
 					"sha256": {
 						"type": "string",
@@ -33704,6 +33845,10 @@
 					"receiptName": {
 						"type": ["string", "null"]
 					},
+					"receiptScan": {
+						"type": ["string", "null"],
+						"description": "The receipt's malware scan (ADR-094), when there's a receipt:\n`unscanned`, `pending`, `clean`, `infected` (quarantined) or `failed`."
+					},
 					"reimbursable": {
 						"type": "boolean"
 					},
@@ -34302,6 +34447,75 @@
 					}
 				],
 				"description": "A field that applies to an entity, with its value (null when unset)."
+			},
+			"FileScan": {
+				"type": "object",
+				"description": "A scanned upload, for the admin page.",
+				"required": [
+					"id",
+					"orgId",
+					"orgName",
+					"source",
+					"recordId",
+					"filename",
+					"sizeBytes",
+					"status",
+					"attempts",
+					"createdAt"
+				],
+				"properties": {
+					"attempts": {
+						"type": "integer",
+						"format": "int32"
+					},
+					"createdAt": {
+						"type": "string",
+						"format": "date-time"
+					},
+					"engine": {
+						"type": ["string", "null"]
+					},
+					"filename": {
+						"type": "string"
+					},
+					"finding": {
+						"type": ["string", "null"]
+					},
+					"id": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"lastError": {
+						"type": ["string", "null"]
+					},
+					"orgId": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"orgName": {
+						"type": "string"
+					},
+					"recordId": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"scannedAt": {
+						"type": ["string", "null"],
+						"format": "date-time"
+					},
+					"sizeBytes": {
+						"type": "integer",
+						"format": "int64"
+					},
+					"source": {
+						"type": "string",
+						"description": "`attachment` or `receipt`."
+					},
+					"status": {
+						"type": "string",
+						"description": "`pending`, `clean`, `infected` or `failed`."
+					}
+				}
 			},
 			"Filter": {
 				"type": "object",
@@ -44627,6 +44841,45 @@
 					}
 				},
 				"additionalProperties": false
+			},
+			"ScanStatus": {
+				"type": "object",
+				"description": "How uploads are scanned.",
+				"required": ["provider", "holdsUnscanned", "pending", "clean", "infected", "failed"],
+				"properties": {
+					"clean": {
+						"type": "integer",
+						"format": "int64"
+					},
+					"detail": {
+						"type": ["string", "null"],
+						"description": "The scanner's version, or why it didn't answer."
+					},
+					"failed": {
+						"type": "integer",
+						"format": "int64"
+					},
+					"holdsUnscanned": {
+						"type": "boolean",
+						"description": "Files not scanned clean yet are withheld (`uploads.scan.while_pending = \"hold\"`)."
+					},
+					"infected": {
+						"type": "integer",
+						"format": "int64"
+					},
+					"pending": {
+						"type": "integer",
+						"format": "int64"
+					},
+					"provider": {
+						"type": "string",
+						"description": "`off`, `clamav` or `metadefender`."
+					},
+					"reachable": {
+						"type": ["boolean", "null"],
+						"description": "Whether the scanner answered just now (absent with scanning off)."
+					}
+				}
 			},
 			"Schedule": {
 				"type": "object",

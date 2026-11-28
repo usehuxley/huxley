@@ -40,6 +40,7 @@ huxley-billing.workspace = true
 huxley-expenses.workspace = true
 huxley-servicedesk.workspace = true
 huxley-storage.workspace = true
+huxley-scan.workspace = true
 huxley-variables.workspace = true
 huxley-workflows.workspace = true
 huxley-workforce.workspace = true

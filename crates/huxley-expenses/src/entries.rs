@@ -78,6 +78,9 @@ pub struct Expense {
     pub phase_name: Option<String>,
     pub has_receipt: bool,
     pub receipt_name: Option<String>,
+    /// The receipt's malware scan (ADR-094), when there's a receipt:
+    /// `unscanned`, `pending`, `clean`, `infected` (quarantined) or `failed`.
+    pub receipt_scan: Option<String>,
     /// What AI read from the receipt, for the person to confirm (ADR-080).
     #[schema(value_type = Option<Reading>)]
     #[sqlx(json(nullable))]
@@ -118,11 +121,13 @@ const SELECT: &str = "SELECT e.id, e.org_id, o.name AS org_name, e.user_id, u.di
         CASE WHEN e.billable THEN round(e.amount * (1 + e.markup_pct / 100), 2) ELSE 0 END AS bill_amount, \
         e.reimbursable, e.ticket_id, (t.number_prefix || '-' || t.number) AS ticket_ref, \
         e.project_id, p.name AS project_name, e.phase_id, ph.name AS phase_name, \
-        (e.receipt_key IS NOT NULL) AS has_receipt, e.receipt_name, e.reading, e.reading_error, e.status, e.report_id, e.version, e.created_at, \
+        (e.receipt_key IS NOT NULL) AS has_receipt, e.receipt_name, \
+        CASE WHEN e.receipt_key IS NOT NULL THEN coalesce(rs.status, 'unscanned') END AS receipt_scan, e.reading, e.reading_error, e.status, e.report_id, e.version, e.created_at, \
         c.limit_amount, c.receipt_required \
    FROM exp_entries e JOIN organizations o ON o.id = e.org_id JOIN users u ON u.id = e.user_id \
    JOIN exp_categories c ON c.id = e.category_id LEFT JOIN sd_tickets t ON t.id = e.ticket_id \
-   LEFT JOIN prj_projects p ON p.id = e.project_id LEFT JOIN prj_phases ph ON ph.id = e.phase_id";
+   LEFT JOIN prj_projects p ON p.id = e.project_id LEFT JOIN prj_phases ph ON ph.id = e.phase_id \
+   LEFT JOIN file_scans rs ON rs.storage_key = e.receipt_key";
 
 /// What was read from a receipt. Anything it couldn't read is null.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, ToSchema)]
@@ -608,6 +613,20 @@ pub async fn put_receipt(
     .bind(size)
     .fetch_one(&mut *conn)
     .await?;
+    if storage.scans_uploads() {
+        huxley_db::scans::queue(
+            &mut *conn,
+            huxley_db::scans::NewScan {
+                storage_key: &key,
+                org_id: e.org_id,
+                source: huxley_db::scans::Source::Receipt,
+                record_id: id,
+                filename: &name,
+                size_bytes: size,
+            },
+        )
+        .await?;
+    }
     audit::record(
         &mut *conn,
         ctx,
@@ -643,6 +662,45 @@ pub async fn put_receipt(
     get(conn, id).await
 }
 
+/// Removes an entry's receipt file (an administrator deleting one the
+/// malware scan quarantined, ADR-094). The entry stays, without a receipt.
+pub async fn drop_receipt(
+    conn: &mut PgConnection,
+    storage: &Storage,
+    ctx: &RequestContext,
+    id: Uuid,
+) -> ExpenseResult<()> {
+    let row: Option<(Uuid, Option<String>, Option<String>)> = sqlx::query_as(
+        "SELECT org_id, receipt_key, receipt_name FROM exp_entries WHERE id = $1 FOR UPDATE",
+    )
+    .bind(id)
+    .fetch_optional(&mut *conn)
+    .await?;
+    let (org_id, Some(key), name) = row.ok_or(ExpenseError::NotFound)? else {
+        return Err(ExpenseError::NotFound);
+    };
+    sqlx::query(
+        "UPDATE exp_entries SET receipt_key = NULL, receipt_name = NULL, receipt_type = NULL, receipt_size = NULL, \
+            reading = NULL, reading_error = NULL, read_at = NULL, version = version + 1, updated_at = now() \
+          WHERE id = $1",
+    )
+    .bind(id)
+    .execute(&mut *conn)
+    .await?;
+    audit::record(
+        &mut *conn,
+        ctx,
+        AuditRecord::new("expense.receipt_removed")
+            .org(org_id)
+            .target("expense", id)
+            .details(json!({ "name": name })),
+    )
+    .await?;
+    // Unreachable now either way, so a storage hiccup doesn't fail it.
+    let _ = storage.delete(&key).await;
+    Ok(())
+}
+
 /// An entry's receipt: `(file name, content type, bytes)`.
 pub async fn receipt(
     conn: &mut PgConnection,
@@ -653,11 +711,15 @@ pub async fn receipt(
         "SELECT receipt_key, receipt_name, receipt_type FROM exp_entries WHERE id = $1",
     )
     .bind(id)
-    .fetch_optional(conn)
+    .fetch_optional(&mut *conn)
     .await?;
     let (Some(key), name, kind) = row.ok_or(ExpenseError::NotFound)? else {
         return Err(ExpenseError::NotFound);
     };
+    let scan = huxley_db::scans::status(&mut *conn, &key).await?;
+    if !scan.servable(storage.holds_unscanned()) {
+        return Err(ExpenseError::Withheld(scan));
+    }
     let data = storage.get(&key).await?;
     Ok((
         name.unwrap_or_else(|| "receipt".into()),
@@ -694,12 +756,18 @@ pub async fn receipt_for_reading(
     let row: Option<(Option<String>, Option<String>)> =
         sqlx::query_as("SELECT receipt_key, receipt_type FROM exp_entries WHERE id = $1")
             .bind(id)
-            .fetch_optional(conn)
+            .fetch_optional(&mut *conn)
             .await?;
     let (key, kind) = row.ok_or(ExpenseError::NotFound)?;
     let (Some(key), Some(kind)) = (key, kind) else {
         return Ok(None);
     };
+    // A quarantined receipt isn't read (or sent to an AI provider).
+    if let scan @ huxley_db::scans::Status::Infected(_) =
+        huxley_db::scans::status(&mut *conn, &key).await?
+    {
+        return Err(ExpenseError::Withheld(scan));
+    }
     Ok(Some((kind, storage.get(&key).await?)))
 }
 

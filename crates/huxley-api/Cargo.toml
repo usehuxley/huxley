@@ -26,6 +26,7 @@ huxley-crypto.workspace = true
 huxley-db.workspace = true
 huxley-entity.workspace = true
 huxley-storage.workspace = true
+huxley-scan.workspace = true
 huxley-workflows.workspace = true
 huxley-integrations.workspace = true
 huxley-forms.workspace = true

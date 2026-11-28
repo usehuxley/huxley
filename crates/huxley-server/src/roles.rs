@@ -83,6 +83,23 @@ fn spawn_scheduler(
         huxley_engine::audit_stream::run_shipper(ship_engine, ship_stop).await;
         Ok(())
     });
+    // A broken setting is caught at startup (check_startup).
+    if let Ok(Some(scanner)) = huxley_scan::Scanner::from_config(&config.uploads.scan) {
+        let (scan_engine, scan_stop) = (
+            engine
+                .clone()
+                .with_scanner(scanner.clone(), storage.clone()),
+            shutdown.clone(),
+        );
+        tasks.spawn(async move {
+            match scanner.check().await {
+                Ok(version) => tracing::info!(scanner = scanner.name(), %version, "upload scanning on"),
+                Err(e) => tracing::warn!(scanner = scanner.name(), error = %e, "the upload scanner isn't answering; uploads wait until it does"),
+            }
+            huxley_engine::scan::run_scanner(scan_engine, scan_stop).await;
+            Ok(())
+        });
+    }
     let (retention_engine, retention_stop) = (engine.clone(), shutdown.clone());
     tasks.spawn(async move {
         huxley_engine::retention::run_sweeper(retention_engine, retention_stop).await;
@@ -150,7 +167,7 @@ async fn spawn_api(
     tracing::info!(addr = %config.http.bind, "api role listening");
     let auth = huxley_auth::AuthService::new(db.clone(), config.auth.clone(), crypto.clone())
         .with_mailer(mailer.clone());
-    let storage = huxley_storage::Storage::from_config(&config.storage)?;
+    let storage = storage(config)?;
     storage
         .check()
         .await
@@ -170,6 +187,11 @@ async fn spawn_api(
             Some(database) => huxley_db::connect_read(database)?,
             None => None,
         },
+        // Checked at startup, so a configured scanner builds.
+        scanner: huxley_scan::Scanner::from_config(&config.uploads.scan)
+            .ok()
+            .flatten()
+            .map(Arc::new),
         ..state
     };
     spawn_runner_gateway(tasks, config, db, crypto, shutdown).await?;
@@ -243,9 +265,22 @@ fn pool_gauges(pools: Vec<(&'static str, huxley_db::sqlx::PgPool)>) {
         .build();
 }
 
+/// Object storage, queueing uploads for a malware scan when a scanner is
+/// configured (ADR-094).
+fn storage(config: &Config) -> anyhow::Result<huxley_storage::Storage> {
+    let scan = &config.uploads.scan;
+    Ok(
+        huxley_storage::Storage::from_config(&config.storage)?.with_scanning(
+            scan.enabled(),
+            scan.while_pending == huxley_scan::WhilePending::Hold,
+        ),
+    )
+}
+
 /// Settings that can only be checked once running: connections through a
-/// transaction pooler run as the application role (ADR-089), and worker
-/// pools name real job kinds.
+/// transaction pooler run as the application role (ADR-089), the upload
+/// scanner's settings make sense (ADR-094), and worker pools name real job
+/// kinds.
 async fn check_startup(
     config: &Config,
     db: &huxley_db::sqlx::PgPool,
@@ -254,6 +289,9 @@ async fn check_startup(
     huxley_db::check_pooled(db, db_config)
         .await
         .map_err(anyhow::Error::msg)?;
+    // A broken scanner setting would hold every upload with nothing to scan
+    // them, so it stops startup instead.
+    huxley_scan::Scanner::from_config(&config.uploads.scan).map_err(|e| anyhow::anyhow!("{e}"))?;
     if let Some(bad) = config
         .engine
         .kinds
@@ -300,7 +338,7 @@ pub async fn serve(config: Config, roles: BTreeSet<Role>) -> anyhow::Result<()> 
 
     // Workers spill large step payloads to object storage; the scheduler
     // and event dispatcher start runs with the same engine settings.
-    let storage = huxley_storage::Storage::from_config(&config.storage)?;
+    let storage = storage(&config)?;
 
     let mut tasks = JoinSet::new();
     for role in &roles {

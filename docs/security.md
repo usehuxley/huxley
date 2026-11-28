@@ -58,7 +58,7 @@ This page holds the threat model (STRIDE, by component), the gap review against 
 | **Data at rest** | I: a stolen database or backup. | Envelope encryption (ADR-018): per-organization data keys, wrapped by the KEK. The KEK can be in Vault, Azure Key Vault or AWS KMS, where it never leaves the service. Each wrap is bound to its key id and organization. Object storage is private. | With the KEK in configuration, an operator with both the database and the configuration can decrypt. Use a key service. |
 | **Audit log** | R: denying an action. T: editing history. | Every change is recorded with actor, address, request id and what changed. The log is a hash chain sealed in commit order (ADR-086). The application role can't update or delete it. `huxley admin verify-audit` checks the chain. It can be streamed to a SIEM (ADR-087), and retention never prunes it. | A database owner could rewrite the chain. Streaming to a SIEM keeps a copy out of their reach. |
 | **Datasets SQL console** | E: SQL reaching other tables or writing. | A separate database login that can only be a member of a read-only role, checked at startup. Read-only transactions, statement timeouts, row caps. | — |
-| **Uploads and object storage** | T: malicious files served back. I: one organization's files to another. | Downloads are always `attachment`, with a safe content type, `nosniff`, and `CSP: default-src 'none'; sandbox`. Access is checked against the record the file belongs to. Size limits. | **No malware scanning** (see the ASVS gaps). |
+| **Uploads and object storage** | T: malicious files served back. I: one organization's files to another. | Downloads are always `attachment`, with a safe content type, `nosniff`, and `CSP: default-src 'none'; sandbox`. Access is checked against the record the file belongs to. Size limits. Optional malware scanning with ClamAV or MetaDefender (ADR-094): files are held until scanned clean, and quarantined files are never served. | With scanning off (the default), files aren't checked for malware. Scanners miss what they don't have signatures for. |
 | **Operations** | I: secrets in logs or telemetry. D: floods. | Authorization and cookie headers are marked sensitive and kept out of traces. Secrets can come from `_FILE` variables. Rate limits on sign-in, public forms and OAuth. Request timeouts and body limits. Behind a CDN, configurable client addresses (ADR-090). | — |
 
 ## ASVS Level 2 review
@@ -78,7 +78,7 @@ Against OWASP ASVS 4.0.3, chapter by chapter. **Met** means the chapter's Level 
 | V9 Communications | Met | TLS at the edge (Caddy, ingress, cloud load balancers); mutual TLS for runners; TLS to the database where configured (`sslmode`). |
 | V10 Malicious code | Met | Signed packs with review; dependencies checked by `cargo deny`; pnpm minimum release age; Actions pinned to SHAs. |
 | V11 Business logic | Met | Rate limits; optimistic concurrency on updates; approvals for sensitive workflow steps. |
-| V12 Files and resources | **Partial** | Met: size limits, served as attachments, and the SSRF egress policy. **Gap: no malware scanning of uploads** (V12.4.2, applied by most to uploaded files). |
+| V12 Files and resources | Met | Size limits, served as attachments, the SSRF egress policy, and malware scanning of uploads with ClamAV or MetaDefender (ADR-094, when configured). |
 | V13 API and web services | Met | Authenticated APIs, a published OpenAPI document, CSRF protection, rate limits, and replay protection for signed webhooks (a timestamp window plus a record of signatures seen in it). |
 | V14 Configuration | Met | Reproducible builds, distroless non-root images, security headers, `cargo deny`, no default credentials (bootstrap generates them). |
 
@@ -86,7 +86,7 @@ Against OWASP ASVS 4.0.3, chapter by chapter. **Met** means the chapter's Level 
 
 1. ~~**Breached-password check (V2.1.7).**~~ Done offline: new passwords are checked against the 12+ character entries of the million most common breached passwords (`crates/huxley-auth/data`). A full check through Have I Been Pwned's k-anonymity API (sending a 5-character hash prefix) could be added later as an opt-in setting.
 2. ~~**Webhook replay (V13).**~~ Done: signatures are recorded for the replay window.
-3. **Malware scanning (V12).** An optional ClamAV (or ICAP) hook on uploads, quarantining files until scanned.
+3. ~~**Malware scanning (V12).**~~ Done: optional scanning with ClamAV or MetaDefender ([Malware scanning](attachment-scanning.md)).
 4. **Prompt injection.** Mark AI output as untrusted wherever it's shown. Never let a workflow act on AI output without review by default. Keep outside text clearly separated from instructions in prompts.
 
 ### Found and fixed in this review
