@@ -1,5 +1,6 @@
 //! Password hashing with Argon2id (OWASP-recommended parameters) and policy.
 
+use std::collections::HashSet;
 use std::sync::LazyLock;
 
 use argon2::{Algorithm, Argon2, Params, PasswordHasher as _, PasswordVerifier as _, Version};
@@ -20,20 +21,42 @@ pub enum PasswordPolicyError {
     TooShort,
     #[error("password must be at most {MAX_LENGTH} characters")]
     TooLong,
+    #[error("this password appears in lists of breached passwords; choose another")]
+    Breached,
+    #[error("password is too repetitive; choose one with more variety")]
+    Repetitive,
 }
+
+/// Passwords from breach compilations, lowercased (`data/README.md`).
+static BREACHED: LazyLock<HashSet<&'static str>> = LazyLock::new(|| {
+    include_str!("../data/breached-passwords.txt")
+        .lines()
+        .filter(|l| !l.is_empty())
+        .collect()
+});
+
+/// Fewest different characters a password may have: twelve of one or two
+/// repeated characters (`aaaaaaaaaaaa`, `abababababab`) guess in moments.
+const MIN_DISTINCT: usize = 4;
 
 fn hasher() -> Argon2<'static> {
     let params = Params::new(M_COST_KIB, T_COST, P_COST, None).expect("valid Argon2 parameters");
     Argon2::new(Algorithm::Argon2id, Version::V0x13, params)
 }
 
-/// Checks a new password against the policy. Length counts characters, not bytes.
+/// Checks a new password against the policy: its length (characters, not
+/// bytes), enough different characters, and not a breached password
+/// (compared ignoring case).
 pub fn validate(password: &str) -> Result<(), PasswordPolicyError> {
     let len = password.chars().count();
     if len < MIN_LENGTH {
         Err(PasswordPolicyError::TooShort)
     } else if len > MAX_LENGTH {
         Err(PasswordPolicyError::TooLong)
+    } else if password.chars().collect::<HashSet<_>>().len() < MIN_DISTINCT {
+        Err(PasswordPolicyError::Repetitive)
+    } else if BREACHED.contains(password.to_lowercase().as_str()) {
+        Err(PasswordPolicyError::Breached)
     } else {
         Ok(())
     }
@@ -70,6 +93,25 @@ mod tests {
     use super::*;
 
     #[test]
+    fn breached_and_repetitive_passwords_are_refused() {
+        assert_eq!(validate("password1234"), Err(PasswordPolicyError::Breached));
+        // Case doesn't make a breached password new.
+        assert_eq!(validate("PassWord1234"), Err(PasswordPolicyError::Breached));
+        assert_eq!(validate("123456789012"), Err(PasswordPolicyError::Breached));
+        assert_eq!(
+            validate("aaaaaaaaaaaaaaa"),
+            Err(PasswordPolicyError::Repetitive)
+        );
+        assert_eq!(
+            validate("abcabcabcabc"),
+            Err(PasswordPolicyError::Repetitive)
+        );
+        assert!(BREACHED.len() > 25_000);
+        assert!(validate("correct horse battery staple").is_ok());
+        assert!(validate("tangerine-quarry-41-lantern").is_ok());
+    }
+
+    #[test]
     fn hash_and_verify_round_trip() {
         let phc = hash("correct horse battery staple");
         assert!(phc.starts_with("$argon2id$v=19$m=19456,t=2,p=1$"));
@@ -96,6 +138,7 @@ mod tests {
         );
         assert!(validate("twelve chars").is_ok());
         // Characters, not bytes: 12 multibyte characters pass.
-        assert!(validate(&"é".repeat(12)).is_ok());
+        assert!(validate(&"éàü".repeat(4)).is_err_and(|e| e != PasswordPolicyError::TooShort));
+        assert!(validate("éàüößçñøåæœ€").is_ok());
     }
 }
