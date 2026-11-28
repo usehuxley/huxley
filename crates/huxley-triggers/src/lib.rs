@@ -227,6 +227,44 @@ pub struct Webhook {
     pub document: Json,
 }
 
+/// Records a signed delivery until its timestamp leaves the replay window.
+/// False if it was already recorded: a replay.
+pub async fn record_delivery(
+    engine: &Engine,
+    public_id: &str,
+    signed_at: i64,
+    digest: &[u8],
+) -> TriggerResult<bool> {
+    let mut tx = begin_scoped(engine.db(), &OrgScope::System).await?;
+    let fresh = sqlx::query(
+        "INSERT INTO webhook_deliveries (public_id, digest, expires_at) \
+         VALUES ($1, $2, to_timestamp($3::bigint + $4::bigint)) ON CONFLICT DO NOTHING",
+    )
+    .bind(public_id)
+    .bind(digest)
+    .bind(signed_at)
+    .bind(webhook::REPLAY_WINDOW_SECS)
+    .execute(&mut *tx)
+    .await?
+    .rows_affected()
+        == 1;
+    tx.commit().await?;
+    Ok(fresh)
+}
+
+/// Forgets a recorded delivery, so the sender's retry is accepted (when
+/// the run couldn't be started).
+pub async fn forget_delivery(engine: &Engine, public_id: &str, digest: &[u8]) -> TriggerResult<()> {
+    let mut tx = begin_scoped(engine.db(), &OrgScope::System).await?;
+    sqlx::query("DELETE FROM webhook_deliveries WHERE public_id = $1 AND digest = $2")
+        .bind(public_id)
+        .bind(digest)
+        .execute(&mut *tx)
+        .await?;
+    tx.commit().await?;
+    Ok(())
+}
+
 /// The webhook behind `public_id`, if it exists and its workflow is active
 /// and published.
 pub async fn find_webhook(engine: &Engine, public_id: &str) -> TriggerResult<Option<Webhook>> {
