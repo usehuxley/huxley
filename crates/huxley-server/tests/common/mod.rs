@@ -73,7 +73,13 @@ pub fn huxley_command(args: &[&str]) -> Command {
 
 /// Starts `huxley serve --roles worker` against `url`.
 pub fn worker(url: &str, concurrency: usize) -> Child {
+    worker_with(url, concurrency, &[])
+}
+
+/// A worker process with extra environment settings.
+pub fn worker_with(url: &str, concurrency: usize, env: &[(&str, &str)]) -> Child {
     huxley_command(&["serve", "--roles", "worker"])
+        .envs(env.iter().copied())
         .env("HUXLEY_DATABASE__URL", url)
         .env("HUXLEY_CRYPTO__KEK", TEST_KEK)
         .env("HUXLEY_ENGINE__LEASE_SECS", "2")
